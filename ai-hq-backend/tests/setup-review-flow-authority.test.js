@@ -79,23 +79,18 @@ test("review flow keeps AI-native setup authority while preserving canonical rea
     }
   );
 
+  const activeQuestionKeys =
+    payload?.assistant?.interviewPlan?.activeQuestionKeys || [];
+
   assert.equal(payload.assistant.nextQuestion, null);
   assert.equal(payload.assistant.readyForApproval, false);
   assert.ok(!("assistantBrain" in payload));
   assert.equal(payload.assistant.sourceSignals.primarySourceType, "google_maps");
-  assert.ok(
-    !payload.assistant.interviewPlan.activeQuestionKeys.includes("languages")
-  );
-  assert.ok(!payload.assistant.interviewPlan.activeQuestionKeys.includes("tone"));
-  assert.ok(
-    !payload.assistant.interviewPlan.activeQuestionKeys.includes("greeting")
-  );
-  assert.ok(
-    !payload.assistant.interviewPlan.activeQuestionKeys.includes("after_hours")
-  );
-  assert.ok(
-    !payload.assistant.interviewPlan.activeQuestionKeys.includes("audience")
-  );
+  assert.ok(!activeQuestionKeys.includes("languages"));
+  assert.ok(!activeQuestionKeys.includes("tone"));
+  assert.ok(!activeQuestionKeys.includes("greeting"));
+  assert.ok(!activeQuestionKeys.includes("after_hours"));
+  assert.ok(!activeQuestionKeys.includes("audience"));
 });
 
 test("review flow marks setup ready from the canonical launch-critical scope only", async () => {
