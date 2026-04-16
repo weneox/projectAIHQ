@@ -944,7 +944,7 @@ export default function SetupAssistantSections({
             />
           ) : null}
 
-          {busy && pendingTurnRef.current ? <TypingBubble /> : null}
+          {busy && pendingTurnId ? <TypingBubble /> : null}
 
           {smartDraftReady ? (
             <SmartDraftCard
