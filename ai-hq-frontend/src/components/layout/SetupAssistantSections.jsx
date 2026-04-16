@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { AlertCircle, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  ArrowUp,
+  LoaderCircle,
+  Sparkles,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
@@ -417,12 +423,6 @@ function transcriptReducer(state, action) {
   return arr(state);
 }
 
-function pendingTurnReducer(_state, action) {
-  if (action?.type === "show") return true;
-  if (action?.type === "hide") return false;
-  return false;
-}
-
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
     return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)]";
@@ -572,10 +572,77 @@ function StatusNotice({ model }) {
   );
 }
 
+function IntroActionButton({
+  label = "",
+  intent = "",
+  variant = "primary",
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        variant === "primary"
+          ? "inline-flex h-11 items-center justify-center rounded-full bg-slate-950 px-5 text-[13px] font-semibold text-white transition-transform hover:scale-[1.01]"
+          : "inline-flex h-11 items-center justify-center rounded-full border border-[rgba(15,23,42,0.08)] bg-white px-5 text-[13px] font-semibold text-text transition-colors hover:bg-[rgba(15,23,42,0.03)]"
+      }
+      data-intent={intent}
+    >
+      <span>{label}</span>
+      <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.2} />
+    </button>
+  );
+}
+
+function IntroAssistantCard({
+  message = "",
+  primaryAction = null,
+  secondaryAction = null,
+  onPrimaryAction,
+  onSecondaryAction,
+}) {
+  const primary = obj(primaryAction);
+  const secondary = obj(secondaryAction);
+
+  return (
+    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+      <div className="flex justify-start">
+        <div className="max-w-[88%] rounded-[28px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] px-5 py-5 shadow-[0_14px_32px_rgba(15,23,42,0.06)]">
+          <div className="whitespace-pre-wrap text-[15px] leading-7 text-text">
+            {message}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {s(primary.label) ? (
+              <IntroActionButton
+                label={primary.label}
+                intent={primary.intent}
+                variant="secondary"
+                onClick={onPrimaryAction}
+              />
+            ) : null}
+
+            {s(secondary.label) ? (
+              <IntroActionButton
+                label={secondary.label}
+                intent={secondary.intent}
+                variant="primary"
+                onClick={onSecondaryAction}
+              />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function Composer({
   value,
   busy,
   placeholder,
+  textareaRef,
   onChange,
   onSubmit,
 }) {
@@ -586,6 +653,7 @@ function Composer({
       <div className="rounded-[34px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.07)]">
         <div className="flex items-end gap-3">
           <textarea
+            ref={textareaRef}
             rows={3}
             value={value}
             onChange={(event) => onChange(event.target.value)}
@@ -635,8 +703,11 @@ function SetupAssistantSectionsContent({
   onCaptureSource,
   onParseMessage,
   onFinalize,
+  onPrimaryAction,
+  onSecondaryAction,
 }) {
   const scrollRef = useRef(null);
+  const textareaRef = useRef(null);
   const pendingTurnRef = useRef(null);
   const responseFingerprintRef = useRef("");
   const serverTimelineFingerprintRef = useRef("");
@@ -648,12 +719,12 @@ function SetupAssistantSectionsContent({
     storageKey,
     loadStoredTranscript
   );
-  const [hasPendingTurn, dispatchPendingTurn] = useReducer(
-    pendingTurnReducer,
-    false
-  );
+  const [hasPendingTurn, setHasPendingTurn] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
+
+  const primaryAction = obj(assistant?.primaryAction);
+  const secondaryAction = obj(assistant?.secondaryAction);
 
   const finalModel = useMemo(
     () => buildFinalViewModel(reviewPayload, assistant),
@@ -698,6 +769,14 @@ function SetupAssistantSectionsContent({
       transcript.some((item) => item.role === "user")
   );
 
+  const showIntroCard = Boolean(
+    sessionHydrated &&
+      !sourceSubmitted &&
+      !serverTimeline.length &&
+      transcript.length === 0 &&
+      canonicalAssistantMessage
+  );
+
   const composerPlaceholder = useMemo(() => {
     if (currentQuestion?.placeholder) return currentQuestion.placeholder;
 
@@ -732,7 +811,7 @@ function SetupAssistantSectionsContent({
     serverTimelineFingerprintRef.current = fingerprint;
     responseFingerprintRef.current = fingerprint;
     pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
+    setHasPendingTurn(false);
     dispatchTranscript({
       type: "replace",
       entries: serverTimeline,
@@ -745,7 +824,15 @@ function SetupAssistantSectionsContent({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [transcript, busy, localError, errorMessage, smartDraftReady, canonicalAssistantMessage]);
+  }, [
+    transcript,
+    busy,
+    localError,
+    errorMessage,
+    smartDraftReady,
+    canonicalAssistantMessage,
+    showIntroCard,
+  ]);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -761,7 +848,7 @@ function SetupAssistantSectionsContent({
       s(serverLast.body) === canonicalAssistantMessage
     ) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -772,7 +859,7 @@ function SetupAssistantSectionsContent({
       s(lastTranscriptItem.meta) === canonicalAssistantMeta
     ) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -790,13 +877,13 @@ function SetupAssistantSectionsContent({
 
     if (!canonicalAssistantMessage) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
     if (responseFingerprintRef.current === fingerprint) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -813,7 +900,7 @@ function SetupAssistantSectionsContent({
     });
 
     pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
+    setHasPendingTurn(false);
   }, [
     sessionHydrated,
     busy,
@@ -834,7 +921,7 @@ function SetupAssistantSectionsContent({
 
     setLocalError("");
     pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
+    setHasPendingTurn(true);
 
     dispatchTranscript({
       type: "append",
@@ -855,7 +942,7 @@ function SetupAssistantSectionsContent({
       });
     } catch (error) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -872,7 +959,7 @@ function SetupAssistantSectionsContent({
 
     setLocalError("");
     pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
+    setHasPendingTurn(true);
 
     dispatchTranscript({
       type: "append",
@@ -897,7 +984,7 @@ function SetupAssistantSectionsContent({
       });
     } catch (error) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Message processing failed."));
     }
   }
@@ -911,7 +998,19 @@ function SetupAssistantSectionsContent({
     handleMessageSubmit();
   }
 
+  function handleStartSetupAction() {
+    onSecondaryAction?.(secondaryAction);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }
+
+  function handlePrimaryActionClick() {
+    onPrimaryAction?.(primaryAction);
+  }
+
   const showBootBubble =
+    !showIntroCard &&
     transcript.length === 0 &&
     serverTimeline.length === 0 &&
     sessionHydrated &&
@@ -924,6 +1023,16 @@ function SetupAssistantSectionsContent({
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
           <StatusNotice model={finalModel} />
+
+          {showIntroCard ? (
+            <IntroAssistantCard
+              message={canonicalAssistantMessage}
+              primaryAction={primaryAction}
+              secondaryAction={secondaryAction}
+              onPrimaryAction={handlePrimaryActionClick}
+              onSecondaryAction={handleStartSetupAction}
+            />
+          ) : null}
 
           <AnimatePresence initial={false}>
             {transcript.map((item) => (
@@ -968,6 +1077,7 @@ function SetupAssistantSectionsContent({
           value={composerValue}
           busy={busy}
           placeholder={composerPlaceholder}
+          textareaRef={textareaRef}
           onChange={setComposerValue}
           onSubmit={handleSubmit}
         />

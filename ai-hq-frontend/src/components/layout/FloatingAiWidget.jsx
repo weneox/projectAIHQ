@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { RotateCcw, X } from "lucide-react";
@@ -130,6 +131,35 @@ function buildDefaultAssistant() {
   };
 }
 
+function buildFreshEntryAssistantSeed() {
+  const base = buildDefaultAssistant();
+  const intro =
+    "Salam. Mən sizin setup assistantınızam. İstəsəniz əvvəl launch kanalını qoşa bilərik, ya da elə buradan biznesinizi birlikdə yığa bilərik. Siz rahat şəkildə yazın — mən vacib olan məlumatı çıxarıb setup draftını yığacağam.";
+
+  return {
+    ...base,
+    title: "Setup studio",
+    statusLabel: "New",
+    summary: "Fresh setup entry",
+    primaryAction: {
+      id: "connect_channel",
+      label: "Go to channel",
+      intent: "launch_channel",
+    },
+    secondaryAction: {
+      id: "start_setup",
+      label: "Start setup",
+      intent: "setup",
+    },
+    assistant: {
+      ...base.assistant,
+      phase: "source_capture",
+      message: intro,
+      assistantMessage: intro,
+    },
+  };
+}
+
 function buildLoadingAssistantSeed() {
   return {
     ...buildDefaultAssistant(),
@@ -149,6 +179,7 @@ function normalizeDecisionAssistant(value = {}) {
     completion: obj(source.completion),
     servicesCatalog: obj(source.servicesCatalog),
     sourceInsights: arr(source.sourceInsights),
+    timeline: arr(source.timeline),
     phase: s(source.phase),
     message: s(source.message || source.assistantMessage),
     assistantMessage: s(source.assistantMessage || source.message),
@@ -241,11 +272,19 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
   return {
     ...reviewRoot,
     review: obj(reviewRoot.review),
+    timeline: arr(reviewRoot.timeline),
     bundleSources: arr(reviewRoot.bundleSources),
     contributionSummary: obj(reviewRoot.contributionSummary),
     fieldProvenance: obj(reviewRoot.fieldProvenance),
     reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
-    assistant,
+    assistant: {
+      ...assistant,
+      timeline: arr(
+        obj(reviewRoot.assistant).timeline ||
+          reviewRoot.timeline ||
+          obj(assistantState.assistant).timeline
+      ),
+    },
   };
 }
 
@@ -312,7 +351,7 @@ function getConversationStorageKey(tenantKey = "") {
 function clearSetupConversationStorage(tenantKey = "") {
   try {
     const storageKey = getConversationStorageKey(tenantKey);
-    window.sessionStorage.removeItem(`setup_assistant_timeline:${storageKey}`);
+    window.sessionStorage.removeItem(`setup_assistant_chat_v3:${storageKey}`);
   } catch {
     return;
   }
@@ -344,6 +383,7 @@ function hasVisibleSetupState(state = {}) {
       s(sourceMetadata.primarySourceType) ||
       s(sourceMetadata.primarySourceUrl) ||
       s(obj(assistant.nextQuestion).key) ||
+      s(assistant.message || assistant.assistantMessage) ||
       assistant.readyForApproval === true
   );
 }
@@ -355,15 +395,20 @@ export default function FloatingAiWidget({
   assistant = null,
   presentation = "floating",
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const assistantRef = useRef(normalizeAssistantState(assistant));
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;
   const workspace = useWorkspaceTenantKey({ enabled: panelOpen });
 
-  const [clientAssistant, setClientAssistant] = useState(
-    normalizeAssistantState(assistant)
+  const freshEntrySeed = useMemo(
+    () => normalizeAssistantState(buildFreshEntryAssistantSeed()),
+    []
   );
+
+  const assistantRef = useRef(freshEntrySeed);
+  const [freshEntryMode, setFreshEntryMode] = useState(true);
+  const [clientAssistant, setClientAssistant] = useState(freshEntrySeed);
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [capturingSource, setCapturingSource] = useState(false);
@@ -424,12 +469,32 @@ export default function FloatingAiWidget({
     staleTime: 30_000,
   });
 
+  const serverAssistant = useMemo(
+    () => normalizeAssistantState(sessionQuery.data),
+    [sessionQuery.data]
+  );
+
+  const hasServerVisibleSetup = useMemo(() => {
+    const reviewRoot = obj(reviewQuery.data);
+    return (
+      hasVisibleSetupState(serverAssistant) ||
+      Boolean(
+        s(obj(reviewRoot.session).id) ||
+          s(obj(obj(reviewRoot.review).session).id)
+      )
+    );
+  }, [serverAssistant, reviewQuery.data]);
+
   const baseAssistant = useMemo(() => {
-    const sessionAssistant = normalizeAssistantState(sessionQuery.data);
+    if (freshEntryMode) {
+      return freshEntrySeed;
+    }
+
+    const sessionAssistant = serverAssistant;
     return s(sessionAssistant.session?.id)
       ? sessionAssistant
       : normalizeAssistantState(assistant);
-  }, [assistant, sessionQuery.data]);
+  }, [assistant, serverAssistant, freshEntryMode, freshEntrySeed]);
 
   useEffect(() => {
     assistantRef.current = baseAssistant;
@@ -453,29 +518,34 @@ export default function FloatingAiWidget({
     if (lastTenantKeyRef.current === nextTenantKey) return;
 
     lastTenantKeyRef.current = nextTenantKey;
-    const loadingAssistant = normalizeAssistantState(buildLoadingAssistantSeed());
-    assistantRef.current = loadingAssistant;
-    setClientAssistant(loadingAssistant);
+    setFreshEntryMode(true);
+    assistantRef.current = freshEntrySeed;
+    setClientAssistant(freshEntrySeed);
     setSaving(false);
     setFinalizing(false);
     setCapturingSource(false);
     setResetting(false);
     setSetupError("");
-  }, [workspace.tenantKey]);
+  }, [workspace.tenantKey, freshEntrySeed]);
 
   const mergedReviewPayload = useMemo(
-    () => buildMergedReviewPayload(reviewQuery.data, clientAssistant),
-    [reviewQuery.data, clientAssistant]
+    () =>
+      freshEntryMode
+        ? null
+        : buildMergedReviewPayload(reviewQuery.data, clientAssistant),
+    [reviewQuery.data, clientAssistant, freshEntryMode]
   );
 
   const sessionHydrated = useMemo(() => {
     if (!panelOpen || !workspace.ready) return false;
+    if (freshEntryMode) return true;
     return !sessionQuery.isLoading && !reviewQuery.isLoading;
   }, [
     panelOpen,
     workspace.ready,
     sessionQuery.isLoading,
     reviewQuery.isLoading,
+    freshEntryMode,
   ]);
 
   const conversationStorageKey = useMemo(
@@ -483,9 +553,17 @@ export default function FloatingAiWidget({
     [workspace.tenantKey]
   );
 
+  const effectiveStorageKey = useMemo(
+    () =>
+      freshEntryMode
+        ? `${conversationStorageKey}:fresh`
+        : conversationStorageKey,
+    [conversationStorageKey, freshEntryMode]
+  );
+
   const canReset = useMemo(
-    () => hasVisibleSetupState(clientAssistant),
-    [clientAssistant]
+    () => freshEntryMode !== true || hasVisibleSetupState(clientAssistant),
+    [clientAssistant, freshEntryMode]
   );
 
   if (hidden) return null;
@@ -522,28 +600,49 @@ export default function FloatingAiWidget({
     if (latestSession) {
       queryClient.setQueryData(setupAssistantSessionQueryKey, latestSession);
       setClientAssistant((prev) => buildAssistantFromApi(prev, latestSession));
+      setFreshEntryMode(false);
       return latestSession;
     }
 
-    const emptyAssistant = normalizeAssistantState(buildDefaultAssistant());
     queryClient.setQueryData(setupAssistantSessionQueryKey, null);
-    setClientAssistant(emptyAssistant);
+    setFreshEntryMode(true);
+    setClientAssistant(freshEntrySeed);
     return null;
+  }
+
+  async function bootstrapFreshSessionIfNeeded() {
+    if (!freshEntryMode) return;
+
+    if (hasServerVisibleSetup) {
+      try {
+        await discardCurrentSetupReview({
+          reason: "fresh widget entry",
+        });
+      } catch {
+        // ignore and continue
+      }
+    }
+
+    clearSetupConversationStorage(workspace.tenantKey);
+    queryClient.setQueryData(setupAssistantSessionQueryKey, null);
+    queryClient.setQueryData(setupReviewQueryKey, null);
   }
 
   async function ensureSession() {
     const current = assistantRef.current;
-    if (s(current.session?.id)) return current;
+    if (!freshEntryMode && s(current.session?.id)) return current;
 
     const cachedSession = normalizeAssistantState(
       queryClient.getQueryData(setupAssistantSessionQueryKey)
     );
 
-    if (s(cachedSession.session?.id)) {
+    if (!freshEntryMode && s(cachedSession.session?.id)) {
       assistantRef.current = cachedSession;
       setClientAssistant(cachedSession);
       return cachedSession;
     }
+
+    await bootstrapFreshSessionIfNeeded();
 
     const response = await startSetupAssistantSession();
     let nextAssistant = null;
@@ -552,6 +651,7 @@ export default function FloatingAiWidget({
       return nextAssistant;
     });
     queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+    setFreshEntryMode(false);
     return nextAssistant || assistantRef.current;
   }
 
@@ -569,6 +669,7 @@ export default function FloatingAiWidget({
       });
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
       queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+      setFreshEntryMode(false);
       await refreshWidgetWorkspaceState();
       return response;
     } catch (error) {
@@ -635,18 +736,22 @@ export default function FloatingAiWidget({
     setSetupError("");
 
     try {
-      await discardCurrentSetupReview({
-        reason: "fresh setup restart",
-      });
+      try {
+        await discardCurrentSetupReview({
+          reason: "fresh setup restart",
+        });
+      } catch {
+        // ignore missing session cases
+      }
 
       clearSetupConversationStorage(workspace.tenantKey);
 
       queryClient.setQueryData(setupAssistantSessionQueryKey, null);
       queryClient.setQueryData(setupReviewQueryKey, null);
 
-      const emptyAssistant = normalizeAssistantState(buildDefaultAssistant());
-      assistantRef.current = emptyAssistant;
-      setClientAssistant(emptyAssistant);
+      assistantRef.current = freshEntrySeed;
+      setClientAssistant(freshEntrySeed);
+      setFreshEntryMode(true);
 
       await refreshWidgetWorkspaceState({
         emitReason: "setup-reset",
@@ -671,6 +776,7 @@ export default function FloatingAiWidget({
         ? lower(type)
         : lower(resolvedSource.type);
     const normalizedSourceValue = s(resolvedSource.value || sourceValue);
+
     if (
       !sourceType ||
       !sourceValue ||
@@ -719,6 +825,7 @@ export default function FloatingAiWidget({
         });
         setClientAssistant((prev) => buildAssistantFromApi(prev, patchResponse));
         queryClient.setQueryData(setupAssistantSessionQueryKey, patchResponse);
+        setFreshEntryMode(false);
 
         const analyzeResponse = await analyzeSetupIntake(
           buildManualAnalyzePayload(sourceType, normalizedSourceValue)
@@ -739,6 +846,23 @@ export default function FloatingAiWidget({
     } finally {
       setCapturingSource(false);
     }
+  }
+
+  function handlePrimaryIntroAction(action = {}) {
+    const intent = lower(action?.intent);
+
+    if (intent === "launch_channel" || intent === "connect_channel") {
+      onOpenChange?.(false);
+      navigate("/channels");
+      return;
+    }
+
+    navigate("/channels");
+  }
+
+  function handleSecondaryIntroAction() {
+    setFreshEntryMode(true);
+    setSetupError("");
   }
 
   const wrapperClass = pageMode
@@ -812,8 +936,8 @@ export default function FloatingAiWidget({
 
             <div className="min-h-0 flex-1">
               <SetupAssistantSections
-                key={conversationStorageKey}
-                storageKey={conversationStorageKey}
+                key={effectiveStorageKey}
+                storageKey={effectiveStorageKey}
                 sessionHydrated={sessionHydrated}
                 assistant={clientAssistant}
                 reviewPayload={mergedReviewPayload}
@@ -824,6 +948,8 @@ export default function FloatingAiWidget({
                 onCaptureSource={handleSetupCaptureSource}
                 onParseMessage={handleSetupParseMessage}
                 onFinalize={handleSetupFinalize}
+                onPrimaryAction={handlePrimaryIntroAction}
+                onSecondaryAction={handleSecondaryIntroAction}
               />
             </div>
           </motion.section>
