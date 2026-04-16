@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { RotateCcw, X } from "lucide-react";
@@ -358,7 +357,6 @@ export default function FloatingAiWidget({
   assistant = null,
   presentation = "floating",
 }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;

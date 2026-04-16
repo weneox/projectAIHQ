@@ -27,7 +27,6 @@ import {
 import { getNextQuestion } from "./setupAssistantApp/questions.js";
 import { buildSetupAssistantSeedFromReview } from "./setupAssistantApp/seed.js";
 import {
-  buildSetupAssistantAuthorityState,
   buildSetupAssistantSessionPayload,
   buildStoredSetupAssistantPayload,
 } from "./setupAssistantApp/sessionPayload.js";
@@ -44,7 +43,6 @@ export {
 };
 
 export const __test__ = {
-  buildSetupAssistantAuthorityState,
   buildCanonicalBusinessProfileFromSetupAssistant,
   buildCanonicalContactsFromSetupAssistant,
   buildCanonicalReviewDraftPatchFromSetupAssistant,

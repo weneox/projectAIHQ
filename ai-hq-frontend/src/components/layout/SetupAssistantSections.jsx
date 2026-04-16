@@ -510,19 +510,14 @@ function SetupAssistantSectionsContent({
   }, [currentQuestion]);
 
   const assistantMeta = useMemo(() => buildAssistantMeta(finalModel), [finalModel]);
+  const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
   const showEphemeralAssistantBubble = Boolean(
     sessionHydrated &&
       serverTimeline.length === 0 &&
       s(finalModel.message) &&
-      !pendingUserMessage
+      !visiblePendingUserMessage
   );
-
-  useEffect(() => {
-    if (!busy) {
-      setPendingUserMessage("");
-    }
-  }, [busy]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -532,7 +527,7 @@ function SetupAssistantSectionsContent({
     });
   }, [
     serverTimeline,
-    pendingUserMessage,
+    visiblePendingUserMessage,
     busy,
     localError,
     errorMessage,
@@ -614,8 +609,8 @@ function SetupAssistantSectionsContent({
             ))}
           </AnimatePresence>
 
-          {pendingUserMessage ? (
-            <ChatBubble role="user" body={pendingUserMessage} />
+          {visiblePendingUserMessage ? (
+            <ChatBubble role="user" body={visiblePendingUserMessage} />
           ) : null}
 
           {showEphemeralAssistantBubble ? (
