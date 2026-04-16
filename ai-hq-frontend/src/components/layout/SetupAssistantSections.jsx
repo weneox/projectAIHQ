@@ -1,47 +1,19 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { AlertCircle, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const STORAGE_PREFIX = "setup_assistant_chat_v1";
+const STORAGE_PREFIX = "setup_assistant_chat_v3";
 
-const QUESTION_FALLBACKS = {
-  profile: {
-    prompt: "Biznesin dəqiq public adını və nə etdiyini bir təmiz cümlə ilə yaz.",
-    placeholder:
-      "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
-  },
-  website: {
-    prompt: "Əsas website linkini yaz, əgər varsa.",
-    placeholder: "Məsələn: yourbusiness.com",
-  },
-  services: {
-    prompt:
-      "AI-in danışmalı olduğu real xidmətləri yaz. Ümumi sözləri yox, həqiqi xidmətləri yaz.",
-    placeholder:
-      "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
-  },
-  contacts: {
-    prompt:
-      "Müştərini ilk olaraq hara yönləndirməli olduğumuzu yaz.",
-    placeholder:
-      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
-  },
-  hours: {
-    prompt: "İş və cavab saatlarını bir sətirdə yaz.",
-    placeholder:
-      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
-  },
-  pricing: {
-    prompt: "AI qiymət barədə necə danışmalıdır?",
-    placeholder:
-      "Məsələn: xidmətə görə dəyişir, dəqiq quote üçün müraciət istənməlidir",
-  },
-  handoff: {
-    prompt: "AI hansı hallarda dayanıb insana ötürməlidir?",
-    placeholder:
-      "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
-  },
+const STEP_PLACEHOLDERS = {
+  source_capture:
+    "Paste a website, Google Maps link, Instagram, Facebook, or a short business note",
+  profile: "Write the exact business identity in one clean message",
+  services: "Write only the real customer-facing services",
+  contacts: "Write the main public contact route",
+  hours: "Write the public weekly hours",
+  pricing: "Write how AI should speak about pricing publicly",
+  handoff: "Write when AI must stop and escalate to a human",
 };
 
 function s(value, fallback = "") {
@@ -58,14 +30,14 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function uniqueStrings(items = [], max = 12) {
+function uniqueStrings(items = [], max = 16) {
   return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
     0,
     max
   );
 }
 
-function compactText(value, max = 260) {
+function compactText(value, max = 220) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
@@ -84,6 +56,7 @@ function listPreview(items = [], max = 6) {
 function looksLikeUrlOrDomain(value = "") {
   const text = s(value);
   if (!text) return false;
+
   return (
     /^https?:\/\//i.test(text) ||
     /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)
@@ -146,263 +119,237 @@ function resolveHintStepFromMessage(value = "", fallbackStep = "profile") {
   if (looksLikeHoursText(text)) return "hours";
   if (looksLikePricingText(text)) return "pricing";
 
-  if (/şikayət|complaint|refund|payment|operator|manager|handoff|ötür/i.test(lowerText)) {
+  if (
+    /şikayət|complaint|refund|payment|operator|manager|handoff|ötür/i.test(
+      lowerText
+    )
+  ) {
     return "handoff";
   }
 
-  if (/[,\n;]/.test(text) && text.split(/[,;\n]/).filter((item) => s(item)).length >= 2) {
+  if (
+    /[,\n;]/.test(text) &&
+    text.split(/[,;\n]/).filter((item) => s(item)).length >= 2
+  ) {
     return "services";
   }
 
   return s(fallbackStep, "profile");
 }
 
-function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
-  const primary = obj(reviewPayload?.assistant);
-  const fallback = obj(obj(assistant).assistant);
-  const source = Object.keys(primary).length ? primary : fallback;
-  const nextQuestion = obj(source.nextQuestion);
-  const activeQuestions = arr(obj(source.interviewPlan).activeQuestions);
-  const fallbackQuestion =
-    !s(nextQuestion.key) && activeQuestions.length ? obj(activeQuestions[0]) : {};
+function normalizeQuestion(value = {}) {
+  const source = obj(value);
 
   return {
-    nextQuestion: s(nextQuestion.key) ? nextQuestion : fallbackQuestion,
-    readyForApproval: source.readyForApproval === true,
-    draftVersion: Number(source.draftVersion || 0),
-    phase: s(source.phase),
-    message: s(source.message || source.assistantMessage),
+    key: s(source.key).toLowerCase(),
+    step: s(source.step || source.key).toLowerCase(),
+    title: s(source.title),
+    prompt: s(source.prompt),
+    placeholder:
+      s(source.placeholder) ||
+      s(STEP_PLACEHOLDERS[s(source.step || source.key).toLowerCase()]) ||
+      "Write your answer",
+  };
+}
+
+function normalizeTimelineEntry(value = {}) {
+  const source = obj(value);
+
+  return {
+    id: s(source.id) || `timeline-${Date.now()}`,
+    role: s(source.role).toLowerCase() === "user" ? "user" : "assistant",
+    body: s(source.text || source.body || source.message),
+    meta: s(source.meta),
+    questionKey: s(source.questionKey || source.question_key).toLowerCase(),
+    phase: s(source.phase).toLowerCase(),
     provider: s(source.provider),
     model: s(source.model),
     usedFallback: source.usedFallback === true,
     error: s(source.error),
+    createdAt: source.createdAt || source.created_at || null,
   };
 }
 
-function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
-  const review = obj(reviewPayload?.review || reviewPayload);
-  const reviewDraft = obj(review.draft);
-  const assistantRoot = obj(assistant);
-  const assistantDraft = obj(obj(assistantRoot.assistant).draft);
-  const setupDraft = obj(assistantRoot.draft);
-  const profile = obj(reviewDraft.businessProfile);
+function mapServiceItems(items = []) {
+  return uniqueStrings(
+    arr(items).map((item) => s(item?.title || item?.name || item?.label)),
+    24
+  );
+}
 
-  const services = arr(reviewDraft.services)
-    .map((item) => s(item.title || item.name || item.label))
-    .filter(Boolean);
+function mapContactItems(items = []) {
+  return uniqueStrings(
+    arr(items).map((item) =>
+      s(
+        item?.label ||
+          item?.value ||
+          item?.channel ||
+          item?.type ||
+          item?.phone ||
+          item?.email
+      )
+    ),
+    24
+  );
+}
 
-  const contacts = arr(reviewDraft.contacts)
-    .map((item) => s(item.label || item.channel || item.value || item.type))
-    .filter(Boolean);
+function formatHoursItem(item = {}) {
+  const row = obj(item);
+  const day = s(row.day);
+  const openTime = s(row.openTime || row.open || row.from);
+  const closeTime = s(row.closeTime || row.close || row.to);
+  const notes = s(row.notes);
+
+  if (row.allDay === true) {
+    return [day, "24/7"].filter(Boolean).join(" ");
+  }
+
+  if (row.closed === true) {
+    return [day, "closed"].filter(Boolean).join(" ");
+  }
+
+  if (openTime && closeTime) {
+    return [day, `${openTime}–${closeTime}`].filter(Boolean).join(" ");
+  }
+
+  if (notes) {
+    return [day, notes].filter(Boolean).join(" ");
+  }
+
+  return "";
+}
+
+function mapHoursItems(items = []) {
+  return uniqueStrings(arr(items).map((item) => formatHoursItem(item)), 24);
+}
+
+function buildCanonicalAssistantState(reviewPayload = null, assistantState = {}) {
+  const reviewAssistant = obj(reviewPayload?.assistant);
+  const setupAssistant = obj(obj(assistantState).assistant);
+  const source = Object.keys(reviewAssistant).length
+    ? reviewAssistant
+    : setupAssistant;
+
+  const nextQuestion =
+    Object.keys(obj(source.nextQuestion)).length > 0
+      ? normalizeQuestion(source.nextQuestion)
+      : arr(obj(source.interviewPlan).activeQuestions).length
+        ? normalizeQuestion(arr(obj(source.interviewPlan).activeQuestions)[0])
+        : null;
+
+  const timeline = arr(
+    source.timeline ||
+      obj(assistantState).assistantTimeline ||
+      reviewPayload?.timeline
+  )
+    .map(normalizeTimelineEntry)
+    .filter((item) => item.body);
 
   return {
-    businessName: s(
-      profile.companyName ||
-        obj(setupDraft.businessProfile).companyName ||
-        assistantDraft.businessName ||
-        localAnswers.profile
-    ),
-    whatThisBusinessIs: s(
-      profile.description ||
-        obj(setupDraft.businessProfile).description ||
-        assistantDraft.whatThisBusinessIs
-    ),
-    coreServices: services.length ? services : arr(assistantDraft.coreServices),
-    pricingPosture: s(
-      obj(setupDraft.pricingPosture).publicSummary ||
-        assistantDraft.pricingPosture
-    ),
-    contactRoutes: uniqueStrings([
-      s(profile.primaryPhone),
-      s(profile.primaryEmail),
-      ...contacts,
-      ...arr(assistantDraft.contactRoutes),
-    ]),
-    humanHandoff: s(
-      obj(setupDraft.handoffRules).summary || assistantDraft.humanHandoff
-    ),
-    hours: arr(assistantDraft.hours),
-    websiteUrl: s(
-      assistantDraft.websiteUrl || obj(setupDraft.businessProfile).websiteUrl
-    ),
+    message: s(source.assistantMessage || source.message),
+    phase: s(source.phase),
+    nextQuestion,
+    readyForApproval: source.readyForApproval === true,
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
+    sourceSignals: obj(source.sourceSignals),
+    confidence: obj(source.confidence),
+    recommendation: obj(source.recommendation),
+    interviewPlan: obj(source.interviewPlan),
+    draft: obj(source.draft),
+    rejectedInputs: arr(source.rejectedInputs),
+    timeline,
   };
 }
 
-function buildFinalViewModel({
-  reviewPayload = null,
-  assistant = {},
-  localAnswers = {},
-}) {
-  const reviewAssistant = Object.keys(obj(reviewPayload?.assistant)).length
-    ? obj(reviewPayload?.assistant)
-    : obj(obj(assistant).assistant);
+function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
+  const canonicalAssistant = buildCanonicalAssistantState(
+    reviewPayload,
+    assistantState
+  );
+  const setupDraft = obj(obj(assistantState).draft);
+  const businessProfile = obj(setupDraft.businessProfile);
+  const pricingPosture = obj(setupDraft.pricingPosture);
+  const handoffRules = obj(setupDraft.handoffRules);
+  const sourceMetadata = obj(setupDraft.sourceMetadata);
 
-  const draft = obj(reviewAssistant.draft);
-  const sourceSignals = obj(reviewAssistant.sourceSignals);
-  const fallback = buildFallbackDraft(reviewPayload, assistant, localAnswers);
+  const previewDraft = obj(canonicalAssistant.draft);
+
+  const coreServices =
+    arr(previewDraft.coreServices).length > 0
+      ? uniqueStrings(previewDraft.coreServices, 24)
+      : mapServiceItems(setupDraft.services);
+
+  const contactRoutes =
+    arr(previewDraft.contactRoutes).length > 0
+      ? uniqueStrings(previewDraft.contactRoutes, 24)
+      : mapContactItems(setupDraft.contacts);
+
+  const hours =
+    arr(previewDraft.hours).length > 0
+      ? uniqueStrings(previewDraft.hours, 24)
+      : mapHoursItems(setupDraft.hours);
 
   return {
-    message: s(reviewAssistant.message || reviewAssistant.assistantMessage),
-    readyForApproval: reviewAssistant.readyForApproval === true,
-    phase: s(reviewAssistant.phase),
-    provider: s(reviewAssistant.provider),
-    model: s(reviewAssistant.model),
-    usedFallback: reviewAssistant.usedFallback === true,
-    error: s(reviewAssistant.error),
+    ...canonicalAssistant,
     draft: {
-      businessName: s(draft.businessName || fallback.businessName),
+      businessName: s(previewDraft.businessName || businessProfile.companyName),
       whatThisBusinessIs: s(
-        draft.whatThisBusinessIs || fallback.whatThisBusinessIs
+        previewDraft.whatThisBusinessIs || businessProfile.description
       ),
-      websiteUrl: s(draft.websiteUrl || fallback.websiteUrl),
-      coreServices: arr(draft.coreServices).length
-        ? arr(draft.coreServices)
-        : arr(fallback.coreServices),
-      pricingPosture: s(draft.pricingPosture || fallback.pricingPosture),
-      contactRoutes: arr(draft.contactRoutes).length
-        ? arr(draft.contactRoutes)
-        : arr(fallback.contactRoutes),
-      humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
-      hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
-    },
-    sourceSignals: {
-      primarySourceLabel: s(sourceSignals.primarySourceLabel),
-      primarySourceUrl: s(sourceSignals.primarySourceUrl),
-      coverage: obj(sourceSignals.coverage),
+      websiteUrl: s(
+        previewDraft.websiteUrl ||
+          businessProfile.websiteUrl ||
+          sourceMetadata.primarySourceUrl
+      ),
+      coreServices,
+      pricingPosture: s(
+        previewDraft.pricingPosture || pricingPosture.publicSummary
+      ),
+      contactRoutes,
+      humanHandoff: s(previewDraft.humanHandoff || handoffRules.summary),
+      hours,
     },
   };
 }
 
-function hasBackendSmartDraft(model = {}) {
+function hasStrongDraft(model = {}) {
   const draft = obj(model.draft);
 
-  return (
+  return Boolean(
     model.readyForApproval === true &&
-    Boolean(s(draft.businessName)) &&
-    Boolean(s(draft.whatThisBusinessIs)) &&
-    arr(draft.coreServices).length > 0 &&
-    arr(draft.contactRoutes).length > 0 &&
-    Boolean(s(draft.pricingPosture)) &&
-    Boolean(s(draft.humanHandoff))
+      s(draft.businessName) &&
+      s(draft.whatThisBusinessIs) &&
+      arr(draft.coreServices).length > 0 &&
+      arr(draft.contactRoutes).length > 0 &&
+      s(draft.pricingPosture) &&
+      s(draft.humanHandoff)
   );
 }
 
-function shouldOverrideQuestionPrompt(prompt = "") {
-  const text = s(prompt);
-  if (!text) return true;
+function buildAssistantMeta(model = {}) {
+  const sourceSignals = obj(model.sourceSignals);
+  const parts = [];
 
-  return (
-    /^send\b/i.test(text) ||
-    /^add\b/i.test(text) ||
-    /^describe\b/i.test(text) ||
-    /^define\b/i.test(text) ||
-    /^list\b/i.test(text) ||
-    /^confirm\b/i.test(text) ||
-    /^lock\b/i.test(text) ||
-    /^set\b/i.test(text) ||
-    /^current signal:/i.test(text) ||
-    /\bno routing lane\b/i.test(text) ||
-    /\bnot set\b/i.test(text) ||
-    /\brecommended\b/i.test(text)
-  );
-}
-
-function buildQuestionPrompt(question = {}) {
-  const key = s(question?.key).toLowerCase();
-  const fallbackPrompt = s(obj(QUESTION_FALLBACKS[key]).prompt);
-  const prompt = s(question.prompt);
-
-  if (shouldOverrideQuestionPrompt(prompt)) {
-    return fallbackPrompt || prompt;
+  if (s(sourceSignals.primarySourceLabel)) {
+    parts.push(s(sourceSignals.primarySourceLabel));
   }
 
-  return prompt || fallbackPrompt;
-}
-
-function buildQuestionPlaceholder(question = {}) {
-  const key = s(question?.key).toLowerCase();
-  const prompt = s(question.placeholder);
-  const fallback = s(obj(QUESTION_FALLBACKS[key]).placeholder);
-
-  if (prompt && !/MÉ|â€”|Ã|Å|É™|zÉ|vÉ/i.test(prompt)) {
-    return prompt;
+  if (s(sourceSignals.primarySourceUrl)) {
+    parts.push(s(sourceSignals.primarySourceUrl));
   }
 
-  return fallback || "Cavabını yaz";
-}
-
-function buildWelcomeAssistantMessage() {
-  return {
-    body:
-      "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə səliqəli drafta çevirməkdir. Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi ilə başlaya bilərsən.",
-    meta: "",
-  };
-}
-
-function buildQuestionAssistantMessage({
-  currentQuestion = null,
-  finalModel = {},
-}) {
-  const prompt = buildQuestionPrompt(currentQuestion);
-  const sourceLabel = s(obj(finalModel.sourceSignals).primarySourceLabel);
-  const sourceUrl = s(obj(finalModel.sourceSignals).primarySourceUrl);
-
-  const intro =
-    sourceLabel || sourceUrl
-      ? "Mənbədən artıq anladığım hissələri təkrar soruşmuram."
-      : "Mən bunu sərbəst yazdığın formada başa düşməyə çalışacağam.";
-
-  return {
-    body: `${prompt} ${intro}`,
-    meta: [sourceLabel, sourceUrl].filter(Boolean).join(" · "),
-  };
-}
-
-function buildContinueAssistantMessage(finalModel = {}) {
-  const sourceLabel = s(obj(finalModel.sourceSignals).primarySourceLabel);
-  const sourceUrl = s(obj(finalModel.sourceSignals).primarySourceUrl);
-  const draft = obj(finalModel.draft);
-
-  const knownBits = [];
-  if (s(draft.businessName)) knownBits.push(`ad: ${draft.businessName}`);
-  if (s(draft.whatThisBusinessIs)) knownBits.push("təsvir var");
-  if (arr(draft.coreServices).length) knownBits.push(`${arr(draft.coreServices).length} xidmət`);
-  if (arr(draft.contactRoutes).length) knownBits.push("əlaqə var");
-  if (arr(draft.hours).length) knownBits.push("saat var");
-  if (s(draft.pricingPosture)) knownBits.push("pricing var");
-
-  const body = knownBits.length
-    ? `Hazırda yetərli siqnallar var: ${knownBits.join(", ")}. İstəsən əlavə detal və ya düzəliş yaz. Hazır hesab edirsənsə, “bitdi” də yaza bilərsən.`
-    : "Davam edə bilərik. İstəsən əlavə detal və ya düzəliş yaz. Hazır hesab edirsənsə, “bitdi” də yaza bilərsən.";
-
-  return {
-    body,
-    meta: [sourceLabel, sourceUrl].filter(Boolean).join(" · "),
-  };
-}
-
-function buildAssistantView({
-  sourceSubmitted = false,
-  currentQuestion = null,
-  smartDraftReady = false,
-  finalModel = {},
-}) {
-  if (!sourceSubmitted) {
-    return buildWelcomeAssistantMessage();
+  if (model.usedFallback === true) {
+    parts.push("Degraded reasoning mode");
   }
 
-  if (smartDraftReady) {
-    return null;
-  }
+  return parts.join(" · ");
+}
 
-  if (currentQuestion) {
-    return buildQuestionAssistantMessage({
-      currentQuestion,
-      finalModel,
-    });
-  }
-
-  return buildContinueAssistantMessage(finalModel);
+function getConversationStorageKey(storageKey = "") {
+  return `${STORAGE_PREFIX}:${s(storageKey, "default")}`;
 }
 
 function makeTranscriptEntry(entry = {}) {
@@ -418,9 +365,7 @@ function loadStoredTranscript(storageKey = "") {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = window.sessionStorage.getItem(
-      `${STORAGE_PREFIX}:${s(storageKey, "default")}`
-    );
+    const raw = window.sessionStorage.getItem(getConversationStorageKey(storageKey));
     return arr(JSON.parse(raw || "[]"))
       .map((item, index) =>
         makeTranscriptEntry({
@@ -441,7 +386,7 @@ function saveStoredTranscript(storageKey = "", transcript = []) {
 
   try {
     window.sessionStorage.setItem(
-      `${STORAGE_PREFIX}:${s(storageKey, "default")}`,
+      getConversationStorageKey(storageKey),
       JSON.stringify(
         arr(transcript).map((item) => ({
           id: s(item.id),
@@ -459,6 +404,14 @@ function saveStoredTranscript(storageKey = "", transcript = []) {
 function transcriptReducer(state, action) {
   if (action?.type === "append") {
     return [...arr(state), makeTranscriptEntry(action.entry)];
+  }
+
+  if (action?.type === "replace") {
+    return arr(action.entries).map(makeTranscriptEntry);
+  }
+
+  if (action?.type === "reset") {
+    return [];
   }
 
   return arr(state);
@@ -542,27 +495,30 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
   const draft = obj(model.draft);
 
   const rows = [
-    ["Biznes adı", draft.businessName],
-    ["Biznes nə edir", draft.whatThisBusinessIs],
+    ["Business name", draft.businessName],
+    ["What the business does", draft.whatThisBusinessIs],
     ["Website", draft.websiteUrl],
-    ["Əsas xidmətlər", listPreview(draft.coreServices, 6)],
-    ["Qiymət mövqeyi", draft.pricingPosture],
-    ["Əlaqə yolları", listPreview(draft.contactRoutes, 6)],
-    ["İş saatları", listPreview(draft.hours, 4)],
-    ["İnsana ötürmə", draft.humanHandoff],
+    ["Core services", listPreview(draft.coreServices, 6)],
+    ["Pricing posture", draft.pricingPosture],
+    ["Contact routes", listPreview(draft.contactRoutes, 6)],
+    ["Hours", listPreview(draft.hours, 4)],
+    ["Human handoff", draft.humanHandoff],
   ].filter(([, value]) => s(value));
 
   return (
     <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
       <div className="flex justify-start">
         <div className="max-w-[84%] rounded-[26px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
-          <div className="text-[20px] font-semibold tracking-[-0.04em] text-text">
-            Draft hazırdır
+          <div className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
+            <Sparkles className="h-5 w-5 text-brand" />
+            Draft ready
           </div>
-          <div className="mt-2 text-[15px] leading-7 text-text">
-            Əsas draftı yığdım. Aşağıda yoxla. Dəyişmək istədiyini yaza bilərsən,
-            hər şey doğrudursa təsdiqlə.
-          </div>
+
+          {s(model.message) ? (
+            <div className="mt-2 text-[15px] leading-7 text-text">
+              {model.message}
+            </div>
+          ) : null}
 
           <div className="mt-4 grid gap-3">
             {rows.map(([label, value]) => (
@@ -576,8 +532,34 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
             disabled={finalizing}
             className="mt-4 inline-flex h-11 items-center rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {finalizing ? "Təsdiqlənir..." : "Təsdiqlə və setup-ı bitir"}
+            {finalizing ? "Finalizing..." : "Approve and finish setup"}
           </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function StatusNotice({ model }) {
+  const error = s(model.error);
+
+  if (model.usedFallback !== true && !error) {
+    return null;
+  }
+
+  return (
+    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+      <div className="rounded-[20px] border border-[rgba(239,68,68,0.12)] bg-[rgba(255,244,244,0.9)] px-4 py-3 text-[13px] leading-6 text-[#7f1d1d]">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">
+              {model.usedFallback === true
+                ? "Degraded setup reasoning mode is active."
+                : "Setup assistant reported an issue."}
+            </div>
+            {error ? <div className="mt-0.5">{compactText(error, 180)}</div> : null}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -650,8 +632,8 @@ function SetupAssistantSectionsContent({
 }) {
   const scrollRef = useRef(null);
   const pendingTurnRef = useRef(null);
-  const bootSignatureRef = useRef("");
   const responseFingerprintRef = useRef("");
+  const serverTimelineFingerprintRef = useRef("");
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
@@ -660,42 +642,28 @@ function SetupAssistantSectionsContent({
     storageKey,
     loadStoredTranscript
   );
-  const [localAnswers, setLocalAnswers] = useState({});
   const [hasPendingTurn, setHasPendingTurn] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
   const finalModel = useMemo(
-    () =>
-      buildFinalViewModel({
-        reviewPayload,
-        assistant,
-        localAnswers,
-      }),
-    [reviewPayload, assistant, localAnswers]
-  );
-
-  const assistantControl = useMemo(
-    () => normalizeAssistantControl(reviewPayload, assistant),
+    () => buildFinalViewModel(reviewPayload, assistant),
     [reviewPayload, assistant]
   );
 
   const smartDraftReady = useMemo(
-    () => hasBackendSmartDraft(finalModel),
+    () => hasStrongDraft(finalModel),
     [finalModel]
   );
 
-  const currentQuestion = useMemo(() => {
-    const raw = obj(assistantControl.nextQuestion);
-    if (!s(raw.key)) return null;
+  const currentQuestion = finalModel.nextQuestion;
 
-    return {
-      key: s(raw.key).toLowerCase(),
-      step: s(raw.step || raw.key).toLowerCase(),
-      prompt: buildQuestionPrompt(raw),
-      placeholder: buildQuestionPlaceholder(raw),
-    };
-  }, [assistantControl.nextQuestion]);
+  const canonicalAssistantMessage = s(finalModel.message);
+  const canonicalAssistantMeta = buildAssistantMeta(finalModel);
+  const serverTimeline = useMemo(
+    () => arr(finalModel.timeline).map((item) => makeTranscriptEntry(item)),
+    [finalModel.timeline]
+  );
 
   const hasExistingProgress = useMemo(() => {
     const draft = obj(finalModel.draft);
@@ -715,38 +683,52 @@ function SetupAssistantSectionsContent({
     );
   }, [finalModel]);
 
-  const sourceSubmitted = Boolean(hasExistingProgress || transcript.length > 0);
-
-  const assistantView = useMemo(
-    () =>
-      buildAssistantView({
-        sourceSubmitted,
-        currentQuestion,
-        smartDraftReady,
-        finalModel,
-      }),
-    [sourceSubmitted, currentQuestion, smartDraftReady, finalModel]
+  const sourceSubmitted = Boolean(
+    hasExistingProgress ||
+      serverTimeline.some((item) => item.role === "user") ||
+      transcript.some((item) => item.role === "user")
   );
 
   const composerPlaceholder = useMemo(() => {
+    if (currentQuestion?.placeholder) return currentQuestion.placeholder;
+
     if (!sourceSubmitted) {
-      return "Website, Google Maps linki və ya qısa biznes qeydi yaz";
+      return STEP_PLACEHOLDERS.source_capture;
     }
 
-    if (currentQuestion) {
-      return currentQuestion.placeholder;
-    }
-
-    if (smartDraftReady) {
-      return "Dəyişmək istədiyin detalı yaz";
-    }
-
-    return "Əlavə detal və ya düzəliş yaz";
-  }, [sourceSubmitted, currentQuestion, smartDraftReady]);
+    return (
+      s(STEP_PLACEHOLDERS[s(currentQuestion?.step || currentQuestion?.key)]) ||
+      "Write the next detail or correction"
+    );
+  }, [currentQuestion, sourceSubmitted]);
 
   useEffect(() => {
     saveStoredTranscript(storageKey, transcript);
   }, [storageKey, transcript]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    if (!serverTimeline.length) return;
+
+    const fingerprint = JSON.stringify(
+      serverTimeline.map((item) => ({
+        role: item.role,
+        body: item.body,
+        meta: item.meta,
+      }))
+    );
+
+    if (serverTimelineFingerprintRef.current === fingerprint) return;
+
+    serverTimelineFingerprintRef.current = fingerprint;
+    responseFingerprintRef.current = fingerprint;
+    pendingTurnRef.current = null;
+    setHasPendingTurn(false);
+    dispatchTranscript({
+      type: "replace",
+      entries: serverTimeline,
+    });
+  }, [sessionHydrated, serverTimeline]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -754,56 +736,60 @@ function SetupAssistantSectionsContent({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [transcript, busy, localError, errorMessage, smartDraftReady]);
+  }, [transcript, busy, localError, errorMessage, smartDraftReady, canonicalAssistantMessage]);
 
   useEffect(() => {
     if (!sessionHydrated) return;
-    if (transcript.length > 0) return;
-    if (!assistantView || smartDraftReady) return;
-
-    const signature = JSON.stringify({
-      body: s(assistantView.body),
-      meta: s(assistantView.meta),
-      question: s(currentQuestion?.key),
-      phase: s(finalModel.phase),
-    });
-
-    if (bootSignatureRef.current === signature) return;
-
-    bootSignatureRef.current = signature;
-  }, [
-    sessionHydrated,
-    transcript.length,
-    assistantView,
-    smartDraftReady,
-    currentQuestion,
-    finalModel.phase,
-  ]);
-
-  useEffect(() => {
-    if (!sessionHydrated) return;
-    if (busy) return;
     if (!pendingTurnRef.current) return;
+    if (busy) return;
 
-    const turnId = pendingTurnRef.current;
-    pendingTurnRef.current = null;
+    const lastTranscriptItem = transcript[transcript.length - 1];
+    const serverLast = serverTimeline[serverTimeline.length - 1];
 
-    if (smartDraftReady) {
-      responseFingerprintRef.current = "";
+    if (
+      serverLast &&
+      serverLast.role === "assistant" &&
+      s(serverLast.body) === canonicalAssistantMessage
+    ) {
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
       return;
     }
 
-    if (!assistantView?.body) return;
+    if (
+      lastTranscriptItem &&
+      lastTranscriptItem.role === "assistant" &&
+      s(lastTranscriptItem.body) === canonicalAssistantMessage &&
+      s(lastTranscriptItem.meta) === canonicalAssistantMeta
+    ) {
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
+      return;
+    }
 
     const fingerprint = JSON.stringify({
-      turnId,
-      body: s(assistantView.body),
-      meta: s(assistantView.meta),
-      question: s(currentQuestion?.key),
+      body: canonicalAssistantMessage,
+      meta: canonicalAssistantMeta,
+      questionKey: s(currentQuestion?.key),
       phase: s(finalModel.phase),
       ready: finalModel.readyForApproval === true,
+      provider: s(finalModel.provider),
+      model: s(finalModel.model),
+      usedFallback: finalModel.usedFallback === true,
       error: s(finalModel.error),
     });
+
+    if (!canonicalAssistantMessage) {
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
+      return;
+    }
+
+    if (responseFingerprintRef.current === fingerprint) {
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
+      return;
+    }
 
     responseFingerprintRef.current = fingerprint;
 
@@ -812,19 +798,22 @@ function SetupAssistantSectionsContent({
       entry: {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        body: assistantView.body,
-        meta: assistantView.meta,
+        body: canonicalAssistantMessage,
+        meta: canonicalAssistantMeta,
       },
     });
+
+    pendingTurnRef.current = null;
+    setHasPendingTurn(false);
   }, [
     sessionHydrated,
     busy,
-    assistantView,
-    smartDraftReady,
+    canonicalAssistantMessage,
+    canonicalAssistantMeta,
     currentQuestion,
-    finalModel.phase,
-    finalModel.readyForApproval,
-    finalModel.error,
+    finalModel,
+    transcript,
+    serverTimeline,
   ]);
 
   async function handleInitialSourceSubmit() {
@@ -885,13 +874,6 @@ function SetupAssistantSectionsContent({
       },
     });
 
-    if (currentQuestion?.key) {
-      setLocalAnswers((current) => ({
-        ...current,
-        [currentQuestion.key]: text,
-      }));
-    }
-
     setComposerValue("");
 
     try {
@@ -907,7 +889,7 @@ function SetupAssistantSectionsContent({
     } catch (error) {
       pendingTurnRef.current = null;
       setHasPendingTurn(false);
-      setLocalError(s(error?.message, "Mesaj emal olunmadı."));
+      setLocalError(s(error?.message, "Message processing failed."));
     }
   }
 
@@ -922,15 +904,18 @@ function SetupAssistantSectionsContent({
 
   const showBootBubble =
     transcript.length === 0 &&
+    serverTimeline.length === 0 &&
     sessionHydrated &&
     !busy &&
     !smartDraftReady &&
-    assistantView?.body;
+    canonicalAssistantMessage;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
+          <StatusNotice model={finalModel} />
+
           <AnimatePresence initial={false}>
             {transcript.map((item) => (
               <ChatBubble
@@ -945,8 +930,8 @@ function SetupAssistantSectionsContent({
           {showBootBubble ? (
             <ChatBubble
               role="assistant"
-              body={assistantView.body}
-              meta={assistantView.meta}
+              body={canonicalAssistantMessage}
+              meta={canonicalAssistantMeta}
             />
           ) : null}
 

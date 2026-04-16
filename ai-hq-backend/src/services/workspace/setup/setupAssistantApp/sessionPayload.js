@@ -52,6 +52,31 @@ function deriveWebsitePrefillDraft(core = {}) {
   };
 }
 
+function normalizeTimelineTurn(value = {}) {
+  const source = obj(value);
+
+  return compactDraftObject({
+    id: s(source.id),
+    role: s(source.role).toLowerCase() === "user" ? "user" : "assistant",
+    text: s(source.text || source.body || source.message),
+    meta: s(source.meta),
+    questionKey: s(source.questionKey || source.question_key).toLowerCase(),
+    phase: s(source.phase).toLowerCase(),
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
+    createdAt: source.createdAt || source.created_at || null,
+  });
+}
+
+function readSetupAssistantTimeline(draftPayload = {}) {
+  return arr(obj(draftPayload).setupAssistantTimeline)
+    .map(normalizeTimelineTurn)
+    .filter((item) => item.text)
+    .slice(-40);
+}
+
 export function resolveSessionCurrentStep(
   review = {},
   setup = {},
@@ -121,6 +146,7 @@ export function buildSetupAssistantAuthorityState({
   reviewState = {},
   review = {},
   sources = [],
+  timeline = [],
 } = {}) {
   const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
   const question = nextQuestion
@@ -200,6 +226,7 @@ export function buildSetupAssistantAuthorityState({
     phase,
     message: assistantMessage,
     assistantMessage,
+    timeline: arr(timeline).map(normalizeTimelineTurn),
     draft: buildAssistantDraftPreview(setup, {
       formatHours: formatSetupAssistantHoursForCanonical,
     }),
@@ -229,6 +256,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const draftRow = obj(review.draft);
   const draftPayload = obj(draftRow.draftPayload);
   const seed = buildSetupAssistantSeedFromReview(review);
+  const timeline = readSetupAssistantTimeline(draftPayload);
 
   const setup = normalizeStoredSetupAssistantPayload(
     readStoredSetupAssistantDraftPayload(draftPayload),
@@ -259,6 +287,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     reviewState,
     review,
     sources: arr(review.sources),
+    timeline,
   });
 
   const nextQuestion = obj(assistant.nextQuestion);
@@ -292,6 +321,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       websitePrefill: obj(setup.websitePrefill),
       review: reviewState,
       assistant,
+      timeline,
       draft: {
         businessProfile: obj(setup.businessProfile),
         services: arr(setup.services),
@@ -310,6 +340,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
     },
+    timeline,
   };
 }
 
@@ -323,6 +354,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     return {
       ok: true,
       ...baseBody,
+      timeline: arr(setup.timeline || assistant.timeline),
     };
   }
 
@@ -401,6 +433,10 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       s(session.currentStep),
   };
 
+  const timeline = arr(setup.timeline || assistant.timeline).map(
+    normalizeTimelineTurn
+  );
+
   return {
     ok: true,
     ...baseBody,
@@ -409,7 +445,9 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       ...setup,
       assistant: mergedAssistant,
       review: mergedReview,
+      timeline,
     },
+    timeline,
     assistant: mergedAssistant,
     turn: {
       role: "assistant",

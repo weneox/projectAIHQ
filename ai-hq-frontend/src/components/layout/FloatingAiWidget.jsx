@@ -91,6 +91,7 @@ function buildDefaultAssistant() {
       progress: {},
       version: 0,
     },
+    assistantTimeline: [],
     assistant: {
       nextQuestion: {},
       confirmationBlockers: [],
@@ -106,6 +107,7 @@ function buildDefaultAssistant() {
         suggestedServices: [],
       },
       sourceInsights: [],
+      timeline: [],
       phase: "source_capture",
       message: "",
       draft: {},
@@ -170,6 +172,9 @@ function normalizeAssistantState(input = null) {
   const source = input || buildDefaultAssistant();
   const draft = obj(source.draft);
   const decisionAssistant = normalizeDecisionAssistant(obj(source.assistant));
+  const assistantTimeline = arr(
+    obj(source.assistant).timeline || source.assistantTimeline || source.timeline
+  );
 
   return {
     mode: s(source.mode, "setup"),
@@ -199,7 +204,11 @@ function normalizeAssistantState(input = null) {
       version: Number(draft.version || 0),
       updatedAt: draft.updatedAt || null,
     },
-    assistant: decisionAssistant,
+    assistantTimeline,
+    assistant: {
+      ...decisionAssistant,
+      timeline: assistantTimeline,
+    },
   };
 }
 

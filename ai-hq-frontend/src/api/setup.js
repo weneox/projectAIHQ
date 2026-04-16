@@ -26,6 +26,24 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeTimelineEntry(value = {}) {
+  const source = obj(value);
+
+  return {
+    id: s(source.id),
+    role: s(source.role).toLowerCase() === "user" ? "user" : "assistant",
+    text: s(source.text || source.body || source.message),
+    meta: s(source.meta),
+    questionKey: s(source.questionKey || source.question_key).toLowerCase(),
+    phase: s(source.phase).toLowerCase(),
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
+    createdAt: source.createdAt || source.created_at || null,
+  };
+}
+
 function normalizeAssistantPayload(value = {}) {
   const source = obj(value);
 
@@ -52,6 +70,7 @@ function normalizeAssistantPayload(value = {}) {
     model: s(source.model),
     usedFallback: source.usedFallback === true,
     error: s(source.error),
+    timeline: arr(source.timeline).map(normalizeTimelineEntry),
   };
 }
 
@@ -121,6 +140,7 @@ function normalizeSetupPayload(value = {}) {
     review: normalizeSetupReviewPayload(source.review),
     draft: normalizeSetupDraftPayload(source.draft),
     assistant: normalizeAssistantPayload(source.assistant),
+    timeline: arr(source.timeline).map(normalizeTimelineEntry),
   };
 }
 
@@ -140,6 +160,7 @@ function normalizeSetupAssistantResponse(payload = {}) {
     assistant: normalizeAssistantPayload(
       Object.keys(obj(root.assistant)).length ? root.assistant : setup.assistant
     ),
+    timeline: arr(root.timeline).map(normalizeTimelineEntry),
     turn: obj(root.turn),
     question: obj(root.question),
     primaryQuestion: obj(root.primaryQuestion),
@@ -165,6 +186,7 @@ function normalizeReviewPayload(payload = {}) {
     reason: s(root.reason),
     review: obj(root.review),
     assistant: normalizeAssistantPayload(root.assistant),
+    timeline: arr(root.timeline).map(normalizeTimelineEntry),
     bundleSources: arr(root.bundleSources),
     contributionSummary: obj(root.contributionSummary),
     fieldProvenance: obj(root.fieldProvenance),
