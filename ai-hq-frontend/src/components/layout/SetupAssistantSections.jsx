@@ -417,12 +417,6 @@ function transcriptReducer(state, action) {
   return arr(state);
 }
 
-function pendingTurnReducer(_state, action) {
-  if (action?.type === "show") return true;
-  if (action?.type === "hide") return false;
-  return false;
-}
-
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
     return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)]";
@@ -648,10 +642,7 @@ function SetupAssistantSectionsContent({
     storageKey,
     loadStoredTranscript
   );
-  const [hasPendingTurn, dispatchPendingTurn] = useReducer(
-    pendingTurnReducer,
-    false
-  );
+  const [hasPendingTurn, setHasPendingTurn] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -732,7 +723,7 @@ function SetupAssistantSectionsContent({
     serverTimelineFingerprintRef.current = fingerprint;
     responseFingerprintRef.current = fingerprint;
     pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
+    setHasPendingTurn(false);
     dispatchTranscript({
       type: "replace",
       entries: serverTimeline,
@@ -761,7 +752,7 @@ function SetupAssistantSectionsContent({
       s(serverLast.body) === canonicalAssistantMessage
     ) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -772,7 +763,7 @@ function SetupAssistantSectionsContent({
       s(lastTranscriptItem.meta) === canonicalAssistantMeta
     ) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -790,13 +781,13 @@ function SetupAssistantSectionsContent({
 
     if (!canonicalAssistantMessage) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
     if (responseFingerprintRef.current === fingerprint) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       return;
     }
 
@@ -813,7 +804,7 @@ function SetupAssistantSectionsContent({
     });
 
     pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
+    setHasPendingTurn(false);
   }, [
     sessionHydrated,
     busy,
@@ -834,7 +825,7 @@ function SetupAssistantSectionsContent({
 
     setLocalError("");
     pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
+    setHasPendingTurn(true);
 
     dispatchTranscript({
       type: "append",
@@ -855,7 +846,7 @@ function SetupAssistantSectionsContent({
       });
     } catch (error) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -872,7 +863,7 @@ function SetupAssistantSectionsContent({
 
     setLocalError("");
     pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
+    setHasPendingTurn(true);
 
     dispatchTranscript({
       type: "append",
@@ -897,7 +888,7 @@ function SetupAssistantSectionsContent({
       });
     } catch (error) {
       pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Message processing failed."));
     }
   }

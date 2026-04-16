@@ -75,7 +75,7 @@ function normalizeTimelineTurn(value = {}) {
   const source = obj(value);
 
   return {
-    id: s(source.id) || `turn-${Date.now()}`,
+    id: s(value.id) || `turn-${Date.now()}`,
     role: normalizeConversationRole(source.role),
     text: s(source.text || source.body || source.message),
     meta: s(source.meta),
@@ -127,6 +127,7 @@ function buildReviewForBrain(review = {}) {
         error: turn.error,
       },
     })),
+    timeline,
   };
 }
 

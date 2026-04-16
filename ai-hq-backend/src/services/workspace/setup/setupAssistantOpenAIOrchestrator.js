@@ -288,7 +288,6 @@ function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) 
   const lower = combined.toLowerCase();
 
   if (!lower) return "match_user_language";
-
   if (/[а-яёіїєґ]/i.test(combined)) return "ru";
   if (/[\u0600-\u06FF]/.test(combined)) return "ar";
   if (/[əğıöüşç]/i.test(combined)) return "az";
@@ -451,22 +450,14 @@ function buildReadinessRubric() {
       "Real customer-facing services only",
       "Avoid generic labels, vague capabilities, channels, or adjectives",
     ],
-    contacts: [
-      "At least one primary public customer contact lane",
-    ],
-    hours: [
-      "Public hours, or an explicit appointment-only / 24-7 posture",
-    ],
+    contacts: ["At least one primary public customer contact lane"],
+    hours: ["Public hours, or an explicit appointment-only / 24-7 posture"],
     pricing: [
       "Safe public pricing posture",
       "Whether exact quotes require operator involvement",
     ],
-    handoff: [
-      "Clear human escalation cases",
-    ],
-    aiBehavior: [
-      "Tone or language only if confidently known",
-    ],
+    handoff: ["Clear human escalation cases"],
+    aiBehavior: ["Tone or language only if confidently known"],
   };
 }
 
@@ -951,14 +942,17 @@ export async function runSetupAssistantOpenAIOrchestrator({
     forceFallback === true || runtime.forceFallback === true;
 
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
-    return normalizeTurnResult(buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep), {
-      fallbackBrain,
-      latestMessage,
-      latestStep,
-      provider: "local_fallback",
-      model: shouldForceFallback ? runtime.model : "",
-      usedFallback: true,
-    });
+    return normalizeTurnResult(
+      buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep),
+      {
+        fallbackBrain,
+        latestMessage,
+        latestStep,
+        provider: "local_fallback",
+        model: shouldForceFallback ? runtime.model : "",
+        usedFallback: true,
+      }
+    );
   }
 
   const context = buildSetupContext({
@@ -988,15 +982,18 @@ export async function runSetupAssistantOpenAIOrchestrator({
       usedFallback: false,
     });
   } catch (error) {
-    return normalizeTurnResult(buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep), {
-      fallbackBrain,
-      latestMessage,
-      latestStep,
-      provider: "local_fallback",
-      model: runtime.model,
-      usedFallback: true,
-      error: s(error?.message, "openai_setup_assistant_failed"),
-    });
+    return normalizeTurnResult(
+      buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep),
+      {
+        fallbackBrain,
+        latestMessage,
+        latestStep,
+        provider: "local_fallback",
+        model: runtime.model,
+        usedFallback: true,
+        error: s(error?.message, "openai_setup_assistant_failed"),
+      }
+    );
   }
 }
 
