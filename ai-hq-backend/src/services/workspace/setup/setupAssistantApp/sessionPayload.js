@@ -156,7 +156,7 @@ export function buildSetupAssistantAuthorityState({
       : "source_capture";
 
   return {
-    mode: "structured_v3",
+    mode: "structured_v2",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
