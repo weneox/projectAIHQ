@@ -66,6 +66,9 @@ function buildProfileStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
+    hasName,
+    hasDescription,
+    hasWebsite,
     sourceCovered: sourceCoverage.identity === true,
     reviewReady: completed || sourceCoverage.identity === true,
     metric: [

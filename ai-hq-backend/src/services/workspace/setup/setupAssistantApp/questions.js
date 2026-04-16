@@ -189,8 +189,13 @@ export function buildProfileQuestionPrompt(draft = {}) {
   const safeDraft = obj(draft);
   const businessProfile = obj(safeDraft.businessProfile);
   const sourceMetadata = obj(safeDraft.sourceMetadata);
-  const sourceLead = buildSourceLead(safeDraft);
   const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
+
+  if (sourceIdentityPresent) {
+    return "Confirm the business name and a reliable short description first. Add the website if the business has one.";
+  }
+
+  const sourceLead = buildSourceLead(safeDraft);
 
   const parts = [];
 
@@ -215,9 +220,24 @@ export function buildProfileQuestionPrompt(draft = {}) {
   return normalizeText(parts.join(" "));
 }
 
-export function resolveProfileQuestion(draft = {}, progress = {}) {
+export function resolveProfileQuestion(
+  draft = {},
+  progress = {},
+  profileStatus = {}
+) {
   const safeDraft = obj(draft);
   const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
+  const safeProfileStatus = obj(profileStatus);
+
+  if (
+    safeProfileStatus.hasName === true &&
+    safeProfileStatus.hasDescription === true &&
+    safeProfileStatus.hasWebsite !== true
+  ) {
+    return buildAssistantQuestion("website", {
+      priority: currentQuestionKey === "website" ? 100 : 98,
+    });
+  }
 
   return buildAssistantQuestion("profile", {
     prompt: buildProfileQuestionPrompt(safeDraft),
@@ -307,7 +327,7 @@ export function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   const sectionStatus = obj(summary.sectionStatus);
 
   if (sectionStatus.profile?.status !== "ready") {
-    return resolveProfileQuestion(draft, progress);
+    return resolveProfileQuestion(draft, progress, sectionStatus.profile);
   }
 
   const blocker = obj(arr(summary.confirmationBlockers)[0]);
