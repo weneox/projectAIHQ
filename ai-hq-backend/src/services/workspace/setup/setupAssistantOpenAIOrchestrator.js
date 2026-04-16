@@ -893,46 +893,46 @@ async function callOpenAISetupAssistant({
     throw new Error("openai_setup_assistant_not_configured");
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), resolvedTimeoutMs);
-
-  try {
-    const response = await client.responses.create({
-      model: resolvedModel,
-      input: [
-        {
-          role: "system",
-          content: buildSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: buildUserPrompt(context),
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "setup_assistant_turn",
-          strict: true,
-          schema: SETUP_TURN_SCHEMA,
-        },
+  const responsePromise = client.responses.create({
+    model: resolvedModel,
+    input: [
+      {
+        role: "system",
+        content: buildSystemPrompt(),
       },
-      max_output_tokens: resolvedMaxOutputTokens,
-      signal: controller.signal,
-    });
+      {
+        role: "user",
+        content: buildUserPrompt(context),
+      },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "setup_assistant_turn",
+        strict: true,
+        schema: SETUP_TURN_SCHEMA,
+      },
+    },
+    max_output_tokens: resolvedMaxOutputTokens,
+  });
 
-    const outputText = s(response.output_text);
-    if (!outputText) {
-      throw new Error("openai_setup_assistant_empty_output");
-    }
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("openai_setup_assistant_timeout"));
+    }, resolvedTimeoutMs);
+  });
 
-    return {
-      model: resolvedModel,
-      payload: safeJsonParse(outputText, {}),
-    };
-  } finally {
-    clearTimeout(timeoutId);
+  const response = await Promise.race([responsePromise, timeoutPromise]);
+
+  const outputText = s(response?.output_text);
+  if (!outputText) {
+    throw new Error("openai_setup_assistant_empty_output");
   }
+
+  return {
+    model: resolvedModel,
+    payload: safeJsonParse(outputText, {}),
+  };
 }
 
 function buildFallbackShadowTurn({
