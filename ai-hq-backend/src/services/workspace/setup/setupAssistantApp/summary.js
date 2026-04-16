@@ -7,18 +7,28 @@ import {
   buildSetupSourceSignals,
 } from "./sourceSignals.js";
 
-function buildCoverageContext(draft = {}) {
+function normalizeSummaryContext(context = {}) {
+  return {
+    session: obj(context.session),
+    review: obj(context.review),
+    sources: arr(context.sources),
+  };
+}
+
+function buildCoverageContext(draft = {}, context = {}) {
+  const safeContext = normalizeSummaryContext(context);
+
   const sourceSignals = buildSetupSourceSignals({
-    session: {},
+    session: safeContext.session,
     draft: obj(draft),
-    sources: [],
-    review: null,
+    sources: safeContext.sources,
+    review: safeContext.review,
   });
 
   const sourceCoverage = buildSetupSourceCoverage(sourceSignals);
   const draftState = buildSetupDraftStateFromSignals({
     draft: obj(draft),
-    review: null,
+    review: safeContext.review,
     sourceSignals,
   });
 
@@ -136,7 +146,11 @@ function buildPricingStatus(draft = {}, context = {}) {
     sourceCovered: sourceCoverage.pricing === true,
     reviewReady: completed || sourceCoverage.pricing === true,
     metric: completed
-      ? s(pricing.pricingMode || pricing.publicSummary || draftState.pricingPosture)
+      ? s(
+          pricing.pricingMode ||
+            pricing.publicSummary ||
+            draftState.pricingPosture
+        )
       : sourceCoverage.pricing === true
         ? `${arr(sourceSignals.pricingCandidates).length} source signals`
         : "not set",
@@ -191,16 +205,16 @@ function buildHandoffStatus(draft = {}, context = {}) {
   };
 }
 
-export function buildSectionStatus(draft = {}) {
-  const context = buildCoverageContext(draft);
+export function buildSectionStatus(draft = {}, context = {}) {
+  const coverageContext = buildCoverageContext(draft, context);
 
   const sections = {
-    profile: buildProfileStatus(draft, context),
-    services: buildServicesStatus(draft, context),
-    hours: buildHoursStatus(draft, context),
-    pricing: buildPricingStatus(draft, context),
-    contacts: buildContactsStatus(draft, context),
-    handoff: buildHandoffStatus(draft, context),
+    profile: buildProfileStatus(draft, coverageContext),
+    services: buildServicesStatus(draft, coverageContext),
+    hours: buildHoursStatus(draft, coverageContext),
+    pricing: buildPricingStatus(draft, coverageContext),
+    contacts: buildContactsStatus(draft, coverageContext),
+    handoff: buildHandoffStatus(draft, coverageContext),
   };
 
   return Object.fromEntries(
@@ -218,9 +232,13 @@ export function buildSectionStatus(draft = {}) {
   );
 }
 
-export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
-  const context = buildCoverageContext(draft);
-  const { sourceSignals, sourceCoverage } = context;
+export function buildConfirmationBlockers(
+  draft = {},
+  sectionStatus = {},
+  context = {}
+) {
+  const coverageContext = buildCoverageContext(draft, context);
+  const { sourceSignals, sourceCoverage } = coverageContext;
 
   const sourceHint =
     s(sourceSignals.primarySourceLabel) && s(sourceSignals.primarySourceUrl)
@@ -281,18 +299,22 @@ export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
   });
 }
 
-export function buildSummary(draft = {}) {
-  const context = buildCoverageContext(draft);
-  const { draftState, sourceCoverage } = context;
+export function buildSummary(draft = {}, context = {}) {
+  const coverageContext = buildCoverageContext(draft, context);
+  const { draftState, sourceCoverage } = coverageContext;
 
-  const sectionStatus = buildSectionStatus(draft);
+  const sectionStatus = buildSectionStatus(draft, context);
   const completionCount = Object.values(sectionStatus).filter(
     (item) => item.status === "ready"
   ).length;
   const reviewReadyCount = Object.values(sectionStatus).filter(
     (item) => item.reviewReady === true
   ).length;
-  const confirmationBlockers = buildConfirmationBlockers(draft, sectionStatus);
+  const confirmationBlockers = buildConfirmationBlockers(
+    draft,
+    sectionStatus,
+    context
+  );
 
   const hasAnyDraft =
     completionCount > 0 ||
@@ -323,8 +345,14 @@ export function buildSummary(draft = {}) {
     blockerCount: confirmationBlockers.length,
     sectionStatus,
     confirmationBlockers,
-    servicesCount: Math.max(arr(draft.services).length, arr(draftState.services).length),
-    contactsCount: Math.max(arr(draft.contacts).length, arr(draftState.contacts).length),
+    servicesCount: Math.max(
+      arr(draft.services).length,
+      arr(draftState.services).length
+    ),
+    contactsCount: Math.max(
+      arr(draft.contacts).length,
+      arr(draftState.contacts).length
+    ),
     hoursConfiguredCount: Math.max(
       arr(draft.hours).filter(
         (item) =>
@@ -337,7 +365,7 @@ export function buildSummary(draft = {}) {
   };
 }
 
-export function buildReviewState(draft = {}, summary = {}) {
+export function buildReviewState(draft = {}, summary = {}, _context = {}) {
   return {
     status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
     readyForReview: summary.readyForReview === true,

@@ -78,8 +78,15 @@ export function safeDraftVersion(draftRow = {}) {
 
 export function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
   const mergedCore = mergeSetupAssistantCore(seed, value);
-  const summary = buildSummary(mergedCore);
-  const review = buildReviewState(mergedCore, summary);
+
+  const summaryContext = {
+    review: {},
+    session: {},
+    sources: [],
+  };
+
+  const summary = buildSummary(mergedCore, summaryContext);
+  const review = buildReviewState(mergedCore, summary, summaryContext);
 
   return {
     ...mergedCore,
@@ -156,7 +163,7 @@ export function buildSetupAssistantAuthorityState({
       : "source_capture";
 
   return {
-    mode: "structured_v2",
+    mode: "structured_v3",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
@@ -228,8 +235,14 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     seed
   );
 
-  const summary = buildSummary(setup);
-  const reviewState = buildReviewState(setup, summary);
+  const summaryContext = {
+    review,
+    session,
+    sources: arr(review.sources),
+  };
+
+  const summary = buildSummary(setup, summaryContext);
+  const reviewState = buildReviewState(setup, summary, summaryContext);
 
   const servicesCatalog = buildSetupAssistantServiceCatalog({
     businessProfile: setup.businessProfile,
