@@ -1123,6 +1123,9 @@ function buildKnownState(draftState = {}) {
   return bits.slice(0, 4);
 }
 
+const SOURCE_CAPTURE_OPENING_MESSAGE =
+  "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə düşünülmüş drafta çevirməkdir. Send the best public source you have first: website, Google Maps, Instagram, Facebook, or a short business note. Sən sərbəst yaza bilərsən, mən mümkün qədər düzgün başa düşüb strukturlaşdıracağam.";
+
 function buildConversationalAssistantMessage({
   phase,
   nextQuestion,
@@ -1137,7 +1140,7 @@ function buildConversationalAssistantMessage({
   const knownState = buildKnownState(draftState);
 
   if (phase === "source_capture") {
-    return "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə düşünülmüş drafta çevirməkdir. Başlamaq üçün ən rahat bildiyin yerdən yaz: website, Google Maps, Instagram, Facebook və ya sadəcə qısa biznes qeydi. Sən sərbəst yaza bilərsən — mən mümkün qədər düzgün başa düşüb strukturlaşdıracağam.";
+    return SOURCE_CAPTURE_OPENING_MESSAGE;
   }
 
   if (readyForApproval) {
@@ -1324,8 +1327,7 @@ export function buildSetupAssistantBrainState({
 export function buildSetupAssistantFirstPrompt() {
   return {
     phase: "source_capture",
-    assistantMessage:
-      "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə düşünülmüş drafta çevirməkdir. Başlamaq üçün ən rahat bildiyin yerdən yaz: website, Google Maps, Instagram, Facebook və ya sadəcə qısa biznes qeydi. Sən sərbəst yaza bilərsən — mən mümkün qədər düzgün başa düşüb strukturlaşdıracağam.",
+    assistantMessage: SOURCE_CAPTURE_OPENING_MESSAGE,
     nextQuestion: {
       key: "source_capture",
       step: "source_capture",
