@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   readSetupAssistantView,
   updateSetupAssistantDraft,
+  buildSetupAssistantSessionPayload,
   __test__ as setupAssistantAppTest,
 } from "../src/services/workspace/setup/setupAssistantApp.js";
 import { runSetupAssistantOpenAIOrchestrator } from "../src/services/workspace/setup/setupAssistantOpenAIOrchestrator.js";
@@ -168,6 +169,58 @@ function createBrainTurn(overrides = {}) {
     },
     readyForApproval: false,
     ...overrides,
+  };
+}
+
+function createStoredSetupAssistantFromBrain(turn = createBrainTurn()) {
+  const patch = setupAssistantAppTest.buildSetupAssistantPatchFromOrchestrator(
+    turn,
+    {
+      businessProfile: {},
+      services: [],
+      contacts: [],
+      hours: [],
+      pricingPosture: {},
+      handoffRules: {},
+      sourceMetadata: {},
+      assistantState: {},
+      progress: {},
+    }
+  );
+
+  const sourceSignals = obj(turn.sourceSignals);
+
+  return {
+    businessProfile: obj(patch.businessProfile),
+    services: arr(patch.services),
+    contacts: arr(patch.contacts),
+    hours: arr(patch.hours),
+    pricingPosture: obj(patch.pricingPosture),
+    handoffRules: obj(patch.handoffRules),
+    sourceMetadata: {
+      ...obj(patch.sourceMetadata),
+      primarySourceType: s(
+        obj(patch.sourceMetadata).primarySourceType ||
+          sourceSignals.primarySourceType
+      ),
+      primarySourceUrl: s(
+        obj(patch.sourceMetadata).primarySourceUrl ||
+          sourceSignals.primarySourceUrl
+      ),
+      sourceLabels: arr(
+        obj(patch.sourceMetadata).sourceLabels || [sourceSignals.primarySourceLabel]
+      ).filter(Boolean),
+      evidenceSummary: arr(
+        obj(patch.sourceMetadata).evidenceSummary ||
+          sourceSignals.strongestEvidence
+      ),
+    },
+    assistantState: obj(patch.assistantState),
+    progress: obj(patch.progress),
+    languages: arr(obj(turn.draft).languages),
+    tone: s(obj(turn.draft).tone),
+    greetingStyle: s(obj(turn.draft).greetingStyle),
+    afterHoursBehavior: s(obj(turn.draft).afterHoursBehavior),
   };
 }
 
@@ -343,8 +396,43 @@ test("message-mode setup draft update bridges orchestrator output into review dr
   );
 });
 
-test("read setup assistant view overlays brain payload and exposes compat response fields", async () => {
-  let currentReview = createBaseReview();
+test("read setup assistant view returns stored session payload without compat overlay wrappers", async () => {
+  const turn = createBrainTurn();
+  const storedSetupAssistant = createStoredSetupAssistantFromBrain(turn);
+
+  const currentReview = {
+    ...createBaseReview(),
+    draft: {
+      ...createBaseReview().draft,
+      version: 2,
+      updatedAt: "2026-04-15T10:05:00.000Z",
+      businessProfile: obj(storedSetupAssistant.businessProfile),
+      services: arr(storedSetupAssistant.services),
+      contacts: arr(storedSetupAssistant.contacts),
+      hours: arr(storedSetupAssistant.hours),
+      pricingPosture: obj(storedSetupAssistant.pricingPosture),
+      handoffRules: obj(storedSetupAssistant.handoffRules),
+      draftPayload: {
+        setupAssistant: storedSetupAssistant,
+        setupAssistantBrain: turn,
+        setupAssistantTimeline: [
+          {
+            id: "turn-assistant-1",
+            role: "assistant",
+            text: turn.assistantMessage,
+            meta: s(obj(turn.sourceSignals).primarySourceUrl),
+            questionKey: s(obj(turn.nextQuestion).key),
+            phase: s(turn.phase),
+            provider: s(turn.provider),
+            model: s(turn.model),
+            usedFallback: turn.usedFallback === true,
+            error: s(turn.error),
+            createdAt: "2026-04-15T10:05:00.000Z",
+          },
+        ],
+      },
+    },
+  };
 
   const deps = {
     getCurrentSetupReview: async () => currentReview,
@@ -352,34 +440,9 @@ test("read setup assistant view overlays brain payload and exposes compat respon
       status: 200,
       body: {
         ok: true,
-        ...setupAssistantAppTest.buildSetupAssistantSessionPayload(currentReview),
+        ...buildSetupAssistantSessionPayload(currentReview),
       },
     }),
-    patchSetupReviewDraft: async ({ patch }) => {
-      currentReview = {
-        ...currentReview,
-        draft: {
-          ...currentReview.draft,
-          version: Number(currentReview.draft.version || 0) + 1,
-          updatedAt: "2026-04-15T10:05:00.000Z",
-          draftPayload: {
-            ...obj(currentReview.draft.draftPayload),
-            ...obj(patch.draftPayload),
-          },
-        },
-      };
-      return currentReview.draft;
-    },
-    updateSetupReviewSession: async (_sessionId, payload) => {
-      currentReview = {
-        ...currentReview,
-        session: {
-          ...currentReview.session,
-          ...payload,
-        },
-      };
-    },
-    runSetupAssistantOpenAIOrchestrator: async () => createBrainTurn(),
   };
 
   const result = await readSetupAssistantView(
@@ -395,18 +458,38 @@ test("read setup assistant view overlays brain payload and exposes compat respon
 
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
-  assert.equal(result.body.assistant.provider, "openai");
-  assert.equal(result.body.assistant.model, "gpt-5");
-  assert.equal(result.body.assistant.readyForApproval, false);
-  assert.equal(result.body.turn.role, "assistant");
-  assert.equal(result.body.turn.payload.provider, "openai");
-  assert.equal(result.body.question.key, "services");
-  assert.equal(result.body.primaryQuestion.key, "services");
-  assert.equal(result.body.businessFacts.companyName, "North Clinic");
-  assert.equal(result.body.conversationStatus.phase, "interview");
-  assert.equal(arr(result.body.followupQueue).length, 1);
+
+  assert.equal(result.body.setup.assistant.provider, "openai");
+  assert.equal(result.body.setup.assistant.model, "gpt-5");
+  assert.equal(result.body.setup.assistant.readyForApproval, false);
+  assert.equal(result.body.setup.assistant.nextQuestion.key, "services");
+  assert.equal(result.body.setup.assistant.draft.businessName, "North Clinic");
+  assert.equal(result.body.setup.review.readyForApproval, false);
+  assert.equal(arr(result.body.setup.timeline).length, 1);
+
   assert.equal(
-    arr(result.body.unknowns)[0],
-    "Pricing still needs a stricter policy."
+    Object.prototype.hasOwnProperty.call(result.body, "assistant"),
+    false
+  );
+  assert.equal(Object.prototype.hasOwnProperty.call(result.body, "turn"), false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.body, "question"),
+    false
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.body, "primaryQuestion"),
+    false
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.body, "conversationStatus"),
+    false
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.body, "followupQueue"),
+    false
+  );
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.body, "businessFacts"),
+    false
   );
 });
