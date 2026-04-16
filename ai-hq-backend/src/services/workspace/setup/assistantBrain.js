@@ -29,43 +29,41 @@ function buildConfidenceBuckets({
   const unclear = [];
 
   if (draftState.businessName) {
-    strong.push(`Business name locked: ${draftState.businessName}`);
+    strong.push(`Business name confirmed: ${draftState.businessName}`);
   } else if (sourceCoverage.identity) {
-    strong.push("Source evidence already covers the public business identity.");
+    strong.push("There is already enough source evidence for business identity.");
   } else if (arr(sourceSignals.companyNameCandidates).length) {
     unclear.push(
-      `Source suggests the business name may be ${s(
+      `Business name is still not locked. One source signal is ${s(
         arr(sourceSignals.companyNameCandidates)[0]
       )}.`
     );
   } else {
-    unclear.push("Business name is still unclear.");
+    unclear.push("Business name is still missing.");
   }
 
   if (draftState.description) {
-    strong.push("The business description is usable.");
+    strong.push("Business description is present.");
   } else if (sourceCoverage.identity) {
     strong.push("Source evidence already covers the business description.");
   } else if (arr(sourceSignals.descriptionCandidates).length) {
-    unclear.push(
-      "There is a source-grounded description signal, but it still needs a clean confirmation."
-    );
+    unclear.push("Business description still needs a clean confirmation.");
   } else {
-    unclear.push("The business description is still missing.");
+    unclear.push("Business description is still missing.");
   }
 
   if (draftState.services.length) {
-    strong.push(`Core services are usable: ${listPreview(draftState.services, 4)}`);
+    strong.push(`Core services present: ${listPreview(draftState.services, 4)}`);
   } else if (sourceCoverage.services) {
     strong.push(
-      `Source evidence already covers core services: ${listPreview(
+      `Source evidence already covers services: ${listPreview(
         sourceSignals.serviceCandidates,
         4
       )}.`
     );
   } else if (sourceSignals.serviceCandidates.length) {
     unclear.push(
-      `Source service signals exist: ${listPreview(
+      `Service signals exist but are not clean yet: ${listPreview(
         sourceSignals.serviceCandidates,
         4
       )}.`
@@ -83,11 +81,11 @@ function buildConfidenceBuckets({
   }
 
   if (draftState.hours.length) {
-    strong.push("Weekly availability has been recognized.");
+    strong.push("Public hours are present.");
   } else if (sourceCoverage.hours) {
-    strong.push("Source evidence already covers public working hours.");
+    strong.push("Source evidence already covers public hours.");
   } else {
-    unclear.push("Weekly hours still need to be locked in.");
+    unclear.push("Public hours still need to be confirmed.");
   }
 
   if (draftState.pricingPosture) {
@@ -95,13 +93,13 @@ function buildConfidenceBuckets({
   } else if (sourceCoverage.pricing) {
     strong.push("Source evidence already covers pricing posture.");
   } else {
-    unclear.push("Pricing posture is still too weak or too vague.");
+    unclear.push("Pricing posture is still weak or missing.");
   }
 
   if (draftState.humanHandoff) {
-    strong.push("Escalation behavior is present.");
+    strong.push("Human escalation policy is present.");
   } else {
-    unclear.push("Escalation rules still need to be defined.");
+    unclear.push("Human escalation rules still need to be defined.");
   }
 
   if (!draftState.websiteUrl && !sourceCoverage.primarySourceExists) {
@@ -129,38 +127,38 @@ function buildRecommendation({
     !sourceCoverage.identity
   ) {
     notes.push(
-      "Lock one exact public business identity before approval: the business name and one clean sentence describing what the business does."
+      "Lock the exact public business name and one clean sentence describing what the business does."
     );
   }
 
   if (!draftState.services.length && !sourceCoverage.services) {
     if (sourceSignals.serviceCandidates.length) {
       notes.push(
-        "Pick only real customer-facing services. Ignore channels or generic words unless they are actual services."
+        "Clean the service list and keep only real customer-facing services."
       );
     } else {
-      notes.push("Define the real customer-facing services before approval.");
+      notes.push("Define the real customer-facing services.");
     }
   }
 
   if (!draftState.pricingPosture && !sourceCoverage.pricing) {
-    notes.push("Set a safe public pricing posture before AI answers price questions.");
+    notes.push("Define a safe public pricing posture.");
   }
 
   if (!draftState.contacts.length && !sourceCoverage.contacts) {
-    notes.push("Choose one real public contact lane so AI knows where to route people.");
+    notes.push("Choose one real public contact route.");
   }
 
   if (!draftState.hours.length && !sourceCoverage.hours) {
-    notes.push("Lock the public weekly hours so AI does not promise the wrong availability.");
+    notes.push("Confirm public weekly hours.");
   }
 
   if (!draftState.humanHandoff) {
-    notes.push("Define the exact cases where AI should stop and escalate to a human.");
+    notes.push("Define when AI should escalate to a human.");
   }
 
   if (contradictions.length) {
-    notes.push("There is still source-vs-draft drift. Clean that before approval.");
+    notes.push("Resolve source-vs-draft contradictions before approval.");
   }
 
   return notes;
@@ -229,9 +227,9 @@ function buildQuestionCandidates({
       group: "business_truth",
       prompt:
         parts.length > 0
-          ? `I already have partial source signals (${parts.join(
+          ? `I have partial identity signals (${parts.join(
               " • "
-            )}), but they are not yet strong enough to lock the business identity. Send the exact business name and one clean public sentence describing what the business does.`
+            )}), but they are not strong enough yet. Send the exact business name and one clean public sentence describing what the business does.`
           : "Send the exact business name and one clean public sentence describing what the business does.",
       priority: 96,
     });
@@ -256,11 +254,11 @@ function buildQuestionCandidates({
       group: "business_truth",
       prompt:
         sourceSignals.serviceCandidates.length > 0
-          ? `The sources suggest these service signals: ${listPreview(
+          ? `These service signals exist: ${listPreview(
               sourceSignals.serviceCandidates,
               5
-            )}. Send only the real customer-facing services you want AI to talk about.`
-          : "List the real core services in plain language. Ignore generic labels or channel names.",
+            )}. Send only the real customer-facing services.`
+          : "List the real customer-facing services in plain language.",
       priority: 88,
     });
   }
@@ -273,11 +271,11 @@ function buildQuestionCandidates({
       group: "business_truth",
       prompt:
         sourceSignals.contactCandidates.length > 0
-          ? `I found these possible contact routes: ${listPreview(
+          ? `Possible contact routes found: ${listPreview(
               sourceSignals.contactCandidates,
               3
             )}. Which public contact route should AI use first?`
-          : "Send the main public contact route customers should be sent to first.",
+          : "Send the main public contact route customers should use first.",
       priority: 86,
     });
   }
@@ -293,7 +291,7 @@ function buildQuestionCandidates({
           ? `I found these hour signals: ${listPreview(
               sourceSignals.hoursCandidates,
               2
-            )}. Send the public weekly hours in one line only if those source signals are wrong or incomplete.`
+            )}. Send the public weekly hours only if those are wrong or incomplete.`
           : "Send the public weekly hours in one line.",
       priority: 84,
     });
@@ -310,7 +308,7 @@ function buildQuestionCandidates({
           ? `I found these pricing signals: ${listPreview(
               sourceSignals.pricingCandidates,
               2
-            )}. How should AI answer pricing questions publicly only if those signals are not enough?`
+            )}. How should AI answer pricing questions publicly if those are not enough?`
           : "How should AI speak publicly about pricing?",
       priority: 82,
     });
@@ -366,82 +364,88 @@ function buildInterviewPlan(questionCandidates = [], nextQuestion = null) {
 }
 
 const SOURCE_CAPTURE_OPENING_MESSAGE =
-  "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə düşünülmüş drafta çevirməkdir. Başlamaq üçün ən yaxşı public source-u göndər: website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi. Sən sərbəst yaza bilərsən, mən mümkün qədər düzgün başa düşüb strukturlaşdıracağam.";
+  "Salam. Gəlin bunu normal, ağıllı şəkildə yığaq. Mən məqsəd olaraq biznesi anlamağa çalışıram, formanı doldurtmağa yox. Başlamaq üçün ən yaxşı public source-u göndər: website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi.";
 
 function getSourceCaptureOpeningMessage() {
-  return `${SOURCE_CAPTURE_OPENING_MESSAGE} Send the best public source you have first: website, Google Maps, Instagram, Facebook, or a short business note.`;
+  return `${SOURCE_CAPTURE_OPENING_MESSAGE} You can write freely. I will extract what I can before I ask anything else.`;
 }
 
 function buildConversationalAssistantMessage({
   phase,
   nextQuestion,
   draftState,
-  confidence,
-  recommendations,
   sourceSignals,
   readyForApproval,
-  sourceCoverage,
 }) {
   const sourceLead = buildSetupSourceLead(sourceSignals);
-  const knownState = buildSetupKnownState(draftState);
+  const businessName = s(draftState.businessName);
+  const description = s(draftState.description);
+  const services = arr(draftState.services);
+  const contacts = arr(draftState.contacts);
+  const hours = arr(draftState.hours);
+  const pricing = s(draftState.pricingPosture);
+  const handoff = s(draftState.humanHandoff);
 
   if (phase === "source_capture") {
     return getSourceCaptureOpeningMessage();
   }
 
   if (readyForApproval) {
-    const leadParts = [];
-    if (sourceLead) leadParts.push(sourceLead);
-    if (knownState.length) {
-      leadParts.push(`current setup looks solid across ${knownState.join(", ")}`);
-    }
+    const parts = [];
+    if (businessName) parts.push(businessName);
+    if (description) parts.push(description);
+    if (services.length) parts.push(`services: ${listPreview(services, 4)}`);
+    if (contacts.length) parts.push(`contact: ${listPreview(contacts, 2)}`);
+    if (hours.length) parts.push("hours confirmed");
+    if (pricing) parts.push("pricing posture confirmed");
+    if (handoff) parts.push("handoff rules confirmed");
 
-    return `${leadParts.join(". ")}. The draft is now structured enough to move into review and approval. Read it once more, then finalize if everything looks correct.`;
+    return parts.length
+      ? `Setup draft looks strong now — ${parts.join(", ")}. Review it once, then finalize if it looks correct.`
+      : "Setup draft looks strong now. Review it once, then finalize if it looks correct.";
   }
 
-  const parts = [];
-  if (sourceLead) parts.push(sourceLead);
+  const sentences = [];
 
-  if (knownState.length) {
-    parts.push(`current setup already has ${knownState.join(", ")}`);
+  if (sourceLead) {
+    sentences.push(sourceLead);
   }
 
-  const sourceCoveredBits = [];
-  if (sourceCoverage.identity) sourceCoveredBits.push("identity");
-  if (sourceCoverage.services) sourceCoveredBits.push("services");
-  if (sourceCoverage.contacts) sourceCoveredBits.push("contact route");
-  if (sourceCoverage.hours) sourceCoveredBits.push("hours");
-  if (sourceCoverage.pricing) sourceCoveredBits.push("pricing posture");
+  if (businessName && description) {
+    sentences.push(`I already understand the business as: ${businessName} — ${description}`);
+  } else if (businessName) {
+    sentences.push(`I already have the business name: ${businessName}.`);
+  } else if (description) {
+    sentences.push(`I already have a business description.`);
+  }
 
-  if (sourceCoveredBits.length) {
-    parts.push(
-      `I will not re-ask what already looks covered by source evidence: ${sourceCoveredBits.join(
-        ", "
-      )}`
-    );
+  if (services.length) {
+    sentences.push(`Current service draft: ${listPreview(services, 4)}.`);
+  }
+
+  if (contacts.length) {
+    sentences.push(`Main contact route is already present.`);
+  }
+
+  if (hours.length) {
+    sentences.push(`Public hours are already present.`);
+  }
+
+  if (pricing) {
+    sentences.push(`Pricing posture is already present.`);
+  }
+
+  if (handoff) {
+    sentences.push(`Human escalation policy is already present.`);
   }
 
   if (nextQuestion?.prompt) {
-    parts.push(`next most important gap: ${s(nextQuestion.prompt)}`);
+    sentences.push(nextQuestion.prompt);
+  } else {
+    sentences.push("Continue with the next most important missing business detail.");
   }
 
-  if (arr(confidence.unclear).length > 0) {
-    parts.push(
-      `still unclear: ${arr(confidence.unclear).slice(0, 2).join(" ")}`
-    );
-  }
-
-  if (arr(confidence.contradictions).length > 0) {
-    parts.push(
-      `conflict detected: ${arr(confidence.contradictions).slice(0, 1).join(" ")}`
-    );
-  }
-
-  if (arr(recommendations).length > 0 && !nextQuestion?.prompt) {
-    parts.push(`next cleanup: ${arr(recommendations).slice(0, 1).join(" ")}`);
-  }
-
-  return parts.join(". ").replace(/\.\./g, ".").trim();
+  return sentences.join(" ").replace(/\s+/g, " ").trim();
 }
 
 export function buildSetupAssistantBrainState({
@@ -576,11 +580,8 @@ export function buildSetupAssistantBrainState({
       phase,
       nextQuestion,
       draftState,
-      confidence,
-      recommendations,
       sourceSignals,
       readyForApproval,
-      sourceCoverage,
     }),
   };
 }
@@ -594,7 +595,7 @@ export function buildSetupAssistantFirstPrompt() {
       step: "source_capture",
       title: "Ən rahat bildiyin yerdən başlayaq",
       prompt:
-        "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl nəyin artıq aydın olduğunu çıxaracağam, sonra yalnız həqiqətən lazım olan növbəti şeyi soruşacağam.",
+        "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl başa düşdüklərimi çıxaracağam, sonra yalnız həqiqətən çatmayan şeyi soruşacağam.",
       group: "business_truth",
       groupLabel: "Business truth",
     },
