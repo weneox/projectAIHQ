@@ -641,7 +641,6 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
-  const pendingTurnRef = useRef(null);
   const bootSignatureRef = useRef("");
   const responseFingerprintRef = useRef("");
 
@@ -649,6 +648,7 @@ export default function SetupAssistantSections({
   const [localError, setLocalError] = useState("");
   const [transcript, setTranscript] = useState(() => loadStoredTranscript(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
+  const [pendingTurnId, setPendingTurnId] = useState("");
 
   const busy = saving || finalizing || capturingSource;
 
@@ -736,7 +736,7 @@ export default function SetupAssistantSections({
     setComposerValue("");
     setLocalError("");
     setLocalAnswers({});
-    pendingTurnRef.current = null;
+    setPendingTurnId("");
     bootSignatureRef.current = "";
     responseFingerprintRef.current = "";
   }, [storageKey]);
@@ -780,10 +780,10 @@ export default function SetupAssistantSections({
   useEffect(() => {
     if (!sessionHydrated) return;
     if (busy) return;
-    if (!pendingTurnRef.current) return;
+    if (!pendingTurnId) return;
 
-    const turnId = pendingTurnRef.current;
-    pendingTurnRef.current = null;
+    const turnId = pendingTurnId;
+    setPendingTurnId("");
 
     if (smartDraftReady) {
       responseFingerprintRef.current = "";
@@ -816,6 +816,7 @@ export default function SetupAssistantSections({
   }, [
     sessionHydrated,
     busy,
+    pendingTurnId,
     assistantView,
     smartDraftReady,
     currentQuestion,
@@ -829,9 +830,10 @@ export default function SetupAssistantSections({
     if (!text || busy) return;
 
     const resolvedSource = resolveSetupSourceInput(text);
+    const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
-    pendingTurnRef.current = `turn-${Date.now()}`;
+    setPendingTurnId(turnId);
 
     setTranscript((current) => [
       ...current,
@@ -851,7 +853,7 @@ export default function SetupAssistantSections({
         message: text,
       });
     } catch (error) {
-      pendingTurnRef.current = null;
+      setPendingTurnId("");
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -864,9 +866,10 @@ export default function SetupAssistantSections({
       text,
       currentQuestion?.step || "profile"
     );
+    const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
-    pendingTurnRef.current = `turn-${Date.now()}`;
+    setPendingTurnId(turnId);
 
     setTranscript((current) => [
       ...current,
@@ -897,7 +900,7 @@ export default function SetupAssistantSections({
         questionKey: s(currentQuestion?.key),
       });
     } catch (error) {
-      pendingTurnRef.current = null;
+      setPendingTurnId("");
       setLocalError(s(error?.message, "Mesaj emal olunmadı."));
     }
   }
