@@ -1,4 +1,12 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
+import {
+  buildAssistantConfidence,
+  buildAssistantInterviewPlan,
+  buildAssistantMessage,
+  buildAssistantRecommendation,
+  buildAssistantSections,
+  buildAssistantSourceSignals,
+} from "../setupAssistantAuthorityView.js";
 import { buildSetupAssistantServiceCatalog } from "../setupAssistantCatalog.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
 import {
@@ -7,6 +15,12 @@ import {
   buildAssistantCompatFollowupQueue,
   buildAssistantCompatQuestion,
 } from "./compat.js";
+import {
+  buildAssistantQuestion,
+  getNextQuestion,
+  SECTION_META,
+  SECTION_ORDER,
+} from "./questions.js";
 import { buildSetupAssistantSeedFromReview } from "./seed.js";
 import {
   SETUP_ASSISTANT_CURRENT_STEP,
@@ -144,7 +158,7 @@ function sanitizeBrainInterviewPlan(value = {}) {
     )
     .filter((item) => item.key);
 
-  return compactDraftObject({
+  return {
     activeQuestionKeys: uniqueStrings(
       source.activeQuestionKeys || activeQuestions.map((item) => item.key),
       12
@@ -153,7 +167,7 @@ function sanitizeBrainInterviewPlan(value = {}) {
     remainingQuestionKeys: uniqueStrings(source.remainingQuestionKeys, 12),
     nextGroup: s(source.nextGroup || "business_truth"),
     nextGroupLabel: s(source.nextGroupLabel || "Business truth"),
-  });
+  };
 }
 
 function sanitizeBrainSnapshot(value = {}) {
@@ -365,6 +379,47 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   };
 }
 
+function hasMeaningfulBrainSourceSignals(value = {}) {
+  const source = obj(value);
+
+  return Boolean(
+    s(source.primarySourceType) ||
+      s(source.primarySourceUrl) ||
+      arr(source.sourceTypes).length ||
+      arr(source.strongestEvidence).length ||
+      arr(source.companyNameCandidates).length ||
+      arr(source.descriptionCandidates).length ||
+      arr(source.serviceCandidates).length ||
+      arr(source.contactCandidates).length ||
+      arr(source.hoursCandidates).length ||
+      arr(source.pricingCandidates).length ||
+      arr(source.audienceCandidates).length ||
+      arr(source.languagesCandidates).length
+  );
+}
+
+function hasMeaningfulStoredBrain(brain = {}, timelineTurn = {}) {
+  const safeBrain = obj(brain);
+
+  return Boolean(
+    s(safeBrain.assistantMessage || safeBrain.message) ||
+      s(obj(safeBrain.nextQuestion).key) ||
+      arr(obj(safeBrain.interviewPlan).activeQuestionKeys).length ||
+      arr(obj(safeBrain.interviewPlan).activeQuestions).length ||
+      arr(obj(safeBrain.rejectedInputs)).length ||
+      arr(obj(safeBrain.confidence).strong).length ||
+      arr(obj(safeBrain.confidence).unclear).length ||
+      arr(obj(safeBrain.recommendation).notes).length ||
+      hasMeaningfulBrainSourceSignals(obj(safeBrain.sourceSignals)) ||
+      safeBrain.readyForApproval === true ||
+      s(safeBrain.provider) ||
+      s(safeBrain.model) ||
+      safeBrain.usedFallback === true ||
+      s(safeBrain.error) ||
+      s(timelineTurn.text)
+  );
+}
+
 function buildAssistantFromStoredBrain({
   session = {},
   draftRow = {},
@@ -373,15 +428,35 @@ function buildAssistantFromStoredBrain({
   servicesCatalog = {},
   timeline = [],
   storedBrain = {},
+  review = {},
+  sources = [],
 } = {}) {
   const brain = sanitizeBrainSnapshot(storedBrain);
   const lastAssistantTurn =
     [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
-  const sourceSignals = sanitizeBrainSourceSignals(
-    Object.keys(obj(brain.sourceSignals)).length
-      ? brain.sourceSignals
-      : buildMinimalSourceSignals(setup)
+  const fallbackQuestion = getNextQuestion(summary, setup, {
+    ...obj(setup.progress),
+    currentQuestionKey:
+      s(obj(setup.progress).currentQuestionKey) || s(session.currentStep),
+  });
+  const nextQuestion = sanitizeBrainQuestion(
+    obj(brain.nextQuestion).key && obj(brain.nextQuestion).prompt
+      ? brain.nextQuestion
+      : fallbackQuestion
   );
+  const fallbackSourceSignals = buildAssistantSourceSignals(setup, {
+    session,
+    review,
+    sources,
+  });
+  const sourceSignals = sanitizeBrainSourceSignals(
+    hasMeaningfulBrainSourceSignals(obj(brain.sourceSignals))
+      ? brain.sourceSignals
+      : Object.keys(obj(fallbackSourceSignals)).length
+        ? fallbackSourceSignals
+        : buildMinimalSourceSignals(setup)
+  );
+  const hasStoredBrain = hasMeaningfulStoredBrain(brain, lastAssistantTurn);
 
   const draftPreview =
     Object.keys(obj(brain.draft)).length > 0
@@ -393,17 +468,48 @@ function buildAssistantFromStoredBrain({
   const readyForApproval =
     brain.readyForApproval === true || summary.readyForReview === true;
 
+  const fallbackInterviewPlan = buildAssistantInterviewPlan(summary, nextQuestion, {
+    buildAssistantQuestion,
+  });
+  const hasStoredInterviewPlan = Boolean(
+    arr(obj(brain.interviewPlan).activeQuestionKeys).length ||
+      arr(obj(brain.interviewPlan).activeQuestions).length ||
+      arr(obj(brain.interviewPlan).remainingQuestionKeys).length
+  );
+  const interviewPlan = sanitizeBrainInterviewPlan(
+    hasStoredInterviewPlan ? brain.interviewPlan : fallbackInterviewPlan
+  );
+
+  const confidence =
+    arr(obj(brain.confidence).strong).length ||
+    arr(obj(brain.confidence).unclear).length ||
+    arr(obj(brain.confidence).contradictions).length
+      ? sanitizeBrainConfidence(brain.confidence)
+      : buildAssistantConfidence(summary, sourceSignals, setup);
+
+  const recommendation = arr(obj(brain.recommendation).notes).length
+    ? sanitizeBrainRecommendation(brain.recommendation)
+    : buildAssistantRecommendation(summary, sourceSignals, setup);
+
+  const sections = buildAssistantSections(
+    summary,
+    servicesCatalog,
+    SECTION_ORDER,
+    SECTION_META
+  );
+
   const phase = s(
     brain.phase ||
       lastAssistantTurn.phase ||
+      (obj(nextQuestion).key === "source_capture"
+        ? "source_capture"
+        : "") ||
       (readyForApproval
         ? "ready"
         : summary.hasAnyDraft
           ? "interview"
           : "source_capture")
   ).toLowerCase();
-
-  const nextQuestion = sanitizeBrainQuestion(brain.nextQuestion);
 
   const completionMessage =
     readyForApproval === true
@@ -418,10 +524,10 @@ function buildAssistantFromStoredBrain({
       : "";
 
   return {
-    mode: "brain_v3",
+    mode: hasStoredBrain ? "brain_v3" : "structured_v2",
     nextQuestion: nextQuestion.key && nextQuestion.prompt ? nextQuestion : null,
-    confirmationBlockers: [],
-    sections: [],
+    confirmationBlockers: arr(summary.confirmationBlockers),
+    sections,
     completion: {
       ready: readyForApproval,
       action: readyForApproval
@@ -441,22 +547,29 @@ function buildAssistantFromStoredBrain({
     ),
     phase,
     message: compactText(
-      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+      s(
+        brain.assistantMessage ||
+          brain.message ||
+          lastAssistantTurn.text ||
+          buildAssistantMessage(summary, nextQuestion, "", sourceSignals, setup)
+      ),
       420
     ),
     assistantMessage: compactText(
-      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+      s(
+        brain.assistantMessage ||
+          brain.message ||
+          lastAssistantTurn.text ||
+          buildAssistantMessage(summary, nextQuestion, "", sourceSignals, setup)
+      ),
       420
     ),
     timeline: arr(timeline).map(normalizeTimelineTurn),
     draft: obj(draftPreview),
-    confidence:
-      Object.keys(obj(brain.confidence)).length > 0
-        ? sanitizeBrainConfidence(brain.confidence)
-        : buildMinimalConfidenceFromSetup(setup),
-    recommendation: sanitizeBrainRecommendation(brain.recommendation),
+    confidence,
+    recommendation,
     sourceSignals,
-    interviewPlan: sanitizeBrainInterviewPlan(brain.interviewPlan),
+    interviewPlan,
     aiBehavior: compactDraftObject({
       languages: uniqueStrings(
         arr(obj(brain.aiBehavior).languages || setup.languages),
@@ -518,6 +631,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     servicesCatalog,
     timeline,
     storedBrain,
+    review,
+    sources: arr(review.sources),
   });
 
   const nextQuestion = obj(assistant.nextQuestion);

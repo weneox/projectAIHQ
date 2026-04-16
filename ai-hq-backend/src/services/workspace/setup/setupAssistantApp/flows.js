@@ -136,13 +136,19 @@ function buildSupplementalMessagePatch(
 ) {
   if (!s(latestMessage)) return {};
 
-  return normalizeSetupAssistantDraftPatchBody(
+  const patch = normalizeSetupAssistantDraftPatchBody(
     {
       step: latestStep,
       answer: latestMessage,
     },
     currentSetupAssistant
   );
+
+  const { assistantState, progress, ...rest } = obj(patch);
+  void assistantState;
+  void progress;
+
+  return rest;
 }
 
 async function maybeUpdateReviewSessionStep({
@@ -205,15 +211,28 @@ async function persistSetupAssistantState({
   const canonicalReviewDraftPatch =
     buildCanonicalReviewDraftPatchFromSetupAssistant(mergedSetupAssistant);
 
-  await patchReviewDraft({
-    sessionId: review.session.id,
-    tenantId: actor.tenantId,
-    patch: {
-      draftPayload: nextDraftPayload,
-      ...canonicalReviewDraftPatch,
-    },
-    bumpVersion: true,
-  });
+  try {
+    await patchReviewDraft({
+      sessionId: review.session.id,
+      tenantId: actor.tenantId,
+      patch: {
+        draftPayload: nextDraftPayload,
+        ...canonicalReviewDraftPatch,
+      },
+      bumpVersion: true,
+    });
+  } catch (error) {
+    if (
+      deps.patchSetupReviewDraft == null &&
+      deps.patchReview == null &&
+      isDatabaseNotInitializedError(error)
+    ) {
+      return false;
+    }
+    throw error;
+  }
+
+  return true;
 }
 
 async function ensureInitialBrainState({
@@ -275,7 +294,7 @@ async function ensureInitialBrainState({
         ])
       : existingTimeline;
 
-  await persistSetupAssistantState({
+  const persisted = await persistSetupAssistantState({
     review,
     actor,
     mergedSetupAssistant: currentSetupAssistant,
@@ -289,6 +308,13 @@ async function ensureInitialBrainState({
     nextQuestion: obj(rawTurn.nextQuestion),
     deps,
   });
+
+  if (persisted === false) {
+    return {
+      review,
+      brainSnapshot,
+    };
+  }
 
   const refreshed = await getCurrentReviewHelper(actor.tenantId);
 
@@ -316,18 +342,31 @@ export async function readSetupAssistantView({ db, actor }, deps = {}) {
 
   try {
     const currentReview = await getCurrentReviewHelper(actor.tenantId);
-    await ensureInitialBrainState({
+    const bootstrapped = await ensureInitialBrainState({
       db,
       actor,
       review: currentReview,
       deps,
     });
+
+    const refreshed = await loadSession({ db, actor }, deps);
+    const basePayload =
+      refreshed &&
+      Number(refreshed.status || 500) === 200 &&
+      refreshed.body?.ok !== false
+        ? refreshed.body
+        : sessionResult.body;
+
+    return {
+      status: 200,
+      body: buildSetupAssistantResponseBody(
+        basePayload,
+        bootstrapped?.brainSnapshot || null
+      ),
+    };
   } catch {
     return sessionResult;
   }
-
-  const refreshed = await loadSession({ db, actor }, deps);
-  return refreshed;
 }
 
 export async function startSetupAssistantSession({ db, actor }, deps = {}) {

@@ -1,7 +1,15 @@
 import OpenAI from "openai";
 
 import { cfg } from "../../../config.js";
+import {
+  buildAssistantConfidence,
+  buildAssistantInterviewPlan,
+  buildAssistantMessage,
+  buildAssistantRecommendation,
+} from "./setupAssistantAuthorityView.js";
 import { arr, compactDraftObject, obj, s } from "./draftShared.js";
+import { getNextQuestion } from "./setupAssistantApp/questions.js";
+import { buildSummary } from "./setupAssistantApp/summary.js";
 import {
   buildSetupDraftStateFromSignals,
   buildSetupSourceCoverage,
@@ -940,6 +948,10 @@ async function callOpenAISetupAssistant({
 }
 
 function buildFallbackShadowTurn({
+  session = {},
+  draft = {},
+  sources = [],
+  review = null,
   shadow = {},
   latestMessage = "",
   latestStep = "",
@@ -953,65 +965,46 @@ function buildFallbackShadowTurn({
     obj(safeShadow.sourceSignals),
     {}
   );
-
-  const strong = [];
-  const unclear = [];
-
-  if (s(fallbackDraft.businessName)) {
-    strong.push(`name_present:${fallbackDraft.businessName}`);
-  }
-  if (s(fallbackDraft.whatThisBusinessIs)) {
-    strong.push("description_present");
-  }
-  if (arr(fallbackDraft.coreServices).length) {
-    strong.push(`services_present:${arr(fallbackDraft.coreServices).length}`);
-  }
-  if (arr(fallbackDraft.contactRoutes).length) {
-    strong.push("contacts_present");
-  }
-  if (arr(fallbackDraft.hours).length) {
-    strong.push("hours_present");
-  }
-  if (s(fallbackDraft.pricingPosture)) {
-    strong.push("pricing_present");
-  }
-  if (s(fallbackDraft.humanHandoff)) {
-    strong.push("handoff_present");
-  }
-
-  if (!readiness.identityReady) unclear.push("identity_missing");
-  if (!readiness.servicesReady) unclear.push("services_missing");
-  if (!readiness.contactsReady) unclear.push("contacts_missing");
-  if (!readiness.hoursReady) unclear.push("hours_missing");
-  if (!readiness.pricingReady) unclear.push("pricing_missing");
-  if (!readiness.handoffReady) unclear.push("handoff_missing");
+  const summary = buildSummary(draft, {
+    session,
+    review,
+    sources,
+  });
+  const nextQuestion = getNextQuestion(summary, draft, obj(draft.progress));
+  const interviewPlan = buildAssistantInterviewPlan(summary, nextQuestion);
+  const confidence = buildAssistantConfidence(
+    summary,
+    fallbackSourceSignals,
+    draft
+  );
+  const recommendation = buildAssistantRecommendation(
+    summary,
+    fallbackSourceSignals,
+    draft
+  );
+  const assistantMessage =
+    buildAssistantMessage(
+      summary,
+      nextQuestion,
+      "",
+      fallbackSourceSignals,
+      draft
+    ) || s(obj(nextQuestion).prompt);
 
   return {
-    phase: s(safeShadow.phase, "interview"),
-    assistantMessage: "",
-    nextQuestion: null,
+    phase: s(
+      safeShadow.phase,
+      obj(nextQuestion).key === "source_capture" ? "source_capture" : "interview"
+    ),
+    assistantMessage,
+    nextQuestion: nextQuestion || null,
     draft: fallbackDraft,
     acceptedPatch: sanitizeAcceptedPatch({}, fallbackDraft),
     rejectedInputs: [],
-    confidence: {
-      strong,
-      unclear,
-      contradictions: uniqueStrings(
-        arr(safeShadow.contradictions).map((item) => s(item.message)),
-        12
-      ),
-    },
-    recommendation: {
-      notes: [],
-    },
+    confidence,
+    recommendation,
     sourceSignals: fallbackSourceSignals,
-    interviewPlan: {
-      activeQuestionKeys: [],
-      activeQuestions: [],
-      remainingQuestionKeys: [],
-      nextGroup: "business_truth",
-      nextGroupLabel: "Business truth",
-    },
+    interviewPlan,
     aiBehavior: {
       languages: uniqueStrings(fallbackDraft.languages, 8),
       tone: s(fallbackDraft.tone),
@@ -1153,6 +1146,10 @@ export async function runSetupAssistantOpenAIOrchestrator({
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
     return normalizeTurnResult(
       buildFallbackShadowTurn({
+        session,
+        draft,
+        sources,
+        review,
         shadow,
         latestMessage,
         latestStep,
@@ -1203,6 +1200,10 @@ export async function runSetupAssistantOpenAIOrchestrator({
   } catch (error) {
     return normalizeTurnResult(
       buildFallbackShadowTurn({
+        session,
+        draft,
+        sources,
+        review,
         shadow,
         latestMessage,
         latestStep,

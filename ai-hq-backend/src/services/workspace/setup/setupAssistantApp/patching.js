@@ -436,11 +436,12 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
             ? {
                 websiteUrl: sourceCandidate.value,
               }
-            : {
+            : sourceCandidate?.type
+              ? {}
+              : {
                 websiteUrl: normalizeWebsiteUrl(text),
               },
-        sourceMetadata:
-          sourceCandidate?.type === "website" ? sourceMetadataPatch : {},
+        sourceMetadata: sourceCandidate?.type ? sourceMetadataPatch : {},
         assistantState: {
           lastUpdatedSection: "profile",
           activeSection: "website",
