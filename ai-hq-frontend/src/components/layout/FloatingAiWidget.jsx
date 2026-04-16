@@ -160,15 +160,6 @@ function buildFreshEntryAssistantSeed() {
   };
 }
 
-function buildLoadingAssistantSeed() {
-  return {
-    ...buildDefaultAssistant(),
-    title: "Loading setup studio",
-    statusLabel: "Loading",
-    summary: "Loading the current workspace setup state.",
-  };
-}
-
 function normalizeDecisionAssistant(value = {}) {
   const source = obj(value);
 
