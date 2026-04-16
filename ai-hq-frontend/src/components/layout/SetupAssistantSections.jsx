@@ -3,7 +3,7 @@ import { ArrowUp, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const STORAGE_PREFIX = "setup_assistant_history_v3";
+const STORAGE_PREFIX = "setup_assistant_transcript_v4";
 
 const QUESTION_FALLBACKS = {
   profile: {
@@ -361,7 +361,7 @@ function hasBackendSmartDraft(model = {}) {
   return model.readyForApproval === true && hasStructuredDraft;
 }
 
-function loadStoredHistory(storageKey = "") {
+function loadStoredTranscript(storageKey = "") {
   if (typeof window === "undefined") return [];
 
   try {
@@ -373,26 +373,32 @@ function loadStoredHistory(storageKey = "") {
     return arr(parsed)
       .map((item, index) => ({
         id: s(item.id) || `msg-${index + 1}`,
-        role: "user",
+        role: s(item.role) || "assistant",
+        kind: s(item.kind) || "message",
+        title: s(item.title),
         body: s(item.body),
+        tags: arr(item.tags).map((tag) => s(tag)).filter(Boolean),
       }))
-      .filter((item) => s(item.body));
+      .filter((item) => item.title || item.body);
   } catch {
     return [];
   }
 }
 
-function saveStoredHistory(storageKey = "", history = []) {
+function saveStoredTranscript(storageKey = "", transcript = []) {
   if (typeof window === "undefined") return;
 
   try {
     window.sessionStorage.setItem(
       `${STORAGE_PREFIX}:${s(storageKey, "default")}`,
       JSON.stringify(
-        arr(history).map((item) => ({
+        arr(transcript).map((item) => ({
           id: s(item.id),
-          role: "user",
+          role: s(item.role),
+          kind: s(item.kind),
+          title: s(item.title),
           body: s(item.body),
+          tags: arr(item.tags).map((tag) => s(tag)).filter(Boolean),
         }))
       )
     );
@@ -480,9 +486,23 @@ function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
   return s(fallbackStep, "profile");
 }
 
+function looksLikeGenericEnglishPrompt(value = "") {
+  const text = s(value);
+  if (!text) return false;
+
+  return /^(send|add|describe|define|list|confirm|lock|set)\b/i.test(text);
+}
+
 function buildQuestionPrompt(question = {}) {
   const key = s(question?.key).toLowerCase();
-  return s(question.prompt) || s(obj(QUESTION_FALLBACKS[key]).prompt);
+  const fallbackPrompt = s(obj(QUESTION_FALLBACKS[key]).prompt);
+  const prompt = s(question.prompt);
+
+  if (fallbackPrompt && looksLikeGenericEnglishPrompt(prompt)) {
+    return fallbackPrompt;
+  }
+
+  return prompt || fallbackPrompt;
 }
 
 function buildQuestionPlaceholder(question = {}) {
@@ -520,6 +540,7 @@ function MessageBubble({
   eyebrow = "",
   title = "",
   body = "",
+  tags = [],
   children = null,
 }) {
   const isUser = role === "user";
@@ -551,6 +572,14 @@ function MessageBubble({
               } ${isUser ? "text-white/95" : "text-text"}`}
             >
               {body}
+            </div>
+          ) : null}
+
+          {arr(tags).length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {arr(tags).map((tag) => (
+                <StatusPill key={tag}>{tag}</StatusPill>
+              ))}
             </div>
           ) : null}
 
@@ -868,33 +897,31 @@ function ChallengeCard({ challengeState = {}, currentQuestion = null }) {
 function buildLiveAssistantState({
   sourceSubmitted = false,
   currentQuestion = null,
-  finalModel = {},
-  assistantControl = {},
   smartDraftReady = false,
   challengeState = {},
   sourceCoverageState = {},
+  finalModel = {},
+  assistantControl = {},
 }) {
   if (!sourceSubmitted) {
     return {
       title: "Biz bunu səliqəli şəkildə birlikdə quraq",
       body:
-        "Mən məqsədyönlü şəkildə işləyəcəyəm: əvvəl mövcud source və ya yazdıqlarından nəyin artıq aydın olduğunu çıxaracağam, sonra chatbot-un həqiqətən düzgün işləməsi üçün yalnız vacib olan hissələri tamamlayacağam. Format barədə narahat olma — website, Google Maps, Instagram, Facebook və ya sadəcə sərbəst biznes qeydi ilə başlaya bilərsən.",
+        "Mən əvvəl source və ya yazdıqlarından nəyin artıq aydın olduğunu çıxaracağam, sonra chatbot-un həqiqətən düzgün işləməsi üçün yalnız vacib boşluqları tamamlayacağam. Format barədə narahat olma — website, Google Maps, Instagram, Facebook və ya sadəcə qısa biznes qeydi ilə başlaya bilərsən.",
+      tags: ["Website", "Google Maps", "Instagram", "Facebook", "Qısa qeyd"],
     };
   }
 
   if (smartDraftReady) {
-    return {
-      title: "Draft hazırdır",
-      body:
-        "Əsas draftı aşağıda topladım. Düzəlişini yaza və ya birbaşa təsdiqləyə bilərsən.",
-    };
+    return null;
   }
 
   if (challengeState?.hasChallenge) {
     return {
-      title: "Bir şeyi olduğu kimi qəbul etmədim",
+      title: "Bunu bir az dəqiqləşdirək",
       body:
-        "Bəzi hissələr zəif, qarışıq və ya uyğun görünmür. Mən onları kor-koranə drafta salmadım. Daha dəqiq yazsan, düzgün şəkildə strukturlaşdıracağam.",
+        "Bəzi hissələri olduğu kimi drafta salmadım. Daha dəqiq yazsan, düzgün şəkildə strukturlaşdıracağam.",
+      tags: [],
     };
   }
 
@@ -902,22 +929,74 @@ function buildLiveAssistantState({
     return {
       title: buildQuestionPrompt(currentQuestion),
       body: sourceCoverageState?.hasCoverage
-        ? "Mənbədən artıq bir hissəni anladım, ona görə yalnız qalan vacib boşluğu soruşuram. Rahat şəkildə cavab verə bilərsən — mən onu peşəkar draft formasına salmağa çalışacağam."
-        : "Rahat şəkildə cavab verə bilərsən — mən onu mümkün qədər düzgün başa düşüb peşəkar draft formasına salmağa çalışacağam.",
+        ? "Mənbədən artıq anladığım hissələri təkrar soruşmuram. Sadəcə qalan ən vacib boşluğu tamamlayırıq."
+        : "Rahat şəkildə cavab ver — mən onu mümkün qədər düzgün başa düşüb peşəkar draft formasına salacağam.",
+      tags: [],
     };
   }
-
-  const fallbackMessage = compactText(
-    finalModel.message || assistantControl.message,
-    280
-  );
 
   return {
     title: "Davam edək",
     body:
-      fallbackMessage ||
-      "Əlavə detail və ya düzəliş yaza bilərsən.",
+      compactText(finalModel.message || assistantControl.message, 220) ||
+      "Əlavə detal və ya düzəliş yaza bilərsən.",
+    tags: [],
   };
+}
+
+function makeTranscriptEntry(entry = {}) {
+  return {
+    id: s(entry.id) || `msg-${Date.now()}`,
+    role: s(entry.role) || "assistant",
+    kind: s(entry.kind) || "message",
+    title: s(entry.title),
+    body: s(entry.body),
+    tags: uniqueStrings(arr(entry.tags), 8),
+    signature: s(entry.signature),
+  };
+}
+
+function buildAssistantSnapshot({
+  sourceSubmitted,
+  smartDraftReady,
+  liveAssistant,
+  statusPills,
+  finalModel,
+  currentQuestion,
+  challengeState,
+}) {
+  if (smartDraftReady) return null;
+
+  const title = s(liveAssistant?.title);
+  const body = s(liveAssistant?.body);
+  if (!title && !body) return null;
+
+  const tags =
+    !sourceSubmitted || currentQuestion || challengeState?.hasChallenge
+      ? []
+      : arr(statusPills).slice(0, 4);
+
+  const signature = JSON.stringify({
+    kind: "assistant",
+    title,
+    body,
+    tags,
+    phase: s(finalModel.phase),
+    questionKey: s(currentQuestion?.key),
+    coverage: arr(obj(finalModel.sourceSignals).coverage ? Object.keys(obj(finalModel.sourceSignals).coverage).filter((key) => obj(finalModel.sourceSignals).coverage[key]) : []),
+    ready: finalModel.readyForApproval === true,
+    error: s(finalModel.error),
+  });
+
+  return makeTranscriptEntry({
+    id: `assistant-${Date.now()}`,
+    role: "assistant",
+    kind: "message",
+    title,
+    body,
+    tags,
+    signature,
+  });
 }
 
 export default function SetupAssistantSections({
@@ -934,10 +1013,11 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
+  const lastAssistantSignatureRef = useRef("");
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
-  const [history, setHistory] = useState(() => loadStoredHistory(storageKey));
+  const [transcript, setTranscript] = useState(() => loadStoredTranscript(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
 
@@ -1004,9 +1084,7 @@ export default function SetupAssistantSections({
       smartDraftReady
   );
 
-  const sourceSubmitted = Boolean(
-    hasRealSessionState || history.length > 0
-  );
+  const sourceSubmitted = Boolean(hasRealSessionState || transcript.length > 0);
 
   const currentQuestion =
     sourceSubmitted && assistantControl.readyForApproval !== true
@@ -1023,37 +1101,59 @@ export default function SetupAssistantSections({
     [finalModel]
   );
 
-  const liveAssistant = useMemo(
-    () =>
-      buildLiveAssistantState({
-        sourceSubmitted,
-        currentQuestion,
-        finalModel,
-        assistantControl,
-        smartDraftReady,
-        challengeState,
-        sourceCoverageState,
-      }),
-    [
-      sourceSubmitted,
-      currentQuestion,
-      finalModel,
-      assistantControl,
-      smartDraftReady,
-      challengeState,
-      sourceCoverageState,
-    ]
-  );
-
   const statusPills = useMemo(
     () => buildStatusPills(finalModel, sourceSubmitted),
     [finalModel, sourceSubmitted]
   );
 
+  const liveAssistant = useMemo(
+    () =>
+      buildLiveAssistantState({
+        sourceSubmitted,
+        currentQuestion,
+        smartDraftReady,
+        challengeState,
+        sourceCoverageState,
+        finalModel,
+        assistantControl,
+      }),
+    [
+      sourceSubmitted,
+      currentQuestion,
+      smartDraftReady,
+      challengeState,
+      sourceCoverageState,
+      finalModel,
+      assistantControl,
+    ]
+  );
+
+  const currentAssistantSnapshot = useMemo(
+    () =>
+      buildAssistantSnapshot({
+        sourceSubmitted,
+        smartDraftReady,
+        liveAssistant,
+        statusPills,
+        finalModel,
+        currentQuestion,
+        challengeState,
+      }),
+    [
+      sourceSubmitted,
+      smartDraftReady,
+      liveAssistant,
+      statusPills,
+      finalModel,
+      currentQuestion,
+      challengeState,
+    ]
+  );
+
   const lastAssistantQuestionStep = useMemo(() => {
     if (currentQuestion?.step) return s(currentQuestion.step).toLowerCase();
 
-    const text = s(liveAssistant.title || liveAssistant.body).toLowerCase();
+    const text = s(liveAssistant?.title || liveAssistant?.body).toLowerCase();
 
     if (text.includes("qiymət")) return "pricing";
     if (text.includes("saat")) return "hours";
@@ -1066,45 +1166,62 @@ export default function SetupAssistantSections({
 
   const composerPlaceholder = useMemo(() => {
     if (!sourceSubmitted) {
-      return "Məsələn: website, Instagram, Google Maps linki və ya qısa biznes qeydi yaz";
+      return "Website, Google Maps linki və ya qısa biznes qeydi yaz";
     }
 
     if (challengeState?.hasChallenge) {
-      return "Rahat formada daha dəqiq yaz — mən uyğunlaşdıracağam";
+      return "Daha dəqiq yaz — mən uyğunlaşdıracağam";
     }
 
     if (currentQuestion) {
-      return `${buildQuestionPlaceholder(currentQuestion)} — sərbəst formada da yaza bilərsən`;
+      return buildQuestionPlaceholder(currentQuestion);
     }
 
     if (smartDraftReady) {
       return "Dəyişmək istədiyin detalı yaz";
     }
 
-    return "Əlavə detail və ya correction yaz";
-  }, [sourceSubmitted, currentQuestion, smartDraftReady, challengeState]);
+    return "Əlavə detal və ya düzəliş yaz";
+  }, [sourceSubmitted, challengeState, currentQuestion, smartDraftReady]);
 
   useEffect(() => {
-    setHistory(loadStoredHistory(storageKey));
+    setTranscript(loadStoredTranscript(storageKey));
     setComposerValue("");
     setLocalError("");
     setAwaitingAssistant(false);
+    lastAssistantSignatureRef.current = "";
   }, [storageKey]);
 
   useEffect(() => {
-    saveStoredHistory(storageKey, history);
-  }, [storageKey, history]);
+    saveStoredTranscript(storageKey, transcript);
+  }, [storageKey, transcript]);
 
   useEffect(() => {
-    if (
-      sessionHydrated &&
-      !hasRealSessionState &&
-      history.length > 0 &&
-      !awaitingAssistant
-    ) {
-      setHistory([]);
+    if (sessionHydrated && !hasRealSessionState && !awaitingAssistant) {
+      setTranscript([]);
+      lastAssistantSignatureRef.current = "";
     }
-  }, [sessionHydrated, hasRealSessionState, history.length, awaitingAssistant]);
+  }, [sessionHydrated, hasRealSessionState, awaitingAssistant]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    if (!currentAssistantSnapshot) return;
+    if (awaitingAssistant) return;
+
+    const signature = s(currentAssistantSnapshot.signature);
+    if (!signature) return;
+    if (lastAssistantSignatureRef.current === signature) return;
+
+    setTranscript((current) => [
+      ...current,
+      makeTranscriptEntry({
+        ...currentAssistantSnapshot,
+        id: `assistant-${Date.now()}`,
+      }),
+    ]);
+
+    lastAssistantSignatureRef.current = signature;
+  }, [sessionHydrated, currentAssistantSnapshot, awaitingAssistant]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -1113,7 +1230,7 @@ export default function SetupAssistantSections({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [history, awaitingAssistant, localError, errorMessage, liveAssistant, smartDraftReady]);
+  }, [transcript, awaitingAssistant, localError, errorMessage, smartDraftReady]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -1124,13 +1241,14 @@ export default function SetupAssistantSections({
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setHistory((current) => [
+    setTranscript((current) => [
       ...current,
-      {
+      makeTranscriptEntry({
         id: `user-source-${Date.now()}`,
         role: "user",
+        kind: "message",
         body: text,
-      },
+      }),
     ]);
 
     setComposerValue("");
@@ -1154,13 +1272,14 @@ export default function SetupAssistantSections({
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setHistory((current) => [
+    setTranscript((current) => [
       ...current,
-      {
+      makeTranscriptEntry({
         id: `user-answer-${Date.now()}`,
         role: "user",
+        kind: "message",
         body: text,
-      },
+      }),
     ]);
 
     setLocalAnswers((current) => ({
@@ -1186,18 +1305,22 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy) return;
 
-    const resolvedStep = resolveFreeformStepFromText(text, lastAssistantQuestionStep);
+    const resolvedStep = resolveFreeformStepFromText(
+      text,
+      lastAssistantQuestionStep
+    );
 
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setHistory((current) => [
+    setTranscript((current) => [
       ...current,
-      {
+      makeTranscriptEntry({
         id: `user-freeform-${Date.now()}`,
         role: "user",
+        kind: "message",
         body: text,
-      },
+      }),
     ]);
 
     setComposerValue("");
@@ -1229,50 +1352,57 @@ export default function SetupAssistantSections({
   }
 
   const composerReady = sessionHydrated;
+  const showBootAssistant =
+    transcript.length === 0 &&
+    currentAssistantSnapshot &&
+    !awaitingAssistant &&
+    !smartDraftReady;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
           <AnimatePresence initial={false}>
-            {history.map((item) => (
+            {transcript.map((item) => (
               <MessageBubble
                 key={item.id}
                 role={item.role}
+                eyebrow={item.role === "assistant" ? "Setup" : ""}
+                title={item.title}
                 body={item.body}
+                tags={item.role === "assistant" ? item.tags : []}
               />
             ))}
           </AnimatePresence>
 
-          {awaitingAssistant ? <TypingBubble /> : null}
-
-          {!smartDraftReady ? (
+          {showBootAssistant ? (
             <MessageBubble
               role="assistant"
               eyebrow="Setup"
-              title={liveAssistant.title}
-              body={liveAssistant.body}
+              title={currentAssistantSnapshot.title}
+              body={currentAssistantSnapshot.body}
+              tags={currentAssistantSnapshot.tags}
+            />
+          ) : null}
+
+          {awaitingAssistant ? <TypingBubble /> : null}
+
+          {!smartDraftReady && sourceCoverageState?.hasCoverage ? (
+            <MessageBubble
+              role="assistant"
+              eyebrow="Setup"
+              title=""
+              body=""
             >
-              <div className="space-y-3">
-                {statusPills.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {statusPills.map((pill) => (
-                      <StatusPill key={pill}>{pill}</StatusPill>
-                    ))}
-                  </div>
-                ) : null}
-
-                {sourceCoverageState?.hasCoverage ? (
-                  <SourceCoverageCard sourceCoverageState={sourceCoverageState} />
-                ) : null}
-
-                {challengeState?.hasChallenge ? (
+              <SourceCoverageCard sourceCoverageState={sourceCoverageState} />
+              {challengeState?.hasChallenge ? (
+                <div className="mt-3">
                   <ChallengeCard
                     challengeState={challengeState}
                     currentQuestion={currentQuestion}
                   />
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </MessageBubble>
           ) : null}
 
