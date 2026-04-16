@@ -95,6 +95,69 @@ function buildSourceLead(sourceSignals = {}) {
   return "";
 }
 
+function buildCoverage(sourceSignals = {}, setup = {}, summary = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const sectionStatus = obj(summary.sectionStatus);
+
+  const primarySourceExists =
+    Boolean(s(sourceSignals.primarySourceType)) ||
+    Boolean(s(sourceSignals.primarySourceUrl));
+
+  const identity =
+    sectionTone(sectionStatus.profile?.status) === "ready" ||
+    Boolean(
+      primarySourceExists &&
+        s(firstNonEmpty(businessProfile.companyName, arr(sourceSignals.companyNameCandidates)[0])) &&
+        s(firstNonEmpty(businessProfile.description, arr(sourceSignals.descriptionCandidates)[0]))
+    );
+
+  const services =
+    sectionTone(sectionStatus.services?.status) === "ready" ||
+    arr(sourceSignals.serviceCandidates).length >= 2 ||
+    arr(setup.services).length >= 2;
+
+  const contacts =
+    sectionTone(sectionStatus.contacts?.status) === "ready" ||
+    arr(sourceSignals.contactCandidates).length >= 1 ||
+    arr(setup.contacts).length >= 1;
+
+  const hours =
+    sectionTone(sectionStatus.hours?.status) === "ready" ||
+    arr(sourceSignals.hoursCandidates).length >= 1 ||
+    countConfiguredHours(setup.hours) >= 1;
+
+  const pricingCovered =
+    sectionTone(sectionStatus.pricing?.status) === "ready" ||
+    arr(sourceSignals.pricingCandidates).length >= 1 ||
+    Boolean(s(pricing.publicSummary));
+
+  const audience =
+    Boolean(arr(sourceSignals.audienceCandidates).length) ||
+    Boolean(s(businessProfile.targetAudience));
+
+  const languages =
+    Boolean(arr(sourceSignals.languagesCandidates).length) ||
+    Boolean(arr(setup.languages).length);
+
+  const handoffCovered =
+    sectionTone(sectionStatus.handoff?.status) === "ready" ||
+    Boolean(s(handoff.summary) || arr(handoff.triggers).length);
+
+  return {
+    primarySourceExists,
+    identity,
+    services,
+    contacts,
+    hours,
+    pricing: pricingCovered,
+    audience,
+    languages,
+    handoff: handoffCovered,
+  };
+}
+
 export function buildAssistantDraftPreview(
   setup = {},
   { formatHours = null } = {}
@@ -138,6 +201,7 @@ export function buildAssistantSourceSignals(
 ) {
   const businessProfile = obj(setup.businessProfile);
   const sourceMetadata = obj(setup.sourceMetadata);
+  const pricing = obj(setup.pricingPosture);
 
   const normalizeWebsiteUrlSafe =
     typeof normalizeWebsiteUrl === "function"
@@ -164,12 +228,20 @@ export function buildAssistantSourceSignals(
 
   const primarySourceUrl = websiteUrl || s(sourceMetadata.primarySourceUrl);
 
-  const sourceLabels = uniqueStringsSafe(arr(sourceMetadata.sourceLabels), 12);
+  const sourceLabels = uniqueStringsSafe(
+    [
+      ...arr(sourceMetadata.sourceLabels),
+      primarySourceType ? sourceTypeLabelSafe(primarySourceType) : "",
+    ],
+    12
+  );
 
   const sourceTypes = uniqueStringsSafe(
     [
       primarySourceType,
-      ...sourceLabels.map((label) => normalizeSourceTypeSafe(label)),
+      ...arr(sourceMetadata.sourceLabels).map((label) =>
+        normalizeSourceTypeSafe(label)
+      ),
     ].filter(Boolean),
     8
   );
@@ -178,11 +250,42 @@ export function buildAssistantSourceSignals(
     [
       ...arr(sourceMetadata.evidenceSummary),
       primarySourceUrl ? `Primary source: ${primarySourceUrl}` : "",
-      primarySourceType
-        ? `Primary source type: ${sourceTypeLabelSafe(primarySourceType)}`
+      firstNonEmpty(businessProfile.companyName)
+        ? `Business name: ${s(businessProfile.companyName)}`
+        : "",
+      firstNonEmpty(businessProfile.description)
+        ? `Description present`
+        : "",
+      arr(setup.services).length
+        ? `Service signals: ${listPreview(
+            arr(setup.services).map((item) => s(item.title || item.name || item.label)),
+            4
+          )}`
+        : "",
+      arr(setup.contacts).length
+        ? `Contact signals: ${listPreview(
+            arr(setup.contacts).map((item) => s(item.value || item.label || item.type)),
+            3
+          )}`
+        : "",
+      countConfiguredHours(setup.hours) > 0
+        ? `Hours configured: ${countConfiguredHours(setup.hours)} days`
+        : "",
+      s(pricing.publicSummary)
+        ? `Pricing posture: ${s(pricing.publicSummary)}`
         : "",
     ],
     12
+  );
+
+  const discoveredPublicClaims = uniqueStringsSafe(
+    [
+      ...arr(sourceMetadata.evidenceSummary),
+      ...arr(setup.services).map((item) => s(item.title || item.name || item.label)),
+      ...arr(setup.contacts).map((item) => s(item.value || item.label || item.type)),
+      s(pricing.publicSummary),
+    ],
+    16
   );
 
   return {
@@ -191,10 +294,10 @@ export function buildAssistantSourceSignals(
       s(sourceLabels[0]) || sourceTypeLabelSafe(primarySourceType),
     primarySourceUrl,
     primarySourceAuthorityClass: "",
-    pageCount: 0,
+    pageCount: Number(sourceMetadata.pageCount || 0) || 0,
     sourceTypes,
     strongestEvidence,
-    discoveredPublicClaims: [],
+    discoveredPublicClaims,
     companyNameCandidates: s(businessProfile.companyName)
       ? [s(businessProfile.companyName)]
       : [],
@@ -207,18 +310,40 @@ export function buildAssistantSourceSignals(
     contactCandidates: arr(setup.contacts)
       .map((item) => s(item.value || item.label || item.type))
       .filter(Boolean),
-    hoursCandidates: [],
-    pricingCandidates: s(obj(setup.pricingPosture).publicSummary)
-      ? [s(obj(setup.pricingPosture).publicSummary)]
+    hoursCandidates: buildAssistantDraftPreview(setup, {
+      formatHours: (hours) =>
+        arr(hours)
+          .map((row) => {
+            const item = obj(row);
+            if (!s(item.day)) return "";
+            if (item.appointmentOnly === true) return `${item.day} appointment only`;
+            if (item.allDay === true) return `${item.day} 24/7`;
+            if (item.closed === true) return `${item.day} closed`;
+            if (s(item.openTime) && s(item.closeTime)) {
+              return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
+            }
+            if (s(item.notes)) return `${item.day} ${s(item.notes)}`;
+            return "";
+          })
+          .filter(Boolean),
+    }).hours,
+    pricingCandidates: s(pricing.publicSummary)
+      ? [s(pricing.publicSummary)]
       : [],
-    audienceCandidates: [],
-    languagesCandidates: [],
+    audienceCandidates: s(businessProfile.targetAudience)
+      ? [s(businessProfile.targetAudience)]
+      : [],
+    languagesCandidates: arr(setup.languages)
+      .map((item) => s(item))
+      .filter(Boolean),
   };
 }
 
-export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
+export function buildAssistantConfidence(summary = {}, sourceSignals = {}, setup = {}) {
   const sectionStatus = obj(summary.sectionStatus);
   const safeSourceSignals = obj(sourceSignals);
+  const safeSetup = obj(setup);
+  const coverage = buildCoverage(safeSourceSignals, safeSetup, summary);
 
   const strong = [];
   const unclear = [];
@@ -226,6 +351,8 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.profile?.status) === "ready") {
     strong.push("Business identity is present and looks usable.");
+  } else if (coverage.identity) {
+    strong.push("Source evidence already covers the public business identity.");
   } else if (
     s(safeSourceSignals.primarySourceUrl) ||
     s(safeSourceSignals.primarySourceType)
@@ -239,6 +366,8 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.services?.status) === "ready") {
     strong.push("Core services are already structured.");
+  } else if (coverage.services) {
+    strong.push("Source evidence already covers core services.");
   } else if (sectionTone(sectionStatus.services?.status) === "needs_review") {
     unclear.push("Service signals exist, but they still need cleanup.");
   } else {
@@ -247,6 +376,8 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.hours?.status) === "ready") {
     strong.push("Business hours are already structured.");
+  } else if (coverage.hours) {
+    strong.push("Source evidence already covers public working hours.");
   } else if (sectionTone(sectionStatus.hours?.status) === "needs_review") {
     unclear.push("Hour signals exist, but they still need confirmation.");
   } else {
@@ -255,6 +386,8 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.pricing?.status) === "ready") {
     strong.push("Pricing posture is already defined.");
+  } else if (coverage.pricing) {
+    strong.push("Source evidence already covers pricing posture.");
   } else if (sectionTone(sectionStatus.pricing?.status) === "needs_review") {
     unclear.push("Pricing signals exist, but public reply policy still needs refinement.");
   } else {
@@ -263,6 +396,8 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.contacts?.status) === "ready") {
     strong.push("A customer contact route is present.");
+  } else if (coverage.contacts) {
+    strong.push("Source evidence already covers a public contact route.");
   } else if (sectionTone(sectionStatus.contacts?.status) === "needs_review") {
     unclear.push("Contact details exist, but the main routing lane still needs confirmation.");
   } else {
@@ -271,16 +406,15 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
 
   if (sectionTone(sectionStatus.handoff?.status) === "ready") {
     strong.push("Operator escalation rules are present.");
+  } else if (coverage.handoff) {
+    strong.push("Escalation logic already exists in the draft.");
   } else if (sectionTone(sectionStatus.handoff?.status) === "needs_review") {
     unclear.push("Escalation logic exists, but still needs stronger boundaries.");
   } else {
     unclear.push("Operator handoff rules are still missing.");
   }
 
-  if (
-    !s(safeSourceSignals.primarySourceType) ||
-    safeSourceSignals.primarySourceType === "manual"
-  ) {
+  if (!coverage.primarySourceExists) {
     unclear.push("A reliable public source is still missing.");
   }
 
@@ -291,8 +425,9 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}) {
   };
 }
 
-export function buildAssistantRecommendation(summary = {}) {
+export function buildAssistantRecommendation(summary = {}, sourceSignals = {}, setup = {}) {
   const blockers = arr(summary.confirmationBlockers);
+  const coverage = buildCoverage(obj(sourceSignals), obj(setup), summary);
 
   if (!blockers.length) {
     return {
@@ -302,41 +437,51 @@ export function buildAssistantRecommendation(summary = {}) {
 
   const notes = [];
 
-  for (const blocker of blockers.slice(0, 3)) {
+  for (const blocker of blockers.slice(0, 4)) {
     const key = s(blocker.key);
 
     if (key === "profile") {
-      notes.push(
-        "Lock the exact public business name and one clean description before approval."
-      );
+      if (!coverage.identity) {
+        notes.push(
+          "Lock the exact public business name and one clean description before approval."
+        );
+      }
       continue;
     }
 
     if (key === "services") {
-      notes.push(
-        "Keep only the real customer-facing services AI should confidently talk about."
-      );
+      if (!coverage.services) {
+        notes.push(
+          "Keep only the real customer-facing services AI should confidently talk about."
+        );
+      }
       continue;
     }
 
     if (key === "hours") {
-      notes.push(
-        "Capture the real public hours so AI does not promise the wrong availability."
-      );
+      if (!coverage.hours) {
+        notes.push(
+          "Capture the real public hours so AI does not promise the wrong availability."
+        );
+      }
       continue;
     }
 
     if (key === "pricing") {
-      notes.push(
-        "Define a safe public pricing posture before AI answers price questions."
-      );
+      if (!coverage.pricing) {
+        notes.push(
+          "Define a safe public pricing posture before AI answers price questions."
+        );
+      }
       continue;
     }
 
     if (key === "contacts") {
-      notes.push(
-        "Choose one primary customer contact lane so AI can hand people somewhere real."
-      );
+      if (!coverage.contacts) {
+        notes.push(
+          "Choose one primary customer contact lane so AI can hand people somewhere real."
+        );
+      }
       continue;
     }
 
@@ -402,25 +547,46 @@ export function buildAssistantInterviewPlan(
 export function buildAssistantMessage(
   summary = {},
   nextQuestion = null,
-  reviewMessage = ""
+  reviewMessage = "",
+  sourceSignals = {},
+  setup = {}
 ) {
   const question = obj(nextQuestion);
   const blockers = arr(summary.confirmationBlockers);
   const blocker = obj(blockers[0]);
   const sourceHint = s(blocker.sourceHint);
   const metric = s(blocker.metric);
+  const coverage = buildCoverage(obj(sourceSignals), obj(setup), summary);
+  const configuredState = buildConfiguredStateSummary(setup, sourceSignals);
+  const sourceLead = buildSourceLead(sourceSignals);
+
+  const coveredParts = [];
+  if (coverage.identity) coveredParts.push("identity");
+  if (coverage.services) coveredParts.push("services");
+  if (coverage.contacts) coveredParts.push("contact route");
+  if (coverage.hours) coveredParts.push("hours");
+  if (coverage.pricing) coveredParts.push("pricing posture");
 
   if (s(question.key)) {
     const parts = [];
 
+    if (sourceLead) parts.push(sourceLead);
+    if (configuredState.length) {
+      parts.push(`Current setup already has ${configuredState.join(", ")}`);
+    }
+    if (coveredParts.length) {
+      parts.push(
+        `I will not re-ask what already looks covered by source evidence: ${coveredParts.join(
+          ", "
+        )}`
+      );
+    }
     if (sourceHint) parts.push(sourceHint);
     if (metric) parts.push(`Current signal: ${metric}`);
-
     if (s(question.prompt)) {
       parts.push(`Next most important gap: ${s(question.prompt)}`);
     }
-
-    if (s(blocker.reason)) {
+    if (s(blocker.reason) && !s(question.prompt).includes(s(blocker.reason))) {
       parts.push(s(blocker.reason));
     }
 
@@ -428,7 +594,19 @@ export function buildAssistantMessage(
   }
 
   if (summary.readyForReview === true) {
-    return "The setup draft is structurally complete enough to move into review and approval.";
+    const parts = [];
+    if (sourceLead) parts.push(sourceLead);
+    if (configuredState.length) {
+      parts.push(`Current setup looks solid across ${configuredState.join(", ")}`);
+    }
+    parts.push(
+      "The setup draft is structurally complete enough to move into review and approval."
+    );
+    return parts.join(". ");
+  }
+
+  if (sourceLead && !s(blocker.reason)) {
+    return `${sourceLead}. ${s(reviewMessage)}`;
   }
 
   if (s(blocker.reason)) {

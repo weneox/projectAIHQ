@@ -264,6 +264,7 @@ export async function updateSetupAssistantDraft(
   let mergedSetupAssistant = currentSetupAssistant;
   let nextQuestion = null;
   let brainTurn = null;
+  let clientTurn = null;
 
   if (messageMode) {
     brainTurn = await runSetupBrain({
@@ -275,10 +276,13 @@ export async function updateSetupAssistantDraft(
       latestMessage: latestMessage || (isMessageSkip(body) ? "Let's continue." : ""),
     });
 
-    const clientTurn = shapeBrainTurnForClient(brainTurn, currentSetupAssistant);
+    clientTurn = shapeBrainTurnForClient(
+      brainTurn,
+      currentSetupAssistant
+    );
 
     const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
-      brainTurn,
+      clientTurn,
       currentSetupAssistant
     );
 
@@ -293,6 +297,7 @@ export async function updateSetupAssistantDraft(
         orchestratorPatch,
         seed
       );
+
       mergedSetupAssistant = mergeSetupAssistantDraft(
         mergedSetupAssistant,
         fallbackAnswerPatch,
@@ -327,6 +332,14 @@ export async function updateSetupAssistantDraft(
           seed
         );
       }
+
+      clientTurn = shapeBrainTurnForClient(
+        {
+          ...obj(brainTurn),
+          nextQuestion: obj(nextQuestion || obj(clientTurn).nextQuestion),
+        },
+        mergedSetupAssistant
+      );
     } else {
       mergedSetupAssistant = mergeSetupAssistantDraft(
         currentSetupAssistant,
@@ -334,7 +347,7 @@ export async function updateSetupAssistantDraft(
         seed
       );
 
-      nextQuestion = obj(brainTurn.nextQuestion);
+      nextQuestion = obj(clientTurn.nextQuestion);
     }
   } else {
     const patch = normalizeSetupAssistantDraftPatchBody(
@@ -392,9 +405,14 @@ export async function updateSetupAssistantDraft(
     bumpVersion: true,
   });
 
+  const effectiveNextQuestion =
+    messageMode && brainTurn?.usedFallback !== true && clientTurn
+      ? obj(clientTurn.nextQuestion)
+      : obj(nextQuestion);
+
   await maybeUpdateReviewSessionStep({
     reviewSessionId: review.session.id,
-    nextQuestion,
+    nextQuestion: effectiveNextQuestion,
     deps,
   });
 
@@ -429,7 +447,7 @@ export async function updateSetupAssistantDraft(
       draftOnly: true,
       messageMode,
       skipped: isMessageSkip(body),
-      nextQuestion: s(nextQuestion?.key),
+      nextQuestion: s(effectiveNextQuestion?.key),
       canonicalBridge: true,
       brainProvider: s(brainTurn?.provider),
       brainModel: s(brainTurn?.model),
@@ -445,7 +463,10 @@ export async function updateSetupAssistantDraft(
     body: {
       ...buildSetupAssistantResponseBody(
         baseResponsePayload,
-        messageMode ? shapeBrainTurnForClient(brainTurn, mergedSetupAssistant) : null
+        messageMode
+          ? clientTurn ||
+              shapeBrainTurnForClient(brainTurn, mergedSetupAssistant)
+          : null
       ),
       message: "Setup assistant draft updated",
     },

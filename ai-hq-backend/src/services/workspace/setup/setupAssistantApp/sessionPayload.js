@@ -28,7 +28,12 @@ import {
   uniqueStrings,
 } from "./shared.js";
 import { mergeSetupAssistantCore } from "./sanitize.js";
-import { buildAssistantQuestion, SECTION_META, SECTION_ORDER, getNextQuestion } from "./questions.js";
+import {
+  buildAssistantQuestion,
+  SECTION_META,
+  SECTION_ORDER,
+  getNextQuestion,
+} from "./questions.js";
 import { buildReviewState, buildSummary } from "./summary.js";
 
 function deriveWebsitePrefillDraft(core = {}) {
@@ -111,7 +116,10 @@ export function buildSetupAssistantAuthorityState({
   reviewState = {},
 } = {}) {
   const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
-  const question = nextQuestion ? buildAssistantQuestion(nextQuestion.key, nextQuestion) : null;
+  const question = nextQuestion
+    ? buildAssistantQuestion(nextQuestion.key, nextQuestion)
+    : null;
+
   const readyForApproval = obj(reviewState).finalizeAvailable === true;
 
   const sourceSignals = buildAssistantSourceSignals(setup, {
@@ -121,10 +129,22 @@ export function buildSetupAssistantAuthorityState({
     uniqueStrings,
   });
 
-  const assistantMessage = buildAssistantMessage(summary, question, REVIEW_MESSAGE);
+  const confidence = buildAssistantConfidence(summary, sourceSignals, setup);
+  const recommendation = buildAssistantRecommendation(
+    summary,
+    sourceSignals,
+    setup
+  );
+  const assistantMessage = buildAssistantMessage(
+    summary,
+    question,
+    REVIEW_MESSAGE,
+    sourceSignals,
+    setup
+  );
 
   return {
-    mode: "structured_v2",
+    mode: "structured_v3",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
@@ -157,7 +177,7 @@ export function buildSetupAssistantAuthorityState({
       ])
     ),
     servicesCatalog,
-    sourceInsights: arr(obj(setup.sourceMetadata).evidenceSummary),
+    sourceInsights: arr(sourceSignals.strongestEvidence),
     phase: summary.hasAnyDraft
       ? readyForApproval
         ? "ready"
@@ -168,13 +188,20 @@ export function buildSetupAssistantAuthorityState({
     draft: buildAssistantDraftPreview(setup, {
       formatHours: formatSetupAssistantHoursForCanonical,
     }),
-    confidence: buildAssistantConfidence(summary, sourceSignals),
-    recommendation: buildAssistantRecommendation(summary),
+    confidence,
+    recommendation,
     sourceSignals,
     interviewPlan: buildAssistantInterviewPlan(summary, question, {
       buildAssistantQuestion,
     }),
-    aiBehavior: {},
+    aiBehavior: compactDraftObject({
+      languages: arr(setup.languages),
+      tone: s(setup.tone),
+      greetingStyle: s(setup.greetingStyle),
+      afterHoursBehavior: s(setup.afterHoursBehavior),
+      escalationPolicy: s(obj(setup.handoffRules).summary),
+      pricingDisclosurePolicy: s(obj(setup.pricingPosture).publicSummary),
+    }),
     readyForApproval,
     finalizeAvailable: readyForApproval,
     reviewSessionId: s(session.id),
@@ -187,17 +214,21 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const draftRow = obj(review.draft);
   const draftPayload = obj(draftRow.draftPayload);
   const seed = buildSetupAssistantSeedFromReview(review);
+
   const setup = normalizeStoredSetupAssistantPayload(
     readStoredSetupAssistantDraftPayload(draftPayload),
     seed
   );
+
   const summary = buildSummary(setup);
   const reviewState = buildReviewState(setup, summary);
+
   const servicesCatalog = buildSetupAssistantServiceCatalog({
     businessProfile: setup.businessProfile,
     currentServices: setup.services,
     sourceServices: seed.services,
   });
+
   const assistant = buildSetupAssistantAuthorityState({
     session,
     draftRow,
@@ -206,6 +237,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     servicesCatalog,
     reviewState,
   });
+
   const nextQuestion = obj(assistant.nextQuestion);
 
   return {
@@ -247,6 +279,10 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         sourceMetadata: obj(setup.sourceMetadata),
         assistantState: obj(setup.assistantState),
         progress: obj(setup.progress),
+        languages: arr(setup.languages),
+        tone: s(setup.tone),
+        greetingStyle: s(setup.greetingStyle),
+        afterHoursBehavior: s(setup.afterHoursBehavior),
         version: safeDraftVersion(draftRow),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
@@ -274,10 +310,14 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     mode: "brain_v2",
     phase: s(safeTurn.phase || assistant.phase),
     message: s(
-      safeTurn.assistantMessage || assistant.message || assistant.assistantMessage
+      safeTurn.assistantMessage ||
+        assistant.message ||
+        assistant.assistantMessage
     ),
     assistantMessage: s(
-      safeTurn.assistantMessage || assistant.assistantMessage || assistant.message
+      safeTurn.assistantMessage ||
+        assistant.assistantMessage ||
+        assistant.message
     ),
     nextQuestion: obj(safeTurn.nextQuestion),
     confidence: obj(safeTurn.confidence),
@@ -313,8 +353,10 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   });
 
   const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
-  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
-  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
+  const compatFollowupQueue =
+    buildAssistantCompatFollowupQueue(mergedAssistant);
+  const compatBusinessFacts =
+    buildAssistantCompatBusinessFacts(mergedAssistant);
   const compatConversationStatus =
     buildAssistantCompatConversationStatus(mergedAssistant);
 

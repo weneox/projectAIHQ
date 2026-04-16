@@ -6,7 +6,10 @@ import {
   sanitizeStructuredHours,
 } from "../setupAssistantParser.js";
 import { buildRejectedFieldSet, hasRejectedField } from "./challenge.js";
-import { buildStoredSetupAssistantPayload, normalizeStoredSetupAssistantPayload } from "./sessionPayload.js";
+import {
+  buildStoredSetupAssistantPayload,
+  normalizeStoredSetupAssistantPayload,
+} from "./sessionPayload.js";
 import { INTENT_ONLY_RESPONSES } from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
@@ -29,6 +32,89 @@ import {
   sanitizeServices,
   sanitizeSourceMetadata,
 } from "./sanitize.js";
+
+function looksLikeEmail(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
+}
+
+function looksLikePhone(value = "") {
+  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
+}
+
+function looksLikeHoursText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return (
+    /(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|b\.e|be|cume|şənbə|senbe|bazar)/.test(
+      text
+    ) ||
+    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
+      text
+    ) ||
+    /\b(24\/7|appointment only|closed|bagli|bağlı)\b/.test(text)
+  );
+}
+
+function looksLikePricingText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return (
+    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
+    /\b(price|pricing|quote|starting|from|discount|promo|qiymət|qiymet|xidmete gore|xidmətə görə)\b/.test(
+      text
+    )
+  );
+}
+
+function looksLikeHandoffText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return /şikayət|complaint|refund|payment|operator|manager|human|handoff|escalat|təcili|tecili|problem/i.test(
+    text
+  );
+}
+
+function looksLikeServiceList(value = "") {
+  const text = s(value);
+  if (!text) return false;
+
+  const parts = text
+    .split(/[,;\n]/)
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  return parts.length >= 2;
+}
+
+function resolveSemanticAnswerStep(step = "", answer = "") {
+  const safeStep = s(step).toLowerCase();
+  const text = s(answer);
+
+  if (!text) return safeStep;
+
+  const sourceCandidate = buildRecognizedSourceCandidate(text);
+  if (sourceCandidate?.type === "website") return "website";
+  if (sourceCandidate?.type === "instagram") return "profile";
+  if (sourceCandidate?.type === "facebook") return "profile";
+  if (sourceCandidate?.type === "google_maps") return "profile";
+
+  if (looksLikeEmail(text) || looksLikePhone(text) || /whatsapp|telegram|wa\.me/i.test(text)) {
+    return "contacts";
+  }
+
+  if (looksLikeHoursText(text)) return "hours";
+  if (looksLikePricingText(text)) return "pricing";
+  if (looksLikeHandoffText(text)) return "handoff";
+
+  if (!safeStep || safeStep === "profile") {
+    if (looksLikeServiceList(text)) return "services";
+  }
+
+  return safeStep || "profile";
+}
 
 function buildContactsFromAnswer(answer = "") {
   const items = splitAnswerList(answer, 12).map((item, index) => ({
@@ -103,7 +189,7 @@ export function parseProfileAnswer(answer = "", current = {}) {
 
   const single = lines[0];
   const split = single
-    .split(/\s[-â€“â€”:]\s/)
+    .split(/\s[-–—:]\s/)
     .map((item) => s(item))
     .filter(Boolean);
 
@@ -345,6 +431,29 @@ function normalizeDirectPatchBody(body = {}) {
     out.assistantState = sanitizeAssistantState(obj(assistantState.value));
   }
 
+  const languages = pickAliasedField(root, ["languages"]);
+  if (languages.provided) {
+    out.languages = uniqueStrings(arr(languages.value).map((item) => s(item)), 8);
+  }
+
+  const tone = pickAliasedField(root, ["tone"]);
+  if (tone.provided) {
+    out.tone = s(tone.value);
+  }
+
+  const greetingStyle = pickAliasedField(root, ["greetingStyle", "greeting_style"]);
+  if (greetingStyle.provided) {
+    out.greetingStyle = s(greetingStyle.value);
+  }
+
+  const afterHoursBehavior = pickAliasedField(root, [
+    "afterHoursBehavior",
+    "after_hours_behavior",
+  ]);
+  if (afterHoursBehavior.provided) {
+    out.afterHoursBehavior = s(afterHoursBehavior.value);
+  }
+
   return compactDraftObject(out);
 }
 
@@ -368,9 +477,11 @@ function buildSourceCandidateFromAnswer(answer = "") {
 }
 
 export function patchFromAnswer(step = "", answer = "", current = {}) {
-  const key = s(step).toLowerCase();
+  const rawKey = s(step).toLowerCase();
   const text = s(answer);
   const currentDraft = obj(current);
+  const key = resolveSemanticAnswerStep(rawKey, text);
+
   const sourceCandidate = buildSourceCandidateFromAnswer(text);
   const sourceMetadataPatch = sourceCandidate
     ? buildAssistantSourceMetadataPatch(
@@ -392,6 +503,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           activeSection: "profile",
         },
       });
+
     case "website":
       return compactDraftObject({
         businessProfile:
@@ -399,15 +511,18 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
             ? {
                 websiteUrl: sourceCandidate.value,
               }
-            : {},
+            : {
+                websiteUrl: normalizeWebsiteUrl(text),
+              },
         sourceMetadata: sourceMetadataPatch,
         assistantState: {
           lastUpdatedSection: "profile",
           activeSection: "website",
         },
       });
+
     case "company":
-      return {
+      return compactDraftObject({
         businessProfile: {
           companyName: text,
         },
@@ -415,9 +530,10 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastUpdatedSection: "profile",
           activeSection: "company",
         },
-      };
+      });
+
     case "description":
-      return {
+      return compactDraftObject({
         businessProfile: {
           description: text,
         },
@@ -425,36 +541,41 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastUpdatedSection: "profile",
           activeSection: "description",
         },
-      };
+      });
+
     case "services":
-      return {
+      return compactDraftObject({
         services: parseServicesNote(text, currentDraft.services),
         assistantState: {
           lastParsedServicesNote: text,
           lastUpdatedSection: "services",
           activeSection: "services",
         },
-      };
+      });
+
     case "contact":
     case "contacts":
-      return {
+      return compactDraftObject({
         contacts: buildContactsFromAnswer(text),
+        sourceMetadata: sourceMetadataPatch,
         assistantState: {
           lastUpdatedSection: "contacts",
           activeSection: "contacts",
         },
-      };
+      });
+
     case "hours":
-      return {
+      return compactDraftObject({
         hours: parseHoursNote(text, currentDraft.hours),
         assistantState: {
           lastParsedHoursNote: text,
           lastUpdatedSection: "hours",
           activeSection: "hours",
         },
-      };
+      });
+
     case "pricing":
-      return {
+      return compactDraftObject({
         pricingPosture: parsePricingNote(
           text,
           currentDraft.pricingPosture,
@@ -465,23 +586,26 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastUpdatedSection: "pricing",
           activeSection: "pricing",
         },
-      };
+      });
+
     case "handoff":
-      return {
+      return compactDraftObject({
         handoffRules: buildHandoffFromAnswer(text),
         assistantState: {
           lastUpdatedSection: "handoff",
           activeSection: "handoff",
         },
-      };
+      });
+
     default:
       return {};
   }
 }
 
 function normalizeAnswerPatchBody(body = {}, current = {}) {
-  const step = s(body.step || body.questionKey || body.field).toLowerCase();
+  const rawStep = s(body.step || body.questionKey || body.field).toLowerCase();
   const answer = s(body.answer || body.message || body.text || body.value);
+  const step = resolveSemanticAnswerStep(rawStep, answer);
 
   if (isMessageSkip(body)) {
     if (!step) return {};
@@ -540,11 +664,15 @@ function removeSkippedIfAnswered(skipped = [], patch = {}) {
     nextSkipped.delete("description");
     nextSkipped.delete("profile");
   }
-  if (patch.services !== undefined && arr(patch.services).length > 0)
+  if (patch.services !== undefined && arr(patch.services).length > 0) {
     nextSkipped.delete("services");
-  if (patch.contacts !== undefined && arr(patch.contacts).length > 0)
+  }
+  if (patch.contacts !== undefined && arr(patch.contacts).length > 0) {
     nextSkipped.delete("contacts");
-  if (patch.hours !== undefined) nextSkipped.delete("hours");
+  }
+  if (patch.hours !== undefined) {
+    nextSkipped.delete("hours");
+  }
   if (
     patch.pricingPosture !== undefined &&
     Object.keys(obj(patch.pricingPosture)).length > 0
@@ -653,7 +781,10 @@ function buildContactPatchFromAcceptedValues(values = [], currentContacts = []) 
 }
 
 function buildHoursPatchFromAcceptedValues(values = [], currentHours = []) {
-  const nextValues = uniqueStrings(arr(values).map((item) => s(item)).filter(Boolean), 12);
+  const nextValues = uniqueStrings(
+    arr(values).map((item) => s(item)).filter(Boolean),
+    12
+  );
   if (!nextValues.length) return currentHours;
   return parseHoursNote(nextValues.join("; "), currentHours);
 }
@@ -665,7 +796,11 @@ function buildSourceMetadataPatchFromAcceptedIdentity(
   const websiteUrl = normalizeWebsiteUrl(s(identity.websiteUrl));
   if (!websiteUrl) return {};
 
-  return buildAssistantSourceMetadataPatch("website", websiteUrl, currentSourceMetadata);
+  return buildAssistantSourceMetadataPatch(
+    "website",
+    websiteUrl,
+    currentSourceMetadata
+  );
 }
 
 export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {}) {
@@ -704,13 +839,18 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
     businessProfile: sanitizeBusinessProfile({
       ...obj(currentDraft.businessProfile),
       companyName: s(
-        acceptedIdentity.businessName || obj(currentDraft.businessProfile).companyName
+        acceptedIdentity.businessName ||
+          obj(currentDraft.businessProfile).companyName
       ),
       description: s(
-        acceptedIdentity.description || obj(currentDraft.businessProfile).description
+        acceptedIdentity.description ||
+          obj(currentDraft.businessProfile).description
       ),
       websiteUrl: normalizeWebsiteUrl(
-        s(acceptedIdentity.websiteUrl || obj(currentDraft.businessProfile).websiteUrl)
+        s(
+          acceptedIdentity.websiteUrl ||
+            obj(currentDraft.businessProfile).websiteUrl
+        )
       ),
     }),
     services: nextServices,
@@ -738,11 +878,18 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
         currentDraft.sourceMetadata
       )
     ),
-    languages: mergeStringLists(currentDraft.languages, acceptedAiBehavior.languages, 8),
+    languages: mergeStringLists(
+      currentDraft.languages,
+      acceptedAiBehavior.languages,
+      8
+    ),
     tone: s(acceptedAiBehavior.tone || currentDraft.tone),
-    greetingStyle: s(acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle),
+    greetingStyle: s(
+      acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle
+    ),
     afterHoursBehavior: s(
-      acceptedAiBehavior.afterHoursBehavior || currentDraft.afterHoursBehavior
+      acceptedAiBehavior.afterHoursBehavior ||
+        currentDraft.afterHoursBehavior
     ),
     assistantState: {
       activeSection: nextStep,
