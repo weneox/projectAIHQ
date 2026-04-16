@@ -3,7 +3,7 @@ import { ArrowUp, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const STORAGE_PREFIX = "setup_assistant_transcript_v4";
+const STORAGE_PREFIX = "setup_assistant_transcript_v5";
 
 const QUESTION_FALLBACKS = {
   profile: {
@@ -226,47 +226,6 @@ function buildCompactNotes(model = {}) {
   );
 }
 
-function buildChallengeState(model = {}) {
-  const rejectedInputs = arr(model.rejectedInputs)
-    .map((item) => ({
-      input: s(item.input),
-      reason: s(item.reason),
-      suggestedField: s(item.suggestedField),
-    }))
-    .filter((item) => item.input || item.reason);
-
-  const contradictions = arr(obj(model.confidence).contradictions)
-    .map((item) => s(item))
-    .filter(Boolean);
-
-  const hasChallenge = rejectedInputs.length > 0 || contradictions.length > 0;
-
-  return {
-    hasChallenge,
-    rejectedInputs: rejectedInputs.slice(0, 4),
-    contradictions: contradictions.slice(0, 3),
-  };
-}
-
-function buildSourceCoverageState(model = {}) {
-  const coverage = obj(obj(model.sourceSignals).coverage);
-
-  const items = [
-    coverage.identity ? "Biznes kimliyi" : "",
-    coverage.services ? "Xidmətlər" : "",
-    coverage.contacts ? "Əlaqə yolu" : "",
-    coverage.hours ? "İş saatları" : "",
-    coverage.pricing ? "Pricing posture" : "",
-    coverage.audience ? "Audience" : "",
-    coverage.languages ? "Dil siqnalları" : "",
-  ].filter(Boolean);
-
-  return {
-    hasCoverage: items.length > 0,
-    items: items.slice(0, 7),
-  };
-}
-
 function buildFinalViewModel({
   reviewPayload = null,
   assistant = {},
@@ -378,6 +337,7 @@ function loadStoredTranscript(storageKey = "") {
         title: s(item.title),
         body: s(item.body),
         tags: arr(item.tags).map((tag) => s(tag)).filter(Boolean),
+        signature: s(item.signature),
       }))
       .filter((item) => item.title || item.body);
   } catch {
@@ -399,6 +359,7 @@ function saveStoredTranscript(storageKey = "", transcript = []) {
           title: s(item.title),
           body: s(item.body),
           tags: arr(item.tags).map((tag) => s(tag)).filter(Boolean),
+          signature: s(item.signature),
         }))
       )
     );
@@ -489,8 +450,7 @@ function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
 function looksLikeGenericEnglishPrompt(value = "") {
   const text = s(value);
   if (!text) return false;
-
-  return /^(send|add|describe|define|list|confirm|lock|set)\b/i.test(text);
+  return /^(send|add|describe|define|list|confirm|lock|set|current signal:)/i.test(text);
 }
 
 function buildQuestionPrompt(question = {}) {
@@ -787,24 +747,6 @@ function Composer({
   );
 }
 
-function SourceCoverageCard({ sourceCoverageState = {} }) {
-  const items = arr(sourceCoverageState.items);
-  if (!items.length) return null;
-
-  return (
-    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-        Mənbədən artıq anladım
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {items.map((item) => (
-          <MetaPill key={item}>{item}</MetaPill>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function buildStatusPills(finalModel = {}, sourceSubmitted = false) {
   const draft = obj(finalModel.draft);
   const sourceSignals = obj(finalModel.sourceSignals);
@@ -842,73 +784,20 @@ function buildStatusPills(finalModel = {}, sourceSubmitted = false) {
   return pills.slice(0, 5);
 }
 
-function ChallengeCard({ challengeState = {}, currentQuestion = null }) {
-  const rejectedInputs = arr(challengeState.rejectedInputs);
-  const contradictions = arr(challengeState.contradictions);
-
-  if (!rejectedInputs.length && !contradictions.length) return null;
-
-  return (
-    <div className="rounded-[18px] border border-[rgba(239,68,68,0.16)] bg-[linear-gradient(180deg,rgba(254,242,242,0.98),rgba(255,255,255,0.98))] px-3.5 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(153,27,27,0.82)]">
-        Dəqiqləşdirmə lazımdır
-      </div>
-
-      {contradictions.length ? (
-        <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-          {contradictions.map((item) => (
-            <div key={item}>• {item}</div>
-          ))}
-        </div>
-      ) : null}
-
-      {rejectedInputs.length ? (
-        <div className={`${contradictions.length ? "mt-3" : "mt-2"} space-y-2 text-[14px] leading-7 text-text`}>
-          {rejectedInputs.map((item) => (
-            <div
-              key={`${item.input}|${item.reason}|${item.suggestedField}`}
-              className="rounded-[14px] border border-[rgba(15,23,42,0.06)] bg-white px-3 py-2.5"
-            >
-              {s(item.input) ? (
-                <div className="font-medium text-text">“{item.input}”</div>
-              ) : null}
-              {s(item.reason) ? (
-                <div className="mt-1 text-text-muted">{item.reason}</div>
-              ) : null}
-              {s(item.suggestedField) ? (
-                <div className="mt-1 text-[12px] font-medium text-text-subtle">
-                  Daha uyğun sahə: {item.suggestedField}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {currentQuestion ? (
-        <div className="mt-3 text-[13px] leading-6 text-text-muted">
-          Davam etmək üçün bunu daha dəqiq yaz: {buildQuestionPrompt(currentQuestion)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function buildLiveAssistantState({
   sourceSubmitted = false,
   currentQuestion = null,
   smartDraftReady = false,
-  challengeState = {},
-  sourceCoverageState = {},
   finalModel = {},
   assistantControl = {},
+  statusPills = [],
 }) {
   if (!sourceSubmitted) {
     return {
       title: "Biz bunu səliqəli şəkildə birlikdə quraq",
       body:
-        "Mən əvvəl source və ya yazdıqlarından nəyin artıq aydın olduğunu çıxaracağam, sonra chatbot-un həqiqətən düzgün işləməsi üçün yalnız vacib boşluqları tamamlayacağam. Format barədə narahat olma — website, Google Maps, Instagram, Facebook və ya sadəcə qısa biznes qeydi ilə başlaya bilərsən.",
-      tags: ["Website", "Google Maps", "Instagram", "Facebook", "Qısa qeyd"],
+        "Mən əvvəl source və ya yazdıqlarından nəyin artıq aydın olduğunu çıxaracağam, sonra chatbot-un həqiqətən düzgün işləməsi üçün yalnız vacib boşluqları tamamlayacağam. Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi ilə başlaya bilərsən.",
+      tags: statusPills,
     };
   }
 
@@ -916,22 +805,12 @@ function buildLiveAssistantState({
     return null;
   }
 
-  if (challengeState?.hasChallenge) {
-    return {
-      title: "Bunu bir az dəqiqləşdirək",
-      body:
-        "Bəzi hissələri olduğu kimi drafta salmadım. Daha dəqiq yazsan, düzgün şəkildə strukturlaşdıracağam.",
-      tags: [],
-    };
-  }
-
   if (currentQuestion) {
     return {
       title: buildQuestionPrompt(currentQuestion),
-      body: sourceCoverageState?.hasCoverage
-        ? "Mənbədən artıq anladığım hissələri təkrar soruşmuram. Sadəcə qalan ən vacib boşluğu tamamlayırıq."
-        : "Rahat şəkildə cavab ver — mən onu mümkün qədər düzgün başa düşüb peşəkar draft formasına salacağam.",
-      tags: [],
+      body:
+        "Mənbədən artıq anladığım hissələri təkrar soruşmuram. Sadəcə qalan ən vacib boşluğu tamamlayırıq.",
+      tags: statusPills,
     };
   }
 
@@ -940,7 +819,7 @@ function buildLiveAssistantState({
     body:
       compactText(finalModel.message || assistantControl.message, 220) ||
       "Əlavə detal və ya düzəliş yaza bilərsən.",
-    tags: [],
+    tags: statusPills,
   };
 }
 
@@ -960,10 +839,8 @@ function buildAssistantSnapshot({
   sourceSubmitted,
   smartDraftReady,
   liveAssistant,
-  statusPills,
   finalModel,
   currentQuestion,
-  challengeState,
 }) {
   if (smartDraftReady) return null;
 
@@ -971,10 +848,7 @@ function buildAssistantSnapshot({
   const body = s(liveAssistant?.body);
   if (!title && !body) return null;
 
-  const tags =
-    !sourceSubmitted || currentQuestion || challengeState?.hasChallenge
-      ? []
-      : arr(statusPills).slice(0, 4);
+  const tags = arr(liveAssistant?.tags);
 
   const signature = JSON.stringify({
     kind: "assistant",
@@ -983,7 +857,6 @@ function buildAssistantSnapshot({
     tags,
     phase: s(finalModel.phase),
     questionKey: s(currentQuestion?.key),
-    coverage: arr(obj(finalModel.sourceSignals).coverage ? Object.keys(obj(finalModel.sourceSignals).coverage).filter((key) => obj(finalModel.sourceSignals).coverage[key]) : []),
     ready: finalModel.readyForApproval === true,
     error: s(finalModel.error),
   });
@@ -1091,16 +964,6 @@ export default function SetupAssistantSections({
       ? rawCurrentQuestion
       : null;
 
-  const challengeState = useMemo(
-    () => buildChallengeState(finalModel),
-    [finalModel]
-  );
-
-  const sourceCoverageState = useMemo(
-    () => buildSourceCoverageState(finalModel),
-    [finalModel]
-  );
-
   const statusPills = useMemo(
     () => buildStatusPills(finalModel, sourceSubmitted),
     [finalModel, sourceSubmitted]
@@ -1112,19 +975,17 @@ export default function SetupAssistantSections({
         sourceSubmitted,
         currentQuestion,
         smartDraftReady,
-        challengeState,
-        sourceCoverageState,
         finalModel,
         assistantControl,
+        statusPills,
       }),
     [
       sourceSubmitted,
       currentQuestion,
       smartDraftReady,
-      challengeState,
-      sourceCoverageState,
       finalModel,
       assistantControl,
+      statusPills,
     ]
   );
 
@@ -1134,19 +995,15 @@ export default function SetupAssistantSections({
         sourceSubmitted,
         smartDraftReady,
         liveAssistant,
-        statusPills,
         finalModel,
         currentQuestion,
-        challengeState,
       }),
     [
       sourceSubmitted,
       smartDraftReady,
       liveAssistant,
-      statusPills,
       finalModel,
       currentQuestion,
-      challengeState,
     ]
   );
 
@@ -1169,10 +1026,6 @@ export default function SetupAssistantSections({
       return "Website, Google Maps linki və ya qısa biznes qeydi yaz";
     }
 
-    if (challengeState?.hasChallenge) {
-      return "Daha dəqiq yaz — mən uyğunlaşdıracağam";
-    }
-
     if (currentQuestion) {
       return buildQuestionPlaceholder(currentQuestion);
     }
@@ -1182,7 +1035,7 @@ export default function SetupAssistantSections({
     }
 
     return "Əlavə detal və ya düzəliş yaz";
-  }, [sourceSubmitted, challengeState, currentQuestion, smartDraftReady]);
+  }, [sourceSubmitted, currentQuestion, smartDraftReady]);
 
   useEffect(() => {
     setTranscript(loadStoredTranscript(storageKey));
@@ -1386,25 +1239,6 @@ export default function SetupAssistantSections({
           ) : null}
 
           {awaitingAssistant ? <TypingBubble /> : null}
-
-          {!smartDraftReady && sourceCoverageState?.hasCoverage ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow="Setup"
-              title=""
-              body=""
-            >
-              <SourceCoverageCard sourceCoverageState={sourceCoverageState} />
-              {challengeState?.hasChallenge ? (
-                <div className="mt-3">
-                  <ChallengeCard
-                    challengeState={challengeState}
-                    currentQuestion={currentQuestion}
-                  />
-                </div>
-              ) : null}
-            </MessageBubble>
-          ) : null}
 
           {smartDraftReady ? (
             <SmartDraftBubble
