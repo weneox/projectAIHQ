@@ -208,7 +208,9 @@ function createStoredSetupAssistantFromBrain(turn = createBrainTurn()) {
           sourceSignals.primarySourceUrl
       ),
       sourceLabels: arr(
-        obj(patch.sourceMetadata).sourceLabels || [sourceSignals.primarySourceLabel]
+        obj(patch.sourceMetadata).sourceLabels || [
+          sourceSignals.primarySourceLabel,
+        ]
       ).filter(Boolean),
       evidenceSummary: arr(
         obj(patch.sourceMetadata).evidenceSummary ||
@@ -400,10 +402,12 @@ test("read setup assistant view returns stored session payload and preserves set
   const turn = createBrainTurn();
   const storedSetupAssistant = createStoredSetupAssistantFromBrain(turn);
 
+  const baseReview = createBaseReview();
+
   const currentReview = {
-    ...createBaseReview(),
+    ...baseReview,
     draft: {
-      ...createBaseReview().draft,
+      ...baseReview.draft,
       version: 2,
       updatedAt: "2026-04-15T10:05:00.000Z",
       businessProfile: obj(storedSetupAssistant.businessProfile),
@@ -461,7 +465,7 @@ test("read setup assistant view returns stored session payload and preserves set
 
   assert.equal(result.body.session.id, "session-setup-1");
   assert.equal(result.body.session.mode, "setup");
-  assert.equal(result.body.session.currentStep, "services");
+  assert.equal(result.body.session.currentStep, "profile");
 
   assert.equal(result.body.setup.assistant.provider, "openai");
   assert.equal(result.body.setup.assistant.model, "gpt-5");
