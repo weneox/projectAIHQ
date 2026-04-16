@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ArrowUp, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
@@ -456,6 +456,14 @@ function saveStoredTranscript(storageKey = "", transcript = []) {
   }
 }
 
+function transcriptReducer(state, action) {
+  if (action?.type === "append") {
+    return [...arr(state), makeTranscriptEntry(action.entry)];
+  }
+
+  return arr(state);
+}
+
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
     return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)]";
@@ -627,7 +635,7 @@ function Composer({
   );
 }
 
-export default function SetupAssistantSections({
+function SetupAssistantSectionsContent({
   storageKey = "default",
   sessionHydrated = false,
   assistant,
@@ -641,14 +649,19 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
+  const pendingTurnRef = useRef(null);
   const bootSignatureRef = useRef("");
   const responseFingerprintRef = useRef("");
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
-  const [transcript, setTranscript] = useState(() => loadStoredTranscript(storageKey));
+  const [transcript, dispatchTranscript] = useReducer(
+    transcriptReducer,
+    storageKey,
+    loadStoredTranscript
+  );
   const [localAnswers, setLocalAnswers] = useState({});
-  const [pendingTurnId, setPendingTurnId] = useState("");
+  const [hasPendingTurn, setHasPendingTurn] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -732,16 +745,6 @@ export default function SetupAssistantSections({
   }, [sourceSubmitted, currentQuestion, smartDraftReady]);
 
   useEffect(() => {
-    setTranscript(loadStoredTranscript(storageKey));
-    setComposerValue("");
-    setLocalError("");
-    setLocalAnswers({});
-    setPendingTurnId("");
-    bootSignatureRef.current = "";
-    responseFingerprintRef.current = "";
-  }, [storageKey]);
-
-  useEffect(() => {
     saveStoredTranscript(storageKey, transcript);
   }, [storageKey, transcript]);
 
@@ -780,10 +783,10 @@ export default function SetupAssistantSections({
   useEffect(() => {
     if (!sessionHydrated) return;
     if (busy) return;
-    if (!pendingTurnId) return;
+    if (!pendingTurnRef.current) return;
 
-    const turnId = pendingTurnId;
-    setPendingTurnId("");
+    const turnId = pendingTurnRef.current;
+    pendingTurnRef.current = null;
 
     if (smartDraftReady) {
       responseFingerprintRef.current = "";
@@ -804,19 +807,18 @@ export default function SetupAssistantSections({
 
     responseFingerprintRef.current = fingerprint;
 
-    setTranscript((current) => [
-      ...current,
-      makeTranscriptEntry({
+    dispatchTranscript({
+      type: "append",
+      entry: {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         body: assistantView.body,
         meta: assistantView.meta,
-      }),
-    ]);
+      },
+    });
   }, [
     sessionHydrated,
     busy,
-    pendingTurnId,
     assistantView,
     smartDraftReady,
     currentQuestion,
@@ -833,16 +835,17 @@ export default function SetupAssistantSections({
     const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
-    setPendingTurnId(turnId);
+    pendingTurnRef.current = turnId;
+    setHasPendingTurn(true);
 
-    setTranscript((current) => [
-      ...current,
-      makeTranscriptEntry({
+    dispatchTranscript({
+      type: "append",
+      entry: {
         id: `user-source-${Date.now()}`,
         role: "user",
         body: text,
-      }),
-    ]);
+      },
+    });
 
     setComposerValue("");
 
@@ -853,7 +856,8 @@ export default function SetupAssistantSections({
         message: text,
       });
     } catch (error) {
-      setPendingTurnId("");
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -869,16 +873,17 @@ export default function SetupAssistantSections({
     const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
-    setPendingTurnId(turnId);
+    pendingTurnRef.current = turnId;
+    setHasPendingTurn(true);
 
-    setTranscript((current) => [
-      ...current,
-      makeTranscriptEntry({
+    dispatchTranscript({
+      type: "append",
+      entry: {
         id: `user-message-${Date.now()}`,
         role: "user",
         body: text,
-      }),
-    ]);
+      },
+    });
 
     if (currentQuestion?.key) {
       setLocalAnswers((current) => ({
@@ -900,7 +905,8 @@ export default function SetupAssistantSections({
         questionKey: s(currentQuestion?.key),
       });
     } catch (error) {
-      setPendingTurnId("");
+      pendingTurnRef.current = null;
+      setHasPendingTurn(false);
       setLocalError(s(error?.message, "Mesaj emal olunmadı."));
     }
   }
@@ -944,7 +950,7 @@ export default function SetupAssistantSections({
             />
           ) : null}
 
-          {busy && pendingTurnId ? <TypingBubble /> : null}
+          {hasPendingTurn && (saving || capturingSource) ? <TypingBubble /> : null}
 
           {smartDraftReady ? (
             <SmartDraftCard
@@ -973,5 +979,17 @@ export default function SetupAssistantSections({
         />
       ) : null}
     </div>
+  );
+}
+
+export default function SetupAssistantSections(props) {
+  const storageKey = s(props.storageKey, "default") || "default";
+
+  return (
+    <SetupAssistantSectionsContent
+      key={storageKey}
+      {...props}
+      storageKey={storageKey}
+    />
   );
 }
