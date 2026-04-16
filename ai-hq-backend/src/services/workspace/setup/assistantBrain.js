@@ -364,7 +364,7 @@ function buildInterviewPlan(questionCandidates = [], nextQuestion = null) {
 }
 
 const SOURCE_CAPTURE_OPENING_MESSAGE =
-  "Salam. Mən sizin setup assistantınızam. İstəsəniz əvvəl launch kanalını qoşa bilərik, ya da elə buradan biznesinizi birlikdə yığa bilərik. Siz rahat şəkildə yazın — mən vacib olan məlumatı çıxarıb setup draftını yığacağam.";
+  "Send the best public source you have first — a website, Google Maps link, Instagram, Facebook, or a short business note. I will extract what I can first, then ask only what is still genuinely missing.";
 
 function getSourceCaptureOpeningMessage() {
   return SOURCE_CAPTURE_OPENING_MESSAGE;
