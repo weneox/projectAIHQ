@@ -16,12 +16,20 @@ const STEP_ORDER = [
 
 const STEP_META = {
   company: { key: "company", step: "company", title: "Company name" },
-  description: { key: "description", step: "description", title: "Business description" },
+  description: {
+    key: "description",
+    step: "description",
+    title: "Business description",
+  },
   services: { key: "services", step: "services", title: "Core services" },
   contacts: { key: "contacts", step: "contacts", title: "Contact routes" },
   hours: { key: "hours", step: "hours", title: "Working hours" },
   pricing: { key: "pricing", step: "pricing", title: "Pricing posture" },
-  handoff: { key: "handoff", step: "handoff", title: "Human handoff rules" },
+  handoff: {
+    key: "handoff",
+    step: "handoff",
+    title: "Human handoff rules",
+  },
 };
 
 let cachedClient = null;
@@ -110,17 +118,11 @@ function buildCurrentPreview(draft = {}, review = null) {
     ...obj(safeDraft.businessProfile),
   };
 
-  const services = [
-    ...arr(reviewDraft.services),
-    ...arr(safeDraft.services),
-  ]
+  const services = [...arr(reviewDraft.services), ...arr(safeDraft.services)]
     .map((item) => s(item?.title || item?.name || item?.label))
     .filter(Boolean);
 
-  const contacts = [
-    ...arr(reviewDraft.contacts),
-    ...arr(safeDraft.contacts),
-  ]
+  const contacts = [...arr(reviewDraft.contacts), ...arr(safeDraft.contacts)]
     .map((item) => s(item?.value || item?.label || item?.channel || item?.type))
     .filter(Boolean);
 
@@ -132,7 +134,8 @@ function buildCurrentPreview(draft = {}, review = null) {
       if (row.appointmentOnly === true) {
         return [day, "appointment only"].filter(Boolean).join(" ");
       }
-      if (row.closed === true) return [day, "closed"].filter(Boolean).join(" ");
+      if (row.closed === true)
+        return [day, "closed"].filter(Boolean).join(" ");
       if (s(row.openTime) && s(row.closeTime)) {
         return [day, `${s(row.openTime)}-${s(row.closeTime)}`]
           .filter(Boolean)
@@ -169,6 +172,25 @@ function buildCurrentPreview(draft = {}, review = null) {
   };
 }
 
+function hasPreviewSignals(preview = {}) {
+  const safePreview = obj(preview);
+
+  return Boolean(
+    s(safePreview.businessName) ||
+      s(safePreview.whatThisBusinessIs) ||
+      s(safePreview.websiteUrl) ||
+      arr(safePreview.coreServices).length ||
+      arr(safePreview.contactRoutes).length ||
+      arr(safePreview.hours).length ||
+      s(safePreview.pricingPosture) ||
+      s(safePreview.humanHandoff) ||
+      arr(safePreview.languages).length ||
+      s(safePreview.tone) ||
+      s(safePreview.greetingStyle) ||
+      s(safePreview.afterHoursBehavior)
+  );
+}
+
 function applyAcceptedPatchToPreview(preview = {}, acceptedPatch = {}) {
   const identity = obj(acceptedPatch.identity);
   const aiBehavior = obj(acceptedPatch.aiBehavior);
@@ -176,9 +198,7 @@ function applyAcceptedPatchToPreview(preview = {}, acceptedPatch = {}) {
   return {
     businessName: s(identity.businessName || preview.businessName),
     whatThisBusinessIs: s(identity.description || preview.whatThisBusinessIs),
-    websiteUrl: normalizeWebsiteUrl(
-      s(identity.websiteUrl || preview.websiteUrl)
-    ),
+    websiteUrl: normalizeWebsiteUrl(s(identity.websiteUrl || preview.websiteUrl)),
     coreServices: uniqueStrings(
       [...arr(preview.coreServices), ...arr(acceptedPatch.services)],
       24
@@ -210,7 +230,8 @@ function stepSatisfied(step = "", preview = {}) {
   const safePreview = obj(preview);
 
   if (safeStep === "company") return Boolean(s(safePreview.businessName));
-  if (safeStep === "description") return Boolean(s(safePreview.whatThisBusinessIs));
+  if (safeStep === "description")
+    return Boolean(s(safePreview.whatThisBusinessIs));
   if (safeStep === "services") return arr(safePreview.coreServices).length > 0;
   if (safeStep === "contacts") return arr(safePreview.contactRoutes).length > 0;
   if (safeStep === "hours") return arr(safePreview.hours).length > 0;
@@ -226,7 +247,7 @@ function resolveCurrentStep(session = {}, draft = {}, latestStep = "") {
     normalizeStep(obj(draft.progress).currentQuestionKey) ||
     normalizeStep(obj(draft.assistantState).activeSection) ||
     normalizeStep(obj(session).currentStep) ||
-    "company"
+    ""
   );
 }
 
@@ -280,44 +301,25 @@ function sanitizeTurnPayload(payload = {}, currentStep = "", preview = {}) {
   });
 
   const mergedPreview = applyAcceptedPatchToPreview(preview, acceptedPatch);
+  const safeCurrentStep = normalizeStep(currentStep);
+
   const validCurrentStep =
     source.isRelevantToCurrentStep === true &&
-    (
-      stepSatisfied(currentStep, mergedPreview) ||
-      (
-        currentStep === "company" &&
-        Boolean(s(extracted.companyName))
-      ) ||
-      (
-        currentStep === "description" &&
-        Boolean(s(extracted.description))
-      ) ||
-      (
-        currentStep === "services" &&
-        arr(extracted.services).length > 0
-      ) ||
-      (
-        currentStep === "contacts" &&
-        arr(extracted.contacts).length > 0
-      ) ||
-      (
-        currentStep === "hours" &&
-        arr(extracted.hours).length > 0
-      ) ||
-      (
-        currentStep === "pricing" &&
-        Boolean(s(extracted.pricingPolicy))
-      ) ||
-      (
-        currentStep === "handoff" &&
-        Boolean(s(extracted.handoffRules))
-      )
-    );
+    (stepSatisfied(safeCurrentStep, mergedPreview) ||
+      (safeCurrentStep === "company" && Boolean(s(extracted.companyName))) ||
+      (safeCurrentStep === "description" && Boolean(s(extracted.description))) ||
+      (safeCurrentStep === "services" && arr(extracted.services).length > 0) ||
+      (safeCurrentStep === "contacts" && arr(extracted.contacts).length > 0) ||
+      (safeCurrentStep === "hours" && arr(extracted.hours).length > 0) ||
+      (safeCurrentStep === "pricing" &&
+        Boolean(s(extracted.pricingPolicy))) ||
+      (safeCurrentStep === "handoff" &&
+        Boolean(s(extracted.handoffRules))));
 
   const shouldAdvance =
     source.shouldAdvanceStep === true && validCurrentStep === true;
 
-  const nextStep = shouldAdvance ? findNextStep(mergedPreview) : currentStep;
+  const nextStep = shouldAdvance ? findNextStep(mergedPreview) : safeCurrentStep;
   const readyForApproval = looksReadyForApproval(mergedPreview);
 
   return {
@@ -361,21 +363,35 @@ function buildSourceSignals(preview = {}) {
       12
     ),
     discoveredPublicClaims: [],
-    companyNameCandidates: safePreview.businessName ? [safePreview.businessName] : [],
+    companyNameCandidates: safePreview.businessName
+      ? [safePreview.businessName]
+      : [],
     descriptionCandidates: safePreview.whatThisBusinessIs
       ? [safePreview.whatThisBusinessIs]
       : [],
     serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
     contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
     hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
-    pricingCandidates: safePreview.pricingPosture ? [safePreview.pricingPosture] : [],
+    pricingCandidates: safePreview.pricingPosture
+      ? [safePreview.pricingPosture]
+      : [],
     audienceCandidates: [],
     languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
   };
 }
 
 function buildInterviewPlan(currentStep = "", nextStep = "") {
-  const active = nextStep || currentStep;
+  const active = normalizeStep(nextStep || currentStep);
+  if (!active) {
+    return {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "business_truth",
+      nextGroupLabel: "Business truth",
+    };
+  }
+
   const question = buildQuestion(active);
 
   return {
@@ -423,12 +439,16 @@ function buildUserPrompt({
 }) {
   return [
     "Current setup step:",
-    JSON.stringify({
-      currentStep,
-      currentQuestion: obj(question),
-      currentDraftPreview: preview,
-      latestUserMessage: s(latestMessage),
-    }, null, 2),
+    JSON.stringify(
+      {
+        currentStep,
+        currentQuestion: obj(question),
+        currentDraftPreview: preview,
+        latestUserMessage: s(latestMessage),
+      },
+      null,
+      2
+    ),
     "",
     "Rules:",
     "- Decide whether the message is relevant to the current step.",
@@ -574,7 +594,8 @@ async function callOpenAISetupAssistant({
   const response = await Promise.race([responsePromise, timeoutPromise]);
 
   const payload =
-    obj(response?.output_parsed) && Object.keys(obj(response.output_parsed)).length
+    obj(response?.output_parsed) &&
+    Object.keys(obj(response.output_parsed)).length
       ? response.output_parsed
       : safeJsonParse(extractJsonText(response), {});
 
@@ -595,8 +616,11 @@ function buildFallbackTurn({
   error = "",
   model = "",
 } = {}) {
-  const nextStep = currentStep || findNextStep(preview) || "company";
+  const hasSignals = hasPreviewSignals(preview);
+  const hasMessage = Boolean(s(latestMessage));
   const readyForApproval = looksReadyForApproval(preview);
+  const nextStep = findNextStep(preview) || normalizeStep(currentStep) || "company";
+  const sourceCaptureMode = !hasSignals && !hasMessage;
 
   return {
     ok: true,
@@ -605,12 +629,17 @@ function buildFallbackTurn({
     usedFallback: true,
     error: s(error),
     latestUserInput: compactDraftObject({
-      step: currentStep,
+      step: normalizeStep(currentStep),
       text: latestMessage,
     }),
-    phase: readyForApproval ? "ready" : "interview",
+    phase: sourceCaptureMode
+      ? "source_capture"
+      : readyForApproval
+        ? "ready"
+        : "interview",
     assistantMessage: "",
-    nextQuestion: readyForApproval ? null : buildQuestion(nextStep),
+    nextQuestion:
+      sourceCaptureMode || readyForApproval ? null : buildQuestion(nextStep),
     draft: preview,
     acceptedPatch: {
       identity: {},
@@ -631,7 +660,9 @@ function buildFallbackTurn({
       notes: [],
     },
     sourceSignals: buildSourceSignals(preview),
-    interviewPlan: buildInterviewPlan(currentStep, nextStep),
+    interviewPlan: sourceCaptureMode
+      ? buildInterviewPlan("", "")
+      : buildInterviewPlan(currentStep, nextStep),
     aiBehavior: compactDraftObject({
       languages: arr(preview.languages),
       tone: s(preview.tone),
@@ -665,7 +696,7 @@ function normalizeTurnResult({
     usedFallback: usedFallback === true,
     error: s(error),
     latestUserInput: compactDraftObject({
-      step: currentStep,
+      step: normalizeStep(currentStep),
       text: latestMessage,
     }),
     phase: interpreted.readyForApproval === true ? "ready" : "interview",
@@ -682,7 +713,7 @@ function normalizeTurnResult({
               reason:
                 s(interpreted.invalidReason) ||
                 "The answer did not match the current setup step.",
-              suggestedField: currentStep,
+              suggestedField: normalizeStep(currentStep),
             },
           ],
     confidence: {
@@ -718,8 +749,8 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
   const runtime = getSetupAssistantRuntimeConfig();
   const preview = buildCurrentPreview(draft, review);
-  const currentStep = resolveCurrentStep(session, draft, latestStep) || "company";
-  const currentQuestion = buildQuestion(currentStep);
+  const currentStep = resolveCurrentStep(session, draft, latestStep);
+  const currentQuestion = currentStep ? buildQuestion(currentStep) : null;
 
   const shouldForceFallback =
     forceFallback === true || runtime.forceFallback === true;
@@ -738,8 +769,8 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
   try {
     const openaiResult = await callOpenAISetupAssistant({
-      currentStep,
-      question: currentQuestion,
+      currentStep: currentStep || "company",
+      question: currentQuestion || buildQuestion("company"),
       preview,
       latestMessage,
       model: runtime.model,
@@ -749,7 +780,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
     return normalizeTurnResult({
       raw: openaiResult.payload,
-      currentStep,
+      currentStep: currentStep || "company",
       preview,
       latestMessage,
       provider: "openai",
@@ -769,6 +800,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
 export const __test__ = {
   buildCurrentPreview,
+  hasPreviewSignals,
   applyAcceptedPatchToPreview,
   stepSatisfied,
   resolveCurrentStep,
