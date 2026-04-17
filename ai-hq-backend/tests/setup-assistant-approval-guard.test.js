@@ -163,7 +163,7 @@ function createValidDraft() {
     handoffRules: {
       enabled: true,
       summary:
-        "Müştəri operator istəyəndə və ya şikayət olduqda insana yönləndir.",
+        "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
       triggers: ["operator request", "complaint"],
     },
     assistantState: {

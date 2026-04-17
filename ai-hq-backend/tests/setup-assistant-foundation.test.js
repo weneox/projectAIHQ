@@ -259,7 +259,7 @@ test("setup assistant session start reuses setup review storage and returns the 
   );
   assert.equal(result.body.setup.assistant.mode, "brain_v4");
   assert.ok(Array.isArray(result.body.setup.assistant.confirmationBlockers));
-  assert.equal(result.body.setup.assistant.nextQuestion, null);
+  assert.equal(result.body.setup.assistant.nextQuestion.key, "company");
   assert.equal(result.body.message, "Setup assistant session started");
   assert.equal(auditCalls.length, 1);
 });
@@ -672,7 +672,7 @@ test("setup assistant source answers never store instagram, facebook, or google 
   );
 });
 
-test("setup assistant treats google maps as a valid source identity and still surfaces handoff as missing when absent", () => {
+test("setup assistant treats google maps as a valid source identity but still keeps finalize locked until handoff exists", () => {
   const reviewBase = {
     session: {
       id: "session-1",
@@ -737,7 +737,7 @@ test("setup assistant treats google maps as a valid source identity and still su
           ...reviewBase.draft.draftPayload.setupAssistant,
           handoffRules: {
             enabled: true,
-            summary: "Complaints and custom quotes go to an operator.",
+            summary: "If customer asks for an operator, complains, or needs a custom quote, route to a human operator.",
             triggers: ["complaints", "custom quotes"],
           },
         },
@@ -745,8 +745,8 @@ test("setup assistant treats google maps as a valid source identity and still su
     },
   });
 
-  assert.equal(withoutHandoff.setup.review.finalizeAvailable, true);
-  assert.equal(withoutHandoff.setup.assistant.readyForApproval, true);
+  assert.equal(withoutHandoff.setup.review.finalizeAvailable, false);
+  assert.equal(withoutHandoff.setup.assistant.readyForApproval, false);
   assert.equal(withoutHandoff.setup.websitePrefill.status, "awaiting_input");
   assert.equal(
     withoutHandoff.setup.draft.sourceMetadata.primarySourceType,
@@ -760,7 +760,7 @@ test("setup assistant treats google maps as a valid source identity and still su
     withoutHandoff.setup.summary.sectionStatus.handoff.status,
     "missing"
   );
-  assert.equal(withoutHandoff.setup.assistant.nextQuestion, null);
+  assert.equal(withoutHandoff.setup.assistant.nextQuestion.key, "handoff");
 
   assert.equal(withHandoff.setup.review.finalizeAvailable, true);
   assert.equal(withHandoff.setup.assistant.readyForApproval, true);
@@ -807,7 +807,7 @@ test("setup assistant does not block finalize on extra AI-behavior fields once c
           },
           handoffRules: {
             enabled: true,
-            summary: "Complaints and custom quotes go to an operator.",
+            summary: "If customer asks for an operator, complains, or needs a custom quote, route to a human operator.",
             triggers: ["complaints", "custom quotes"],
           },
           sourceMetadata: {
@@ -877,8 +877,8 @@ test("setup assistant does not inject a hardcoded profile follow-up when a stron
     },
   });
 
-  assert.equal(payload.setup.assistant.nextQuestion, null);
-  assert.equal(payload.setup.assistant.phase, "ready");
+  assert.equal(payload.setup.assistant.nextQuestion.key, "company");
+  assert.equal(payload.setup.assistant.phase, "interview");
   assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
   assert.equal(
     payload.setup.draft.sourceMetadata.primarySourceType,
@@ -925,7 +925,7 @@ test("setup assistant still marks profile as needs_review for a manual-only sour
           },
           handoffRules: {
             enabled: true,
-            summary: "Complaints go to an operator.",
+            summary: "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
             triggers: ["complaints"],
           },
           sourceMetadata: {
@@ -992,7 +992,7 @@ test("setup assistant AI-native payload keeps compat fields available after a br
           },
           handoffRules: {
             enabled: true,
-            summary: "Escalate complaints and urgent cases to a human.",
+            summary: "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
             triggers: ["complaints", "urgent cases"],
           },
         },

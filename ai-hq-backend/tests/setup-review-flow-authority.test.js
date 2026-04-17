@@ -51,7 +51,7 @@ function createReviewDraft(overrides = {}) {
   };
 }
 
-test("review flow keeps AI-native setup authority while surfacing the current assistant finalize semantics", async () => {
+test("review flow keeps AI-native setup authority while preserving canonical readiness semantics", async () => {
   const payload = await loadCurrentReviewPayload(
     {
       db: {},
@@ -82,8 +82,8 @@ test("review flow keeps AI-native setup authority while surfacing the current as
   const activeQuestionKeys =
     payload?.assistant?.interviewPlan?.activeQuestionKeys || [];
 
-  assert.equal(payload.assistant.nextQuestion, null);
-  assert.equal(payload.assistant.readyForApproval, true);
+  assert.equal(payload.assistant.nextQuestion.key, "handoff");
+  assert.equal(payload.assistant.readyForApproval, false);
   assert.ok(!("assistantBrain" in payload));
   assert.equal(payload.assistant.sourceSignals.primarySourceType, "google_maps");
   assert.ok(!activeQuestionKeys.includes("languages"));
@@ -113,7 +113,7 @@ test("review flow marks setup ready from the canonical launch-critical scope onl
                 ...createReviewDraft().draft.draftPayload.setupAssistant,
                 handoffRules: {
                   enabled: true,
-                  summary: "Complaints and custom quotes go to an operator.",
+                  summary: "If customer asks for an operator, complains, or needs a custom quote, route to a human operator.",
                   triggers: ["complaints", "custom quotes"],
                 },
                 assistantState: {

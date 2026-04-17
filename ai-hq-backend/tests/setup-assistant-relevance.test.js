@@ -52,7 +52,8 @@ function createValidDraft() {
     },
     handoffRules: {
       enabled: true,
-      summary: "Müştəri operator istəyəndə və ya şikayət olduqda insana yönləndir.",
+      summary:
+        "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
       triggers: ["operator request", "complaint"],
     },
   };
@@ -129,7 +130,7 @@ test("handoff validation rejects confusion phrase as a policy", () => {
 test("handoff validation accepts real escalation rule", () => {
   const result = validateStepAnswer(
     "handoff",
-    "Müştəri operator istəyəndə, şikayət olduqda və ya təcili hal varsa insana yönləndir.",
+    "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
     {}
   );
 

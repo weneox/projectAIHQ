@@ -276,7 +276,7 @@ test("buildSetupAssistantPatchFromAcceptedPatch maps orchestrator acceptedPatch 
   assert.equal(patch.assistantState.activeSection, "contacts");
 });
 
-test("buildSetupAssistantSessionPayload keeps a brain_v4 payload when stored brain has no next question", () => {
+test("buildSetupAssistantSessionPayload falls back to next deterministic question when stored brain has none", () => {
   const review = {
     session: {
       id: "session-1",
@@ -320,8 +320,8 @@ test("buildSetupAssistantSessionPayload keeps a brain_v4 payload when stored bra
   assert.equal(payload.ok, undefined);
   assert.equal(payload.session.id, "session-1");
   assert.equal(payload.setup.assistant.mode, "brain_v4");
-  assert.equal(payload.setup.assistant.nextQuestion, null);
-  assert.equal(payload.setup.assistant.readyForApproval, true);
+  assert.equal(payload.setup.assistant.nextQuestion.key, "description");
+  assert.equal(payload.setup.assistant.readyForApproval, false);
 });
 
 test("orchestrator passive turn stays in interview mode when a setup draft shell already exists", async () => {

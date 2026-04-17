@@ -167,7 +167,7 @@ function createValidDraft() {
     handoffRules: {
       enabled: true,
       summary:
-        "Müştəri operator istəyəndə və ya şikayət olduqda insana yönləndir.",
+        "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
       triggers: ["operator request", "complaint"],
     },
     assistantState: {
@@ -311,7 +311,7 @@ function createApprovedTurn() {
       hours: ["monday 09:00-18:00", "tuesday 09:00-18:00"],
       pricingPosture: "Qiymətlər 20 AZN-dən başlayır.",
       humanHandoff:
-        "Müştəri operator istəyəndə və ya şikayət olduqda insana yönləndir.",
+        "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
     },
     acceptedPatch: {
       identity: {},
@@ -320,7 +320,7 @@ function createApprovedTurn() {
       hours: [],
       pricingPosture: "",
       humanHandoff:
-        "Müştəri operator istəyəndə və ya şikayət olduqda insana yönləndir.",
+        "If customer asks for an operator, complains, or there is an urgent case, route to a human operator.",
       aiBehavior: {
         languages: ["az-AZ"],
       },
