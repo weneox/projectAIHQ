@@ -11,7 +11,6 @@ import {
   INTENT_ONLY_RESPONSES,
   buildAssistantQuestion,
   getNextQuestion,
-  getSetupCopy,
   hasSetupSignalForInterview,
   normalizeQuestionKey,
   normalizeSetupLocale,
@@ -94,6 +93,8 @@ const STEP_KEYWORDS = {
     "sirket",
     "şirkət",
     "brand",
+    "website",
+    "sayt",
   ],
   description: [
     "description",
@@ -111,6 +112,7 @@ const STEP_KEYWORDS = {
     "xidmət",
     "xidmet",
     "offer",
+    "təklif",
   ],
   contacts: [
     "contact",
@@ -190,8 +192,8 @@ const STEP_KEYWORDS = {
     "xəritə",
     "xerite",
     "address behavior",
-    "unvan",
     "ünvan",
+    "unvan",
   ],
   booking_behavior: [
     "booking behavior",
@@ -200,7 +202,6 @@ const STEP_KEYWORDS = {
     "reservation",
     "rezervasiya",
     "appointment",
-    "whatsapp",
     "instagram dm",
   ],
   contact_behavior: [
@@ -226,22 +227,22 @@ const STEP_KEYWORDS = {
 
 const STEP_EXAMPLES = {
   "az-AZ": {
-    company: ["MAND Beauty", "Mand Beauty mand.az"],
+    company: ["Neox Clinic", "Neox Clinic neox.az"],
     description: [
-      "Qadın saç kəsimi, boyama və baxım xidmətləri göstəririk.",
-      "Logistika və yükdaşıma xidməti göstəririk.",
+      "Dəri baxımı və kosmetoloji xidmətlər göstəririk.",
+      "Veb sayt və çatbot həlləri hazırlayırıq.",
     ],
     services: [
-      "saç kəsimi, saç boyama, baxım",
-      "yükdaşıma, logistika, anbarlama",
+      "botoks, dolğu, lazer epilyasiya",
+      "veb sayt, çatbot, avtomatizasiya",
     ],
     contacts: [
-      "+994 50 555 55 55 WhatsApp",
+      "+994 50 111 22 33 WhatsApp",
       "hello@brand.az",
-      "@mandbeauty",
+      "@brandname",
     ],
     hours: [
-      "həftə içi 09:00-18:00",
+      "bazar ertəsi-cümə 09:00-18:00, şənbə 10:00-14:00",
       "hər gün 10:00-20:00",
       "24/7",
     ],
@@ -251,8 +252,8 @@ const STEP_EXAMPLES = {
       "Əvvəlcə sorğu alırıq.",
     ],
     handoff: [
-      "Müştəri operator istəyəndə insana yönləndir.",
-      "Şikayət, təcili hal və ödəniş problemi olanda insana keç.",
+      "Operator istəyi, şikayət və təcili hal olanda insana yönləndir.",
+      "Ödəniş problemi olanda insana keç.",
     ],
     pricing_behavior: [
       "qısa cavab + pricing page",
@@ -267,7 +268,7 @@ const STEP_EXAMPLES = {
     booking_behavior: [
       "WhatsApp-a yönləndir",
       "Instagram DM-ə yönləndir",
-      "əvvəlcə məlumat topla sonra yönləndir",
+      "əvvəlcə məlumat topla",
     ],
     contact_behavior: [
       "WhatsApp first",
@@ -283,20 +284,20 @@ const STEP_EXAMPLES = {
   en: {
     company: ["North Clinic", "North Clinic northclinic.com"],
     description: [
-      "We provide dental consultation, whitening, and implant services.",
-      "We provide logistics and cargo transport services.",
+      "We provide skincare and cosmetic services.",
+      "We build websites and chatbot systems.",
     ],
     services: [
-      "haircut, coloring, treatment",
-      "cargo transport, logistics, warehousing",
+      "botox, filler, laser epilation",
+      "website development, chatbot setup, automation",
     ],
     contacts: [
-      "+994 50 555 55 55 WhatsApp",
+      "+994 50 111 22 33 WhatsApp",
       "hello@brand.az",
       "@northclinic",
     ],
     hours: [
-      "weekdays 09:00-18:00",
+      "Monday-Friday 09:00-18:00, Saturday 10:00-14:00",
       "every day 10:00-20:00",
       "24/7",
     ],
@@ -306,8 +307,8 @@ const STEP_EXAMPLES = {
       "We ask for details first.",
     ],
     handoff: [
-      "Hand off to a human when the customer asks for an operator.",
-      "Hand off for complaints, urgent issues, or payment problems.",
+      "Hand off for complaints, urgent issues, or operator requests.",
+      "Hand off for payment problems.",
     ],
     pricing_behavior: [
       "short answer + pricing page",
@@ -337,6 +338,93 @@ const STEP_EXAMPLES = {
   },
 };
 
+const REASONER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "action",
+    "targetStep",
+    "reason",
+    "companyName",
+    "description",
+    "services",
+    "contacts",
+    "hours",
+    "pricingPosture",
+    "humanHandoff",
+    "websiteUrl",
+    "pricingBehavior",
+    "locationBehavior",
+    "bookingBehavior",
+    "contactBehavior",
+    "handoffBehavior",
+  ],
+  properties: {
+    action: {
+      type: "string",
+      enum: ["direct_answer", "correction", "off_topic", "unclear"],
+    },
+    targetStep: { type: "string" },
+    reason: { type: "string" },
+    companyName: { type: "string" },
+    description: { type: "string" },
+    services: { type: "array", items: { type: "string" } },
+    contacts: { type: "array", items: { type: "string" } },
+    hours: { type: "array", items: { type: "string" } },
+    pricingPosture: { type: "string" },
+    humanHandoff: { type: "string" },
+    websiteUrl: { type: "string" },
+    pricingBehavior: { type: "string" },
+    locationBehavior: { type: "string" },
+    bookingBehavior: { type: "string" },
+    contactBehavior: { type: "string" },
+    handoffBehavior: { type: "string" },
+  },
+};
+
+const POLISHER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "businessName",
+    "whatThisBusinessIs",
+    "websiteUrl",
+    "coreServices",
+    "contactRoutes",
+    "hours",
+    "pricingPosture",
+    "humanHandoff",
+    "pricingBehavior",
+    "locationBehavior",
+    "bookingBehavior",
+    "contactBehavior",
+    "handoffBehavior",
+    "languages",
+    "tone",
+    "greetingStyle",
+    "afterHoursBehavior",
+  ],
+  properties: {
+    businessName: { type: "string" },
+    whatThisBusinessIs: { type: "string" },
+    websiteUrl: { type: "string" },
+    coreServices: { type: "array", items: { type: "string" } },
+    contactRoutes: { type: "array", items: { type: "string" } },
+    hours: { type: "array", items: { type: "string" } },
+    pricingPosture: { type: "string" },
+    humanHandoff: { type: "string" },
+    pricingBehavior: { type: "string" },
+    locationBehavior: { type: "string" },
+    bookingBehavior: { type: "string" },
+    contactBehavior: { type: "string" },
+    handoffBehavior: { type: "string" },
+    languages: { type: "array", items: { type: "string" } },
+    tone: { type: "string" },
+    greetingStyle: { type: "string" },
+    afterHoursBehavior: { type: "string" },
+  },
+};
+
 function isBehaviorStep(step = "") {
   return /_behavior$/.test(normalizeQuestionKey(step));
 }
@@ -347,7 +435,9 @@ function getSetupAssistantRuntimeConfig() {
     Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 7000) ||
     7000;
   const maxOutputTokens =
-    Number(cfg.ai?.openaiSetupMaxOutputTokens || 500) || 500;
+    Number(cfg.ai?.openaiSetupMaxOutputTokens || 650) || 650;
+  const maxPolisherOutputTokens =
+    Number(cfg.ai?.openaiSetupPolisherMaxOutputTokens || 650) || 650;
 
   const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
@@ -357,6 +447,7 @@ function getSetupAssistantRuntimeConfig() {
     model,
     timeoutMs,
     maxOutputTokens,
+    maxPolisherOutputTokens,
   };
 }
 
@@ -382,6 +473,24 @@ function safeJsonParse(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function extractJsonText(response = {}) {
+  const outputText = s(response?.output_text);
+  if (outputText) return outputText;
+
+  for (const item of arr(response?.output)) {
+    for (const content of arr(item?.content)) {
+      const text =
+        s(content?.text) ||
+        s(content?.value) ||
+        s(content?.json) ||
+        s(content?.parsed);
+      if (text) return text;
+    }
+  }
+
+  return "";
 }
 
 function uniqueStrings(items = [], max = 24) {
@@ -446,25 +555,8 @@ function countAssistantAsksForStep(review = {}, step = "") {
   ).length;
 }
 
-function buildCurrentPreview(draft = {}, review = null) {
-  const safeDraft = obj(draft);
-  const reviewRoot = obj(review);
-  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
-
-  const businessProfile = {
-    ...obj(reviewDraft.businessProfile),
-    ...obj(safeDraft.businessProfile),
-  };
-
-  const services = [...arr(reviewDraft.services), ...arr(safeDraft.services)]
-    .map((item) => s(item?.title || item?.name || item?.label))
-    .filter(Boolean);
-
-  const contacts = [...arr(reviewDraft.contacts), ...arr(safeDraft.contacts)]
-    .map((item) => s(item?.value || item?.label || item?.channel || item?.type))
-    .filter(Boolean);
-
-  const hours = arr(safeDraft.hours)
+function buildHoursLines(hours = []) {
+  return arr(hours)
     .map((item) => {
       const row = obj(item);
       const day = s(row.day);
@@ -484,6 +576,78 @@ function buildCurrentPreview(draft = {}, review = null) {
 
       return s(row.notes);
     })
+    .filter(Boolean)
+    .slice(0, 16);
+}
+
+function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
+  const safePolicy = obj(policy);
+
+  if (policyKey === "pricing") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "location") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "booking") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "contact") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredChannel),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "handoff") {
+    return [
+      s(safePolicy.mode),
+      safePolicy.requiresReason === true ? "requires reason" : "",
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return "";
+}
+
+function buildCurrentPreview(draft = {}, review = null) {
+  const safeDraft = obj(draft);
+  const reviewRoot = obj(review);
+  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
+
+  const businessProfile = {
+    ...obj(reviewDraft.businessProfile),
+    ...obj(safeDraft.businessProfile),
+  };
+
+  const services = [...arr(reviewDraft.services), ...arr(safeDraft.services)]
+    .map((item) => s(item?.title || item?.name || item?.label))
+    .filter(Boolean);
+
+  const contacts = [...arr(reviewDraft.contacts), ...arr(safeDraft.contacts)]
+    .map((item) => s(item?.value || item?.label || item?.channel || item?.type))
     .filter(Boolean);
 
   const pricingPosture = s(
@@ -492,7 +656,7 @@ function buildCurrentPreview(draft = {}, review = null) {
       businessProfile.pricingPolicy
   );
 
-  const humanHandoff = s(
+  const handoff = s(
     obj(safeDraft.handoffRules).summary ||
       arr(obj(safeDraft.handoffRules).triggers).join(", ")
   );
@@ -502,64 +666,98 @@ function buildCurrentPreview(draft = {}, review = null) {
     obj(safeDraft.assistantBehaviorDraft)
   );
 
-  const summarizeBehavior = (policyKey = "", policy = {}) => {
-    const safePolicy = obj(policy);
-
-    if (policyKey === "pricing") {
-      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-        .filter(Boolean)
-        .join(" ");
-    }
-    if (policyKey === "location") {
-      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-        .filter(Boolean)
-        .join(" ");
-    }
-    if (policyKey === "booking") {
-      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-        .filter(Boolean)
-        .join(" ");
-    }
-    if (policyKey === "contact") {
-      return [
-        s(safePolicy.mode),
-        s(safePolicy.preferredChannel),
-        s(safePolicy.preferredTargetUrl),
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
-    if (policyKey === "handoff") {
-      return [
-        s(safePolicy.mode),
-        safePolicy.requiresReason === true ? "requires reason" : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    return "";
-  };
-
   return compactDraftObject({
     businessName: s(businessProfile.companyName),
     whatThisBusinessIs: s(businessProfile.description),
     websiteUrl: normalizeWebsiteUrl(s(businessProfile.websiteUrl)),
     coreServices: uniqueStrings(services, 24),
     contactRoutes: uniqueStrings(contacts, 24),
-    hours: uniqueStrings(hours, 24),
+    hours: uniqueStrings(buildHoursLines(safeDraft.hours), 16),
     pricingPosture,
-    humanHandoff,
+    humanHandoff: handoff,
     languages: uniqueStrings(arr(safeDraft.languages), 8),
     tone: s(safeDraft.tone),
     greetingStyle: s(safeDraft.greetingStyle),
     afterHoursBehavior: s(safeDraft.afterHoursBehavior),
-    pricingBehavior: summarizeBehavior("pricing", behaviorDraft.pricingPolicy),
-    locationBehavior: summarizeBehavior("location", behaviorDraft.locationPolicy),
-    bookingBehavior: summarizeBehavior("booking", behaviorDraft.bookingPolicy),
-    contactBehavior: summarizeBehavior("contact", behaviorDraft.contactPolicy),
-    handoffBehavior: summarizeBehavior("handoff", behaviorDraft.handoffPolicy),
+    pricingBehavior: summarizeBehaviorPolicy(
+      "pricing",
+      behaviorDraft.pricingPolicy
+    ),
+    locationBehavior: summarizeBehaviorPolicy(
+      "location",
+      behaviorDraft.locationPolicy
+    ),
+    bookingBehavior: summarizeBehaviorPolicy(
+      "booking",
+      behaviorDraft.bookingPolicy
+    ),
+    contactBehavior: summarizeBehaviorPolicy(
+      "contact",
+      behaviorDraft.contactPolicy
+    ),
+    handoffBehavior: summarizeBehaviorPolicy(
+      "handoff",
+      behaviorDraft.handoffPolicy
+    ),
   });
+}
+
+function buildSourceSignals(preview = {}, sources = [], draft = {}) {
+  const safePreview = obj(preview);
+  const sourceRows = arr(sources);
+
+  const sourceTypes = uniqueStrings(
+    [
+      ...sourceRows.map((item) => s(item?.type || item?.sourceType)),
+      s(obj(draft.sourceMetadata).primarySourceType),
+      safePreview.websiteUrl ? "website" : "",
+    ],
+    8
+  );
+
+  return {
+    primarySourceType:
+      s(obj(draft.sourceMetadata).primarySourceType) ||
+      (safePreview.websiteUrl ? "website" : s(sourceTypes[0])),
+    primarySourceLabel:
+      s(arr(obj(draft.sourceMetadata).sourceLabels)[0]) ||
+      (safePreview.websiteUrl ? "Website" : s(sourceTypes[0])),
+    primarySourceUrl:
+      s(obj(draft.sourceMetadata).primarySourceUrl) || s(safePreview.websiteUrl),
+    primarySourceAuthorityClass: safePreview.websiteUrl ? "official" : "",
+    pageCount: 0,
+    sourceTypes,
+    strongestEvidence: uniqueStrings(
+      [
+        safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
+        safePreview.whatThisBusinessIs
+          ? `Description: ${safePreview.whatThisBusinessIs}`
+          : "",
+        arr(safePreview.coreServices).length
+          ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
+          : "",
+        arr(safePreview.contactRoutes).length
+          ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
+          : "",
+        arr(safePreview.hours).length
+          ? `Hours: ${arr(safePreview.hours).slice(0, 2).join(" • ")}`
+          : "",
+        s(safePreview.pricingPosture)
+          ? `Pricing: ${safePreview.pricingPosture}`
+          : "",
+      ],
+      12
+    ),
+    discoveredPublicClaims: [],
+    companyNameCandidates: uniqueStrings([safePreview.businessName], 8),
+    descriptionCandidates: uniqueStrings([safePreview.whatThisBusinessIs], 8),
+    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
+    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
+    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
+    pricingCandidates: uniqueStrings([safePreview.pricingPosture], 12),
+    audienceCandidates: [],
+    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
+  };
 }
 
 function detectLocaleFromText(value = "") {
@@ -615,24 +813,6 @@ function resolveReplyLocale({ draft = {}, latestMessage = "" } = {}) {
   return "az-AZ";
 }
 
-function extractJsonText(response = {}) {
-  const outputText = s(response?.output_text);
-  if (outputText) return outputText;
-
-  for (const item of arr(response?.output)) {
-    for (const content of arr(item?.content)) {
-      const text =
-        s(content?.text) ||
-        s(content?.value) ||
-        s(content?.json) ||
-        s(content?.parsed);
-      if (text) return text;
-    }
-  }
-
-  return "";
-}
-
 function buildQuestion(step = "", locale = "az-AZ") {
   return buildAssistantQuestion(step || "company", {}, { locale });
 }
@@ -670,57 +850,6 @@ function buildInterviewPlan(currentStep = "", nextQuestion = null) {
   };
 }
 
-function buildSourceSignals(preview = {}, sources = []) {
-  const safePreview = obj(preview);
-  const sourceRows = arr(sources);
-
-  const sourceTypes = uniqueStrings(
-    [
-      ...sourceRows.map((item) => s(item?.type || item?.sourceType)),
-      safePreview.websiteUrl ? "website" : "",
-    ],
-    8
-  );
-
-  const strongestEvidence = uniqueStrings(
-    [
-      safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
-      safePreview.whatThisBusinessIs
-        ? `Description: ${safePreview.whatThisBusinessIs}`
-        : "",
-      arr(safePreview.coreServices).length
-        ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
-        : "",
-      arr(safePreview.contactRoutes).length
-        ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
-        : "",
-      arr(safePreview.hours).length
-        ? `Hours: ${arr(safePreview.hours).slice(0, 2).join(", ")}`
-        : "",
-    ],
-    12
-  );
-
-  return {
-    primarySourceType: safePreview.websiteUrl ? "website" : s(sourceTypes[0]),
-    primarySourceLabel: safePreview.websiteUrl ? "Website" : s(sourceTypes[0]),
-    primarySourceUrl: s(safePreview.websiteUrl),
-    primarySourceAuthorityClass: safePreview.websiteUrl ? "official" : "",
-    pageCount: 0,
-    sourceTypes,
-    strongestEvidence,
-    discoveredPublicClaims: strongestEvidence,
-    companyNameCandidates: uniqueStrings([safePreview.businessName], 8),
-    descriptionCandidates: uniqueStrings([safePreview.whatThisBusinessIs], 8),
-    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
-    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
-    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
-    pricingCandidates: uniqueStrings([safePreview.pricingPosture], 12),
-    audienceCandidates: [],
-    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
-  };
-}
-
 function buildEmptyAcceptedPatch() {
   return {
     identity: {},
@@ -732,6 +861,33 @@ function buildEmptyAcceptedPatch() {
     aiBehavior: {},
     assistantBehaviorDraft: {},
   };
+}
+
+function hasAcceptedBehaviorPatchSignal(value = {}) {
+  const behavior = obj(value);
+
+  return [
+    "pricingPolicy",
+    "locationPolicy",
+    "bookingPolicy",
+    "contactPolicy",
+    "handoffPolicy",
+  ].some((key) => Object.keys(obj(behavior[key])).length > 0);
+}
+
+function hasAcceptedPatchSignal(value = {}) {
+  const patch = obj(value);
+
+  return Boolean(
+    Object.keys(obj(patch.identity)).length ||
+      arr(patch.services).length ||
+      arr(patch.contacts).length ||
+      arr(patch.hours).length ||
+      s(patch.pricingPosture) ||
+      s(patch.humanHandoff) ||
+      Object.keys(obj(patch.aiBehavior)).length ||
+      hasAcceptedBehaviorPatchSignal(obj(patch.assistantBehaviorDraft))
+  );
 }
 
 function mergeAcceptedPatches(base = {}, extra = {}) {
@@ -761,7 +917,7 @@ function mergeAcceptedPatches(base = {}, extra = {}) {
     ),
     hours: uniqueStrings(
       [...arr(left.hours), ...arr(right.hours)].map((item) => s(item)),
-      12
+      16
     ),
     pricingPosture: s(right.pricingPosture || left.pricingPosture),
     humanHandoff: s(right.humanHandoff || left.humanHandoff),
@@ -792,79 +948,6 @@ function mergeAcceptedPatches(base = {}, extra = {}) {
       ),
     }),
   });
-}
-
-function hasAcceptedBehaviorPatchSignal(value = {}) {
-  const behavior = obj(value);
-
-  return [
-    "pricingPolicy",
-    "locationPolicy",
-    "bookingPolicy",
-    "contactPolicy",
-    "handoffPolicy",
-  ].some((key) => Object.keys(obj(behavior[key])).length > 0);
-}
-
-function hasAcceptedPatchSignal(value = {}) {
-  const patch = obj(value);
-
-  return Boolean(
-    Object.keys(obj(patch.identity)).length ||
-      arr(patch.services).length ||
-      arr(patch.contacts).length ||
-      arr(patch.hours).length ||
-      s(patch.pricingPosture) ||
-      s(patch.humanHandoff) ||
-      Object.keys(obj(patch.aiBehavior)).length ||
-      hasAcceptedBehaviorPatchSignal(patch.assistantBehaviorDraft)
-  );
-}
-
-function patchTouchesCurrentStep(currentStep = "", acceptedPatch = {}) {
-  const step = normalizeQuestionKey(currentStep);
-  const patch = obj(acceptedPatch);
-  const identity = obj(patch.identity);
-  const behaviorDraft = obj(patch.assistantBehaviorDraft);
-
-  if (step === "company") {
-    return Boolean(s(identity.businessName) || s(identity.websiteUrl));
-  }
-  if (step === "description") {
-    return Boolean(s(identity.description));
-  }
-  if (step === "services") {
-    return arr(patch.services).length > 0;
-  }
-  if (step === "contacts") {
-    return arr(patch.contacts).length > 0;
-  }
-  if (step === "hours") {
-    return arr(patch.hours).length > 0;
-  }
-  if (step === "pricing") {
-    return Boolean(s(patch.pricingPosture));
-  }
-  if (step === "handoff") {
-    return Boolean(s(patch.humanHandoff));
-  }
-  if (step === "pricing_behavior") {
-    return Object.keys(obj(behaviorDraft.pricingPolicy)).length > 0;
-  }
-  if (step === "location_behavior") {
-    return Object.keys(obj(behaviorDraft.locationPolicy)).length > 0;
-  }
-  if (step === "booking_behavior") {
-    return Object.keys(obj(behaviorDraft.bookingPolicy)).length > 0;
-  }
-  if (step === "contact_behavior") {
-    return Object.keys(obj(behaviorDraft.contactPolicy)).length > 0;
-  }
-  if (step === "handoff_behavior") {
-    return Object.keys(obj(behaviorDraft.handoffPolicy)).length > 0;
-  }
-
-  return false;
 }
 
 function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
@@ -916,11 +999,6 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
       }
     : obj(safeDraft.handoffRules);
 
-  const mergedBehaviorDraft = mergeAssistantBehaviorDraft(
-    obj(safeDraft.assistantBehaviorDraft),
-    obj(patch.assistantBehaviorDraft)
-  );
-
   return compactDraftObject({
     ...safeDraft,
     businessProfile: compactDraftObject({
@@ -940,7 +1018,10 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
     hours: mergedHours,
     pricingPosture: mergedPricing,
     handoffRules: mergedHandoff,
-    assistantBehaviorDraft: mergedBehaviorDraft,
+    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
+      obj(safeDraft.assistantBehaviorDraft),
+      obj(patch.assistantBehaviorDraft)
+    ),
     languages: uniqueStrings(
       [...arr(safeDraft.languages), ...arr(obj(patch.aiBehavior).languages)],
       8
@@ -961,37 +1042,6 @@ function stripRecognizedSourceFromText(text = "") {
   if (!candidate?.raw) return value;
 
   return s(value.replace(candidate.raw, " ").replace(/\s{2,}/g, " "));
-}
-
-function extractContactCandidates(text = "") {
-  const out = [];
-
-  const emails = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
-  out.push(...emails.map((item) => s(item)));
-
-  const phones =
-    text.match(/(?:\+?\d[\d()\-\s]{6,}\d)/g)?.map((item) => s(item)) || [];
-  out.push(...phones);
-
-  const source = buildRecognizedSourceCandidate(text);
-  if (source?.type && source.type !== "website") {
-    out.push(source.value);
-  }
-
-  const listItems = splitList(text, 16);
-  for (const item of listItems) {
-    const type = inferContactType(item);
-    if (
-      type === "phone" ||
-      type === "email" ||
-      type === "link" ||
-      /whatsapp|wp|telegram|instagram|facebook|wa\.me/i.test(item)
-    ) {
-      out.push(item);
-    }
-  }
-
-  return uniqueStrings(out, 16);
 }
 
 function extractCompanyValue(text = "") {
@@ -1032,6 +1082,37 @@ function extractServiceValues(text = "") {
   return uniqueStrings(splitList(text, 16), 16);
 }
 
+function extractContactCandidates(text = "") {
+  const out = [];
+
+  const emails = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+  out.push(...emails.map((item) => s(item)));
+
+  const phones =
+    text.match(/(?:\+?\d[\d()\-\s]{6,}\d)/g)?.map((item) => s(item)) || [];
+  out.push(...phones);
+
+  const source = buildRecognizedSourceCandidate(text);
+  if (source?.type && source.type !== "website") {
+    out.push(source.value);
+  }
+
+  const listItems = splitList(text, 16);
+  for (const item of listItems) {
+    const type = inferContactType(item);
+    if (
+      type === "phone" ||
+      type === "email" ||
+      type === "link" ||
+      /whatsapp|wp|telegram|instagram|facebook|wa\.me/i.test(item)
+    ) {
+      out.push(item);
+    }
+  }
+
+  return uniqueStrings(out, 16);
+}
+
 function extractHoursValues(text = "") {
   const parsed = parseHoursNote(text, []);
   const hasStructured = arr(parsed).some((row) => {
@@ -1063,8 +1144,7 @@ function extractPricingValue(text = "", currentServices = []) {
 }
 
 function extractHandoffValue(text = "") {
-  const trimmed = compactText(text, 220);
-  return trimmed || "";
+  return compactText(text, 220) || "";
 }
 
 function buildPatchForStep(step = "", text = "", draft = {}) {
@@ -1216,20 +1296,18 @@ function getExamplesForStep(step = "", locale = "az-AZ") {
 
 function buildWarmRedirect(locale = "az-AZ", text = "") {
   const normalizedLocale = normalizeSetupLocale(locale);
+
   if (isSocialTurn(text)) {
-    if (normalizedLocale === "az-AZ") return "Mən yaxşıyam 🙂";
-    return "I’m good 🙂";
+    return normalizedLocale === "az-AZ" ? "Oldu." : "Okay.";
   }
+
   if (isConfusionTurn(text) || hasQuestionMark(text)) {
-    if (normalizedLocale === "az-AZ") {
-      return "Aydın oldu — qarışdırmayaq.";
-    }
-    return "Got it — let’s make this simpler.";
+    return normalizedLocale === "az-AZ"
+      ? "Sadə yaza bilərsən."
+      : "You can answer more simply.";
   }
-  if (normalizedLocale === "az-AZ") {
-    return "Bu cavabdan faydalı setup məlumatı çıxmadı.";
-  }
-  return "That did not give me a usable setup answer.";
+
+  return normalizedLocale === "az-AZ" ? "Bu hissə aydın olmadı." : "That part was not clear.";
 }
 
 function buildClarifyMessage({
@@ -1253,6 +1331,7 @@ function buildClarifyMessage({
         .filter(Boolean)
         .join(" ");
     }
+
     return [buildWarmRedirect(locale, text), s(question.prompt)]
       .filter(Boolean)
       .join(" ");
@@ -1261,7 +1340,7 @@ function buildClarifyMessage({
   if (normalizeSetupLocale(locale) === "az-AZ") {
     return [
       buildWarmRedirect(locale, text),
-      "Bu hissəni bir qısa cümlə ilə yaza bilərsiniz.",
+      "Bir qısa cümlə ilə yaza bilərsən.",
       examples.length ? `Nümunə: ${examples.join(" / ")}.` : "",
     ]
       .filter(Boolean)
@@ -1270,7 +1349,7 @@ function buildClarifyMessage({
 
   return [
     buildWarmRedirect(locale, text),
-    "You can answer this in one short sentence.",
+    "You can answer in one short sentence.",
     examples.length ? `Example: ${examples.join(" / ")}.` : "",
   ]
     .filter(Boolean)
@@ -1377,41 +1456,12 @@ function resolveConversationPlan({
   };
 }
 
-function buildStepAcknowledgement(locale = "az-AZ", step = "") {
-  const safeStep = normalizeQuestionKey(step);
+function buildAck(locale = "az-AZ", kind = "noted") {
   const isAz = normalizeSetupLocale(locale) === "az-AZ";
 
-  const map = isAz
-    ? {
-        company: "Ad qeyd olundu.",
-        description: "Oldu.",
-        services: "Xidmətlər qeyd olundu.",
-        contacts: "Əlaqə yolu qeyd olundu.",
-        hours: "İş saatları qeyd olundu.",
-        pricing: "Qiymət qaydası qeyd olundu.",
-        handoff: "İnsana yönləndirmə qaydası qeyd olundu.",
-        pricing_behavior: "Qiymət cavab davranışı qeyd olundu.",
-        location_behavior: "Ünvan cavab davranışı qeyd olundu.",
-        booking_behavior: "Rezervasiya yönləndirməsi qeyd olundu.",
-        contact_behavior: "Əlaqə üstünlüyü qeyd olundu.",
-        handoff_behavior: "Handoff davranışı qeyd olundu.",
-      }
-    : {
-        company: "Business name noted.",
-        description: "Got it.",
-        services: "Services noted.",
-        contacts: "Contact route noted.",
-        hours: "Working hours noted.",
-        pricing: "Pricing rule noted.",
-        handoff: "Human handoff rule noted.",
-        pricing_behavior: "Pricing reply behavior noted.",
-        location_behavior: "Location reply behavior noted.",
-        booking_behavior: "Booking routing noted.",
-        contact_behavior: "Contact preference noted.",
-        handoff_behavior: "Handoff behavior noted.",
-      };
-
-  return s(map[safeStep] || (isAz ? "Qeyd olundu." : "Noted."));
+  if (kind === "corrected") return isAz ? "Düzəltdim." : "Updated.";
+  if (kind === "ready") return isAz ? "Oldu. Draft hazırdır." : "Okay. The draft is ready.";
+  return isAz ? "Oldu." : "Okay.";
 }
 
 function buildTurn({
@@ -1431,12 +1481,17 @@ function buildTurn({
   rejectedInputs = [],
   recommendationNotes = [],
   forceReadyForApproval = null,
+  polishedDraftOverride = null,
 } = {}) {
   const mergedDraft = hasAcceptedPatchSignal(acceptedPatch)
     ? buildDraftWithAcceptedPatch(draft, acceptedPatch)
     : draft;
 
-  const preview = buildCurrentPreview(mergedDraft, review);
+  const preview =
+    Object.keys(obj(polishedDraftOverride)).length > 0
+      ? obj(polishedDraftOverride)
+      : buildCurrentPreview(mergedDraft, review);
+
   const plan =
     forceReadyForApproval === true && !nextQuestion
       ? {
@@ -1498,13 +1553,13 @@ function buildTurn({
     recommendation: {
       notes: uniqueStrings(recommendationNotes, 8),
     },
-    sourceSignals: buildSourceSignals(preview, sources),
+    sourceSignals: buildSourceSignals(preview, sources, mergedDraft),
     interviewPlan: buildInterviewPlan(currentStep, resolvedNextQuestion),
     aiBehavior: compactDraftObject({
-      languages: uniqueStrings([...arr(draft.languages), locale], 8),
-      tone: s(draft.tone),
-      greetingStyle: s(draft.greetingStyle),
-      afterHoursBehavior: s(draft.afterHoursBehavior),
+      languages: uniqueStrings([...arr(mergedDraft.languages), locale], 8),
+      tone: s(mergedDraft.tone),
+      greetingStyle: s(mergedDraft.greetingStyle),
+      afterHoursBehavior: s(mergedDraft.afterHoursBehavior),
     }),
     readyForApproval,
   };
@@ -1518,7 +1573,6 @@ function buildPassiveTurn({
   sources = [],
   model = "",
 } = {}) {
-  const copy = getSetupCopy(locale);
   const plan = resolveConversationPlan({
     locale,
     draft,
@@ -1528,7 +1582,7 @@ function buildPassiveTurn({
 
   const assistantMessage =
     plan.readyForApproval === true
-      ? s(obj(copy.phrases).readyForApproval)
+      ? buildAck(locale, "ready")
       : s(obj(plan.nextQuestion).prompt);
 
   return buildTurn({
@@ -1559,8 +1613,8 @@ function buildDirectAnswerTurn({
   acceptedPatch = {},
   model = "",
   provider = "local_reasoning",
+  polishedDraftOverride = null,
 } = {}) {
-  const copy = getSetupCopy(locale);
   const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
   const plan = resolveConversationPlan({
     locale,
@@ -1569,12 +1623,12 @@ function buildDirectAnswerTurn({
     review,
   });
 
-  const ack = buildStepAcknowledgement(locale, currentStep);
-
   const assistantMessage =
     plan.readyForApproval === true
-      ? [ack, s(obj(copy.phrases).readyForApproval)].filter(Boolean).join(" ")
-      : [ack, s(obj(plan.nextQuestion).prompt)].filter(Boolean).join(" ");
+      ? buildAck(locale, "ready")
+      : [buildAck(locale, "noted"), s(obj(plan.nextQuestion).prompt)]
+          .filter(Boolean)
+          .join(" ");
 
   return buildTurn({
     locale,
@@ -1591,6 +1645,59 @@ function buildDirectAnswerTurn({
     rejectedInputs: [],
     recommendationNotes: [],
     forceReadyForApproval: plan.readyForApproval === true,
+    polishedDraftOverride,
+  });
+}
+
+function buildCorrectionTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  targetStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  correctionPatch = {},
+  model = "",
+  provider = "local_reasoning",
+  polishedDraftOverride = null,
+} = {}) {
+  const normalizedTarget = normalizeQuestionKey(targetStep);
+  const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionPatch);
+  const plan = resolveConversationPlan({
+    locale,
+    draft: mergedDraft,
+    currentStep,
+    review,
+    preferredStep: currentStep,
+  });
+
+  const assistantMessage =
+    plan.readyForApproval === true
+      ? buildAck(locale, "ready")
+      : [
+          buildAck(locale, "corrected"),
+          s(obj(plan.nextQuestion).prompt || buildQuestion(normalizedTarget, locale).prompt),
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch: correctionPatch,
+    provider,
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [],
+    recommendationNotes: [],
+    forceReadyForApproval: plan.readyForApproval === true,
+    polishedDraftOverride,
   });
 }
 
@@ -1616,23 +1723,10 @@ function buildClarifyTurn({
 
   let assistantMessage = "";
   if (plan.parkedCurrent === true && obj(plan.nextQuestion).key) {
-    if (normalizeSetupLocale(locale) === "az-AZ") {
-      assistantMessage = [
-        buildWarmRedirect(locale, latestMessage),
-        "Bu hissəni sonra bağlayaq.",
-        s(obj(plan.nextQuestion).prompt),
-      ]
-        .filter(Boolean)
-        .join(" ");
-    } else {
-      assistantMessage = [
-        buildWarmRedirect(locale, latestMessage),
-        "We can come back to this part.",
-        s(obj(plan.nextQuestion).prompt),
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
+    assistantMessage =
+      normalizeSetupLocale(locale) === "az-AZ"
+        ? `Keçək növbəti hissəyə. ${s(obj(plan.nextQuestion).prompt)}`
+        : `Let’s move to the next part. ${s(obj(plan.nextQuestion).prompt)}`;
   } else {
     assistantMessage = buildClarifyMessage({
       locale,
@@ -1668,170 +1762,29 @@ function buildClarifyTurn({
   });
 }
 
-function buildCorrectionTurn({
-  locale = "az-AZ",
-  currentStep = "",
-  targetStep = "",
-  draft = {},
-  review = null,
-  sources = [],
-  latestMessage = "",
-  correctionPatch = {},
-  model = "",
-  provider = "local_reasoning",
-} = {}) {
-  const normalizedTarget = normalizeQuestionKey(targetStep);
-  const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionPatch);
-  const plan = resolveConversationPlan({
-    locale,
-    draft: mergedDraft,
-    currentStep,
-    review,
-    preferredStep: currentStep,
-  });
-
-  const targetLabel =
-    normalizeSetupLocale(locale) === "az-AZ"
-      ? `Düzəldildi: ${normalizedTarget}.`
-      : `Updated: ${normalizedTarget}.`;
-
-  const assistantMessage =
-    plan.readyForApproval === true
-      ? normalizeSetupLocale(locale) === "az-AZ"
-        ? `${targetLabel} Əla. Setup draft kifayət qədər doludur.`
-        : `${targetLabel} Great. The setup draft is complete enough.`
-      : [targetLabel, s(obj(plan.nextQuestion).prompt)].filter(Boolean).join(" ");
-
-  return buildTurn({
-    locale,
-    currentStep,
-    draft,
-    review,
-    sources,
-    latestMessage,
-    acceptedPatch: correctionPatch,
-    provider,
-    model,
-    assistantMessage,
-    nextQuestion: plan.nextQuestion,
-    rejectedInputs: [],
-    recommendationNotes: [],
-    forceReadyForApproval: plan.readyForApproval === true,
-  });
-}
-
-function buildSupplementalTurn({
-  locale = "az-AZ",
-  currentStep = "",
-  draft = {},
-  review = null,
-  sources = [],
-  latestMessage = "",
-  acceptedPatch = {},
-  model = "",
-  provider = "local_reasoning",
-} = {}) {
-  const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
-  const plan = resolveConversationPlan({
-    locale,
-    draft: mergedDraft,
-    currentStep,
-    review,
-    preferredStep: currentStep,
-  });
-
-  const assistantMessage =
-    normalizeSetupLocale(locale) === "az-AZ"
-      ? s(obj(plan.nextQuestion).prompt)
-      : s(obj(plan.nextQuestion).prompt);
-
-  return buildTurn({
-    locale,
-    currentStep,
-    draft,
-    review,
-    sources,
-    latestMessage,
-    acceptedPatch,
-    provider,
-    model,
-    assistantMessage,
-    nextQuestion: plan.nextQuestion,
-    rejectedInputs: [],
-    recommendationNotes: [],
-    forceReadyForApproval: plan.readyForApproval === true,
-  });
-}
-
-const OPENAI_TURN_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "action",
-    "targetStep",
-    "currentStepAnswered",
-    "companyName",
-    "description",
-    "services",
-    "contacts",
-    "hours",
-    "pricingPosture",
-    "humanHandoff",
-    "websiteUrl",
-    "reason",
-  ],
-  properties: {
-    action: {
-      type: "string",
-      enum: [
-        "direct_answer",
-        "correction",
-        "supplemental",
-        "off_topic",
-        "unclear",
-      ],
-    },
-    targetStep: { type: "string" },
-    currentStepAnswered: { type: "boolean" },
-    companyName: { type: "string" },
-    description: { type: "string" },
-    services: { type: "array", items: { type: "string" } },
-    contacts: { type: "array", items: { type: "string" } },
-    hours: { type: "array", items: { type: "string" } },
-    pricingPosture: { type: "string" },
-    humanHandoff: { type: "string" },
-    websiteUrl: { type: "string" },
-    reason: { type: "string" },
-  },
-};
-
-function buildSystemPrompt(locale = "az-AZ") {
+function buildPolisherSystemPrompt(locale = "az-AZ") {
   return [
-    "You are the reasoning layer for a business setup assistant.",
-    `Reply locale is ${locale}.`,
-    "Your job is to interpret the latest user message in context.",
-    "Decide whether the user answered the current step, corrected an earlier field, added another useful signal, or went off-topic.",
+    "You are polishing a hidden internal setup draft for a business onboarding assistant.",
+    `Output locale must match ${locale}.`,
     "Do not invent facts.",
+    "You may rewrite, normalize, structure, and professionalize wording.",
+    "Preserve uncertainty if information is incomplete.",
     "Return strict JSON only.",
   ].join(" ");
 }
 
-function buildUserPrompt({
+function buildPolisherUserPrompt({
   locale = "az-AZ",
-  currentStep = "",
-  question = null,
   preview = {},
-  latestMessage = "",
+  sources = [],
 } = {}) {
   return [
-    "Current setup context:",
+    "Professionalize this hidden setup draft:",
     JSON.stringify(
       {
         locale,
-        currentStep,
-        currentQuestion: obj(question),
-        draftPreview: obj(preview),
-        latestUserMessage: s(latestMessage),
+        preview: obj(preview),
+        sources: arr(sources).slice(0, 8),
       },
       null,
       2
@@ -1839,15 +1792,13 @@ function buildUserPrompt({
   ].join("\n");
 }
 
-async function callOpenAISetupAssistant({
+async function callOpenAIPolisher({
   locale = "az-AZ",
-  currentStep = "",
-  question = null,
   preview = {},
-  latestMessage = "",
+  sources = [],
   model = "",
   timeoutMs = 7000,
-  maxOutputTokens = 500,
+  maxOutputTokens = 650,
 } = {}) {
   const client = getOpenAIClient();
   if (!client) {
@@ -1859,11 +1810,122 @@ async function callOpenAISetupAssistant({
     input: [
       {
         role: "system",
-        content: buildSystemPrompt(locale),
+        content: buildPolisherSystemPrompt(locale),
       },
       {
         role: "user",
-        content: buildUserPrompt({
+        content: buildPolisherUserPrompt({
+          locale,
+          preview,
+          sources,
+        }),
+      },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "setup_assistant_polished_draft",
+        strict: true,
+        schema: POLISHER_SCHEMA,
+      },
+    },
+    max_output_tokens: maxOutputTokens,
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("openai_setup_polisher_timeout")), timeoutMs);
+  });
+
+  const response = await Promise.race([responsePromise, timeoutPromise]);
+
+  const payload =
+    obj(response?.output_parsed) && Object.keys(obj(response.output_parsed)).length
+      ? response.output_parsed
+      : safeJsonParse(extractJsonText(response), {});
+
+  if (!Object.keys(obj(payload)).length) {
+    throw new Error("openai_setup_polisher_empty_output");
+  }
+
+  return compactDraftObject({
+    businessName: s(payload.businessName),
+    whatThisBusinessIs: s(payload.whatThisBusinessIs),
+    websiteUrl: normalizeWebsiteUrl(s(payload.websiteUrl)),
+    coreServices: uniqueStrings(payload.coreServices, 24),
+    contactRoutes: uniqueStrings(payload.contactRoutes, 24),
+    hours: uniqueStrings(payload.hours, 16),
+    pricingPosture: s(payload.pricingPosture),
+    humanHandoff: s(payload.humanHandoff),
+    pricingBehavior: s(payload.pricingBehavior),
+    locationBehavior: s(payload.locationBehavior),
+    bookingBehavior: s(payload.bookingBehavior),
+    contactBehavior: s(payload.contactBehavior),
+    handoffBehavior: s(payload.handoffBehavior),
+    languages: uniqueStrings(payload.languages, 8),
+    tone: s(payload.tone),
+    greetingStyle: s(payload.greetingStyle),
+    afterHoursBehavior: s(payload.afterHoursBehavior),
+  });
+}
+
+function buildReasonerSystemPrompt(locale = "az-AZ") {
+  return [
+    "You are a reasoning layer for a business setup assistant.",
+    `Output locale is ${locale}.`,
+    "Your job is to understand whether the latest user message answered the current step or corrected another step.",
+    "Do not invent facts.",
+    "Return strict JSON only.",
+  ].join(" ");
+}
+
+function buildReasonerUserPrompt({
+  locale = "az-AZ",
+  currentStep = "",
+  question = null,
+  preview = {},
+  latestMessage = "",
+} = {}) {
+  return [
+    "Current setup state:",
+    JSON.stringify(
+      {
+        locale,
+        currentStep,
+        currentQuestion: obj(question),
+        preview: obj(preview),
+        latestUserMessage: s(latestMessage),
+      },
+      null,
+      2
+    ),
+  ].join("\n");
+}
+
+async function callOpenAIReasoner({
+  locale = "az-AZ",
+  currentStep = "",
+  question = null,
+  preview = {},
+  latestMessage = "",
+  model = "",
+  timeoutMs = 7000,
+  maxOutputTokens = 650,
+} = {}) {
+  const client = getOpenAIClient();
+  if (!client) {
+    throw new Error("openai_setup_assistant_not_configured");
+  }
+
+  const responsePromise = client.responses.create({
+    model,
+    input: [
+      {
+        role: "system",
+        content: buildReasonerSystemPrompt(locale),
+      },
+      {
+        role: "user",
+        content: buildReasonerUserPrompt({
           locale,
           currentStep,
           question,
@@ -1875,16 +1937,16 @@ async function callOpenAISetupAssistant({
     text: {
       format: {
         type: "json_schema",
-        name: "setup_assistant_reasoning",
+        name: "setup_assistant_reasoner",
         strict: true,
-        schema: OPENAI_TURN_SCHEMA,
+        schema: REASONER_SCHEMA,
       },
     },
     max_output_tokens: maxOutputTokens,
   });
 
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("openai_setup_assistant_timeout")), timeoutMs);
+    setTimeout(() => reject(new Error("openai_setup_reasoner_timeout")), timeoutMs);
   });
 
   const response = await Promise.race([responsePromise, timeoutPromise]);
@@ -1895,28 +1957,103 @@ async function callOpenAISetupAssistant({
       : safeJsonParse(extractJsonText(response), {});
 
   if (!Object.keys(obj(payload)).length) {
-    throw new Error("openai_setup_assistant_empty_output");
+    throw new Error("openai_setup_reasoner_empty_output");
   }
 
   return obj(payload);
 }
 
-function buildAcceptedPatchFromOpenAI(payload = {}) {
+function buildAcceptedPatchFromReasonerPayload(payload = {}) {
   const source = obj(payload);
+  const out = buildEmptyAcceptedPatch();
 
-  return compactDraftObject({
-    identity: compactDraftObject({
-      businessName: s(source.companyName),
-      description: s(source.description),
-      websiteUrl: normalizeWebsiteUrl(s(source.websiteUrl)),
-    }),
-    services: uniqueStrings(source.services, 16),
-    contacts: uniqueStrings(source.contacts, 16),
-    hours: uniqueStrings(source.hours, 12),
-    pricingPosture: compactText(s(source.pricingPosture), 220),
-    humanHandoff: compactText(s(source.humanHandoff), 220),
-    aiBehavior: {},
+  out.identity = compactDraftObject({
+    businessName: s(source.companyName),
+    description: s(source.description),
+    websiteUrl: normalizeWebsiteUrl(s(source.websiteUrl)),
   });
+
+  out.services = uniqueStrings(source.services, 16);
+  out.contacts = uniqueStrings(source.contacts, 16);
+  out.hours = uniqueStrings(source.hours, 16);
+  out.pricingPosture = s(source.pricingPosture);
+  out.humanHandoff = s(source.humanHandoff);
+
+  if (s(source.pricingBehavior)) {
+    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
+      assistantBehaviorDraft: obj(
+        patchFromAnswer("pricing_behavior", s(source.pricingBehavior), {})
+          .assistantBehaviorDraft
+      ),
+    }).assistantBehaviorDraft;
+  }
+
+  if (s(source.locationBehavior)) {
+    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
+      assistantBehaviorDraft: obj(
+        patchFromAnswer("location_behavior", s(source.locationBehavior), {})
+          .assistantBehaviorDraft
+      ),
+    }).assistantBehaviorDraft;
+  }
+
+  if (s(source.bookingBehavior)) {
+    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
+      assistantBehaviorDraft: obj(
+        patchFromAnswer("booking_behavior", s(source.bookingBehavior), {})
+          .assistantBehaviorDraft
+      ),
+    }).assistantBehaviorDraft;
+  }
+
+  if (s(source.contactBehavior)) {
+    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
+      assistantBehaviorDraft: obj(
+        patchFromAnswer("contact_behavior", s(source.contactBehavior), {})
+          .assistantBehaviorDraft
+      ),
+    }).assistantBehaviorDraft;
+  }
+
+  if (s(source.handoffBehavior)) {
+    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
+      assistantBehaviorDraft: obj(
+        patchFromAnswer("handoff_behavior", s(source.handoffBehavior), {})
+          .assistantBehaviorDraft
+      ),
+    }).assistantBehaviorDraft;
+  }
+
+  return compactDraftObject(out);
+}
+
+async function maybeBuildPolishedDraftPreview({
+  mergedDraft = {},
+  review = null,
+  sources = [],
+  locale = "az-AZ",
+  runtime = {},
+} = {}) {
+  const deterministicPreview = buildCurrentPreview(mergedDraft, review);
+
+  if (!hasOpenAISetupAssistant() || runtime.forceFallback === true) {
+    return deterministicPreview;
+  }
+
+  try {
+    const polished = await callOpenAIPolisher({
+      locale,
+      preview: deterministicPreview,
+      sources,
+      model: runtime.model,
+      timeoutMs: runtime.timeoutMs,
+      maxOutputTokens: runtime.maxPolisherOutputTokens,
+    });
+
+    return Object.keys(obj(polished)).length ? polished : deterministicPreview;
+  } catch {
+    return deterministicPreview;
+  }
 }
 
 export async function runSetupAssistantOpenAIOrchestrator({
@@ -1941,7 +2078,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
     latestMessage,
   });
 
-  const preview = buildCurrentPreview(draft, review);
   const currentQuestion = buildQuestion(currentStep, locale);
   const safeMessage = s(latestMessage);
 
@@ -1964,10 +2100,10 @@ export async function runSetupAssistantOpenAIOrchestrator({
       review,
       allowPark: true,
     });
-    const copy = getSetupCopy(locale);
+
     const assistantMessage =
       plan.readyForApproval === true
-        ? s(obj(copy.phrases).readyForApproval)
+        ? buildAck(locale, "ready")
         : s(obj(plan.nextQuestion).prompt);
 
     return buildTurn({
@@ -1997,6 +2133,15 @@ export async function runSetupAssistantOpenAIOrchestrator({
       correctionResult.validation?.accepted === true &&
       hasAcceptedPatchSignal(correctionResult.patch)
     ) {
+      const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionResult.patch);
+      const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
+        mergedDraft,
+        review,
+        sources,
+        locale,
+        runtime,
+      });
+
       return buildCorrectionTurn({
         locale,
         currentStep,
@@ -2008,6 +2153,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
         correctionPatch: correctionResult.patch,
         model: runtime.model,
         provider: "local_reasoning",
+        polishedDraftOverride,
       });
     }
   }
@@ -2016,6 +2162,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
     correctionTarget && correctionTarget === currentStep
       ? stripCorrectionPrefix(safeMessage)
       : safeMessage;
+
   const directResult = buildPatchForStep(currentStep, directInput, draft);
   const directPatch = obj(directResult.patch);
   const directValidation = obj(directResult.validation);
@@ -2023,20 +2170,14 @@ export async function runSetupAssistantOpenAIOrchestrator({
   if (directValidation.accepted === true && hasAcceptedPatchSignal(directPatch)) {
     const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
     const mergedPatch = mergeAcceptedPatches(directPatch, secondary.patch);
-
-    if (secondary.steps.length > 0) {
-      return buildSupplementalTurn({
-        locale,
-        currentStep,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        acceptedPatch: mergedPatch,
-        model: runtime.model,
-        provider: "local_reasoning",
-      });
-    }
+    const mergedDraft = buildDraftWithAcceptedPatch(draft, mergedPatch);
+    const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
+      mergedDraft,
+      review,
+      sources,
+      locale,
+      runtime,
+    });
 
     return buildDirectAnswerTurn({
       locale,
@@ -2048,150 +2189,123 @@ export async function runSetupAssistantOpenAIOrchestrator({
       acceptedPatch: mergedPatch,
       model: runtime.model,
       provider: "local_reasoning",
+      polishedDraftOverride,
     });
   }
 
-  if (correctionTarget) {
-    const correctionText = stripCorrectionPrefix(safeMessage);
-    const correctionResult = buildPatchForStep(correctionTarget, correctionText, draft);
-
-    if (
-      correctionResult.validation?.accepted === true &&
-      hasAcceptedPatchSignal(correctionResult.patch)
-    ) {
-      return buildCorrectionTurn({
+  if (
+    runtime.forceFallback !== true &&
+    forceFallback !== true &&
+    hasOpenAISetupAssistant()
+  ) {
+    try {
+      const preview = buildCurrentPreview(draft, review);
+      const reasoned = await callOpenAIReasoner({
         locale,
         currentStep,
-        targetStep: correctionTarget,
+        question: currentQuestion,
+        preview,
+        latestMessage: safeMessage,
+        model: runtime.model,
+        timeoutMs: runtime.timeoutMs,
+        maxOutputTokens: runtime.maxOutputTokens,
+      });
+
+      const action = s(reasoned.action).toLowerCase();
+      const targetStep = normalizeQuestionKey(
+        s(reasoned.targetStep || currentStep)
+      );
+      const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
+
+      if (
+        (action === "direct_answer" || action === "correction") &&
+        hasAcceptedPatchSignal(reasonedPatch)
+      ) {
+        const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
+        const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
+          mergedDraft,
+          review,
+          sources,
+          locale,
+          runtime,
+        });
+
+        if (action === "correction" && targetStep) {
+          return buildCorrectionTurn({
+            locale,
+            currentStep,
+            targetStep,
+            draft,
+            review,
+            sources,
+            latestMessage: safeMessage,
+            correctionPatch: reasonedPatch,
+            model: runtime.model,
+            provider: "openai_reasoning",
+            polishedDraftOverride,
+          });
+        }
+
+        return buildDirectAnswerTurn({
+          locale,
+          currentStep,
+          draft,
+          review,
+          sources,
+          latestMessage: safeMessage,
+          acceptedPatch: reasonedPatch,
+          model: runtime.model,
+          provider: "openai_reasoning",
+          polishedDraftOverride,
+        });
+      }
+
+      return buildClarifyTurn({
+        locale,
+        currentStep,
         draft,
         review,
         sources,
         latestMessage: safeMessage,
-        correctionPatch: correctionResult.patch,
+        model: runtime.model,
+        provider: "openai_reasoning",
+        invalidReason: s(reasoned.reason || directValidation.reason),
+      });
+    } catch (error) {
+      return buildClarifyTurn({
+        locale,
+        currentStep,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
         model: runtime.model,
         provider: "local_reasoning",
+        invalidReason: s(error?.message || directValidation.reason),
       });
     }
   }
 
-  if (runtime.forceFallback === true || forceFallback === true) {
-    return buildClarifyTurn({
-      locale,
-      currentStep,
-      draft,
-      review,
-      sources,
-      latestMessage: safeMessage,
-      model: runtime.model,
-      provider: "local_reasoning",
-      invalidReason: s(directValidation.reason),
-    });
-  }
-
-  if (!hasOpenAISetupAssistant()) {
-    return buildClarifyTurn({
-      locale,
-      currentStep,
-      draft,
-      review,
-      sources,
-      latestMessage: safeMessage,
-      model: runtime.model,
-      provider: "local_reasoning",
-      invalidReason: s(directValidation.reason),
-    });
-  }
-
-  try {
-    const openaiPayload = await callOpenAISetupAssistant({
-      locale,
-      currentStep,
-      question: currentQuestion,
-      preview,
-      latestMessage: safeMessage,
-      model: runtime.model,
-      timeoutMs: runtime.timeoutMs,
-      maxOutputTokens: runtime.maxOutputTokens,
-    });
-
-    const action = s(openaiPayload.action).toLowerCase();
-    const targetStep = normalizeQuestionKey(
-      s(openaiPayload.targetStep || currentStep)
-    );
-    const modelPatch = buildAcceptedPatchFromOpenAI(openaiPayload);
-
-    if (
-      action === "direct_answer" &&
-      targetStep === currentStep &&
-      hasAcceptedPatchSignal(modelPatch)
-    ) {
-      return buildDirectAnswerTurn({
-        locale,
-        currentStep,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        acceptedPatch: modelPatch,
-        model: runtime.model,
-        provider: "openai_reasoning",
-      });
-    }
-
-    if (
-      action === "correction" &&
-      targetStep &&
-      hasAcceptedPatchSignal(modelPatch)
-    ) {
-      return buildCorrectionTurn({
-        locale,
-        currentStep,
-        targetStep,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        correctionPatch: modelPatch,
-        model: runtime.model,
-        provider: "openai_reasoning",
-      });
-    }
-
-    return buildClarifyTurn({
-      locale,
-      currentStep,
-      draft,
-      review,
-      sources,
-      latestMessage: safeMessage,
-      model: runtime.model,
-      provider: "openai_reasoning",
-      invalidReason: s(openaiPayload.reason || directValidation.reason),
-    });
-  } catch (error) {
-    return buildClarifyTurn({
-      locale,
-      currentStep,
-      draft,
-      review,
-      sources,
-      latestMessage: safeMessage,
-      model: runtime.model,
-      provider: "local_reasoning",
-      invalidReason: s(error?.message || directValidation.reason),
-    });
-  }
+  return buildClarifyTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage: safeMessage,
+    model: runtime.model,
+    provider: "local_reasoning",
+    invalidReason: s(directValidation.reason),
+  });
 }
 
 export const __test__ = {
   buildCurrentPreview,
+  buildSourceSignals,
   resolveReplyLocale,
   buildPatchForStep,
   buildDraftWithAcceptedPatch,
-  patchTouchesCurrentStep,
   hasAcceptedPatchSignal,
-  buildSourceSignals,
-  isIntentOnlyMessage,
   mergeAcceptedPatches,
   detectCorrectionTargetStep,
   stripCorrectionPrefix,
@@ -2200,6 +2314,7 @@ export const __test__ = {
   countAssistantAsksForStep,
   isSocialTurn,
   isConfusionTurn,
+  buildAcceptedPatchFromReasonerPayload,
   setCachedClient(client = null) {
     cachedClient = client;
   },

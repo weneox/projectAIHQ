@@ -80,6 +80,42 @@ test("mergeSetupAssistantDraft preserves business data and behavior data togethe
   assert.equal(merged.assistantBehaviorDraft.contactPolicy.preferredChannel, "whatsapp");
 });
 
+test("mergeSetupAssistantDraft keeps existing hidden synthesis while regular answers update raw setup fields", () => {
+  const current = buildCompleteBusinessDraft({
+    silentSynthesis: {
+      synthesisStatus: "synthesized",
+      rawEvidenceLog: [
+        {
+          kind: "user_answer",
+          step: "company",
+          text: "Acme Clinic",
+          createdAt: "2026-04-18T10:00:00.000Z",
+        },
+      ],
+      polishedDraft: {
+        businessName: "Acme Clinic",
+      },
+    },
+  });
+
+  const merged = mergeSetupAssistantDraft(
+    current,
+    normalizeSetupAssistantDraftPatchBody(
+      {
+        step: "pricing",
+        answer: "pricing depends on the service",
+      },
+      current
+    ),
+    {}
+  );
+
+  assert.ok(merged.pricingPosture.publicSummary);
+  assert.equal(merged.silentSynthesis.synthesisStatus, "synthesized");
+  assert.equal(merged.silentSynthesis.rawEvidenceLog.length, 1);
+  assert.equal(merged.silentSynthesis.polishedDraft.businessName, "Acme Clinic");
+});
+
 test("buildSetupAssistantPatchFromAcceptedPatch carries behavior policies forward", () => {
   const patch = buildSetupAssistantPatchFromAcceptedPatch(
     {
@@ -112,4 +148,3 @@ test("buildSetupAssistantPatchFromAcceptedPatch carries behavior policies forwar
   assert.equal(patch.assistantState.activeSection, "contact_behavior");
   assert.equal(patch.assistantState.activeBehaviorPolicy, "contact");
 });
-

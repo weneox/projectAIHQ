@@ -16,6 +16,14 @@ test("business validation rejects greetings and meta chat but accepts real busin
   );
 
   assert.equal(
+    validateStepAnswer("pricing", "xidmete gore deyisir", {}).accepted,
+    true
+  );
+  assert.equal(
+    validateStepAnswer("pricing", "pricing depends on the service", {}).accepted,
+    true
+  );
+  assert.equal(
     validateStepAnswer(
       "description",
       "Dental clinic for consultation, whitening, and implants.",

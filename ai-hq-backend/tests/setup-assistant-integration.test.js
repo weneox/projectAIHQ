@@ -1,87 +1,158 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { cfg } from "../src/config.js";
+import { __test__ as orchestratorTest } from "../src/services/workspace/setup/setupAssistantOpenAIOrchestrator.js";
+import { updateSetupAssistantDraft } from "../src/services/workspace/setup/setupAssistantApp/flows.js";
 import {
-  buildSetupAssistantSessionPayload,
-  buildStoredSetupAssistantBrainPayload,
-} from "../src/services/workspace/setup/setupAssistantApp/sessionPayload.js";
-import {
-  mergeSetupAssistantDraft,
-  normalizeSetupAssistantDraftPatchBody,
-} from "../src/services/workspace/setup/setupAssistantApp/patching.js";
-import { getNextQuestion } from "../src/services/workspace/setup/setupAssistantApp/questions.js";
-import { buildDraft, buildReview } from "./setup-assistant-test-helpers.js";
+  FIXED_ISO,
+  buildDraft,
+  buildReview,
+} from "./setup-assistant-test-helpers.js";
 
-test("business completion can still point getNextQuestion at behavior while the session payload already treats defaults as approval-ready", () => {
-  let draft = buildDraft();
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
-  const businessTurns = [
-    ["company", "Acme Clinic acme.az"],
-    ["description", "Dental clinic in Baku"],
-    ["services", "consultation"],
-    ["contacts", "https://wa.me/994551112233, https://acme.az/book"],
-    ["hours", "weekdays 09:00-18:00"],
-    ["pricing", "Starts from 20 AZN."],
-    [
-      "handoff",
-      "If the customer asks for an operator, there is a complaint, or it is urgent, route to a human.",
-    ],
-  ];
+function createIntegrationHarness(review = buildReview()) {
+  let currentReview = clone(review);
 
-  for (const [step, answer] of businessTurns) {
-    draft = mergeSetupAssistantDraft(
-      draft,
-      normalizeSetupAssistantDraftPatchBody({ step, answer }, draft),
-      draft
-    );
-  }
+  return {
+    getReview() {
+      return clone(currentReview);
+    },
+    async update(body) {
+      return updateSetupAssistantDraft(
+        {
+          db: null,
+          actor: {
+            tenantId: "tenant-1",
+            user: {
+              id: "4f08d501-1c8f-4f0b-a7bf-2c924f7dad55",
+            },
+          },
+          body,
+        },
+        {
+          getCurrentSetupReview: async () => clone(currentReview),
+          patchSetupReviewDraft: async ({ patch, bumpVersion }) => {
+            currentReview = {
+              ...currentReview,
+              draft: {
+                ...currentReview.draft,
+                version: bumpVersion
+                  ? Number(currentReview.draft.version || 0) + 1
+                  : currentReview.draft.version,
+                updatedAt: FIXED_ISO,
+                draftPayload: clone(patch.draftPayload),
+              },
+            };
+          },
+          updateSetupReviewSession: async (_reviewSessionId, patch) => {
+            currentReview = {
+              ...currentReview,
+              session: {
+                ...currentReview.session,
+                ...clone(patch),
+                updatedAt: FIXED_ISO,
+              },
+            };
+          },
+          auditSetupAction: async () => {},
+        }
+      );
+    },
+  };
+}
 
-  assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }).key, "pricing_behavior");
+test("realistic message turns make hidden synthesis richer while replies stay short", async (t) => {
+  const previous = {
+    openaiApiKey: cfg.ai.openaiApiKey,
+    openaiSetupAssistantEnabled: cfg.ai.openaiSetupAssistantEnabled,
+    openaiSetupForceFallback: cfg.ai.openaiSetupForceFallback,
+  };
 
-  const beforeBehavior = buildSetupAssistantSessionPayload(
+  cfg.ai.openaiApiKey = "";
+  cfg.ai.openaiSetupAssistantEnabled = false;
+  cfg.ai.openaiSetupForceFallback = true;
+  orchestratorTest.clearCachedClient();
+
+  t.after(() => {
+    Object.assign(cfg.ai, previous);
+    orchestratorTest.clearCachedClient();
+  });
+
+  const harness = createIntegrationHarness(
     buildReview({
-      currentStep: "pricing_behavior",
-      setupAssistant: draft,
-      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
-        readyForApproval: true,
-        phase: "ready",
+      currentStep: "company",
+      setupAssistant: buildDraft({
+        languages: ["en"],
       }),
     })
   );
 
-  assert.equal(beforeBehavior.setup.assistant.readyForApproval, true);
-  assert.equal(beforeBehavior.setup.review.finalizeAvailable, true);
-  assert.deepEqual(beforeBehavior.setup.assistant.approvalBlockers, []);
-
-  const behaviorTurns = [
-    ["pricing_behavior", "ask service first"],
-    ["booking_behavior", "route to WhatsApp"],
-    ["contact_behavior", "WhatsApp first"],
-    ["handoff_behavior", "direct handoff"],
+  const turns = [
+    ["company", "Acme Dental https://acme.az"],
+    ["description", "We help patients with cleaning and implants."],
+    ["services", "cleaning, implants"],
+    ["pricing", "pricing depends on the service"],
   ];
 
-  for (const [step, answer] of behaviorTurns) {
-    draft = mergeSetupAssistantDraft(
-      draft,
-      normalizeSetupAssistantDraftPatchBody({ step, answer }, draft),
-      draft
+  const evidenceCounts = [];
+  const replyWordCounts = [];
+
+  for (const [step, message] of turns) {
+    const result = await harness.update({
+      mode: "message",
+      step,
+      message,
+    });
+
+    assert.equal(result.status, 200);
+    replyWordCounts.push(
+      String(result.body.setup.assistant.message || "")
+        .split(/\s+/)
+        .filter(Boolean).length
     );
+    assert.doesNotMatch(result.body.setup.assistant.message, /http|debug|source/i);
+
+    const persisted =
+      harness.getReview().draft.draftPayload.setupAssistant.silentSynthesis;
+    evidenceCounts.push(persisted.rawEvidenceLog.length);
   }
 
-  const readyPayload = buildSetupAssistantSessionPayload(
-    buildReview({
-      currentStep: "handoff_behavior",
-      setupAssistant: draft,
-      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
-        readyForApproval: true,
-        phase: "ready",
-        assistantMessage: "Ready to approve.",
-      }),
-    })
+  assert.deepEqual(evidenceCounts, [1, 2, 3, 4]);
+  assert.ok(replyWordCounts.every((count) => count <= 20));
+
+  const finalPayload = harness.getReview().draft.draftPayload.setupAssistant;
+  const finalSilent = finalPayload.silentSynthesis;
+
+  assert.equal(finalSilent.synthesisStatus, "synthesized");
+  assert.equal(finalSilent.rawEvidenceLog.length, 4);
+  assert.equal(
+    finalSilent.structuredDraft.businessProfile.companyName,
+    "Acme Dental"
+  );
+  assert.equal(
+    finalSilent.structuredDraft.businessProfile.description,
+    "We help patients with cleaning and implants."
+  );
+  assert.deepEqual(
+    finalSilent.structuredDraft.services.map((item) => item.title),
+    ["cleaning", "implants"]
+  );
+  assert.match(
+    finalSilent.structuredDraft.pricingPosture.publicSummary,
+    /service|quote|details/i
   );
 
-  assert.equal(readyPayload.setup.assistant.readyForApproval, true);
-  assert.equal(readyPayload.setup.review.finalizeAvailable, true);
-  assert.deepEqual(readyPayload.setup.assistant.approvalBlockers, []);
-  assert.equal(readyPayload.setup.assistant.nextQuestion, null);
+  assert.equal(finalSilent.polishedDraft.businessName, "Acme Dental");
+  assert.equal(finalSilent.polishedDraft.websiteUrl, "https://acme.az");
+  assert.ok(!finalSilent.polishedDraft.businessName.includes("http"));
+  assert.deepEqual(finalSilent.polishedDraft.coreServices, [
+    "cleaning",
+    "implants",
+  ]);
+  assert.match(finalSilent.polishedDraft.pricingSummary, /service|quote|details/i);
+  assert.ok(finalSilent.polishedDraft.professionalizedAt);
 });

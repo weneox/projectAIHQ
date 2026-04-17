@@ -23,7 +23,7 @@ import {
   SETUP_ASSISTANT_SOURCE_TYPE,
   normalizeSourceType,
 } from "./shared.js";
-import { mergeSetupAssistantCore } from "./sanitize.js";
+import { mergeSetupAssistantCore, sanitizeSilentSynthesis } from "./sanitize.js";
 import { buildSummary } from "./summary.js";
 
 const BEHAVIOR_SECTION_KEYS = [
@@ -223,7 +223,9 @@ function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
     return compactText(
       [
         s(safePolicy.mode),
-        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+        safePolicy.preferredTargetUrl
+          ? `target: ${safePolicy.preferredTargetUrl}`
+          : "",
       ]
         .filter(Boolean)
         .join(" • "),
@@ -235,7 +237,9 @@ function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
     return compactText(
       [
         s(safePolicy.mode),
-        safePolicy.preferredTargetUrl ? `map: ${safePolicy.preferredTargetUrl}` : "",
+        safePolicy.preferredTargetUrl
+          ? `map: ${safePolicy.preferredTargetUrl}`
+          : "",
       ]
         .filter(Boolean)
         .join(" • "),
@@ -247,7 +251,9 @@ function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
     return compactText(
       [
         s(safePolicy.mode),
-        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+        safePolicy.preferredTargetUrl
+          ? `target: ${safePolicy.preferredTargetUrl}`
+          : "",
       ]
         .filter(Boolean)
         .join(" • "),
@@ -260,7 +266,9 @@ function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
       [
         s(safePolicy.mode),
         s(safePolicy.preferredChannel),
-        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+        safePolicy.preferredTargetUrl
+          ? `target: ${safePolicy.preferredTargetUrl}`
+          : "",
       ]
         .filter(Boolean)
         .join(" • "),
@@ -310,12 +318,110 @@ function buildBehaviorPreview(setup = {}) {
   };
 }
 
+function buildFallbackDraftPreview(setup = {}, { formatHours = null } = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const behaviorPreview = buildBehaviorPreview(setup);
+  const formatHoursSafe =
+    typeof formatHours === "function"
+      ? formatHours
+      : formatSetupAssistantHoursForCanonical;
+
+  return {
+    businessName: s(businessProfile.companyName),
+    businessDescription: s(businessProfile.description),
+    websiteUrl: s(businessProfile.websiteUrl),
+    coreServices: arr(setup.services)
+      .map((item) => s(item.title || item.name || item.label))
+      .filter(Boolean),
+    pricingSummary: s(pricing.publicSummary),
+    contactRoutes: arr(setup.contacts)
+      .map((item) => s(item.value || item.label || item.type))
+      .filter(Boolean),
+    handoffSummary: s(handoff.summary || arr(handoff.triggers).join(", ")),
+    workingHoursLines: formatHoursSafe(setup.hours),
+    languages: arr(setup.languages)
+      .map((item) => s(item))
+      .filter(Boolean),
+    tone: s(setup.tone),
+    greetingStyle: s(setup.greetingStyle),
+    afterHoursBehavior: s(setup.afterHoursBehavior),
+
+    pricingBehaviorSummary: s(behaviorPreview.pricingBehavior),
+    locationBehaviorSummary: s(behaviorPreview.locationBehavior),
+    bookingBehaviorSummary: s(behaviorPreview.bookingBehavior),
+    contactBehaviorSummary: s(behaviorPreview.contactBehavior),
+    handoffBehaviorSummary: s(behaviorPreview.handoffBehavior),
+  };
+}
+
+function buildInternalDraftPreview(setup = {}) {
+  const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
+  const polished = obj(silent.polishedDraft);
+
+  if (Object.keys(polished).length) {
+    return {
+      businessName: s(polished.businessName),
+      businessDescription: s(polished.businessDescription),
+      websiteUrl: s(polished.websiteUrl),
+      coreServices: uniqueStrings(polished.coreServices, 24),
+      pricingSummary: s(polished.pricingSummary),
+      contactRoutes: uniqueStrings(polished.contactRoutes, 24),
+      handoffSummary: s(polished.handoffSummary),
+      workingHoursLines: uniqueStrings(polished.workingHoursLines, 16),
+      languages: uniqueStrings(polished.languages, 8),
+      tone: s(polished.tone),
+      greetingStyle: s(polished.greetingStyle),
+      afterHoursBehavior: s(polished.afterHoursBehavior),
+      pricingBehaviorSummary: s(polished.pricingBehaviorSummary),
+      locationBehaviorSummary: s(polished.locationBehaviorSummary),
+      bookingBehaviorSummary: s(polished.bookingBehaviorSummary),
+      contactBehaviorSummary: s(polished.contactBehaviorSummary),
+      handoffBehaviorSummary: s(polished.handoffBehaviorSummary),
+      professionalizedAt: polished.professionalizedAt || null,
+    };
+  }
+
+  return buildFallbackDraftPreview(setup, {
+    formatHours: formatSetupAssistantHoursForCanonical,
+  });
+}
+
+function shouldHideDraftPreview(setup = {}, readyForApproval = false) {
+  const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
+  const mode = s(silent.visibilityMode || "hidden_until_review").toLowerCase();
+
+  if (readyForApproval === true) return false;
+  return mode === "hidden_until_review";
+}
+
+function buildUserFacingDraftPreview(setup = {}, readyForApproval = false) {
+  if (shouldHideDraftPreview(setup, readyForApproval)) {
+    return {};
+  }
+
+  return buildInternalDraftPreview(setup);
+}
+
 function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
   const sectionStatus = obj(summary.sectionStatus);
   const approvalBlockers = buildApprovalBlockers(setup);
   const blockerSteps = new Set(
     approvalBlockers.map((item) => s(item.step).toLowerCase()).filter(Boolean)
   );
+  const visibleDraft = buildInternalDraftPreview(setup);
+
+  const summaryMap = {
+    identity: [s(visibleDraft.businessName), s(visibleDraft.businessDescription)]
+      .filter(Boolean)
+      .join(" • "),
+    services: uniqueStrings(visibleDraft.coreServices, 4).join(", "),
+    contacts: uniqueStrings(visibleDraft.contactRoutes, 3).join(", "),
+    hours: uniqueStrings(visibleDraft.workingHoursLines, 2).join(" • "),
+    pricing: s(visibleDraft.pricingSummary),
+    handoff: s(visibleDraft.handoffSummary),
+  };
 
   const baseSections = Object.keys(sectionStatus).map((key) => {
     const state = obj(sectionStatus[key]);
@@ -325,7 +431,7 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
       label: key,
       title: key,
       status: s(state.status || "missing"),
-      summary: "",
+      summary: s(summaryMap[key]),
       metric: obj(state.metric),
       sourceCovered: state.sourceCovered === true,
       reviewReady: state.reviewReady === true,
@@ -336,7 +442,6 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
   });
 
   const behaviorDraft = obj(setup.assistantBehaviorDraft);
-  const behaviorPreview = buildBehaviorPreview(setup);
 
   const behaviorSections = BEHAVIOR_SECTION_KEYS.map((key) => {
     const relevant = isBehaviorStepRelevant(key, setup);
@@ -355,21 +460,21 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
 
     const previewKey =
       key === "pricing_behavior"
-        ? "pricingBehavior"
+        ? "pricingBehaviorSummary"
         : key === "location_behavior"
-          ? "locationBehavior"
+          ? "locationBehaviorSummary"
           : key === "booking_behavior"
-            ? "bookingBehavior"
+            ? "bookingBehaviorSummary"
             : key === "contact_behavior"
-              ? "contactBehavior"
-              : "handoffBehavior";
+              ? "contactBehaviorSummary"
+              : "handoffBehaviorSummary";
 
     return {
       key,
       label: key,
       title: key,
       status: relevant ? (blocked ? "missing" : "ready") : "not_applicable",
-      summary: s(behaviorPreview[previewKey]),
+      summary: s(visibleDraft[previewKey]),
       metric: {
         relevant,
         configured: relevant ? !blocked : true,
@@ -387,58 +492,37 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
   return [...baseSections, ...behaviorSections];
 }
 
-function buildAssistantDraftPreview(setup = {}, { formatHours = null } = {}) {
-  const businessProfile = obj(setup.businessProfile);
-  const pricing = obj(setup.pricingPosture);
-  const handoff = obj(setup.handoffRules);
-  const behaviorPreview = buildBehaviorPreview(setup);
-  const formatHoursSafe =
-    typeof formatHours === "function"
-      ? formatHours
-      : formatSetupAssistantHoursForCanonical;
-
-  return {
-    businessName: s(businessProfile.companyName),
-    whatThisBusinessIs: s(businessProfile.description),
-    websiteUrl: s(businessProfile.websiteUrl),
-    coreServices: arr(setup.services)
-      .map((item) => s(item.title || item.name || item.label))
-      .filter(Boolean),
-    pricingPosture: s(pricing.publicSummary),
-    contactRoutes: arr(setup.contacts)
-      .map((item) => s(item.value || item.label || item.type))
-      .filter(Boolean),
-    humanHandoff: s(handoff.summary || arr(handoff.triggers).join(", ")),
-    hours: formatHoursSafe(setup.hours),
-    languages: arr(setup.languages)
-      .map((item) => s(item))
-      .filter(Boolean),
-    tone: s(setup.tone),
-    greetingStyle: s(setup.greetingStyle),
-    afterHoursBehavior: s(setup.afterHoursBehavior),
-
-    pricingBehavior: s(behaviorPreview.pricingBehavior),
-    locationBehavior: s(behaviorPreview.locationBehavior),
-    bookingBehavior: s(behaviorPreview.bookingBehavior),
-    contactBehavior: s(behaviorPreview.contactBehavior),
-    handoffBehavior: s(behaviorPreview.handoffBehavior),
-  };
-}
-
 function buildMinimalSourceSignals(setup = {}) {
   const businessProfile = obj(setup.businessProfile);
   const sourceMetadata = obj(setup.sourceMetadata);
   const pricing = obj(setup.pricingPosture);
+  const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
+  const polished = obj(silent.polishedDraft);
 
-  const services = arr(setup.services)
-    .map((item) => s(item.title || item.name || item.label))
-    .filter(Boolean);
+  const services = uniqueStrings(
+    [
+      ...arr(polished.coreServices),
+      ...arr(setup.services).map((item) => s(item.title || item.name || item.label)),
+    ],
+    12
+  );
 
-  const contacts = arr(setup.contacts)
-    .map((item) => s(item.value || item.label || item.type))
-    .filter(Boolean);
+  const contacts = uniqueStrings(
+    [
+      ...arr(polished.contactRoutes),
+      ...arr(setup.contacts).map((item) => s(item.value || item.label || item.type)),
+    ],
+    12
+  );
 
-  const hours = formatSetupAssistantHoursForCanonical(setup.hours);
+  const hours = uniqueStrings(
+    [
+      ...arr(polished.workingHoursLines),
+      ...formatSetupAssistantHoursForCanonical(setup.hours),
+    ],
+    12
+  );
+
   const behavior = obj(setup.assistantBehaviorDraft);
 
   return {
@@ -462,14 +546,26 @@ function buildMinimalSourceSignals(setup = {}) {
       arr(sourceMetadata.evidenceSummary),
       12
     ),
-    companyNameCandidates: uniqueStrings([businessProfile.companyName], 8),
-    descriptionCandidates: uniqueStrings([businessProfile.description], 8),
-    serviceCandidates: uniqueStrings(services, 12),
-    contactCandidates: uniqueStrings(contacts, 12),
-    hoursCandidates: uniqueStrings(hours, 12),
-    pricingCandidates: uniqueStrings([pricing.publicSummary], 12),
+    companyNameCandidates: uniqueStrings(
+      [polished.businessName, businessProfile.companyName],
+      8
+    ),
+    descriptionCandidates: uniqueStrings(
+      [polished.businessDescription, businessProfile.description],
+      8
+    ),
+    serviceCandidates: services,
+    contactCandidates: contacts,
+    hoursCandidates: hours,
+    pricingCandidates: uniqueStrings(
+      [polished.pricingSummary, pricing.publicSummary],
+      12
+    ),
     audienceCandidates: [],
-    languagesCandidates: uniqueStrings(arr(setup.languages), 8),
+    languagesCandidates: uniqueStrings(
+      [...arr(polished.languages), ...arr(setup.languages)],
+      8
+    ),
     pricingTargetCandidates: arr(
       s(obj(behavior.pricingPolicy).preferredTargetUrl)
         ? [{ url: s(obj(behavior.pricingPolicy).preferredTargetUrl) }]
@@ -495,9 +591,7 @@ function buildMinimalSourceSignals(setup = {}) {
 }
 
 function buildMinimalConfidenceFromSetup(setup = {}) {
-  const draftPreview = buildAssistantDraftPreview(setup, {
-    formatHours: formatSetupAssistantHoursForCanonical,
-  });
+  const draftPreview = buildInternalDraftPreview(setup);
 
   const strong = [];
   const unclear = [];
@@ -505,7 +599,7 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   if (s(draftPreview.businessName)) strong.push("business_name_present");
   else unclear.push("business_name_missing");
 
-  if (s(draftPreview.whatThisBusinessIs)) {
+  if (s(draftPreview.businessDescription)) {
     strong.push("business_description_present");
   } else {
     unclear.push("business_description_missing");
@@ -520,38 +614,53 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
     unclear.push("contact_route_missing");
   }
 
-  if (arr(draftPreview.hours).length) strong.push("hours_present");
+  if (arr(draftPreview.workingHoursLines).length) strong.push("hours_present");
   else unclear.push("hours_missing");
 
-  if (s(draftPreview.pricingPosture)) strong.push("pricing_posture_present");
+  if (s(draftPreview.pricingSummary)) strong.push("pricing_posture_present");
   else unclear.push("pricing_posture_missing");
 
-  if (s(draftPreview.humanHandoff)) strong.push("handoff_present");
+  if (s(draftPreview.handoffSummary)) strong.push("handoff_present");
   else unclear.push("handoff_missing");
 
   if (isBehaviorStepRelevant("pricing_behavior", setup)) {
-    if (s(draftPreview.pricingBehavior)) strong.push("pricing_behavior_present");
-    else unclear.push("pricing_behavior_missing");
+    if (s(draftPreview.pricingBehaviorSummary)) {
+      strong.push("pricing_behavior_present");
+    } else {
+      unclear.push("pricing_behavior_missing");
+    }
   }
 
   if (isBehaviorStepRelevant("location_behavior", setup)) {
-    if (s(draftPreview.locationBehavior)) strong.push("location_behavior_present");
-    else unclear.push("location_behavior_missing");
+    if (s(draftPreview.locationBehaviorSummary)) {
+      strong.push("location_behavior_present");
+    } else {
+      unclear.push("location_behavior_missing");
+    }
   }
 
   if (isBehaviorStepRelevant("booking_behavior", setup)) {
-    if (s(draftPreview.bookingBehavior)) strong.push("booking_behavior_present");
-    else unclear.push("booking_behavior_missing");
+    if (s(draftPreview.bookingBehaviorSummary)) {
+      strong.push("booking_behavior_present");
+    } else {
+      unclear.push("booking_behavior_missing");
+    }
   }
 
   if (isBehaviorStepRelevant("contact_behavior", setup)) {
-    if (s(draftPreview.contactBehavior)) strong.push("contact_behavior_present");
-    else unclear.push("contact_behavior_missing");
+    if (s(draftPreview.contactBehaviorSummary)) {
+      strong.push("contact_behavior_present");
+    } else {
+      unclear.push("contact_behavior_missing");
+    }
   }
 
   if (isBehaviorStepRelevant("handoff_behavior", setup)) {
-    if (s(draftPreview.handoffBehavior)) strong.push("handoff_behavior_present");
-    else unclear.push("handoff_behavior_missing");
+    if (s(draftPreview.handoffBehaviorSummary)) {
+      strong.push("handoff_behavior_present");
+    } else {
+      unclear.push("handoff_behavior_missing");
+    }
   }
 
   return {
@@ -675,12 +784,11 @@ function buildAssistantFromStoredBrain({
       ? sanitizeBrainSourceSignals(brain.sourceSignals)
       : buildMinimalSourceSignals(setup);
 
-  const draftPreview =
-    Object.keys(obj(brain.draft)).length > 0
-      ? obj(brain.draft)
-      : buildAssistantDraftPreview(setup, {
-          formatHours: formatSetupAssistantHoursForCanonical,
-        });
+  const internalDraftPreview = buildInternalDraftPreview(setup);
+  const userFacingDraftPreview = buildUserFacingDraftPreview(
+    setup,
+    readyForApproval
+  );
 
   const confidence =
     arr(obj(brain.confidence).strong).length ||
@@ -767,7 +875,13 @@ function buildAssistantFromStoredBrain({
     message: resolvedAssistantMessage,
     assistantMessage: resolvedAssistantMessage,
     timeline: arr(timeline).map(normalizeTimelineTurn),
-    draft: obj(draftPreview),
+    draft: obj(userFacingDraftPreview),
+    reviewDraft: obj(internalDraftPreview),
+    draftPreviewHidden: shouldHideDraftPreview(setup, readyForApproval),
+    draftVisibilityMode: s(
+      sanitizeSilentSynthesis(obj(setup.silentSynthesis)).visibilityMode ||
+        "hidden_until_review"
+    ),
     confidence,
     recommendation,
     sourceSignals,
@@ -838,6 +952,9 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const nextQuestion = obj(assistant.nextQuestion);
   const readyForApproval = assistant.readyForApproval === true;
   const approvalBlockers = arr(assistant.approvalBlockers);
+  const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
+  const userFacingDraft = buildUserFacingDraftPreview(setup, readyForApproval);
+  const internalDraft = buildInternalDraftPreview(setup);
 
   return {
     session: {
@@ -866,6 +983,15 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       namespace: SETUP_ASSISTANT_NAMESPACE,
       summary,
       websitePrefill: obj(setup.websitePrefill),
+      draftVisibilityMode: s(silent.visibilityMode || "hidden_until_review"),
+      draftPreviewHidden: shouldHideDraftPreview(setup, readyForApproval),
+      hiddenSynthesis: {
+        synthesisStatus: s(silent.synthesisStatus),
+        lastSynthesizedAt: silent.lastSynthesizedAt || null,
+        hasPolishedDraft: Object.keys(obj(silent.polishedDraft)).length > 0,
+        unresolvedNotes: arr(silent.unresolvedNotes),
+        recommendationNotes: arr(silent.recommendationNotes),
+      },
       review: {
         status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
         draftOnly: true,
@@ -880,7 +1006,9 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       },
       assistant,
       timeline,
-      draft: {
+      draft: obj(userFacingDraft),
+      reviewDraft: obj(internalDraft),
+      rawDraft: {
         businessProfile: obj(setup.businessProfile),
         services: arr(setup.services),
         contacts: arr(setup.contacts),
@@ -956,7 +1084,6 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     aiBehavior: compactDraftObject(safeTurn.aiBehavior),
     readyForApproval: guardedReadyForApproval,
     finalizeAvailable: guardedReadyForApproval,
-    draft: obj(safeTurn.draft),
     rejectedInputs: arr(safeTurn.rejectedInputs),
     provider: s(safeTurn.provider),
     model: s(safeTurn.model),
@@ -1040,7 +1167,6 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
         interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
         aiBehavior: obj(safeTurn.aiBehavior),
         readyForApproval: guardedReadyForApproval,
-        draft: obj(safeTurn.draft),
         rejectedInputs: arr(safeTurn.rejectedInputs),
         provider: s(safeTurn.provider),
         model: s(safeTurn.model),

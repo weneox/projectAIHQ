@@ -1,11 +1,6 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { sanitizeStructuredHours } from "../setupAssistantParser.js";
 import {
-  BOOKING_BEHAVIOR_MODES,
-  CONTACT_BEHAVIOR_MODES,
-  HANDOFF_BEHAVIOR_MODES,
-  LOCATION_BEHAVIOR_MODES,
-  PRICING_BEHAVIOR_MODES,
   SOURCE_PRIORITY,
   buildDefaultAssistantBehaviorDraft,
   hasOwn,
@@ -404,19 +399,44 @@ export function sanitizeAssistantBehaviorDraft(value = {}) {
 
   return {
     pricingPolicy: sanitizePricingPolicy(
-      obj(source.pricingPolicy || source.pricing_policy || nested.pricingPolicy || defaults.pricingPolicy)
+      obj(
+        source.pricingPolicy ||
+          source.pricing_policy ||
+          nested.pricingPolicy ||
+          defaults.pricingPolicy
+      )
     ),
     locationPolicy: sanitizeLocationPolicy(
-      obj(source.locationPolicy || source.location_policy || nested.locationPolicy || defaults.locationPolicy)
+      obj(
+        source.locationPolicy ||
+          source.location_policy ||
+          nested.locationPolicy ||
+          defaults.locationPolicy
+      )
     ),
     bookingPolicy: sanitizeBookingPolicy(
-      obj(source.bookingPolicy || source.booking_policy || nested.bookingPolicy || defaults.bookingPolicy)
+      obj(
+        source.bookingPolicy ||
+          source.booking_policy ||
+          nested.bookingPolicy ||
+          defaults.bookingPolicy
+      )
     ),
     contactPolicy: sanitizeContactPolicy(
-      obj(source.contactPolicy || source.contact_policy || nested.contactPolicy || defaults.contactPolicy)
+      obj(
+        source.contactPolicy ||
+          source.contact_policy ||
+          nested.contactPolicy ||
+          defaults.contactPolicy
+      )
     ),
     handoffPolicy: sanitizeHandoffPolicy(
-      obj(source.handoffPolicy || source.handoff_policy || nested.handoffPolicy || defaults.handoffPolicy)
+      obj(
+        source.handoffPolicy ||
+          source.handoff_policy ||
+          nested.handoffPolicy ||
+          defaults.handoffPolicy
+      )
     ),
   };
 }
@@ -467,6 +487,198 @@ export function sanitizeAssistantState(value = {}) {
   });
 }
 
+function sanitizeRawEvidenceItem(value = {}) {
+  const source = obj(value);
+  const text = s(source.text || source.rawText || source.message || source.value);
+  const step = s(source.step || source.field || source.questionKey).toLowerCase();
+  const kind = s(source.kind || source.type || "user_answer").toLowerCase();
+
+  if (!text && !step) return null;
+
+  return compactDraftObject({
+    id: s(source.id),
+    kind,
+    step,
+    text,
+    normalizedText: s(source.normalizedText || source.normalized_text),
+    fieldKey: s(source.fieldKey || source.field_key).toLowerCase(),
+    confidence: s(source.confidence).toLowerCase(),
+    sourceUrl: sanitizeBehaviorTargetUrl(source.sourceUrl || source.source_url),
+    hidden: source.hidden !== false,
+    createdAt: source.createdAt || source.created_at || null,
+  });
+}
+
+function sanitizeRawEvidenceLog(value = []) {
+  const out = [];
+  const seen = new Set();
+
+  for (const item of arr(value)) {
+    const normalized = sanitizeRawEvidenceItem(item);
+    if (!normalized) continue;
+
+    const key = [
+      s(normalized.kind),
+      s(normalized.step),
+      s(normalized.fieldKey),
+      s(normalized.text),
+      s(normalized.createdAt),
+    ]
+      .filter(Boolean)
+      .join("|")
+      .toLowerCase();
+
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+
+  return out.slice(-120);
+}
+
+function sanitizeStructuredSynthesisDraft(value = {}) {
+  const source = obj(value);
+  const aiBehavior = obj(source.aiBehavior);
+
+  return {
+    businessProfile: sanitizeBusinessProfile(
+      obj(source.businessProfile || source.business_profile)
+    ),
+    services: sanitizeServices(source.services),
+    contacts: sanitizeContacts(source.contacts),
+    hours: sanitizeStructuredHours(source.hours),
+    pricingPosture: sanitizePricingPosture(
+      obj(source.pricingPosture || source.pricing_posture || source.pricing)
+    ),
+    handoffRules: sanitizeHandoffRules(
+      obj(source.handoffRules || source.handoff_rules || source.handoff)
+    ),
+    assistantBehaviorDraft: sanitizeAssistantBehaviorDraft(
+      obj(
+        source.assistantBehaviorDraft ||
+          source.assistant_behavior_draft ||
+          source.assistantBehavior ||
+          source.assistant_behavior
+      )
+    ),
+    languages: uniqueStrings(source.languages || aiBehavior.languages, 8),
+    tone: s(source.tone || aiBehavior.tone),
+    greetingStyle: s(source.greetingStyle || aiBehavior.greetingStyle),
+    afterHoursBehavior: s(
+      source.afterHoursBehavior || aiBehavior.afterHoursBehavior
+    ),
+  };
+}
+
+function sanitizePolishedDraft(value = {}) {
+  const source = obj(value);
+
+  return compactDraftObject({
+    businessName: s(source.businessName || source.companyName),
+    businessDescription: s(
+      source.businessDescription ||
+        source.description ||
+        source.whatThisBusinessIs
+    ),
+    websiteUrl: sanitizeBehaviorTargetUrl(source.websiteUrl || source.website_url),
+    coreServices: uniqueStrings(source.coreServices || source.services, 24),
+    contactRoutes: uniqueStrings(source.contactRoutes || source.contacts, 24),
+    workingHoursLines: uniqueStrings(
+      source.workingHoursLines || source.hours || source.hoursLines,
+      16
+    ),
+    pricingSummary: s(
+      source.pricingSummary || source.pricingPosture || source.pricing
+    ),
+    handoffSummary: s(
+      source.handoffSummary || source.humanHandoff || source.handoff
+    ),
+    pricingBehaviorSummary: s(
+      source.pricingBehaviorSummary || source.pricingBehavior
+    ),
+    locationBehaviorSummary: s(
+      source.locationBehaviorSummary || source.locationBehavior
+    ),
+    bookingBehaviorSummary: s(
+      source.bookingBehaviorSummary || source.bookingBehavior
+    ),
+    contactBehaviorSummary: s(
+      source.contactBehaviorSummary || source.contactBehavior
+    ),
+    handoffBehaviorSummary: s(
+      source.handoffBehaviorSummary || source.handoffBehavior
+    ),
+    languages: uniqueStrings(source.languages, 8),
+    tone: s(source.tone),
+    greetingStyle: s(source.greetingStyle),
+    afterHoursBehavior: s(source.afterHoursBehavior),
+    professionalizedAt: source.professionalizedAt || source.professionalized_at || null,
+  });
+}
+
+export function sanitizeSilentSynthesis(value = {}) {
+  const source = obj(value);
+  const nested = obj(
+    source.silentSynthesis ||
+      source.silent_synthesis ||
+      source.hiddenSynthesis ||
+      source.hidden_synthesis
+  );
+
+  return compactDraftObject({
+    visibilityMode: s(
+      source.visibilityMode ||
+        nested.visibilityMode ||
+        source.displayMode ||
+        nested.displayMode ||
+        "hidden_until_review"
+    ).toLowerCase(),
+    synthesisStatus: s(
+      source.synthesisStatus ||
+        nested.synthesisStatus ||
+        source.status ||
+        nested.status ||
+        "idle"
+    ).toLowerCase(),
+    lastSynthesizedAt:
+      source.lastSynthesizedAt ||
+      nested.lastSynthesizedAt ||
+      source.updatedAt ||
+      nested.updatedAt ||
+      null,
+    rawEvidenceLog: sanitizeRawEvidenceLog(
+      source.rawEvidenceLog ||
+        nested.rawEvidenceLog ||
+        source.rawInputs ||
+        nested.rawInputs
+    ),
+    structuredDraft: sanitizeStructuredSynthesisDraft(
+      obj(
+        source.structuredDraft ||
+          nested.structuredDraft ||
+          source.workingDraft ||
+          nested.workingDraft
+      )
+    ),
+    polishedDraft: sanitizePolishedDraft(
+      obj(
+        source.polishedDraft ||
+          nested.polishedDraft ||
+          source.reviewDraft ||
+          nested.reviewDraft
+      )
+    ),
+    unresolvedNotes: uniqueStrings(
+      source.unresolvedNotes || nested.unresolvedNotes,
+      24
+    ),
+    recommendationNotes: uniqueStrings(
+      source.recommendationNotes || nested.recommendationNotes,
+      24
+    ),
+  });
+}
+
 export function sanitizeSetupAssistantCore(value = {}) {
   const source = obj(value);
   const aiBehavior = obj(source.aiBehavior);
@@ -504,6 +716,14 @@ export function sanitizeSetupAssistantCore(value = {}) {
     greetingStyle: s(source.greetingStyle || aiBehavior.greetingStyle),
     afterHoursBehavior: s(
       source.afterHoursBehavior || aiBehavior.afterHoursBehavior
+    ),
+    silentSynthesis: sanitizeSilentSynthesis(
+      obj(
+        source.silentSynthesis ||
+          source.silent_synthesis ||
+          source.hiddenSynthesis ||
+          source.hidden_synthesis
+      )
     ),
   };
 }
@@ -634,6 +854,114 @@ export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
   };
 }
 
+function mergeRawEvidenceLog(left = [], right = []) {
+  return sanitizeRawEvidenceLog([...arr(left), ...arr(right)]);
+}
+
+function mergeStructuredSynthesisDraft(left = {}, right = {}) {
+  const a = sanitizeStructuredSynthesisDraft(left);
+  const b = sanitizeStructuredSynthesisDraft(right);
+  const rightSource = obj(right);
+  const rightHasHours = hasOwn(rightSource, "hours");
+
+  return {
+    businessProfile: mergeBusinessProfile(a.businessProfile, b.businessProfile),
+    services: b.services.length ? sanitizeServices(b.services) : a.services,
+    contacts: b.contacts.length ? sanitizeContacts(b.contacts) : a.contacts,
+    hours: rightHasHours ? sanitizeStructuredHours(b.hours) : a.hours,
+    pricingPosture: mergePricingPosture(a.pricingPosture, b.pricingPosture),
+    handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
+    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
+      a.assistantBehaviorDraft,
+      b.assistantBehaviorDraft
+    ),
+    languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
+    tone: s(b.tone || a.tone),
+    greetingStyle: s(b.greetingStyle || a.greetingStyle),
+    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
+  };
+}
+
+function mergePolishedDraft(left = {}, right = {}) {
+  const a = sanitizePolishedDraft(left);
+  const b = sanitizePolishedDraft(right);
+
+  return compactDraftObject({
+    businessName: s(b.businessName || a.businessName),
+    businessDescription: s(b.businessDescription || a.businessDescription),
+    websiteUrl: s(b.websiteUrl || a.websiteUrl),
+    coreServices: arr(b.coreServices).length
+      ? uniqueStrings(b.coreServices, 24)
+      : a.coreServices,
+    contactRoutes: arr(b.contactRoutes).length
+      ? uniqueStrings(b.contactRoutes, 24)
+      : a.contactRoutes,
+    workingHoursLines: arr(b.workingHoursLines).length
+      ? uniqueStrings(b.workingHoursLines, 16)
+      : a.workingHoursLines,
+    pricingSummary: s(b.pricingSummary || a.pricingSummary),
+    handoffSummary: s(b.handoffSummary || a.handoffSummary),
+    pricingBehaviorSummary: s(
+      b.pricingBehaviorSummary || a.pricingBehaviorSummary
+    ),
+    locationBehaviorSummary: s(
+      b.locationBehaviorSummary || a.locationBehaviorSummary
+    ),
+    bookingBehaviorSummary: s(
+      b.bookingBehaviorSummary || a.bookingBehaviorSummary
+    ),
+    contactBehaviorSummary: s(
+      b.contactBehaviorSummary || a.contactBehaviorSummary
+    ),
+    handoffBehaviorSummary: s(
+      b.handoffBehaviorSummary || a.handoffBehaviorSummary
+    ),
+    languages: arr(b.languages).length ? uniqueStrings(b.languages, 8) : a.languages,
+    tone: s(b.tone || a.tone),
+    greetingStyle: s(b.greetingStyle || a.greetingStyle),
+    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
+    professionalizedAt: b.professionalizedAt || a.professionalizedAt || null,
+  });
+}
+
+export function mergeSilentSynthesis(left = {}, right = {}) {
+  const a = sanitizeSilentSynthesis(left);
+  const b = sanitizeSilentSynthesis(right);
+  const rightSource = obj(right);
+  const rightHasVisibilityMode =
+    hasOwn(rightSource, "visibilityMode") || hasOwn(rightSource, "displayMode");
+  const rightHasSynthesisStatus =
+    hasOwn(rightSource, "synthesisStatus") || hasOwn(rightSource, "status");
+
+  return compactDraftObject({
+    visibilityMode: s(
+      (rightHasVisibilityMode ? b.visibilityMode : "") ||
+        a.visibilityMode ||
+        "hidden_until_review"
+    ),
+    synthesisStatus: s(
+      (rightHasSynthesisStatus ? b.synthesisStatus : "") ||
+        a.synthesisStatus ||
+        "idle"
+    ),
+    lastSynthesizedAt: b.lastSynthesizedAt || a.lastSynthesizedAt || null,
+    rawEvidenceLog: mergeRawEvidenceLog(a.rawEvidenceLog, b.rawEvidenceLog),
+    structuredDraft: mergeStructuredSynthesisDraft(
+      a.structuredDraft,
+      b.structuredDraft
+    ),
+    polishedDraft: mergePolishedDraft(a.polishedDraft, b.polishedDraft),
+    unresolvedNotes: uniqueStrings(
+      [...arr(a.unresolvedNotes), ...arr(b.unresolvedNotes)],
+      24
+    ),
+    recommendationNotes: uniqueStrings(
+      [...arr(a.recommendationNotes), ...arr(b.recommendationNotes)],
+      24
+    ),
+  });
+}
+
 export function mergeSetupAssistantCore(left = {}, right = {}) {
   const a = sanitizeSetupAssistantCore(left);
   const b = sanitizeSetupAssistantCore(right);
@@ -663,6 +991,15 @@ export function mergeSetupAssistantCore(left = {}, right = {}) {
     tone: s(b.tone || a.tone),
     greetingStyle: s(b.greetingStyle || a.greetingStyle),
     afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
+    silentSynthesis: mergeSilentSynthesis(
+      a.silentSynthesis,
+      obj(
+        rightSource.silentSynthesis ||
+          rightSource.silent_synthesis ||
+          rightSource.hiddenSynthesis ||
+          rightSource.hidden_synthesis
+      )
+    ),
   };
 }
 

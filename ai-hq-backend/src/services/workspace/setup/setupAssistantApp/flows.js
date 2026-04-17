@@ -37,6 +37,13 @@ import {
   stripLegacySetupAssistantPayloadKeys,
 } from "./sessionPayload.js";
 
+function uniqueStrings(items = [], max = 24) {
+  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
+    0,
+    max
+  );
+}
+
 function resolveStartedBy(actor = {}) {
   return (
     safeUuidOrNull(actor?.user?.id) ||
@@ -128,6 +135,269 @@ function resolveAssistantTurnPayload(turn = {}) {
     ...safeTurn,
     assistantMessage: fallbackText,
     message: s(safeTurn.message || fallbackText),
+  };
+}
+
+function buildHoursLines(hours = []) {
+  return arr(hours)
+    .map((item) => {
+      const row = obj(item);
+      const day = s(row.day);
+
+      if (row.allDay === true) return [day, "24/7"].filter(Boolean).join(" ");
+      if (row.appointmentOnly === true) {
+        return [day, "appointment only"].filter(Boolean).join(" ");
+      }
+      if (row.closed === true) {
+        return [day, "closed"].filter(Boolean).join(" ");
+      }
+      if (s(row.openTime) && s(row.closeTime)) {
+        return [day, `${s(row.openTime)}-${s(row.closeTime)}`]
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      return s(row.notes);
+    })
+    .filter(Boolean)
+    .slice(0, 16);
+}
+
+function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
+  const safePolicy = obj(policy);
+
+  if (policyKey === "pricing") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "location") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "booking") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "contact") {
+    return [
+      s(safePolicy.mode),
+      s(safePolicy.preferredChannel),
+      s(safePolicy.preferredTargetUrl),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  if (policyKey === "handoff") {
+    return [
+      s(safePolicy.mode),
+      safePolicy.requiresReason === true ? "requires reason" : "",
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return "";
+}
+
+function buildStructuredDraftFromSetupAssistant(setup = {}) {
+  const safeSetup = obj(setup);
+
+  return {
+    businessProfile: obj(safeSetup.businessProfile),
+    services: arr(safeSetup.services),
+    contacts: arr(safeSetup.contacts),
+    hours: arr(safeSetup.hours),
+    pricingPosture: obj(safeSetup.pricingPosture),
+    handoffRules: obj(safeSetup.handoffRules),
+    assistantBehaviorDraft: obj(safeSetup.assistantBehaviorDraft),
+    languages: arr(safeSetup.languages),
+    tone: s(safeSetup.tone),
+    greetingStyle: s(safeSetup.greetingStyle),
+    afterHoursBehavior: s(safeSetup.afterHoursBehavior),
+  };
+}
+
+function buildPolishedDraftFromSetupAssistant(setup = {}, responseTurn = {}) {
+  const safeSetup = obj(setup);
+  const turn = obj(responseTurn);
+  const draftFromBrain = obj(turn.draft);
+  const businessProfile = obj(safeSetup.businessProfile);
+  const pricing = obj(safeSetup.pricingPosture);
+  const handoff = obj(safeSetup.handoffRules);
+  const behavior = obj(safeSetup.assistantBehaviorDraft);
+
+  const services = uniqueStrings(
+    [
+      ...arr(draftFromBrain.coreServices),
+      ...arr(safeSetup.services).map((item) =>
+        s(item?.title || item?.name || item?.label)
+      ),
+    ],
+    24
+  );
+
+  const contactRoutes = uniqueStrings(
+    [
+      ...arr(draftFromBrain.contactRoutes),
+      ...arr(safeSetup.contacts).map((item) =>
+        s(item?.value || item?.label || item?.type)
+      ),
+    ],
+    24
+  );
+
+  const workingHoursLines = uniqueStrings(
+    [...arr(draftFromBrain.hours), ...buildHoursLines(safeSetup.hours)],
+    16
+  );
+
+  return {
+    businessName: s(
+      draftFromBrain.businessName || businessProfile.companyName
+    ),
+    businessDescription: s(
+      draftFromBrain.whatThisBusinessIs || businessProfile.description
+    ),
+    websiteUrl: s(draftFromBrain.websiteUrl || businessProfile.websiteUrl),
+    coreServices: services,
+    contactRoutes,
+    workingHoursLines,
+    pricingSummary: s(
+      draftFromBrain.pricingPosture || pricing.publicSummary
+    ),
+    handoffSummary: s(
+      draftFromBrain.humanHandoff ||
+        handoff.summary ||
+        arr(handoff.triggers).join(", ")
+    ),
+    pricingBehaviorSummary: s(
+      draftFromBrain.pricingBehavior ||
+        summarizeBehaviorPolicy("pricing", behavior.pricingPolicy)
+    ),
+    locationBehaviorSummary: s(
+      draftFromBrain.locationBehavior ||
+        summarizeBehaviorPolicy("location", behavior.locationPolicy)
+    ),
+    bookingBehaviorSummary: s(
+      draftFromBrain.bookingBehavior ||
+        summarizeBehaviorPolicy("booking", behavior.bookingPolicy)
+    ),
+    contactBehaviorSummary: s(
+      draftFromBrain.contactBehavior ||
+        summarizeBehaviorPolicy("contact", behavior.contactPolicy)
+    ),
+    handoffBehaviorSummary: s(
+      draftFromBrain.handoffBehavior ||
+        summarizeBehaviorPolicy("handoff", behavior.handoffPolicy)
+    ),
+    languages: uniqueStrings(
+      [...arr(draftFromBrain.languages), ...arr(safeSetup.languages)],
+      8
+    ),
+    tone: s(draftFromBrain.tone || safeSetup.tone),
+    greetingStyle: s(
+      draftFromBrain.greetingStyle || safeSetup.greetingStyle
+    ),
+    afterHoursBehavior: s(
+      draftFromBrain.afterHoursBehavior || safeSetup.afterHoursBehavior
+    ),
+    professionalizedAt: nowIso(),
+  };
+}
+
+function buildRawEvidenceEntry({
+  latestMessage = "",
+  latestStep = "",
+  responseTurn = {},
+  kind = "user_answer",
+} = {}) {
+  const text = s(latestMessage);
+  const step = s(latestStep).toLowerCase();
+  if (!text && !step) return null;
+
+  return {
+    id: `evidence-${Date.now()}`,
+    kind,
+    step,
+    text,
+    normalizedText: text.replace(/\s+/g, " ").trim(),
+    fieldKey: step,
+    confidence:
+      arr(obj(responseTurn).rejectedInputs).length > 0 ? "low" : "high",
+    hidden: true,
+    createdAt: nowIso(),
+  };
+}
+
+function buildSilentSynthesisPatch({
+  currentSetupAssistant = {},
+  mergedSetupAssistant = {},
+  latestMessage = "",
+  latestStep = "",
+  responseTurn = {},
+  includeRawEvidence = true,
+} = {}) {
+  const currentSilent = obj(obj(currentSetupAssistant).silentSynthesis);
+  const rawEntry = includeRawEvidence
+    ? buildRawEvidenceEntry({
+        latestMessage,
+        latestStep,
+        responseTurn,
+      })
+    : null;
+
+  const unresolvedNotes = uniqueStrings(
+    [
+      ...arr(currentSilent.unresolvedNotes),
+      ...arr(obj(responseTurn).rejectedInputs).map((item) => s(item.reason)),
+      ...arr(obj(responseTurn).confidence?.unclear),
+    ],
+    24
+  );
+
+  const recommendationNotes = uniqueStrings(
+    [
+      ...arr(currentSilent.recommendationNotes),
+      ...arr(obj(responseTurn).recommendation?.notes),
+    ],
+    24
+  );
+
+  return {
+    silentSynthesis: {
+      visibilityMode: "hidden_until_review",
+      synthesisStatus:
+        arr(obj(responseTurn).rejectedInputs).length > 0
+          ? "partial"
+          : "synthesized",
+      lastSynthesizedAt: nowIso(),
+      rawEvidenceLog: rawEntry ? [rawEntry] : [],
+      structuredDraft: buildStructuredDraftFromSetupAssistant(
+        mergedSetupAssistant
+      ),
+      polishedDraft: buildPolishedDraftFromSetupAssistant(
+        mergedSetupAssistant,
+        responseTurn
+      ),
+      unresolvedNotes,
+      recommendationNotes,
+    },
   };
 }
 
@@ -309,6 +579,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
         orchestrationModel: "ask_ai_setup_brain_v4",
         deterministicFirst: true,
         semanticApprovalGuard: true,
+        hiddenSynthesisEnabled: true,
       },
       ensureDraft: true,
     });
@@ -339,6 +610,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       brainNamespace: "setupAssistantBrain",
       timelineNamespace: "setupAssistantTimeline",
       draftOnly: true,
+      hiddenSynthesisEnabled: true,
       fastStart: true,
       orchestrationModel: "ask_ai_setup_brain_v4",
       readyForApproval: payload?.setup?.assistant?.readyForApproval === true,
@@ -483,6 +755,21 @@ export async function updateSetupAssistantDraft(
       resolveAssistantTurnPayload(rawTurn)
     );
 
+    const hiddenSynthesisPatch = buildSilentSynthesisPatch({
+      currentSetupAssistant: draftForBrain,
+      mergedSetupAssistant,
+      latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
+      latestStep,
+      responseTurn,
+      includeRawEvidence: true,
+    });
+
+    mergedSetupAssistant = mergeSetupAssistantDraft(
+      mergedSetupAssistant,
+      hiddenSynthesisPatch,
+      seed
+    );
+
     nextTimeline = appendSetupAssistantTimeline(existingDraftPayload, [
       {
         role: "user",
@@ -512,6 +799,7 @@ export async function updateSetupAssistantDraft(
     updatedFields = [
       ...Object.keys(obj(supplementalPatch)),
       ...Object.keys(obj(orchestratorPatch)),
+      "silentSynthesis",
       "setupAssistantBrain",
       "setupAssistantTimeline",
     ];
@@ -562,9 +850,25 @@ export async function updateSetupAssistantDraft(
       resolveAssistantTurnPayload(rawTurn)
     );
 
+    const hiddenSynthesisPatch = buildSilentSynthesisPatch({
+      currentSetupAssistant,
+      mergedSetupAssistant,
+      latestMessage: "",
+      latestStep,
+      responseTurn,
+      includeRawEvidence: false,
+    });
+
+    mergedSetupAssistant = mergeSetupAssistantDraft(
+      mergedSetupAssistant,
+      hiddenSynthesisPatch,
+      seed
+    );
+
     updatedFields = [
       ...Object.keys(obj(directPatch)),
       ...Object.keys(obj(brainDerivedPatch)),
+      "silentSynthesis",
       "setupAssistantBrain",
     ];
   }
@@ -611,6 +915,7 @@ export async function updateSetupAssistantDraft(
       timelineNamespace: "setupAssistantTimeline",
       timelineLength: nextTimeline.length,
       draftOnly: true,
+      hiddenSynthesisEnabled: true,
       messageMode,
       skipped: isMessageSkip(body),
       nextQuestion: s(obj(responseTurn).nextQuestion?.key),
