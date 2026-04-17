@@ -229,10 +229,7 @@ function buildSummarySections(summary = {}, servicesCatalog = {}) {
   });
 }
 
-function buildAssistantDraftPreview(
-  setup = {},
-  { formatHours = null } = {}
-) {
+function buildAssistantDraftPreview(setup = {}, { formatHours = null } = {}) {
   const businessProfile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
   const handoff = obj(setup.handoffRules);
@@ -318,8 +315,11 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   if (s(draftPreview.businessName)) strong.push("business_name_present");
   else unclear.push("business_name_missing");
 
-  if (s(draftPreview.whatThisBusinessIs)) strong.push("business_description_present");
-  else unclear.push("business_description_missing");
+  if (s(draftPreview.whatThisBusinessIs)) {
+    strong.push("business_description_present");
+  } else {
+    unclear.push("business_description_missing");
+  }
 
   if (arr(draftPreview.coreServices).length) strong.push("services_present");
   else unclear.push("services_missing");
@@ -483,7 +483,7 @@ function buildAssistantFromStoredBrain({
 
   return {
     mode: "brain_v3",
-    nextQuestion: nextQuestion.key && nextQuestion.prompt ? nextQuestion : null,
+    nextQuestion: nextQuestion.key ? nextQuestion : null,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildSummarySections(summary, servicesCatalog),
     completion: {
@@ -519,7 +519,12 @@ function buildAssistantFromStoredBrain({
       420
     ),
     assistantMessage: compactText(
-      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+      s(
+        brain.assistantMessage ||
+          brain.message ||
+          assistant?.assistantMessage ||
+          lastAssistantTurn.text
+      ),
       420
     ),
     timeline: arr(timeline).map(normalizeTimelineTurn),
@@ -689,10 +694,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       ),
       420
     ),
-    nextQuestion:
-      obj(safeTurn.nextQuestion).key && obj(safeTurn.nextQuestion).prompt
-        ? obj(safeTurn.nextQuestion)
-        : null,
+    nextQuestion: obj(safeTurn.nextQuestion).key ? obj(safeTurn.nextQuestion) : null,
     confidence: sanitizeBrainConfidence(safeTurn.confidence),
     recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
     sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
@@ -739,7 +741,8 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     ...obj(setup.review),
     readyForApproval: safeTurn.readyForApproval === true,
     finalizeAvailable:
-      safeTurn.readyForApproval === true || obj(setup.review).finalizeAvailable === true,
+      safeTurn.readyForApproval === true ||
+      obj(setup.review).finalizeAvailable === true,
     message: "",
   };
 

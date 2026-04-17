@@ -15,20 +15,52 @@ const STEP_ORDER = [
 ];
 
 const STEP_META = {
-  company: { key: "company", step: "company", title: "Company name" },
+  company: {
+    key: "company",
+    step: "company",
+    title: "Company name",
+    prompt: "O zaman başlayaq. Şirkətinizin adı nədir?",
+  },
   description: {
     key: "description",
     step: "description",
     title: "Business description",
+    prompt: "Qısa olaraq nə iş gördüyünüzü yazın.",
   },
-  services: { key: "services", step: "services", title: "Core services" },
-  contacts: { key: "contacts", step: "contacts", title: "Contact routes" },
-  hours: { key: "hours", step: "hours", title: "Working hours" },
-  pricing: { key: "pricing", step: "pricing", title: "Pricing posture" },
+  services: {
+    key: "services",
+    step: "services",
+    title: "Core services",
+    prompt:
+      "Əsas xidmətlərinizi yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
+  },
+  contacts: {
+    key: "contacts",
+    step: "contacts",
+    title: "Contact routes",
+    prompt:
+      "Müştəri sizinlə necə əlaqə saxlamalıdır? Telefon, email, WhatsApp və ya link yazın.",
+  },
+  hours: {
+    key: "hours",
+    step: "hours",
+    title: "Working hours",
+    prompt:
+      "İş saatlarınızı yazın. Məsələn: B.e–C. 09:00–18:00 və ya 24/7.",
+  },
+  pricing: {
+    key: "pricing",
+    step: "pricing",
+    title: "Pricing posture",
+    prompt:
+      "AI qiymətlərlə bağlı nə deyə bilər? Dəqiq qiymət desin, başlanğıc qiymət desin, yoxsa quote tələb olunsun?",
+  },
   handoff: {
     key: "handoff",
     step: "handoff",
     title: "Human handoff rules",
+    prompt:
+      "Hansı hallarda AI mütləq operatora və ya insana yönləndirməlidir?",
   },
 };
 
@@ -102,7 +134,7 @@ function buildQuestion(step = "") {
     key: s(meta.key).toLowerCase(),
     step: s(meta.step).toLowerCase(),
     title: s(meta.title),
-    prompt: "",
+    prompt: s(meta.prompt),
     group: "business_truth",
     groupLabel: "Business truth",
   });
