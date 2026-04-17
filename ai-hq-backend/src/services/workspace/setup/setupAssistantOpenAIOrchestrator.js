@@ -68,18 +68,11 @@ let cachedClient = null;
 
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
-
-  const requestedTimeoutMs =
+  const timeoutMs =
     Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 8_000) ||
     8_000;
-  const timeoutMs = Math.max(1_500, Math.min(requestedTimeoutMs, 6_000));
-
-  const requestedMaxOutputTokens =
+  const maxOutputTokens =
     Number(cfg.ai?.openaiSetupMaxOutputTokens || 500) || 500;
-  const maxOutputTokens = Math.max(
-    120,
-    Math.min(requestedMaxOutputTokens, 350)
-  );
 
   const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
@@ -650,20 +643,6 @@ async function callOpenAISetupAssistant({
   };
 }
 
-function buildFallbackAssistantMessage({
-  sourceCaptureMode = false,
-  readyForApproval = false,
-  nextQuestion = null,
-} = {}) {
-  if (sourceCaptureMode) return "";
-
-  if (readyForApproval) {
-    return "Məlumatlar kifayət qədər toplandı. İstəsəniz setup-u bitirə bilərsiniz.";
-  }
-
-  return s(obj(nextQuestion).prompt) || "Davam edək.";
-}
-
 function buildFallbackTurn({
   currentStep = "",
   preview = {},
@@ -677,8 +656,12 @@ function buildFallbackTurn({
   const nextStep =
     findNextStep(preview) || normalizeStep(currentStep) || "company";
   const sourceCaptureMode = !hasSignals && !hasMessage;
-  const fallbackQuestion =
+  const nextQuestion =
     sourceCaptureMode || readyForApproval ? null : buildQuestion(nextStep);
+
+  const fallbackAssistantMessage = sourceCaptureMode
+    ? ""
+    : s(obj(nextQuestion).prompt);
 
   return {
     ok: true,
@@ -695,12 +678,9 @@ function buildFallbackTurn({
       : readyForApproval
         ? "ready"
         : "interview",
-    assistantMessage: buildFallbackAssistantMessage({
-      sourceCaptureMode,
-      readyForApproval,
-      nextQuestion: fallbackQuestion,
-    }),
-    nextQuestion: fallbackQuestion,
+    assistantMessage: fallbackAssistantMessage,
+    message: fallbackAssistantMessage,
+    nextQuestion,
     draft: preview,
     acceptedPatch: {
       identity: {},
@@ -750,13 +730,6 @@ function normalizeTurnResult({
       ? null
       : buildQuestion(interpreted.nextStep || currentStep || "company");
 
-  const resolvedAssistantMessage = s(
-    interpreted.assistantReply ||
-      (interpreted.readyForApproval === true
-        ? "Məlumatlar kifayət qədər toplandı. İstəsəniz setup-u bitirə bilərsiniz."
-        : obj(nextQuestion).prompt)
-  );
-
   return {
     ok: true,
     provider,
@@ -768,7 +741,8 @@ function normalizeTurnResult({
       text: latestMessage,
     }),
     phase: interpreted.readyForApproval === true ? "ready" : "interview",
-    assistantMessage: resolvedAssistantMessage,
+    assistantMessage: s(interpreted.assistantReply),
+    message: s(interpreted.assistantReply),
     nextQuestion,
     draft: interpreted.mergedPreview,
     acceptedPatch: interpreted.acceptedPatch,

@@ -107,13 +107,7 @@ function createBrainTurn(overrides = {}) {
         afterHoursBehavior: "Collect the request and promise a callback.",
       },
     },
-    rejectedInputs: [
-      {
-        input: "ok davam",
-        reason: "Acknowledgement-only text should not become business truth.",
-        suggestedField: "none",
-      },
-    ],
+    rejectedInputs: [],
     confidence: {
       strong: ["Business identity is anchored."],
       unclear: ["Pricing still needs a stricter policy."],
@@ -396,6 +390,201 @@ test("message-mode setup draft update bridges orchestrator output into review dr
     s(obj(result.body.setup).draft.businessProfile.companyName),
     "North Clinic"
   );
+});
+
+test("message-mode does not precommit irrelevant free text and incorrectly advance the step", async () => {
+  let review = {
+    session: {
+      id: "session-services-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "services",
+      updatedAt: "2026-04-15T10:00:00.000Z",
+    },
+    draft: {
+      id: "draft-services-1",
+      version: 1,
+      updatedAt: "2026-04-15T10:00:00.000Z",
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "Neox",
+            description: "AI automation studio",
+          },
+          services: [],
+          contacts: [],
+          hours: [],
+          pricingPosture: {},
+          handoffRules: {},
+          sourceMetadata: {},
+          assistantState: {
+            activeSection: "services",
+          },
+          progress: {
+            currentQuestionKey: "services",
+          },
+        },
+      },
+      businessProfile: {
+        companyName: "Neox",
+        description: "AI automation studio",
+      },
+      capabilities: {},
+      services: [],
+      contacts: [],
+      hours: [],
+      sourceSummary: {},
+      warnings: [],
+    },
+    sources: [],
+    events: [],
+  };
+
+  const deps = {
+    getCurrentSetupReview: async () => review,
+    patchSetupReviewDraft: async ({ patch }) => {
+      review = {
+        ...review,
+        draft: {
+          ...review.draft,
+          ...patch,
+          draftPayload: {
+            ...obj(review.draft.draftPayload),
+            ...obj(patch.draftPayload),
+          },
+          businessProfile: {
+            ...obj(review.draft.businessProfile),
+            ...obj(patch.businessProfile),
+          },
+          services: arr(patch.services).length
+            ? arr(patch.services)
+            : review.draft.services,
+          contacts: arr(patch.contacts).length
+            ? arr(patch.contacts)
+            : review.draft.contacts,
+          sourceSummary: {
+            ...obj(review.draft.sourceSummary),
+            ...obj(patch.sourceSummary),
+          },
+          version: Number(review.draft.version || 0) + 1,
+        },
+      };
+    },
+    updateSetupReviewSession: async (_sessionId, payload) => {
+      review = {
+        ...review,
+        session: {
+          ...review.session,
+          ...payload,
+        },
+      };
+    },
+    auditSetupAction: async () => {},
+    runSetupAssistantOpenAIOrchestrator: async () =>
+      createBrainTurn({
+        latestUserInput: {
+          step: "services",
+          text: "i dont understand",
+        },
+        assistantMessage:
+          "Bu cavab xidmətləri göstərmir. Əsas xidmətlərinizi yazın.",
+        nextQuestion: {
+          key: "services",
+          step: "services",
+          title: "Curate the service menu",
+          prompt:
+            "Əsas xidmətlərinizi yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
+          group: "business_truth",
+          groupLabel: "Business truth",
+        },
+        draft: {
+          businessName: "Neox",
+          whatThisBusinessIs: "AI automation studio",
+          websiteUrl: "",
+          coreServices: [],
+          audience: "",
+          pricingPosture: "",
+          contactRoutes: [],
+          humanHandoff: "",
+          languages: [],
+          tone: "",
+          hours: [],
+          greetingStyle: "",
+          afterHoursBehavior: "",
+        },
+        acceptedPatch: {
+          identity: {},
+          services: [],
+          contacts: [],
+          hours: [],
+          pricingPosture: "",
+          humanHandoff: "",
+          aiBehavior: {},
+        },
+        rejectedInputs: [
+          {
+            input: "i dont understand",
+            reason: "The answer did not match the current setup step.",
+            suggestedField: "services",
+          },
+        ],
+        confidence: {
+          strong: [],
+          unclear: ["services_missing"],
+          contradictions: [],
+        },
+        recommendation: {
+          notes: [],
+        },
+        sourceSignals: {},
+        interviewPlan: {
+          activeQuestionKeys: ["services"],
+          activeQuestions: [
+            {
+              key: "services",
+              step: "services",
+              title: "Curate the service menu",
+              group: "business_truth",
+              groupLabel: "Business truth",
+              priority: 1,
+            },
+          ],
+          remainingQuestionKeys: ["services"],
+          nextGroup: "business_truth",
+          nextGroupLabel: "Business truth",
+        },
+        readyForApproval: false,
+      }),
+  };
+
+  const result = await updateSetupAssistantDraft(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "north",
+        user: {
+          id: "11111111-1111-4111-8111-111111111111",
+        },
+      },
+      body: {
+        step: "services",
+        answer: "i dont understand",
+      },
+    },
+    deps
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  assert.equal(result.body.session.currentStep, "services");
+  assert.equal(obj(result.body.setup.assistant.nextQuestion).key, "services");
+  assert.equal(arr(obj(result.body.setup.draft).services).length, 0);
+
+  const storedSetupAssistant = obj(
+    obj(review.draft.draftPayload).setupAssistant
+  );
+  assert.equal(arr(obj(storedSetupAssistant).services).length, 0);
 });
 
 test("read setup assistant view returns stored session payload and preserves setup assistant brain fields", async () => {

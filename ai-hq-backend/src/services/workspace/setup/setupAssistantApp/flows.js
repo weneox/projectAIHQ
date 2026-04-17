@@ -116,28 +116,6 @@ function buildReviewForBrain(review = {}) {
   };
 }
 
-function buildSupplementalMessagePatch(
-  currentSetupAssistant = {},
-  latestMessage = "",
-  latestStep = ""
-) {
-  if (!s(latestMessage)) return {};
-
-  const patch = normalizeSetupAssistantDraftPatchBody(
-    {
-      step: latestStep,
-      answer: latestMessage,
-    },
-    currentSetupAssistant
-  );
-
-  const { assistantState, progress, ...rest } = obj(patch);
-  void assistantState;
-  void progress;
-
-  return rest;
-}
-
 function resolveAssistantTurnPayload(turn = {}) {
   const safeTurn = obj(turn);
   const fallbackText = s(
@@ -409,21 +387,9 @@ export async function updateSetupAssistantDraft(
   let nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
   if (messageMode) {
-    const supplementalPatch = buildSupplementalMessagePatch(
-      currentSetupAssistant,
-      latestMessage,
-      latestStep
-    );
-
-    const draftForBrain = mergeSetupAssistantDraft(
-      currentSetupAssistant,
-      supplementalPatch,
-      seed
-    );
-
     rawTurn = await runSetupBrain({
       session: obj(review.session),
-      draft: draftForBrain,
+      draft: currentSetupAssistant,
       sources: arr(reviewForBrain.sources),
       review: reviewForBrain,
       latestStep,
@@ -432,11 +398,11 @@ export async function updateSetupAssistantDraft(
 
     const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
       rawTurn,
-      draftForBrain
+      currentSetupAssistant
     );
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
-      draftForBrain,
+      currentSetupAssistant,
       orchestratorPatch,
       seed
     );
@@ -472,7 +438,6 @@ export async function updateSetupAssistantDraft(
     ]);
 
     updatedFields = [
-      ...Object.keys(obj(supplementalPatch)),
       ...Object.keys(obj(orchestratorPatch)),
       "setupAssistantBrain",
       "setupAssistantTimeline",
@@ -557,7 +522,9 @@ export async function updateSetupAssistantDraft(
     s(refreshed?.session?.id || review.session.id),
     {
       reviewSessionId: s(refreshed?.session?.id || review.session.id),
-      draftVersion: Number(refreshed?.draft?.version || review?.draft?.version || 0),
+      draftVersion: Number(
+        refreshed?.draft?.version || review?.draft?.version || 0
+      ),
       updatedFields: [...new Set(updatedFields)].filter(Boolean),
       source: "home_widget",
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
