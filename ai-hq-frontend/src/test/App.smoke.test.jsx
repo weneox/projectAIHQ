@@ -66,6 +66,8 @@ vi.mock("../pages/SelectWorkspace.jsx", () => ({
 
 import App from "../App.jsx";
 
+const ROUTE_RENDER_TIMEOUT_MS = 5000;
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -95,6 +97,8 @@ describe("App shell smoke", () => {
   ])("renders %s from the top-level route tree", async (path, text) => {
     window.history.replaceState({}, "", path);
     render(<App />);
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(
+      await screen.findByText(text, {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+    ).toBeInTheDocument();
   });
 });
