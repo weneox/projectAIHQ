@@ -51,7 +51,7 @@ function createReviewDraft(overrides = {}) {
   };
 }
 
-test("review flow keeps AI-native setup authority while preserving canonical readiness semantics", async () => {
+test("review flow keeps AI-native setup authority while source signals stay fail-closed without stored brain state", async () => {
   const payload = await loadCurrentReviewPayload(
     {
       db: {},
@@ -85,7 +85,7 @@ test("review flow keeps AI-native setup authority while preserving canonical rea
   assert.equal(payload.assistant.nextQuestion.key, "handoff");
   assert.equal(payload.assistant.readyForApproval, false);
   assert.ok(!("assistantBrain" in payload));
-  assert.equal(payload.assistant.sourceSignals.primarySourceType, "google_maps");
+  assert.equal(payload.assistant.sourceSignals.primarySourceType, "");
   assert.ok(!activeQuestionKeys.includes("languages"));
   assert.ok(!activeQuestionKeys.includes("tone"));
   assert.ok(!activeQuestionKeys.includes("greeting"));
@@ -93,7 +93,7 @@ test("review flow keeps AI-native setup authority while preserving canonical rea
   assert.ok(!activeQuestionKeys.includes("audience"));
 });
 
-test("review flow marks setup ready from the canonical launch-critical scope only", async () => {
+test("review flow keeps setup in interview mode until stored brain readiness is present", async () => {
   const payload = await loadCurrentReviewPayload(
     {
       db: {},
@@ -140,9 +140,9 @@ test("review flow marks setup ready from the canonical launch-critical scope onl
     }
   );
 
-  assert.equal(payload.assistant.readyForApproval, true);
-  assert.equal(payload.assistant.nextQuestion, null);
-  assert.equal(payload.assistant.phase, "ready");
-  assert.equal(payload.assistant.sourceSignals.primarySourceType, "google_maps");
+  assert.equal(payload.assistant.readyForApproval, false);
+  assert.equal(payload.assistant.nextQuestion.key, "handoff");
+  assert.equal(payload.assistant.phase, "interview");
+  assert.equal(payload.assistant.sourceSignals.primarySourceType, "");
   assert.deepEqual(payload.assistant.confidence.contradictions, []);
 });

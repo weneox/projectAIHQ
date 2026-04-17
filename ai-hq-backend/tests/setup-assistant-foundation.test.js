@@ -672,7 +672,7 @@ test("setup assistant source answers never store instagram, facebook, or google 
   );
 });
 
-test("setup assistant treats google maps as a valid source identity but still keeps finalize locked until handoff exists", () => {
+test("setup assistant keeps google maps identity on the draft while review readiness stays gated by stored brain state", () => {
   const reviewBase = {
     session: {
       id: "session-1",
@@ -754,7 +754,7 @@ test("setup assistant treats google maps as a valid source identity but still ke
   );
   assert.equal(
     withoutHandoff.setup.summary.sectionStatus.profile.reviewReady,
-    true
+    undefined
   );
   assert.equal(
     withoutHandoff.setup.summary.sectionStatus.handoff.status,
@@ -762,13 +762,13 @@ test("setup assistant treats google maps as a valid source identity but still ke
   );
   assert.equal(withoutHandoff.setup.assistant.nextQuestion.key, "handoff");
 
-  assert.equal(withHandoff.setup.review.finalizeAvailable, true);
-  assert.equal(withHandoff.setup.assistant.readyForApproval, true);
-  assert.equal(withHandoff.setup.assistant.nextQuestion, null);
+  assert.equal(withHandoff.setup.review.finalizeAvailable, false);
+  assert.equal(withHandoff.setup.assistant.readyForApproval, false);
+  assert.equal(withHandoff.setup.assistant.nextQuestion.key, "handoff");
   assert.equal(withHandoff.setup.draft.businessProfile.websiteUrl || "", "");
 });
 
-test("setup assistant does not block finalize on extra AI-behavior fields once canonical truth is strong enough", () => {
+test("setup assistant still keeps finalize locked without stored brain readiness even when canonical truth is strong", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -825,18 +825,12 @@ test("setup assistant does not block finalize on extra AI-behavior fields once c
     },
   });
 
-  assert.equal(payload.setup.review.finalizeAvailable, true);
-  assert.equal(payload.setup.assistant.readyForApproval, true);
-  assert.equal(payload.setup.assistant.completion.ready, true);
-  assert.equal(payload.setup.assistant.nextQuestion, null);
-  assert.deepEqual(
-    payload.setup.assistant.interviewPlan?.activeQuestionKeys || [],
-    []
-  );
-  assert.equal(
-    payload.setup.assistant.sourceSignals.primarySourceType,
-    "instagram"
-  );
+  assert.equal(payload.setup.review.finalizeAvailable, false);
+  assert.equal(payload.setup.assistant.readyForApproval, false);
+  assert.equal(payload.setup.assistant.completion.ready, false);
+  assert.equal(payload.setup.assistant.nextQuestion.key, "handoff");
+  assert.deepEqual(payload.setup.assistant.interviewPlan?.activeQuestionKeys, undefined);
+  assert.equal(payload.setup.assistant.sourceSignals.primarySourceType, "");
 });
 
 test("setup assistant does not inject a hardcoded profile follow-up when a strong public source already exists", () => {
@@ -886,7 +880,7 @@ test("setup assistant does not inject a hardcoded profile follow-up when a stron
   );
 });
 
-test("setup assistant still marks profile as needs_review for a manual-only source without injecting a canned website question", () => {
+test("setup assistant falls back to the company question for a manual-only source when no stored brain state exists", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -938,14 +932,14 @@ test("setup assistant still marks profile as needs_review for a manual-only sour
     },
   });
 
-  assert.equal(payload.setup.review.finalizeAvailable, true);
-  assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
-  assert.equal(payload.setup.summary.sectionStatus.profile.reviewReady, false);
-  assert.equal(payload.setup.assistant.readyForApproval, true);
-  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.equal(payload.setup.review.finalizeAvailable, false);
+  assert.equal(payload.setup.summary.sectionStatus.profile.status, "ready");
+  assert.equal(payload.setup.summary.sectionStatus.profile.reviewReady, undefined);
+  assert.equal(payload.setup.assistant.readyForApproval, false);
+  assert.equal(payload.setup.assistant.nextQuestion.key, "company");
 });
 
-test("setup assistant AI-native payload keeps compat fields available after a brain turn", () => {
+test("setup assistant AI-native payload keeps compat fields available and preserves the stored next question after a brain turn", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -1070,7 +1064,7 @@ test("setup assistant AI-native payload keeps compat fields available after a br
   assert.equal(payload.setup.assistant.mode, "brain_v4");
   assert.equal(payload.setup.assistant.provider, "openai");
   assert.equal(payload.setup.assistant.model, "gpt-5");
-  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.equal(payload.setup.assistant.nextQuestion.key, "services");
   assert.equal(
     payload.setup.assistant.interviewPlan?.activeQuestionKeys?.[0],
     "services"

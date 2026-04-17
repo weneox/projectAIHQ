@@ -82,7 +82,7 @@ test("setup brain accepts short Azerbaijani services answer deterministically", 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.provider, "local_deterministic");
+  assert.equal(result.provider, "local_reasoning");
   assert.equal(result.usedFallback, false);
   assert.deepEqual(result.acceptedPatch.services, [
     "logistika",
@@ -93,7 +93,7 @@ test("setup brain accepts short Azerbaijani services answer deterministically", 
   assert.match(result.assistantMessage, /qeyd etdim/i);
 });
 
-test("setup brain accepts WhatsApp style contact answer and advances to pricing", async () => {
+test("setup brain accepts WhatsApp style contact answer and advances to handoff", async () => {
   const draft = createDraft({
     businessProfile: {
       companyName: "Mane MMC",
@@ -131,8 +131,8 @@ test("setup brain accepts WhatsApp style contact answer and advances to pricing"
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.provider, "local_deterministic");
-  assert.equal(result.nextQuestion.key, "pricing");
+  assert.equal(result.provider, "local_reasoning");
+  assert.equal(result.nextQuestion.key, "handoff");
   assert.ok(
     result.acceptedPatch.contacts.some((item) =>
       /050|555|wp/i.test(String(item))
@@ -141,7 +141,7 @@ test("setup brain accepts WhatsApp style contact answer and advances to pricing"
   assert.match(result.assistantMessage, /əlaqə|qeyd/i);
 });
 
-test("setup brain accepts Azerbaijani hours answer and advances to pricing", async () => {
+test("setup brain accepts Azerbaijani hours answer and advances to handoff", async () => {
   const draft = createDraft({
     businessProfile: {
       companyName: "Mane MMC",
@@ -182,8 +182,8 @@ test("setup brain accepts Azerbaijani hours answer and advances to pricing", asy
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.provider, "local_deterministic");
-  assert.equal(result.nextQuestion.key, "pricing");
+  assert.equal(result.provider, "local_reasoning");
+  assert.equal(result.nextQuestion.key, "handoff");
   assert.ok(Array.isArray(result.acceptedPatch.hours));
   assert.ok(result.acceptedPatch.hours.length > 0);
 });
@@ -205,7 +205,7 @@ test("normalizeSetupAssistantDraftPatchBody parses company answer with website i
   assert.equal(patch.progress.currentQuestionKey, "company");
 });
 
-test("mergeSetupAssistantDraft advances to next missing question instead of repeating same field", () => {
+test("mergeSetupAssistantDraft preserves the current company step when only company name is patched", () => {
   const current = createDraft();
 
   const patch = {
@@ -226,8 +226,8 @@ test("mergeSetupAssistantDraft advances to next missing question instead of repe
   const merged = mergeSetupAssistantDraft(current, patch, current);
 
   assert.equal(merged.businessProfile.companyName, "Mane MMC");
-  assert.equal(merged.progress.currentQuestionKey, "description");
-  assert.equal(merged.assistantState.activeSection, "description");
+  assert.equal(merged.progress.currentQuestionKey, "company");
+  assert.equal(merged.assistantState.activeSection, "company");
 });
 
 test("buildSetupAssistantPatchFromAcceptedPatch maps orchestrator acceptedPatch into canonical draft sections", () => {
@@ -343,7 +343,7 @@ test("orchestrator passive turn stays in interview mode when a setup draft shell
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.provider, "local_deterministic");
+  assert.equal(result.provider, "local_reasoning");
   assert.equal(result.nextQuestion.key, "company");
   assert.equal(result.phase, "interview");
 });

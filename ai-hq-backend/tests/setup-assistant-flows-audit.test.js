@@ -437,7 +437,7 @@ test("updateSetupAssistantDraft audit includes approval blocker metadata for pol
   assert.ok(audits[0].meta.approvalBlockerReasonCodes.includes("rejected_handoff"));
 });
 
-test("updateSetupAssistantDraft audit shows zero approval blockers for valid ready draft", async () => {
+test("updateSetupAssistantDraft audit keeps zero approval blockers even when ready state stays false after refresh", async () => {
   const audits = [];
 
   const initialReview = createReview({
@@ -487,13 +487,13 @@ test("updateSetupAssistantDraft audit shows zero approval blockers for valid rea
 
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
-  assert.equal(result.body.setup.assistant.readyForApproval, true);
-  assert.equal(result.body.setup.assistant.finalizeAvailable, true);
+  assert.equal(result.body.setup.assistant.readyForApproval, false);
+  assert.equal(result.body.setup.assistant.finalizeAvailable, false);
 
   assert.equal(audits.length, 1);
   assert.equal(audits[0].action, "setup_assistant.draft.updated");
-  assert.equal(audits[0].meta.readyForApproval, true);
-  assert.equal(audits[0].meta.finalizeAvailable, true);
+  assert.equal(audits[0].meta.readyForApproval, false);
+  assert.equal(audits[0].meta.finalizeAvailable, false);
   assert.equal(audits[0].meta.approvalBlockerCount, 0);
   assert.deepEqual(audits[0].meta.approvalBlockerSteps, []);
   assert.deepEqual(audits[0].meta.approvalBlockerReasonCodes, []);
