@@ -253,6 +253,21 @@ async function persistSetupAssistantState({
   return true;
 }
 
+function extractApprovalBlockersFromPayload(payload = {}) {
+  return arr(
+    obj(payload?.setup?.assistant).approvalBlockers ||
+      obj(payload?.setup?.review).approvalBlockers ||
+      []
+  )
+    .map((item) => ({
+      step: s(item?.step),
+      reasonCode: s(item?.reasonCode),
+      reason: s(item?.reason),
+      currentValue: s(item?.currentValue),
+    }))
+    .filter((item) => item.step || item.reasonCode || item.reason);
+}
+
 export async function readSetupAssistantView({ db, actor }, deps = {}) {
   void db;
 
@@ -293,6 +308,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
         namespace: SETUP_ASSISTANT_NAMESPACE,
         orchestrationModel: "ask_ai_setup_brain_v4",
         deterministicFirst: true,
+        semanticApprovalGuard: true,
       },
       ensureDraft: true,
     });
@@ -302,6 +318,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
   }
 
   const payload = buildSetupAssistantSessionPayload(review);
+  const approvalBlockers = extractApprovalBlockersFromPayload(payload);
 
   await audit(
     db,
@@ -324,6 +341,10 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       draftOnly: true,
       fastStart: true,
       orchestrationModel: "ask_ai_setup_brain_v4",
+      readyForApproval: payload?.setup?.assistant?.readyForApproval === true,
+      finalizeAvailable: payload?.setup?.assistant?.finalizeAvailable === true,
+      approvalBlockerCount: approvalBlockers.length,
+      approvalBlockerSteps: approvalBlockers.map((item) => item.step).filter(Boolean),
     }
   );
 
@@ -565,6 +586,11 @@ export async function updateSetupAssistantDraft(
 
   const refreshed = await getCurrentReviewHelper(actor.tenantId);
   const baseResponsePayload = buildSetupAssistantSessionPayload(refreshed);
+  const finalResponseBody = buildSetupAssistantResponseBody(
+    baseResponsePayload,
+    responseTurn
+  );
+  const approvalBlockers = extractApprovalBlockersFromPayload(finalResponseBody);
 
   await audit(
     db,
@@ -595,13 +621,22 @@ export async function updateSetupAssistantDraft(
       brainError: s(responseTurn?.error),
       latestMessagePreview: s(latestMessage).slice(0, 160),
       orchestrationModel: "ask_ai_setup_brain_v4",
+      readyForApproval:
+        finalResponseBody?.setup?.assistant?.readyForApproval === true,
+      finalizeAvailable:
+        finalResponseBody?.setup?.assistant?.finalizeAvailable === true,
+      approvalBlockerCount: approvalBlockers.length,
+      approvalBlockerSteps: approvalBlockers.map((item) => item.step).filter(Boolean),
+      approvalBlockerReasonCodes: approvalBlockers
+        .map((item) => item.reasonCode)
+        .filter(Boolean),
     }
   );
 
   return {
     status: 200,
     body: {
-      ...buildSetupAssistantResponseBody(baseResponsePayload, responseTurn),
+      ...finalResponseBody,
       message: "Setup assistant draft updated",
     },
   };

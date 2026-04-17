@@ -13,10 +13,14 @@ import {
   getNextQuestion,
   getSetupCopy,
   hasSetupSignalForInterview,
-  isQuestionSatisfied,
   normalizeQuestionKey,
   normalizeSetupLocale,
 } from "./setupAssistantApp/questions.js";
+import {
+  buildApprovalBlockers,
+  isDraftReadyForApproval,
+  validateStepAnswer,
+} from "./setupAssistantApp/relevance.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
@@ -106,10 +110,6 @@ function listToNatural(locale = "az-AZ", values = []) {
   if (items.length === 2) return `${items[0]} ${copy.and} ${items[1]}`;
 
   return `${items.slice(0, -1).join(", ")} ${copy.and} ${items.at(-1)}`;
-}
-
-function normalizeConversationRole(value = "") {
-  return s(value).toLowerCase() === "user" ? "user" : "assistant";
 }
 
 function buildCurrentPreview(draft = {}, review = null) {
@@ -538,7 +538,12 @@ function extractContactCandidates(text = "") {
   const listItems = splitList(text, 16);
   for (const item of listItems) {
     const type = inferContactType(item);
-    if (type) {
+    if (
+      type === "phone" ||
+      type === "email" ||
+      type === "link" ||
+      /whatsapp|wp|telegram|instagram|facebook|wa\.me/i.test(item)
+    ) {
       out.push(item);
     }
   }
@@ -621,15 +626,64 @@ function extractHandoffValue(text = "") {
   return trimmed || "";
 }
 
+function extractValidationValueFromAcceptedPatch(step = "", acceptedPatch = {}) {
+  const normalizedStep = normalizeQuestionKey(step);
+  const patch = obj(acceptedPatch);
+  const identity = obj(patch.identity);
+
+  if (normalizedStep === "company") {
+    return [s(identity.businessName), s(identity.websiteUrl)]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "description") {
+    return s(identity.description);
+  }
+
+  if (normalizedStep === "services") {
+    return arr(patch.services).join(", ");
+  }
+
+  if (normalizedStep === "contacts") {
+    return arr(patch.contacts).join(", ");
+  }
+
+  if (normalizedStep === "hours") {
+    return arr(patch.hours).join("; ");
+  }
+
+  if (normalizedStep === "pricing") {
+    return s(patch.pricingPosture);
+  }
+
+  if (normalizedStep === "handoff") {
+    return s(patch.humanHandoff);
+  }
+
+  return "";
+}
+
 function buildLocalAcceptedPatch(currentStep = "", latestMessage = "", draft = {}) {
   const step = normalizeQuestionKey(currentStep);
   const text = s(latestMessage);
+  const validation = validateStepAnswer(step, text, draft);
   const source = buildRecognizedSourceCandidate(text);
 
   const patch = buildEmptyAcceptedPatch();
 
   if (!text) {
-    return patch;
+    return {
+      acceptedPatch: patch,
+      validation,
+    };
+  }
+
+  if (!validation.accepted) {
+    return {
+      acceptedPatch: patch,
+      validation,
+    };
   }
 
   if (source?.type === "website") {
@@ -645,10 +699,7 @@ function buildLocalAcceptedPatch(currentStep = "", latestMessage = "", draft = {
       businessName: s(company.businessName),
       websiteUrl: s(company.websiteUrl || obj(patch.identity).websiteUrl),
     });
-    return compactDraftObject(patch);
-  }
-
-  if (step === "description") {
+  } else if (step === "description") {
     const description = extractDescriptionValue(text);
     if (description) {
       patch.identity = compactDraftObject({
@@ -656,37 +707,22 @@ function buildLocalAcceptedPatch(currentStep = "", latestMessage = "", draft = {
         description,
       });
     }
-    return compactDraftObject(patch);
-  }
-
-  if (step === "services") {
-    patch.services = extractServiceValues(text);
-    return compactDraftObject(patch);
-  }
-
-  if (step === "contacts") {
-    patch.contacts = extractContactCandidates(text);
-    return compactDraftObject(patch);
-  }
-
-  if (step === "hours") {
+  } else if (step === "services") {
+    patch.services = uniqueStrings(validation.extractedValues || extractServiceValues(text), 16);
+  } else if (step === "contacts") {
+    patch.contacts = uniqueStrings(validation.extractedValues || extractContactCandidates(text), 16);
+  } else if (step === "hours") {
     patch.hours = extractHoursValues(text);
-    return compactDraftObject(patch);
-  }
-
-  if (step === "pricing") {
+  } else if (step === "pricing") {
     patch.pricingPosture = extractPricingValue(text, arr(draft.services));
-    return compactDraftObject(patch);
-  }
-
-  if (step === "handoff") {
+  } else if (step === "handoff") {
     patch.humanHandoff = extractHandoffValue(text);
-    return compactDraftObject(patch);
   }
 
-  patch.contacts = extractContactCandidates(text);
-
-  return compactDraftObject(patch);
+  return {
+    acceptedPatch: compactDraftObject(patch),
+    validation,
+  };
 }
 
 const OPENAI_TURN_SCHEMA = {
@@ -727,7 +763,7 @@ function buildSystemPrompt(locale = "az-AZ") {
     "You do not own the system state.",
     "Only extract grounded business facts from the latest user message.",
     "Prefer short precise extraction.",
-    "Never invent services, pricing, contacts, hours, or company names.",
+    "Never invent services, pricing, contacts, hours, handoff rules, or company names.",
     "If the latest message does not answer the current step, mark it not relevant.",
     "Return strict JSON only.",
   ].join(" ");
@@ -883,28 +919,69 @@ function buildAckMessage(locale = "az-AZ", currentStep = "", acceptedPatch = {})
   return s(phrases.genericCaptured);
 }
 
-function buildPassiveTurn({
+function resolveNextQuestionForDraft({
   locale = "az-AZ",
-  currentStep = "",
   draft = {},
-  review = null,
-  sources = [],
-  error = "",
-  model = "",
-  provider = "local_deterministic",
-  usedFallback = false,
+  currentStep = "",
 } = {}) {
-  const preview = buildCurrentPreview(draft, review);
+  const blockers = buildApprovalBlockers(draft);
+
+  if (blockers.length > 0) {
+    return {
+      readyForApproval: false,
+      blockers,
+      nextQuestion: buildQuestion(s(blockers[0].step || currentStep || "company"), locale),
+    };
+  }
+
   const nextQuestion = getNextQuestion(
     {},
     draft,
     {
       currentQuestionKey: currentStep,
+      lastAnsweredStep: currentStep,
     },
     { locale }
   );
-  const readyForApproval = nextQuestion == null;
+
+  return {
+    readyForApproval: isDraftReadyForApproval(draft) && !nextQuestion,
+    blockers: [],
+    nextQuestion: nextQuestion ? obj(nextQuestion) : null,
+  };
+}
+
+function buildRejectedTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  provider = "local_validation",
+  model = "",
+  usedFallback = false,
+  error = "",
+  invalidReason = "",
+} = {}) {
+  const preview = buildCurrentPreview(draft, review);
+  const resolution = resolveNextQuestionForDraft({
+    locale,
+    draft,
+    currentStep,
+  });
+  const nextQuestion =
+    obj(resolution.nextQuestion).key
+      ? obj(resolution.nextQuestion)
+      : buildQuestion(currentStep || "company", locale);
+
   const copy = getSetupCopy(locale);
+  const assistantMessage = [
+    s(obj(copy.phrases).redirectPrefix),
+    s(obj(nextQuestion).prompt),
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return {
     ok: true,
@@ -914,26 +991,24 @@ function buildPassiveTurn({
     error: s(error),
     latestUserInput: compactDraftObject({
       step: normalizeQuestionKey(currentStep),
-      text: "",
+      text: latestMessage,
     }),
-    phase: readyForApproval
-      ? "ready"
-      : hasSetupSignalForInterview(draft)
-        ? "interview"
-        : "source_capture",
-    assistantMessage: readyForApproval
-      ? s(obj(copy.phrases).readyForApproval)
-      : s(obj(nextQuestion).prompt),
-    message: readyForApproval
-      ? s(obj(copy.phrases).readyForApproval)
-      : s(obj(nextQuestion).prompt),
+    phase: hasSetupSignalForInterview(draft) ? "interview" : "source_capture",
+    assistantMessage,
+    message: assistantMessage,
     nextQuestion,
     draft: preview,
     acceptedPatch: buildEmptyAcceptedPatch(),
-    rejectedInputs: [],
+    rejectedInputs: [
+      {
+        input: s(latestMessage),
+        reason: s(invalidReason || "The answer did not match the current setup step."),
+        suggestedField: normalizeQuestionKey(currentStep),
+      },
+    ],
     confidence: {
       strong: [],
-      unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
+      unclear: normalizeQuestionKey(currentStep) ? [normalizeQuestionKey(currentStep)] : [],
       contradictions: [],
     },
     recommendation: {
@@ -947,11 +1022,11 @@ function buildPassiveTurn({
       greetingStyle: s(draft.greetingStyle),
       afterHoursBehavior: s(draft.afterHoursBehavior),
     }),
-    readyForApproval,
+    readyForApproval: false,
   };
 }
 
-function buildLocalTurn({
+function buildAcceptedTurn({
   locale = "az-AZ",
   currentStep = "",
   draft = {},
@@ -963,21 +1038,16 @@ function buildLocalTurn({
   model = "",
   usedFallback = false,
   error = "",
-  isRelevantToCurrentStep = true,
-  openAIReason = "",
 } = {}) {
   const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
   const preview = buildCurrentPreview(mergedDraft, review);
-  const nextQuestion = getNextQuestion(
-    {},
-    mergedDraft,
-    {
-      currentQuestionKey: currentStep,
-      lastAnsweredStep: currentStep,
-    },
-    { locale }
-  );
-  const readyForApproval = nextQuestion == null;
+  const resolution = resolveNextQuestionForDraft({
+    locale,
+    draft: mergedDraft,
+    currentStep,
+  });
+  const nextQuestion = resolution.readyForApproval ? null : obj(resolution.nextQuestion);
+  const readyForApproval = resolution.readyForApproval === true;
   const copy = getSetupCopy(locale);
   const ack = hasAcceptedPatchSignal(acceptedPatch)
     ? buildAckMessage(locale, currentStep, acceptedPatch)
@@ -987,10 +1057,6 @@ function buildLocalTurn({
 
   if (readyForApproval) {
     assistantMessage = s(obj(copy.phrases).readyForApproval);
-  } else if (isRelevantToCurrentStep !== true && s(latestMessage)) {
-    assistantMessage = [s(obj(copy.phrases).redirectPrefix), s(obj(nextQuestion).prompt)]
-      .filter(Boolean)
-      .join(" ");
   } else if (ack && s(obj(nextQuestion).prompt)) {
     assistantMessage = `${ack} ${s(obj(nextQuestion).prompt)}`.trim();
   } else if (ack) {
@@ -1019,27 +1085,10 @@ function buildLocalTurn({
     nextQuestion,
     draft: preview,
     acceptedPatch: compactDraftObject(acceptedPatch),
-    rejectedInputs:
-      isRelevantToCurrentStep === true || !s(latestMessage)
-        ? []
-        : [
-            {
-              input: s(latestMessage),
-              reason:
-                s(openAIReason) ||
-                "The answer did not clearly match the current setup step.",
-              suggestedField: normalizeQuestionKey(currentStep),
-            },
-          ],
+    rejectedInputs: [],
     confidence: {
-      strong:
-        isRelevantToCurrentStep === true && normalizeQuestionKey(currentStep)
-          ? [normalizeQuestionKey(currentStep)]
-          : [],
-      unclear:
-        isRelevantToCurrentStep === true || !normalizeQuestionKey(currentStep)
-          ? []
-          : [normalizeQuestionKey(currentStep)],
+      strong: normalizeQuestionKey(currentStep) ? [normalizeQuestionKey(currentStep)] : [],
+      unclear: [],
       contradictions: [],
     },
     recommendation: {
@@ -1074,6 +1123,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
     normalizeQuestionKey(latestStep) ||
     normalizeQuestionKey(obj(draft.progress).currentQuestionKey) ||
     normalizeQuestionKey(obj(draft.progress).lastAnsweredStep) ||
+    normalizeQuestionKey(obj(session).currentStep) ||
     "company";
 
   const locale = resolveReplyLocale({
@@ -1086,42 +1136,135 @@ export async function runSetupAssistantOpenAIOrchestrator({
   const safeMessage = s(latestMessage);
 
   if (!safeMessage) {
-    return buildPassiveTurn({
+    const resolution = resolveNextQuestionForDraft({
       locale,
-      currentStep,
       draft,
-      review,
-      sources,
+      currentStep,
+    });
+
+    const nextQuestion =
+      resolution.readyForApproval === true
+        ? null
+        : obj(resolution.nextQuestion).key
+          ? obj(resolution.nextQuestion)
+          : buildQuestion(currentStep, locale);
+
+    const copy = getSetupCopy(locale);
+    const assistantMessage =
+      resolution.readyForApproval === true
+        ? s(obj(copy.phrases).readyForApproval)
+        : s(obj(nextQuestion).prompt);
+
+    return {
+      ok: true,
       provider: "local_deterministic",
       model: runtime.model,
       usedFallback: false,
-    });
+      error: "",
+      latestUserInput: compactDraftObject({
+        step: normalizeQuestionKey(currentStep),
+        text: "",
+      }),
+      phase:
+        resolution.readyForApproval === true
+          ? "ready"
+          : hasSetupSignalForInterview(draft)
+            ? "interview"
+            : "source_capture",
+      assistantMessage,
+      message: assistantMessage,
+      nextQuestion,
+      draft: preview,
+      acceptedPatch: buildEmptyAcceptedPatch(),
+      rejectedInputs: [],
+      confidence: {
+        strong: [],
+        unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
+        contradictions: [],
+      },
+      recommendation: {
+        notes: [],
+      },
+      sourceSignals: buildSourceSignals(preview, sources),
+      interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
+      aiBehavior: compactDraftObject({
+        languages: uniqueStrings(arr(draft.languages), 8),
+        tone: s(draft.tone),
+        greetingStyle: s(draft.greetingStyle),
+        afterHoursBehavior: s(draft.afterHoursBehavior),
+      }),
+      readyForApproval: resolution.readyForApproval === true,
+    };
   }
 
   if (isIntentOnlyMessage(safeMessage)) {
-    return buildPassiveTurn({
+    const resolution = resolveNextQuestionForDraft({
       locale,
-      currentStep,
       draft,
-      review,
-      sources,
+      currentStep,
+    });
+
+    const nextQuestion =
+      resolution.readyForApproval === true
+        ? null
+        : obj(resolution.nextQuestion).key
+          ? obj(resolution.nextQuestion)
+          : buildQuestion(currentStep, locale);
+
+    const copy = getSetupCopy(locale);
+    const assistantMessage =
+      resolution.readyForApproval === true
+        ? s(obj(copy.phrases).readyForApproval)
+        : s(obj(nextQuestion).prompt);
+
+    return {
+      ok: true,
       provider: "local_deterministic",
       model: runtime.model,
       usedFallback: false,
-    });
+      error: "",
+      latestUserInput: compactDraftObject({
+        step: normalizeQuestionKey(currentStep),
+        text: safeMessage,
+      }),
+      phase:
+        resolution.readyForApproval === true
+          ? "ready"
+          : hasSetupSignalForInterview(draft)
+            ? "interview"
+            : "source_capture",
+      assistantMessage,
+      message: assistantMessage,
+      nextQuestion,
+      draft: preview,
+      acceptedPatch: buildEmptyAcceptedPatch(),
+      rejectedInputs: [],
+      confidence: {
+        strong: [],
+        unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
+        contradictions: [],
+      },
+      recommendation: {
+        notes: [],
+      },
+      sourceSignals: buildSourceSignals(preview, sources),
+      interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
+      aiBehavior: compactDraftObject({
+        languages: uniqueStrings(arr(draft.languages), 8),
+        tone: s(draft.tone),
+        greetingStyle: s(draft.greetingStyle),
+        afterHoursBehavior: s(draft.afterHoursBehavior),
+      }),
+      readyForApproval: resolution.readyForApproval === true,
+    };
   }
 
-  const localAcceptedPatch = buildLocalAcceptedPatch(currentStep, safeMessage, draft);
-  const localMergedDraft = buildDraftWithAcceptedPatch(draft, localAcceptedPatch);
-  const localTouchesStep = patchTouchesCurrentStep(currentStep, localAcceptedPatch);
-  const localSatisfiesStep = isQuestionSatisfied(currentStep, localMergedDraft);
-  const localRelevant =
-    localTouchesStep ||
-    localSatisfiesStep ||
-    (currentStep === "company" && Boolean(s(obj(localAcceptedPatch.identity).websiteUrl)));
+  const localResult = buildLocalAcceptedPatch(currentStep, safeMessage, draft);
+  const localAcceptedPatch = obj(localResult.acceptedPatch);
+  const localValidation = obj(localResult.validation);
 
-  if (localRelevant || runtime.forceFallback === true || forceFallback === true) {
-    return buildLocalTurn({
+  if (localValidation.accepted === true && hasAcceptedPatchSignal(localAcceptedPatch)) {
+    return buildAcceptedTurn({
       locale,
       currentStep,
       draft,
@@ -1131,29 +1274,40 @@ export async function runSetupAssistantOpenAIOrchestrator({
       acceptedPatch: localAcceptedPatch,
       provider: "local_deterministic",
       model: runtime.model,
-      usedFallback: runtime.forceFallback === true || forceFallback === true,
-      error:
-        runtime.forceFallback === true || forceFallback === true
-          ? "openai_setup_assistant_forced_fallback"
-          : "",
-      isRelevantToCurrentStep: true,
+      usedFallback: false,
+      error: "",
+    });
+  }
+
+  if (runtime.forceFallback === true || forceFallback === true) {
+    return buildRejectedTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      provider: "local_validation",
+      model: runtime.model,
+      usedFallback: true,
+      error: "openai_setup_assistant_forced_fallback",
+      invalidReason: s(localValidation.reason),
     });
   }
 
   if (!hasOpenAISetupAssistant()) {
-    return buildLocalTurn({
+    return buildRejectedTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      acceptedPatch: localAcceptedPatch,
-      provider: "local_deterministic",
+      provider: "local_validation",
       model: runtime.model,
       usedFallback: true,
       error: "openai_setup_assistant_unavailable",
-      isRelevantToCurrentStep: false,
+      invalidReason: s(localValidation.reason),
     });
   }
 
@@ -1171,14 +1325,37 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
     const openAIAcceptedPatch = buildAcceptedPatchFromOpenAI(openaiPayload);
     const mergedAcceptedPatch = mergeAcceptedPatches(localAcceptedPatch, openAIAcceptedPatch);
+
+    const validationValue = extractValidationValueFromAcceptedPatch(
+      currentStep,
+      mergedAcceptedPatch
+    );
+
+    const openAIValidation = validateStepAnswer(currentStep, validationValue, draft);
     const mergedDraft = buildDraftWithAcceptedPatch(draft, mergedAcceptedPatch);
+    const touchesCurrentStep = patchTouchesCurrentStep(currentStep, mergedAcceptedPatch);
 
-    const relevant =
-      openaiPayload.isRelevantToCurrentStep === true ||
-      patchTouchesCurrentStep(currentStep, mergedAcceptedPatch) ||
-      isQuestionSatisfied(currentStep, mergedDraft);
+    const accepted =
+      openAIValidation.accepted === true &&
+      (touchesCurrentStep || isDraftReadyForApproval(mergedDraft) === true);
 
-    return buildLocalTurn({
+    if (!accepted) {
+      return buildRejectedTurn({
+        locale,
+        currentStep,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        provider: "openai",
+        model: runtime.model,
+        usedFallback: false,
+        error: "",
+        invalidReason: s(openAIValidation.reason || openaiPayload.reason || localValidation.reason),
+      });
+    }
+
+    return buildAcceptedTurn({
       locale,
       currentStep,
       draft,
@@ -1190,23 +1367,20 @@ export async function runSetupAssistantOpenAIOrchestrator({
       model: runtime.model,
       usedFallback: false,
       error: "",
-      isRelevantToCurrentStep: relevant,
-      openAIReason: s(openaiPayload.reason),
     });
   } catch (error) {
-    return buildLocalTurn({
+    return buildRejectedTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      acceptedPatch: localAcceptedPatch,
-      provider: "local_deterministic",
+      provider: "local_validation",
       model: runtime.model,
       usedFallback: true,
       error: s(error?.message, "openai_setup_assistant_failed"),
-      isRelevantToCurrentStep: false,
+      invalidReason: s(localValidation.reason),
     });
   }
 }
@@ -1222,8 +1396,8 @@ export const __test__ = {
   isIntentOnlyMessage,
   mergeAcceptedPatches,
   buildAckMessage,
-  buildPassiveTurn,
-  buildLocalTurn,
+  extractValidationValueFromAcceptedPatch,
+  resolveNextQuestionForDraft,
   setCachedClient(client = null) {
     cachedClient = client;
   },

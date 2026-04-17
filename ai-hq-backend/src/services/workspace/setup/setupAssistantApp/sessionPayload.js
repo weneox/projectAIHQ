@@ -8,9 +8,14 @@ import {
   buildAssistantCompatQuestion,
 } from "./compat.js";
 import {
+  buildAssistantQuestion,
   getNextQuestion,
   normalizeSetupLocale,
 } from "./questions.js";
+import {
+  buildApprovalBlockers,
+  isDraftReadyForApproval,
+} from "./relevance.js";
 import { buildSetupAssistantSeedFromReview } from "./seed.js";
 import {
   SETUP_ASSISTANT_CURRENT_STEP,
@@ -358,8 +363,18 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   };
 }
 
-function resolveFallbackNextQuestion({ setup = {}, summary = {}, session = {} } = {}) {
+function buildGuardedNextQuestion({ setup = {}, summary = {}, session = {} } = {}) {
   const locale = resolveSetupLocaleFromSetup(setup);
+  const approvalBlockers = buildApprovalBlockers(setup);
+
+  if (approvalBlockers.length > 0) {
+    return {
+      approvalBlockers,
+      nextQuestion: sanitizeBrainQuestion(
+        buildAssistantQuestion(s(approvalBlockers[0].step || "company"), {}, { locale })
+      ),
+    };
+  }
 
   const nextQuestion = getNextQuestion(
     summary,
@@ -373,7 +388,41 @@ function resolveFallbackNextQuestion({ setup = {}, summary = {}, session = {} } 
     { locale }
   );
 
-  return sanitizeBrainQuestion(nextQuestion);
+  return {
+    approvalBlockers: [],
+    nextQuestion: sanitizeBrainQuestion(nextQuestion),
+  };
+}
+
+function resolveGuardedApprovalState({
+  setup = {},
+  summary = {},
+  session = {},
+  storedBrain = {},
+} = {}) {
+  const guarded = buildGuardedNextQuestion({
+    setup,
+    summary,
+    session,
+  });
+
+  const approvalBlockers = arr(guarded.approvalBlockers);
+  const nextQuestion = obj(guarded.nextQuestion);
+
+  const readyForApproval =
+    approvalBlockers.length === 0 &&
+    isDraftReadyForApproval(setup) &&
+    (
+      obj(storedBrain).readyForApproval === true ||
+      summary.readyForReview === true ||
+      !nextQuestion.key
+    );
+
+  return {
+    approvalBlockers,
+    nextQuestion,
+    readyForApproval,
+  };
 }
 
 export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
@@ -465,22 +514,16 @@ function buildAssistantFromStoredBrain({
           formatHours: formatSetupAssistantHoursForCanonical,
         });
 
-  const fallbackQuestion = resolveFallbackNextQuestion({
+  const guardedApproval = resolveGuardedApprovalState({
     setup,
     summary,
     session,
+    storedBrain: brain,
   });
 
-  const nextQuestion = sanitizeBrainQuestion(
-    Object.keys(obj(brain.nextQuestion)).length > 0
-      ? brain.nextQuestion
-      : fallbackQuestion
-  );
-
-  const readyForApproval =
-    brain.readyForApproval === true ||
-    summary.readyForReview === true ||
-    !nextQuestion.key;
+  const nextQuestion = sanitizeBrainQuestion(guardedApproval.nextQuestion);
+  const approvalBlockers = arr(guardedApproval.approvalBlockers);
+  const readyForApproval = guardedApproval.readyForApproval === true;
 
   const phase = s(
     brain.phase ||
@@ -493,23 +536,25 @@ function buildAssistantFromStoredBrain({
   ).toLowerCase();
 
   const interviewPlan = sanitizeBrainInterviewPlan(
-    Object.keys(obj(brain.interviewPlan)).length > 0
+    Object.keys(obj(brain.interviewPlan)).length > 0 && !approvalBlockers.length
       ? brain.interviewPlan
       : {
-          activeQuestionKeys: nextQuestion.key ? [nextQuestion.key] : [],
-          activeQuestions: nextQuestion.key
-            ? [
-                {
-                  key: nextQuestion.key,
-                  step: nextQuestion.step,
-                  title: nextQuestion.title,
-                  group: nextQuestion.group || "business_truth",
-                  groupLabel: nextQuestion.groupLabel || "Business truth",
-                  priority: 1,
-                },
-              ]
-            : [],
-          remainingQuestionKeys: nextQuestion.key ? [nextQuestion.key] : [],
+          activeQuestionKeys: nextQuestion.key && !readyForApproval ? [nextQuestion.key] : [],
+          activeQuestions:
+            nextQuestion.key && !readyForApproval
+              ? [
+                  {
+                    key: nextQuestion.key,
+                    step: nextQuestion.step,
+                    title: nextQuestion.title,
+                    group: nextQuestion.group || "business_truth",
+                    groupLabel: nextQuestion.groupLabel || "Business truth",
+                    priority: 1,
+                  },
+                ]
+              : [],
+          remainingQuestionKeys:
+            nextQuestion.key && !readyForApproval ? [nextQuestion.key] : [],
           nextGroup: nextQuestion.group || "business_truth",
           nextGroupLabel: nextQuestion.groupLabel || "Business truth",
         }
@@ -525,7 +570,11 @@ function buildAssistantFromStoredBrain({
   const recommendation =
     arr(obj(brain.recommendation).notes).length
       ? sanitizeBrainRecommendation(brain.recommendation)
-      : { notes: [] };
+      : {
+          notes: approvalBlockers.length
+            ? approvalBlockers.map((item) => s(item.reason)).filter(Boolean)
+            : [],
+        };
 
   const resolvedAssistantMessage = compactText(
     s(
@@ -540,7 +589,8 @@ function buildAssistantFromStoredBrain({
   return {
     mode: "brain_v4",
     nextQuestion: nextQuestion.key && !readyForApproval ? nextQuestion : null,
-    confirmationBlockers: arr(summary.confirmationBlockers),
+    approvalBlockers,
+    confirmationBlockers: approvalBlockers,
     sections: buildSummarySections(summary, servicesCatalog),
     completion: {
       ready: readyForApproval,
@@ -630,6 +680,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
 
   const nextQuestion = obj(assistant.nextQuestion);
   const readyForApproval = assistant.readyForApproval === true;
+  const approvalBlockers = arr(assistant.approvalBlockers);
 
   return {
     session: {
@@ -663,10 +714,11 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         draftOnly: true,
         sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
         namespace: SETUP_ASSISTANT_NAMESPACE,
-        readyForReview: summary.readyForReview === true,
+        readyForReview: readyForApproval,
         readyForApproval,
         finalizeAvailable: readyForApproval,
         finalized: false,
+        approvalBlockers,
         message: "",
       },
       assistant,
@@ -708,11 +760,16 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   }
 
   const safeTurn = sanitizeBrainSnapshot(turn);
+  const guardedReadyForApproval =
+    obj(setup.assistant).readyForApproval === true &&
+    safeTurn.readyForApproval === true;
 
   const resolvedNextQuestion =
-    obj(safeTurn.nextQuestion).key
-      ? obj(safeTurn.nextQuestion)
-      : obj(assistant.nextQuestion);
+    guardedReadyForApproval === true
+      ? null
+      : obj(safeTurn.nextQuestion).key
+        ? obj(safeTurn.nextQuestion)
+        : obj(assistant.nextQuestion);
 
   const mergedAssistant = compactDraftObject({
     ...assistant,
@@ -734,13 +791,14 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     nextQuestion: obj(resolvedNextQuestion).key
       ? obj(resolvedNextQuestion)
       : null,
+    approvalBlockers: arr(assistant.approvalBlockers),
     confidence: sanitizeBrainConfidence(safeTurn.confidence),
     recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
     sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
     interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
     aiBehavior: compactDraftObject(safeTurn.aiBehavior),
-    readyForApproval: safeTurn.readyForApproval === true,
-    finalizeAvailable: safeTurn.readyForApproval === true,
+    readyForApproval: guardedReadyForApproval,
+    finalizeAvailable: guardedReadyForApproval,
     draft: obj(safeTurn.draft),
     rejectedInputs: arr(safeTurn.rejectedInputs),
     provider: s(safeTurn.provider),
@@ -752,9 +810,9 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       12
     ),
     completion: {
-      ready: safeTurn.readyForApproval === true,
+      ready: guardedReadyForApproval,
       action:
-        safeTurn.readyForApproval === true
+        guardedReadyForApproval
           ? {
               id: "finalize_setup",
               label: "Finish setup",
@@ -762,7 +820,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
             }
           : null,
       message:
-        safeTurn.readyForApproval === true
+        guardedReadyForApproval
           ? compactText(s(safeTurn.assistantMessage || safeTurn.message), 420)
           : "",
     },
@@ -778,10 +836,10 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
 
   const mergedReview = {
     ...obj(setup.review),
-    readyForApproval: safeTurn.readyForApproval === true,
-    finalizeAvailable:
-      safeTurn.readyForApproval === true ||
-      obj(setup.review).finalizeAvailable === true,
+    readyForReview: guardedReadyForApproval,
+    readyForApproval: guardedReadyForApproval,
+    finalizeAvailable: guardedReadyForApproval,
+    approvalBlockers: arr(assistant.approvalBlockers),
     message: "",
   };
 
@@ -818,12 +876,13 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
         mode: mergedAssistant.mode,
         phase: mergedAssistant.phase,
         nextQuestion: obj(resolvedNextQuestion),
+        approvalBlockers: arr(assistant.approvalBlockers),
         confidence: sanitizeBrainConfidence(safeTurn.confidence),
         recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
         sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
         interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
         aiBehavior: obj(safeTurn.aiBehavior),
-        readyForApproval: safeTurn.readyForApproval === true,
+        readyForApproval: guardedReadyForApproval,
         draft: obj(safeTurn.draft),
         rejectedInputs: arr(safeTurn.rejectedInputs),
         provider: s(safeTurn.provider),
@@ -840,7 +899,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     reasoningSummary: arr(obj(safeTurn.recommendation).notes).join(" "),
     unknowns: arr(obj(safeTurn.confidence).unclear),
     assistantHints: arr(obj(safeTurn.sourceSignals).strongestEvidence),
-    guardrails: [],
+    guardrails: arr(assistant.approvalBlockers),
     review: mergedReview,
   };
 }
