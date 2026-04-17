@@ -17,6 +17,8 @@ function withOpenAISetupConfig(t, overrides = {}) {
     openaiSetupAssistantEnabled: cfg.ai.openaiSetupAssistantEnabled,
     openaiSetupForceFallback: cfg.ai.openaiSetupForceFallback,
     openaiSetupModel: cfg.ai.openaiSetupModel,
+    openaiSetupEnableTurnPolisher: cfg.ai.openaiSetupEnableTurnPolisher,
+    openaiSetupTurnPolisherReadyOnly: cfg.ai.openaiSetupTurnPolisherReadyOnly,
   };
 
   Object.assign(cfg.ai, overrides);
@@ -233,6 +235,8 @@ test("polished draft override path replaces the hidden preview when the polisher
     openaiSetupAssistantEnabled: true,
     openaiSetupForceFallback: false,
     openaiSetupModel: "test-model",
+    openaiSetupEnableTurnPolisher: true,
+    openaiSetupTurnPolisherReadyOnly: false,
   });
 
   orchestratorTest.setCachedClient({
