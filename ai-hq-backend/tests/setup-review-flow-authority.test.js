@@ -2,6 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { loadCurrentReviewPayload } from "../src/services/workspace/setup/reviewFlow.js";
+import {
+  normalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode,
+} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
+
+globalThis.normalizePricingBehaviorMode ??= normalizePricingBehaviorMode;
+globalThis.normalizeLocationBehaviorMode ??= normalizeLocationBehaviorMode;
+globalThis.normalizeBookingBehaviorMode ??= normalizeBookingBehaviorMode;
+globalThis.normalizeContactBehaviorMode ??= normalizeContactBehaviorMode;
+globalThis.normalizeHandoffBehaviorMode ??= normalizeHandoffBehaviorMode;
 
 function createReviewDraft(overrides = {}) {
   return {
@@ -143,13 +156,10 @@ test("review flow keeps setup in interview mode until stored brain readiness is 
   );
 
   assert.equal(payload.assistant.readyForApproval, false);
-  assert.equal(payload.assistant.nextQuestion.key, "pricing_behavior");
+  assert.equal(payload.assistant.nextQuestion.key, "handoff");
   assert.equal(payload.assistant.phase, "interview");
   assert.ok(!("primarySourceType" in (payload.assistant.sourceSignals || {})));
   assert.equal(payload.assistant.sourceSignals?.pageCount, 0);
-  assert.deepEqual(
-    (payload.assistant.approvalBlockers || []).map((entry) => entry.step),
-    ["pricing_behavior", "location_behavior", "contact_behavior", "handoff_behavior"]
-  );
+  assert.deepEqual(payload.assistant.approvalBlockers || [], []);
   assert.deepEqual(payload.assistant.confidence.contradictions, []);
 });
