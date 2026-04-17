@@ -111,7 +111,6 @@ const STEP_KEYWORDS = {
     "xidmət",
     "xidmet",
     "offer",
-    "do",
   ],
   contacts: [
     "contact",
@@ -151,6 +150,10 @@ const STEP_KEYWORDS = {
     "eur",
     "from",
     "starting",
+    "xidmətə görə",
+    "xidmete gore",
+    "dəyişir",
+    "deyisir",
   ],
   handoff: [
     "handoff",
@@ -171,19 +174,21 @@ const STEP_KEYWORDS = {
   pricing_behavior: [
     "pricing behavior",
     "pricing policy",
-    "how to answer price",
-    "price replies",
-    "qiymet davranis",
+    "price behavior",
     "qiymət davranış",
+    "qiymet davranis",
     "pricing page",
+    "price page",
     "ask service first",
+    "link first",
+    "answer then link",
   ],
   location_behavior: [
     "location behavior",
     "location policy",
     "map",
-    "xerite",
     "xəritə",
+    "xerite",
     "address behavior",
     "unvan",
     "ünvan",
@@ -214,8 +219,8 @@ const STEP_KEYWORDS = {
     "ask reason first",
     "contextual handoff",
     "direct handoff",
-    "insana kecid",
     "insana keçid",
+    "insana kecid",
   ],
 };
 
@@ -241,38 +246,38 @@ const STEP_EXAMPLES = {
       "24/7",
     ],
     pricing: [
+      "Qiymət xidmətə görə dəyişir.",
       "Qiymətlər 20 AZN-dən başlayır.",
-      "Dəqiq qiymət xidmətə görə dəyişir, əvvəlcə detal alırıq.",
-      "Public qiymət vermirik, əvvəlcə sorğu alırıq.",
+      "Əvvəlcə sorğu alırıq.",
     ],
     handoff: [
       "Müştəri operator istəyəndə insana yönləndir.",
       "Şikayət, təcili hal və ödəniş problemi olanda insana keç.",
     ],
     pricing_behavior: [
-      "qÄ±sa cavab + pricing page",
-      "É™vvÉ™lcÉ™ xidmÉ™t soruÅŸ",
-      "birbaÅŸa pricing page-É™ yÃ¶nlÉ™ndir",
+      "qısa cavab + pricing page",
+      "əvvəlcə xidmət soruş",
+      "birbaşa pricing page-ə yönləndir",
     ],
     location_behavior: [
-      "Ã¼nvan + xÉ™ritÉ™",
-      "birbaÅŸa xÉ™ritÉ™",
-      "yalnÄ±z qÄ±sa Ã¼nvan",
+      "ünvan + xəritə",
+      "birbaşa xəritə",
+      "yalnız qısa ünvan",
     ],
     booking_behavior: [
-      "WhatsApp-a yÃ¶nlÉ™ndir",
-      "Instagram DM-É™ yÃ¶nlÉ™ndir",
-      "É™vvÉ™lcÉ™ mÉ™lumat topla sonra yÃ¶nlÉ™ndir",
+      "WhatsApp-a yönləndir",
+      "Instagram DM-ə yönləndir",
+      "əvvəlcə məlumat topla sonra yönləndir",
     ],
     contact_behavior: [
       "WhatsApp first",
-      "zÉ™ng first",
+      "zəng first",
       "email first",
     ],
     handoff_behavior: [
-      "kontekstÉ™ gÃ¶rÉ™ keÃ§",
-      "É™vvÉ™lcÉ™ sÉ™bÉ™b soruÅŸ",
-      "birbaÅŸa keÃ§",
+      "kontekstə görə keç",
+      "əvvəlcə səbəb soruş",
+      "birbaşa keç",
     ],
   },
   en: {
@@ -296,9 +301,9 @@ const STEP_EXAMPLES = {
       "24/7",
     ],
     pricing: [
+      "Pricing depends on the service.",
       "Prices start from 20 AZN.",
-      "Exact pricing depends on the service, we ask for details first.",
-      "We do not share exact prices publicly.",
+      "We ask for details first.",
     ],
     handoff: [
       "Hand off to a human when the customer asks for an operator.",
@@ -331,6 +336,10 @@ const STEP_EXAMPLES = {
     ],
   },
 };
+
+function isBehaviorStep(step = "") {
+  return /_behavior$/.test(normalizeQuestionKey(step));
+}
 
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
@@ -402,17 +411,6 @@ function splitList(value = "", limit = 24) {
     .map((item) => s(item))
     .filter(Boolean)
     .slice(0, limit);
-}
-
-function listToNatural(locale = "az-AZ", values = []) {
-  const copy = getSetupCopy(locale);
-  const items = uniqueStrings(values, 6);
-
-  if (!items.length) return "";
-  if (items.length === 1) return items[0];
-  if (items.length === 2) return `${items[0]} ${copy.and} ${items[1]}`;
-
-  return `${items.slice(0, -1).join(", ")} ${copy.and} ${items.at(-1)}`;
 }
 
 function getTimelineTurns(review = {}) {
@@ -1012,10 +1010,8 @@ function extractCompanyValue(text = "") {
     .map((item) => s(item))
     .filter(Boolean);
 
-  const companyName = s(lines[0]);
-
   return {
-    businessName: companyName,
+    businessName: s(lines[0]),
     websiteUrl: source?.type === "website" ? source.value : "",
   };
 }
@@ -1109,15 +1105,7 @@ function buildPatchForStep(step = "", text = "", draft = {}) {
     patch.pricingPosture = extractPricingValue(text, arr(draft.services));
   } else if (normalizedStep === "handoff") {
     patch.humanHandoff = extractHandoffValue(text);
-  } else if (
-    [
-      "pricing_behavior",
-      "location_behavior",
-      "booking_behavior",
-      "contact_behavior",
-      "handoff_behavior",
-    ].includes(normalizedStep)
-  ) {
+  } else if (isBehaviorStep(normalizedStep)) {
     patch.assistantBehaviorDraft = obj(
       patchFromAnswer(normalizedStep, text, draft).assistantBehaviorDraft
     );
@@ -1167,17 +1155,29 @@ function stripCorrectionPrefix(text = "") {
     .trim();
 }
 
-function extractCrossStepSignals(text = "", currentStep = "", draft = {}) {
-  const patches = [];
-  const normalizedCurrent = normalizeQuestionKey(currentStep);
-  const currentIsBehavior = /_behavior$/.test(normalizedCurrent);
-  const candidateSteps = STEP_ORDER.filter((step) => {
-    if (step === normalizedCurrent) return false;
-    if (currentIsBehavior) return /_behavior$/.test(step);
-    return /_behavior$/.test(step);
-  });
+function isExplicitCrossStepMention(text = "", step = "") {
+  const value = normalizeMessage(text);
+  const keywords = STEP_KEYWORDS[step] || [];
+  return keywords.some((keyword) => value.includes(normalizeMessage(keyword)));
+}
 
-  for (const step of candidateSteps) {
+function extractCrossStepSignals(text = "", currentStep = "", draft = {}) {
+  const current = normalizeQuestionKey(currentStep);
+
+  if (!current || !isBehaviorStep(current)) {
+    return {
+      patch: buildEmptyAcceptedPatch(),
+      steps: [],
+    };
+  }
+
+  const patches = [];
+
+  for (const step of STEP_ORDER) {
+    if (step === current) continue;
+    if (!isBehaviorStep(step)) continue;
+    if (!isExplicitCrossStepMention(text, step)) continue;
+
     const result = buildPatchForStep(step, text, draft);
     if (hasAcceptedPatchSignal(result.patch)) {
       patches.push({
@@ -1237,7 +1237,7 @@ function buildClarifyMessage({
   step = "",
   retryCount = 0,
   text = "",
-}) {
+} = {}) {
   const question = buildQuestion(step, locale);
   const examples = getExamplesForStep(step, locale);
 
@@ -1261,7 +1261,7 @@ function buildClarifyMessage({
   if (normalizeSetupLocale(locale) === "az-AZ") {
     return [
       buildWarmRedirect(locale, text),
-      "Bu hissəni bir cümlə ilə və ya hazır nümunə kimi yaza bilərsiniz.",
+      "Bu hissəni bir qısa cümlə ilə yaza bilərsiniz.",
       examples.length ? `Nümunə: ${examples.join(" / ")}.` : "",
     ]
       .filter(Boolean)
@@ -1270,7 +1270,7 @@ function buildClarifyMessage({
 
   return [
     buildWarmRedirect(locale, text),
-    "You can answer this in one short sentence or by following one of these examples.",
+    "You can answer this in one short sentence.",
     examples.length ? `Example: ${examples.join(" / ")}.` : "",
   ]
     .filter(Boolean)
@@ -1318,11 +1318,7 @@ function resolveConversationPlan({
 
   const retryCount = countAssistantAsksForStep(review, normalizedCurrent);
 
-  if (
-    allowPark === true &&
-    currentBlocker &&
-    retryCount >= 2
-  ) {
+  if (allowPark === true && currentBlocker && retryCount >= 2) {
     const alternateBlocker = blockers.find(
       (item) => normalizeQuestionKey(item.step) !== normalizedCurrent
     );
@@ -1381,6 +1377,43 @@ function resolveConversationPlan({
   };
 }
 
+function buildStepAcknowledgement(locale = "az-AZ", step = "") {
+  const safeStep = normalizeQuestionKey(step);
+  const isAz = normalizeSetupLocale(locale) === "az-AZ";
+
+  const map = isAz
+    ? {
+        company: "Ad qeyd olundu.",
+        description: "Oldu.",
+        services: "Xidmətlər qeyd olundu.",
+        contacts: "Əlaqə yolu qeyd olundu.",
+        hours: "İş saatları qeyd olundu.",
+        pricing: "Qiymət qaydası qeyd olundu.",
+        handoff: "İnsana yönləndirmə qaydası qeyd olundu.",
+        pricing_behavior: "Qiymət cavab davranışı qeyd olundu.",
+        location_behavior: "Ünvan cavab davranışı qeyd olundu.",
+        booking_behavior: "Rezervasiya yönləndirməsi qeyd olundu.",
+        contact_behavior: "Əlaqə üstünlüyü qeyd olundu.",
+        handoff_behavior: "Handoff davranışı qeyd olundu.",
+      }
+    : {
+        company: "Business name noted.",
+        description: "Got it.",
+        services: "Services noted.",
+        contacts: "Contact route noted.",
+        hours: "Working hours noted.",
+        pricing: "Pricing rule noted.",
+        handoff: "Human handoff rule noted.",
+        pricing_behavior: "Pricing reply behavior noted.",
+        location_behavior: "Location reply behavior noted.",
+        booking_behavior: "Booking routing noted.",
+        contact_behavior: "Contact preference noted.",
+        handoff_behavior: "Handoff behavior noted.",
+      };
+
+  return s(map[safeStep] || (isAz ? "Qeyd olundu." : "Noted."));
+}
+
 function buildTurn({
   locale = "az-AZ",
   currentStep = "",
@@ -1425,7 +1458,11 @@ function buildTurn({
       : plan.readyForApproval === true;
 
   const resolvedNextQuestion =
-    readyForApproval === true ? null : obj(nextQuestion).key ? obj(nextQuestion) : obj(plan.nextQuestion);
+    readyForApproval === true
+      ? null
+      : obj(nextQuestion).key
+        ? obj(nextQuestion)
+        : obj(plan.nextQuestion);
 
   return {
     ok: true,
@@ -1522,7 +1559,6 @@ function buildDirectAnswerTurn({
   acceptedPatch = {},
   model = "",
   provider = "local_reasoning",
-  extraNote = "",
 } = {}) {
   const copy = getSetupCopy(locale);
   const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
@@ -1533,70 +1569,12 @@ function buildDirectAnswerTurn({
     review,
   });
 
-  let ack = "";
-  const patch = obj(acceptedPatch);
-  const identity = obj(patch.identity);
-
-  if (currentStep === "company" && s(identity.businessName)) {
-    ack = s(obj(copy.phrases).companyCaptured).replace(
-      "{value}",
-      s(identity.businessName)
-    );
-  } else if (currentStep === "description" && s(identity.description)) {
-    ack = s(obj(copy.phrases).descriptionCaptured).replace(
-      "{value}",
-      s(identity.description)
-    );
-  } else if (currentStep === "services" && arr(patch.services).length) {
-    ack = s(obj(copy.phrases).servicesCaptured).replace(
-      "{value}",
-      listToNatural(locale, arr(patch.services))
-    );
-  } else if (currentStep === "contacts" && arr(patch.contacts).length) {
-    ack = s(obj(copy.phrases).contactsCaptured);
-  } else if (currentStep === "hours" && arr(patch.hours).length) {
-    ack = s(obj(copy.phrases).hoursCaptured);
-  } else if (currentStep === "pricing" && s(patch.pricingPosture)) {
-    ack = s(obj(copy.phrases).pricingCaptured);
-  } else if (currentStep === "handoff" && s(patch.humanHandoff)) {
-    ack = s(obj(copy.phrases).handoffCaptured);
-  } else if (
-    currentStep === "pricing_behavior" &&
-    Object.keys(obj(obj(patch.assistantBehaviorDraft).pricingPolicy)).length
-  ) {
-    ack = s(obj(copy.phrases).pricingBehaviorCaptured);
-  } else if (
-    currentStep === "location_behavior" &&
-    Object.keys(obj(obj(patch.assistantBehaviorDraft).locationPolicy)).length
-  ) {
-    ack = s(obj(copy.phrases).locationBehaviorCaptured);
-  } else if (
-    currentStep === "booking_behavior" &&
-    Object.keys(obj(obj(patch.assistantBehaviorDraft).bookingPolicy)).length
-  ) {
-    ack = s(obj(copy.phrases).bookingBehaviorCaptured);
-  } else if (
-    currentStep === "contact_behavior" &&
-    Object.keys(obj(obj(patch.assistantBehaviorDraft).contactPolicy)).length
-  ) {
-    ack = s(obj(copy.phrases).contactBehaviorCaptured);
-  } else if (
-    currentStep === "handoff_behavior" &&
-    Object.keys(obj(obj(patch.assistantBehaviorDraft).handoffPolicy)).length
-  ) {
-    ack = s(obj(copy.phrases).handoffBehaviorCaptured);
-  } else {
-    ack = s(obj(copy.phrases).genericCaptured);
-  }
+  const ack = buildStepAcknowledgement(locale, currentStep);
 
   const assistantMessage =
     plan.readyForApproval === true
-      ? [ack, s(obj(copy.phrases).readyForApproval), extraNote]
-          .filter(Boolean)
-          .join(" ")
-      : [ack, extraNote, s(obj(plan.nextQuestion).prompt)]
-          .filter(Boolean)
-          .join(" ");
+      ? [ack, s(obj(copy.phrases).readyForApproval)].filter(Boolean).join(" ")
+      : [ack, s(obj(plan.nextQuestion).prompt)].filter(Boolean).join(" ");
 
   return buildTurn({
     locale,
@@ -1714,20 +1692,15 @@ function buildCorrectionTurn({
 
   const targetLabel =
     normalizeSetupLocale(locale) === "az-AZ"
-      ? `Düzəltdim: ${normalizedTarget}.`
+      ? `Düzəldildi: ${normalizedTarget}.`
       : `Updated: ${normalizedTarget}.`;
 
-  let assistantMessage = "";
-  if (plan.readyForApproval === true) {
-    assistantMessage =
-      normalizeSetupLocale(locale) === "az-AZ"
+  const assistantMessage =
+    plan.readyForApproval === true
+      ? normalizeSetupLocale(locale) === "az-AZ"
         ? `${targetLabel} Əla. Setup draft kifayət qədər doludur.`
-        : `${targetLabel} Great. The setup draft is complete enough.`;
-  } else {
-    assistantMessage = [targetLabel, s(obj(plan.nextQuestion).prompt)]
-      .filter(Boolean)
-      .join(" ");
-  }
+        : `${targetLabel} Great. The setup draft is complete enough.`
+      : [targetLabel, s(obj(plan.nextQuestion).prompt)].filter(Boolean).join(" ");
 
   return buildTurn({
     locale,
@@ -1750,7 +1723,6 @@ function buildCorrectionTurn({
 function buildSupplementalTurn({
   locale = "az-AZ",
   currentStep = "",
-  supplementalSteps = [],
   draft = {},
   review = null,
   sources = [],
@@ -1768,14 +1740,10 @@ function buildSupplementalTurn({
     preferredStep: currentStep,
   });
 
-  const capturedLabel =
+  const assistantMessage =
     normalizeSetupLocale(locale) === "az-AZ"
-      ? `Bunu ${listToNatural(locale, supplementalSteps)} hissəsi üçün də qeyd etdim.`
-      : `I also captured that for ${listToNatural(locale, supplementalSteps)}.`;
-
-  const assistantMessage = [capturedLabel, s(obj(plan.nextQuestion).prompt)]
-    .filter(Boolean)
-    .join(" ");
+      ? s(obj(plan.nextQuestion).prompt)
+      : s(obj(plan.nextQuestion).prompt);
 
   return buildTurn({
     locale,
@@ -1854,7 +1822,7 @@ function buildUserPrompt({
   question = null,
   preview = {},
   latestMessage = "",
-}) {
+} = {}) {
   return [
     "Current setup context:",
     JSON.stringify(
@@ -2055,12 +2023,20 @@ export async function runSetupAssistantOpenAIOrchestrator({
   if (directValidation.accepted === true && hasAcceptedPatchSignal(directPatch)) {
     const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
     const mergedPatch = mergeAcceptedPatches(directPatch, secondary.patch);
-    const extraNote =
-      secondary.steps.length > 0
-        ? normalizeSetupLocale(locale) === "az-AZ"
-          ? `Əlavə olaraq ${listToNatural(locale, secondary.steps)} üçün də faydalı məlumat gördüm.`
-          : `I also picked up useful info for ${listToNatural(locale, secondary.steps)}.`
-        : "";
+
+    if (secondary.steps.length > 0) {
+      return buildSupplementalTurn({
+        locale,
+        currentStep,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        acceptedPatch: mergedPatch,
+        model: runtime.model,
+        provider: "local_reasoning",
+      });
+    }
 
     return buildDirectAnswerTurn({
       locale,
@@ -2072,7 +2048,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
       acceptedPatch: mergedPatch,
       model: runtime.model,
       provider: "local_reasoning",
-      extraNote,
     });
   }
 
@@ -2097,22 +2072,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
         provider: "local_reasoning",
       });
     }
-  }
-
-  const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
-  if (hasAcceptedPatchSignal(secondary.patch)) {
-    return buildSupplementalTurn({
-      locale,
-      currentStep,
-      supplementalSteps: secondary.steps,
-      draft,
-      review,
-      sources,
-      latestMessage: safeMessage,
-      acceptedPatch: secondary.patch,
-      model: runtime.model,
-      provider: "local_reasoning",
-    });
   }
 
   if (runtime.forceFallback === true || forceFallback === true) {
@@ -2193,42 +2152,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
         sources,
         latestMessage: safeMessage,
         correctionPatch: modelPatch,
-        model: runtime.model,
-        provider: "openai_reasoning",
-      });
-    }
-
-    if (action === "supplemental" && hasAcceptedPatchSignal(modelPatch)) {
-      const supplementalSteps = STEP_ORDER.filter((step) => {
-        const value = normalizeMessage(
-          step === "company"
-            ? `${s(obj(modelPatch.identity).businessName)} ${s(obj(modelPatch.identity).websiteUrl)}`
-            : step === "description"
-              ? s(obj(modelPatch.identity).description)
-              : step === "services"
-                ? arr(modelPatch.services).join(", ")
-                : step === "contacts"
-                  ? arr(modelPatch.contacts).join(", ")
-                  : step === "hours"
-                    ? arr(modelPatch.hours).join(", ")
-                    : step === "pricing"
-                      ? s(modelPatch.pricingPosture)
-                      : step === "handoff"
-                        ? s(modelPatch.humanHandoff)
-                        : ""
-        );
-        return Boolean(value) && step !== currentStep;
-      });
-
-      return buildSupplementalTurn({
-        locale,
-        currentStep,
-        supplementalSteps,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        acceptedPatch: modelPatch,
         model: runtime.model,
         provider: "openai_reasoning",
       });

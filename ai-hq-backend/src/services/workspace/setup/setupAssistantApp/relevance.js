@@ -4,26 +4,14 @@ import {
   parsePricingNote,
   parseServicesNote,
 } from "../setupAssistantParser.js";
-import {
-  isBehaviorStepRelevant,
-  isQuestionSatisfied,
-  normalizeQuestionKey,
-} from "./questions.js";
-import {
-  buildRecognizedSourceCandidate,
-  inferContactType,
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
-} from "./shared.js";
+import { isBehaviorStepRelevant, normalizeQuestionKey } from "./questions.js";
+import { buildRecognizedSourceCandidate, inferContactType } from "./shared.js";
 
 const GREETING_WORDS = new Set([
   "salam",
   "salamlar",
-  "sagol",
   "sağol",
+  "sagol",
   "hello",
   "hi",
   "hey",
@@ -91,6 +79,30 @@ const PRICING_KEYWORDS = [
   "deposit",
   "paket",
   "package",
+];
+
+const PRICING_CONTEXT_PATTERNS = [
+  /\bxidmətə görə\b/i,
+  /\bxidmete gore\b/i,
+  /\bservice-based\b/i,
+  /\bdepends on the service\b/i,
+  /\bdepends by service\b/i,
+  /\bvaries by service\b/i,
+  /\bdəyişir\b/i,
+  /\bdeyisir\b/i,
+  /\bvaries\b/i,
+  /\bdepends\b/i,
+  /\bsabit\b/i,
+  /\bfixed\b/i,
+  /\bbaşlanğıc qiymət\b/i,
+  /\bstarts? from\b/i,
+  /\bquote required\b/i,
+  /\bəvvəlcə sorğu\b/i,
+  /\bevvelce sorgu\b/i,
+  /\brequest first\b/i,
+  /\bdetails first\b/i,
+  /\bpublic qiymət vermirik\b/i,
+  /\bdo not share exact prices\b/i,
 ];
 
 const HANDOFF_KEYWORDS = [
@@ -193,9 +205,17 @@ function hasUrlLike(value = "") {
   return Boolean(buildRecognizedSourceCandidate(value));
 }
 
+function extractRecognizedUrl(value = "") {
+  return s(buildRecognizedSourceCandidate(value)?.value).toLowerCase();
+}
+
 function containsAnyKeyword(value = "", keywords = []) {
   const text = normalizeText(value);
   return keywords.some((keyword) => text.includes(normalizeText(keyword)));
+}
+
+function hasAnyPattern(value = "", patterns = []) {
+  return patterns.some((pattern) => pattern.test(String(value || "")));
 }
 
 function isPureGreeting(value = "") {
@@ -312,10 +332,12 @@ function hasMeaningfulPricingText(value = "") {
   if (!text) return false;
   if (isPureGreeting(text) || isMetaChat(text)) return false;
 
-  const hasKeyword =
-    containsAnyKeyword(text, PRICING_KEYWORDS) || hasDigits(text);
+  const hasExplicitPricingSignal =
+    containsAnyKeyword(text, PRICING_KEYWORDS) ||
+    hasAnyPattern(text, PRICING_CONTEXT_PATTERNS) ||
+    hasDigits(text);
 
-  if (!hasKeyword) return false;
+  if (!hasExplicitPricingSignal) return false;
 
   const parsed = parsePricingNote(text, {}, []);
   return Boolean(
@@ -323,7 +345,8 @@ function hasMeaningfulPricingText(value = "") {
       s(parsed.pricingMode) ||
       s(parsed.pricingNotes) ||
       Number.isFinite(Number(parsed.startingAt)) ||
-      Number.isFinite(Number(parsed.minPrice))
+      Number.isFinite(Number(parsed.minPrice)) ||
+      hasAnyPattern(text, PRICING_CONTEXT_PATTERNS)
   );
 }
 
@@ -374,6 +397,34 @@ function hasMeaningfulCompanyText(value = "") {
   return tokenList.length <= 8 || /^[\p{L}\p{N} .&'-]+$/u.test(stripped);
 }
 
+function pricingBehaviorUrlLooksValid(value = "") {
+  const url = extractRecognizedUrl(value);
+  if (!url) return false;
+  return /pricing|price|menu|qiymet|qiymət/.test(url);
+}
+
+function locationBehaviorUrlLooksValid(value = "") {
+  const url = extractRecognizedUrl(value);
+  if (!url) return false;
+  return /maps|map|directions|location|contact|g\.page|maps\.app|google\..*\/maps/.test(
+    url
+  );
+}
+
+function bookingBehaviorUrlLooksValid(value = "") {
+  const url = extractRecognizedUrl(value);
+  if (!url) return false;
+  return /book|booking|reserve|reservation|appointment|wa\.me|instagram/.test(
+    url
+  );
+}
+
+function contactBehaviorUrlLooksValid(value = "") {
+  const url = extractRecognizedUrl(value);
+  if (!url) return false;
+  return /contact|wa\.me|whatsapp|telegram|instagram|facebook|mailto:/.test(url);
+}
+
 function hasMeaningfulPricingBehaviorText(value = "") {
   const text = s(value);
   if (!text) return false;
@@ -387,7 +438,7 @@ function hasMeaningfulPricingBehaviorText(value = "") {
       /(cavab|answer|reply)/i.test(text) ||
       /(service|xidmət).*(soruş|ask)/i.test(text) ||
       /(quote|sorğu|detal|details)/i.test(text) ||
-      hasUrlLike(text)
+      pricingBehaviorUrlLooksValid(text)
   );
 }
 
@@ -401,7 +452,7 @@ function hasMeaningfulLocationBehaviorText(value = "") {
 
   return Boolean(
     /(xəritə|map|google maps|directions|address|ünvan)/i.test(text) ||
-      hasUrlLike(text)
+      locationBehaviorUrlLooksValid(text)
   );
 }
 
@@ -417,7 +468,7 @@ function hasMeaningfulBookingBehaviorText(value = "") {
     /(booking|book|reserve|reservation|appointment)/i.test(text) ||
       /(whatsapp|instagram|website|site|wa\.me|dm)/i.test(text) ||
       /(collect|topla|məlumat|details)/i.test(text) ||
-      hasUrlLike(text)
+      bookingBehaviorUrlLooksValid(text)
   );
 }
 
@@ -431,7 +482,7 @@ function hasMeaningfulContactBehaviorText(value = "") {
 
   return Boolean(
     /(whatsapp|phone|call|email|link|telegram|instagram|facebook)/i.test(text) ||
-      hasUrlLike(text)
+      contactBehaviorUrlLooksValid(text)
   );
 }
 
@@ -453,8 +504,7 @@ function hasMeaningfulHandoffBehaviorText(value = "") {
 function validateCompanyAnswer(answer = "") {
   const source = buildRecognizedSourceCandidate(answer);
   const accepted =
-    hasMeaningfulCompanyText(answer) ||
-    Boolean(source?.type === "website");
+    hasMeaningfulCompanyText(answer) || Boolean(source?.type === "website");
 
   return {
     accepted,
@@ -511,9 +561,7 @@ function validateHoursAnswer(answer = "") {
   return {
     accepted,
     reasonCode: accepted ? "accepted_hours" : "rejected_hours",
-    reason: accepted
-      ? ""
-      : "The message does not look like working hours.",
+    reason: accepted ? "" : "The message does not look like working hours.",
   };
 }
 
@@ -803,15 +851,6 @@ export function buildApprovalBlockers(draft = {}) {
 
   return steps
     .map((step) => {
-      if (!isQuestionSatisfied(step, draft)) {
-        return {
-          step,
-          reasonCode: "empty_answer",
-          reason: "Empty answer.",
-          currentValue: "",
-        };
-      }
-
       const value = extractDraftFieldValue(step, draft);
       const validation = validateStepAnswer(step, value, draft);
 

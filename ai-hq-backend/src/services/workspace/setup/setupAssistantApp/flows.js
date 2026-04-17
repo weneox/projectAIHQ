@@ -63,7 +63,7 @@ function normalizeTimelineTurn(value = {}) {
     id: s(source.id) || `turn-${Date.now()}`,
     role: normalizeConversationRole(source.role),
     text: s(source.text || source.body || source.message),
-    meta: s(source.meta),
+    meta: "",
     questionKey: s(source.questionKey || source.question_key).toLowerCase(),
     phase: s(source.phase).toLowerCase(),
     provider: s(source.provider),
@@ -103,7 +103,7 @@ function buildReviewForBrain(review = {}) {
       message: turn.text,
       type: `setup_assistant_${turn.role}`,
       payload: {
-        meta: turn.meta,
+        meta: "",
         questionKey: turn.questionKey,
         phase: turn.phase,
         provider: turn.provider,
@@ -498,7 +498,7 @@ export async function updateSetupAssistantDraft(
             obj(responseTurn).message ||
             obj(responseTurn).nextQuestion?.prompt
         ),
-        meta: s(obj(rawTurn.sourceSignals).primarySourceUrl),
+        meta: "",
         questionKey: s(obj(responseTurn).nextQuestion?.key),
         phase: s(responseTurn.phase || rawTurn.phase),
         provider: s(responseTurn.provider || rawTurn.provider),
