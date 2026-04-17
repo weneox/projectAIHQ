@@ -1,9 +1,21 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { sanitizeStructuredHours } from "../setupAssistantParser.js";
 import {
+  BOOKING_BEHAVIOR_MODES,
+  CONTACT_BEHAVIOR_MODES,
+  HANDOFF_BEHAVIOR_MODES,
+  LOCATION_BEHAVIOR_MODES,
+  PRICING_BEHAVIOR_MODES,
   SOURCE_PRIORITY,
+  buildDefaultAssistantBehaviorDraft,
   hasOwn,
   inferContactType,
+  normalizeBehaviorPolicyKey,
+  normalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode,
   normalizeSourceType,
   normalizeWebsiteUrl,
   slugify,
@@ -32,6 +44,11 @@ export function sanitizeBusinessProfile(value = {}) {
     websiteUrl: normalizeWebsiteUrl(
       source.websiteUrl || source.website_url || source.website
     ),
+    primaryPhone: s(source.primaryPhone || source.primary_phone),
+    primaryEmail: s(source.primaryEmail || source.primary_email),
+    primaryAddress: s(source.primaryAddress || source.primary_address),
+    targetAudience: s(source.targetAudience || source.target_audience),
+    pricingPolicy: s(source.pricingPolicy || source.pricing_policy),
   });
 }
 
@@ -108,9 +125,9 @@ export function normalizeCurrency(value = "") {
   const upper = s(value).toUpperCase();
   if (!upper) return "";
   if (upper === "$") return "USD";
-  if (upper === "â‚¬") return "EUR";
-  if (upper === "â‚¼") return "AZN";
-  if (upper === "Â£") return "GBP";
+  if (upper === "â‚¬" || upper === "€") return "EUR";
+  if (upper === "â‚¼" || upper === "₼") return "AZN";
+  if (upper === "Â£" || upper === "£") return "GBP";
   return upper;
 }
 
@@ -165,9 +182,12 @@ export function sanitizePricingPosture(value = {}) {
         ? source.requiresOperatorForExactQuote
         : typeof source.requires_operator_for_exact_quote === "boolean"
           ? source.requires_operator_for_exact_quote
-          : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
-              pricingMode
-            ),
+          : [
+              "quote_required",
+              "operator_only",
+              "variable_by_service",
+              "promotional",
+            ].includes(pricingMode),
     pricingNotes: s(
       source.pricingNotes || source.pricing_notes || source.notes || source.summary
     ),
@@ -197,6 +217,203 @@ export function sanitizeHandoffRules(value = {}) {
       source.escalationTarget || source.escalation_target || source.target
     ),
   });
+}
+
+function sanitizeBehaviorTargetUrl(value = "") {
+  return normalizeWebsiteUrl(s(value));
+}
+
+function sanitizeBehaviorNote(value = "") {
+  return s(value);
+}
+
+export function sanitizePricingPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
+
+  const mode =
+    normalizePricingBehaviorMode(source.mode || source.defaultBehavior) ||
+    defaults.mode;
+
+  const preferredTargetType =
+    s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
+    defaults.preferredTargetType;
+
+  return compactDraftObject({
+    mode,
+    publicAnswerAllowed:
+      typeof source.publicAnswerAllowed === "boolean"
+        ? source.publicAnswerAllowed
+        : typeof source.public_answer_allowed === "boolean"
+          ? source.public_answer_allowed
+          : defaults.publicAnswerAllowed,
+    redirectEnabled:
+      typeof source.redirectEnabled === "boolean"
+        ? source.redirectEnabled
+        : typeof source.redirect_enabled === "boolean"
+          ? source.redirect_enabled
+          : defaults.redirectEnabled,
+    shouldSummarizeBeforeRedirect:
+      typeof source.shouldSummarizeBeforeRedirect === "boolean"
+        ? source.shouldSummarizeBeforeRedirect
+        : typeof source.should_summarize_before_redirect === "boolean"
+          ? source.should_summarize_before_redirect
+          : defaults.shouldSummarizeBeforeRedirect,
+    askServiceFirst:
+      typeof source.askServiceFirst === "boolean"
+        ? source.askServiceFirst
+        : typeof source.ask_service_first === "boolean"
+          ? source.ask_service_first
+          : defaults.askServiceFirst,
+    preferredTargetType,
+    preferredTargetUrl: sanitizeBehaviorTargetUrl(
+      source.preferredTargetUrl || source.preferred_target_url
+    ),
+    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
+      source.fallbackTargetUrl || source.fallback_target_url
+    ),
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeLocationPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
+
+  const mode =
+    normalizeLocationBehaviorMode(source.mode || source.defaultBehavior) ||
+    defaults.mode;
+
+  return compactDraftObject({
+    mode,
+    redirectEnabled:
+      typeof source.redirectEnabled === "boolean"
+        ? source.redirectEnabled
+        : typeof source.redirect_enabled === "boolean"
+          ? source.redirect_enabled
+          : defaults.redirectEnabled,
+    shouldSummarizeBeforeRedirect:
+      typeof source.shouldSummarizeBeforeRedirect === "boolean"
+        ? source.shouldSummarizeBeforeRedirect
+        : typeof source.should_summarize_before_redirect === "boolean"
+          ? source.should_summarize_before_redirect
+          : defaults.shouldSummarizeBeforeRedirect,
+    preferredTargetType:
+      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
+      defaults.preferredTargetType,
+    preferredTargetUrl: sanitizeBehaviorTargetUrl(
+      source.preferredTargetUrl || source.preferred_target_url
+    ),
+    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
+      source.fallbackTargetUrl || source.fallback_target_url
+    ),
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeBookingPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
+
+  const mode =
+    normalizeBookingBehaviorMode(source.mode || source.defaultBehavior) ||
+    defaults.mode;
+
+  return compactDraftObject({
+    mode,
+    redirectEnabled:
+      typeof source.redirectEnabled === "boolean"
+        ? source.redirectEnabled
+        : typeof source.redirect_enabled === "boolean"
+          ? source.redirect_enabled
+          : defaults.redirectEnabled,
+    collectLeadFirst:
+      typeof source.collectLeadFirst === "boolean"
+        ? source.collectLeadFirst
+        : typeof source.collect_lead_first === "boolean"
+          ? source.collect_lead_first
+          : defaults.collectLeadFirst,
+    preferredTargetType:
+      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
+      defaults.preferredTargetType,
+    preferredTargetUrl: sanitizeBehaviorTargetUrl(
+      source.preferredTargetUrl || source.preferred_target_url
+    ),
+    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
+      source.fallbackTargetUrl || source.fallback_target_url
+    ),
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeContactPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
+
+  const mode =
+    normalizeContactBehaviorMode(source.mode || source.defaultBehavior) ||
+    defaults.mode;
+
+  return compactDraftObject({
+    mode,
+    preferredChannel: s(
+      source.preferredChannel || source.preferred_channel
+    ).toLowerCase(),
+    preferredTargetType:
+      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
+      defaults.preferredTargetType,
+    preferredTargetUrl: sanitizeBehaviorTargetUrl(
+      source.preferredTargetUrl || source.preferred_target_url
+    ),
+    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
+      source.fallbackTargetUrl || source.fallback_target_url
+    ),
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeHandoffPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
+
+  const mode =
+    normalizeHandoffBehaviorMode(source.mode || source.defaultBehavior) ||
+    defaults.mode;
+
+  return compactDraftObject({
+    mode,
+    requiresReason:
+      typeof source.requiresReason === "boolean"
+        ? source.requiresReason
+        : typeof source.requires_reason === "boolean"
+          ? source.requires_reason
+          : defaults.requiresReason,
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeAssistantBehaviorDraft(value = {}) {
+  const source = obj(value);
+  const nested = obj(source.assistantBehavior || source.assistant_behavior);
+  const defaults = buildDefaultAssistantBehaviorDraft();
+
+  return {
+    pricingPolicy: sanitizePricingPolicy(
+      obj(source.pricingPolicy || source.pricing_policy || nested.pricingPolicy || defaults.pricingPolicy)
+    ),
+    locationPolicy: sanitizeLocationPolicy(
+      obj(source.locationPolicy || source.location_policy || nested.locationPolicy || defaults.locationPolicy)
+    ),
+    bookingPolicy: sanitizeBookingPolicy(
+      obj(source.bookingPolicy || source.booking_policy || nested.bookingPolicy || defaults.bookingPolicy)
+    ),
+    contactPolicy: sanitizeContactPolicy(
+      obj(source.contactPolicy || source.contact_policy || nested.contactPolicy || defaults.contactPolicy)
+    ),
+    handoffPolicy: sanitizeHandoffPolicy(
+      obj(source.handoffPolicy || source.handoff_policy || nested.handoffPolicy || defaults.handoffPolicy)
+    ),
+  };
 }
 
 export function sanitizeProgress(value = {}) {
@@ -239,6 +456,9 @@ export function sanitizeAssistantState(value = {}) {
     lastUpdatedSection: s(
       source.lastUpdatedSection || source.last_updated_section
     ).toLowerCase(),
+    activeBehaviorPolicy: normalizeBehaviorPolicyKey(
+      source.activeBehaviorPolicy || source.active_behavior_policy
+    ),
   });
 }
 
@@ -264,6 +484,14 @@ export function sanitizeSetupAssistantCore(value = {}) {
     ),
     assistantState: sanitizeAssistantState(
       obj(source.assistantState || source.assistant_state)
+    ),
+    assistantBehaviorDraft: sanitizeAssistantBehaviorDraft(
+      obj(
+        source.assistantBehaviorDraft ||
+          source.assistant_behavior_draft ||
+          source.assistantBehavior ||
+          source.assistant_behavior
+      )
     ),
     progress: sanitizeProgress(source.progress),
     languages: uniqueStrings(source.languages || aiBehavior.languages, 8),
@@ -331,6 +559,54 @@ export function mergeProgress(left = {}, right = {}) {
   });
 }
 
+function mergePricingPolicy(left = {}, right = {}) {
+  return sanitizePricingPolicy({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeLocationPolicy(left = {}, right = {}) {
+  return sanitizeLocationPolicy({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeBookingPolicy(left = {}, right = {}) {
+  return sanitizeBookingPolicy({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeContactPolicy(left = {}, right = {}) {
+  return sanitizeContactPolicy({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeHandoffPolicy(left = {}, right = {}) {
+  return sanitizeHandoffPolicy({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
+  const a = sanitizeAssistantBehaviorDraft(left);
+  const b = sanitizeAssistantBehaviorDraft(right);
+
+  return {
+    pricingPolicy: mergePricingPolicy(a.pricingPolicy, b.pricingPolicy),
+    locationPolicy: mergeLocationPolicy(a.locationPolicy, b.locationPolicy),
+    bookingPolicy: mergeBookingPolicy(a.bookingPolicy, b.bookingPolicy),
+    contactPolicy: mergeContactPolicy(a.contactPolicy, b.contactPolicy),
+    handoffPolicy: mergeHandoffPolicy(a.handoffPolicy, b.handoffPolicy),
+  };
+}
+
 export function mergeSetupAssistantCore(left = {}, right = {}) {
   const a = sanitizeSetupAssistantCore(left);
   const b = sanitizeSetupAssistantCore(right);
@@ -346,6 +622,10 @@ export function mergeSetupAssistantCore(left = {}, right = {}) {
     handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
     sourceMetadata: mergeSourceMetadata(a.sourceMetadata, b.sourceMetadata),
     assistantState: mergeAssistantState(a.assistantState, b.assistantState),
+    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
+      a.assistantBehaviorDraft,
+      b.assistantBehaviorDraft
+    ),
     progress: mergeProgress(a.progress, b.progress),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),

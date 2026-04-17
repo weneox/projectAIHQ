@@ -5,7 +5,10 @@ export const REVIEW_MESSAGE =
 
 export const SETUP_ASSISTANT_NAMESPACE = "setup_assistant";
 export const SETUP_ASSISTANT_SOURCE_TYPE = "setup_assistant";
-export const SETUP_ASSISTANT_CURRENT_STEP = "setup_assistant";
+export const SETUP_ASSISTANT_CURRENT_STEP = "company";
+
+export const SETUP_BUSINESS_SECTION = "business";
+export const SETUP_BEHAVIOR_SECTION = "assistant_behavior";
 
 export const SOURCE_PRIORITY = {
   "": 0,
@@ -16,8 +19,96 @@ export const SOURCE_PRIORITY = {
   website: 4,
 };
 
+export const BEHAVIOR_POLICY_KEYS = [
+  "pricing",
+  "location",
+  "booking",
+  "contact",
+  "handoff",
+];
+
+export const PRICING_BEHAVIOR_MODES = [
+  "answer_first",
+  "answer_then_link",
+  "link_first",
+  "ask_service_first",
+  "quote_first",
+];
+
+export const LOCATION_BEHAVIOR_MODES = [
+  "text_only",
+  "text_then_map",
+  "map_first",
+];
+
+export const BOOKING_BEHAVIOR_MODES = [
+  "best_available",
+  "route_whatsapp",
+  "route_instagram",
+  "route_website",
+  "collect_then_route",
+];
+
+export const CONTACT_BEHAVIOR_MODES = [
+  "best_available",
+  "whatsapp_first",
+  "call_first",
+  "email_first",
+  "link_first",
+];
+
+export const HANDOFF_BEHAVIOR_MODES = [
+  "contextual_handoff",
+  "ask_then_handoff",
+  "direct_handoff",
+];
+
 export const WEBSITE_PATTERN =
   /\b((?:https?:\/\/)?(?:www\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s]*)?)\b/i;
+
+const PRICING_TARGET_PATTERNS = [
+  /\/pricing(?:\/|$)/i,
+  /\/prices?(?:\/|$)/i,
+  /\/price-list(?:\/|$)/i,
+  /\/menu(?:\/|$)/i,
+  /\bpricing\b/i,
+  /\bprices?\b/i,
+  /\bqiym[eə]t\b/i,
+  /\bmenu\b/i,
+];
+
+const LOCATION_TARGET_PATTERNS = [
+  /\/location(?:\/|$)/i,
+  /\/locations(?:\/|$)/i,
+  /\/find-us(?:\/|$)/i,
+  /\/contact(?:\/|$)/i,
+  /\bmap\b/i,
+  /\bdirections?\b/i,
+  /\bx[eə]rit[eə]\b/i,
+  /\bgoogle maps\b/i,
+];
+
+const BOOKING_TARGET_PATTERNS = [
+  /\/book(?:\/|$)/i,
+  /\/booking(?:\/|$)/i,
+  /\/reserve(?:\/|$)/i,
+  /\/reservation(?:\/|$)/i,
+  /\/appointment(?:\/|$)/i,
+  /\bbook now\b/i,
+  /\bappointment\b/i,
+  /\breserve\b/i,
+  /\bwa\.me\b/i,
+];
+
+const CONTACT_TARGET_PATTERNS = [
+  /\/contact(?:\/|$)/i,
+  /\bwhatsapp\b/i,
+  /\btelegram\b/i,
+  /\bemail\b/i,
+  /\bcall\b/i,
+  /\bphone\b/i,
+  /\bdm\b/i,
+];
 
 export function nowIso() {
   return new Date().toISOString();
@@ -47,6 +138,125 @@ export function normalizeSourceType(value = "") {
   const type = s(value).toLowerCase();
   if (type === "facebook_page") return "facebook";
   return type;
+}
+
+export function normalizeBehaviorPolicyKey(value = "") {
+  const key = s(value).toLowerCase();
+  if (!key) return "";
+  if (key === "pricing_policy") return "pricing";
+  if (key === "location_policy") return "location";
+  if (key === "booking_policy") return "booking";
+  if (key === "contact_policy") return "contact";
+  if (key === "handoff_policy") return "handoff";
+  return BEHAVIOR_POLICY_KEYS.includes(key) ? key : "";
+}
+
+export function normalizePricingBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "answer then link") return "answer_then_link";
+  if (raw === "link first") return "link_first";
+  if (raw === "ask service first") return "ask_service_first";
+  if (raw === "quote first") return "quote_first";
+  if (raw === "answer first") return "answer_first";
+
+  if (PRICING_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeLocationBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "text then map") return "text_then_map";
+  if (raw === "map first") return "map_first";
+  if (raw === "text only") return "text_only";
+
+  if (LOCATION_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeBookingBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "route whatsapp") return "route_whatsapp";
+  if (raw === "route instagram") return "route_instagram";
+  if (raw === "route website") return "route_website";
+  if (raw === "collect then route") return "collect_then_route";
+  if (raw === "best available") return "best_available";
+
+  if (BOOKING_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeContactBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "whatsapp first") return "whatsapp_first";
+  if (raw === "call first") return "call_first";
+  if (raw === "email first") return "email_first";
+  if (raw === "link first") return "link_first";
+  if (raw === "best available") return "best_available";
+
+  if (CONTACT_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeHandoffBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "contextual handoff") return "contextual_handoff";
+  if (raw === "ask then handoff") return "ask_then_handoff";
+  if (raw === "direct handoff") return "direct_handoff";
+
+  if (HANDOFF_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function buildDefaultAssistantBehaviorDraft() {
+  return {
+    pricingPolicy: {
+      mode: "answer_then_link",
+      publicAnswerAllowed: true,
+      redirectEnabled: true,
+      shouldSummarizeBeforeRedirect: true,
+      askServiceFirst: false,
+      preferredTargetType: "pricing_page",
+      preferredTargetUrl: "",
+      fallbackTargetUrl: "",
+      note: "",
+    },
+    locationPolicy: {
+      mode: "text_then_map",
+      redirectEnabled: true,
+      shouldSummarizeBeforeRedirect: true,
+      preferredTargetType: "map",
+      preferredTargetUrl: "",
+      fallbackTargetUrl: "",
+      note: "",
+    },
+    bookingPolicy: {
+      mode: "best_available",
+      redirectEnabled: true,
+      collectLeadFirst: false,
+      preferredTargetType: "booking",
+      preferredTargetUrl: "",
+      fallbackTargetUrl: "",
+      note: "",
+    },
+    contactPolicy: {
+      mode: "best_available",
+      preferredChannel: "",
+      preferredTargetType: "contact",
+      preferredTargetUrl: "",
+      fallbackTargetUrl: "",
+      note: "",
+    },
+    handoffPolicy: {
+      mode: "contextual_handoff",
+      requiresReason: true,
+      note: "",
+    },
+  };
 }
 
 export function buildUrlCandidate(value = "") {
@@ -194,4 +404,69 @@ export function hasNonManualSourceIdentity(sourceMetadata = {}) {
   return Boolean(
     s(sourceMetadata.primarySourceUrl) || arr(sourceMetadata.sourceLabels).length
   );
+}
+
+export function inferTargetPurpose(value = "", label = "") {
+  const text = `${s(value)} ${s(label)}`.trim();
+  if (!text) return "general";
+
+  if (isGoogleMapsUrl(safeParseUrl(text))) return "location";
+
+  if (PRICING_TARGET_PATTERNS.some((pattern) => pattern.test(text))) {
+    return "pricing";
+  }
+  if (LOCATION_TARGET_PATTERNS.some((pattern) => pattern.test(text))) {
+    return "location";
+  }
+  if (BOOKING_TARGET_PATTERNS.some((pattern) => pattern.test(text))) {
+    return "booking";
+  }
+  if (CONTACT_TARGET_PATTERNS.some((pattern) => pattern.test(text))) {
+    return "contact";
+  }
+
+  return "general";
+}
+
+export function buildBehaviorTargetCandidate(value = "", label = "") {
+  const url = normalizeWebsiteUrl(s(value));
+  if (!url) return null;
+
+  return {
+    url,
+    label: s(label),
+    purpose: inferTargetPurpose(url, label),
+    sourceType: classifySetupSourceValue(url) || "website",
+  };
+}
+
+export function pickBehaviorTargetByPurpose(candidates = [], purpose = "") {
+  const safePurpose = normalizeBehaviorPolicyKey(purpose) || s(purpose).toLowerCase();
+
+  return (
+    arr(candidates).find((item) => s(item.purpose).toLowerCase() === safePurpose) ||
+    null
+  );
+}
+
+export function mergeBehaviorTargetCandidates(...groups) {
+  const out = [];
+  const seen = new Set();
+
+  for (const group of groups) {
+    for (const item of arr(group)) {
+      const row = obj(item);
+      const key = s(row.url).toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        url: s(row.url),
+        label: s(row.label),
+        purpose: s(row.purpose || inferTargetPurpose(row.url, row.label)),
+        sourceType: s(row.sourceType || classifySetupSourceValue(row.url)),
+      });
+    }
+  }
+
+  return out;
 }

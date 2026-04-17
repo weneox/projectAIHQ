@@ -7,7 +7,11 @@ import {
   buildAssistantCompatFollowupQueue,
   buildAssistantCompatQuestion,
 } from "./compat.js";
-import { buildAssistantQuestion, normalizeSetupLocale } from "./questions.js";
+import {
+  buildAssistantQuestion,
+  isBehaviorStepRelevant,
+  normalizeSetupLocale,
+} from "./questions.js";
 import {
   buildApprovalBlockers,
   isDraftReadyForApproval,
@@ -21,6 +25,14 @@ import {
 } from "./shared.js";
 import { mergeSetupAssistantCore } from "./sanitize.js";
 import { buildSummary } from "./summary.js";
+
+const BEHAVIOR_SECTION_KEYS = [
+  "pricing_behavior",
+  "location_behavior",
+  "booking_behavior",
+  "contact_behavior",
+  "handoff_behavior",
+];
 
 function uniqueStrings(items = [], max = 24) {
   return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
@@ -94,6 +106,7 @@ function sanitizeBrainQuestion(value = {}) {
     group: s(source.group || "business_truth"),
     groupLabel: s(source.groupLabel || "Business truth"),
     priority: Number(source.priority || 0) || 0,
+    examples: arr(source.examples).slice(0, 3),
   });
 }
 
@@ -118,7 +131,7 @@ function sanitizeBrainRecommendation(value = {}) {
 function sanitizeBrainSourceSignals(value = {}) {
   const source = obj(value);
 
-  return {
+  return compactDraftObject({
     primarySourceType: s(source.primarySourceType),
     primarySourceLabel: s(source.primarySourceLabel),
     primarySourceUrl: s(source.primarySourceUrl),
@@ -135,7 +148,12 @@ function sanitizeBrainSourceSignals(value = {}) {
     pricingCandidates: uniqueStrings(source.pricingCandidates, 12),
     audienceCandidates: uniqueStrings(source.audienceCandidates, 8),
     languagesCandidates: uniqueStrings(source.languagesCandidates, 8),
-  };
+    pricingTargetCandidates: arr(source.pricingTargetCandidates).slice(0, 6),
+    locationTargetCandidates: arr(source.locationTargetCandidates).slice(0, 6),
+    bookingTargetCandidates: arr(source.bookingTargetCandidates).slice(0, 6),
+    contactTargetCandidates: arr(source.contactTargetCandidates).slice(0, 6),
+    suggestedAssistantBehaviorDraft: obj(source.suggestedAssistantBehaviorDraft),
+  });
 }
 
 function sanitizeBrainInterviewPlan(value = {}) {
@@ -198,10 +216,108 @@ function sanitizeBrainSnapshot(value = {}) {
   });
 }
 
-function buildSummarySections(summary = {}, servicesCatalog = {}) {
-  const sectionStatus = obj(summary.sectionStatus);
+function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
+  const safePolicy = obj(policy);
 
-  return Object.keys(sectionStatus).map((key) => {
+  if (policyKey === "pricing") {
+    return compactText(
+      [
+        s(safePolicy.mode),
+        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+      220
+    );
+  }
+
+  if (policyKey === "location") {
+    return compactText(
+      [
+        s(safePolicy.mode),
+        safePolicy.preferredTargetUrl ? `map: ${safePolicy.preferredTargetUrl}` : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+      220
+    );
+  }
+
+  if (policyKey === "booking") {
+    return compactText(
+      [
+        s(safePolicy.mode),
+        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+      220
+    );
+  }
+
+  if (policyKey === "contact") {
+    return compactText(
+      [
+        s(safePolicy.mode),
+        s(safePolicy.preferredChannel),
+        safePolicy.preferredTargetUrl ? `target: ${safePolicy.preferredTargetUrl}` : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+      220
+    );
+  }
+
+  if (policyKey === "handoff") {
+    return compactText(
+      [
+        s(safePolicy.mode),
+        safePolicy.requiresReason === true ? "requires reason" : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+      220
+    );
+  }
+
+  return "";
+}
+
+function buildBehaviorPreview(setup = {}) {
+  const behavior = obj(setup.assistantBehaviorDraft);
+
+  return {
+    pricingBehavior: summarizeBehaviorPolicy(
+      "pricing",
+      obj(behavior.pricingPolicy)
+    ),
+    locationBehavior: summarizeBehaviorPolicy(
+      "location",
+      obj(behavior.locationPolicy)
+    ),
+    bookingBehavior: summarizeBehaviorPolicy(
+      "booking",
+      obj(behavior.bookingPolicy)
+    ),
+    contactBehavior: summarizeBehaviorPolicy(
+      "contact",
+      obj(behavior.contactPolicy)
+    ),
+    handoffBehavior: summarizeBehaviorPolicy(
+      "handoff",
+      obj(behavior.handoffPolicy)
+    ),
+  };
+}
+
+function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
+  const sectionStatus = obj(summary.sectionStatus);
+  const approvalBlockers = buildApprovalBlockers(setup);
+  const blockerSteps = new Set(
+    approvalBlockers.map((item) => s(item.step).toLowerCase()).filter(Boolean)
+  );
+
+  const baseSections = Object.keys(sectionStatus).map((key) => {
     const state = obj(sectionStatus[key]);
 
     return {
@@ -218,12 +334,64 @@ function buildSummarySections(summary = {}, servicesCatalog = {}) {
         key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
     };
   });
+
+  const behaviorDraft = obj(setup.assistantBehaviorDraft);
+  const behaviorPreview = buildBehaviorPreview(setup);
+
+  const behaviorSections = BEHAVIOR_SECTION_KEYS.map((key) => {
+    const relevant = isBehaviorStepRelevant(key, setup);
+    const blocked = blockerSteps.has(key);
+
+    const policyKey =
+      key === "pricing_behavior"
+        ? "pricingPolicy"
+        : key === "location_behavior"
+          ? "locationPolicy"
+          : key === "booking_behavior"
+            ? "bookingPolicy"
+            : key === "contact_behavior"
+              ? "contactPolicy"
+              : "handoffPolicy";
+
+    const previewKey =
+      key === "pricing_behavior"
+        ? "pricingBehavior"
+        : key === "location_behavior"
+          ? "locationBehavior"
+          : key === "booking_behavior"
+            ? "bookingBehavior"
+            : key === "contact_behavior"
+              ? "contactBehavior"
+              : "handoffBehavior";
+
+    return {
+      key,
+      label: key,
+      title: key,
+      status: relevant ? (blocked ? "missing" : "ready") : "not_applicable",
+      summary: s(behaviorPreview[previewKey]),
+      metric: {
+        relevant,
+        configured: relevant ? !blocked : true,
+        hasPreferredTarget: Boolean(
+          s(obj(behaviorDraft[policyKey]).preferredTargetUrl)
+        ),
+      },
+      sourceCovered: false,
+      reviewReady: relevant ? !blocked : true,
+      missingFields: relevant && blocked ? [key] : [],
+      suggestedCount: 0,
+    };
+  });
+
+  return [...baseSections, ...behaviorSections];
 }
 
 function buildAssistantDraftPreview(setup = {}, { formatHours = null } = {}) {
   const businessProfile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
   const handoff = obj(setup.handoffRules);
+  const behaviorPreview = buildBehaviorPreview(setup);
   const formatHoursSafe =
     typeof formatHours === "function"
       ? formatHours
@@ -248,6 +416,12 @@ function buildAssistantDraftPreview(setup = {}, { formatHours = null } = {}) {
     tone: s(setup.tone),
     greetingStyle: s(setup.greetingStyle),
     afterHoursBehavior: s(setup.afterHoursBehavior),
+
+    pricingBehavior: s(behaviorPreview.pricingBehavior),
+    locationBehavior: s(behaviorPreview.locationBehavior),
+    bookingBehavior: s(behaviorPreview.bookingBehavior),
+    contactBehavior: s(behaviorPreview.contactBehavior),
+    handoffBehavior: s(behaviorPreview.handoffBehavior),
   };
 }
 
@@ -265,6 +439,7 @@ function buildMinimalSourceSignals(setup = {}) {
     .filter(Boolean);
 
   const hours = formatSetupAssistantHoursForCanonical(setup.hours);
+  const behavior = obj(setup.assistantBehaviorDraft);
 
   return {
     primarySourceType: s(sourceMetadata.primarySourceType),
@@ -295,6 +470,27 @@ function buildMinimalSourceSignals(setup = {}) {
     pricingCandidates: uniqueStrings([pricing.publicSummary], 12),
     audienceCandidates: [],
     languagesCandidates: uniqueStrings(arr(setup.languages), 8),
+    pricingTargetCandidates: arr(
+      s(obj(behavior.pricingPolicy).preferredTargetUrl)
+        ? [{ url: s(obj(behavior.pricingPolicy).preferredTargetUrl) }]
+        : []
+    ),
+    locationTargetCandidates: arr(
+      s(obj(behavior.locationPolicy).preferredTargetUrl)
+        ? [{ url: s(obj(behavior.locationPolicy).preferredTargetUrl) }]
+        : []
+    ),
+    bookingTargetCandidates: arr(
+      s(obj(behavior.bookingPolicy).preferredTargetUrl)
+        ? [{ url: s(obj(behavior.bookingPolicy).preferredTargetUrl) }]
+        : []
+    ),
+    contactTargetCandidates: arr(
+      s(obj(behavior.contactPolicy).preferredTargetUrl)
+        ? [{ url: s(obj(behavior.contactPolicy).preferredTargetUrl) }]
+        : []
+    ),
+    suggestedAssistantBehaviorDraft: obj(setup.assistantBehaviorDraft),
   };
 }
 
@@ -332,6 +528,31 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
 
   if (s(draftPreview.humanHandoff)) strong.push("handoff_present");
   else unclear.push("handoff_missing");
+
+  if (isBehaviorStepRelevant("pricing_behavior", setup)) {
+    if (s(draftPreview.pricingBehavior)) strong.push("pricing_behavior_present");
+    else unclear.push("pricing_behavior_missing");
+  }
+
+  if (isBehaviorStepRelevant("location_behavior", setup)) {
+    if (s(draftPreview.locationBehavior)) strong.push("location_behavior_present");
+    else unclear.push("location_behavior_missing");
+  }
+
+  if (isBehaviorStepRelevant("booking_behavior", setup)) {
+    if (s(draftPreview.bookingBehavior)) strong.push("booking_behavior_present");
+    else unclear.push("booking_behavior_missing");
+  }
+
+  if (isBehaviorStepRelevant("contact_behavior", setup)) {
+    if (s(draftPreview.contactBehavior)) strong.push("contact_behavior_present");
+    else unclear.push("contact_behavior_missing");
+  }
+
+  if (isBehaviorStepRelevant("handoff_behavior", setup)) {
+    if (s(draftPreview.handoffBehavior)) strong.push("handoff_behavior_present");
+    else unclear.push("handoff_behavior_missing");
+  }
 
   return {
     strong,
@@ -527,7 +748,7 @@ function buildAssistantFromStoredBrain({
     nextQuestion: obj(nextQuestion).key && !readyForApproval ? obj(nextQuestion) : null,
     approvalBlockers,
     confirmationBlockers: approvalBlockers,
-    sections: buildSummarySections(summary, servicesCatalog),
+    sections: buildSummarySections(summary, servicesCatalog, setup),
     completion: {
       ready: readyForApproval,
       action: readyForApproval
@@ -666,6 +887,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         hours: arr(setup.hours),
         pricingPosture: obj(setup.pricingPosture),
         handoffRules: obj(setup.handoffRules),
+        assistantBehaviorDraft: obj(setup.assistantBehaviorDraft),
         sourceMetadata: obj(setup.sourceMetadata),
         assistantState: obj(setup.assistantState),
         progress: obj(setup.progress),

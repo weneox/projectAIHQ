@@ -1,7 +1,15 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import {
+  buildBehaviorTargetCandidate,
+  buildDefaultAssistantBehaviorDraft,
+  buildRecognizedSourceCandidate,
+  classifySetupSourceValue,
+  inferContactType,
+  mergeBehaviorTargetCandidates,
+  normalizeBehaviorPolicyKey,
   normalizeSourceType,
   normalizeWebsiteUrl,
+  pickBehaviorTargetByPurpose,
   sourceTypeLabel,
   uniqueStrings,
 } from "./shared.js";
@@ -396,6 +404,184 @@ function buildSourceRows({ draft = {}, sources = [], review = null } = {}) {
   return rows;
 }
 
+function collectBehaviorTargetCandidates({
+  draft = {},
+  review = null,
+  sourceRows = [],
+  sourceSignalSummary = {},
+}) {
+  const safeDraft = obj(draft);
+  const businessProfile = obj(safeDraft.businessProfile);
+  const sourceMetadata = obj(safeDraft.sourceMetadata);
+  const contacts = arr(safeDraft.contacts);
+  const reviewRoot = obj(review);
+  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
+
+  const rawTargets = [];
+
+  const pushTarget = (value = "", label = "") => {
+    const candidate = buildBehaviorTargetCandidate(value, label);
+    if (candidate) rawTargets.push(candidate);
+  };
+
+  for (const row of arr(sourceRows)) {
+    pushTarget(row.sourceUrl, row.label || row.sourceType);
+  }
+
+  pushTarget(sourceMetadata.primarySourceUrl, sourceTypeLabel(sourceMetadata.primarySourceType));
+  pushTarget(businessProfile.websiteUrl, "Website");
+  pushTarget(reviewDraft.businessProfile?.websiteUrl, "Website");
+
+  for (const item of contacts) {
+    const value = s(item?.value || item?.label);
+    const type = inferContactType(value);
+    if (type === "link" || /whatsapp|telegram|instagram|facebook|wa\.me/i.test(value)) {
+      pushTarget(value, s(item?.label || item?.type));
+    }
+  }
+
+  for (const claim of arr(sourceSignalSummary.discoveredPublicClaims)) {
+    const sourceCandidate = buildRecognizedSourceCandidate(claim);
+    if (sourceCandidate?.value) {
+      pushTarget(sourceCandidate.value, claim);
+    }
+  }
+
+  for (const evidence of arr(sourceMetadata.evidenceSummary)) {
+    const sourceCandidate = buildRecognizedSourceCandidate(evidence);
+    if (sourceCandidate?.value) {
+      pushTarget(sourceCandidate.value, evidence);
+    }
+  }
+
+  return mergeBehaviorTargetCandidates(rawTargets);
+}
+
+export function buildSuggestedAssistantBehaviorDraft({
+  draft = {},
+  sourceSignals = {},
+} = {}) {
+  const defaults = buildDefaultAssistantBehaviorDraft();
+  const safeDraft = obj(draft);
+  const contacts = arr(safeDraft.contacts).map((item) =>
+    s(item?.value || item?.label || "")
+  );
+  const pricingFacts = obj(safeDraft.pricingPosture);
+  const handoffFacts = obj(safeDraft.handoffRules);
+
+  const pricingTarget = pickBehaviorTargetByPurpose(
+    sourceSignals.pricingTargetCandidates,
+    "pricing"
+  );
+  const locationTarget = pickBehaviorTargetByPurpose(
+    sourceSignals.locationTargetCandidates,
+    "location"
+  );
+  const bookingTarget = pickBehaviorTargetByPurpose(
+    sourceSignals.bookingTargetCandidates,
+    "booking"
+  );
+  const contactTarget = pickBehaviorTargetByPurpose(
+    sourceSignals.contactTargetCandidates,
+    "contact"
+  );
+
+  const contactValuePreview = contacts.join(" ");
+
+  const pricingMode =
+    pricingTarget && arr(sourceSignals.pricingCandidates).length
+      ? "answer_then_link"
+      : arr(sourceSignals.pricingCandidates).length
+        ? "answer_first"
+        : defaults.pricingPolicy.mode;
+
+  const locationMode =
+    locationTarget && arr(sourceSignals.contactCandidates).length
+      ? "text_then_map"
+      : locationTarget
+        ? "map_first"
+        : defaults.locationPolicy.mode;
+
+  let bookingMode = defaults.bookingPolicy.mode;
+  if (bookingTarget?.sourceType === "instagram") {
+    bookingMode = "route_instagram";
+  } else if (
+    bookingTarget?.sourceType === "website" ||
+    /book|booking|reserve|appointment/i.test(s(bookingTarget?.url))
+  ) {
+    bookingMode = "route_website";
+  } else if (
+    bookingTarget?.sourceType === "website" &&
+    /wa\.me|whatsapp/i.test(s(bookingTarget?.url))
+  ) {
+    bookingMode = "route_whatsapp";
+  } else if (/wa\.me|whatsapp/i.test(s(bookingTarget?.url))) {
+    bookingMode = "route_whatsapp";
+  }
+
+  let contactMode = defaults.contactPolicy.mode;
+  let preferredChannel = "";
+  if (/wa\.me|whatsapp/i.test(contactValuePreview)) {
+    contactMode = "whatsapp_first";
+    preferredChannel = "whatsapp";
+  } else if (/telegram/i.test(contactValuePreview)) {
+    contactMode = "link_first";
+    preferredChannel = "telegram";
+  } else if (/^\+?\d[\d()\-\s]{6,}\d/.test(contactValuePreview)) {
+    contactMode = "call_first";
+    preferredChannel = "phone";
+  } else if (/@/.test(contactValuePreview)) {
+    contactMode = "email_first";
+    preferredChannel = "email";
+  }
+
+  const handoffMode = handoffFacts.enabled === true
+    ? "contextual_handoff"
+    : defaults.handoffPolicy.mode;
+
+  return {
+    pricingPolicy: {
+      ...defaults.pricingPolicy,
+      mode: pricingMode,
+      preferredTargetUrl: s(pricingTarget?.url),
+      note:
+        pricingTarget && arr(sourceSignals.pricingCandidates).length
+          ? "Pricing facts and a pricing target were discovered from sources."
+          : "",
+    },
+    locationPolicy: {
+      ...defaults.locationPolicy,
+      mode: locationMode,
+      preferredTargetUrl: s(locationTarget?.url),
+      note:
+        locationTarget && arr(sourceSignals.contactCandidates).length
+          ? "Location/map target was discovered from sources."
+          : "",
+    },
+    bookingPolicy: {
+      ...defaults.bookingPolicy,
+      mode: bookingMode,
+      preferredTargetUrl: s(bookingTarget?.url),
+      note: bookingTarget ? "Booking target was discovered from sources." : "",
+    },
+    contactPolicy: {
+      ...defaults.contactPolicy,
+      mode: contactMode,
+      preferredChannel,
+      preferredTargetUrl: s(contactTarget?.url),
+      note: contactTarget ? "Primary contact target was discovered from sources." : "",
+    },
+    handoffPolicy: {
+      ...defaults.handoffPolicy,
+      mode: handoffMode,
+      note:
+        handoffFacts.enabled === true
+          ? "Human handoff facts already exist in the setup draft."
+          : "",
+    },
+  };
+}
+
 export function buildSetupSourceSignals({
   session = {},
   draft = {},
@@ -626,6 +812,29 @@ export function buildSetupSourceSignals({
     sanitizeLanguageCandidate
   );
 
+  const behaviorTargetCandidates = collectBehaviorTargetCandidates({
+    draft,
+    review,
+    sourceRows,
+    sourceSignalSummary,
+  });
+
+  const pricingTargetCandidates = behaviorTargetCandidates.filter(
+    (item) => normalizeBehaviorPolicyKey(item.purpose) === "pricing"
+  );
+
+  const locationTargetCandidates = behaviorTargetCandidates.filter(
+    (item) => normalizeBehaviorPolicyKey(item.purpose) === "location"
+  );
+
+  const bookingTargetCandidates = behaviorTargetCandidates.filter(
+    (item) => normalizeBehaviorPolicyKey(item.purpose) === "booking"
+  );
+
+  const contactTargetCandidates = behaviorTargetCandidates.filter(
+    (item) => normalizeBehaviorPolicyKey(item.purpose) === "contact"
+  );
+
   const strongestEvidence = uniqueStrings(
     [
       primarySource.sourceUrl
@@ -649,6 +858,15 @@ export function buildSetupSourceSignals({
       pricingCandidates.length
         ? `Pricing signals: ${listPreview(pricingCandidates, 2)}`
         : "",
+      pricingTargetCandidates.length
+        ? `Pricing target: ${s(pricingTargetCandidates[0].url)}`
+        : "",
+      locationTargetCandidates.length
+        ? `Location target: ${s(locationTargetCandidates[0].url)}`
+        : "",
+      bookingTargetCandidates.length
+        ? `Booking target: ${s(bookingTargetCandidates[0].url)}`
+        : "",
       Number(sourceSignalSummary.website?.pageCount || websiteKnowledge.pageCount || 0) > 0
         ? `Website pages analyzed: ${Number(
             sourceSignalSummary.website?.pageCount ||
@@ -661,7 +879,7 @@ export function buildSetupSourceSignals({
     12
   );
 
-  return {
+  const out = {
     sourceRows,
     primarySourceType: s(primarySource.sourceType || session.primarySourceType),
     primarySourceLabel:
@@ -671,10 +889,7 @@ export function buildSetupSourceSignals({
     sourceTypes: uniqueStrings(
       sourceSignalSummary.sourceTypes?.length
         ? sourceSignalSummary.sourceTypes
-        : [
-            primarySource.sourceType,
-            ...sourceRows.map((item) => item.sourceType),
-          ]
+        : [primarySource.sourceType, ...sourceRows.map((item) => item.sourceType)]
     ),
     pageCount:
       Number(sourceSignalSummary.website?.pageCount || 0) ||
@@ -696,7 +911,20 @@ export function buildSetupSourceSignals({
     languagesCandidates,
     greetingCandidates: behaviorSignals.greetingCandidates,
     afterHoursCandidates: behaviorSignals.afterHoursCandidates,
+
+    behaviorTargetCandidates,
+    pricingTargetCandidates,
+    locationTargetCandidates,
+    bookingTargetCandidates,
+    contactTargetCandidates,
   };
+
+  out.suggestedAssistantBehaviorDraft = buildSuggestedAssistantBehaviorDraft({
+    draft,
+    sourceSignals: out,
+  });
+
+  return out;
 }
 
 export function buildSetupSourceCoverage(sourceSignals = {}) {
@@ -720,6 +948,11 @@ export function buildSetupSourceCoverage(sourceSignals = {}) {
   const audience = arr(sourceSignals.audienceCandidates).length >= 1;
   const languages = arr(sourceSignals.languagesCandidates).length >= 1;
 
+  const pricingBehavior = arr(sourceSignals.pricingTargetCandidates).length >= 1;
+  const locationBehavior = arr(sourceSignals.locationTargetCandidates).length >= 1;
+  const bookingBehavior = arr(sourceSignals.bookingTargetCandidates).length >= 1;
+  const contactBehavior = arr(sourceSignals.contactTargetCandidates).length >= 1;
+
   return {
     primarySourceExists,
     identity,
@@ -729,6 +962,10 @@ export function buildSetupSourceCoverage(sourceSignals = {}) {
     pricing,
     audience,
     languages,
+    pricingBehavior,
+    locationBehavior,
+    bookingBehavior,
+    contactBehavior,
   };
 }
 
@@ -849,6 +1086,12 @@ export function buildSetupDraftStateFromSignals({
     tone,
     greetingStyle,
     afterHoursBehavior,
+
+    pricingTargetUrl: s(obj(sourceSignals.pricingTargetCandidates[0]).url),
+    locationTargetUrl: s(obj(sourceSignals.locationTargetCandidates[0]).url),
+    bookingTargetUrl: s(obj(sourceSignals.bookingTargetCandidates[0]).url),
+    contactTargetUrl: s(obj(sourceSignals.contactTargetCandidates[0]).url),
+    suggestedAssistantBehaviorDraft: obj(sourceSignals.suggestedAssistantBehaviorDraft),
   };
 }
 
@@ -924,6 +1167,9 @@ export function buildSetupKnownState(draftState = {}) {
   if (arr(draftState.hours).length) bits.push("hours present");
   if (s(draftState.pricingPosture)) bits.push("pricing posture present");
   if (s(draftState.humanHandoff)) bits.push("handoff rules present");
+  if (s(draftState.pricingTargetUrl)) bits.push("pricing target present");
+  if (s(draftState.locationTargetUrl)) bits.push("location target present");
+  if (s(draftState.bookingTargetUrl)) bits.push("booking target present");
 
-  return bits.slice(0, 4);
+  return bits.slice(0, 6);
 }

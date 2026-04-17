@@ -5,17 +5,18 @@ import {
   parseServicesNote,
   sanitizeStructuredHours,
 } from "../setupAssistantParser.js";
-import {
-  buildStoredSetupAssistantPayload,
-  normalizeStoredSetupAssistantPayload,
-} from "./sessionPayload.js";
-import {
-  INTENT_ONLY_RESPONSES,
-  normalizeQuestionKey,
-} from "./questions.js";
+import { normalizeStoredSetupAssistantPayload } from "./sessionPayload.js";
+import { INTENT_ONLY_RESPONSES, normalizeQuestionKey } from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
+  buildUrlCandidate,
   inferContactType,
+  normalizeBehaviorPolicyKey,
+  normalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode,
   normalizeWebsiteUrl,
   nowIso,
   splitAnswerList,
@@ -25,14 +26,21 @@ import {
   buildAssistantSourceMetadataPatch,
   mergeSetupAssistantCore,
   mergeSourceMetadata,
+  sanitizeAssistantBehaviorDraft,
   sanitizeAssistantState,
+  sanitizeBehaviorTargetUrl,
   sanitizeBusinessProfile,
+  sanitizeContactPolicy,
   sanitizeContacts,
+  sanitizeHandoffPolicy,
   sanitizeHandoffRules,
+  sanitizeLocationPolicy,
+  sanitizePricingPolicy,
   sanitizePricingPosture,
   sanitizeProgress,
   sanitizeServices,
   sanitizeSourceMetadata,
+  sanitizeBookingPolicy,
 } from "./sanitize.js";
 
 function normalizeStep(value = "") {
@@ -42,7 +50,26 @@ function normalizeStep(value = "") {
   if (normalized) return normalized;
   if (raw === "profile") return "profile";
   if (raw === "website") return "company";
+  return "";
+}
 
+function isBehaviorStep(step = "") {
+  return [
+    "pricing_behavior",
+    "location_behavior",
+    "booking_behavior",
+    "contact_behavior",
+    "handoff_behavior",
+  ].includes(normalizeStep(step));
+}
+
+function behaviorPolicyKeyFromStep(step = "") {
+  const safeStep = normalizeStep(step);
+  if (safeStep === "pricing_behavior") return "pricing";
+  if (safeStep === "location_behavior") return "location";
+  if (safeStep === "booking_behavior") return "booking";
+  if (safeStep === "contact_behavior") return "contact";
+  if (safeStep === "handoff_behavior") return "handoff";
   return "";
 }
 
@@ -78,6 +105,18 @@ function extractWebsiteCandidate(text = "") {
   const candidate = buildRecognizedSourceCandidate(text);
   if (!candidate || candidate.type !== "website") return "";
   return candidate.value;
+}
+
+function extractAnyUrlCandidate(text = "") {
+  const sourceCandidate = buildRecognizedSourceCandidate(text);
+  if (sourceCandidate?.value) return sourceCandidate.value;
+
+  for (const part of splitAnswerList(text, 16)) {
+    const candidate = buildUrlCandidate(part);
+    if (candidate) return normalizeWebsiteUrl(candidate);
+  }
+
+  return "";
 }
 
 function stripRecognizedSourceFromText(text = "") {
@@ -206,6 +245,9 @@ function buildStepIntentPatch(step = "") {
     },
     assistantState: {
       activeSection: safeStep,
+      activeBehaviorPolicy: isBehaviorStep(safeStep)
+        ? behaviorPolicyKeyFromStep(safeStep)
+        : "",
     },
   });
 }
@@ -229,6 +271,9 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
       },
       assistantState: {
         activeSection: safeStep || "services",
+        activeBehaviorPolicy: isBehaviorStep(safeStep)
+          ? behaviorPolicyKeyFromStep(safeStep)
+          : "",
       },
     });
   }
@@ -372,6 +417,41 @@ function normalizeDirectPatchBody(body = {}) {
     out.assistantState = sanitizeAssistantState(obj(assistantState.value));
   }
 
+  const assistantBehaviorDraft = pickAliasedField(root, [
+    "assistantBehaviorDraft",
+    "assistant_behavior_draft",
+    "assistantBehavior",
+    "assistant_behavior",
+  ]);
+  if (assistantBehaviorDraft.provided) {
+    out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft(
+      obj(assistantBehaviorDraft.value)
+    );
+  }
+
+  const pricingPolicy = pickAliasedField(root, ["pricingPolicy", "pricing_policy"]);
+  const locationPolicy = pickAliasedField(root, ["locationPolicy", "location_policy"]);
+  const bookingPolicy = pickAliasedField(root, ["bookingPolicy", "booking_policy"]);
+  const contactPolicy = pickAliasedField(root, ["contactPolicy", "contact_policy"]);
+  const handoffPolicy = pickAliasedField(root, ["handoffPolicy", "handoff_policy"]);
+
+  if (
+    pricingPolicy.provided ||
+    locationPolicy.provided ||
+    bookingPolicy.provided ||
+    contactPolicy.provided ||
+    handoffPolicy.provided
+  ) {
+    out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft({
+      ...(obj(out.assistantBehaviorDraft) || {}),
+      pricingPolicy: pricingPolicy.provided ? obj(pricingPolicy.value) : undefined,
+      locationPolicy: locationPolicy.provided ? obj(locationPolicy.value) : undefined,
+      bookingPolicy: bookingPolicy.provided ? obj(bookingPolicy.value) : undefined,
+      contactPolicy: contactPolicy.provided ? obj(contactPolicy.value) : undefined,
+      handoffPolicy: handoffPolicy.provided ? obj(handoffPolicy.value) : undefined,
+    });
+  }
+
   const progress = pickAliasedField(root, ["progress"]);
   if (progress.provided) {
     out.progress = sanitizeProgress(obj(progress.value));
@@ -422,12 +502,244 @@ function buildSourceCandidateFromAnswer(answer = "") {
   return buildRecognizedSourceCandidate(text);
 }
 
+function buildPricingBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentPolicy = obj(obj(current.assistantBehaviorDraft).pricingPolicy);
+
+  const explicitMode =
+    normalizePricingBehaviorMode(text) ||
+    (/xidmət|service/.test(lower) && /soruş|ask/.test(lower)
+      ? "ask_service_first"
+      : "") ||
+    (/link first|birbaşa.*(səhifə|page|link)|pricing page/i.test(lower)
+      ? "link_first"
+      : "") ||
+    (/(cavab|answer).*(link|page|səhifə)|qısa.*(link|page|səhifə)/i.test(lower)
+      ? "answer_then_link"
+      : "") ||
+    (/(quote|sorğu|request|detal|details)/i.test(lower)
+      ? "quote_first"
+      : "") ||
+    (/(burada|here|yalnız cavab|just answer|text only)/i.test(lower)
+      ? "answer_first"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "answer_then_link");
+  const targetUrl = extractAnyUrlCandidate(text);
+
+  return {
+    assistantBehaviorDraft: {
+      pricingPolicy: sanitizePricingPolicy({
+        ...currentPolicy,
+        mode,
+        publicAnswerAllowed:
+          mode === "quote_first" ? false : currentPolicy.publicAnswerAllowed,
+        redirectEnabled:
+          ["answer_then_link", "link_first"].includes(mode) || Boolean(targetUrl),
+        shouldSummarizeBeforeRedirect:
+          mode === "answer_then_link"
+            ? true
+            : mode === "link_first"
+              ? false
+              : currentPolicy.shouldSummarizeBeforeRedirect,
+        askServiceFirst: mode === "ask_service_first",
+        preferredTargetType: "pricing_page",
+        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
+        note:
+          targetUrl || explicitMode
+            ? ""
+            : text,
+      }),
+    },
+  };
+}
+
+function buildLocationBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentPolicy = obj(obj(current.assistantBehaviorDraft).locationPolicy);
+
+  const explicitMode =
+    normalizeLocationBehaviorMode(text) ||
+    (/birbaşa.*(xəritə|map)|map first/i.test(lower)
+      ? "map_first"
+      : "") ||
+    (/(ünvan|address|text).*(xəritə|map)|text.*map/i.test(lower)
+      ? "text_then_map"
+      : "") ||
+    (/(yalnız mətn|text only|only address|only text)/i.test(lower)
+      ? "text_only"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "text_then_map");
+  const targetUrl = extractAnyUrlCandidate(text);
+
+  return {
+    assistantBehaviorDraft: {
+      locationPolicy: sanitizeLocationPolicy({
+        ...currentPolicy,
+        mode,
+        redirectEnabled:
+          ["map_first", "text_then_map"].includes(mode) || Boolean(targetUrl),
+        shouldSummarizeBeforeRedirect: mode === "text_then_map",
+        preferredTargetType: "map",
+        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
+        note:
+          targetUrl || explicitMode
+            ? ""
+            : text,
+      }),
+    },
+  };
+}
+
+function buildBookingBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentPolicy = obj(obj(current.assistantBehaviorDraft).bookingPolicy);
+
+  const explicitMode =
+    normalizeBookingBehaviorMode(text) ||
+    (/whatsapp|wa\.me/i.test(lower) ? "route_whatsapp" : "") ||
+    (/instagram|dm/i.test(lower) ? "route_instagram" : "") ||
+    (/website|site|booking page|reservation page|appointment page/i.test(lower)
+      ? "route_website"
+      : "") ||
+    (/əvvəl|first|topla|collect|məlumat|details/i.test(lower)
+      ? "collect_then_route"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "best_available");
+  const targetUrl = extractAnyUrlCandidate(text);
+
+  return {
+    assistantBehaviorDraft: {
+      bookingPolicy: sanitizeBookingPolicy({
+        ...currentPolicy,
+        mode,
+        redirectEnabled: mode !== "collect_then_route" || Boolean(targetUrl),
+        collectLeadFirst: mode === "collect_then_route",
+        preferredTargetType: "booking",
+        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
+        note:
+          targetUrl || explicitMode
+            ? ""
+            : text,
+      }),
+    },
+  };
+}
+
+function buildContactBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentPolicy = obj(obj(current.assistantBehaviorDraft).contactPolicy);
+
+  const explicitMode =
+    normalizeContactBehaviorMode(text) ||
+    (/whatsapp|wa\.me/i.test(lower) ? "whatsapp_first" : "") ||
+    (/zəng|call|phone/i.test(lower) ? "call_first" : "") ||
+    (/email|mail/i.test(lower) ? "email_first" : "") ||
+    (/link|instagram|telegram|facebook|site|website/i.test(lower)
+      ? "link_first"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "best_available");
+  const targetUrl = extractAnyUrlCandidate(text);
+
+  let preferredChannel = s(currentPolicy.preferredChannel);
+  if (mode === "whatsapp_first") preferredChannel = "whatsapp";
+  if (mode === "call_first") preferredChannel = "phone";
+  if (mode === "email_first") preferredChannel = "email";
+  if (mode === "link_first" && !preferredChannel) preferredChannel = "link";
+
+  return {
+    assistantBehaviorDraft: {
+      contactPolicy: sanitizeContactPolicy({
+        ...currentPolicy,
+        mode,
+        preferredChannel,
+        preferredTargetType: "contact",
+        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
+        note:
+          targetUrl || explicitMode
+            ? ""
+            : text,
+      }),
+    },
+  };
+}
+
+function buildHandoffBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentPolicy = obj(obj(current.assistantBehaviorDraft).handoffPolicy);
+
+  const explicitMode =
+    normalizeHandoffBehaviorMode(text) ||
+    (/birbaşa|direct/i.test(lower) ? "direct_handoff" : "") ||
+    (/səbəb|reason|niyə|why|clarify|explain/i.test(lower)
+      ? "ask_then_handoff"
+      : "") ||
+    (/kontekst|context|uyğun halda|case by case/i.test(lower)
+      ? "contextual_handoff"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "contextual_handoff");
+
+  return {
+    assistantBehaviorDraft: {
+      handoffPolicy: sanitizeHandoffPolicy({
+        ...currentPolicy,
+        mode,
+        requiresReason: mode === "ask_then_handoff",
+        note: explicitMode ? "" : text,
+      }),
+    },
+  };
+}
+
+function buildBehaviorAnswerPatch(step = "", answer = "", current = {}) {
+  const safeStep = normalizeStep(step);
+
+  if (safeStep === "pricing_behavior") {
+    return buildPricingBehaviorPatch(answer, current);
+  }
+  if (safeStep === "location_behavior") {
+    return buildLocationBehaviorPatch(answer, current);
+  }
+  if (safeStep === "booking_behavior") {
+    return buildBookingBehaviorPatch(answer, current);
+  }
+  if (safeStep === "contact_behavior") {
+    return buildContactBehaviorPatch(answer, current);
+  }
+  if (safeStep === "handoff_behavior") {
+    return buildHandoffBehaviorPatch(answer, current);
+  }
+
+  return {};
+}
+
 export function patchFromAnswer(step = "", answer = "", current = {}) {
   const key = normalizeStep(step);
   const text = s(answer);
   const currentDraft = obj(current);
 
   if (!key || !text) return {};
+
+  if (isBehaviorStep(key)) {
+    const behaviorPatch = buildBehaviorAnswerPatch(key, text, currentDraft);
+    return compactDraftObject({
+      ...behaviorPatch,
+      assistantState: {
+        activeSection: key,
+        activeBehaviorPolicy: behaviorPolicyKeyFromStep(key),
+        lastUpdatedSection: key,
+      },
+    });
+  }
 
   const sourceCandidate = buildSourceCandidateFromAnswer(text);
   const sourceMetadataPatch = sourceCandidate
@@ -446,6 +758,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         assistantState: {
           lastUpdatedSection: "company",
           activeSection: "company",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -460,6 +773,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         assistantState: {
           lastUpdatedSection: "company",
           activeSection: "company",
+          activeBehaviorPolicy: "",
         },
       });
     }
@@ -472,6 +786,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         assistantState: {
           lastUpdatedSection: "description",
           activeSection: "description",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -482,6 +797,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastParsedServicesNote: text,
           lastUpdatedSection: "services",
           activeSection: "services",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -495,6 +811,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         assistantState: {
           lastUpdatedSection: "contacts",
           activeSection: "contacts",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -505,6 +822,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastParsedHoursNote: text,
           lastUpdatedSection: "hours",
           activeSection: "hours",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -519,6 +837,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           lastParsedPricingNote: text,
           lastUpdatedSection: "pricing",
           activeSection: "pricing",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -528,6 +847,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         assistantState: {
           lastUpdatedSection: "handoff",
           activeSection: "handoff",
+          activeBehaviorPolicy: "",
         },
       });
 
@@ -554,6 +874,9 @@ function normalizeAnswerPatchBody(body = {}, current = {}) {
       },
       assistantState: {
         activeSection: step,
+        activeBehaviorPolicy: isBehaviorStep(step)
+          ? behaviorPolicyKeyFromStep(step)
+          : "",
       },
     };
   }
@@ -642,11 +965,19 @@ function resolveAssistantState(existing = {}, patch = {}) {
       activeSection
   );
 
+  const activeBehaviorPolicy =
+    normalizeBehaviorPolicyKey(
+      s(patchAssistant.activeBehaviorPolicy) ||
+        (isBehaviorStep(activeSection) ? behaviorPolicyKeyFromStep(activeSection) : "") ||
+        s(existingAssistant.activeBehaviorPolicy)
+    ) || "";
+
   return sanitizeAssistantState({
     ...existingAssistant,
     ...patchAssistant,
     activeSection,
     lastUpdatedSection,
+    activeBehaviorPolicy,
   });
 }
 
@@ -660,7 +991,7 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
     assistantState: resolveAssistantState(existing, patch),
   };
 
-  return buildStoredSetupAssistantPayload(next, seed);
+  return normalizeStoredSetupAssistantPayload(next, seed);
 }
 
 export function extractIncomingStep(body = {}) {
@@ -745,11 +1076,33 @@ function resolveNextStepFromTurn(turn = {}, currentDraft = {}) {
   );
 }
 
+function sanitizeAcceptedBehaviorPatch(acceptedPatch = {}) {
+  const source = obj(acceptedPatch);
+
+  return sanitizeAssistantBehaviorDraft({
+    assistantBehaviorDraft:
+      obj(source.assistantBehaviorDraft).pricingPolicy ||
+      obj(source.assistantBehaviorDraft).locationPolicy ||
+      obj(source.assistantBehaviorDraft).bookingPolicy ||
+      obj(source.assistantBehaviorDraft).contactPolicy ||
+      obj(source.assistantBehaviorDraft).handoffPolicy
+        ? obj(source.assistantBehaviorDraft)
+        : {
+            pricingPolicy: obj(source.pricingPolicy || source.pricing_policy),
+            locationPolicy: obj(source.locationPolicy || source.location_policy),
+            bookingPolicy: obj(source.bookingPolicy || source.booking_policy),
+            contactPolicy: obj(source.contactPolicy || source.contact_policy),
+            handoffPolicy: obj(source.handoffPolicy || source.handoff_policy),
+          },
+  });
+}
+
 export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {}) {
   const safeTurn = obj(turn);
   const acceptedPatch = obj(safeTurn.acceptedPatch);
   const acceptedIdentity = obj(acceptedPatch.identity);
   const acceptedAiBehavior = obj(acceptedPatch.aiBehavior);
+  const acceptedBehaviorDraft = sanitizeAcceptedBehaviorPatch(acceptedPatch);
   const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
 
   const nextServices = buildServicePatchFromAcceptedValues(
@@ -813,6 +1166,7 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
         currentDraft.sourceMetadata
       )
     ),
+    assistantBehaviorDraft: acceptedBehaviorDraft,
     languages: mergeStringLists(
       currentDraft.languages,
       acceptedAiBehavior.languages,
@@ -836,6 +1190,9 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
     ...partialPatch,
     assistantState: {
       activeSection: nextStep,
+      activeBehaviorPolicy: isBehaviorStep(nextStep)
+        ? behaviorPolicyKeyFromStep(nextStep)
+        : "",
       lastUpdatedSection: nextStep || lastAnsweredStep,
     },
     progress: {

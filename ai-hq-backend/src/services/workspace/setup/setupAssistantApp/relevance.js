@@ -4,10 +4,15 @@ import {
   parsePricingNote,
   parseServicesNote,
 } from "../setupAssistantParser.js";
-import { normalizeQuestionKey } from "./questions.js";
+import { isBehaviorStepRelevant, normalizeQuestionKey } from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
+  normalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode,
 } from "./shared.js";
 
 const GREETING_WORDS = new Set([
@@ -365,6 +370,82 @@ function hasMeaningfulCompanyText(value = "") {
   return tokenList.length <= 8 || /^[\p{L}\p{N} .&'-]+$/u.test(stripped);
 }
 
+function hasMeaningfulPricingBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isPureGreeting(text) || isMetaChat(text)) return false;
+
+  const mode = normalizePricingBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(link|page|səhifə|pricing page|price list|menu)/i.test(text) ||
+      /(cavab|answer|reply)/i.test(text) ||
+      /(service|xidmət).*(soruş|ask)/i.test(text) ||
+      /(quote|sorğu|detal|details)/i.test(text) ||
+      hasUrlLike(text)
+  );
+}
+
+function hasMeaningfulLocationBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isPureGreeting(text) || isMetaChat(text)) return false;
+
+  const mode = normalizeLocationBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(xəritə|map|google maps|directions|address|ünvan)/i.test(text) ||
+      hasUrlLike(text)
+  );
+}
+
+function hasMeaningfulBookingBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isPureGreeting(text) || isMetaChat(text)) return false;
+
+  const mode = normalizeBookingBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(booking|book|reserve|reservation|appointment)/i.test(text) ||
+      /(whatsapp|instagram|website|site|wa\.me|dm)/i.test(text) ||
+      /(collect|topla|məlumat|details)/i.test(text) ||
+      hasUrlLike(text)
+  );
+}
+
+function hasMeaningfulContactBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isPureGreeting(text) || isMetaChat(text)) return false;
+
+  const mode = normalizeContactBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(whatsapp|phone|call|email|link|telegram|instagram|facebook)/i.test(text) ||
+      hasUrlLike(text)
+  );
+}
+
+function hasMeaningfulHandoffBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isPureGreeting(text) || isMetaChat(text)) return false;
+
+  const mode = normalizeHandoffBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(context|kontekst|case by case|uyğun halda)/i.test(text) ||
+      /(reason|səbəb|niyə|why|clarify|izah)/i.test(text) ||
+      /(direct|birbaşa|dərhal)/i.test(text)
+  );
+}
+
 function validateCompanyAnswer(answer = "") {
   const source = buildRecognizedSourceCandidate(answer);
   const accepted =
@@ -456,6 +537,76 @@ function validateHandoffAnswer(answer = "") {
   };
 }
 
+function validatePricingBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulPricingBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_pricing_behavior"
+      : "rejected_pricing_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a pricing response preference.",
+  };
+}
+
+function validateLocationBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulLocationBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_location_behavior"
+      : "rejected_location_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a location response preference.",
+  };
+}
+
+function validateBookingBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulBookingBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_booking_behavior"
+      : "rejected_booking_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a booking routing preference.",
+  };
+}
+
+function validateContactBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulContactBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_contact_behavior"
+      : "rejected_contact_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a contact channel preference.",
+  };
+}
+
+function validateHandoffBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulHandoffBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_handoff_behavior"
+      : "rejected_handoff_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a handoff behavior preference.",
+  };
+}
+
 export function validateStepAnswer(step = "", answer = "", currentDraft = {}) {
   void currentDraft;
 
@@ -485,6 +636,22 @@ export function validateStepAnswer(step = "", answer = "", currentDraft = {}) {
   if (normalizedStep === "pricing") return validatePricingAnswer(answer);
   if (normalizedStep === "handoff") return validateHandoffAnswer(answer);
 
+  if (normalizedStep === "pricing_behavior") {
+    return validatePricingBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "location_behavior") {
+    return validateLocationBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "booking_behavior") {
+    return validateBookingBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "contact_behavior") {
+    return validateContactBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "handoff_behavior") {
+    return validateHandoffBehaviorAnswer(answer);
+  }
+
   return {
     accepted: false,
     reasonCode: "unsupported_step",
@@ -495,6 +662,7 @@ export function validateStepAnswer(step = "", answer = "", currentDraft = {}) {
 function extractDraftFieldValue(step = "", draft = {}) {
   const normalizedStep = normalizeQuestionKey(step);
   const safeDraft = obj(draft);
+  const behaviorDraft = obj(safeDraft.assistantBehaviorDraft);
 
   if (normalizedStep === "company") {
     return s(obj(safeDraft.businessProfile).companyName);
@@ -545,11 +713,71 @@ function extractDraftFieldValue(step = "", draft = {}) {
     );
   }
 
+  if (normalizedStep === "pricing_behavior") {
+    const policy = obj(behaviorDraft.pricingPolicy);
+    return [
+      s(policy.mode),
+      s(policy.preferredTargetUrl),
+      s(policy.fallbackTargetUrl),
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "location_behavior") {
+    const policy = obj(behaviorDraft.locationPolicy);
+    return [
+      s(policy.mode),
+      s(policy.preferredTargetUrl),
+      s(policy.fallbackTargetUrl),
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "booking_behavior") {
+    const policy = obj(behaviorDraft.bookingPolicy);
+    return [
+      s(policy.mode),
+      s(policy.preferredTargetUrl),
+      s(policy.fallbackTargetUrl),
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "contact_behavior") {
+    const policy = obj(behaviorDraft.contactPolicy);
+    return [
+      s(policy.mode),
+      s(policy.preferredChannel),
+      s(policy.preferredTargetUrl),
+      s(policy.fallbackTargetUrl),
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "handoff_behavior") {
+    const policy = obj(behaviorDraft.handoffPolicy);
+    return [
+      s(policy.mode),
+      policy.requiresReason === true ? "requires reason" : "",
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   return "";
 }
 
 export function buildApprovalBlockers(draft = {}) {
-  const steps = [
+  const businessSteps = [
     "company",
     "description",
     "services",
@@ -558,6 +786,16 @@ export function buildApprovalBlockers(draft = {}) {
     "pricing",
     "handoff",
   ];
+
+  const behaviorSteps = [
+    "pricing_behavior",
+    "location_behavior",
+    "booking_behavior",
+    "contact_behavior",
+    "handoff_behavior",
+  ].filter((step) => isBehaviorStepRelevant(step, draft));
+
+  const steps = [...businessSteps, ...behaviorSteps];
 
   return steps
     .map((step) => {
@@ -591,5 +829,10 @@ export const __test__ = {
   hasMeaningfulHandoffText,
   hasMeaningfulDescriptionText,
   hasMeaningfulCompanyText,
+  hasMeaningfulPricingBehaviorText,
+  hasMeaningfulLocationBehaviorText,
+  hasMeaningfulBookingBehaviorText,
+  hasMeaningfulContactBehaviorText,
+  hasMeaningfulHandoffBehaviorText,
   extractDraftFieldValue,
 };
