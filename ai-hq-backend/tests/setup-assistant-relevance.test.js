@@ -56,7 +56,7 @@ test("behavior validation accepts the new behavior-style answers", () => {
   }
 });
 
-test("approval blockers include only relevant missing behavior steps", () => {
+test("approval blockers stay empty when default behavior policies already satisfy relevant behavior", () => {
   const draft = buildCompleteBusinessDraft({
     contacts: [{ value: "https://wa.me/994551112233", preferred: true }],
     assistantBehaviorDraft: {
@@ -70,12 +70,7 @@ test("approval blockers include only relevant missing behavior steps", () => {
   const blockers = buildApprovalBlockers(draft);
   const steps = blockers.map((item) => item.step);
 
-  assert.deepEqual(steps, [
-    "booking_behavior",
-    "contact_behavior",
-    "handoff_behavior",
-  ]);
+  assert.deepEqual(steps, []);
   assert.equal(steps.includes("location_behavior"), false);
-  assert.equal(isDraftReadyForApproval(draft), false);
+  assert.equal(isDraftReadyForApproval(draft), true);
 });
-

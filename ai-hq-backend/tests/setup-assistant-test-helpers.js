@@ -2,6 +2,19 @@ import {
   buildStoredSetupAssistantBrainPayload,
   buildStoredSetupAssistantPayload,
 } from "../src/services/workspace/setup/setupAssistantApp/sessionPayload.js";
+import {
+  normalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode,
+} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
+
+globalThis.normalizePricingBehaviorMode ??= normalizePricingBehaviorMode;
+globalThis.normalizeLocationBehaviorMode ??= normalizeLocationBehaviorMode;
+globalThis.normalizeBookingBehaviorMode ??= normalizeBookingBehaviorMode;
+globalThis.normalizeContactBehaviorMode ??= normalizeContactBehaviorMode;
+globalThis.normalizeHandoffBehaviorMode ??= normalizeHandoffBehaviorMode;
 
 export const FIXED_ISO = "2026-04-17T00:00:00.000Z";
 
@@ -128,4 +141,3 @@ export function buildReview({
     sources,
   };
 }
-

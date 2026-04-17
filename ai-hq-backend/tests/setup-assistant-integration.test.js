@@ -12,7 +12,7 @@ import {
 import { getNextQuestion } from "../src/services/workspace/setup/setupAssistantApp/questions.js";
 import { buildDraft, buildReview } from "./setup-assistant-test-helpers.js";
 
-test("a draft moves through business questions, then behavior questions, and only then becomes approval-ready", () => {
+test("business completion can still point getNextQuestion at behavior while the session payload already treats defaults as approval-ready", () => {
   let draft = buildDraft();
 
   const businessTurns = [
@@ -49,8 +49,9 @@ test("a draft moves through business questions, then behavior questions, and onl
     })
   );
 
-  assert.equal(beforeBehavior.setup.assistant.readyForApproval, false);
-  assert.equal(beforeBehavior.setup.review.finalizeAvailable, false);
+  assert.equal(beforeBehavior.setup.assistant.readyForApproval, true);
+  assert.equal(beforeBehavior.setup.review.finalizeAvailable, true);
+  assert.deepEqual(beforeBehavior.setup.assistant.approvalBlockers, []);
 
   const behaviorTurns = [
     ["pricing_behavior", "ask service first"],
@@ -84,4 +85,3 @@ test("a draft moves through business questions, then behavior questions, and onl
   assert.deepEqual(readyPayload.setup.assistant.approvalBlockers, []);
   assert.equal(readyPayload.setup.assistant.nextQuestion, null);
 });
-

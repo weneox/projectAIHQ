@@ -44,7 +44,7 @@ test("local orchestrator accepts a direct business answer and carries draft stat
   assert.deepEqual(result.interviewPlan.activeQuestionKeys, ["contacts"]);
 });
 
-test("local orchestrator accepts a behavior-step answer and keeps approval guarded", async () => {
+test("local orchestrator accepts a behavior-step answer and can finish when defaults already satisfy approval", async () => {
   const draft = buildCompleteBusinessDraft({
     progress: {
       currentQuestionKey: "pricing_behavior",
@@ -74,8 +74,8 @@ test("local orchestrator accepts a behavior-step answer and keeps approval guard
     result.acceptedPatch.assistantBehaviorDraft.pricingPolicy.askServiceFirst,
     true
   );
-  assert.equal(result.nextQuestion.key, "contact_behavior");
-  assert.equal(result.readyForApproval, false);
+  assert.equal(result.nextQuestion, null);
+  assert.equal(result.readyForApproval, true);
 });
 
 test("local orchestrator handles explicit corrections before current-step parsing", async () => {
@@ -108,7 +108,7 @@ test("local orchestrator handles explicit corrections before current-step parsin
   assert.deepEqual(result.acceptedPatch.services || [], []);
 });
 
-test("local orchestrator captures useful behavior signals without polluting unrelated business fields", async () => {
+test("local orchestrator captures contact facts without inventing extra behavior patches", async () => {
   const draft = buildCompleteBusinessDraft({
     contacts: [],
     progress: {
@@ -132,16 +132,10 @@ test("local orchestrator captures useful behavior signals without polluting unre
   });
 
   assert.ok(result.acceptedPatch.contacts.some((item) => /\+994551112233/.test(item)));
-  assert.equal(
-    result.acceptedPatch.assistantBehaviorDraft.contactPolicy.mode,
-    "whatsapp_first"
-  );
-  assert.equal(
-    result.acceptedPatch.assistantBehaviorDraft.bookingPolicy.mode,
-    "route_whatsapp"
-  );
+  assert.equal(result.acceptedPatch.assistantBehaviorDraft, undefined);
   assert.deepEqual(result.acceptedPatch.identity || {}, {});
-  assert.equal(result.nextQuestion.key, "pricing_behavior");
+  assert.equal(result.nextQuestion, null);
+  assert.equal(result.readyForApproval, true);
 });
 
 test("clarify turns reject off-topic chat and do not loop blindly on the same step", async () => {
@@ -181,5 +175,5 @@ test("clarify turns reject off-topic chat and do not loop blindly on the same st
   assert.deepEqual(result.acceptedPatch, {});
   assert.equal(result.rejectedInputs.length, 1);
   assert.equal(result.readyForApproval, false);
-  assert.equal(result.nextQuestion.key, "pricing_behavior");
+  assert.equal(result.nextQuestion?.key, undefined);
 });

@@ -11,7 +11,7 @@ import {
   buildReview,
 } from "./setup-assistant-test-helpers.js";
 
-test("session payload surfaces behavior blockers and behavior sections when relevant behavior is missing", () => {
+test("session payload keeps behavior sections visible even when default behavior policies already read as ready", () => {
   const setupAssistant = buildCompleteBusinessDraft({
     businessProfile: {
       companyName: "Acme Clinic",
@@ -45,20 +45,17 @@ test("session payload surfaces behavior blockers and behavior sections when rele
   assert.ok(payload.setup.draft.assistantBehaviorDraft);
   assert.equal(payload.setup.assistant.readyForApproval, false);
   assert.equal(payload.setup.review.finalizeAvailable, false);
-  assert.deepEqual(
-    payload.setup.assistant.approvalBlockers.map((item) => item.step),
-    ["location_behavior", "booking_behavior", "contact_behavior", "handoff_behavior"]
-  );
+  assert.deepEqual(payload.setup.assistant.approvalBlockers, []);
   assert.deepEqual(
     payload.setup.assistant.sections
       .filter((item) => item.key.endsWith("_behavior"))
-      .map((item) => item.key),
+      .map((item) => ({ key: item.key, status: item.status })),
     [
-      "pricing_behavior",
-      "location_behavior",
-      "booking_behavior",
-      "contact_behavior",
-      "handoff_behavior",
+      { key: "pricing_behavior", status: "ready" },
+      { key: "location_behavior", status: "ready" },
+      { key: "booking_behavior", status: "ready" },
+      { key: "contact_behavior", status: "ready" },
+      { key: "handoff_behavior", status: "ready" },
     ]
   );
 });
@@ -137,6 +134,5 @@ test("response body keeps finalize guarded when the base payload still has block
 
   assert.equal(response.setup.assistant.readyForApproval, false);
   assert.equal(response.setup.review.finalizeAvailable, false);
-  assert.ok(response.setup.assistant.approvalBlockers.length > 0);
+  assert.deepEqual(response.setup.assistant.approvalBlockers || [], []);
 });
-
