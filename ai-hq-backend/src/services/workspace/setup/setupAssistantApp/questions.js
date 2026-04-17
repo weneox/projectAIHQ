@@ -586,7 +586,7 @@ function hasBookingSignal(draft = {}) {
 }
 
 function hasPricingBehaviorConfigured(draft = {}) {
-  const policy = obj(obj(draft).assistantBehaviorDraft).pricingPolicy;
+  const policy = obj(obj(obj(draft).assistantBehaviorDraft).pricingPolicy);
   const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
 
   return Boolean(
@@ -600,7 +600,7 @@ function hasPricingBehaviorConfigured(draft = {}) {
 }
 
 function hasLocationBehaviorConfigured(draft = {}) {
-  const policy = obj(obj(draft).assistantBehaviorDraft).locationPolicy;
+  const policy = obj(obj(obj(draft).assistantBehaviorDraft).locationPolicy);
   const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
 
   return Boolean(
@@ -613,7 +613,7 @@ function hasLocationBehaviorConfigured(draft = {}) {
 }
 
 function hasBookingBehaviorConfigured(draft = {}) {
-  const policy = obj(obj(draft).assistantBehaviorDraft).bookingPolicy;
+  const policy = obj(obj(obj(draft).assistantBehaviorDraft).bookingPolicy);
   const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
 
   return Boolean(
@@ -627,7 +627,7 @@ function hasBookingBehaviorConfigured(draft = {}) {
 }
 
 function hasContactBehaviorConfigured(draft = {}) {
-  const policy = obj(obj(draft).assistantBehaviorDraft).contactPolicy;
+  const policy = obj(obj(obj(draft).assistantBehaviorDraft).contactPolicy);
   const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
 
   return Boolean(
@@ -641,7 +641,7 @@ function hasContactBehaviorConfigured(draft = {}) {
 }
 
 function hasHandoffBehaviorConfigured(draft = {}) {
-  const policy = obj(obj(draft).assistantBehaviorDraft).handoffPolicy;
+  const policy = obj(obj(obj(draft).assistantBehaviorDraft).handoffPolicy);
   const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
 
   return Boolean(
@@ -652,7 +652,7 @@ function hasHandoffBehaviorConfigured(draft = {}) {
   );
 }
 
-function isBehaviorStepRelevant(questionKey = "", draft = {}) {
+export function isBehaviorStepRelevant(questionKey = "", draft = {}) {
   const key = normalizeQuestionKey(questionKey);
 
   if (key === "pricing_behavior") {

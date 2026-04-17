@@ -21,11 +21,13 @@ import {
   isDraftReadyForApproval,
   validateStepAnswer,
 } from "./setupAssistantApp/relevance.js";
+import { patchFromAnswer } from "./setupAssistantApp/patching.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
   normalizeWebsiteUrl,
 } from "./setupAssistantApp/shared.js";
+import { mergeAssistantBehaviorDraft } from "./setupAssistantApp/sanitize.js";
 
 let cachedClient = null;
 
@@ -37,6 +39,11 @@ const STEP_ORDER = [
   "hours",
   "pricing",
   "handoff",
+  "pricing_behavior",
+  "location_behavior",
+  "booking_behavior",
+  "contact_behavior",
+  "handoff_behavior",
 ];
 
 const SOCIAL_PATTERNS = [
@@ -161,6 +168,55 @@ const STEP_KEYWORDS = {
     "təcili",
     "tecli",
   ],
+  pricing_behavior: [
+    "pricing behavior",
+    "pricing policy",
+    "how to answer price",
+    "price replies",
+    "qiymet davranis",
+    "qiymət davranış",
+    "pricing page",
+    "ask service first",
+  ],
+  location_behavior: [
+    "location behavior",
+    "location policy",
+    "map",
+    "xerite",
+    "xəritə",
+    "address behavior",
+    "unvan",
+    "ünvan",
+  ],
+  booking_behavior: [
+    "booking behavior",
+    "booking policy",
+    "booking route",
+    "reservation",
+    "rezervasiya",
+    "appointment",
+    "whatsapp",
+    "instagram dm",
+  ],
+  contact_behavior: [
+    "contact behavior",
+    "contact policy",
+    "contact preference",
+    "əlaqə üstünlüyü",
+    "elaqe ustunluyu",
+    "whatsapp first",
+    "phone first",
+    "email first",
+  ],
+  handoff_behavior: [
+    "handoff behavior",
+    "handoff policy",
+    "ask reason first",
+    "contextual handoff",
+    "direct handoff",
+    "insana kecid",
+    "insana keçid",
+  ],
 };
 
 const STEP_EXAMPLES = {
@@ -193,6 +249,31 @@ const STEP_EXAMPLES = {
       "Müştəri operator istəyəndə insana yönləndir.",
       "Şikayət, təcili hal və ödəniş problemi olanda insana keç.",
     ],
+    pricing_behavior: [
+      "qÄ±sa cavab + pricing page",
+      "É™vvÉ™lcÉ™ xidmÉ™t soruÅŸ",
+      "birbaÅŸa pricing page-É™ yÃ¶nlÉ™ndir",
+    ],
+    location_behavior: [
+      "Ã¼nvan + xÉ™ritÉ™",
+      "birbaÅŸa xÉ™ritÉ™",
+      "yalnÄ±z qÄ±sa Ã¼nvan",
+    ],
+    booking_behavior: [
+      "WhatsApp-a yÃ¶nlÉ™ndir",
+      "Instagram DM-É™ yÃ¶nlÉ™ndir",
+      "É™vvÉ™lcÉ™ mÉ™lumat topla sonra yÃ¶nlÉ™ndir",
+    ],
+    contact_behavior: [
+      "WhatsApp first",
+      "zÉ™ng first",
+      "email first",
+    ],
+    handoff_behavior: [
+      "kontekstÉ™ gÃ¶rÉ™ keÃ§",
+      "É™vvÉ™lcÉ™ sÉ™bÉ™b soruÅŸ",
+      "birbaÅŸa keÃ§",
+    ],
   },
   en: {
     company: ["North Clinic", "North Clinic northclinic.com"],
@@ -222,6 +303,31 @@ const STEP_EXAMPLES = {
     handoff: [
       "Hand off to a human when the customer asks for an operator.",
       "Hand off for complaints, urgent issues, or payment problems.",
+    ],
+    pricing_behavior: [
+      "short answer + pricing page",
+      "ask service first",
+      "link first",
+    ],
+    location_behavior: [
+      "address + map",
+      "map first",
+      "text only",
+    ],
+    booking_behavior: [
+      "route to WhatsApp",
+      "Instagram DM",
+      "collect details first",
+    ],
+    contact_behavior: [
+      "WhatsApp first",
+      "phone first",
+      "email first",
+    ],
+    handoff_behavior: [
+      "contextual handoff",
+      "ask reason first",
+      "direct handoff",
     ],
   },
 };
@@ -393,6 +499,50 @@ function buildCurrentPreview(draft = {}, review = null) {
       arr(obj(safeDraft.handoffRules).triggers).join(", ")
   );
 
+  const behaviorDraft = mergeAssistantBehaviorDraft(
+    obj(reviewDraft.assistantBehaviorDraft),
+    obj(safeDraft.assistantBehaviorDraft)
+  );
+
+  const summarizeBehavior = (policyKey = "", policy = {}) => {
+    const safePolicy = obj(policy);
+
+    if (policyKey === "pricing") {
+      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (policyKey === "location") {
+      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (policyKey === "booking") {
+      return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (policyKey === "contact") {
+      return [
+        s(safePolicy.mode),
+        s(safePolicy.preferredChannel),
+        s(safePolicy.preferredTargetUrl),
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (policyKey === "handoff") {
+      return [
+        s(safePolicy.mode),
+        safePolicy.requiresReason === true ? "requires reason" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return "";
+  };
+
   return compactDraftObject({
     businessName: s(businessProfile.companyName),
     whatThisBusinessIs: s(businessProfile.description),
@@ -406,6 +556,11 @@ function buildCurrentPreview(draft = {}, review = null) {
     tone: s(safeDraft.tone),
     greetingStyle: s(safeDraft.greetingStyle),
     afterHoursBehavior: s(safeDraft.afterHoursBehavior),
+    pricingBehavior: summarizeBehavior("pricing", behaviorDraft.pricingPolicy),
+    locationBehavior: summarizeBehavior("location", behaviorDraft.locationPolicy),
+    bookingBehavior: summarizeBehavior("booking", behaviorDraft.bookingPolicy),
+    contactBehavior: summarizeBehavior("contact", behaviorDraft.contactPolicy),
+    handoffBehavior: summarizeBehavior("handoff", behaviorDraft.handoffPolicy),
   });
 }
 
@@ -577,12 +732,21 @@ function buildEmptyAcceptedPatch() {
     pricingPosture: "",
     humanHandoff: "",
     aiBehavior: {},
+    assistantBehaviorDraft: {},
   };
 }
 
 function mergeAcceptedPatches(base = {}, extra = {}) {
   const left = obj(base);
   const right = obj(extra);
+  const leftBehavior = obj(left.assistantBehaviorDraft);
+  const rightBehavior = obj(right.assistantBehaviorDraft);
+
+  const mergeBehaviorPolicyPatch = (a = {}, b = {}) =>
+    compactDraftObject({
+      ...obj(a),
+      ...obj(b),
+    });
 
   return compactDraftObject({
     identity: compactDraftObject({
@@ -607,7 +771,41 @@ function mergeAcceptedPatches(base = {}, extra = {}) {
       ...obj(left.aiBehavior),
       ...obj(right.aiBehavior),
     }),
+    assistantBehaviorDraft: compactDraftObject({
+      pricingPolicy: mergeBehaviorPolicyPatch(
+        leftBehavior.pricingPolicy,
+        rightBehavior.pricingPolicy
+      ),
+      locationPolicy: mergeBehaviorPolicyPatch(
+        leftBehavior.locationPolicy,
+        rightBehavior.locationPolicy
+      ),
+      bookingPolicy: mergeBehaviorPolicyPatch(
+        leftBehavior.bookingPolicy,
+        rightBehavior.bookingPolicy
+      ),
+      contactPolicy: mergeBehaviorPolicyPatch(
+        leftBehavior.contactPolicy,
+        rightBehavior.contactPolicy
+      ),
+      handoffPolicy: mergeBehaviorPolicyPatch(
+        leftBehavior.handoffPolicy,
+        rightBehavior.handoffPolicy
+      ),
+    }),
   });
+}
+
+function hasAcceptedBehaviorPatchSignal(value = {}) {
+  const behavior = obj(value);
+
+  return [
+    "pricingPolicy",
+    "locationPolicy",
+    "bookingPolicy",
+    "contactPolicy",
+    "handoffPolicy",
+  ].some((key) => Object.keys(obj(behavior[key])).length > 0);
 }
 
 function hasAcceptedPatchSignal(value = {}) {
@@ -620,7 +818,8 @@ function hasAcceptedPatchSignal(value = {}) {
       arr(patch.hours).length ||
       s(patch.pricingPosture) ||
       s(patch.humanHandoff) ||
-      Object.keys(obj(patch.aiBehavior)).length
+      Object.keys(obj(patch.aiBehavior)).length ||
+      hasAcceptedBehaviorPatchSignal(patch.assistantBehaviorDraft)
   );
 }
 
@@ -628,6 +827,7 @@ function patchTouchesCurrentStep(currentStep = "", acceptedPatch = {}) {
   const step = normalizeQuestionKey(currentStep);
   const patch = obj(acceptedPatch);
   const identity = obj(patch.identity);
+  const behaviorDraft = obj(patch.assistantBehaviorDraft);
 
   if (step === "company") {
     return Boolean(s(identity.businessName) || s(identity.websiteUrl));
@@ -649,6 +849,21 @@ function patchTouchesCurrentStep(currentStep = "", acceptedPatch = {}) {
   }
   if (step === "handoff") {
     return Boolean(s(patch.humanHandoff));
+  }
+  if (step === "pricing_behavior") {
+    return Object.keys(obj(behaviorDraft.pricingPolicy)).length > 0;
+  }
+  if (step === "location_behavior") {
+    return Object.keys(obj(behaviorDraft.locationPolicy)).length > 0;
+  }
+  if (step === "booking_behavior") {
+    return Object.keys(obj(behaviorDraft.bookingPolicy)).length > 0;
+  }
+  if (step === "contact_behavior") {
+    return Object.keys(obj(behaviorDraft.contactPolicy)).length > 0;
+  }
+  if (step === "handoff_behavior") {
+    return Object.keys(obj(behaviorDraft.handoffPolicy)).length > 0;
   }
 
   return false;
@@ -703,6 +918,11 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
       }
     : obj(safeDraft.handoffRules);
 
+  const mergedBehaviorDraft = mergeAssistantBehaviorDraft(
+    obj(safeDraft.assistantBehaviorDraft),
+    obj(patch.assistantBehaviorDraft)
+  );
+
   return compactDraftObject({
     ...safeDraft,
     businessProfile: compactDraftObject({
@@ -722,6 +942,7 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
     hours: mergedHours,
     pricingPosture: mergedPricing,
     handoffRules: mergedHandoff,
+    assistantBehaviorDraft: mergedBehaviorDraft,
     languages: uniqueStrings(
       [...arr(safeDraft.languages), ...arr(obj(patch.aiBehavior).languages)],
       8

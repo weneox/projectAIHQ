@@ -28,7 +28,6 @@ import {
   mergeSourceMetadata,
   sanitizeAssistantBehaviorDraft,
   sanitizeAssistantState,
-  sanitizeBehaviorTargetUrl,
   sanitizeBusinessProfile,
   sanitizeContactPolicy,
   sanitizeContacts,
