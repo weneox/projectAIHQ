@@ -7,6 +7,10 @@ import {
   buildAssistantCompatFollowupQueue,
   buildAssistantCompatQuestion,
 } from "./compat.js";
+import {
+  getNextQuestion,
+  normalizeSetupLocale,
+} from "./questions.js";
 import { buildSetupAssistantSeedFromReview } from "./seed.js";
 import {
   SETUP_ASSISTANT_CURRENT_STEP,
@@ -28,6 +32,10 @@ function compactText(value = "", max = 280) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
+
+function resolveSetupLocaleFromSetup(setup = {}) {
+  return normalizeSetupLocale(s(arr(setup.languages)[0] || "az-AZ"));
 }
 
 function deriveWebsitePrefillDraft(core = {}) {
@@ -79,7 +87,8 @@ function sanitizeBrainQuestion(value = {}) {
   return compactDraftObject({
     key: s(source.key).toLowerCase(),
     step: s(source.step || source.key).toLowerCase(),
-    title: s(source.title),
+    title: s(source.title || source.label),
+    label: s(source.label || source.title),
     prompt: s(source.prompt),
     group: s(source.group || "business_truth"),
     groupLabel: s(source.groupLabel || "Business truth"),
@@ -136,7 +145,7 @@ function sanitizeBrainInterviewPlan(value = {}) {
       compactDraftObject({
         key: s(item?.key).toLowerCase(),
         step: s(item?.step || item?.key).toLowerCase(),
-        title: s(item?.title),
+        title: s(item?.title || item?.label),
         group: s(item?.group || "business_truth"),
         groupLabel: s(item?.groupLabel || "Business truth"),
         priority: Number(item?.priority || 0) || 0,
@@ -349,6 +358,24 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   };
 }
 
+function resolveFallbackNextQuestion({ setup = {}, summary = {}, session = {} } = {}) {
+  const locale = resolveSetupLocaleFromSetup(setup);
+
+  const nextQuestion = getNextQuestion(
+    summary,
+    setup,
+    {
+      currentQuestionKey:
+        s(obj(setup.progress).currentQuestionKey) ||
+        s(obj(session).currentStep),
+      lastAnsweredStep: s(obj(setup.progress).lastAnsweredStep),
+    },
+    { locale }
+  );
+
+  return sanitizeBrainQuestion(nextQuestion);
+}
+
 export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
   const payload = obj(draftPayload);
   return sanitizeBrainSnapshot(obj(payload.setupAssistantBrain));
@@ -423,8 +450,7 @@ function buildAssistantFromStoredBrain({
 } = {}) {
   const brain = sanitizeBrainSnapshot(storedBrain);
   const lastAssistantTurn =
-    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") ||
-    {};
+    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
 
   const sourceSignals = sanitizeBrainSourceSignals(
     hasMeaningfulBrainSourceSignals(obj(brain.sourceSignals))
@@ -439,9 +465,22 @@ function buildAssistantFromStoredBrain({
           formatHours: formatSetupAssistantHoursForCanonical,
         });
 
-  const nextQuestion = sanitizeBrainQuestion(brain.nextQuestion);
+  const fallbackQuestion = resolveFallbackNextQuestion({
+    setup,
+    summary,
+    session,
+  });
+
+  const nextQuestion = sanitizeBrainQuestion(
+    Object.keys(obj(brain.nextQuestion)).length > 0
+      ? brain.nextQuestion
+      : fallbackQuestion
+  );
+
   const readyForApproval =
-    brain.readyForApproval === true || summary.readyForReview === true;
+    brain.readyForApproval === true ||
+    summary.readyForReview === true ||
+    !nextQuestion.key;
 
   const phase = s(
     brain.phase ||
@@ -470,9 +509,9 @@ function buildAssistantFromStoredBrain({
                 },
               ]
             : [],
-          remainingQuestionKeys: [],
-          nextGroup: nextQuestion.group || "",
-          nextGroupLabel: nextQuestion.groupLabel || "",
+          remainingQuestionKeys: nextQuestion.key ? [nextQuestion.key] : [],
+          nextGroup: nextQuestion.group || "business_truth",
+          nextGroupLabel: nextQuestion.groupLabel || "Business truth",
         }
   );
 
@@ -489,13 +528,18 @@ function buildAssistantFromStoredBrain({
       : { notes: [] };
 
   const resolvedAssistantMessage = compactText(
-    s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+    s(
+      brain.assistantMessage ||
+        brain.message ||
+        lastAssistantTurn.text ||
+        (!readyForApproval ? nextQuestion.prompt : "")
+    ),
     420
   );
 
   return {
-    mode: "brain_v3",
-    nextQuestion: nextQuestion.key ? nextQuestion : null,
+    mode: "brain_v4",
+    nextQuestion: nextQuestion.key && !readyForApproval ? nextQuestion : null,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildSummarySections(summary, servicesCatalog),
     completion: {
@@ -507,7 +551,7 @@ function buildAssistantFromStoredBrain({
             intent: "finalize_review",
           }
         : null,
-      message: readyForApproval === true ? resolvedAssistantMessage : "",
+      message: readyForApproval ? resolvedAssistantMessage : "",
     },
     quickCapture: {},
     servicesCatalog,
@@ -621,7 +665,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         namespace: SETUP_ASSISTANT_NAMESPACE,
         readyForReview: summary.readyForReview === true,
         readyForApproval,
-        finalizeAvailable: summary.readyForReview === true,
+        finalizeAvailable: readyForApproval,
         finalized: false,
         message: "",
       },
@@ -665,9 +709,14 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
 
   const safeTurn = sanitizeBrainSnapshot(turn);
 
+  const resolvedNextQuestion =
+    obj(safeTurn.nextQuestion).key
+      ? obj(safeTurn.nextQuestion)
+      : obj(assistant.nextQuestion);
+
   const mergedAssistant = compactDraftObject({
     ...assistant,
-    mode: "brain_v3",
+    mode: "brain_v4",
     phase: s(safeTurn.phase || assistant.phase),
     message: compactText(
       s(safeTurn.assistantMessage || safeTurn.message || assistant.message),
@@ -682,8 +731,8 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       ),
       420
     ),
-    nextQuestion: obj(safeTurn.nextQuestion).key
-      ? obj(safeTurn.nextQuestion)
+    nextQuestion: obj(resolvedNextQuestion).key
+      ? obj(resolvedNextQuestion)
       : null,
     confidence: sanitizeBrainConfidence(safeTurn.confidence),
     recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
@@ -739,8 +788,8 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   const mergedSession = {
     ...session,
     currentStep:
-      s(obj(safeTurn.nextQuestion).step) ||
-      s(obj(safeTurn.nextQuestion).key) ||
+      s(obj(resolvedNextQuestion).step) ||
+      s(obj(resolvedNextQuestion).key) ||
       s(session.currentStep),
   };
 
@@ -763,12 +812,12 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     turn: {
       role: "assistant",
       text: s(safeTurn.assistantMessage || safeTurn.message),
-      questionKey: s(obj(safeTurn.nextQuestion).key),
-      questionCategory: s(obj(safeTurn.nextQuestion).group),
+      questionKey: s(obj(resolvedNextQuestion).key),
+      questionCategory: s(obj(resolvedNextQuestion).group),
       payload: compactDraftObject({
         mode: mergedAssistant.mode,
         phase: mergedAssistant.phase,
-        nextQuestion: obj(safeTurn.nextQuestion),
+        nextQuestion: obj(resolvedNextQuestion),
         confidence: sanitizeBrainConfidence(safeTurn.confidence),
         recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
         sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),

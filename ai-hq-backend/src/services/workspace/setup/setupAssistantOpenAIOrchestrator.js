@@ -2,77 +2,36 @@ import OpenAI from "openai";
 
 import { cfg } from "../../../config.js";
 import { arr, compactDraftObject, obj, s } from "./draftShared.js";
-import { normalizeWebsiteUrl } from "./setupAssistantApp/shared.js";
-
-const STEP_ORDER = [
-  "company",
-  "description",
-  "services",
-  "contacts",
-  "hours",
-  "pricing",
-  "handoff",
-];
-
-const STEP_META = {
-  company: {
-    key: "company",
-    step: "company",
-    title: "Company name",
-    prompt: "O zaman başlayaq. Şirkətinizin adı nədir?",
-  },
-  description: {
-    key: "description",
-    step: "description",
-    title: "Business description",
-    prompt: "Qısa olaraq nə iş gördüyünüzü yazın.",
-  },
-  services: {
-    key: "services",
-    step: "services",
-    title: "Core services",
-    prompt:
-      "Əsas xidmətlərinizi yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
-  },
-  contacts: {
-    key: "contacts",
-    step: "contacts",
-    title: "Contact routes",
-    prompt:
-      "Müştəri sizinlə necə əlaqə saxlamalıdır? Telefon, email, WhatsApp və ya link yazın.",
-  },
-  hours: {
-    key: "hours",
-    step: "hours",
-    title: "Working hours",
-    prompt:
-      "İş saatlarınızı yazın. Məsələn: B.e–C. 09:00–18:00 və ya 24/7.",
-  },
-  pricing: {
-    key: "pricing",
-    step: "pricing",
-    title: "Pricing posture",
-    prompt:
-      "AI qiymətlərlə bağlı nə deyə bilər? Dəqiq qiymət desin, başlanğıc qiymət desin, yoxsa quote tələb olunsun?",
-  },
-  handoff: {
-    key: "handoff",
-    step: "handoff",
-    title: "Human handoff rules",
-    prompt:
-      "Hansı hallarda AI mütləq operatora və ya insana yönləndirməlidir?",
-  },
-};
+import {
+  parseHoursNote,
+  parsePricingNote,
+  parseServicesNote,
+} from "./setupAssistantParser.js";
+import {
+  INTENT_ONLY_RESPONSES,
+  buildAssistantQuestion,
+  getNextQuestion,
+  getSetupCopy,
+  hasSetupSignalForInterview,
+  isQuestionSatisfied,
+  normalizeQuestionKey,
+  normalizeSetupLocale,
+} from "./setupAssistantApp/questions.js";
+import {
+  buildRecognizedSourceCandidate,
+  inferContactType,
+  normalizeWebsiteUrl,
+} from "./setupAssistantApp/shared.js";
 
 let cachedClient = null;
 
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
   const timeoutMs =
-    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 8_000) ||
-    8_000;
+    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 6000) ||
+    6000;
   const maxOutputTokens =
-    Number(cfg.ai?.openaiSetupMaxOutputTokens || 500) || 500;
+    Number(cfg.ai?.openaiSetupMaxOutputTokens || 350) || 350;
 
   const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
@@ -116,28 +75,41 @@ function uniqueStrings(items = [], max = 24) {
   );
 }
 
-function normalizeStep(value = "") {
-  const key = s(value).toLowerCase();
-  if (!key) return "";
-  if (key === "contact") return "contacts";
-  if (key === "price") return "pricing";
-  if (key === "pricing_posture") return "pricing";
-  if (key === "business_name") return "company";
-  if (key === "business_description") return "description";
-  return STEP_META[key] ? key : "";
+function compactText(value = "", max = 420) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
 }
 
-function buildQuestion(step = "") {
-  const meta = obj(STEP_META[normalizeStep(step)] || STEP_META.company);
+function normalizeMessage(value = "") {
+  return s(value).toLowerCase().replace(/\s+/g, " ").trim();
+}
 
-  return compactDraftObject({
-    key: s(meta.key).toLowerCase(),
-    step: s(meta.step).toLowerCase(),
-    title: s(meta.title),
-    prompt: s(meta.prompt),
-    group: "business_truth",
-    groupLabel: "Business truth",
-  });
+function isIntentOnlyMessage(value = "") {
+  return Boolean(INTENT_ONLY_RESPONSES[normalizeMessage(value)]);
+}
+
+function splitList(value = "", limit = 24) {
+  return String(value || "")
+    .split(/\n|,|;|\u2022/g)
+    .map((item) => s(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function listToNatural(locale = "az-AZ", values = []) {
+  const copy = getSetupCopy(locale);
+  const items = uniqueStrings(values, 6);
+
+  if (!items.length) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} ${copy.and} ${items[1]}`;
+
+  return `${items.slice(0, -1).join(", ")} ${copy.and} ${items.at(-1)}`;
+}
+
+function normalizeConversationRole(value = "") {
+  return s(value).toLowerCase() === "user" ? "user" : "assistant";
 }
 
 function buildCurrentPreview(draft = {}, review = null) {
@@ -162,6 +134,7 @@ function buildCurrentPreview(draft = {}, review = null) {
     .map((item) => {
       const row = obj(item);
       const day = s(row.day);
+
       if (row.allDay === true) return [day, "24/7"].filter(Boolean).join(" ");
       if (row.appointmentOnly === true) {
         return [day, "appointment only"].filter(Boolean).join(" ");
@@ -174,6 +147,7 @@ function buildCurrentPreview(draft = {}, review = null) {
           .filter(Boolean)
           .join(" ");
       }
+
       return s(row.notes);
     })
     .filter(Boolean);
@@ -184,12 +158,12 @@ function buildCurrentPreview(draft = {}, review = null) {
       businessProfile.pricingPolicy
   );
 
-  const handoffRules = s(
+  const humanHandoff = s(
     obj(safeDraft.handoffRules).summary ||
       arr(obj(safeDraft.handoffRules).triggers).join(", ")
   );
 
-  return {
+  return compactDraftObject({
     businessName: s(businessProfile.companyName),
     whatThisBusinessIs: s(businessProfile.description),
     websiteUrl: normalizeWebsiteUrl(s(businessProfile.websiteUrl)),
@@ -197,360 +171,86 @@ function buildCurrentPreview(draft = {}, review = null) {
     contactRoutes: uniqueStrings(contacts, 24),
     hours: uniqueStrings(hours, 24),
     pricingPosture,
-    humanHandoff: handoffRules,
+    humanHandoff,
     languages: uniqueStrings(arr(safeDraft.languages), 8),
     tone: s(safeDraft.tone),
     greetingStyle: s(safeDraft.greetingStyle),
     afterHoursBehavior: s(safeDraft.afterHoursBehavior),
-  };
+  });
 }
 
-function hasPreviewSignals(preview = {}) {
-  const safePreview = obj(preview);
+function detectLocaleFromText(value = "") {
+  const text = s(value);
 
-  return Boolean(
-    s(safePreview.businessName) ||
-      s(safePreview.whatThisBusinessIs) ||
-      s(safePreview.websiteUrl) ||
-      arr(safePreview.coreServices).length ||
-      arr(safePreview.contactRoutes).length ||
-      arr(safePreview.hours).length ||
-      s(safePreview.pricingPosture) ||
-      s(safePreview.humanHandoff) ||
-      arr(safePreview.languages).length ||
-      s(safePreview.tone) ||
-      s(safePreview.greetingStyle) ||
-      s(safePreview.afterHoursBehavior)
-  );
-}
+  if (!text) return "";
 
-function applyAcceptedPatchToPreview(preview = {}, acceptedPatch = {}) {
-  const identity = obj(acceptedPatch.identity);
-  const aiBehavior = obj(acceptedPatch.aiBehavior);
+  if (/[\u0600-\u06FF]/.test(text)) return "ar";
+  if (/[\u0900-\u097F]/.test(text)) return "hi";
+  if (/[\u0400-\u04FF]/.test(text)) return "ru";
 
-  return {
-    businessName: s(identity.businessName || preview.businessName),
-    whatThisBusinessIs: s(identity.description || preview.whatThisBusinessIs),
-    websiteUrl: normalizeWebsiteUrl(s(identity.websiteUrl || preview.websiteUrl)),
-    coreServices: uniqueStrings(
-      [...arr(preview.coreServices), ...arr(acceptedPatch.services)],
-      24
-    ),
-    contactRoutes: uniqueStrings(
-      [...arr(preview.contactRoutes), ...arr(acceptedPatch.contacts)],
-      24
-    ),
-    hours: uniqueStrings(
-      [...arr(preview.hours), ...arr(acceptedPatch.hours)],
-      24
-    ),
-    pricingPosture: s(acceptedPatch.pricingPosture || preview.pricingPosture),
-    humanHandoff: s(acceptedPatch.humanHandoff || preview.humanHandoff),
-    languages: uniqueStrings(
-      [...arr(preview.languages), ...arr(aiBehavior.languages)],
-      8
-    ),
-    tone: s(aiBehavior.tone || preview.tone),
-    greetingStyle: s(aiBehavior.greetingStyle || preview.greetingStyle),
-    afterHoursBehavior: s(
-      aiBehavior.afterHoursBehavior || preview.afterHoursBehavior
-    ),
-  };
-}
+  if (/[əğıöşüƏĞIİÖŞÜ]/.test(text)) return "az-AZ";
+  if (/[çğıİöşüÇĞİÖŞÜ]/.test(text)) return "tr";
+  if (/[ñáéíóú¿¡]/i.test(text)) return "es";
+  if (/[àâçéèêëîïôûùüÿœ]/i.test(text)) return "fr";
+  if (/[äöüß]/i.test(text)) return "de";
+  if (/[ãõáâàçêéíóôõú]/i.test(text)) return "pt";
 
-function stepSatisfied(step = "", preview = {}) {
-  const safeStep = normalizeStep(step);
-  const safePreview = obj(preview);
+  const lower = normalizeMessage(text);
 
-  if (safeStep === "company") return Boolean(s(safePreview.businessName));
-  if (safeStep === "description") {
-    return Boolean(s(safePreview.whatThisBusinessIs));
+  if (
+    /\b(hə|bəli|yox|şirkət|iş|xidmət|əlaqə|saat|qiymət|insana)\b/.test(lower)
+  ) {
+    return "az-AZ";
   }
-  if (safeStep === "services") return arr(safePreview.coreServices).length > 0;
-  if (safeStep === "contacts") return arr(safePreview.contactRoutes).length > 0;
-  if (safeStep === "hours") return arr(safePreview.hours).length > 0;
-  if (safeStep === "pricing") return Boolean(s(safePreview.pricingPosture));
-  if (safeStep === "handoff") return Boolean(s(safePreview.humanHandoff));
-
-  return false;
-}
-
-function resolveCurrentStep(session = {}, draft = {}, latestStep = "") {
-  return (
-    normalizeStep(latestStep) ||
-    normalizeStep(obj(draft.progress).currentQuestionKey) ||
-    normalizeStep(obj(draft.assistantState).activeSection) ||
-    normalizeStep(obj(session).currentStep) ||
-    ""
-  );
-}
-
-function findNextStep(preview = {}) {
-  for (const step of STEP_ORDER) {
-    if (!stepSatisfied(step, preview)) return step;
+  if (
+    /\b(ev(et)?|hayir|işletme|hizmet|iletisim|fiyat|insan)\b/.test(lower)
+  ) {
+    return "tr";
   }
+  if (
+    /\b(what|business|service|contact|hours|price|human)\b/.test(lower)
+  ) {
+    return "en";
+  }
+  if (
+    /\b(negocio|servicio|contacto|horario|precio|persona)\b/.test(lower)
+  ) {
+    return "es";
+  }
+  if (
+    /\b(entreprise|service|contact|horaires|prix|humain)\b/.test(lower)
+  ) {
+    return "fr";
+  }
+  if (
+    /\b(geschaft|kontakt|offnungszeiten|preis|mensch)\b/.test(lower)
+  ) {
+    return "de";
+  }
+  if (
+    /\b(negocio|contato|horario|preco|pessoa)\b/.test(lower)
+  ) {
+    return "pt";
+  }
+
   return "";
 }
 
-function looksReadyForApproval(preview = {}) {
-  return STEP_ORDER.every((step) => stepSatisfied(step, preview));
-}
+function resolveReplyLocale({ draft = {}, latestMessage = "" } = {}) {
+  const safeDraft = obj(draft);
 
-function sanitizeExtracted(value = {}) {
-  const source = obj(value);
-
-  return {
-    companyName: s(source.companyName),
-    description: s(source.description),
-    services: uniqueStrings(source.services, 16),
-    contacts: uniqueStrings(source.contacts, 16),
-    hours: uniqueStrings(source.hours, 12),
-    pricingPolicy: s(source.pricingPolicy),
-    handoffRules: s(source.handoffRules),
-  };
-}
-
-function sanitizeTurnPayload(payload = {}, currentStep = "", preview = {}) {
-  const source = obj(payload);
-  const extracted = sanitizeExtracted(source.extracted);
-
-  const acceptedPatch = compactDraftObject({
-    identity: compactDraftObject({
-      businessName: s(extracted.companyName),
-      description: s(extracted.description),
-      websiteUrl: "",
-      audience: "",
-    }),
-    services: arr(extracted.services),
-    contacts: arr(extracted.contacts),
-    hours: arr(extracted.hours),
-    pricingPosture: s(extracted.pricingPolicy),
-    humanHandoff: s(extracted.handoffRules),
-    aiBehavior: compactDraftObject({
-      languages: [],
-      tone: s(preview.tone),
-      greetingStyle: s(preview.greetingStyle),
-      afterHoursBehavior: s(preview.afterHoursBehavior),
-    }),
-  });
-
-  const mergedPreview = applyAcceptedPatchToPreview(preview, acceptedPatch);
-  const safeCurrentStep = normalizeStep(currentStep);
-
-  const validCurrentStep =
-    source.isRelevantToCurrentStep === true &&
-    (stepSatisfied(safeCurrentStep, mergedPreview) ||
-      (safeCurrentStep === "company" && Boolean(s(extracted.companyName))) ||
-      (safeCurrentStep === "description" && Boolean(s(extracted.description))) ||
-      (safeCurrentStep === "services" && arr(extracted.services).length > 0) ||
-      (safeCurrentStep === "contacts" && arr(extracted.contacts).length > 0) ||
-      (safeCurrentStep === "hours" && arr(extracted.hours).length > 0) ||
-      (safeCurrentStep === "pricing" &&
-        Boolean(s(extracted.pricingPolicy))) ||
-      (safeCurrentStep === "handoff" &&
-        Boolean(s(extracted.handoffRules))));
-
-  const shouldAdvance =
-    source.shouldAdvanceStep === true && validCurrentStep === true;
-
-  const nextStep = shouldAdvance ? findNextStep(mergedPreview) : safeCurrentStep;
-  const readyForApproval = looksReadyForApproval(mergedPreview);
-
-  return {
-    intent: s(source.intent).toLowerCase(),
-    replyLanguage: s(source.replyLanguage),
-    isRelevantToCurrentStep: validCurrentStep,
-    confidence: Math.max(0, Math.min(1, Number(source.confidence || 0) || 0)),
-    normalizedAnswer: s(source.normalizedAnswer),
-    acceptedPatch,
-    mergedPreview,
-    assistantReply: s(source.assistantReply),
-    invalidReason: s(source.invalidReason),
-    nextStep: nextStep || "",
-    readyForApproval,
-  };
-}
-
-function buildSourceSignals(preview = {}) {
-  const safePreview = obj(preview);
-
-  return {
-    primarySourceType: "",
-    primarySourceLabel: "",
-    primarySourceUrl: s(safePreview.websiteUrl),
-    primarySourceAuthorityClass: "",
-    pageCount: 0,
-    sourceTypes: safePreview.websiteUrl ? ["website"] : [],
-    strongestEvidence: uniqueStrings(
-      [
-        safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
-        safePreview.whatThisBusinessIs
-          ? `Description: ${safePreview.whatThisBusinessIs}`
-          : "",
-        arr(safePreview.coreServices).length
-          ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
-          : "",
-        arr(safePreview.contactRoutes).length
-          ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
-          : "",
-      ],
-      12
-    ),
-    discoveredPublicClaims: [],
-    companyNameCandidates: safePreview.businessName
-      ? [safePreview.businessName]
-      : [],
-    descriptionCandidates: safePreview.whatThisBusinessIs
-      ? [safePreview.whatThisBusinessIs]
-      : [],
-    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
-    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
-    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
-    pricingCandidates: safePreview.pricingPosture
-      ? [safePreview.pricingPosture]
-      : [],
-    audienceCandidates: [],
-    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
-  };
-}
-
-function buildInterviewPlan(currentStep = "", nextStep = "") {
-  const active = normalizeStep(nextStep || currentStep);
-  if (!active) {
-    return {
-      activeQuestionKeys: [],
-      activeQuestions: [],
-      remainingQuestionKeys: [],
-      nextGroup: "business_truth",
-      nextGroupLabel: "Business truth",
-    };
+  const explicitLanguage = s(arr(safeDraft.languages)[0]);
+  if (explicitLanguage) {
+    return normalizeSetupLocale(explicitLanguage);
   }
 
-  const question = buildQuestion(active);
+  const fromText = detectLocaleFromText(latestMessage);
+  if (fromText) {
+    return normalizeSetupLocale(fromText);
+  }
 
-  return {
-    activeQuestionKeys: question?.key ? [question.key] : [],
-    activeQuestions: question?.key
-      ? [
-          {
-            key: question.key,
-            step: question.step,
-            title: question.title,
-            group: question.group,
-            groupLabel: question.groupLabel,
-            priority: 1,
-          },
-        ]
-      : [],
-    remainingQuestionKeys: question?.key ? [question.key] : [],
-    nextGroup: "business_truth",
-    nextGroupLabel: "Business truth",
-  };
+  return "az-AZ";
 }
-
-function buildSystemPrompt() {
-  return [
-    "You are the semantic setup brain for a business onboarding assistant.",
-    "Your job is to understand the user's latest message inside the current setup step.",
-    "You are not the owner of the whole system state.",
-    "Do not generate a huge business draft.",
-    "Only decide the user's intent, relevance to the current step, extract small grounded fields, and write one short assistant reply.",
-    "If the message is unrelated to the current step, mark isRelevantToCurrentStep=false and explain briefly.",
-    "If the message partially answers the step, extract what is grounded and keep the reply concise.",
-    "Always reply in the user's latest language.",
-    "Do not use canned robotic setup language.",
-    "Do not over-extract.",
-    "Never invent pricing, hours, services, contacts, or handoff rules.",
-    "Only return strict JSON.",
-  ].join(" ");
-}
-
-function buildUserPrompt({
-  currentStep = "",
-  question = null,
-  preview = {},
-  latestMessage = "",
-}) {
-  return [
-    "Current setup step:",
-    JSON.stringify(
-      {
-        currentStep,
-        currentQuestion: obj(question),
-        currentDraftPreview: preview,
-        latestUserMessage: s(latestMessage),
-      },
-      null,
-      2
-    ),
-    "",
-    "Rules:",
-    "- Decide whether the message is relevant to the current step.",
-    "- Extract only grounded fields.",
-    "- If the user gives extra useful information for another field, you may extract it too.",
-    "- assistantReply must be short, natural, and helpful.",
-    "- If the answer is invalid or unrelated, keep the same step.",
-    "- If the answer is good enough, ask the next setup question naturally.",
-  ].join("\n");
-}
-
-const TURN_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "intent",
-    "replyLanguage",
-    "isRelevantToCurrentStep",
-    "confidence",
-    "normalizedAnswer",
-    "extracted",
-    "assistantReply",
-    "shouldAdvanceStep",
-    "invalidReason",
-  ],
-  properties: {
-    intent: {
-      type: "string",
-      enum: [
-        "greeting",
-        "go_to_channels",
-        "start_setup",
-        "setup_answer",
-        "correction",
-        "unrelated",
-      ],
-    },
-    replyLanguage: { type: "string" },
-    isRelevantToCurrentStep: { type: "boolean" },
-    confidence: { type: "number" },
-    normalizedAnswer: { type: "string" },
-    extracted: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "companyName",
-        "description",
-        "services",
-        "contacts",
-        "hours",
-        "pricingPolicy",
-        "handoffRules",
-      ],
-      properties: {
-        companyName: { type: "string" },
-        description: { type: "string" },
-        services: { type: "array", items: { type: "string" } },
-        contacts: { type: "array", items: { type: "string" } },
-        hours: { type: "array", items: { type: "string" } },
-        pricingPolicy: { type: "string" },
-        handoffRules: { type: "string" },
-      },
-    },
-    assistantReply: { type: "string" },
-    shouldAdvanceStep: { type: "boolean" },
-    invalidReason: { type: "string" },
-  },
-};
 
 function extractJsonText(response = {}) {
   const outputText = s(response?.output_text);
@@ -570,37 +270,520 @@ function extractJsonText(response = {}) {
   return "";
 }
 
-async function callOpenAISetupAssistant({
+function buildQuestion(step = "", locale = "az-AZ") {
+  return buildAssistantQuestion(step || "company", {}, { locale });
+}
+
+function buildInterviewPlan(currentStep = "", nextQuestion = null) {
+  const safeQuestion = obj(nextQuestion);
+  const activeKey =
+    s(safeQuestion.key || safeQuestion.step || currentStep).toLowerCase();
+
+  if (!activeKey) {
+    return {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "business_truth",
+      nextGroupLabel: "Business truth",
+    };
+  }
+
+  return {
+    activeQuestionKeys: [activeKey],
+    activeQuestions: [
+      {
+        key: activeKey,
+        step: s(safeQuestion.step || activeKey).toLowerCase(),
+        title: s(safeQuestion.title || safeQuestion.label),
+        group: s(safeQuestion.group || "business_truth"),
+        groupLabel: s(safeQuestion.groupLabel || "Business truth"),
+        priority: Number(safeQuestion.priority || 1) || 1,
+      },
+    ],
+    remainingQuestionKeys: [activeKey],
+    nextGroup: s(safeQuestion.group || "business_truth"),
+    nextGroupLabel: s(safeQuestion.groupLabel || "Business truth"),
+  };
+}
+
+function buildSourceSignals(preview = {}, sources = []) {
+  const safePreview = obj(preview);
+  const sourceRows = arr(sources);
+
+  const sourceTypes = uniqueStrings(
+    [
+      ...sourceRows.map((item) => s(item?.type || item?.sourceType)),
+      safePreview.websiteUrl ? "website" : "",
+    ],
+    8
+  );
+
+  const strongestEvidence = uniqueStrings(
+    [
+      safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
+      safePreview.whatThisBusinessIs
+        ? `Description: ${safePreview.whatThisBusinessIs}`
+        : "",
+      arr(safePreview.coreServices).length
+        ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
+        : "",
+      arr(safePreview.contactRoutes).length
+        ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
+        : "",
+      arr(safePreview.hours).length
+        ? `Hours: ${arr(safePreview.hours).slice(0, 2).join(", ")}`
+        : "",
+    ],
+    12
+  );
+
+  return {
+    primarySourceType: safePreview.websiteUrl ? "website" : s(sourceTypes[0]),
+    primarySourceLabel: safePreview.websiteUrl ? "Website" : s(sourceTypes[0]),
+    primarySourceUrl: s(safePreview.websiteUrl),
+    primarySourceAuthorityClass: safePreview.websiteUrl ? "official" : "",
+    pageCount: 0,
+    sourceTypes,
+    strongestEvidence,
+    discoveredPublicClaims: strongestEvidence,
+    companyNameCandidates: uniqueStrings([safePreview.businessName], 8),
+    descriptionCandidates: uniqueStrings([safePreview.whatThisBusinessIs], 8),
+    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
+    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
+    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
+    pricingCandidates: uniqueStrings([safePreview.pricingPosture], 12),
+    audienceCandidates: [],
+    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
+  };
+}
+
+function buildEmptyAcceptedPatch() {
+  return {
+    identity: {},
+    services: [],
+    contacts: [],
+    hours: [],
+    pricingPosture: "",
+    humanHandoff: "",
+    aiBehavior: {},
+  };
+}
+
+function mergeAcceptedPatches(base = {}, extra = {}) {
+  const left = obj(base);
+  const right = obj(extra);
+
+  return compactDraftObject({
+    identity: compactDraftObject({
+      ...obj(left.identity),
+      ...obj(right.identity),
+    }),
+    services: uniqueStrings(
+      [...arr(left.services), ...arr(right.services)].map((item) => s(item)),
+      24
+    ),
+    contacts: uniqueStrings(
+      [...arr(left.contacts), ...arr(right.contacts)].map((item) => s(item)),
+      24
+    ),
+    hours: uniqueStrings(
+      [...arr(left.hours), ...arr(right.hours)].map((item) => s(item)),
+      12
+    ),
+    pricingPosture: s(right.pricingPosture || left.pricingPosture),
+    humanHandoff: s(right.humanHandoff || left.humanHandoff),
+    aiBehavior: compactDraftObject({
+      ...obj(left.aiBehavior),
+      ...obj(right.aiBehavior),
+    }),
+  });
+}
+
+function hasAcceptedPatchSignal(value = {}) {
+  const patch = obj(value);
+
+  return Boolean(
+    Object.keys(obj(patch.identity)).length ||
+      arr(patch.services).length ||
+      arr(patch.contacts).length ||
+      arr(patch.hours).length ||
+      s(patch.pricingPosture) ||
+      s(patch.humanHandoff) ||
+      Object.keys(obj(patch.aiBehavior)).length
+  );
+}
+
+function patchTouchesCurrentStep(currentStep = "", acceptedPatch = {}) {
+  const step = normalizeQuestionKey(currentStep);
+  const patch = obj(acceptedPatch);
+  const identity = obj(patch.identity);
+
+  if (step === "company") {
+    return Boolean(s(identity.businessName) || s(identity.websiteUrl));
+  }
+  if (step === "description") {
+    return Boolean(s(identity.description));
+  }
+  if (step === "services") {
+    return arr(patch.services).length > 0;
+  }
+  if (step === "contacts") {
+    return arr(patch.contacts).length > 0;
+  }
+  if (step === "hours") {
+    return arr(patch.hours).length > 0;
+  }
+  if (step === "pricing") {
+    return Boolean(s(patch.pricingPosture));
+  }
+  if (step === "handoff") {
+    return Boolean(s(patch.humanHandoff));
+  }
+
+  return false;
+}
+
+function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
+  const safeDraft = obj(draft);
+  const patch = obj(acceptedPatch);
+  const identity = obj(patch.identity);
+
+  const mergedServices = uniqueStrings(
+    [
+      ...arr(safeDraft.services).map((item) => s(item?.title || item?.name || item?.label)),
+      ...arr(patch.services),
+    ],
+    24
+  ).map((item) => ({ title: item }));
+
+  const mergedContacts = uniqueStrings(
+    [
+      ...arr(safeDraft.contacts).map((item) => s(item?.value || item?.label || item?.type)),
+      ...arr(patch.contacts),
+    ],
+    24
+  ).map((item) => ({
+    type: inferContactType(item),
+    value: item,
+    label: item,
+  }));
+
+  const mergedHours = arr(patch.hours).length
+    ? parseHoursNote(arr(patch.hours).join("; "), safeDraft.hours)
+    : arr(safeDraft.hours);
+
+  const mergedPricing = s(patch.pricingPosture)
+    ? parsePricingNote(s(patch.pricingPosture), safeDraft.pricingPosture, safeDraft.services)
+    : obj(safeDraft.pricingPosture);
+
+  const mergedHandoff = s(patch.humanHandoff)
+    ? {
+        enabled: true,
+        summary: s(patch.humanHandoff),
+        triggers: splitList(s(patch.humanHandoff), 16),
+      }
+    : obj(safeDraft.handoffRules);
+
+  return compactDraftObject({
+    ...safeDraft,
+    businessProfile: compactDraftObject({
+      ...obj(safeDraft.businessProfile),
+      companyName: s(identity.businessName || obj(safeDraft.businessProfile).companyName),
+      description: s(identity.description || obj(safeDraft.businessProfile).description),
+      websiteUrl: normalizeWebsiteUrl(
+        s(identity.websiteUrl || obj(safeDraft.businessProfile).websiteUrl)
+      ),
+    }),
+    services: mergedServices,
+    contacts: mergedContacts,
+    hours: mergedHours,
+    pricingPosture: mergedPricing,
+    handoffRules: mergedHandoff,
+    languages: uniqueStrings(
+      [...arr(safeDraft.languages), ...arr(obj(patch.aiBehavior).languages)],
+      8
+    ),
+    tone: s(obj(patch.aiBehavior).tone || safeDraft.tone),
+    greetingStyle: s(obj(patch.aiBehavior).greetingStyle || safeDraft.greetingStyle),
+    afterHoursBehavior: s(
+      obj(patch.aiBehavior).afterHoursBehavior || safeDraft.afterHoursBehavior
+    ),
+  });
+}
+
+function stripRecognizedSourceFromText(text = "") {
+  const value = s(text);
+  const candidate = buildRecognizedSourceCandidate(value);
+  if (!candidate?.raw) return value;
+
+  return s(value.replace(candidate.raw, " ").replace(/\s{2,}/g, " "));
+}
+
+function extractContactCandidates(text = "") {
+  const out = [];
+
+  const emails = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+  out.push(...emails.map((item) => s(item)));
+
+  const phones =
+    text.match(/(?:\+?\d[\d()\-\s]{6,}\d)/g)?.map((item) => s(item)) || [];
+  out.push(...phones);
+
+  const source = buildRecognizedSourceCandidate(text);
+  if (source?.type && source.type !== "website") {
+    out.push(source.value);
+  }
+
+  const listItems = splitList(text, 16);
+  for (const item of listItems) {
+    const type = inferContactType(item);
+    if (type) {
+      out.push(item);
+    }
+  }
+
+  return uniqueStrings(out, 16);
+}
+
+function extractCompanyValue(text = "") {
+  const source = buildRecognizedSourceCandidate(text);
+  const stripped = stripRecognizedSourceFromText(text);
+
+  if (!stripped) {
+    return {
+      businessName: "",
+      websiteUrl: source?.type === "website" ? source.value : "",
+    };
+  }
+
+  const lines = stripped
+    .split(/\n+/)
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  const companyName = s(lines[0]);
+
+  return {
+    businessName: companyName,
+    websiteUrl: source?.type === "website" ? source.value : "",
+  };
+}
+
+function extractDescriptionValue(text = "") {
+  const stripped = stripRecognizedSourceFromText(text);
+  return compactText(stripped, 220);
+}
+
+function extractServiceValues(text = "") {
+  const services = parseServicesNote(text, []);
+  const titles = services
+    .map((item) => s(item?.title || item?.name || item?.label))
+    .filter(Boolean);
+
+  if (titles.length) return uniqueStrings(titles, 16);
+
+  return uniqueStrings(splitList(text, 16), 16);
+}
+
+function extractHoursValues(text = "") {
+  const parsed = parseHoursNote(text, []);
+  const hasStructured = arr(parsed).some((row) => {
+    const item = obj(row);
+    return Boolean(
+      item.allDay === true ||
+        item.appointmentOnly === true ||
+        item.closed === true ||
+        s(item.openTime) ||
+        s(item.closeTime) ||
+        s(item.notes)
+    );
+  });
+
+  return hasStructured ? [compactText(text, 220)] : [];
+}
+
+function extractPricingValue(text = "", currentServices = []) {
+  const parsed = parsePricingNote(text, {}, currentServices);
+  const hasMeaningful = Boolean(
+    s(parsed.publicSummary) ||
+      s(parsed.pricingMode) ||
+      s(parsed.pricingNotes) ||
+      Number.isFinite(Number(parsed.startingAt)) ||
+      Number.isFinite(Number(parsed.minPrice))
+  );
+
+  return hasMeaningful ? compactText(text, 220) : "";
+}
+
+function extractHandoffValue(text = "") {
+  const trimmed = compactText(text, 220);
+  return trimmed || "";
+}
+
+function buildLocalAcceptedPatch(currentStep = "", latestMessage = "", draft = {}) {
+  const step = normalizeQuestionKey(currentStep);
+  const text = s(latestMessage);
+  const source = buildRecognizedSourceCandidate(text);
+
+  const patch = buildEmptyAcceptedPatch();
+
+  if (!text) {
+    return patch;
+  }
+
+  if (source?.type === "website") {
+    patch.identity = compactDraftObject({
+      websiteUrl: source.value,
+    });
+  }
+
+  if (step === "company") {
+    const company = extractCompanyValue(text);
+    patch.identity = compactDraftObject({
+      ...obj(patch.identity),
+      businessName: s(company.businessName),
+      websiteUrl: s(company.websiteUrl || obj(patch.identity).websiteUrl),
+    });
+    return compactDraftObject(patch);
+  }
+
+  if (step === "description") {
+    const description = extractDescriptionValue(text);
+    if (description) {
+      patch.identity = compactDraftObject({
+        ...obj(patch.identity),
+        description,
+      });
+    }
+    return compactDraftObject(patch);
+  }
+
+  if (step === "services") {
+    patch.services = extractServiceValues(text);
+    return compactDraftObject(patch);
+  }
+
+  if (step === "contacts") {
+    patch.contacts = extractContactCandidates(text);
+    return compactDraftObject(patch);
+  }
+
+  if (step === "hours") {
+    patch.hours = extractHoursValues(text);
+    return compactDraftObject(patch);
+  }
+
+  if (step === "pricing") {
+    patch.pricingPosture = extractPricingValue(text, arr(draft.services));
+    return compactDraftObject(patch);
+  }
+
+  if (step === "handoff") {
+    patch.humanHandoff = extractHandoffValue(text);
+    return compactDraftObject(patch);
+  }
+
+  patch.contacts = extractContactCandidates(text);
+
+  return compactDraftObject(patch);
+}
+
+const OPENAI_TURN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "isRelevantToCurrentStep",
+    "confidence",
+    "companyName",
+    "description",
+    "services",
+    "contacts",
+    "hours",
+    "pricingPosture",
+    "humanHandoff",
+    "websiteUrl",
+    "reason",
+  ],
+  properties: {
+    isRelevantToCurrentStep: { type: "boolean" },
+    confidence: { type: "number" },
+    companyName: { type: "string" },
+    description: { type: "string" },
+    services: { type: "array", items: { type: "string" } },
+    contacts: { type: "array", items: { type: "string" } },
+    hours: { type: "array", items: { type: "string" } },
+    pricingPosture: { type: "string" },
+    humanHandoff: { type: "string" },
+    websiteUrl: { type: "string" },
+    reason: { type: "string" },
+  },
+};
+
+function buildSystemPrompt(locale = "az-AZ") {
+  return [
+    "You are a setup extraction helper for a business onboarding assistant.",
+    `Reply locale is ${locale}.`,
+    "You do not own the system state.",
+    "Only extract grounded business facts from the latest user message.",
+    "Prefer short precise extraction.",
+    "Never invent services, pricing, contacts, hours, or company names.",
+    "If the latest message does not answer the current step, mark it not relevant.",
+    "Return strict JSON only.",
+  ].join(" ");
+}
+
+function buildUserPrompt({
+  locale = "az-AZ",
   currentStep = "",
   question = null,
   preview = {},
   latestMessage = "",
-  model,
-  timeoutMs,
-  maxOutputTokens,
-} = {}) {
-  const runtime = getSetupAssistantRuntimeConfig();
-  const resolvedModel = s(model, runtime.model);
-  const resolvedTimeoutMs =
-    Number(timeoutMs || runtime.timeoutMs || 8_000) || 8_000;
-  const resolvedMaxOutputTokens =
-    Number(maxOutputTokens || runtime.maxOutputTokens || 500) || 500;
+}) {
+  return [
+    "Current setup context:",
+    JSON.stringify(
+      {
+        locale,
+        currentStep,
+        currentQuestion: obj(question),
+        draftPreview: obj(preview),
+        latestUserMessage: s(latestMessage),
+      },
+      null,
+      2
+    ),
+    "",
+    "Extract only grounded values for the current step and any obviously useful companion field such as website URL.",
+  ].join("\n");
+}
 
+async function callOpenAISetupAssistant({
+  locale = "az-AZ",
+  currentStep = "",
+  question = null,
+  preview = {},
+  latestMessage = "",
+  model = "",
+  timeoutMs = 6000,
+  maxOutputTokens = 350,
+} = {}) {
   const client = getOpenAIClient();
   if (!client) {
     throw new Error("openai_setup_assistant_not_configured");
   }
 
   const responsePromise = client.responses.create({
-    model: resolvedModel,
+    model,
     input: [
       {
         role: "system",
-        content: buildSystemPrompt(),
+        content: buildSystemPrompt(locale),
       },
       {
         role: "user",
         content: buildUserPrompt({
+          locale,
           currentStep,
           question,
           preview,
@@ -611,25 +794,22 @@ async function callOpenAISetupAssistant({
     text: {
       format: {
         type: "json_schema",
-        name: "setup_semantic_turn",
+        name: "setup_assistant_semantic_extraction",
         strict: true,
-        schema: TURN_SCHEMA,
+        schema: OPENAI_TURN_SCHEMA,
       },
     },
-    max_output_tokens: resolvedMaxOutputTokens,
+    max_output_tokens: maxOutputTokens,
   });
 
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("openai_setup_assistant_timeout"));
-    }, resolvedTimeoutMs);
+    setTimeout(() => reject(new Error("openai_setup_assistant_timeout")), timeoutMs);
   });
 
   const response = await Promise.race([responsePromise, timeoutPromise]);
 
   const payload =
-    obj(response?.output_parsed) &&
-    Object.keys(obj(response.output_parsed)).length
+    obj(response?.output_parsed) && Object.keys(obj(response.output_parsed)).length
       ? response.output_parsed
       : safeJsonParse(extractJsonText(response), {});
 
@@ -637,98 +817,94 @@ async function callOpenAISetupAssistant({
     throw new Error("openai_setup_assistant_empty_output");
   }
 
-  return {
-    model: resolvedModel,
-    payload,
-  };
+  return obj(payload);
 }
 
-function buildFallbackTurn({
+function buildAcceptedPatchFromOpenAI(payload = {}) {
+  const source = obj(payload);
+
+  return compactDraftObject({
+    identity: compactDraftObject({
+      businessName: s(source.companyName),
+      description: s(source.description),
+      websiteUrl: normalizeWebsiteUrl(s(source.websiteUrl)),
+    }),
+    services: uniqueStrings(source.services, 16),
+    contacts: uniqueStrings(source.contacts, 16),
+    hours: uniqueStrings(source.hours, 12),
+    pricingPosture: compactText(s(source.pricingPosture), 220),
+    humanHandoff: compactText(s(source.humanHandoff), 220),
+    aiBehavior: {},
+  });
+}
+
+function buildAckMessage(locale = "az-AZ", currentStep = "", acceptedPatch = {}) {
+  const copy = getSetupCopy(locale);
+  const phrases = obj(copy.phrases);
+  const step = normalizeQuestionKey(currentStep);
+  const patch = obj(acceptedPatch);
+  const identity = obj(patch.identity);
+
+  if (step === "company" && s(identity.businessName)) {
+    return s(phrases.companyCaptured).replace("{value}", s(identity.businessName));
+  }
+
+  if (step === "description" && s(identity.description)) {
+    return s(phrases.descriptionCaptured).replace("{value}", s(identity.description));
+  }
+
+  if (step === "services" && arr(patch.services).length) {
+    return s(phrases.servicesCaptured).replace(
+      "{value}",
+      listToNatural(locale, arr(patch.services))
+    );
+  }
+
+  if (step === "contacts" && arr(patch.contacts).length) {
+    return s(phrases.contactsCaptured || phrases.genericCaptured);
+  }
+
+  if (step === "hours" && arr(patch.hours).length) {
+    return s(phrases.hoursCaptured || phrases.genericCaptured);
+  }
+
+  if (step === "pricing" && s(patch.pricingPosture)) {
+    return s(phrases.pricingCaptured || phrases.genericCaptured);
+  }
+
+  if (step === "handoff" && s(patch.humanHandoff)) {
+    return s(phrases.handoffCaptured || phrases.genericCaptured);
+  }
+
+  if (s(identity.websiteUrl)) {
+    return s(phrases.genericCaptured);
+  }
+
+  return s(phrases.genericCaptured);
+}
+
+function buildPassiveTurn({
+  locale = "az-AZ",
   currentStep = "",
-  preview = {},
-  latestMessage = "",
+  draft = {},
+  review = null,
+  sources = [],
   error = "",
   model = "",
-} = {}) {
-  const hasSignals = hasPreviewSignals(preview);
-  const hasMessage = Boolean(s(latestMessage));
-  const readyForApproval = looksReadyForApproval(preview);
-  const nextStep =
-    findNextStep(preview) || normalizeStep(currentStep) || "company";
-  const sourceCaptureMode = !hasSignals && !hasMessage;
-  const nextQuestion =
-    sourceCaptureMode || readyForApproval ? null : buildQuestion(nextStep);
-
-  const fallbackAssistantMessage = sourceCaptureMode
-    ? ""
-    : s(obj(nextQuestion).prompt);
-
-  return {
-    ok: true,
-    provider: "local_fallback",
-    model: s(model),
-    usedFallback: true,
-    error: s(error),
-    latestUserInput: compactDraftObject({
-      step: normalizeStep(currentStep),
-      text: latestMessage,
-    }),
-    phase: sourceCaptureMode
-      ? "source_capture"
-      : readyForApproval
-        ? "ready"
-        : "interview",
-    assistantMessage: fallbackAssistantMessage,
-    message: fallbackAssistantMessage,
-    nextQuestion,
-    draft: preview,
-    acceptedPatch: {
-      identity: {},
-      services: [],
-      contacts: [],
-      hours: [],
-      pricingPosture: "",
-      humanHandoff: "",
-      aiBehavior: {},
-    },
-    rejectedInputs: [],
-    confidence: {
-      strong: [],
-      unclear: [],
-      contradictions: [],
-    },
-    recommendation: {
-      notes: [],
-    },
-    sourceSignals: buildSourceSignals(preview),
-    interviewPlan: sourceCaptureMode
-      ? buildInterviewPlan("", "")
-      : buildInterviewPlan(currentStep, nextStep),
-    aiBehavior: compactDraftObject({
-      languages: arr(preview.languages),
-      tone: s(preview.tone),
-      greetingStyle: s(preview.greetingStyle),
-      afterHoursBehavior: s(preview.afterHoursBehavior),
-    }),
-    readyForApproval,
-  };
-}
-
-function normalizeTurnResult({
-  raw = {},
-  currentStep = "",
-  preview = {},
-  latestMessage = "",
-  provider = "openai",
-  model = "",
+  provider = "local_deterministic",
   usedFallback = false,
-  error = "",
 } = {}) {
-  const interpreted = sanitizeTurnPayload(raw, currentStep, preview);
-  const nextQuestion =
-    interpreted.readyForApproval === true
-      ? null
-      : buildQuestion(interpreted.nextStep || currentStep || "company");
+  const preview = buildCurrentPreview(draft, review);
+  const nextQuestion = getNextQuestion(
+    {},
+    draft,
+    {
+      currentQuestionKey: currentStep,
+    },
+    { locale }
+  );
+  const readyForApproval = nextQuestion == null;
+  const copy = getSetupCopy(locale);
 
   return {
     ok: true,
@@ -737,44 +913,150 @@ function normalizeTurnResult({
     usedFallback: usedFallback === true,
     error: s(error),
     latestUserInput: compactDraftObject({
-      step: normalizeStep(currentStep),
-      text: latestMessage,
+      step: normalizeQuestionKey(currentStep),
+      text: "",
     }),
-    phase: interpreted.readyForApproval === true ? "ready" : "interview",
-    assistantMessage: s(interpreted.assistantReply),
-    message: s(interpreted.assistantReply),
+    phase: readyForApproval
+      ? "ready"
+      : hasSetupSignalForInterview(draft)
+        ? "interview"
+        : "source_capture",
+    assistantMessage: readyForApproval
+      ? s(obj(copy.phrases).readyForApproval)
+      : s(obj(nextQuestion).prompt),
+    message: readyForApproval
+      ? s(obj(copy.phrases).readyForApproval)
+      : s(obj(nextQuestion).prompt),
     nextQuestion,
-    draft: interpreted.mergedPreview,
-    acceptedPatch: interpreted.acceptedPatch,
-    rejectedInputs:
-      interpreted.isRelevantToCurrentStep === true
-        ? []
-        : [
-            {
-              input: s(latestMessage),
-              reason:
-                s(interpreted.invalidReason) ||
-                "The answer did not match the current setup step.",
-              suggestedField: normalizeStep(currentStep),
-            },
-          ],
+    draft: preview,
+    acceptedPatch: buildEmptyAcceptedPatch(),
+    rejectedInputs: [],
     confidence: {
-      strong: interpreted.isRelevantToCurrentStep === true ? [currentStep] : [],
-      unclear: interpreted.isRelevantToCurrentStep === true ? [] : [currentStep],
+      strong: [],
+      unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
       contradictions: [],
     },
     recommendation: {
       notes: [],
     },
-    sourceSignals: buildSourceSignals(interpreted.mergedPreview),
-    interviewPlan: buildInterviewPlan(currentStep, interpreted.nextStep),
+    sourceSignals: buildSourceSignals(preview, sources),
+    interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
     aiBehavior: compactDraftObject({
-      languages: arr(preview.languages),
-      tone: s(preview.tone),
-      greetingStyle: s(preview.greetingStyle),
-      afterHoursBehavior: s(preview.afterHoursBehavior),
+      languages: uniqueStrings(arr(draft.languages), 8),
+      tone: s(draft.tone),
+      greetingStyle: s(draft.greetingStyle),
+      afterHoursBehavior: s(draft.afterHoursBehavior),
     }),
-    readyForApproval: interpreted.readyForApproval === true,
+    readyForApproval,
+  };
+}
+
+function buildLocalTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  acceptedPatch = {},
+  provider = "local_deterministic",
+  model = "",
+  usedFallback = false,
+  error = "",
+  isRelevantToCurrentStep = true,
+  openAIReason = "",
+} = {}) {
+  const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
+  const preview = buildCurrentPreview(mergedDraft, review);
+  const nextQuestion = getNextQuestion(
+    {},
+    mergedDraft,
+    {
+      currentQuestionKey: currentStep,
+      lastAnsweredStep: currentStep,
+    },
+    { locale }
+  );
+  const readyForApproval = nextQuestion == null;
+  const copy = getSetupCopy(locale);
+  const ack = hasAcceptedPatchSignal(acceptedPatch)
+    ? buildAckMessage(locale, currentStep, acceptedPatch)
+    : "";
+
+  let assistantMessage = "";
+
+  if (readyForApproval) {
+    assistantMessage = s(obj(copy.phrases).readyForApproval);
+  } else if (isRelevantToCurrentStep !== true && s(latestMessage)) {
+    assistantMessage = [s(obj(copy.phrases).redirectPrefix), s(obj(nextQuestion).prompt)]
+      .filter(Boolean)
+      .join(" ");
+  } else if (ack && s(obj(nextQuestion).prompt)) {
+    assistantMessage = `${ack} ${s(obj(nextQuestion).prompt)}`.trim();
+  } else if (ack) {
+    assistantMessage = ack;
+  } else {
+    assistantMessage = s(obj(nextQuestion).prompt);
+  }
+
+  return {
+    ok: true,
+    provider,
+    model: s(model),
+    usedFallback: usedFallback === true,
+    error: s(error),
+    latestUserInput: compactDraftObject({
+      step: normalizeQuestionKey(currentStep),
+      text: latestMessage,
+    }),
+    phase: readyForApproval
+      ? "ready"
+      : hasSetupSignalForInterview(mergedDraft)
+        ? "interview"
+        : "source_capture",
+    assistantMessage,
+    message: assistantMessage,
+    nextQuestion,
+    draft: preview,
+    acceptedPatch: compactDraftObject(acceptedPatch),
+    rejectedInputs:
+      isRelevantToCurrentStep === true || !s(latestMessage)
+        ? []
+        : [
+            {
+              input: s(latestMessage),
+              reason:
+                s(openAIReason) ||
+                "The answer did not clearly match the current setup step.",
+              suggestedField: normalizeQuestionKey(currentStep),
+            },
+          ],
+    confidence: {
+      strong:
+        isRelevantToCurrentStep === true && normalizeQuestionKey(currentStep)
+          ? [normalizeQuestionKey(currentStep)]
+          : [],
+      unclear:
+        isRelevantToCurrentStep === true || !normalizeQuestionKey(currentStep)
+          ? []
+          : [normalizeQuestionKey(currentStep)],
+      contradictions: [],
+    },
+    recommendation: {
+      notes: [],
+    },
+    sourceSignals: buildSourceSignals(preview, sources),
+    interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
+    aiBehavior: compactDraftObject({
+      languages: uniqueStrings(
+        [...arr(draft.languages), locale],
+        8
+      ),
+      tone: s(draft.tone),
+      greetingStyle: s(draft.greetingStyle),
+      afterHoursBehavior: s(draft.afterHoursBehavior),
+    }),
+    readyForApproval,
   };
 }
 
@@ -787,72 +1069,161 @@ export async function runSetupAssistantOpenAIOrchestrator({
   latestMessage = "",
   forceFallback = false,
 } = {}) {
-  void sources;
-
   const runtime = getSetupAssistantRuntimeConfig();
+  const currentStep =
+    normalizeQuestionKey(latestStep) ||
+    normalizeQuestionKey(obj(draft.progress).currentQuestionKey) ||
+    normalizeQuestionKey(obj(draft.progress).lastAnsweredStep) ||
+    "company";
+
+  const locale = resolveReplyLocale({
+    draft,
+    latestMessage,
+  });
+
   const preview = buildCurrentPreview(draft, review);
-  const currentStep = resolveCurrentStep(session, draft, latestStep);
-  const currentQuestion = currentStep ? buildQuestion(currentStep) : null;
+  const currentQuestion = buildQuestion(currentStep, locale);
+  const safeMessage = s(latestMessage);
 
-  const shouldForceFallback =
-    forceFallback === true || runtime.forceFallback === true;
-
-  if (shouldForceFallback || !hasOpenAISetupAssistant()) {
-    return buildFallbackTurn({
+  if (!safeMessage) {
+    return buildPassiveTurn({
+      locale,
       currentStep,
-      preview,
-      latestMessage,
-      error: shouldForceFallback
-        ? "openai_setup_assistant_forced_fallback"
-        : "openai_setup_assistant_unavailable",
+      draft,
+      review,
+      sources,
+      provider: "local_deterministic",
       model: runtime.model,
+      usedFallback: false,
+    });
+  }
+
+  if (isIntentOnlyMessage(safeMessage)) {
+    return buildPassiveTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      provider: "local_deterministic",
+      model: runtime.model,
+      usedFallback: false,
+    });
+  }
+
+  const localAcceptedPatch = buildLocalAcceptedPatch(currentStep, safeMessage, draft);
+  const localMergedDraft = buildDraftWithAcceptedPatch(draft, localAcceptedPatch);
+  const localTouchesStep = patchTouchesCurrentStep(currentStep, localAcceptedPatch);
+  const localSatisfiesStep = isQuestionSatisfied(currentStep, localMergedDraft);
+  const localRelevant =
+    localTouchesStep ||
+    localSatisfiesStep ||
+    (currentStep === "company" && Boolean(s(obj(localAcceptedPatch.identity).websiteUrl)));
+
+  if (localRelevant || runtime.forceFallback === true || forceFallback === true) {
+    return buildLocalTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: localAcceptedPatch,
+      provider: "local_deterministic",
+      model: runtime.model,
+      usedFallback: runtime.forceFallback === true || forceFallback === true,
+      error:
+        runtime.forceFallback === true || forceFallback === true
+          ? "openai_setup_assistant_forced_fallback"
+          : "",
+      isRelevantToCurrentStep: true,
+    });
+  }
+
+  if (!hasOpenAISetupAssistant()) {
+    return buildLocalTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: localAcceptedPatch,
+      provider: "local_deterministic",
+      model: runtime.model,
+      usedFallback: true,
+      error: "openai_setup_assistant_unavailable",
+      isRelevantToCurrentStep: false,
     });
   }
 
   try {
-    const openaiResult = await callOpenAISetupAssistant({
-      currentStep: currentStep || "company",
-      question: currentQuestion || buildQuestion("company"),
+    const openaiPayload = await callOpenAISetupAssistant({
+      locale,
+      currentStep,
+      question: currentQuestion,
       preview,
-      latestMessage,
+      latestMessage: safeMessage,
       model: runtime.model,
       timeoutMs: runtime.timeoutMs,
       maxOutputTokens: runtime.maxOutputTokens,
     });
 
-    return normalizeTurnResult({
-      raw: openaiResult.payload,
-      currentStep: currentStep || "company",
-      preview,
-      latestMessage,
+    const openAIAcceptedPatch = buildAcceptedPatchFromOpenAI(openaiPayload);
+    const mergedAcceptedPatch = mergeAcceptedPatches(localAcceptedPatch, openAIAcceptedPatch);
+    const mergedDraft = buildDraftWithAcceptedPatch(draft, mergedAcceptedPatch);
+
+    const relevant =
+      openaiPayload.isRelevantToCurrentStep === true ||
+      patchTouchesCurrentStep(currentStep, mergedAcceptedPatch) ||
+      isQuestionSatisfied(currentStep, mergedDraft);
+
+    return buildLocalTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: mergedAcceptedPatch,
       provider: "openai",
-      model: openaiResult.model,
+      model: runtime.model,
       usedFallback: false,
+      error: "",
+      isRelevantToCurrentStep: relevant,
+      openAIReason: s(openaiPayload.reason),
     });
   } catch (error) {
-    return buildFallbackTurn({
+    return buildLocalTurn({
+      locale,
       currentStep,
-      preview,
-      latestMessage,
-      error: s(error?.message, "openai_setup_assistant_failed"),
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: localAcceptedPatch,
+      provider: "local_deterministic",
       model: runtime.model,
+      usedFallback: true,
+      error: s(error?.message, "openai_setup_assistant_failed"),
+      isRelevantToCurrentStep: false,
     });
   }
 }
 
 export const __test__ = {
   buildCurrentPreview,
-  hasPreviewSignals,
-  applyAcceptedPatchToPreview,
-  stepSatisfied,
-  resolveCurrentStep,
-  findNextStep,
-  looksReadyForApproval,
-  sanitizeTurnPayload,
-  normalizeTurnResult,
-  buildFallbackTurn,
-  getSetupAssistantRuntimeConfig,
-  hasOpenAISetupAssistant,
+  resolveReplyLocale,
+  buildLocalAcceptedPatch,
+  buildDraftWithAcceptedPatch,
+  patchTouchesCurrentStep,
+  hasAcceptedPatchSignal,
+  buildSourceSignals,
+  isIntentOnlyMessage,
+  mergeAcceptedPatches,
+  buildAckMessage,
+  buildPassiveTurn,
+  buildLocalTurn,
   setCachedClient(client = null) {
     cachedClient = client;
   },

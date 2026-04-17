@@ -9,7 +9,12 @@ import {
   buildStoredSetupAssistantPayload,
   normalizeStoredSetupAssistantPayload,
 } from "./sessionPayload.js";
-import { INTENT_ONLY_RESPONSES } from "./questions.js";
+import {
+  INTENT_ONLY_RESPONSES,
+  getNextQuestion,
+  isQuestionSatisfied,
+  normalizeQuestionKey,
+} from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
@@ -33,15 +38,19 @@ import {
 } from "./sanitize.js";
 
 function normalizeStep(value = "") {
-  const key = s(value).toLowerCase();
+  const raw = s(value).toLowerCase();
+  const normalized = normalizeQuestionKey(raw);
 
-  if (key === "contact") return "contacts";
-  if (key === "price") return "pricing";
-  if (key === "pricing_posture") return "pricing";
-  if (key === "business_name") return "company";
-  if (key === "business_description") return "description";
+  if (normalized) return normalized;
+  if (raw === "profile") return "profile";
+  if (raw === "website") return "company";
 
-  return key;
+  return "";
+}
+
+function resolveDraftLocale(current = {}, seed = {}) {
+  const currentDraft = normalizeStoredSetupAssistantPayload(current, seed);
+  return s(arr(currentDraft.languages)[0] || "az-AZ");
 }
 
 function buildContactsFromAnswer(answer = "") {
@@ -59,6 +68,7 @@ function buildContactsFromAnswer(answer = "") {
 function buildHandoffFromAnswer(answer = "") {
   const text = s(answer);
   if (!text) return {};
+
   return sanitizeHandoffRules({
     enabled: true,
     summary: text,
@@ -226,7 +236,7 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
   }
 
   if (intent === "__continue__") {
-    return buildStepIntentPatch(safeStep || "profile");
+    return buildStepIntentPatch(safeStep || "company");
   }
 
   if (intent === "__always_open__") {
@@ -416,40 +426,25 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         businessProfile: parseProfileAnswer(text, currentDraft),
         sourceMetadata: sourceMetadataPatch,
         assistantState: {
-          lastUpdatedSection: "profile",
-          activeSection: "profile",
-        },
-      });
-
-    case "website":
-      return compactDraftObject({
-        businessProfile:
-          sourceCandidate?.type === "website"
-            ? {
-                websiteUrl: sourceCandidate.value,
-              }
-            : sourceCandidate?.type
-              ? {}
-              : {
-                  websiteUrl: normalizeWebsiteUrl(text),
-                },
-        sourceMetadata: sourceCandidate?.type ? sourceMetadataPatch : {},
-        assistantState: {
-          lastUpdatedSection: "profile",
-          activeSection: "website",
-        },
-      });
-
-    case "company":
-      return compactDraftObject({
-        businessProfile: {
-          companyName: text,
-        },
-        assistantState: {
-          lastUpdatedSection: "profile",
+          lastUpdatedSection: "company",
           activeSection: "company",
         },
       });
+
+    case "company": {
+      const parsedProfile = parseProfileAnswer(text, currentDraft);
+      return compactDraftObject({
+        businessProfile: {
+          ...obj(parsedProfile),
+          companyName: s(obj(parsedProfile).companyName || text),
+        },
+        sourceMetadata: sourceMetadataPatch,
+        assistantState: {
+          lastUpdatedSection: "company",
+          activeSection: "company",
+        },
+      });
+    }
 
     case "description":
       return compactDraftObject({
@@ -457,7 +452,7 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
           description: text,
         },
         assistantState: {
-          lastUpdatedSection: "profile",
+          lastUpdatedSection: "description",
           activeSection: "description",
         },
       });
@@ -554,7 +549,7 @@ function normalizeAnswerPatchBody(body = {}, current = {}) {
   if (!Object.keys(answerPatch).length) return {};
 
   const activeSection =
-    s(obj(answerPatch.assistantState).activeSection) || step || "profile";
+    s(obj(answerPatch.assistantState).activeSection) || step || "company";
 
   return compactDraftObject({
     ...answerPatch,
@@ -572,51 +567,52 @@ export function normalizeSetupAssistantDraftPatchBody(body = {}, current = {}) {
   return mergeDraftState(directPatch, answerPatch);
 }
 
-function removeSkippedIfAnswered(skipped = [], patch = {}) {
-  const nextSkipped = new Set(arr(skipped).map((item) => s(item).toLowerCase()));
+function removeSkippedIfAnswered(skipped = [], draft = {}) {
+  return arr(skipped)
+    .map((item) => normalizeStep(item))
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index)
+    .filter((item) => !isQuestionSatisfied(item, draft));
+}
 
-  if (patch.businessProfile?.websiteUrl) {
-    nextSkipped.delete("website");
-    nextSkipped.delete("profile");
-  }
-  if (patch.businessProfile?.companyName) {
-    nextSkipped.delete("company");
-    nextSkipped.delete("profile");
-  }
-  if (patch.businessProfile?.description) {
-    nextSkipped.delete("description");
-    nextSkipped.delete("profile");
-  }
-  if (patch.services !== undefined && arr(patch.services).length > 0) {
-    nextSkipped.delete("services");
-  }
-  if (patch.contacts !== undefined && arr(patch.contacts).length > 0) {
-    nextSkipped.delete("contacts");
-  }
-  if (patch.hours !== undefined) {
-    nextSkipped.delete("hours");
-  }
-  if (
-    patch.pricingPosture !== undefined &&
-    Object.keys(obj(patch.pricingPosture)).length > 0
-  ) {
-    nextSkipped.delete("pricing");
-  }
-  if (
-    patch.handoffRules !== undefined &&
-    Object.keys(obj(patch.handoffRules)).length > 0
-  ) {
-    nextSkipped.delete("handoff");
-  }
+function resolveNextQuestionKey(existing = {}, patch = {}, merged = {}, locale = "az-AZ") {
+  const existingProgress = obj(existing.progress);
+  const patchProgress = obj(patch.progress);
+  const preferredQuestionKey = normalizeStep(
+    s(obj(patch.assistantState).activeSection) ||
+      s(patchProgress.currentQuestionKey) ||
+      s(existingProgress.currentQuestionKey) ||
+      s(patchProgress.lastAnsweredStep) ||
+      s(existingProgress.lastAnsweredStep)
+  );
 
-  return Array.from(nextSkipped);
+  const nextQuestion = getNextQuestion(
+    {},
+    merged,
+    {
+      currentQuestionKey: preferredQuestionKey,
+      lastAnsweredStep:
+        normalizeStep(s(patchProgress.lastAnsweredStep)) ||
+        normalizeStep(s(existingProgress.lastAnsweredStep)),
+    },
+    { locale }
+  );
+
+  return {
+    nextQuestionKey: normalizeStep(
+      s(obj(nextQuestion).key || obj(nextQuestion).step || preferredQuestionKey)
+    ),
+    nextQuestion,
+  };
 }
 
 export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
   const existing = normalizeStoredSetupAssistantPayload(current, seed);
   const existingProgress = obj(existing.progress);
   const patchProgress = obj(patch.progress);
+  const locale = resolveDraftLocale(current, seed);
 
+  const mergedCore = mergeSetupAssistantCore(existing, patch);
   const mergedSkipped = uniqueStrings(
     [
       ...arr(existingProgress.skippedQuestions),
@@ -625,32 +621,27 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
     32
   );
 
-  const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, patch);
-  const nextQuestionKey =
-    s(obj(patch.assistantState).activeSection) ||
-    s(patchProgress.currentQuestionKey) ||
-    s(existingProgress.currentQuestionKey) ||
-    s(patchProgress.lastAnsweredStep) ||
-    s(existingProgress.lastAnsweredStep);
+  const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, mergedCore);
+  const { nextQuestionKey } = resolveNextQuestionKey(
+    existing,
+    patch,
+    mergedCore,
+    locale
+  );
 
   const next = {
-    ...mergeSetupAssistantCore(existing, patch),
+    ...mergedCore,
     progress: sanitizeProgress({
       ...existingProgress,
       ...patchProgress,
       skippedQuestions: normalizedSkipped,
-      currentQuestionKey: normalizeStep(nextQuestionKey),
+      currentQuestionKey: nextQuestionKey,
       updatedAt: nowIso(),
     }),
     assistantState: sanitizeAssistantState({
       ...obj(existing.assistantState),
       ...obj(patch.assistantState),
-      activeSection:
-        normalizeStep(
-          s(obj(patch.assistantState).activeSection) ||
-            s(obj(existing.assistantState).activeSection) ||
-            nextQuestionKey
-        ) || "",
+      activeSection: nextQuestionKey || "",
       lastUpdatedSection:
         normalizeStep(
           s(obj(patch.assistantState).lastUpdatedSection) ||
@@ -755,16 +746,7 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
   const pricingText = s(acceptedPatch.pricingPosture);
   const handoffText = s(acceptedPatch.humanHandoff);
 
-  const nextStep = normalizeStep(
-    s(
-      obj(safeTurn.nextQuestion).step ||
-        obj(safeTurn.nextQuestion).key ||
-        obj(currentDraft.progress).currentQuestionKey ||
-        "profile"
-    )
-  );
-
-  return compactDraftObject({
+  const partialPatch = compactDraftObject({
     businessProfile: sanitizeBusinessProfile({
       ...obj(currentDraft.businessProfile),
       companyName: s(
@@ -820,14 +802,45 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
       acceptedAiBehavior.afterHoursBehavior ||
         currentDraft.afterHoursBehavior
     ),
+  });
+
+  const mergedDraft = mergeSetupAssistantCore(currentDraft, partialPatch);
+  const locale = resolveDraftLocale(mergedDraft, currentDraft);
+  const lastAnsweredStep = normalizeStep(
+    s(obj(safeTurn.latestUserInput).step).toLowerCase()
+  );
+
+  const fallbackQuestion = getNextQuestion(
+    {},
+    mergedDraft,
+    {
+      currentQuestionKey: normalizeStep(
+        s(obj(safeTurn.nextQuestion).step || obj(safeTurn.nextQuestion).key)
+      ),
+      lastAnsweredStep,
+    },
+    { locale }
+  );
+
+  const nextStep = normalizeStep(
+    s(
+      obj(safeTurn.nextQuestion).step ||
+        obj(safeTurn.nextQuestion).key ||
+        obj(fallbackQuestion).step ||
+        obj(fallbackQuestion).key ||
+        obj(currentDraft.progress).currentQuestionKey ||
+        lastAnsweredStep
+    )
+  );
+
+  return compactDraftObject({
+    ...partialPatch,
     assistantState: {
       activeSection: nextStep,
-      lastUpdatedSection: nextStep,
+      lastUpdatedSection: nextStep || lastAnsweredStep,
     },
     progress: {
-      lastAnsweredStep: normalizeStep(
-        s(obj(safeTurn.latestUserInput).step).toLowerCase()
-      ),
+      lastAnsweredStep,
       currentQuestionKey: nextStep,
       updatedAt: nowIso(),
     },

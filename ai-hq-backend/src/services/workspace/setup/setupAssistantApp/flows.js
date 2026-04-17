@@ -60,7 +60,7 @@ function normalizeTimelineTurn(value = {}) {
   const source = obj(value);
 
   return {
-    id: s(value.id) || `turn-${Date.now()}`,
+    id: s(source.id) || `turn-${Date.now()}`,
     role: normalizeConversationRole(source.role),
     text: s(source.text || source.body || source.message),
     meta: s(source.meta),
@@ -136,10 +136,12 @@ function shouldUseDeterministicMessagePrelude(step = "", message = "") {
   const text = s(message);
 
   if (!text) return false;
-  if (safeStep !== "hours") return false;
 
-  return /(?:mon|monday|tue|tuesday|wed|wednesday|thu|thursday|fri|friday|sat|saturday|sun|sunday|b\.?e|bazar|cume|şənbə|senbe|24\/7|7\/24|appointment|closed|bağlı|bagli|\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:-|to|dan|den|dek)\s*\d{1,2})/i.test(
-    text
+  return (
+    safeStep === "hours" ||
+    /(?:24\/7|7\/24|appointment|closed|bağlı|bagli|\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:-|to|dan|den|dek)\s*\d{1,2})/i.test(
+      text
+    )
   );
 }
 
@@ -277,7 +279,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       mode: "setup",
       currentStep: SETUP_ASSISTANT_CURRENT_STEP,
       startedBy: resolveStartedBy(actor),
-      title: "Setup assistant v3",
+      title: "Setup assistant v4",
       notes: "",
       metadata: {
         setupAssistantShell: true,
@@ -289,6 +291,8 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
         truthApprovalDeferred: true,
         sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
         namespace: SETUP_ASSISTANT_NAMESPACE,
+        orchestrationModel: "ask_ai_setup_brain_v4",
+        deterministicFirst: true,
       },
       ensureDraft: true,
     });
@@ -319,6 +323,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       timelineNamespace: "setupAssistantTimeline",
       draftOnly: true,
       fastStart: true,
+      orchestrationModel: "ask_ai_setup_brain_v4",
     }
   );
 
@@ -589,6 +594,7 @@ export async function updateSetupAssistantDraft(
       brainUsedFallback: responseTurn?.usedFallback === true,
       brainError: s(responseTurn?.error),
       latestMessagePreview: s(latestMessage).slice(0, 160),
+      orchestrationModel: "ask_ai_setup_brain_v4",
     }
   );
 
