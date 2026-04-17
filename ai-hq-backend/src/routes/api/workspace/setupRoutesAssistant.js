@@ -1,5 +1,24 @@
 import { readSetupAssistantView } from "../../../services/workspace/setup/setupAssistantApp.js";
 
+function hasRenderableAssistantView(body = {}) {
+  const root = body && typeof body === "object" ? body : {};
+  const session = root.session && typeof root.session === "object" ? root.session : {};
+  const setup = root.setup && typeof root.setup === "object" ? root.setup : {};
+  const assistant =
+    setup.assistant && typeof setup.assistant === "object"
+      ? setup.assistant
+      : root.assistant && typeof root.assistant === "object"
+        ? root.assistant
+        : {};
+
+  return Boolean(
+    root.ok !== false &&
+      (String(session.id || "").trim() ||
+        Object.keys(setup).length > 0 ||
+        Object.keys(assistant).length > 0)
+  );
+}
+
 export function registerSetupAssistantRoutes(
   router,
   {
@@ -17,12 +36,15 @@ export function registerSetupAssistantRoutes(
 
   async function runReadView(req, res, actor) {
     try {
-      const result = await readSetupAssistantView({
-        db,
-        actor,
-      }, {
-        loadCurrentSetupAssistantSession,
-      });
+      const result = await readSetupAssistantView(
+        {
+          db,
+          actor,
+        },
+        {
+          loadCurrentSetupAssistantSession,
+        }
+      );
 
       return res.status(result.status).json(result.body);
     } catch (error) {
@@ -46,12 +68,27 @@ export function registerSetupAssistantRoutes(
         return res.status(updated.status).json(updated.body);
       }
 
-      try {
-        const view = await readSetupAssistantView({
-          db,
-          actor,
-          loadCurrentSetupAssistantSession,
+      // Fast path:
+      // updateSetupAssistantDraft now returns a full optimistic assistant view.
+      // Avoid a second DB reread on every message turn.
+      if (hasRenderableAssistantView(updated?.body)) {
+        return res.status(updated.status).json({
+          ...updated.body,
+          message: s(updated?.body?.message || "Setup assistant draft updated"),
         });
+      }
+
+      // Safety fallback only if the returned payload is unexpectedly incomplete.
+      try {
+        const view = await readSetupAssistantView(
+          {
+            db,
+            actor,
+          },
+          {
+            loadCurrentSetupAssistantSession,
+          }
+        );
 
         if (responseOk(view)) {
           return res.status(view.status).json({
@@ -88,18 +125,36 @@ export function registerSetupAssistantRoutes(
         return res.status(started.status).json(started.body);
       }
 
-      try {
-        const view = await readSetupAssistantView({
-          db,
-          actor,
-          loadCurrentSetupAssistantSession,
+      // Start path is less latency-sensitive, but if the service already returned
+      // a complete payload, do not reread unnecessarily.
+      if (hasRenderableAssistantView(started?.body)) {
+        return res.status(started.status).json({
+          ...started.body,
+          created: started?.body?.created === true,
+          message: s(
+            started?.body?.message || "Setup assistant session started"
+          ),
         });
+      }
+
+      try {
+        const view = await readSetupAssistantView(
+          {
+            db,
+            actor,
+          },
+          {
+            loadCurrentSetupAssistantSession,
+          }
+        );
 
         if (responseOk(view)) {
           return res.status(view.status).json({
             ...view.body,
             created: started?.body?.created === true,
-            message: s(started?.body?.message || "Setup assistant session started"),
+            message: s(
+              started?.body?.message || "Setup assistant session started"
+            ),
           });
         }
       } catch {}

@@ -9,6 +9,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Mesaj yazın";
+const TYPING_BUBBLE_DELAY_MS = 320;
 
 const LOCALIZED_QUESTION_COPY = {
   company: {
@@ -39,14 +40,38 @@ const LOCALIZED_QUESTION_COPY = {
     body: "Hansı hallarda AI mütləq operatora və ya insana yönləndirməlidir?",
     placeholder: "Handoff qaydalarını yazın",
   },
+  pricing_behavior: {
+    body: "Qiymət soruşulanda AI necə cavab versin?",
+    placeholder: "Məsələn: cavab + pricing page",
+  },
+  location_behavior: {
+    body: "Ünvan soruşulanda AI necə cavab versin?",
+    placeholder: "Məsələn: mətn + xəritə",
+  },
+  booking_behavior: {
+    body: "Booking üçün AI əsasən hara yönləndirsin?",
+    placeholder: "Məsələn: WhatsApp / website booking page",
+  },
+  contact_behavior: {
+    body: "Əlaqə istəyəndə hansı kanal önə çıxsın?",
+    placeholder: "Məsələn: WhatsApp first",
+  },
+  handoff_behavior: {
+    body: "İnsana keçid lazım olanda AI necə davransın?",
+    placeholder: "Məsələn: əvvəlcə səbəb soruş",
+  },
 };
 
-const SUPPRESSED_FALLBACK_ERRORS = new Set([
+const SUPPRESSED_INTERNAL_ERRORS = new Set([
   "openai_setup_assistant_timeout",
   "openai_setup_assistant_empty_output",
   "openai_setup_assistant_failed",
   "openai_setup_assistant_unavailable",
   "openai_setup_assistant_forced_fallback",
+  "openai_setup_reasoner_timeout",
+  "openai_setup_reasoner_empty_output",
+  "openai_setup_polisher_timeout",
+  "openai_setup_polisher_empty_output",
 ]);
 
 function s(value, fallback = "") {
@@ -82,7 +107,7 @@ function compactText(value, max = 220) {
 
 function listPreview(items = [], max = 6) {
   const safe = uniqueStrings(
-    arr(items).map((item) => compactText(item, 80)),
+    arr(items).map((item) => compactText(item, 90)),
     24
   );
   if (!safe.length) return "";
@@ -287,60 +312,129 @@ function hasStrongDraft(model = {}) {
   );
 }
 
-function buildAssistantMeta(model = {}) {
-  const parts = [];
-
-  if (model.usedFallback === true) {
-    parts.push("Fallback mode");
-  }
-
-  if (s(model.provider) && s(model.model)) {
-    parts.push(`${s(model.provider)} · ${s(model.model)}`);
-  } else if (s(model.provider)) {
-    parts.push(s(model.provider));
-  }
-
-  return parts.join(" · ");
+function shouldSuppressVisibleError(error = "") {
+  const safeError = lower(error);
+  if (!safeError) return false;
+  return SUPPRESSED_INTERNAL_ERRORS.has(safeError);
 }
 
-function bubbleClasses(role = "assistant") {
-  if (role === "user") {
-    return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.24)]";
+function resolveVisibleErrorMessage({
+  localError = "",
+  externalError = "",
+  assistantError = "",
+} = {}) {
+  const first = s(localError);
+  if (first) return first;
+
+  const second = s(externalError);
+  if (second && !shouldSuppressVisibleError(second)) return second;
+
+  const third = s(assistantError);
+  if (third && !shouldSuppressVisibleError(third)) return third;
+
+  return "";
+}
+
+function normalizeIssueText(text = "") {
+  return compactText(
+    s(text)
+      .replace(/^high risk:\s*/i, "")
+      .replace(/^needs review:\s*/i, "")
+      .trim(),
+    180
+  );
+}
+
+function buildDraftReviewFlags(model = {}) {
+  const flags = [];
+
+  for (const item of arr(model.rejectedInputs)) {
+    const reason = s(item?.reason || item?.input);
+    if (!reason) continue;
+    flags.push({
+      level: "high",
+      title: "High risk",
+      body: normalizeIssueText(reason),
+    });
   }
 
-  return "rounded-[26px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] text-text shadow-[0_12px_30px_rgba(15,23,42,0.06)]";
+  for (const item of arr(obj(model.confidence).unclear)) {
+    const text = s(item).replace(/_/g, " ").trim();
+    if (!text) continue;
+    flags.push({
+      level: "medium",
+      title: "Needs review",
+      body: normalizeIssueText(`${text} is still unclear.`),
+    });
+  }
+
+  for (const item of arr(obj(model.recommendation).notes)) {
+    const note = s(item);
+    if (!note) continue;
+
+    const safeLevel =
+      /high risk|should be corrected|did not clearly answer/i.test(note)
+        ? "high"
+        : "medium";
+
+    flags.push({
+      level: safeLevel,
+      title: safeLevel === "high" ? "High risk" : "Review note",
+      body: normalizeIssueText(note),
+    });
+  }
+
+  const deduped = [];
+  const seen = new Set();
+
+  for (const item of flags) {
+    const key = `${item.level}|${item.title}|${item.body}`.toLowerCase();
+    if (!item.body || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped.slice(0, 6);
+}
+
+function pickSoftReviewNote(model = {}) {
+  const flags = buildDraftReviewFlags(model);
+  if (!flags.length) return null;
+  return flags[0];
+}
+
+function bubbleShell(role = "assistant") {
+  if (role === "user") {
+    return "rounded-[22px] rounded-br-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,#0f172a,#111827)] text-white shadow-[0_16px_34px_rgba(2,6,23,0.16)]";
+  }
+
+  return "rounded-[22px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] text-text shadow-[0_10px_28px_rgba(15,23,42,0.05)]";
 }
 
 const bubbleMotion = {
-  hidden: { opacity: 0, y: 12, scale: 0.99 },
+  hidden: { opacity: 0, y: 10, scale: 0.992 },
   visible: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
   },
 };
 
-function ChatBubble({ role = "assistant", body = "", meta = "" }) {
+function ChatBubble({ role = "assistant", body = "" }) {
   const isUser = role === "user";
 
   return (
     <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
       <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-        <div className={`max-w-[84%] px-4 py-3.5 ${bubbleClasses(role)}`}>
+        <div className={`max-w-[76%] px-4 py-3 ${bubbleShell(role)}`}>
           <div
-            className={`whitespace-pre-wrap text-[15px] leading-7 ${
-              isUser ? "text-white/95" : "text-text"
+            className={`whitespace-pre-wrap text-[14px] leading-[1.72] tracking-[-0.01em] ${
+              isUser ? "text-white/96" : "text-[rgba(15,23,42,0.92)]"
             }`}
           >
             {body}
           </div>
-
-          {!isUser && s(meta) ? (
-            <div className="mt-2 text-[12px] leading-6 text-text-subtle">
-              {meta}
-            </div>
-          ) : null}
         </div>
       </div>
     </motion.div>
@@ -355,7 +449,7 @@ function TypingBubble() {
       animate="visible"
       className="flex justify-start"
     >
-      <div className="rounded-[22px] rounded-bl-[10px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <div className="rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse" />
           <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse [animation-delay:120ms]" />
@@ -366,140 +460,81 @@ function TypingBubble() {
   );
 }
 
-function DraftRow({ label, value }) {
-  return (
-    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.82)] px-3.5 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-        {label}
-      </div>
-      <div className="mt-1.5 text-[14px] leading-7 text-text">{value}</div>
-    </div>
-  );
-}
-
-function SmartDraftCard({ model, finalizing, onFinalize }) {
-  const draft = obj(model.draft);
-
-  const rows = [
-    ["Business name", draft.businessName],
-    ["What the business does", draft.whatThisBusinessIs],
-    ["Website", draft.websiteUrl],
-    ["Core services", listPreview(draft.coreServices, 6)],
-    ["Pricing posture", draft.pricingPosture],
-    ["Contact routes", listPreview(draft.contactRoutes, 6)],
-    ["Hours", listPreview(draft.hours, 4)],
-    ["Human handoff", draft.humanHandoff],
-  ].filter(([, value]) => s(value));
+function StatusNotice({ message = "" }) {
+  if (!s(message)) return null;
 
   return (
     <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      <div className="flex justify-start">
-        <div className="max-w-[84%] rounded-[26px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
-          <div className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
-            <Sparkles className="h-5 w-5 text-brand" />
-            Draft ready
-          </div>
-
-          {s(model.message) ? (
-            <div className="mt-2 text-[15px] leading-7 text-text">
-              {model.message}
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid gap-3">
-            {rows.map(([label, value]) => (
-              <DraftRow key={label} label={label} value={value} />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={onFinalize}
-            disabled={finalizing}
-            className="mt-4 inline-flex h-11 items-center rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {finalizing ? "Finalizing..." : "Approve and finish setup"}
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function StatusNotice({ error = "", usedFallback = false }) {
-  const safeError = lower(error);
-
-  if (usedFallback && SUPPRESSED_FALLBACK_ERRORS.has(safeError)) {
-    return null;
-  }
-
-  if (!usedFallback && !s(error)) {
-    return null;
-  }
-
-  return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      <div className="rounded-[20px] border border-[rgba(239,68,68,0.12)] bg-[rgba(255,244,244,0.9)] px-4 py-3 text-[13px] leading-6 text-[#7f1d1d]">
+      <div className="rounded-[18px] border border-[rgba(239,68,68,0.12)] bg-[rgba(255,244,244,0.9)] px-4 py-3 text-[13px] leading-6 text-[#7f1d1d]">
         <div className="flex items-start gap-2">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <div className="font-medium">
-              {usedFallback === true
-                ? "Fallback mode is active."
-                : "The assistant reported an issue."}
-            </div>
-            {s(error) ? (
-              <div className="mt-0.5">{compactText(error, 180)}</div>
-            ) : null}
-          </div>
+          <div>{compactText(message, 220)}</div>
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function ActionButton({
+  children,
+  tone = "primary",
+  onClick,
+  disabled = false,
+}) {
+  const styles =
+    tone === "primary"
+      ? "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white shadow-[0_14px_34px_rgba(2,6,23,0.18)] hover:translate-y-[-1px]"
+      : "border border-[rgba(15,23,42,0.08)] bg-white text-text hover:bg-[rgba(15,23,42,0.028)]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-11 items-center gap-2 rounded-[14px] px-4 text-[13px] font-medium tracking-[-0.01em] transition-all disabled:cursor-not-allowed disabled:opacity-45 ${styles}`}
+    >
+      {children}
+    </button>
   );
 }
 
 function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
   return (
     <motion.div
-      variants={bubbleMotion}
-      initial="hidden"
-      animate="visible"
-      className="rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.96))] px-5 py-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)]"
+      initial={{ opacity: 0, y: 12, scale: 0.992 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      className="relative overflow-hidden rounded-[28px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] px-5 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.07)]"
     >
-      <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-        <Sparkles className="h-4 w-4 text-brand" />
-        Ask AI
-      </div>
+      <div className="pointer-events-none absolute right-0 top-0 h-[220px] w-[220px] bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.07),transparent_68%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.18),rgba(15,23,42,0))]" />
 
-      <div className="mt-4 text-[24px] font-semibold tracking-[-0.04em] text-text">
-        Salam. NEOX AI HQ-yə xoş gəlmisiniz.
-      </div>
+      <div className="relative">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+          <Sparkles className="h-4 w-4 text-brand" />
+          Ask AI
+        </div>
 
-      <div className="mt-2 max-w-[560px] text-[15px] leading-7 text-text-subtle">
-        İstəsəniz əvvəl kanalları qura bilərsiniz, istəsəniz də biznes
-        setup-unuzu elə indi başladaq.
-      </div>
+        <div className="mt-4 text-[22px] font-semibold tracking-[-0.045em] text-text">
+          Salam. Setup-u buradan sakit və səliqəli başlayaq.
+        </div>
 
-      <div className="mt-5 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onGoToChannels}
-          disabled={busy}
-          className="inline-flex h-11 items-center gap-2 rounded-full border border-[rgba(15,23,42,0.08)] bg-white px-4 text-[13px] font-semibold text-text transition-colors hover:bg-[rgba(15,23,42,0.03)] disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          Go to channels
-          <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
-        </button>
+        <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
+          Kanalları sonra da qura bilərsiniz. İndi isə biznesiniz üçün əsas
+          truth draft-ını bir neçə təmiz sual ilə yığaq.
+        </div>
 
-        <button
-          type="button"
-          onClick={onStartSetup}
-          disabled={busy}
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-slate-950 px-4 text-[13px] font-semibold text-white shadow-[0_14px_30px_rgba(2,6,23,0.18)] transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {busy ? "Starting..." : "Start setup"}
-          <Sparkles className="h-4 w-4" strokeWidth={2.1} />
-        </button>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <ActionButton tone="secondary" onClick={onGoToChannels} disabled={busy}>
+            Go to channels
+            <ArrowRight className="h-4 w-4" strokeWidth={2} />
+          </ActionButton>
+
+          <ActionButton tone="primary" onClick={onStartSetup} disabled={busy}>
+            {busy ? "Starting..." : "Start setup"}
+            <Sparkles className="h-4 w-4" strokeWidth={2} />
+          </ActionButton>
+        </div>
       </div>
     </motion.div>
   );
@@ -517,7 +552,9 @@ function Composer({
 
   return (
     <div className="bg-transparent px-5 pb-5 pt-3">
-      <div className="rounded-[34px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.07)]">
+      <div className="relative overflow-hidden rounded-[24px] rounded-bl-[14px] rounded-tr-[18px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_18px_54px_rgba(15,23,42,0.08)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.16),rgba(15,23,42,0))]" />
+
         <div className="flex items-end gap-3">
           <textarea
             ref={textareaRef}
@@ -531,7 +568,7 @@ function Composer({
               }
             }}
             placeholder={placeholder}
-            className="min-h-[92px] flex-1 resize-none appearance-none border-0 bg-transparent px-2 py-2 text-[15px] leading-7 text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+            className="min-h-[88px] flex-1 resize-none appearance-none border-0 bg-transparent px-1 py-1.5 text-[14px] leading-[1.72] tracking-[-0.01em] text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
             style={{ boxShadow: "none" }}
           />
 
@@ -540,21 +577,217 @@ function Composer({
             onClick={onSubmit}
             disabled={disabled}
             aria-label="Send"
-            className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-all ${
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] transition-all ${
               disabled
-                ? "bg-[rgba(15,23,42,0.12)] text-white/80 shadow-none"
-                : "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white shadow-[0_16px_34px_rgba(2,6,23,0.22)] hover:scale-[1.03]"
+                ? "bg-[rgba(15,23,42,0.10)] text-white/80 shadow-none"
+                : "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white shadow-[0_16px_30px_rgba(2,6,23,0.18)] hover:translate-y-[-1px]"
             }`}
           >
             {busy ? (
-              <LoaderCircle className="h-4.5 w-4.5 animate-spin" />
+              <LoaderCircle className="h-4 w-4 animate-spin" />
             ) : (
-              <ArrowUp className="h-4.5 w-4.5" strokeWidth={2.4} />
+              <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
             )}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function SoftReviewWhisper({ note = null }) {
+  const item = note ? obj(note) : {};
+  if (!s(item.body)) return null;
+
+  const tone =
+    item.level === "high"
+      ? "text-[#991b1b]"
+      : "text-[rgba(120,53,15,0.92)]";
+
+  return (
+    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+      <div className="flex justify-start">
+        <div className="max-w-[76%] pl-1">
+          <div className="flex items-center gap-2 text-[11px] font-medium tracking-[-0.01em] text-text-muted">
+            <Sparkles className="h-3.5 w-3.5 text-brand" />
+            <span>Hidden analysis</span>
+          </div>
+          <div className={`mt-1 text-[12px] leading-6 ${tone}`}>
+            {item.title}: {item.body}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function EditorialRow({ label, value, noBorder = false }) {
+  return (
+    <div
+      className={`grid gap-2 py-3.5 sm:grid-cols-[158px_minmax(0,1fr)] ${
+        noBorder ? "" : "border-b border-[rgba(15,23,42,0.06)]"
+      }`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+        {label}
+      </div>
+      <div className="text-[14px] leading-7 tracking-[-0.01em] text-text">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ReviewSignal({ level = "medium", title = "", body = "" }) {
+  const accent =
+    level === "high"
+      ? {
+          dot: "bg-[#dc2626]",
+          title: "text-[#991b1b]",
+          body: "text-[#7f1d1d]",
+          line: "bg-[rgba(220,38,38,0.18)]",
+        }
+      : {
+          dot: "bg-[#d97706]",
+          title: "text-[#92400e]",
+          body: "text-[#78350f]",
+          line: "bg-[rgba(217,119,6,0.16)]",
+        };
+
+  return (
+    <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
+      <div className="relative flex justify-center">
+        <div className={`mt-1 h-2.5 w-2.5 rounded-full ${accent.dot}`} />
+        <div className={`absolute top-5 bottom-0 w-px ${accent.line}`} />
+      </div>
+      <div className="pb-4">
+        <div className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${accent.title}`}>
+          {title}
+        </div>
+        <div className={`mt-1 text-[13px] leading-6 ${accent.body}`}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function SmartDraftCard({ model, finalizing, onFinalize }) {
+  const draft = obj(model.draft);
+  const reviewFlags = buildDraftReviewFlags(model);
+
+  const rows = [
+    ["Business name", draft.businessName],
+    ["What the business does", draft.whatThisBusinessIs],
+    ["Website", draft.websiteUrl],
+    ["Core services", listPreview(draft.coreServices, 6)],
+    ["Pricing posture", draft.pricingPosture],
+    ["Contact routes", listPreview(draft.contactRoutes, 6)],
+    ["Hours", listPreview(draft.hours, 4)],
+    ["Human handoff", draft.humanHandoff],
+  ].filter(([, value]) => s(value));
+
+  const hasHighRisk = reviewFlags.some((item) => item.level === "high");
+  const statusLabel = hasHighRisk
+    ? "Review required"
+    : reviewFlags.length > 0
+      ? "Ready with notes"
+      : "Ready for approval";
+
+  const statusTone = hasHighRisk
+    ? "text-[#991b1b]"
+    : reviewFlags.length > 0
+      ? "text-[#92400e]"
+      : "text-[#0f172a]";
+
+  return (
+    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+      <div className="flex justify-start">
+        <div className="max-w-[88%] min-w-0">
+          <div className="relative overflow-hidden rounded-[28px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,252,0.98))] shadow-[0_26px_80px_rgba(15,23,42,0.09)]">
+            <div className="pointer-events-none absolute inset-0 opacity-[0.58]">
+              <div className="absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.2),rgba(15,23,42,0))]" />
+              <div className="absolute right-0 top-0 h-[240px] w-[240px] bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_68%)]" />
+            </div>
+
+            <div className="relative px-5 py-5 sm:px-6 sm:py-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                    <Sparkles className="h-4 w-4 text-brand" />
+                    Setup draft
+                  </div>
+
+                  <div className="mt-3 text-[24px] font-semibold tracking-[-0.05em] text-text">
+                    Draft ready
+                  </div>
+
+                  {s(model.message) ? (
+                    <div className="mt-2 max-w-[560px] text-[14px] leading-7 tracking-[-0.01em] text-text-subtle">
+                      {model.message}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                    Status
+                  </div>
+                  <div className={`mt-2 text-[13px] font-medium ${statusTone}`}>
+                    {statusLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-[rgba(15,23,42,0.06)]">
+                {rows.map(([label, value], index) => (
+                  <EditorialRow
+                    key={label}
+                    label={label}
+                    value={value}
+                    noBorder={index === rows.length - 1 && reviewFlags.length === 0}
+                  />
+                ))}
+              </div>
+
+              {reviewFlags.length ? (
+                <div className="mt-6 border-t border-[rgba(15,23,42,0.06)] pt-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                      Review intelligence
+                    </div>
+                    <div className="text-[11px] text-text-subtle">
+                      surfaced from hidden analysis
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    {reviewFlags.map((item, index) => (
+                      <ReviewSignal
+                        key={`${item.level}-${item.title}-${index}`}
+                        level={item.level}
+                        title={item.title}
+                        body={item.body}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-2 flex flex-wrap items-center gap-3 pt-2">
+                <ActionButton tone="primary" onClick={onFinalize} disabled={finalizing}>
+                  {finalizing ? "Finalizing..." : "Approve and finish setup"}
+                </ActionButton>
+
+                <div className="text-[12px] leading-6 text-text-subtle">
+                  {reviewFlags.length
+                    ? "Review the flagged points before approval."
+                    : "This draft is structurally ready for approval."}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -573,10 +806,12 @@ function SetupAssistantSectionsContent({
 }) {
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState("");
   const [setupPrimed, setSetupPrimed] = useState(false);
+  const [showTypingBubble, setShowTypingBubble] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -617,11 +852,6 @@ function SetupAssistantSectionsContent({
     return DEFAULT_COMPOSER_PLACEHOLDER;
   }, [showWelcome, questionCopy.placeholder]);
 
-  const assistantMeta = useMemo(
-    () => buildAssistantMeta(finalModel),
-    [finalModel]
-  );
-
   const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
   const staticAssistantMessage = useMemo(() => {
@@ -637,6 +867,46 @@ function SetupAssistantSectionsContent({
     questionCopy.body,
   ]);
 
+  const softReviewNote = useMemo(() => {
+    if (showWelcome) return null;
+    if (smartDraftReady) return null;
+    if (busy) return null;
+    if (!serverTimeline.length && !s(staticAssistantMessage)) return null;
+    return pickSoftReviewNote(finalModel);
+  }, [
+    showWelcome,
+    smartDraftReady,
+    busy,
+    serverTimeline.length,
+    staticAssistantMessage,
+    finalModel,
+  ]);
+
+  const visibleErrorMessage = useMemo(
+    () =>
+      resolveVisibleErrorMessage({
+        localError,
+        externalError: errorMessage,
+        assistantError: finalModel.error,
+      }),
+    [localError, errorMessage, finalModel.error]
+  );
+
+  useEffect(() => {
+    if (!busy) {
+      setShowTypingBubble(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowTypingBubble(true);
+    }, TYPING_BUBBLE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [busy]);
+
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({
@@ -646,17 +916,29 @@ function SetupAssistantSectionsContent({
   }, [
     serverTimeline,
     visiblePendingUserMessage,
-    busy,
-    localError,
-    errorMessage,
+    showTypingBubble,
+    visibleErrorMessage,
     smartDraftReady,
     staticAssistantMessage,
     showWelcome,
+    softReviewNote,
   ]);
+
+  useEffect(() => {
+    if (!sessionHydrated || showWelcome || busy) return;
+    textareaRef.current?.focus?.();
+  }, [sessionHydrated, showWelcome, busy, serverTimeline.length]);
+
+  useEffect(() => {
+    if (!busy) {
+      setPendingUserMessage("");
+    }
+  }, [busy]);
 
   async function handleStartSetupClick() {
     if (busy) return;
     setLocalError("");
+
     try {
       await onStartSetup?.();
       setSetupPrimed(true);
@@ -682,8 +964,14 @@ function SetupAssistantSectionsContent({
         message: text,
         text,
         value: text,
-        step: s(currentQuestion?.step || currentQuestion?.key || "company") || "company",
+        step:
+          s(currentQuestion?.step || currentQuestion?.key || "company") ||
+          "company",
         questionKey: s(currentQuestion?.key),
+      });
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus?.();
       });
     } catch (error) {
       setPendingUserMessage("");
@@ -695,10 +983,7 @@ function SetupAssistantSectionsContent({
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
-          <StatusNotice
-            error={localError || errorMessage || finalModel.error}
-            usedFallback={finalModel.usedFallback === true}
-          />
+          <StatusNotice message={visibleErrorMessage} />
 
           {showWelcome ? (
             <WelcomeCard
@@ -710,28 +995,21 @@ function SetupAssistantSectionsContent({
 
           <AnimatePresence initial={false}>
             {serverTimeline.map((item) => (
-              <ChatBubble
-                key={item.id}
-                role={item.role}
-                body={item.body}
-                meta={item.role === "assistant" ? item.meta : ""}
-              />
+              <ChatBubble key={item.id} role={item.role} body={item.body} />
             ))}
           </AnimatePresence>
+
+          {s(staticAssistantMessage) ? (
+            <ChatBubble role="assistant" body={staticAssistantMessage} />
+          ) : null}
 
           {visiblePendingUserMessage ? (
             <ChatBubble role="user" body={visiblePendingUserMessage} />
           ) : null}
 
-          {s(staticAssistantMessage) ? (
-            <ChatBubble
-              role="assistant"
-              body={staticAssistantMessage}
-              meta={assistantMeta}
-            />
-          ) : null}
+          {showTypingBubble ? <TypingBubble /> : null}
 
-          {busy ? <TypingBubble /> : null}
+          {softReviewNote ? <SoftReviewWhisper note={softReviewNote} /> : null}
 
           {smartDraftReady ? (
             <SmartDraftCard

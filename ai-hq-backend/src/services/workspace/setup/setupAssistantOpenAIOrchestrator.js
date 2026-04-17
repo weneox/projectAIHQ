@@ -444,6 +444,16 @@ function getSetupAssistantRuntimeConfig() {
   return {
     enabled: cfg.ai?.openaiSetupAssistantEnabled === true || hasKey,
     forceFallback: cfg.ai?.openaiSetupForceFallback === true,
+
+    // IMPORTANT:
+    // normal setup turns should stay fast by default.
+    // turn-time polishing is opt-in only.
+    enableTurnPolisher: cfg.ai?.openaiSetupEnableTurnPolisher === true,
+
+    // even if turn polisher is enabled later, keep it final-draft only by default.
+    turnPolisherReadyOnly:
+      cfg.ai?.openaiSetupTurnPolisherReadyOnly !== false,
+
     model,
     timeoutMs,
     maxOutputTokens,
@@ -2027,6 +2037,19 @@ function buildAcceptedPatchFromReasonerPayload(payload = {}) {
   return compactDraftObject(out);
 }
 
+function shouldUseTurnPolisher({ runtime = {}, mergedDraft = {} } = {}) {
+  if (runtime.enableTurnPolisher !== true) return false;
+  if (!hasSetupSignalForInterview(mergedDraft)) return false;
+
+  // Default behavior: only allow expensive polishing when the draft is
+  // already effectively review-ready.
+  if (runtime.turnPolisherReadyOnly !== false) {
+    return buildApprovalBlockers(mergedDraft).length === 0;
+  }
+
+  return true;
+}
+
 async function maybeBuildPolishedDraftPreview({
   mergedDraft = {},
   review = null,
@@ -2035,6 +2058,12 @@ async function maybeBuildPolishedDraftPreview({
   runtime = {},
 } = {}) {
   const deterministicPreview = buildCurrentPreview(mergedDraft, review);
+
+  // Keep normal interview turns fast.
+  // By default we do NOT run the OpenAI polisher inside the request path.
+  if (!shouldUseTurnPolisher({ runtime, mergedDraft })) {
+    return deterministicPreview;
+  }
 
   if (!hasOpenAISetupAssistant() || runtime.forceFallback === true) {
     return deterministicPreview;

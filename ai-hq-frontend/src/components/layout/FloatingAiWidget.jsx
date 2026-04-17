@@ -362,7 +362,8 @@ export default function FloatingAiWidget({
     queryFn: () => getCurrentSetupAssistantSession(),
     enabled: panelOpen && workspace.ready,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
   });
 
   const reviewQuery = useQuery({
@@ -370,7 +371,8 @@ export default function FloatingAiWidget({
     queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
     enabled: panelOpen && workspace.ready,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
   });
 
   const serverAssistant = useMemo(
@@ -443,6 +445,60 @@ export default function FloatingAiWidget({
 
   if (hidden) return null;
 
+  function applyAssistantResponseToState(response = null) {
+    if (!response) return null;
+
+    let nextAssistant = null;
+    setClientAssistant((prev) => {
+      nextAssistant = buildAssistantFromApi(prev, response);
+      return nextAssistant;
+    });
+
+    queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+    return nextAssistant;
+  }
+
+  function scheduleWorkspaceBackgroundRefresh({
+    includeReview = false,
+    includeProductHome = false,
+    includeChannelStatus = false,
+    emitReason = "",
+  } = {}) {
+    queueMicrotask(() => {
+      if (includeProductHome) {
+        queryClient.invalidateQueries({
+          queryKey: productHomeQueryKey,
+          refetchType: "none",
+        });
+      }
+
+      if (includeReview) {
+        queryClient.invalidateQueries({
+          queryKey: setupReviewQueryKey,
+          refetchType: "none",
+        });
+      }
+
+      if (includeChannelStatus) {
+        queryClient.invalidateQueries({
+          queryKey: telegramStatusQueryKey,
+          refetchType: "none",
+        });
+        queryClient.invalidateQueries({
+          queryKey: metaStatusQueryKey,
+          refetchType: "none",
+        });
+      }
+
+      if (emitReason) {
+        emitLaunchSliceRefresh({
+          tenantKey: workspace.tenantKey,
+          reason: emitReason,
+        });
+      }
+    });
+  }
+
   async function refreshWidgetWorkspaceState({
     includeChannelStatus = false,
     emitReason = "",
@@ -485,14 +541,12 @@ export default function FloatingAiWidget({
     }
 
     const response = await startSetupAssistantSession();
-    let nextAssistant = null;
+    const nextAssistant = applyAssistantResponseToState(response);
 
-    setClientAssistant((prev) => {
-      nextAssistant = buildAssistantFromApi(prev, response);
-      return nextAssistant;
+    scheduleWorkspaceBackgroundRefresh({
+      includeReview: true,
     });
 
-    queryClient.setQueryData(setupAssistantSessionQueryKey, response);
     return nextAssistant || assistantRef.current;
   }
 
@@ -502,7 +556,6 @@ export default function FloatingAiWidget({
     setSetupError("");
     try {
       await ensureSession();
-      await refreshWidgetWorkspaceState();
       return true;
     } catch (error) {
       setSetupError(s(error?.message, "Setup could not be started."));
@@ -532,9 +585,12 @@ export default function FloatingAiWidget({
         answer,
       });
 
-      setClientAssistant((prev) => buildAssistantFromApi(prev, response));
-      queryClient.setQueryData(setupAssistantSessionQueryKey, response);
-      await refreshWidgetWorkspaceState();
+      applyAssistantResponseToState(response);
+
+      scheduleWorkspaceBackgroundRefresh({
+        includeReview: true,
+      });
+
       return response;
     } catch (error) {
       setSetupError(

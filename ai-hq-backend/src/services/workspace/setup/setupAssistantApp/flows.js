@@ -98,6 +98,69 @@ function appendSetupAssistantTimeline(existingDraftPayload = {}, entries = []) {
   return next.slice(-40);
 }
 
+function normalizeNextQuestionStep(
+  nextQuestion = {},
+  fallback = SETUP_ASSISTANT_CURRENT_STEP
+) {
+  return (
+    s(nextQuestion?.step || nextQuestion?.key || fallback).toLowerCase() ||
+    fallback
+  );
+}
+
+function buildNextSetupAssistantDraftPayload({
+  review = {},
+  mergedSetupAssistant = {},
+  brainSnapshot = {},
+  nextTimeline = [],
+} = {}) {
+  return mergeDraftState(
+    stripLegacySetupAssistantPayloadKeys(obj(review?.draft?.draftPayload)),
+    {
+      setupAssistant: {
+        ...mergedSetupAssistant,
+        updatedAt: nowIso(),
+        namespace: SETUP_ASSISTANT_NAMESPACE,
+        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+      },
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload(brainSnapshot),
+      setupAssistantTimeline: arr(nextTimeline),
+    }
+  );
+}
+
+function buildOptimisticSetupAssistantReview({
+  review = {},
+  nextDraftPayload = {},
+  nextQuestion = null,
+  persisted = true,
+} = {}) {
+  const currentDraft = obj(review?.draft);
+  const currentSession = obj(review?.session);
+  const currentVersion = Number(currentDraft.version || 1) || 1;
+  const timestamp = nowIso();
+
+  return {
+    ...review,
+    session: {
+      ...currentSession,
+      currentStep: normalizeNextQuestionStep(
+        nextQuestion,
+        s(currentSession.currentStep || SETUP_ASSISTANT_CURRENT_STEP)
+      ),
+      updatedAt: timestamp,
+      updated_at: timestamp,
+    },
+    draft: {
+      ...currentDraft,
+      draftPayload: obj(nextDraftPayload),
+      version: persisted ? currentVersion + 1 : currentVersion,
+      updatedAt: timestamp,
+      updated_at: timestamp,
+    },
+  };
+}
+
 function buildReviewForBrain(review = {}) {
   const timeline = readSetupAssistantTimeline(obj(review?.draft?.draftPayload));
 
@@ -167,28 +230,19 @@ function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
   const safePolicy = obj(policy);
 
   if (policyKey === "pricing") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
+    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
       .filter(Boolean)
       .join(" • ");
   }
 
   if (policyKey === "location") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
+    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
       .filter(Boolean)
       .join(" • ");
   }
 
   if (policyKey === "booking") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
+    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
       .filter(Boolean)
       .join(" • ");
   }
@@ -345,6 +399,44 @@ function buildRawEvidenceEntry({
   };
 }
 
+function humanizeSetupStep(step = "") {
+  return s(step).replace(/_/g, " ").trim();
+}
+
+function buildRiskNotesFromTurn({
+  latestStep = "",
+  responseTurn = {},
+} = {}) {
+  const safeTurn = obj(responseTurn);
+  const rejectedInputs = arr(safeTurn.rejectedInputs);
+  const unclear = arr(obj(safeTurn.confidence).unclear).map((item) =>
+    s(item).toLowerCase()
+  );
+  const stepLabel = humanizeSetupStep(latestStep || "this step");
+
+  const notes = [];
+
+  if (rejectedInputs.length > 0) {
+    notes.push(
+      `High risk: ${stepLabel} answer did not clearly answer the question and should be corrected before approval.`
+    );
+  }
+
+  if (!rejectedInputs.length && unclear.includes(s(latestStep).toLowerCase())) {
+    notes.push(
+      `Review ${stepLabel} again before approval because the answer is still unclear.`
+    );
+  }
+
+  for (const item of rejectedInputs) {
+    const reason = s(item?.reason);
+    if (!reason) continue;
+    notes.push(`${stepLabel}: ${reason}`);
+  }
+
+  return uniqueStrings(notes, 12);
+}
+
 function buildSilentSynthesisPatch({
   currentSetupAssistant = {},
   mergedSetupAssistant = {},
@@ -362,11 +454,17 @@ function buildSilentSynthesisPatch({
       })
     : null;
 
+  const riskNotes = buildRiskNotesFromTurn({
+    latestStep,
+    responseTurn,
+  });
+
   const unresolvedNotes = uniqueStrings(
     [
       ...arr(currentSilent.unresolvedNotes),
       ...arr(obj(responseTurn).rejectedInputs).map((item) => s(item.reason)),
       ...arr(obj(responseTurn).confidence?.unclear),
+      ...riskNotes,
     ],
     24
   );
@@ -375,6 +473,7 @@ function buildSilentSynthesisPatch({
     [
       ...arr(currentSilent.recommendationNotes),
       ...arr(obj(responseTurn).recommendation?.notes),
+      ...riskNotes,
     ],
     24
   );
@@ -454,9 +553,10 @@ async function maybeUpdateReviewSessionStep({
 
   try {
     await updateSession(reviewSessionId, {
-      currentStep: s(
-        nextQuestion?.step || nextQuestion?.key || SETUP_ASSISTANT_CURRENT_STEP
-      ).toLowerCase(),
+      currentStep: normalizeNextQuestionStep(
+        nextQuestion,
+        SETUP_ASSISTANT_CURRENT_STEP
+      ),
     });
   } catch (error) {
     if (
@@ -475,6 +575,7 @@ async function persistSetupAssistantState({
   mergedSetupAssistant = {},
   brainSnapshot = {},
   nextTimeline = [],
+  nextDraftPayload = null,
   deps = {},
 }) {
   const patchReviewDraft =
@@ -482,19 +583,15 @@ async function persistSetupAssistantState({
     deps.patchReview ||
     patchSetupReviewDraft;
 
-  const nextDraftPayload = mergeDraftState(
-    stripLegacySetupAssistantPayloadKeys(obj(review?.draft?.draftPayload)),
-    {
-      setupAssistant: {
-        ...mergedSetupAssistant,
-        updatedAt: nowIso(),
-        namespace: SETUP_ASSISTANT_NAMESPACE,
-        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-      },
-      setupAssistantBrain: buildStoredSetupAssistantBrainPayload(brainSnapshot),
-      setupAssistantTimeline: arr(nextTimeline),
-    }
-  );
+  const draftPayload =
+    obj(nextDraftPayload) && Object.keys(obj(nextDraftPayload)).length
+      ? obj(nextDraftPayload)
+      : buildNextSetupAssistantDraftPayload({
+          review,
+          mergedSetupAssistant,
+          brainSnapshot,
+          nextTimeline,
+        });
 
   const canonicalReviewDraftPatch =
     buildCanonicalReviewDraftPatchFromSetupAssistant(mergedSetupAssistant);
@@ -504,7 +601,7 @@ async function persistSetupAssistantState({
       sessionId: review.session.id,
       tenantId: actor.tenantId,
       patch: {
-        draftPayload: nextDraftPayload,
+        draftPayload,
         ...canonicalReviewDraftPatch,
       },
       bumpVersion: true,
@@ -873,12 +970,20 @@ export async function updateSetupAssistantDraft(
     ];
   }
 
-  await persistSetupAssistantState({
+  const nextDraftPayload = buildNextSetupAssistantDraftPayload({
+    review,
+    mergedSetupAssistant,
+    brainSnapshot: responseTurn,
+    nextTimeline,
+  });
+
+  const persisted = await persistSetupAssistantState({
     review,
     actor,
     mergedSetupAssistant,
     brainSnapshot: responseTurn,
     nextTimeline,
+    nextDraftPayload,
     deps,
   });
 
@@ -888,8 +993,14 @@ export async function updateSetupAssistantDraft(
     deps,
   });
 
-  const refreshed = await getCurrentReviewHelper(actor.tenantId);
-  const baseResponsePayload = buildSetupAssistantSessionPayload(refreshed);
+  const optimisticReview = buildOptimisticSetupAssistantReview({
+    review,
+    nextDraftPayload,
+    nextQuestion: obj(responseTurn.nextQuestion),
+    persisted,
+  });
+
+  const baseResponsePayload = buildSetupAssistantSessionPayload(optimisticReview);
   const finalResponseBody = buildSetupAssistantResponseBody(
     baseResponsePayload,
     responseTurn
@@ -901,11 +1012,11 @@ export async function updateSetupAssistantDraft(
     actor,
     "setup_assistant.draft.updated",
     "tenant_setup_review_session",
-    s(refreshed?.session?.id || review.session.id),
+    s(optimisticReview?.session?.id || review.session.id),
     {
-      reviewSessionId: s(refreshed?.session?.id || review.session.id),
+      reviewSessionId: s(optimisticReview?.session?.id || review.session.id),
       draftVersion: Number(
-        refreshed?.draft?.version || review?.draft?.version || 0
+        optimisticReview?.draft?.version || review?.draft?.version || 0
       ),
       updatedFields: [...new Set(updatedFields)].filter(Boolean),
       source: "home_widget",
