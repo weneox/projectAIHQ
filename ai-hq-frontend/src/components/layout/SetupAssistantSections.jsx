@@ -893,10 +893,7 @@ function SetupAssistantSectionsContent({
   );
 
   useEffect(() => {
-    if (!busy) {
-      setShowTypingBubble(false);
-      return undefined;
-    }
+    if (!busy) return undefined;
 
     const timer = window.setTimeout(() => {
       setShowTypingBubble(true);
@@ -904,6 +901,7 @@ function SetupAssistantSectionsContent({
 
     return () => {
       window.clearTimeout(timer);
+      setShowTypingBubble(false);
     };
   }, [busy]);
 
@@ -928,12 +926,6 @@ function SetupAssistantSectionsContent({
     if (!sessionHydrated || showWelcome || busy) return;
     textareaRef.current?.focus?.();
   }, [sessionHydrated, showWelcome, busy, serverTimeline.length]);
-
-  useEffect(() => {
-    if (!busy) {
-      setPendingUserMessage("");
-    }
-  }, [busy]);
 
   async function handleStartSetupClick() {
     if (busy) return;
@@ -973,6 +965,7 @@ function SetupAssistantSectionsContent({
       requestAnimationFrame(() => {
         textareaRef.current?.focus?.();
       });
+      setPendingUserMessage("");
     } catch (error) {
       setPendingUserMessage("");
       setLocalError(s(error?.message, "Message processing failed."));
