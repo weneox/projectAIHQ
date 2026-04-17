@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  ArrowUp,
+  LoaderCircle,
+  Sparkles,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Mesaj yazın";
@@ -384,7 +390,9 @@ function StatusNotice({ error = "", usedFallback = false }) {
                 ? "Fallback mode is active."
                 : "The assistant reported an issue."}
             </div>
-            {s(error) ? <div className="mt-0.5">{compactText(error, 180)}</div> : null}
+            {s(error) ? (
+              <div className="mt-0.5">{compactText(error, 180)}</div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -410,8 +418,8 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
       </div>
 
       <div className="mt-2 max-w-[560px] text-[15px] leading-7 text-text-subtle">
-        İstəsəniz əvvəl kanalları qura bilərsiniz, istəsəniz də biznes setup-unuzu
-        elə indi başladaq.
+        İstəsəniz əvvəl kanalları qura bilərsiniz, istəsəniz də biznes
+        setup-unuzu elə indi başladaq.
       </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
@@ -519,7 +527,10 @@ function SetupAssistantSectionsContent({
     [reviewPayload, assistant]
   );
 
-  const smartDraftReady = useMemo(() => hasStrongDraft(finalModel), [finalModel]);
+  const smartDraftReady = useMemo(
+    () => hasStrongDraft(finalModel),
+    [finalModel]
+  );
 
   const currentQuestion = finalModel.nextQuestion;
 
@@ -546,13 +557,10 @@ function SetupAssistantSectionsContent({
     );
   }, [finalModel]);
 
-  useEffect(() => {
-    if (hasExistingProgress || serverTimeline.length > 0) {
-      setSetupPrimed(true);
-    }
-  }, [hasExistingProgress, serverTimeline.length]);
+  const effectiveSetupPrimed =
+    setupPrimed || hasExistingProgress || serverTimeline.length > 0;
 
-  const showWelcome = !setupPrimed && !hasExistingProgress && serverTimeline.length === 0;
+  const showWelcome = !effectiveSetupPrimed;
 
   const composerPlaceholder = useMemo(() => {
     if (showWelcome) return DEFAULT_COMPOSER_PLACEHOLDER;
@@ -561,9 +569,18 @@ function SetupAssistantSectionsContent({
       return "Şirkət adınızı yazın";
     }
     return DEFAULT_COMPOSER_PLACEHOLDER;
-  }, [currentQuestion, showWelcome, setupPrimed, serverTimeline.length, hasExistingProgress]);
+  }, [
+    currentQuestion,
+    showWelcome,
+    setupPrimed,
+    serverTimeline.length,
+    hasExistingProgress,
+  ]);
 
-  const assistantMeta = useMemo(() => buildAssistantMeta(finalModel), [finalModel]);
+  const assistantMeta = useMemo(
+    () => buildAssistantMeta(finalModel),
+    [finalModel]
+  );
   const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
   const showSyntheticFirstQuestion = Boolean(
@@ -618,13 +635,10 @@ function SetupAssistantSectionsContent({
         message: text,
         text,
         value: text,
-        step:
-          s(
-            currentQuestion?.step ||
-              currentQuestion?.key ||
-              (showSyntheticFirstQuestion ? "company" : "company")
-          ) || "company",
-        questionKey: s(currentQuestion?.key || (showSyntheticFirstQuestion ? "company" : "")),
+        step: s(currentQuestion?.step || currentQuestion?.key || "company") || "company",
+        questionKey: s(
+          currentQuestion?.key || (showSyntheticFirstQuestion ? "company" : "")
+        ),
       });
     } catch (error) {
       setPendingUserMessage("");

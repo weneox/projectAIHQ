@@ -303,7 +303,10 @@ export default function FloatingAiWidget({
   const panelOpen = pageMode ? true : open;
   const workspace = useWorkspaceTenantKey({ enabled: panelOpen });
 
-  const emptySeed = useMemo(() => normalizeAssistantState(buildDefaultAssistant()), []);
+  const emptySeed = useMemo(
+    () => normalizeAssistantState(buildDefaultAssistant()),
+    []
+  );
   const assistantRef = useRef(emptySeed);
 
   const [clientAssistant, setClientAssistant] = useState(emptySeed);
@@ -347,7 +350,10 @@ export default function FloatingAiWidget({
 
   const metaStatusQueryKey = useMemo(
     () =>
-      buildWorkspaceScopedQueryKey(["meta-channel-status"], workspace.tenantKey),
+      buildWorkspaceScopedQueryKey(
+        ["meta-channel-status"],
+        workspace.tenantKey
+      ),
     [workspace.tenantKey]
   );
 
@@ -418,7 +424,12 @@ export default function FloatingAiWidget({
   const sessionHydrated = useMemo(() => {
     if (!panelOpen || !workspace.ready) return false;
     return !sessionQuery.isLoading && !reviewQuery.isLoading;
-  }, [panelOpen, workspace.ready, sessionQuery.isLoading, reviewQuery.isLoading]);
+  }, [
+    panelOpen,
+    workspace.ready,
+    sessionQuery.isLoading,
+    reviewQuery.isLoading,
+  ]);
 
   const conversationStorageKey = useMemo(
     () => getConversationStorageKey(workspace.tenantKey),
@@ -457,19 +468,6 @@ export default function FloatingAiWidget({
         reason: emitReason,
       });
     }
-  }
-
-  async function syncLatestAssistantSession() {
-    const latestSession = await getCurrentSetupAssistantSession();
-    if (latestSession) {
-      queryClient.setQueryData(setupAssistantSessionQueryKey, latestSession);
-      setClientAssistant((prev) => buildAssistantFromApi(prev, latestSession));
-      return latestSession;
-    }
-
-    queryClient.setQueryData(setupAssistantSessionQueryKey, null);
-    setClientAssistant(emptySeed);
-    return null;
   }
 
   async function ensureSession() {
@@ -590,7 +588,9 @@ export default function FloatingAiWidget({
 
       return response;
     } catch (error) {
-      setSetupError(s(error?.message, "Business truth could not be approved."));
+      setSetupError(
+        s(error?.message, "Business truth could not be approved.")
+      );
       throw error;
     } finally {
       setFinalizing(false);
