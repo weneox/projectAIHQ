@@ -174,7 +174,7 @@ function mapHoursItems(items = []) {
 }
 
 function getQuestionCopy(question = {}) {
-  const key = lower(question?.key || question?.step);
+  const key = lower(question?.key || question?.step || "company");
   const local = obj(LOCALIZED_QUESTION_COPY[key]);
 
   return {
@@ -601,6 +601,14 @@ function SetupAssistantSectionsContent({
     [finalModel.timeline]
   );
 
+  const hasAssistantTimelineMessage = useMemo(
+    () =>
+      serverTimeline.some(
+        (item) => item.role === "assistant" && Boolean(s(item.body))
+      ),
+    [serverTimeline]
+  );
+
   const showWelcome = !setupPrimed && serverTimeline.length === 0 && !busy;
 
   const composerPlaceholder = useMemo(() => {
@@ -618,15 +626,13 @@ function SetupAssistantSectionsContent({
 
   const staticAssistantMessage = useMemo(() => {
     if (showWelcome) return "";
-    if (serverTimeline.length > 0) return "";
-    if (visiblePendingUserMessage) return "";
+    if (hasAssistantTimelineMessage) return "";
     if (s(finalModel.message)) return finalModel.message;
     if (s(questionCopy.body)) return questionCopy.body;
     return "";
   }, [
     showWelcome,
-    serverTimeline.length,
-    visiblePendingUserMessage,
+    hasAssistantTimelineMessage,
     finalModel.message,
     questionCopy.body,
   ]);

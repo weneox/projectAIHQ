@@ -138,6 +138,21 @@ function buildSupplementalMessagePatch(
   return rest;
 }
 
+function resolveAssistantTurnPayload(turn = {}) {
+  const safeTurn = obj(turn);
+  const fallbackText = s(
+    safeTurn.assistantMessage ||
+      safeTurn.message ||
+      obj(safeTurn.nextQuestion).prompt
+  );
+
+  return {
+    ...safeTurn,
+    assistantMessage: fallbackText,
+    message: s(safeTurn.message || fallbackText),
+  };
+}
+
 async function maybeUpdateReviewSessionStep({
   reviewSessionId,
   nextQuestion,
@@ -381,7 +396,7 @@ export async function updateSetupAssistantDraft(
       body.questionKey ||
       obj(currentSetupAssistant.progress).currentQuestionKey ||
       obj(review.session).currentStep ||
-      "profile"
+      SETUP_ASSISTANT_CURRENT_STEP
   ).toLowerCase();
 
   const messageMode =
@@ -394,9 +409,21 @@ export async function updateSetupAssistantDraft(
   let nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
   if (messageMode) {
+    const supplementalPatch = buildSupplementalMessagePatch(
+      currentSetupAssistant,
+      latestMessage,
+      latestStep
+    );
+
+    const draftForBrain = mergeSetupAssistantDraft(
+      currentSetupAssistant,
+      supplementalPatch,
+      seed
+    );
+
     rawTurn = await runSetupBrain({
       session: obj(review.session),
-      draft: currentSetupAssistant,
+      draft: draftForBrain,
       sources: arr(reviewForBrain.sources),
       review: reviewForBrain,
       latestStep,
@@ -405,28 +432,18 @@ export async function updateSetupAssistantDraft(
 
     const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
       rawTurn,
-      currentSetupAssistant
-    );
-
-    const supplementalPatch = buildSupplementalMessagePatch(
-      currentSetupAssistant,
-      latestMessage,
-      latestStep
+      draftForBrain
     );
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
-      currentSetupAssistant,
+      draftForBrain,
       orchestratorPatch,
       seed
     );
 
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      mergedSetupAssistant,
-      supplementalPatch,
-      seed
+    responseTurn = buildStoredSetupAssistantBrainPayload(
+      resolveAssistantTurnPayload(rawTurn)
     );
-
-    responseTurn = buildStoredSetupAssistantBrainPayload(rawTurn);
 
     nextTimeline = appendSetupAssistantTimeline(existingDraftPayload, [
       {
@@ -438,21 +455,25 @@ export async function updateSetupAssistantDraft(
       },
       {
         role: "assistant",
-        text: s(rawTurn.assistantMessage || rawTurn.message),
+        text: s(
+          obj(responseTurn).assistantMessage ||
+            obj(responseTurn).message ||
+            obj(responseTurn).nextQuestion?.prompt
+        ),
         meta: s(obj(rawTurn.sourceSignals).primarySourceUrl),
-        questionKey: s(obj(rawTurn.nextQuestion).key),
-        phase: s(rawTurn.phase),
-        provider: s(rawTurn.provider),
-        model: s(rawTurn.model),
-        usedFallback: rawTurn.usedFallback === true,
-        error: s(rawTurn.error),
+        questionKey: s(obj(responseTurn).nextQuestion?.key),
+        phase: s(responseTurn.phase || rawTurn.phase),
+        provider: s(responseTurn.provider || rawTurn.provider),
+        model: s(responseTurn.model || rawTurn.model),
+        usedFallback: responseTurn.usedFallback === true,
+        error: s(responseTurn.error || rawTurn.error),
         createdAt: nowIso(),
       },
     ]);
 
     updatedFields = [
-      ...Object.keys(obj(orchestratorPatch)),
       ...Object.keys(obj(supplementalPatch)),
+      ...Object.keys(obj(orchestratorPatch)),
       "setupAssistantBrain",
       "setupAssistantTimeline",
     ];
@@ -499,7 +520,9 @@ export async function updateSetupAssistantDraft(
       seed
     );
 
-    responseTurn = buildStoredSetupAssistantBrainPayload(rawTurn);
+    responseTurn = buildStoredSetupAssistantBrainPayload(
+      resolveAssistantTurnPayload(rawTurn)
+    );
 
     updatedFields = [
       ...Object.keys(obj(directPatch)),
