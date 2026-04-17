@@ -131,6 +131,42 @@ function resolveAssistantTurnPayload(turn = {}) {
   };
 }
 
+function shouldUseDeterministicMessagePrelude(step = "", message = "") {
+  const safeStep = s(step).toLowerCase();
+  const text = s(message);
+
+  if (!text) return false;
+  if (safeStep !== "hours") return false;
+
+  return /(?:mon|monday|tue|tuesday|wed|wednesday|thu|thursday|fri|friday|sat|saturday|sun|sunday|b\.?e|bazar|cume|şənbə|senbe|24\/7|7\/24|appointment|closed|bağlı|bagli|\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:-|to|dan|den|dek)\s*\d{1,2})/i.test(
+    text
+  );
+}
+
+function buildSafeSupplementalMessagePatch(
+  currentSetupAssistant = {},
+  latestMessage = "",
+  latestStep = ""
+) {
+  if (!shouldUseDeterministicMessagePrelude(latestStep, latestMessage)) {
+    return {};
+  }
+
+  const parsed = normalizeSetupAssistantDraftPatchBody(
+    {
+      step: latestStep,
+      answer: latestMessage,
+    },
+    currentSetupAssistant
+  );
+
+  return {
+    hours: arr(parsed.hours),
+    assistantState: obj(parsed.assistantState),
+    progress: obj(parsed.progress),
+  };
+}
+
 async function maybeUpdateReviewSessionStep({
   reviewSessionId,
   nextQuestion,
@@ -387,9 +423,19 @@ export async function updateSetupAssistantDraft(
   let nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
   if (messageMode) {
+    const supplementalPatch = buildSafeSupplementalMessagePatch(
+      currentSetupAssistant,
+      latestMessage || (isMessageSkip(body) ? "continue" : ""),
+      latestStep
+    );
+
+    const draftForBrain = Object.keys(supplementalPatch).length
+      ? mergeSetupAssistantDraft(currentSetupAssistant, supplementalPatch, seed)
+      : currentSetupAssistant;
+
     rawTurn = await runSetupBrain({
       session: obj(review.session),
-      draft: currentSetupAssistant,
+      draft: draftForBrain,
       sources: arr(reviewForBrain.sources),
       review: reviewForBrain,
       latestStep,
@@ -398,11 +444,11 @@ export async function updateSetupAssistantDraft(
 
     const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
       rawTurn,
-      currentSetupAssistant
+      draftForBrain
     );
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
-      currentSetupAssistant,
+      draftForBrain,
       orchestratorPatch,
       seed
     );
@@ -438,6 +484,7 @@ export async function updateSetupAssistantDraft(
     ]);
 
     updatedFields = [
+      ...Object.keys(obj(supplementalPatch)),
       ...Object.keys(obj(orchestratorPatch)),
       "setupAssistantBrain",
       "setupAssistantTimeline",

@@ -422,7 +422,9 @@ test("setup assistant message mode parses rough hours into structured weekly row
             description: "Dental clinic",
           },
           services: [{ key: "consultation", title: "Consultation" }],
-          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          contacts: [
+            { type: "phone", label: "Phone", value: "+994555555555" },
+          ],
           hours: [],
           pricingPosture: {},
           handoffRules: {},
@@ -456,6 +458,52 @@ test("setup assistant message mode parses rough hours into structured weekly row
         return currentReview.draft;
       },
       async auditSetupAction() {},
+      async runSetupAssistantOpenAIOrchestrator() {
+        return createAiNativeBrainTurn({
+          latestUserInput: {
+            step: "hours",
+            text: "Mon-Fri 09:00-18:00; Sat 10:00-14:00; Sun closed",
+          },
+          phase: "interview",
+          assistantMessage: "İş saatları qəbul edildi. İndi pricing siyasətini yazın.",
+          nextQuestion: {
+            key: "pricing",
+            step: "pricing",
+            title: "Pricing posture",
+            prompt:
+              "AI qiymətlərlə bağlı nə deyə bilər? Dəqiq qiymət desin, başlanğıc qiymət desin, yoxsa quote tələb olunsun?",
+            group: "business_truth",
+            groupLabel: "Business truth",
+          },
+          acceptedPatch: {
+            identity: {},
+            services: [],
+            contacts: [],
+            hours: [],
+            pricingPosture: "",
+            humanHandoff: "",
+            aiBehavior: {},
+          },
+          draft: {
+            businessName: "Acme Clinic",
+            whatThisBusinessIs: "Dental clinic",
+            websiteUrl: "https://acme.example",
+            coreServices: ["Consultation"],
+            pricingPosture: "",
+            contactRoutes: ["+994555555555"],
+            humanHandoff: "",
+            hours: [
+              "Mon-Fri 09:00-18:00",
+              "Sat 10:00-14:00",
+              "Sun closed",
+            ],
+            languages: [],
+            tone: "",
+            greetingStyle: "",
+            afterHoursBehavior: "",
+          },
+        });
+      },
     }
   );
 
@@ -463,6 +511,9 @@ test("setup assistant message mode parses rough hours into structured weekly row
   assert.equal(result.body.setup.draft.hours[0].day, "monday");
   assert.equal(result.body.setup.draft.hours[0].enabled, true);
   assert.equal(result.body.setup.draft.hours[0].openTime, "09:00");
+  assert.equal(result.body.setup.draft.hours[5].day, "saturday");
+  assert.equal(result.body.setup.draft.hours[5].openTime, "10:00");
+  assert.equal(result.body.setup.draft.hours[5].closeTime, "14:00");
   assert.equal(result.body.setup.draft.hours[6].closed, true);
 });
 
@@ -735,7 +786,9 @@ test("setup assistant does not block finalize on extra AI-behavior fields once c
             websiteUrl: "",
           },
           services: [{ key: "branding", title: "Branding" }],
-          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          contacts: [
+            { type: "phone", label: "Phone", value: "+994555555555" },
+          ],
           hours: [
             {
               day: "monday",
@@ -851,7 +904,9 @@ test("setup assistant requires a real source identity before profile becomes rea
             websiteUrl: "",
           },
           services: [{ key: "branding", title: "Branding" }],
-          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          contacts: [
+            { type: "phone", label: "Phone", value: "+994555555555" },
+          ],
           hours: [
             {
               day: "monday",
@@ -913,7 +968,11 @@ test("setup assistant AI-native payload keeps compat fields available after a br
           ],
           contacts: [
             { type: "phone", label: "Phone", value: "+994502223344" },
-            { type: "email", label: "Email", value: "hello@north.example" },
+            {
+              type: "email",
+              label: "Email",
+              value: "hello@north.example",
+            },
           ],
           hours: [
             {
@@ -944,7 +1003,8 @@ test("setup assistant AI-native payload keeps compat fields available after a br
             key: "services",
             step: "services",
             title: "Curate the service menu",
-            prompt: "List the real customer-facing services you want AI to talk about.",
+            prompt:
+              "List the real customer-facing services you want AI to talk about.",
             group: "business_truth",
             groupLabel: "Business truth",
           },
