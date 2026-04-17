@@ -7,11 +7,7 @@ import {
   buildAssistantCompatFollowupQueue,
   buildAssistantCompatQuestion,
 } from "./compat.js";
-import {
-  buildAssistantQuestion,
-  getNextQuestion,
-  normalizeSetupLocale,
-} from "./questions.js";
+import { buildAssistantQuestion, normalizeSetupLocale } from "./questions.js";
 import {
   buildApprovalBlockers,
   isDraftReadyForApproval,
@@ -202,25 +198,6 @@ function sanitizeBrainSnapshot(value = {}) {
   });
 }
 
-function hasMeaningfulBrainSourceSignals(value = {}) {
-  const source = obj(value);
-
-  return Boolean(
-    s(source.primarySourceType) ||
-      s(source.primarySourceUrl) ||
-      arr(source.sourceTypes).length ||
-      arr(source.strongestEvidence).length ||
-      arr(source.companyNameCandidates).length ||
-      arr(source.descriptionCandidates).length ||
-      arr(source.serviceCandidates).length ||
-      arr(source.contactCandidates).length ||
-      arr(source.hoursCandidates).length ||
-      arr(source.pricingCandidates).length ||
-      arr(source.audienceCandidates).length ||
-      arr(source.languagesCandidates).length
-  );
-}
-
 function buildSummarySections(summary = {}, servicesCatalog = {}) {
   const sectionStatus = obj(summary.sectionStatus);
 
@@ -363,66 +340,23 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   };
 }
 
-function buildGuardedNextQuestion({ setup = {}, summary = {}, session = {} } = {}) {
+function buildFallbackQuestion({ setup = {}, session = {} } = {}) {
   const locale = resolveSetupLocaleFromSetup(setup);
-  const approvalBlockers = buildApprovalBlockers(setup);
+  const blockers = buildApprovalBlockers(setup);
 
-  if (approvalBlockers.length > 0) {
-    return {
-      approvalBlockers,
-      nextQuestion: sanitizeBrainQuestion(
-        buildAssistantQuestion(s(approvalBlockers[0].step || "company"), {}, { locale })
-      ),
-    };
+  if (blockers.length) {
+    return sanitizeBrainQuestion(
+      buildAssistantQuestion(s(blockers[0].step || "company"), {}, { locale })
+    );
   }
 
-  const nextQuestion = getNextQuestion(
-    summary,
-    setup,
-    {
-      currentQuestionKey:
-        s(obj(setup.progress).currentQuestionKey) ||
-        s(obj(session).currentStep),
-      lastAnsweredStep: s(obj(setup.progress).lastAnsweredStep),
-    },
-    { locale }
-  );
+  const currentStep =
+    s(obj(setup.progress).currentQuestionKey) ||
+    s(obj(session).currentStep) ||
+    SETUP_ASSISTANT_CURRENT_STEP ||
+    "company";
 
-  return {
-    approvalBlockers: [],
-    nextQuestion: sanitizeBrainQuestion(nextQuestion),
-  };
-}
-
-function resolveGuardedApprovalState({
-  setup = {},
-  summary = {},
-  session = {},
-  storedBrain = {},
-} = {}) {
-  const guarded = buildGuardedNextQuestion({
-    setup,
-    summary,
-    session,
-  });
-
-  const approvalBlockers = arr(guarded.approvalBlockers);
-  const nextQuestion = obj(guarded.nextQuestion);
-
-  const readyForApproval =
-    approvalBlockers.length === 0 &&
-    isDraftReadyForApproval(setup) &&
-    (
-      obj(storedBrain).readyForApproval === true ||
-      summary.readyForReview === true ||
-      !nextQuestion.key
-    );
-
-  return {
-    approvalBlockers,
-    nextQuestion,
-    readyForApproval,
-  };
+  return sanitizeBrainQuestion(buildAssistantQuestion(currentStep, {}, { locale }));
 }
 
 export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
@@ -499,13 +433,26 @@ function buildAssistantFromStoredBrain({
 } = {}) {
   const brain = sanitizeBrainSnapshot(storedBrain);
   const lastAssistantTurn =
-    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
+    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") ||
+    {};
 
-  const sourceSignals = sanitizeBrainSourceSignals(
-    hasMeaningfulBrainSourceSignals(obj(brain.sourceSignals))
-      ? brain.sourceSignals
-      : buildMinimalSourceSignals(setup)
-  );
+  const approvalBlockers = buildApprovalBlockers(setup);
+  const readyForApproval =
+    approvalBlockers.length === 0 &&
+    isDraftReadyForApproval(setup) &&
+    brain.readyForApproval === true;
+
+  const nextQuestion =
+    readyForApproval === true
+      ? null
+      : obj(brain.nextQuestion).key
+        ? obj(brain.nextQuestion)
+        : buildFallbackQuestion({ setup, session });
+
+  const sourceSignals =
+    Object.keys(obj(brain.sourceSignals)).length > 0
+      ? sanitizeBrainSourceSignals(brain.sourceSignals)
+      : buildMinimalSourceSignals(setup);
 
   const draftPreview =
     Object.keys(obj(brain.draft)).length > 0
@@ -513,52 +460,6 @@ function buildAssistantFromStoredBrain({
       : buildAssistantDraftPreview(setup, {
           formatHours: formatSetupAssistantHoursForCanonical,
         });
-
-  const guardedApproval = resolveGuardedApprovalState({
-    setup,
-    summary,
-    session,
-    storedBrain: brain,
-  });
-
-  const nextQuestion = sanitizeBrainQuestion(guardedApproval.nextQuestion);
-  const approvalBlockers = arr(guardedApproval.approvalBlockers);
-  const readyForApproval = guardedApproval.readyForApproval === true;
-
-  const phase = s(
-    brain.phase ||
-      lastAssistantTurn.phase ||
-      (readyForApproval
-        ? "ready"
-        : summary.hasAnyDraft
-          ? "interview"
-          : "source_capture")
-  ).toLowerCase();
-
-  const interviewPlan = sanitizeBrainInterviewPlan(
-    Object.keys(obj(brain.interviewPlan)).length > 0 && !approvalBlockers.length
-      ? brain.interviewPlan
-      : {
-          activeQuestionKeys: nextQuestion.key && !readyForApproval ? [nextQuestion.key] : [],
-          activeQuestions:
-            nextQuestion.key && !readyForApproval
-              ? [
-                  {
-                    key: nextQuestion.key,
-                    step: nextQuestion.step,
-                    title: nextQuestion.title,
-                    group: nextQuestion.group || "business_truth",
-                    groupLabel: nextQuestion.groupLabel || "Business truth",
-                    priority: 1,
-                  },
-                ]
-              : [],
-          remainingQuestionKeys:
-            nextQuestion.key && !readyForApproval ? [nextQuestion.key] : [],
-          nextGroup: nextQuestion.group || "business_truth",
-          nextGroupLabel: nextQuestion.groupLabel || "Business truth",
-        }
-  );
 
   const confidence =
     arr(obj(brain.confidence).strong).length ||
@@ -576,19 +477,54 @@ function buildAssistantFromStoredBrain({
             : [],
         };
 
+  const phase = s(
+    brain.phase ||
+      lastAssistantTurn.phase ||
+      (readyForApproval
+        ? "ready"
+        : summary.hasAnyDraft
+          ? "interview"
+          : "source_capture")
+  ).toLowerCase();
+
   const resolvedAssistantMessage = compactText(
     s(
       brain.assistantMessage ||
         brain.message ||
         lastAssistantTurn.text ||
-        (!readyForApproval ? nextQuestion.prompt : "")
+        (readyForApproval ? "" : obj(nextQuestion).prompt)
     ),
     420
   );
 
+  const interviewPlan =
+    Object.keys(obj(brain.interviewPlan)).length > 0
+      ? sanitizeBrainInterviewPlan(brain.interviewPlan)
+      : sanitizeBrainInterviewPlan({
+          activeQuestionKeys:
+            obj(nextQuestion).key && !readyForApproval ? [obj(nextQuestion).key] : [],
+          activeQuestions:
+            obj(nextQuestion).key && !readyForApproval
+              ? [
+                  {
+                    key: obj(nextQuestion).key,
+                    step: obj(nextQuestion).step,
+                    title: obj(nextQuestion).title,
+                    group: obj(nextQuestion).group || "business_truth",
+                    groupLabel: obj(nextQuestion).groupLabel || "Business truth",
+                    priority: 1,
+                  },
+                ]
+              : [],
+          remainingQuestionKeys:
+            obj(nextQuestion).key && !readyForApproval ? [obj(nextQuestion).key] : [],
+          nextGroup: obj(nextQuestion).group || "business_truth",
+          nextGroupLabel: obj(nextQuestion).groupLabel || "Business truth",
+        });
+
   return {
     mode: "brain_v4",
-    nextQuestion: nextQuestion.key && !readyForApproval ? nextQuestion : null,
+    nextQuestion: obj(nextQuestion).key && !readyForApproval ? obj(nextQuestion) : null,
     approvalBlockers,
     confirmationBlockers: approvalBlockers,
     sections: buildSummarySections(summary, servicesCatalog),
@@ -761,8 +697,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
 
   const safeTurn = sanitizeBrainSnapshot(turn);
   const guardedReadyForApproval =
-    obj(setup.assistant).readyForApproval === true &&
-    safeTurn.readyForApproval === true;
+    obj(assistant).readyForApproval === true && safeTurn.readyForApproval === true;
 
   const resolvedNextQuestion =
     guardedReadyForApproval === true

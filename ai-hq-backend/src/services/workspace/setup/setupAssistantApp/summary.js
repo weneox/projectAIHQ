@@ -62,7 +62,7 @@ function buildProfileStatus(draft = {}, coverageContext = {}) {
       s(sourceSignals.primarySourceUrl)
   );
 
-  const completed = hasName && hasDescription && hasWebsite;
+  const completed = hasName && hasDescription;
   const partial =
     completed ||
     sourceCoverage.identity === true ||
@@ -74,7 +74,7 @@ function buildProfileStatus(draft = {}, coverageContext = {}) {
     completed,
     partial,
     status: completed ? "ready" : partial ? "needs_review" : "missing",
-    reviewReady: completed || sourceCoverage.identity === true,
+    reportReady: completed || sourceCoverage.identity === true,
     sourceCovered: sourceCoverage.identity === true,
     missingFields: [
       hasName ? "" : "business_name",
@@ -97,13 +97,13 @@ function buildServicesStatus(draft = {}, coverageContext = {}) {
   const sourceCount = arr(sourceSignals.serviceCandidates).length;
 
   const completed = explicitCount > 0 || derivedCount > 0;
-  const partial = completed || sourceCoverage.services === true;
+  const partial = completed || sourceCoverage.services === true || sourceCount > 0;
 
   return {
     completed,
     partial,
     status: completed ? "ready" : partial ? "needs_review" : "missing",
-    reviewReady: completed || sourceCoverage.services === true,
+    reportReady: completed || sourceCoverage.services === true,
     sourceCovered: sourceCoverage.services === true,
     missingFields: completed ? [] : ["services"],
     metric: {
@@ -128,13 +128,13 @@ function buildHoursStatus(draft = {}, coverageContext = {}) {
   const sourceCount = arr(sourceSignals.hoursCandidates).length;
 
   const completed = explicitConfigured > 0 || derivedConfigured > 0;
-  const partial = completed || sourceCoverage.hours === true;
+  const partial = completed || sourceCoverage.hours === true || sourceCount > 0;
 
   return {
     completed,
     partial,
     status: completed ? "ready" : partial ? "needs_review" : "missing",
-    reviewReady: completed || sourceCoverage.hours === true,
+    reportReady: completed || sourceCoverage.hours === true,
     sourceCovered: sourceCoverage.hours === true,
     missingFields: completed ? [] : ["hours"],
     metric: {
@@ -155,13 +155,16 @@ function buildPricingStatus(draft = {}, coverageContext = {}) {
       s(draftState.pricingPosture)
   );
 
-  const partial = completed || sourceCoverage.pricing === true;
+  const partial =
+    completed ||
+    sourceCoverage.pricing === true ||
+    arr(sourceSignals.pricingCandidates).length > 0;
 
   return {
     completed,
     partial,
     status: completed ? "ready" : partial ? "needs_review" : "missing",
-    reviewReady: completed || sourceCoverage.pricing === true,
+    reportReady: completed || sourceCoverage.pricing === true,
     sourceCovered: sourceCoverage.pricing === true,
     missingFields: completed ? [] : ["pricing_posture"],
     metric: {
@@ -180,13 +183,13 @@ function buildContactsStatus(draft = {}, coverageContext = {}) {
   const sourceCount = arr(sourceSignals.contactCandidates).length;
 
   const completed = explicitCount > 0 || derivedCount > 0;
-  const partial = completed || sourceCoverage.contacts === true;
+  const partial = completed || sourceCoverage.contacts === true || sourceCount > 0;
 
   return {
     completed,
     partial,
     status: completed ? "ready" : partial ? "needs_review" : "missing",
-    reviewReady: completed || sourceCoverage.contacts === true,
+    reportReady: completed || sourceCoverage.contacts === true,
     sourceCovered: sourceCoverage.contacts === true,
     missingFields: completed ? [] : ["contact_route"],
     metric: {
@@ -212,7 +215,7 @@ function buildHandoffStatus(draft = {}, coverageContext = {}) {
     completed,
     partial: completed,
     status: completed ? "ready" : "missing",
-    reviewReady: completed,
+    reportReady: completed,
     sourceCovered: false,
     missingFields: completed ? [] : ["handoff_rules"],
     metric: {
@@ -258,7 +261,7 @@ export function buildConfirmationBlockers(
   const coverageContext = buildCoverageContext(draft, context);
 
   return SETUP_SUMMARY_SECTION_ORDER.filter(
-    (key) => obj(sectionStatus[key]).reviewReady !== true
+    (key) => obj(sectionStatus[key]).completed !== true
   ).map((key) => {
     const state = obj(sectionStatus[key]);
 
@@ -267,7 +270,7 @@ export function buildConfirmationBlockers(
       severity: normalizeBlockerSeverity(key, state),
       reasonCode: `${key}_${state.status || "missing"}`,
       sourceCovered: state.sourceCovered === true,
-      reviewReady: state.reviewReady === true,
+      reportReady: state.reportReady === true,
       missingFields: arr(state.missingFields),
       metric: obj(state.metric),
       sourceSignalsPreview:
@@ -317,8 +320,11 @@ export function buildSummary(draft = {}, context = {}) {
   const completionCount = Object.values(sectionStatus).filter(
     (item) => item.status === "ready"
   ).length;
-  const reviewReadyCount = Object.values(sectionStatus).filter(
-    (item) => item.reviewReady === true
+  const partialCount = Object.values(sectionStatus).filter(
+    (item) => item.partial === true
+  ).length;
+  const reportReadyCount = Object.values(sectionStatus).filter(
+    (item) => item.reportReady === true
   ).length;
 
   const confirmationBlockers = buildConfirmationBlockers(
@@ -329,7 +335,7 @@ export function buildSummary(draft = {}, context = {}) {
 
   const hasAnyDraft =
     completionCount > 0 ||
-    Object.values(sectionStatus).some((item) => item.partial === true) ||
+    partialCount > 0 ||
     Boolean(
       s(draftState.businessName) ||
         s(draftState.description) ||
@@ -342,16 +348,11 @@ export function buildSummary(draft = {}, context = {}) {
         sourceCoverage.primarySourceExists
     );
 
-  const readyForReview = SETUP_SUMMARY_SECTION_ORDER.every(
-    (key) => obj(sectionStatus[key]).reviewReady === true
-  );
-
   return {
     hasAnyDraft,
-    readyForReview,
-    readyForApproval: false,
     completionCount,
-    reviewReadyCount,
+    partialCount,
+    reportReadyCount,
     totalSections: SETUP_SUMMARY_SECTION_ORDER.length,
     blockerCount: confirmationBlockers.length,
     sectionStatus,
@@ -377,13 +378,11 @@ export function buildSummary(draft = {}, context = {}) {
 }
 
 export function buildReviewState(_draft = {}, summary = {}, _context = {}) {
-  const readyForReview = summary.readyForReview === true;
-
   return {
     status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
-    readyForReview,
+    readyForReview: false,
     readyForApproval: false,
-    finalizeAvailable: readyForReview,
+    finalizeAvailable: false,
     message: "",
   };
 }

@@ -29,13 +29,210 @@ import {
 
 let cachedClient = null;
 
+const STEP_ORDER = [
+  "company",
+  "description",
+  "services",
+  "contacts",
+  "hours",
+  "pricing",
+  "handoff",
+];
+
+const SOCIAL_PATTERNS = [
+  /\bhow are you\b/i,
+  /\bhow r you\b/i,
+  /\bwhat('?s| is) up\b/i,
+  /\bnec[eə]s[eə]n\b/i,
+  /\bnecesen\b/i,
+  /\bsalam\b/i,
+  /\bhello\b/i,
+  /\bhey\b/i,
+  /\bhi\b/i,
+  /\bok\b/i,
+  /\bokay\b/i,
+];
+
+const CONFUSION_PATTERNS = [
+  /\bi don't understand\b/i,
+  /\bi dont understand\b/i,
+  /\banlamad[iı]m\b/i,
+  /\bbaşa düşmədim\b/i,
+  /\bbasa dusmedim\b/i,
+  /\bqar[iı]şd[iı]m\b/i,
+  /\bconfused\b/i,
+  /\bwhich one\b/i,
+  /\bwhat do you mean\b/i,
+];
+
+const CORRECTION_PATTERNS = [
+  /\byox\b/i,
+  /\bdeyil\b/i,
+  /\bd[uü]z[eə]li[şs]\b/i,
+  /\bduzelis\b/i,
+  /\bwrong\b/i,
+  /\bnot\b/i,
+  /\bactually\b/i,
+  /\binstead\b/i,
+  /\bcorrection\b/i,
+];
+
+const STEP_KEYWORDS = {
+  company: [
+    "company",
+    "business",
+    "name",
+    "ad",
+    "adı",
+    "sirket",
+    "şirkət",
+    "brand",
+  ],
+  description: [
+    "description",
+    "summary",
+    "nə iş",
+    "ne ish",
+    "what do",
+    "about",
+    "təsvir",
+    "tesvir",
+  ],
+  services: [
+    "service",
+    "services",
+    "xidmət",
+    "xidmet",
+    "offer",
+    "do",
+  ],
+  contacts: [
+    "contact",
+    "phone",
+    "number",
+    "whatsapp",
+    "wp",
+    "email",
+    "instagram",
+    "facebook",
+    "telegram",
+    "əlaqə",
+    "elaqe",
+    "nömrə",
+    "nomre",
+  ],
+  hours: [
+    "hours",
+    "working",
+    "open",
+    "close",
+    "schedule",
+    "saat",
+    "iş saat",
+    "is saat",
+    "24/7",
+  ],
+  pricing: [
+    "price",
+    "pricing",
+    "cost",
+    "quote",
+    "qiymət",
+    "qiymet",
+    "azn",
+    "usd",
+    "eur",
+    "from",
+    "starting",
+  ],
+  handoff: [
+    "handoff",
+    "human",
+    "operator",
+    "manager",
+    "doctor",
+    "admin",
+    "insan",
+    "yönləndir",
+    "yonlendir",
+    "şikayət",
+    "sikayet",
+    "urgent",
+    "təcili",
+    "tecli",
+  ],
+};
+
+const STEP_EXAMPLES = {
+  "az-AZ": {
+    company: ["MAND Beauty", "Mand Beauty mand.az"],
+    description: [
+      "Qadın saç kəsimi, boyama və baxım xidmətləri göstəririk.",
+      "Logistika və yükdaşıma xidməti göstəririk.",
+    ],
+    services: [
+      "saç kəsimi, saç boyama, baxım",
+      "yükdaşıma, logistika, anbarlama",
+    ],
+    contacts: [
+      "+994 50 555 55 55 WhatsApp",
+      "hello@brand.az",
+      "@mandbeauty",
+    ],
+    hours: [
+      "həftə içi 09:00-18:00",
+      "hər gün 10:00-20:00",
+      "24/7",
+    ],
+    pricing: [
+      "Qiymətlər 20 AZN-dən başlayır.",
+      "Dəqiq qiymət xidmətə görə dəyişir, əvvəlcə detal alırıq.",
+      "Public qiymət vermirik, əvvəlcə sorğu alırıq.",
+    ],
+    handoff: [
+      "Müştəri operator istəyəndə insana yönləndir.",
+      "Şikayət, təcili hal və ödəniş problemi olanda insana keç.",
+    ],
+  },
+  en: {
+    company: ["North Clinic", "North Clinic northclinic.com"],
+    description: [
+      "We provide dental consultation, whitening, and implant services.",
+      "We provide logistics and cargo transport services.",
+    ],
+    services: [
+      "haircut, coloring, treatment",
+      "cargo transport, logistics, warehousing",
+    ],
+    contacts: [
+      "+994 50 555 55 55 WhatsApp",
+      "hello@brand.az",
+      "@northclinic",
+    ],
+    hours: [
+      "weekdays 09:00-18:00",
+      "every day 10:00-20:00",
+      "24/7",
+    ],
+    pricing: [
+      "Prices start from 20 AZN.",
+      "Exact pricing depends on the service, we ask for details first.",
+      "We do not share exact prices publicly.",
+    ],
+    handoff: [
+      "Hand off to a human when the customer asks for an operator.",
+      "Hand off for complaints, urgent issues, or payment problems.",
+    ],
+  },
+};
+
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
   const timeoutMs =
-    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 6000) ||
-    6000;
+    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 7000) ||
+    7000;
   const maxOutputTokens =
-    Number(cfg.ai?.openaiSetupMaxOutputTokens || 350) || 350;
+    Number(cfg.ai?.openaiSetupMaxOutputTokens || 500) || 500;
 
   const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
@@ -110,6 +307,39 @@ function listToNatural(locale = "az-AZ", values = []) {
   if (items.length === 2) return `${items[0]} ${copy.and} ${items[1]}`;
 
   return `${items.slice(0, -1).join(", ")} ${copy.and} ${items.at(-1)}`;
+}
+
+function getTimelineTurns(review = {}) {
+  const direct = arr(review.timeline)
+    .map((item) => obj(item))
+    .filter((item) => s(item.text || item.message));
+
+  if (direct.length) return direct;
+
+  return arr(review.events)
+    .map((event) => ({
+      role: s(event.role),
+      text: s(event.text || event.message),
+      questionKey: s(obj(event.payload).questionKey),
+      phase: s(obj(event.payload).phase),
+      provider: s(obj(event.payload).provider),
+      error: s(obj(event.payload).error),
+      createdAt: event.createdAt,
+    }))
+    .filter((item) => item.text);
+}
+
+function countAssistantAsksForStep(review = {}, step = "") {
+  const normalizedStep = normalizeQuestionKey(step);
+  if (!normalizedStep) return 0;
+
+  const turns = getTimelineTurns(review).slice(-12);
+
+  return turns.filter(
+    (turn) =>
+      s(turn.role).toLowerCase() === "assistant" &&
+      normalizeQuestionKey(turn.questionKey) === normalizedStep
+  ).length;
 }
 
 function buildCurrentPreview(draft = {}, review = null) {
@@ -211,26 +441,6 @@ function detectLocaleFromText(value = "") {
     /\b(what|business|service|contact|hours|price|human)\b/.test(lower)
   ) {
     return "en";
-  }
-  if (
-    /\b(negocio|servicio|contacto|horario|precio|persona)\b/.test(lower)
-  ) {
-    return "es";
-  }
-  if (
-    /\b(entreprise|service|contact|horaires|prix|humain)\b/.test(lower)
-  ) {
-    return "fr";
-  }
-  if (
-    /\b(geschaft|kontakt|offnungszeiten|preis|mensch)\b/.test(lower)
-  ) {
-    return "de";
-  }
-  if (
-    /\b(negocio|contato|horario|preco|pessoa)\b/.test(lower)
-  ) {
-    return "pt";
   }
 
   return "";
@@ -451,7 +661,9 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
 
   const mergedServices = uniqueStrings(
     [
-      ...arr(safeDraft.services).map((item) => s(item?.title || item?.name || item?.label)),
+      ...arr(safeDraft.services).map((item) =>
+        s(item?.title || item?.name || item?.label)
+      ),
       ...arr(patch.services),
     ],
     24
@@ -459,7 +671,9 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
 
   const mergedContacts = uniqueStrings(
     [
-      ...arr(safeDraft.contacts).map((item) => s(item?.value || item?.label || item?.type)),
+      ...arr(safeDraft.contacts).map((item) =>
+        s(item?.value || item?.label || item?.type)
+      ),
       ...arr(patch.contacts),
     ],
     24
@@ -474,7 +688,11 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
     : arr(safeDraft.hours);
 
   const mergedPricing = s(patch.pricingPosture)
-    ? parsePricingNote(s(patch.pricingPosture), safeDraft.pricingPosture, safeDraft.services)
+    ? parsePricingNote(
+        s(patch.pricingPosture),
+        safeDraft.pricingPosture,
+        safeDraft.services
+      )
     : obj(safeDraft.pricingPosture);
 
   const mergedHandoff = s(patch.humanHandoff)
@@ -489,8 +707,12 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
     ...safeDraft,
     businessProfile: compactDraftObject({
       ...obj(safeDraft.businessProfile),
-      companyName: s(identity.businessName || obj(safeDraft.businessProfile).companyName),
-      description: s(identity.description || obj(safeDraft.businessProfile).description),
+      companyName: s(
+        identity.businessName || obj(safeDraft.businessProfile).companyName
+      ),
+      description: s(
+        identity.description || obj(safeDraft.businessProfile).description
+      ),
       websiteUrl: normalizeWebsiteUrl(
         s(identity.websiteUrl || obj(safeDraft.businessProfile).websiteUrl)
       ),
@@ -505,7 +727,9 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
       8
     ),
     tone: s(obj(patch.aiBehavior).tone || safeDraft.tone),
-    greetingStyle: s(obj(patch.aiBehavior).greetingStyle || safeDraft.greetingStyle),
+    greetingStyle: s(
+      obj(patch.aiBehavior).greetingStyle || safeDraft.greetingStyle
+    ),
     afterHoursBehavior: s(
       obj(patch.aiBehavior).afterHoursBehavior || safeDraft.afterHoursBehavior
     ),
@@ -626,111 +850,696 @@ function extractHandoffValue(text = "") {
   return trimmed || "";
 }
 
-function extractValidationValueFromAcceptedPatch(step = "", acceptedPatch = {}) {
+function buildPatchForStep(step = "", text = "", draft = {}) {
   const normalizedStep = normalizeQuestionKey(step);
-  const patch = obj(acceptedPatch);
-  const identity = obj(patch.identity);
-
-  if (normalizedStep === "company") {
-    return [s(identity.businessName), s(identity.websiteUrl)]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  if (normalizedStep === "description") {
-    return s(identity.description);
-  }
-
-  if (normalizedStep === "services") {
-    return arr(patch.services).join(", ");
-  }
-
-  if (normalizedStep === "contacts") {
-    return arr(patch.contacts).join(", ");
-  }
-
-  if (normalizedStep === "hours") {
-    return arr(patch.hours).join("; ");
-  }
-
-  if (normalizedStep === "pricing") {
-    return s(patch.pricingPosture);
-  }
-
-  if (normalizedStep === "handoff") {
-    return s(patch.humanHandoff);
-  }
-
-  return "";
-}
-
-function buildLocalAcceptedPatch(currentStep = "", latestMessage = "", draft = {}) {
-  const step = normalizeQuestionKey(currentStep);
-  const text = s(latestMessage);
-  const validation = validateStepAnswer(step, text, draft);
-  const source = buildRecognizedSourceCandidate(text);
-
+  const validation = validateStepAnswer(normalizedStep, text, draft);
   const patch = buildEmptyAcceptedPatch();
 
-  if (!text) {
+  if (validation.accepted !== true) {
     return {
-      acceptedPatch: patch,
+      patch,
       validation,
     };
   }
 
-  if (!validation.accepted) {
-    return {
-      acceptedPatch: patch,
-      validation,
-    };
-  }
-
-  if (source?.type === "website") {
-    patch.identity = compactDraftObject({
-      websiteUrl: source.value,
-    });
-  }
-
-  if (step === "company") {
+  if (normalizedStep === "company") {
     const company = extractCompanyValue(text);
     patch.identity = compactDraftObject({
-      ...obj(patch.identity),
       businessName: s(company.businessName),
-      websiteUrl: s(company.websiteUrl || obj(patch.identity).websiteUrl),
+      websiteUrl: s(company.websiteUrl),
     });
-  } else if (step === "description") {
-    const description = extractDescriptionValue(text);
-    if (description) {
-      patch.identity = compactDraftObject({
-        ...obj(patch.identity),
-        description,
-      });
-    }
-  } else if (step === "services") {
-    patch.services = uniqueStrings(validation.extractedValues || extractServiceValues(text), 16);
-  } else if (step === "contacts") {
-    patch.contacts = uniqueStrings(validation.extractedValues || extractContactCandidates(text), 16);
-  } else if (step === "hours") {
+  } else if (normalizedStep === "description") {
+    patch.identity = compactDraftObject({
+      description: extractDescriptionValue(text),
+    });
+  } else if (normalizedStep === "services") {
+    patch.services = uniqueStrings(
+      validation.extractedValues || extractServiceValues(text),
+      16
+    );
+  } else if (normalizedStep === "contacts") {
+    patch.contacts = uniqueStrings(
+      validation.extractedValues || extractContactCandidates(text),
+      16
+    );
+  } else if (normalizedStep === "hours") {
     patch.hours = extractHoursValues(text);
-  } else if (step === "pricing") {
+  } else if (normalizedStep === "pricing") {
     patch.pricingPosture = extractPricingValue(text, arr(draft.services));
-  } else if (step === "handoff") {
+  } else if (normalizedStep === "handoff") {
     patch.humanHandoff = extractHandoffValue(text);
   }
 
   return {
-    acceptedPatch: compactDraftObject(patch),
+    patch: compactDraftObject(patch),
     validation,
   };
+}
+
+function hasQuestionMark(text = "") {
+  return /\?/.test(String(text || ""));
+}
+
+function isSocialTurn(text = "") {
+  return SOCIAL_PATTERNS.some((pattern) => pattern.test(String(text || "")));
+}
+
+function isConfusionTurn(text = "") {
+  return CONFUSION_PATTERNS.some((pattern) => pattern.test(String(text || "")));
+}
+
+function detectCorrectionTargetStep(text = "", currentStep = "") {
+  const value = normalizeMessage(text);
+  if (!CORRECTION_PATTERNS.some((pattern) => pattern.test(value))) {
+    return "";
+  }
+
+  for (const step of STEP_ORDER) {
+    const keywords = STEP_KEYWORDS[step] || [];
+    if (keywords.some((keyword) => value.includes(normalizeMessage(keyword)))) {
+      return step;
+    }
+  }
+
+  return normalizeQuestionKey(currentStep);
+}
+
+function stripCorrectionPrefix(text = "") {
+  return s(text)
+    .replace(
+      /\b(yox|deyil|düzəliş|duzelis|wrong|not|actually|instead|correction)\b[:\s-]*/gi,
+      ""
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function extractCrossStepSignals(text = "", currentStep = "", draft = {}) {
+  const patches = [];
+  const normalizedCurrent = normalizeQuestionKey(currentStep);
+
+  for (const step of STEP_ORDER) {
+    if (step === normalizedCurrent) continue;
+
+    const result = buildPatchForStep(step, text, draft);
+    if (hasAcceptedPatchSignal(result.patch)) {
+      patches.push({
+        step,
+        patch: result.patch,
+      });
+    }
+  }
+
+  if (!patches.length) {
+    return {
+      patch: buildEmptyAcceptedPatch(),
+      steps: [],
+    };
+  }
+
+  let merged = buildEmptyAcceptedPatch();
+  for (const item of patches) {
+    merged = mergeAcceptedPatches(merged, item.patch);
+  }
+
+  return {
+    patch: merged,
+    steps: patches.map((item) => item.step),
+  };
+}
+
+function getExamplesForStep(step = "", locale = "az-AZ") {
+  const normalizedLocale = normalizeSetupLocale(locale);
+  const examples =
+    obj(STEP_EXAMPLES[normalizedLocale])[step] ||
+    obj(STEP_EXAMPLES["az-AZ"])[step] ||
+    [];
+  return arr(examples).map((item) => s(item)).filter(Boolean).slice(0, 3);
+}
+
+function buildWarmRedirect(locale = "az-AZ", text = "") {
+  const normalizedLocale = normalizeSetupLocale(locale);
+  if (isSocialTurn(text)) {
+    if (normalizedLocale === "az-AZ") return "Mən yaxşıyam 🙂";
+    return "I’m good 🙂";
+  }
+  if (isConfusionTurn(text) || hasQuestionMark(text)) {
+    if (normalizedLocale === "az-AZ") {
+      return "Aydın oldu — qarışdırmayaq.";
+    }
+    return "Got it — let’s make this simpler.";
+  }
+  if (normalizedLocale === "az-AZ") {
+    return "Bu cavabdan faydalı setup məlumatı çıxmadı.";
+  }
+  return "That did not give me a usable setup answer.";
+}
+
+function buildClarifyMessage({
+  locale = "az-AZ",
+  step = "",
+  retryCount = 0,
+  text = "",
+}) {
+  const question = buildQuestion(step, locale);
+  const examples = getExamplesForStep(step, locale);
+
+  if (retryCount <= 1) {
+    if (examples.length) {
+      return [
+        buildWarmRedirect(locale, text),
+        s(question.prompt),
+        normalizeSetupLocale(locale) === "az-AZ"
+          ? `Məsələn: ${examples.join(" / ")}.`
+          : `For example: ${examples.join(" / ")}.`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+    return [buildWarmRedirect(locale, text), s(question.prompt)]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizeSetupLocale(locale) === "az-AZ") {
+    return [
+      buildWarmRedirect(locale, text),
+      "Bu hissəni bir cümlə ilə və ya hazır nümunə kimi yaza bilərsiniz.",
+      examples.length ? `Nümunə: ${examples.join(" / ")}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return [
+    buildWarmRedirect(locale, text),
+    "You can answer this in one short sentence or by following one of these examples.",
+    examples.length ? `Example: ${examples.join(" / ")}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function resolveConversationPlan({
+  locale = "az-AZ",
+  draft = {},
+  currentStep = "",
+  review = null,
+  allowPark = true,
+  preferredStep = "",
+} = {}) {
+  const blockers = buildApprovalBlockers(draft);
+
+  if (!blockers.length && isDraftReadyForApproval(draft)) {
+    return {
+      readyForApproval: true,
+      blockers: [],
+      nextQuestion: null,
+      parkedCurrent: false,
+    };
+  }
+
+  const normalizedPreferred = normalizeQuestionKey(preferredStep);
+  if (normalizedPreferred) {
+    const preferredBlocker = blockers.find(
+      (item) => normalizeQuestionKey(item.step) === normalizedPreferred
+    );
+    if (preferredBlocker) {
+      return {
+        readyForApproval: false,
+        blockers,
+        nextQuestion: buildQuestion(normalizedPreferred, locale),
+        parkedCurrent: false,
+      };
+    }
+  }
+
+  const normalizedCurrent = normalizeQuestionKey(currentStep);
+  const currentBlocker = blockers.find(
+    (item) => normalizeQuestionKey(item.step) === normalizedCurrent
+  );
+
+  const retryCount = countAssistantAsksForStep(review, normalizedCurrent);
+
+  if (
+    allowPark === true &&
+    currentBlocker &&
+    retryCount >= 2
+  ) {
+    const alternateBlocker = blockers.find(
+      (item) => normalizeQuestionKey(item.step) !== normalizedCurrent
+    );
+    if (alternateBlocker) {
+      return {
+        readyForApproval: false,
+        blockers,
+        nextQuestion: buildQuestion(alternateBlocker.step, locale),
+        parkedCurrent: true,
+      };
+    }
+  }
+
+  if (currentBlocker) {
+    return {
+      readyForApproval: false,
+      blockers,
+      nextQuestion: buildQuestion(normalizedCurrent, locale),
+      parkedCurrent: false,
+    };
+  }
+
+  const nextQuestion = getNextQuestion(
+    {},
+    draft,
+    {
+      currentQuestionKey: normalizedCurrent,
+      lastAnsweredStep: normalizedCurrent,
+    },
+    { locale }
+  );
+
+  if (nextQuestion) {
+    return {
+      readyForApproval: false,
+      blockers,
+      nextQuestion: obj(nextQuestion),
+      parkedCurrent: false,
+    };
+  }
+
+  if (blockers.length) {
+    return {
+      readyForApproval: false,
+      blockers,
+      nextQuestion: buildQuestion(blockers[0].step, locale),
+      parkedCurrent: false,
+    };
+  }
+
+  return {
+    readyForApproval: false,
+    blockers: [],
+    nextQuestion: buildQuestion(normalizedCurrent || "company", locale),
+    parkedCurrent: false,
+  };
+}
+
+function buildTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  acceptedPatch = {},
+  provider = "local_reasoning",
+  model = "",
+  usedFallback = false,
+  error = "",
+  assistantMessage = "",
+  nextQuestion = null,
+  rejectedInputs = [],
+  recommendationNotes = [],
+  forceReadyForApproval = null,
+} = {}) {
+  const mergedDraft = hasAcceptedPatchSignal(acceptedPatch)
+    ? buildDraftWithAcceptedPatch(draft, acceptedPatch)
+    : draft;
+
+  const preview = buildCurrentPreview(mergedDraft, review);
+  const plan =
+    forceReadyForApproval === true && !nextQuestion
+      ? {
+          readyForApproval: true,
+          blockers: [],
+          nextQuestion: null,
+          parkedCurrent: false,
+        }
+      : resolveConversationPlan({
+          locale,
+          draft: mergedDraft,
+          currentStep,
+          review,
+        });
+
+  const readyForApproval =
+    typeof forceReadyForApproval === "boolean"
+      ? forceReadyForApproval
+      : plan.readyForApproval === true;
+
+  const resolvedNextQuestion =
+    readyForApproval === true ? null : obj(nextQuestion).key ? obj(nextQuestion) : obj(plan.nextQuestion);
+
+  return {
+    ok: true,
+    provider,
+    model: s(model),
+    usedFallback: usedFallback === true,
+    error: s(error),
+    latestUserInput: compactDraftObject({
+      step: normalizeQuestionKey(currentStep),
+      text: latestMessage,
+    }),
+    phase: readyForApproval
+      ? "ready"
+      : hasSetupSignalForInterview(mergedDraft)
+        ? "interview"
+        : "source_capture",
+    assistantMessage: s(assistantMessage),
+    message: s(assistantMessage),
+    nextQuestion: resolvedNextQuestion,
+    draft: preview,
+    acceptedPatch: compactDraftObject(acceptedPatch),
+    rejectedInputs: arr(rejectedInputs),
+    confidence: {
+      strong: hasAcceptedPatchSignal(acceptedPatch)
+        ? [normalizeQuestionKey(currentStep)].filter(Boolean)
+        : [],
+      unclear:
+        hasAcceptedPatchSignal(acceptedPatch) || !normalizeQuestionKey(currentStep)
+          ? []
+          : [normalizeQuestionKey(currentStep)],
+      contradictions: [],
+    },
+    recommendation: {
+      notes: uniqueStrings(recommendationNotes, 8),
+    },
+    sourceSignals: buildSourceSignals(preview, sources),
+    interviewPlan: buildInterviewPlan(currentStep, resolvedNextQuestion),
+    aiBehavior: compactDraftObject({
+      languages: uniqueStrings([...arr(draft.languages), locale], 8),
+      tone: s(draft.tone),
+      greetingStyle: s(draft.greetingStyle),
+      afterHoursBehavior: s(draft.afterHoursBehavior),
+    }),
+    readyForApproval,
+  };
+}
+
+function buildPassiveTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  model = "",
+} = {}) {
+  const copy = getSetupCopy(locale);
+  const plan = resolveConversationPlan({
+    locale,
+    draft,
+    currentStep,
+    review,
+  });
+
+  const assistantMessage =
+    plan.readyForApproval === true
+      ? s(obj(copy.phrases).readyForApproval)
+      : s(obj(plan.nextQuestion).prompt);
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage: "",
+    acceptedPatch: buildEmptyAcceptedPatch(),
+    provider: "local_reasoning",
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [],
+    recommendationNotes: [],
+    forceReadyForApproval: plan.readyForApproval === true,
+  });
+}
+
+function buildDirectAnswerTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  acceptedPatch = {},
+  model = "",
+  provider = "local_reasoning",
+  extraNote = "",
+} = {}) {
+  const copy = getSetupCopy(locale);
+  const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
+  const plan = resolveConversationPlan({
+    locale,
+    draft: mergedDraft,
+    currentStep,
+    review,
+  });
+
+  let ack = "";
+  const patch = obj(acceptedPatch);
+  const identity = obj(patch.identity);
+
+  if (currentStep === "company" && s(identity.businessName)) {
+    ack = s(obj(copy.phrases).companyCaptured).replace(
+      "{value}",
+      s(identity.businessName)
+    );
+  } else if (currentStep === "description" && s(identity.description)) {
+    ack = s(obj(copy.phrases).descriptionCaptured).replace(
+      "{value}",
+      s(identity.description)
+    );
+  } else if (currentStep === "services" && arr(patch.services).length) {
+    ack = s(obj(copy.phrases).servicesCaptured).replace(
+      "{value}",
+      listToNatural(locale, arr(patch.services))
+    );
+  } else if (currentStep === "contacts" && arr(patch.contacts).length) {
+    ack = s(obj(copy.phrases).contactsCaptured);
+  } else if (currentStep === "hours" && arr(patch.hours).length) {
+    ack = s(obj(copy.phrases).hoursCaptured);
+  } else if (currentStep === "pricing" && s(patch.pricingPosture)) {
+    ack = s(obj(copy.phrases).pricingCaptured);
+  } else if (currentStep === "handoff" && s(patch.humanHandoff)) {
+    ack = s(obj(copy.phrases).handoffCaptured);
+  } else {
+    ack = s(obj(copy.phrases).genericCaptured);
+  }
+
+  const assistantMessage =
+    plan.readyForApproval === true
+      ? [ack, s(obj(copy.phrases).readyForApproval), extraNote]
+          .filter(Boolean)
+          .join(" ")
+      : [ack, extraNote, s(obj(plan.nextQuestion).prompt)]
+          .filter(Boolean)
+          .join(" ");
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch,
+    provider,
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [],
+    recommendationNotes: [],
+    forceReadyForApproval: plan.readyForApproval === true,
+  });
+}
+
+function buildClarifyTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  model = "",
+  provider = "local_reasoning",
+  invalidReason = "",
+} = {}) {
+  const retryCount = countAssistantAsksForStep(review, currentStep);
+  const plan = resolveConversationPlan({
+    locale,
+    draft,
+    currentStep,
+    review,
+    allowPark: true,
+  });
+
+  let assistantMessage = "";
+  if (plan.parkedCurrent === true && obj(plan.nextQuestion).key) {
+    if (normalizeSetupLocale(locale) === "az-AZ") {
+      assistantMessage = [
+        buildWarmRedirect(locale, latestMessage),
+        "Bu hissəni sonra bağlayaq.",
+        s(obj(plan.nextQuestion).prompt),
+      ]
+        .filter(Boolean)
+        .join(" ");
+    } else {
+      assistantMessage = [
+        buildWarmRedirect(locale, latestMessage),
+        "We can come back to this part.",
+        s(obj(plan.nextQuestion).prompt),
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+  } else {
+    assistantMessage = buildClarifyMessage({
+      locale,
+      step: currentStep,
+      retryCount,
+      text: latestMessage,
+    });
+  }
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch: buildEmptyAcceptedPatch(),
+    provider,
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [
+      {
+        input: s(latestMessage),
+        reason: s(
+          invalidReason || "The message did not clearly answer the current step."
+        ),
+        suggestedField: normalizeQuestionKey(currentStep),
+      },
+    ],
+    recommendationNotes: [invalidReason],
+    forceReadyForApproval: false,
+  });
+}
+
+function buildCorrectionTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  targetStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  correctionPatch = {},
+  model = "",
+  provider = "local_reasoning",
+} = {}) {
+  const normalizedTarget = normalizeQuestionKey(targetStep);
+  const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionPatch);
+  const plan = resolveConversationPlan({
+    locale,
+    draft: mergedDraft,
+    currentStep,
+    review,
+    preferredStep: currentStep,
+  });
+
+  const targetLabel =
+    normalizeSetupLocale(locale) === "az-AZ"
+      ? `Düzəltdim: ${normalizedTarget}.`
+      : `Updated: ${normalizedTarget}.`;
+
+  let assistantMessage = "";
+  if (plan.readyForApproval === true) {
+    assistantMessage =
+      normalizeSetupLocale(locale) === "az-AZ"
+        ? `${targetLabel} Əla. Setup draft kifayət qədər doludur.`
+        : `${targetLabel} Great. The setup draft is complete enough.`;
+  } else {
+    assistantMessage = [targetLabel, s(obj(plan.nextQuestion).prompt)]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch: correctionPatch,
+    provider,
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [],
+    recommendationNotes: [],
+    forceReadyForApproval: plan.readyForApproval === true,
+  });
+}
+
+function buildSupplementalTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  supplementalSteps = [],
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  acceptedPatch = {},
+  model = "",
+  provider = "local_reasoning",
+} = {}) {
+  const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
+  const plan = resolveConversationPlan({
+    locale,
+    draft: mergedDraft,
+    currentStep,
+    review,
+    preferredStep: currentStep,
+  });
+
+  const capturedLabel =
+    normalizeSetupLocale(locale) === "az-AZ"
+      ? `Bunu ${listToNatural(locale, supplementalSteps)} hissəsi üçün də qeyd etdim.`
+      : `I also captured that for ${listToNatural(locale, supplementalSteps)}.`;
+
+  const assistantMessage = [capturedLabel, s(obj(plan.nextQuestion).prompt)]
+    .filter(Boolean)
+    .join(" ");
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch,
+    provider,
+    model,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [],
+    recommendationNotes: [],
+    forceReadyForApproval: plan.readyForApproval === true,
+  });
 }
 
 const OPENAI_TURN_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
-    "isRelevantToCurrentStep",
-    "confidence",
+    "action",
+    "targetStep",
+    "currentStepAnswered",
     "companyName",
     "description",
     "services",
@@ -742,8 +1551,18 @@ const OPENAI_TURN_SCHEMA = {
     "reason",
   ],
   properties: {
-    isRelevantToCurrentStep: { type: "boolean" },
-    confidence: { type: "number" },
+    action: {
+      type: "string",
+      enum: [
+        "direct_answer",
+        "correction",
+        "supplemental",
+        "off_topic",
+        "unclear",
+      ],
+    },
+    targetStep: { type: "string" },
+    currentStepAnswered: { type: "boolean" },
     companyName: { type: "string" },
     description: { type: "string" },
     services: { type: "array", items: { type: "string" } },
@@ -758,13 +1577,11 @@ const OPENAI_TURN_SCHEMA = {
 
 function buildSystemPrompt(locale = "az-AZ") {
   return [
-    "You are a setup extraction helper for a business onboarding assistant.",
+    "You are the reasoning layer for a business setup assistant.",
     `Reply locale is ${locale}.`,
-    "You do not own the system state.",
-    "Only extract grounded business facts from the latest user message.",
-    "Prefer short precise extraction.",
-    "Never invent services, pricing, contacts, hours, handoff rules, or company names.",
-    "If the latest message does not answer the current step, mark it not relevant.",
+    "Your job is to interpret the latest user message in context.",
+    "Decide whether the user answered the current step, corrected an earlier field, added another useful signal, or went off-topic.",
+    "Do not invent facts.",
     "Return strict JSON only.",
   ].join(" ");
 }
@@ -789,8 +1606,6 @@ function buildUserPrompt({
       null,
       2
     ),
-    "",
-    "Extract only grounded values for the current step and any obviously useful companion field such as website URL.",
   ].join("\n");
 }
 
@@ -801,8 +1616,8 @@ async function callOpenAISetupAssistant({
   preview = {},
   latestMessage = "",
   model = "",
-  timeoutMs = 6000,
-  maxOutputTokens = 350,
+  timeoutMs = 7000,
+  maxOutputTokens = 500,
 } = {}) {
   const client = getOpenAIClient();
   if (!client) {
@@ -830,7 +1645,7 @@ async function callOpenAISetupAssistant({
     text: {
       format: {
         type: "json_schema",
-        name: "setup_assistant_semantic_extraction",
+        name: "setup_assistant_reasoning",
         strict: true,
         schema: OPENAI_TURN_SCHEMA,
       },
@@ -874,241 +1689,6 @@ function buildAcceptedPatchFromOpenAI(payload = {}) {
   });
 }
 
-function buildAckMessage(locale = "az-AZ", currentStep = "", acceptedPatch = {}) {
-  const copy = getSetupCopy(locale);
-  const phrases = obj(copy.phrases);
-  const step = normalizeQuestionKey(currentStep);
-  const patch = obj(acceptedPatch);
-  const identity = obj(patch.identity);
-
-  if (step === "company" && s(identity.businessName)) {
-    return s(phrases.companyCaptured).replace("{value}", s(identity.businessName));
-  }
-
-  if (step === "description" && s(identity.description)) {
-    return s(phrases.descriptionCaptured).replace("{value}", s(identity.description));
-  }
-
-  if (step === "services" && arr(patch.services).length) {
-    return s(phrases.servicesCaptured).replace(
-      "{value}",
-      listToNatural(locale, arr(patch.services))
-    );
-  }
-
-  if (step === "contacts" && arr(patch.contacts).length) {
-    return s(phrases.contactsCaptured || phrases.genericCaptured);
-  }
-
-  if (step === "hours" && arr(patch.hours).length) {
-    return s(phrases.hoursCaptured || phrases.genericCaptured);
-  }
-
-  if (step === "pricing" && s(patch.pricingPosture)) {
-    return s(phrases.pricingCaptured || phrases.genericCaptured);
-  }
-
-  if (step === "handoff" && s(patch.humanHandoff)) {
-    return s(phrases.handoffCaptured || phrases.genericCaptured);
-  }
-
-  if (s(identity.websiteUrl)) {
-    return s(phrases.genericCaptured);
-  }
-
-  return s(phrases.genericCaptured);
-}
-
-function resolveNextQuestionForDraft({
-  locale = "az-AZ",
-  draft = {},
-  currentStep = "",
-} = {}) {
-  const blockers = buildApprovalBlockers(draft);
-
-  if (blockers.length > 0) {
-    return {
-      readyForApproval: false,
-      blockers,
-      nextQuestion: buildQuestion(s(blockers[0].step || currentStep || "company"), locale),
-    };
-  }
-
-  const nextQuestion = getNextQuestion(
-    {},
-    draft,
-    {
-      currentQuestionKey: currentStep,
-      lastAnsweredStep: currentStep,
-    },
-    { locale }
-  );
-
-  return {
-    readyForApproval: isDraftReadyForApproval(draft) && !nextQuestion,
-    blockers: [],
-    nextQuestion: nextQuestion ? obj(nextQuestion) : null,
-  };
-}
-
-function buildRejectedTurn({
-  locale = "az-AZ",
-  currentStep = "",
-  draft = {},
-  review = null,
-  sources = [],
-  latestMessage = "",
-  provider = "local_validation",
-  model = "",
-  usedFallback = false,
-  error = "",
-  invalidReason = "",
-} = {}) {
-  const preview = buildCurrentPreview(draft, review);
-  const resolution = resolveNextQuestionForDraft({
-    locale,
-    draft,
-    currentStep,
-  });
-  const nextQuestion =
-    obj(resolution.nextQuestion).key
-      ? obj(resolution.nextQuestion)
-      : buildQuestion(currentStep || "company", locale);
-
-  const copy = getSetupCopy(locale);
-  const assistantMessage = [
-    s(obj(copy.phrases).redirectPrefix),
-    s(obj(nextQuestion).prompt),
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return {
-    ok: true,
-    provider,
-    model: s(model),
-    usedFallback: usedFallback === true,
-    error: s(error),
-    latestUserInput: compactDraftObject({
-      step: normalizeQuestionKey(currentStep),
-      text: latestMessage,
-    }),
-    phase: hasSetupSignalForInterview(draft) ? "interview" : "source_capture",
-    assistantMessage,
-    message: assistantMessage,
-    nextQuestion,
-    draft: preview,
-    acceptedPatch: buildEmptyAcceptedPatch(),
-    rejectedInputs: [
-      {
-        input: s(latestMessage),
-        reason: s(invalidReason || "The answer did not match the current setup step."),
-        suggestedField: normalizeQuestionKey(currentStep),
-      },
-    ],
-    confidence: {
-      strong: [],
-      unclear: normalizeQuestionKey(currentStep) ? [normalizeQuestionKey(currentStep)] : [],
-      contradictions: [],
-    },
-    recommendation: {
-      notes: [],
-    },
-    sourceSignals: buildSourceSignals(preview, sources),
-    interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings(arr(draft.languages), 8),
-      tone: s(draft.tone),
-      greetingStyle: s(draft.greetingStyle),
-      afterHoursBehavior: s(draft.afterHoursBehavior),
-    }),
-    readyForApproval: false,
-  };
-}
-
-function buildAcceptedTurn({
-  locale = "az-AZ",
-  currentStep = "",
-  draft = {},
-  review = null,
-  sources = [],
-  latestMessage = "",
-  acceptedPatch = {},
-  provider = "local_deterministic",
-  model = "",
-  usedFallback = false,
-  error = "",
-} = {}) {
-  const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
-  const preview = buildCurrentPreview(mergedDraft, review);
-  const resolution = resolveNextQuestionForDraft({
-    locale,
-    draft: mergedDraft,
-    currentStep,
-  });
-  const nextQuestion = resolution.readyForApproval ? null : obj(resolution.nextQuestion);
-  const readyForApproval = resolution.readyForApproval === true;
-  const copy = getSetupCopy(locale);
-  const ack = hasAcceptedPatchSignal(acceptedPatch)
-    ? buildAckMessage(locale, currentStep, acceptedPatch)
-    : "";
-
-  let assistantMessage = "";
-
-  if (readyForApproval) {
-    assistantMessage = s(obj(copy.phrases).readyForApproval);
-  } else if (ack && s(obj(nextQuestion).prompt)) {
-    assistantMessage = `${ack} ${s(obj(nextQuestion).prompt)}`.trim();
-  } else if (ack) {
-    assistantMessage = ack;
-  } else {
-    assistantMessage = s(obj(nextQuestion).prompt);
-  }
-
-  return {
-    ok: true,
-    provider,
-    model: s(model),
-    usedFallback: usedFallback === true,
-    error: s(error),
-    latestUserInput: compactDraftObject({
-      step: normalizeQuestionKey(currentStep),
-      text: latestMessage,
-    }),
-    phase: readyForApproval
-      ? "ready"
-      : hasSetupSignalForInterview(mergedDraft)
-        ? "interview"
-        : "source_capture",
-    assistantMessage,
-    message: assistantMessage,
-    nextQuestion,
-    draft: preview,
-    acceptedPatch: compactDraftObject(acceptedPatch),
-    rejectedInputs: [],
-    confidence: {
-      strong: normalizeQuestionKey(currentStep) ? [normalizeQuestionKey(currentStep)] : [],
-      unclear: [],
-      contradictions: [],
-    },
-    recommendation: {
-      notes: [],
-    },
-    sourceSignals: buildSourceSignals(preview, sources),
-    interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings(
-        [...arr(draft.languages), locale],
-        8
-      ),
-      tone: s(draft.tone),
-      greetingStyle: s(draft.greetingStyle),
-      afterHoursBehavior: s(draft.afterHoursBehavior),
-    }),
-    readyForApproval,
-  };
-}
-
 export async function runSetupAssistantOpenAIOrchestrator({
   session = {},
   draft = {},
@@ -1136,178 +1716,141 @@ export async function runSetupAssistantOpenAIOrchestrator({
   const safeMessage = s(latestMessage);
 
   if (!safeMessage) {
-    const resolution = resolveNextQuestionForDraft({
+    return buildPassiveTurn({
       locale,
-      draft,
       currentStep,
-    });
-
-    const nextQuestion =
-      resolution.readyForApproval === true
-        ? null
-        : obj(resolution.nextQuestion).key
-          ? obj(resolution.nextQuestion)
-          : buildQuestion(currentStep, locale);
-
-    const copy = getSetupCopy(locale);
-    const assistantMessage =
-      resolution.readyForApproval === true
-        ? s(obj(copy.phrases).readyForApproval)
-        : s(obj(nextQuestion).prompt);
-
-    return {
-      ok: true,
-      provider: "local_deterministic",
+      draft,
+      review,
+      sources,
       model: runtime.model,
-      usedFallback: false,
-      error: "",
-      latestUserInput: compactDraftObject({
-        step: normalizeQuestionKey(currentStep),
-        text: "",
-      }),
-      phase:
-        resolution.readyForApproval === true
-          ? "ready"
-          : hasSetupSignalForInterview(draft)
-            ? "interview"
-            : "source_capture",
-      assistantMessage,
-      message: assistantMessage,
-      nextQuestion,
-      draft: preview,
-      acceptedPatch: buildEmptyAcceptedPatch(),
-      rejectedInputs: [],
-      confidence: {
-        strong: [],
-        unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
-        contradictions: [],
-      },
-      recommendation: {
-        notes: [],
-      },
-      sourceSignals: buildSourceSignals(preview, sources),
-      interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
-      aiBehavior: compactDraftObject({
-        languages: uniqueStrings(arr(draft.languages), 8),
-        tone: s(draft.tone),
-        greetingStyle: s(draft.greetingStyle),
-        afterHoursBehavior: s(draft.afterHoursBehavior),
-      }),
-      readyForApproval: resolution.readyForApproval === true,
-    };
+    });
   }
 
   if (isIntentOnlyMessage(safeMessage)) {
-    const resolution = resolveNextQuestionForDraft({
+    const plan = resolveConversationPlan({
       locale,
       draft,
       currentStep,
+      review,
+      allowPark: true,
     });
-
-    const nextQuestion =
-      resolution.readyForApproval === true
-        ? null
-        : obj(resolution.nextQuestion).key
-          ? obj(resolution.nextQuestion)
-          : buildQuestion(currentStep, locale);
-
     const copy = getSetupCopy(locale);
     const assistantMessage =
-      resolution.readyForApproval === true
+      plan.readyForApproval === true
         ? s(obj(copy.phrases).readyForApproval)
-        : s(obj(nextQuestion).prompt);
+        : s(obj(plan.nextQuestion).prompt);
 
-    return {
-      ok: true,
-      provider: "local_deterministic",
-      model: runtime.model,
-      usedFallback: false,
-      error: "",
-      latestUserInput: compactDraftObject({
-        step: normalizeQuestionKey(currentStep),
-        text: safeMessage,
-      }),
-      phase:
-        resolution.readyForApproval === true
-          ? "ready"
-          : hasSetupSignalForInterview(draft)
-            ? "interview"
-            : "source_capture",
-      assistantMessage,
-      message: assistantMessage,
-      nextQuestion,
-      draft: preview,
-      acceptedPatch: buildEmptyAcceptedPatch(),
-      rejectedInputs: [],
-      confidence: {
-        strong: [],
-        unclear: nextQuestion?.key ? [s(nextQuestion.key)] : [],
-        contradictions: [],
-      },
-      recommendation: {
-        notes: [],
-      },
-      sourceSignals: buildSourceSignals(preview, sources),
-      interviewPlan: buildInterviewPlan(currentStep, nextQuestion),
-      aiBehavior: compactDraftObject({
-        languages: uniqueStrings(arr(draft.languages), 8),
-        tone: s(draft.tone),
-        greetingStyle: s(draft.greetingStyle),
-        afterHoursBehavior: s(draft.afterHoursBehavior),
-      }),
-      readyForApproval: resolution.readyForApproval === true,
-    };
-  }
-
-  const localResult = buildLocalAcceptedPatch(currentStep, safeMessage, draft);
-  const localAcceptedPatch = obj(localResult.acceptedPatch);
-  const localValidation = obj(localResult.validation);
-
-  if (localValidation.accepted === true && hasAcceptedPatchSignal(localAcceptedPatch)) {
-    return buildAcceptedTurn({
+    return buildTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      acceptedPatch: localAcceptedPatch,
-      provider: "local_deterministic",
+      acceptedPatch: buildEmptyAcceptedPatch(),
+      provider: "local_reasoning",
       model: runtime.model,
-      usedFallback: false,
-      error: "",
+      assistantMessage,
+      nextQuestion: plan.nextQuestion,
+      rejectedInputs: [],
+      recommendationNotes: [],
+      forceReadyForApproval: plan.readyForApproval === true,
+    });
+  }
+
+  const directResult = buildPatchForStep(currentStep, safeMessage, draft);
+  const directPatch = obj(directResult.patch);
+  const directValidation = obj(directResult.validation);
+
+  if (directValidation.accepted === true && hasAcceptedPatchSignal(directPatch)) {
+    const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
+    const mergedPatch = mergeAcceptedPatches(directPatch, secondary.patch);
+    const extraNote =
+      secondary.steps.length > 0
+        ? normalizeSetupLocale(locale) === "az-AZ"
+          ? `Əlavə olaraq ${listToNatural(locale, secondary.steps)} üçün də faydalı məlumat gördüm.`
+          : `I also picked up useful info for ${listToNatural(locale, secondary.steps)}.`
+        : "";
+
+    return buildDirectAnswerTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: mergedPatch,
+      model: runtime.model,
+      provider: "local_reasoning",
+      extraNote,
+    });
+  }
+
+  const correctionTarget = detectCorrectionTargetStep(safeMessage, currentStep);
+  if (correctionTarget) {
+    const correctionText = stripCorrectionPrefix(safeMessage);
+    const correctionResult = buildPatchForStep(correctionTarget, correctionText, draft);
+
+    if (
+      correctionResult.validation?.accepted === true &&
+      hasAcceptedPatchSignal(correctionResult.patch)
+    ) {
+      return buildCorrectionTurn({
+        locale,
+        currentStep,
+        targetStep: correctionTarget,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        correctionPatch: correctionResult.patch,
+        model: runtime.model,
+        provider: "local_reasoning",
+      });
+    }
+  }
+
+  const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
+  if (hasAcceptedPatchSignal(secondary.patch)) {
+    return buildSupplementalTurn({
+      locale,
+      currentStep,
+      supplementalSteps: secondary.steps,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      acceptedPatch: secondary.patch,
+      model: runtime.model,
+      provider: "local_reasoning",
     });
   }
 
   if (runtime.forceFallback === true || forceFallback === true) {
-    return buildRejectedTurn({
+    return buildClarifyTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      provider: "local_validation",
       model: runtime.model,
-      usedFallback: true,
-      error: "openai_setup_assistant_forced_fallback",
-      invalidReason: s(localValidation.reason),
+      provider: "local_reasoning",
+      invalidReason: s(directValidation.reason),
     });
   }
 
   if (!hasOpenAISetupAssistant()) {
-    return buildRejectedTurn({
+    return buildClarifyTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      provider: "local_validation",
       model: runtime.model,
-      usedFallback: true,
-      error: "openai_setup_assistant_unavailable",
-      invalidReason: s(localValidation.reason),
+      provider: "local_reasoning",
+      invalidReason: s(directValidation.reason),
     });
   }
 
@@ -1323,64 +1866,107 @@ export async function runSetupAssistantOpenAIOrchestrator({
       maxOutputTokens: runtime.maxOutputTokens,
     });
 
-    const openAIAcceptedPatch = buildAcceptedPatchFromOpenAI(openaiPayload);
-    const mergedAcceptedPatch = mergeAcceptedPatches(localAcceptedPatch, openAIAcceptedPatch);
-
-    const validationValue = extractValidationValueFromAcceptedPatch(
-      currentStep,
-      mergedAcceptedPatch
+    const action = s(openaiPayload.action).toLowerCase();
+    const targetStep = normalizeQuestionKey(
+      s(openaiPayload.targetStep || currentStep)
     );
+    const modelPatch = buildAcceptedPatchFromOpenAI(openaiPayload);
 
-    const openAIValidation = validateStepAnswer(currentStep, validationValue, draft);
-    const mergedDraft = buildDraftWithAcceptedPatch(draft, mergedAcceptedPatch);
-    const touchesCurrentStep = patchTouchesCurrentStep(currentStep, mergedAcceptedPatch);
-
-    const accepted =
-      openAIValidation.accepted === true &&
-      (touchesCurrentStep || isDraftReadyForApproval(mergedDraft) === true);
-
-    if (!accepted) {
-      return buildRejectedTurn({
+    if (
+      action === "direct_answer" &&
+      targetStep === currentStep &&
+      hasAcceptedPatchSignal(modelPatch)
+    ) {
+      return buildDirectAnswerTurn({
         locale,
         currentStep,
         draft,
         review,
         sources,
         latestMessage: safeMessage,
-        provider: "openai",
+        acceptedPatch: modelPatch,
         model: runtime.model,
-        usedFallback: false,
-        error: "",
-        invalidReason: s(openAIValidation.reason || openaiPayload.reason || localValidation.reason),
+        provider: "openai_reasoning",
       });
     }
 
-    return buildAcceptedTurn({
+    if (
+      action === "correction" &&
+      targetStep &&
+      hasAcceptedPatchSignal(modelPatch)
+    ) {
+      return buildCorrectionTurn({
+        locale,
+        currentStep,
+        targetStep,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        correctionPatch: modelPatch,
+        model: runtime.model,
+        provider: "openai_reasoning",
+      });
+    }
+
+    if (action === "supplemental" && hasAcceptedPatchSignal(modelPatch)) {
+      const supplementalSteps = STEP_ORDER.filter((step) => {
+        const value = normalizeMessage(
+          step === "company"
+            ? `${s(obj(modelPatch.identity).businessName)} ${s(obj(modelPatch.identity).websiteUrl)}`
+            : step === "description"
+              ? s(obj(modelPatch.identity).description)
+              : step === "services"
+                ? arr(modelPatch.services).join(", ")
+                : step === "contacts"
+                  ? arr(modelPatch.contacts).join(", ")
+                  : step === "hours"
+                    ? arr(modelPatch.hours).join(", ")
+                    : step === "pricing"
+                      ? s(modelPatch.pricingPosture)
+                      : step === "handoff"
+                        ? s(modelPatch.humanHandoff)
+                        : ""
+        );
+        return Boolean(value) && step !== currentStep;
+      });
+
+      return buildSupplementalTurn({
+        locale,
+        currentStep,
+        supplementalSteps,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        acceptedPatch: modelPatch,
+        model: runtime.model,
+        provider: "openai_reasoning",
+      });
+    }
+
+    return buildClarifyTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      acceptedPatch: mergedAcceptedPatch,
-      provider: "openai",
       model: runtime.model,
-      usedFallback: false,
-      error: "",
+      provider: "openai_reasoning",
+      invalidReason: s(openaiPayload.reason || directValidation.reason),
     });
   } catch (error) {
-    return buildRejectedTurn({
+    return buildClarifyTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      provider: "local_validation",
       model: runtime.model,
-      usedFallback: true,
-      error: s(error?.message, "openai_setup_assistant_failed"),
-      invalidReason: s(localValidation.reason),
+      provider: "local_reasoning",
+      invalidReason: s(error?.message || directValidation.reason),
     });
   }
 }
@@ -1388,16 +1974,20 @@ export async function runSetupAssistantOpenAIOrchestrator({
 export const __test__ = {
   buildCurrentPreview,
   resolveReplyLocale,
-  buildLocalAcceptedPatch,
+  buildPatchForStep,
   buildDraftWithAcceptedPatch,
   patchTouchesCurrentStep,
   hasAcceptedPatchSignal,
   buildSourceSignals,
   isIntentOnlyMessage,
   mergeAcceptedPatches,
-  buildAckMessage,
-  extractValidationValueFromAcceptedPatch,
-  resolveNextQuestionForDraft,
+  detectCorrectionTargetStep,
+  stripCorrectionPrefix,
+  extractCrossStepSignals,
+  resolveConversationPlan,
+  countAssistantAsksForStep,
+  isSocialTurn,
+  isConfusionTurn,
   setCachedClient(client = null) {
     cachedClient = client;
   },

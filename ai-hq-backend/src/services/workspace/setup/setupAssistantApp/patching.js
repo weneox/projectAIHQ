@@ -11,8 +11,6 @@ import {
 } from "./sessionPayload.js";
 import {
   INTENT_ONLY_RESPONSES,
-  getNextQuestion,
-  isQuestionSatisfied,
   normalizeQuestionKey,
 } from "./questions.js";
 import {
@@ -246,6 +244,11 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
         activeSection: "hours",
         lastUpdatedSection: "hours",
       },
+      progress: {
+        lastAnsweredStep: "hours",
+        currentQuestionKey: "hours",
+        updatedAt: nowIso(),
+      },
     });
   }
 
@@ -255,6 +258,11 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
       assistantState: {
         activeSection: "hours",
         lastUpdatedSection: "hours",
+      },
+      progress: {
+        lastAnsweredStep: "hours",
+        currentQuestionKey: "hours",
+        updatedAt: nowIso(),
       },
     });
   }
@@ -270,6 +278,11 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
       assistantState: {
         activeSection: "pricing",
         lastUpdatedSection: "pricing",
+      },
+      progress: {
+        lastAnsweredStep: "pricing",
+        currentQuestionKey: "pricing",
+        updatedAt: nowIso(),
       },
     });
   }
@@ -357,6 +370,11 @@ function normalizeDirectPatchBody(body = {}) {
   ]);
   if (assistantState.provided) {
     out.assistantState = sanitizeAssistantState(obj(assistantState.value));
+  }
+
+  const progress = pickAliasedField(root, ["progress"]);
+  if (progress.provided) {
+    out.progress = sanitizeProgress(obj(progress.value));
   }
 
   const languages = pickAliasedField(root, ["languages"]);
@@ -567,87 +585,79 @@ export function normalizeSetupAssistantDraftPatchBody(body = {}, current = {}) {
   return mergeDraftState(directPatch, answerPatch);
 }
 
-function removeSkippedIfAnswered(skipped = [], draft = {}) {
-  return arr(skipped)
-    .map((item) => normalizeStep(item))
-    .filter(Boolean)
-    .filter((item, index, list) => list.indexOf(item) === index)
-    .filter((item) => !isQuestionSatisfied(item, draft));
+function mergeSkippedQuestions(existing = [], incoming = []) {
+  return uniqueStrings(
+    [...arr(existing), ...arr(incoming)].map((item) => normalizeStep(item)).filter(Boolean),
+    32
+  );
 }
 
-function resolveNextQuestionKey(existing = {}, patch = {}, merged = {}, locale = "az-AZ") {
+function resolveProgressState(existing = {}, patch = {}) {
   const existingProgress = obj(existing.progress);
   const patchProgress = obj(patch.progress);
-  const preferredQuestionKey = normalizeStep(
-    s(obj(patch.assistantState).activeSection) ||
-      s(patchProgress.currentQuestionKey) ||
+  const existingAssistant = obj(existing.assistantState);
+  const patchAssistant = obj(patch.assistantState);
+
+  const currentQuestionKey = normalizeStep(
+    s(patchProgress.currentQuestionKey) ||
+      s(patchAssistant.activeSection) ||
       s(existingProgress.currentQuestionKey) ||
-      s(patchProgress.lastAnsweredStep) ||
-      s(existingProgress.lastAnsweredStep)
+      s(existingAssistant.activeSection) ||
+      ""
   );
 
-  const nextQuestion = getNextQuestion(
-    {},
-    merged,
-    {
-      currentQuestionKey: preferredQuestionKey,
-      lastAnsweredStep:
-        normalizeStep(s(patchProgress.lastAnsweredStep)) ||
-        normalizeStep(s(existingProgress.lastAnsweredStep)),
-    },
-    { locale }
+  const lastAnsweredStep = normalizeStep(
+    s(patchProgress.lastAnsweredStep) || s(existingProgress.lastAnsweredStep) || ""
   );
 
-  return {
-    nextQuestionKey: normalizeStep(
-      s(obj(nextQuestion).key || obj(nextQuestion).step || preferredQuestionKey)
+  return sanitizeProgress({
+    ...existingProgress,
+    ...patchProgress,
+    skippedQuestions: mergeSkippedQuestions(
+      existingProgress.skippedQuestions,
+      patchProgress.skippedQuestions
     ),
-    nextQuestion,
-  };
+    currentQuestionKey,
+    lastAnsweredStep,
+    updatedAt: s(patchProgress.updatedAt || nowIso()),
+  });
+}
+
+function resolveAssistantState(existing = {}, patch = {}) {
+  const existingAssistant = obj(existing.assistantState);
+  const patchAssistant = obj(patch.assistantState);
+  const patchProgress = obj(patch.progress);
+
+  const activeSection = normalizeStep(
+    s(patchAssistant.activeSection) ||
+      s(patchProgress.currentQuestionKey) ||
+      s(existingAssistant.activeSection) ||
+      ""
+  );
+
+  const lastUpdatedSection = normalizeStep(
+    s(patchAssistant.lastUpdatedSection) ||
+      s(patchProgress.lastAnsweredStep) ||
+      s(existingAssistant.lastUpdatedSection) ||
+      activeSection
+  );
+
+  return sanitizeAssistantState({
+    ...existingAssistant,
+    ...patchAssistant,
+    activeSection,
+    lastUpdatedSection,
+  });
 }
 
 export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
   const existing = normalizeStoredSetupAssistantPayload(current, seed);
-  const existingProgress = obj(existing.progress);
-  const patchProgress = obj(patch.progress);
-  const locale = resolveDraftLocale(current, seed);
-
   const mergedCore = mergeSetupAssistantCore(existing, patch);
-  const mergedSkipped = uniqueStrings(
-    [
-      ...arr(existingProgress.skippedQuestions),
-      ...arr(patchProgress.skippedQuestions),
-    ],
-    32
-  );
-
-  const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, mergedCore);
-  const { nextQuestionKey } = resolveNextQuestionKey(
-    existing,
-    patch,
-    mergedCore,
-    locale
-  );
 
   const next = {
     ...mergedCore,
-    progress: sanitizeProgress({
-      ...existingProgress,
-      ...patchProgress,
-      skippedQuestions: normalizedSkipped,
-      currentQuestionKey: nextQuestionKey,
-      updatedAt: nowIso(),
-    }),
-    assistantState: sanitizeAssistantState({
-      ...obj(existing.assistantState),
-      ...obj(patch.assistantState),
-      activeSection: nextQuestionKey || "",
-      lastUpdatedSection:
-        normalizeStep(
-          s(obj(patch.assistantState).lastUpdatedSection) ||
-            s(obj(existing.assistantState).lastUpdatedSection)
-        ) || "",
-    }),
+    progress: resolveProgressState(existing, patch),
+    assistantState: resolveAssistantState(existing, patch),
   };
 
   return buildStoredSetupAssistantPayload(next, seed);
@@ -718,6 +728,20 @@ function buildSourceMetadataPatchFromAcceptedIdentity(
     "website",
     websiteUrl,
     currentSourceMetadata
+  );
+}
+
+function resolveNextStepFromTurn(turn = {}, currentDraft = {}) {
+  const safeTurn = obj(turn);
+  const latestUserInput = obj(safeTurn.latestUserInput);
+  const nextQuestion = obj(safeTurn.nextQuestion);
+  const currentProgress = obj(currentDraft.progress);
+
+  return normalizeStep(
+    s(nextQuestion.step || nextQuestion.key) ||
+      s(latestUserInput.step) ||
+      s(currentProgress.currentQuestionKey) ||
+      ""
   );
 }
 
@@ -799,39 +823,14 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
       acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle
     ),
     afterHoursBehavior: s(
-      acceptedAiBehavior.afterHoursBehavior ||
-        currentDraft.afterHoursBehavior
+      acceptedAiBehavior.afterHoursBehavior || currentDraft.afterHoursBehavior
     ),
   });
 
-  const mergedDraft = mergeSetupAssistantCore(currentDraft, partialPatch);
-  const locale = resolveDraftLocale(mergedDraft, currentDraft);
   const lastAnsweredStep = normalizeStep(
     s(obj(safeTurn.latestUserInput).step).toLowerCase()
   );
-
-  const fallbackQuestion = getNextQuestion(
-    {},
-    mergedDraft,
-    {
-      currentQuestionKey: normalizeStep(
-        s(obj(safeTurn.nextQuestion).step || obj(safeTurn.nextQuestion).key)
-      ),
-      lastAnsweredStep,
-    },
-    { locale }
-  );
-
-  const nextStep = normalizeStep(
-    s(
-      obj(safeTurn.nextQuestion).step ||
-        obj(safeTurn.nextQuestion).key ||
-        obj(fallbackQuestion).step ||
-        obj(fallbackQuestion).key ||
-        obj(currentDraft.progress).currentQuestionKey ||
-        lastAnsweredStep
-    )
-  );
+  const nextStep = resolveNextStepFromTurn(safeTurn, currentDraft);
 
   return compactDraftObject({
     ...partialPatch,
