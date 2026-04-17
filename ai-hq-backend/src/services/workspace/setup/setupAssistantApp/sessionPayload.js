@@ -292,7 +292,10 @@ function buildMinimalSourceSignals(setup = {}) {
       8
     ),
     strongestEvidence: uniqueStrings(arr(sourceMetadata.evidenceSummary), 12),
-    discoveredPublicClaims: uniqueStrings(arr(sourceMetadata.evidenceSummary), 12),
+    discoveredPublicClaims: uniqueStrings(
+      arr(sourceMetadata.evidenceSummary),
+      12
+    ),
     companyNameCandidates: uniqueStrings([businessProfile.companyName], 8),
     descriptionCandidates: uniqueStrings([businessProfile.description], 8),
     serviceCandidates: uniqueStrings(services, 12),
@@ -324,8 +327,11 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   if (arr(draftPreview.coreServices).length) strong.push("services_present");
   else unclear.push("services_missing");
 
-  if (arr(draftPreview.contactRoutes).length) strong.push("contact_route_present");
-  else unclear.push("contact_route_missing");
+  if (arr(draftPreview.contactRoutes).length) {
+    strong.push("contact_route_present");
+  } else {
+    unclear.push("contact_route_missing");
+  }
 
   if (arr(draftPreview.hours).length) strong.push("hours_present");
   else unclear.push("hours_missing");
@@ -417,7 +423,8 @@ function buildAssistantFromStoredBrain({
 } = {}) {
   const brain = sanitizeBrainSnapshot(storedBrain);
   const lastAssistantTurn =
-    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
+    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") ||
+    {};
 
   const sourceSignals = sanitizeBrainSourceSignals(
     hasMeaningfulBrainSourceSignals(obj(brain.sourceSignals))
@@ -481,6 +488,11 @@ function buildAssistantFromStoredBrain({
       ? sanitizeBrainRecommendation(brain.recommendation)
       : { notes: [] };
 
+  const resolvedAssistantMessage = compactText(
+    s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+    420
+  );
+
   return {
     mode: "brain_v3",
     nextQuestion: nextQuestion.key ? nextQuestion : null,
@@ -495,38 +507,14 @@ function buildAssistantFromStoredBrain({
             intent: "finalize_review",
           }
         : null,
-      message:
-        readyForApproval === true
-          ? compactText(
-              s(
-                brain.assistantMessage ||
-                  brain.message ||
-                  lastAssistantTurn.text
-              ),
-              420
-            )
-          : "",
+      message: readyForApproval === true ? resolvedAssistantMessage : "",
     },
     quickCapture: {},
     servicesCatalog,
-    sourceInsights: uniqueStrings(
-      arr(sourceSignals.strongestEvidence),
-      12
-    ),
+    sourceInsights: uniqueStrings(arr(sourceSignals.strongestEvidence), 12),
     phase,
-    message: compactText(
-      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
-      420
-    ),
-    assistantMessage: compactText(
-      s(
-        brain.assistantMessage ||
-          brain.message ||
-          assistant?.assistantMessage ||
-          lastAssistantTurn.text
-      ),
-      420
-    ),
+    message: resolvedAssistantMessage,
+    assistantMessage: resolvedAssistantMessage,
     timeline: arr(timeline).map(normalizeTimelineTurn),
     draft: obj(draftPreview),
     confidence,
@@ -694,7 +682,9 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       ),
       420
     ),
-    nextQuestion: obj(safeTurn.nextQuestion).key ? obj(safeTurn.nextQuestion) : null,
+    nextQuestion: obj(safeTurn.nextQuestion).key
+      ? obj(safeTurn.nextQuestion)
+      : null,
     confidence: sanitizeBrainConfidence(safeTurn.confidence),
     recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
     sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
