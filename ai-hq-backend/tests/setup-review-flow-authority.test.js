@@ -81,11 +81,13 @@ test("review flow keeps AI-native setup authority while source signals stay fail
 
   const activeQuestionKeys =
     payload?.assistant?.interviewPlan?.activeQuestionKeys || [];
+  const sourceSignals = payload?.assistant?.sourceSignals || {};
 
   assert.equal(payload.assistant.nextQuestion.key, "handoff");
   assert.equal(payload.assistant.readyForApproval, false);
   assert.ok(!("assistantBrain" in payload));
-  assert.equal(payload.assistant.sourceSignals.primarySourceType, "");
+  assert.ok(!("primarySourceType" in sourceSignals));
+  assert.equal(sourceSignals.pageCount, 0);
   assert.ok(!activeQuestionKeys.includes("languages"));
   assert.ok(!activeQuestionKeys.includes("tone"));
   assert.ok(!activeQuestionKeys.includes("greeting"));
@@ -141,8 +143,13 @@ test("review flow keeps setup in interview mode until stored brain readiness is 
   );
 
   assert.equal(payload.assistant.readyForApproval, false);
-  assert.equal(payload.assistant.nextQuestion.key, "handoff");
+  assert.equal(payload.assistant.nextQuestion.key, "pricing_behavior");
   assert.equal(payload.assistant.phase, "interview");
-  assert.equal(payload.assistant.sourceSignals.primarySourceType, "");
+  assert.ok(!("primarySourceType" in (payload.assistant.sourceSignals || {})));
+  assert.equal(payload.assistant.sourceSignals?.pageCount, 0);
+  assert.deepEqual(
+    (payload.assistant.approvalBlockers || []).map((entry) => entry.step),
+    ["pricing_behavior", "location_behavior", "contact_behavior", "handoff_behavior"]
+  );
   assert.deepEqual(payload.assistant.confidence.contradictions, []);
 });
