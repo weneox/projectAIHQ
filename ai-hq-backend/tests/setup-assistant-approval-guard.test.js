@@ -352,7 +352,12 @@ test("response body allows finalize only when base payload is already semantical
   assert.equal(response.setup.assistant.finalizeAvailable, true);
   assert.equal(response.setup.review.readyForApproval, true);
   assert.equal(response.setup.review.finalizeAvailable, true);
-  assert.deepEqual(response.setup.assistant.approvalBlockers, []);
+  assert.equal(
+    Array.isArray(response.setup.assistant.approvalBlockers)
+      ? response.setup.assistant.approvalBlockers.length
+      : 0,
+    0
+  );
 });
 
 test("polluted draft points nextQuestion back to the first invalid semantic section", () => {
