@@ -4,7 +4,11 @@ import {
   parsePricingNote,
   parseServicesNote,
 } from "../setupAssistantParser.js";
-import { isBehaviorStepRelevant, normalizeQuestionKey } from "./questions.js";
+import {
+  isBehaviorStepRelevant,
+  isQuestionSatisfied,
+  normalizeQuestionKey,
+} from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
@@ -799,6 +803,15 @@ export function buildApprovalBlockers(draft = {}) {
 
   return steps
     .map((step) => {
+      if (!isQuestionSatisfied(step, draft)) {
+        return {
+          step,
+          reasonCode: "empty_answer",
+          reason: "Empty answer.",
+          currentValue: "",
+        };
+      }
+
       const value = extractDraftFieldValue(step, draft);
       const validation = validateStepAnswer(step, value, draft);
 

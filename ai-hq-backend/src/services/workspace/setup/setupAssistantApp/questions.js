@@ -593,7 +593,7 @@ function hasPricingBehaviorConfigured(draft = {}) {
     s(policy.preferredTargetUrl) ||
       s(policy.fallbackTargetUrl) ||
       s(policy.note) ||
-      normalizePricingBehaviorMode(policy.mode) !==
+      normalizePricingBehaviorMode(policy.mode || defaults.mode) !==
         normalizePricingBehaviorMode(defaults.mode) ||
       policy.askServiceFirst === true
   );
@@ -607,7 +607,7 @@ function hasLocationBehaviorConfigured(draft = {}) {
     s(policy.preferredTargetUrl) ||
       s(policy.fallbackTargetUrl) ||
       s(policy.note) ||
-      normalizeLocationBehaviorMode(policy.mode) !==
+      normalizeLocationBehaviorMode(policy.mode || defaults.mode) !==
         normalizeLocationBehaviorMode(defaults.mode)
   );
 }
@@ -620,7 +620,7 @@ function hasBookingBehaviorConfigured(draft = {}) {
     s(policy.preferredTargetUrl) ||
       s(policy.fallbackTargetUrl) ||
       s(policy.note) ||
-      normalizeBookingBehaviorMode(policy.mode) !==
+      normalizeBookingBehaviorMode(policy.mode || defaults.mode) !==
         normalizeBookingBehaviorMode(defaults.mode) ||
       policy.collectLeadFirst === true
   );
@@ -635,7 +635,7 @@ function hasContactBehaviorConfigured(draft = {}) {
       s(policy.fallbackTargetUrl) ||
       s(policy.note) ||
       s(policy.preferredChannel) ||
-      normalizeContactBehaviorMode(policy.mode) !==
+      normalizeContactBehaviorMode(policy.mode || defaults.mode) !==
         normalizeContactBehaviorMode(defaults.mode)
   );
 }
@@ -646,7 +646,7 @@ function hasHandoffBehaviorConfigured(draft = {}) {
 
   return Boolean(
     s(policy.note) ||
-      normalizeHandoffBehaviorMode(policy.mode) !==
+      normalizeHandoffBehaviorMode(policy.mode || defaults.mode) !==
         normalizeHandoffBehaviorMode(defaults.mode) ||
       policy.requiresReason === false
   );

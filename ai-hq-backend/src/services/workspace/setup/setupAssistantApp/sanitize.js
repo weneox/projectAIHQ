@@ -394,7 +394,12 @@ export function sanitizeHandoffPolicy(value = {}) {
 
 export function sanitizeAssistantBehaviorDraft(value = {}) {
   const source = obj(value);
-  const nested = obj(source.assistantBehavior || source.assistant_behavior);
+  const nested = obj(
+    source.assistantBehavior ||
+      source.assistant_behavior ||
+      source.assistantBehaviorDraft ||
+      source.assistant_behavior_draft
+  );
   const defaults = buildDefaultAssistantBehaviorDraft();
 
   return {
@@ -596,14 +601,36 @@ function mergeHandoffPolicy(left = {}, right = {}) {
 
 export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
   const a = sanitizeAssistantBehaviorDraft(left);
-  const b = sanitizeAssistantBehaviorDraft(right);
+  const source = obj(right);
+  const nested = obj(
+    source.assistantBehaviorDraft ||
+      source.assistant_behavior_draft ||
+      source.assistantBehavior ||
+      source.assistant_behavior
+  );
+
+  const pricingPatch = obj(
+    source.pricingPolicy || source.pricing_policy || nested.pricingPolicy
+  );
+  const locationPatch = obj(
+    source.locationPolicy || source.location_policy || nested.locationPolicy
+  );
+  const bookingPatch = obj(
+    source.bookingPolicy || source.booking_policy || nested.bookingPolicy
+  );
+  const contactPatch = obj(
+    source.contactPolicy || source.contact_policy || nested.contactPolicy
+  );
+  const handoffPatch = obj(
+    source.handoffPolicy || source.handoff_policy || nested.handoffPolicy
+  );
 
   return {
-    pricingPolicy: mergePricingPolicy(a.pricingPolicy, b.pricingPolicy),
-    locationPolicy: mergeLocationPolicy(a.locationPolicy, b.locationPolicy),
-    bookingPolicy: mergeBookingPolicy(a.bookingPolicy, b.bookingPolicy),
-    contactPolicy: mergeContactPolicy(a.contactPolicy, b.contactPolicy),
-    handoffPolicy: mergeHandoffPolicy(a.handoffPolicy, b.handoffPolicy),
+    pricingPolicy: mergePricingPolicy(a.pricingPolicy, pricingPatch),
+    locationPolicy: mergeLocationPolicy(a.locationPolicy, locationPatch),
+    bookingPolicy: mergeBookingPolicy(a.bookingPolicy, bookingPatch),
+    contactPolicy: mergeContactPolicy(a.contactPolicy, contactPatch),
+    handoffPolicy: mergeHandoffPolicy(a.handoffPolicy, handoffPatch),
   };
 }
 
@@ -624,7 +651,12 @@ export function mergeSetupAssistantCore(left = {}, right = {}) {
     assistantState: mergeAssistantState(a.assistantState, b.assistantState),
     assistantBehaviorDraft: mergeAssistantBehaviorDraft(
       a.assistantBehaviorDraft,
-      b.assistantBehaviorDraft
+      obj(
+        rightSource.assistantBehaviorDraft ||
+          rightSource.assistant_behavior_draft ||
+          rightSource.assistantBehavior ||
+          rightSource.assistant_behavior
+      )
     ),
     progress: mergeProgress(a.progress, b.progress),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,

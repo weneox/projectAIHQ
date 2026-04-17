@@ -1109,6 +1109,18 @@ function buildPatchForStep(step = "", text = "", draft = {}) {
     patch.pricingPosture = extractPricingValue(text, arr(draft.services));
   } else if (normalizedStep === "handoff") {
     patch.humanHandoff = extractHandoffValue(text);
+  } else if (
+    [
+      "pricing_behavior",
+      "location_behavior",
+      "booking_behavior",
+      "contact_behavior",
+      "handoff_behavior",
+    ].includes(normalizedStep)
+  ) {
+    patch.assistantBehaviorDraft = obj(
+      patchFromAnswer(normalizedStep, text, draft).assistantBehaviorDraft
+    );
   }
 
   return {
@@ -1158,10 +1170,14 @@ function stripCorrectionPrefix(text = "") {
 function extractCrossStepSignals(text = "", currentStep = "", draft = {}) {
   const patches = [];
   const normalizedCurrent = normalizeQuestionKey(currentStep);
+  const currentIsBehavior = /_behavior$/.test(normalizedCurrent);
+  const candidateSteps = STEP_ORDER.filter((step) => {
+    if (step === normalizedCurrent) return false;
+    if (currentIsBehavior) return /_behavior$/.test(step);
+    return /_behavior$/.test(step);
+  });
 
-  for (const step of STEP_ORDER) {
-    if (step === normalizedCurrent) continue;
-
+  for (const step of candidateSteps) {
     const result = buildPatchForStep(step, text, draft);
     if (hasAcceptedPatchSignal(result.patch)) {
       patches.push({
@@ -1544,6 +1560,31 @@ function buildDirectAnswerTurn({
     ack = s(obj(copy.phrases).pricingCaptured);
   } else if (currentStep === "handoff" && s(patch.humanHandoff)) {
     ack = s(obj(copy.phrases).handoffCaptured);
+  } else if (
+    currentStep === "pricing_behavior" &&
+    Object.keys(obj(obj(patch.assistantBehaviorDraft).pricingPolicy)).length
+  ) {
+    ack = s(obj(copy.phrases).pricingBehaviorCaptured);
+  } else if (
+    currentStep === "location_behavior" &&
+    Object.keys(obj(obj(patch.assistantBehaviorDraft).locationPolicy)).length
+  ) {
+    ack = s(obj(copy.phrases).locationBehaviorCaptured);
+  } else if (
+    currentStep === "booking_behavior" &&
+    Object.keys(obj(obj(patch.assistantBehaviorDraft).bookingPolicy)).length
+  ) {
+    ack = s(obj(copy.phrases).bookingBehaviorCaptured);
+  } else if (
+    currentStep === "contact_behavior" &&
+    Object.keys(obj(obj(patch.assistantBehaviorDraft).contactPolicy)).length
+  ) {
+    ack = s(obj(copy.phrases).contactBehaviorCaptured);
+  } else if (
+    currentStep === "handoff_behavior" &&
+    Object.keys(obj(obj(patch.assistantBehaviorDraft).handoffPolicy)).length
+  ) {
+    ack = s(obj(copy.phrases).handoffBehaviorCaptured);
   } else {
     ack = s(obj(copy.phrases).genericCaptured);
   }
@@ -1979,7 +2020,35 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
   }
 
-  const directResult = buildPatchForStep(currentStep, safeMessage, draft);
+  const correctionTarget = detectCorrectionTargetStep(safeMessage, currentStep);
+  if (correctionTarget && correctionTarget !== currentStep) {
+    const correctionText = stripCorrectionPrefix(safeMessage);
+    const correctionResult = buildPatchForStep(correctionTarget, correctionText, draft);
+
+    if (
+      correctionResult.validation?.accepted === true &&
+      hasAcceptedPatchSignal(correctionResult.patch)
+    ) {
+      return buildCorrectionTurn({
+        locale,
+        currentStep,
+        targetStep: correctionTarget,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        correctionPatch: correctionResult.patch,
+        model: runtime.model,
+        provider: "local_reasoning",
+      });
+    }
+  }
+
+  const directInput =
+    correctionTarget && correctionTarget === currentStep
+      ? stripCorrectionPrefix(safeMessage)
+      : safeMessage;
+  const directResult = buildPatchForStep(currentStep, directInput, draft);
   const directPatch = obj(directResult.patch);
   const directValidation = obj(directResult.validation);
 
@@ -2007,7 +2076,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
   }
 
-  const correctionTarget = detectCorrectionTargetStep(safeMessage, currentStep);
   if (correctionTarget) {
     const correctionText = stripCorrectionPrefix(safeMessage);
     const correctionResult = buildPatchForStep(correctionTarget, correctionText, draft);

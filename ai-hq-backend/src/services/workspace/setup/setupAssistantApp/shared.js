@@ -170,6 +170,12 @@ export function normalizeLocationBehaviorMode(value = "") {
   if (raw === "text then map") return "text_then_map";
   if (raw === "map first") return "map_first";
   if (raw === "text only") return "text_only";
+  if (
+    (raw.includes("address") || raw.includes("unvan") || raw.includes("ünvan")) &&
+    (raw.includes("map") || raw.includes("xerite") || raw.includes("xəritə"))
+  ) {
+    return "text_then_map";
+  }
 
   if (LOCATION_BEHAVIOR_MODES.includes(raw)) return raw;
   return "";
