@@ -134,8 +134,9 @@ function buildCurrentPreview(draft = {}, review = null) {
       if (row.appointmentOnly === true) {
         return [day, "appointment only"].filter(Boolean).join(" ");
       }
-      if (row.closed === true)
+      if (row.closed === true) {
         return [day, "closed"].filter(Boolean).join(" ");
+      }
       if (s(row.openTime) && s(row.closeTime)) {
         return [day, `${s(row.openTime)}-${s(row.closeTime)}`]
           .filter(Boolean)
@@ -230,8 +231,9 @@ function stepSatisfied(step = "", preview = {}) {
   const safePreview = obj(preview);
 
   if (safeStep === "company") return Boolean(s(safePreview.businessName));
-  if (safeStep === "description")
+  if (safeStep === "description") {
     return Boolean(s(safePreview.whatThisBusinessIs));
+  }
   if (safeStep === "services") return arr(safePreview.coreServices).length > 0;
   if (safeStep === "contacts") return arr(safePreview.contactRoutes).length > 0;
   if (safeStep === "hours") return arr(safePreview.hours).length > 0;
@@ -619,7 +621,8 @@ function buildFallbackTurn({
   const hasSignals = hasPreviewSignals(preview);
   const hasMessage = Boolean(s(latestMessage));
   const readyForApproval = looksReadyForApproval(preview);
-  const nextStep = findNextStep(preview) || normalizeStep(currentStep) || "company";
+  const nextStep =
+    findNextStep(preview) || normalizeStep(currentStep) || "company";
   const sourceCaptureMode = !hasSignals && !hasMessage;
 
   return {

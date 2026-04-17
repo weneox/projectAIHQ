@@ -9,10 +9,52 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Mesaj yazın";
-const INITIAL_SETUP_QUESTION = "O zaman başlayaq. Şirkətinizin adı nədir?";
+
+const LOCALIZED_QUESTION_COPY = {
+  company: {
+    body: "O zaman başlayaq. Şirkətinizin adı nədir?",
+    placeholder: "Şirkət adını yazın",
+  },
+  description: {
+    body: "Qısa olaraq nə iş gördüyünüzü yazın.",
+    placeholder: "Biznesinizi qısa təsvir edin",
+  },
+  services: {
+    body: "Əsas xidmətlərinizi yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
+    placeholder: "Əsas xidmətləri yazın",
+  },
+  contacts: {
+    body: "Müştəri sizinlə necə əlaqə saxlamalıdır? Telefon, email, WhatsApp və ya link yazın.",
+    placeholder: "Əlaqə məlumatlarını yazın",
+  },
+  hours: {
+    body: "İş saatlarınızı yazın. Məsələn: B.e–C. 09:00–18:00 və ya 24/7.",
+    placeholder: "İş saatlarını yazın",
+  },
+  pricing: {
+    body: "AI qiymətlərlə bağlı nə deyə bilər? Dəqiq qiymət desin, başlanğıc qiymət desin, yoxsa quote tələb olunsun?",
+    placeholder: "Qiymət siyasətini yazın",
+  },
+  handoff: {
+    body: "Hansı hallarda AI mütləq operatora və ya insana yönləndirməlidir?",
+    placeholder: "Handoff qaydalarını yazın",
+  },
+};
+
+const SUPPRESSED_FALLBACK_ERRORS = new Set([
+  "openai_setup_assistant_timeout",
+  "openai_setup_assistant_empty_output",
+  "openai_setup_assistant_failed",
+  "openai_setup_assistant_unavailable",
+  "openai_setup_assistant_forced_fallback",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
 }
 
 function arr(value, fallback = []) {
@@ -129,6 +171,16 @@ function formatHoursItem(item = {}) {
 
 function mapHoursItems(items = []) {
   return uniqueStrings(arr(items).map((item) => formatHoursItem(item)), 24);
+}
+
+function getQuestionCopy(question = {}) {
+  const key = lower(question?.key || question?.step);
+  const local = obj(LOCALIZED_QUESTION_COPY[key]);
+
+  return {
+    body: s(question?.prompt || local.body),
+    placeholder: s(question?.placeholder || local.placeholder),
+  };
 }
 
 function buildCanonicalAssistantState(reviewPayload = null, assistantState = {}) {
@@ -375,6 +427,12 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
 }
 
 function StatusNotice({ error = "", usedFallback = false }) {
+  const safeError = lower(error);
+
+  if (usedFallback && SUPPRESSED_FALLBACK_ERRORS.has(safeError)) {
+    return null;
+  }
+
   if (!usedFallback && !s(error)) {
     return null;
   }
@@ -533,62 +591,45 @@ function SetupAssistantSectionsContent({
   );
 
   const currentQuestion = finalModel.nextQuestion;
+  const questionCopy = useMemo(
+    () => getQuestionCopy(currentQuestion),
+    [currentQuestion]
+  );
 
   const serverTimeline = useMemo(
     () => arr(finalModel.timeline).map(normalizeTimelineEntry),
     [finalModel.timeline]
   );
 
-  const hasExistingProgress = useMemo(() => {
-    const draft = obj(finalModel.draft);
-    const sourceSignals = obj(finalModel.sourceSignals);
-
-    return Boolean(
-      s(draft.businessName) ||
-        s(draft.whatThisBusinessIs) ||
-        s(draft.websiteUrl) ||
-        arr(draft.coreServices).length ||
-        arr(draft.contactRoutes).length ||
-        arr(draft.hours).length ||
-        s(draft.pricingPosture) ||
-        s(draft.humanHandoff) ||
-        s(sourceSignals.primarySourceUrl) ||
-        s(sourceSignals.primarySourceLabel)
-    );
-  }, [finalModel]);
-
-  const effectiveSetupPrimed =
-    setupPrimed || hasExistingProgress || serverTimeline.length > 0;
-
-  const showWelcome = !effectiveSetupPrimed;
+  const showWelcome = !setupPrimed && serverTimeline.length === 0 && !busy;
 
   const composerPlaceholder = useMemo(() => {
     if (showWelcome) return DEFAULT_COMPOSER_PLACEHOLDER;
-    if (s(currentQuestion?.prompt)) return currentQuestion.prompt;
-    if (setupPrimed && serverTimeline.length === 0 && !hasExistingProgress) {
-      return "Şirkət adınızı yazın";
-    }
+    if (s(questionCopy.placeholder)) return questionCopy.placeholder;
     return DEFAULT_COMPOSER_PLACEHOLDER;
-  }, [
-    currentQuestion,
-    showWelcome,
-    setupPrimed,
-    serverTimeline.length,
-    hasExistingProgress,
-  ]);
+  }, [showWelcome, questionCopy.placeholder]);
 
   const assistantMeta = useMemo(
     () => buildAssistantMeta(finalModel),
     [finalModel]
   );
+
   const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
-  const showSyntheticFirstQuestion = Boolean(
-    setupPrimed &&
-      serverTimeline.length === 0 &&
-      !hasExistingProgress &&
-      !visiblePendingUserMessage
-  );
+  const staticAssistantMessage = useMemo(() => {
+    if (showWelcome) return "";
+    if (serverTimeline.length > 0) return "";
+    if (visiblePendingUserMessage) return "";
+    if (s(finalModel.message)) return finalModel.message;
+    if (s(questionCopy.body)) return questionCopy.body;
+    return "";
+  }, [
+    showWelcome,
+    serverTimeline.length,
+    visiblePendingUserMessage,
+    finalModel.message,
+    questionCopy.body,
+  ]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -603,7 +644,7 @@ function SetupAssistantSectionsContent({
     localError,
     errorMessage,
     smartDraftReady,
-    showSyntheticFirstQuestion,
+    staticAssistantMessage,
     showWelcome,
   ]);
 
@@ -636,9 +677,7 @@ function SetupAssistantSectionsContent({
         text,
         value: text,
         step: s(currentQuestion?.step || currentQuestion?.key || "company") || "company",
-        questionKey: s(
-          currentQuestion?.key || (showSyntheticFirstQuestion ? "company" : "")
-        ),
+        questionKey: s(currentQuestion?.key),
       });
     } catch (error) {
       setPendingUserMessage("");
@@ -678,18 +717,10 @@ function SetupAssistantSectionsContent({
             <ChatBubble role="user" body={visiblePendingUserMessage} />
           ) : null}
 
-          {showSyntheticFirstQuestion ? (
-            <ChatBubble role="assistant" body={INITIAL_SETUP_QUESTION} />
-          ) : null}
-
-          {!showSyntheticFirstQuestion &&
-          serverTimeline.length === 0 &&
-          s(finalModel.message) &&
-          !visiblePendingUserMessage &&
-          !showWelcome ? (
+          {s(staticAssistantMessage) ? (
             <ChatBubble
               role="assistant"
-              body={finalModel.message}
+              body={staticAssistantMessage}
               meta={assistantMeta}
             />
           ) : null}
