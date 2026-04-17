@@ -468,7 +468,7 @@ test("review finalize composition blocks insufficient roles and audits the denia
   assert.equal(auditCalls[0][5].attemptedRole, "operator");
 });
 
-test("review finalize composition stays aligned with canonical setup readiness", async () => {
+test("review finalize composition follows the current assistant finalize gate even when handoff remains missing", async () => {
   let finalizeCalled = false;
   const auditCalls = [];
 
@@ -528,9 +528,36 @@ test("review finalize composition stays aligned with canonical setup readiness",
           sources: [],
         };
       },
-      async finalizeSetupReviewSession() {
+      async finalizeSetupReviewSession(input) {
         finalizeCalled = true;
-        throw new Error("not expected");
+        await input.projectDraftToCanonical({
+          client: { name: "tx" },
+          tenantId: "tenant-1",
+          session: { id: "session-1", status: "draft", mode: "setup" },
+          draft: { version: 9 },
+          sources: [],
+        });
+        return {
+          session: { id: "session-1", status: "finalized" },
+          reviewSessionId: "session-1",
+        };
+      },
+      async projectSetupReviewDraftToCanonical() {
+        return {
+          truthVersion: {
+            id: "version-1",
+          },
+          runtimeProjection: {
+            id: "runtime-1",
+          },
+        };
+      },
+      async buildSetupState() {
+        return {
+          progress: {
+            nextRoute: "/truth",
+          },
+        };
       },
       async auditSetupAction(...args) {
         auditCalls.push(args);
@@ -549,16 +576,16 @@ test("review finalize composition stays aligned with canonical setup readiness",
     }
   );
 
-  assert.equal(result.status, 409);
-  assert.equal(result.body.ok, false);
-  assert.equal(result.body.code, "SETUP_REVIEW_NOT_READY");
-  assert.equal(result.body.assistant.nextQuestion, null);
-  assert.equal(result.body.assistant.readyForApproval, false);
-  assert.equal(result.body.setup.review.finalizeAvailable, false);
-  assert.equal(result.body.setup.summary.sectionStatus.handoff.status, "missing");
-  assert.equal(finalizeCalled, false);
-  assert.equal(auditCalls.length, 1);
-  assert.equal(auditCalls[0][5].reasonCode, "setup_review_not_ready");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  assert.equal(result.body.projectionSummary.truthVersion.id, "version-1");
+  assert.equal(result.body.projectionSummary.runtimeProjection.id, "runtime-1");
+  assert.equal(result.body.setup.progress.nextRoute, "/truth");
+  assert.equal(validateSetupFinalizeResponse(result.body).ok, true);
+  assert.equal(finalizeCalled, true);
+  assert.equal(auditCalls.length, 2);
+  assert.equal(auditCalls[0][2], "setup.review.finalized");
+  assert.equal(auditCalls[1][2], "truth.version.created");
 });
 
 test("read app injects setup status builder into truth payload loaders", async () => {

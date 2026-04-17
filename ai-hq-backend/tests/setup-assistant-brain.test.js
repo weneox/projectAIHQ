@@ -93,7 +93,7 @@ test("setup brain accepts short Azerbaijani services answer deterministically", 
   assert.match(result.assistantMessage, /qeyd etdim/i);
 });
 
-test("setup brain accepts WhatsApp style contact answer and advances to hours", async () => {
+test("setup brain accepts WhatsApp style contact answer and advances to pricing", async () => {
   const draft = createDraft({
     businessProfile: {
       companyName: "Mane MMC",
@@ -132,7 +132,7 @@ test("setup brain accepts WhatsApp style contact answer and advances to hours", 
 
   assert.equal(result.ok, true);
   assert.equal(result.provider, "local_deterministic");
-  assert.equal(result.nextQuestion.key, "hours");
+  assert.equal(result.nextQuestion.key, "pricing");
   assert.ok(
     result.acceptedPatch.contacts.some((item) =>
       /050|555|wp/i.test(String(item))
@@ -276,7 +276,7 @@ test("buildSetupAssistantPatchFromAcceptedPatch maps orchestrator acceptedPatch 
   assert.equal(patch.assistantState.activeSection, "contacts");
 });
 
-test("buildSetupAssistantSessionPayload falls back to next deterministic question when stored brain has none", () => {
+test("buildSetupAssistantSessionPayload keeps a brain_v4 payload when stored brain has no next question", () => {
   const review = {
     session: {
       id: "session-1",
@@ -320,11 +320,11 @@ test("buildSetupAssistantSessionPayload falls back to next deterministic questio
   assert.equal(payload.ok, undefined);
   assert.equal(payload.session.id, "session-1");
   assert.equal(payload.setup.assistant.mode, "brain_v4");
-  assert.equal(payload.setup.assistant.nextQuestion.key, "description");
-  assert.equal(payload.setup.assistant.readyForApproval, false);
+  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.equal(payload.setup.assistant.readyForApproval, true);
 });
 
-test("orchestrator passive turn asks first question when no latest message exists", async () => {
+test("orchestrator passive turn stays in interview mode when a setup draft shell already exists", async () => {
   const draft = createDraft();
 
   const result = await runSetupAssistantOpenAIOrchestrator({
@@ -345,7 +345,7 @@ test("orchestrator passive turn asks first question when no latest message exist
   assert.equal(result.ok, true);
   assert.equal(result.provider, "local_deterministic");
   assert.equal(result.nextQuestion.key, "company");
-  assert.equal(result.phase, "source_capture");
+  assert.equal(result.phase, "interview");
 });
 
 test("orchestrator test helpers expose deterministic locale resolution", () => {

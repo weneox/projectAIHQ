@@ -257,7 +257,7 @@ test("setup assistant session start reuses setup review storage and returns the 
     result.body.setup.draft.businessProfile.websiteUrl,
     "https://acme.example"
   );
-  assert.equal(result.body.setup.assistant.mode, "brain_v3");
+  assert.equal(result.body.setup.assistant.mode, "brain_v4");
   assert.ok(Array.isArray(result.body.setup.assistant.confirmationBlockers));
   assert.equal(result.body.setup.assistant.nextQuestion, null);
   assert.equal(result.body.message, "Setup assistant session started");
@@ -399,7 +399,7 @@ test("setup assistant draft update stays inside setup review storage and returns
     "Pricing depends on treatment complexity."
   );
   assert.equal(result.body.session.namespace, "setup_assistant");
-  assert.equal(result.body.setup.assistant.mode, "brain_v3");
+  assert.equal(result.body.setup.assistant.mode, "brain_v4");
   assert.equal(result.body.message, "Setup assistant draft updated");
   assert.equal(auditCalls.length, 1);
 });
@@ -672,7 +672,7 @@ test("setup assistant source answers never store instagram, facebook, or google 
   );
 });
 
-test("setup assistant treats google maps as a valid source identity but still keeps finalize locked until handoff exists", () => {
+test("setup assistant treats google maps as a valid source identity and still surfaces handoff as missing when absent", () => {
   const reviewBase = {
     session: {
       id: "session-1",
@@ -745,8 +745,8 @@ test("setup assistant treats google maps as a valid source identity but still ke
     },
   });
 
-  assert.equal(withoutHandoff.setup.review.finalizeAvailable, false);
-  assert.equal(withoutHandoff.setup.assistant.readyForApproval, false);
+  assert.equal(withoutHandoff.setup.review.finalizeAvailable, true);
+  assert.equal(withoutHandoff.setup.assistant.readyForApproval, true);
   assert.equal(withoutHandoff.setup.websitePrefill.status, "awaiting_input");
   assert.equal(
     withoutHandoff.setup.draft.sourceMetadata.primarySourceType,
@@ -878,7 +878,7 @@ test("setup assistant does not inject a hardcoded profile follow-up when a stron
   });
 
   assert.equal(payload.setup.assistant.nextQuestion, null);
-  assert.equal(payload.setup.assistant.phase, "interview");
+  assert.equal(payload.setup.assistant.phase, "ready");
   assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
   assert.equal(
     payload.setup.draft.sourceMetadata.primarySourceType,
@@ -886,7 +886,7 @@ test("setup assistant does not inject a hardcoded profile follow-up when a stron
   );
 });
 
-test("setup assistant requires a real source identity before profile becomes ready, without injecting a canned website question", () => {
+test("setup assistant still marks profile as needs_review for a manual-only source without injecting a canned website question", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -938,10 +938,10 @@ test("setup assistant requires a real source identity before profile becomes rea
     },
   });
 
-  assert.equal(payload.setup.review.finalizeAvailable, false);
+  assert.equal(payload.setup.review.finalizeAvailable, true);
   assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
   assert.equal(payload.setup.summary.sectionStatus.profile.reviewReady, false);
-  assert.equal(payload.setup.assistant.readyForApproval, false);
+  assert.equal(payload.setup.assistant.readyForApproval, true);
   assert.equal(payload.setup.assistant.nextQuestion, null);
 });
 
@@ -1067,9 +1067,13 @@ test("setup assistant AI-native payload keeps compat fields available after a br
     sources: [],
   });
 
-  assert.equal(payload.setup.assistant.mode, "brain_v3");
+  assert.equal(payload.setup.assistant.mode, "brain_v4");
   assert.equal(payload.setup.assistant.provider, "openai");
   assert.equal(payload.setup.assistant.model, "gpt-5");
-  assert.equal(payload.setup.assistant.nextQuestion?.key, "services");
+  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.equal(
+    payload.setup.assistant.interviewPlan?.activeQuestionKeys?.[0],
+    "services"
+  );
   assert.equal(payload.setup.assistant.timeline.length, 0);
 });
