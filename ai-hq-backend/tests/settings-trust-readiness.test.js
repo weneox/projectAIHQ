@@ -147,6 +147,10 @@ class FakeTrustDb {
       return { rows: [] };
     }
 
+    if (text.includes("from tenant_channels")) {
+      return { rows: [] };
+    }
+
     if (text.includes("from tenant_execution_policy_controls")) {
       return { rows: this.controlRows };
     }
