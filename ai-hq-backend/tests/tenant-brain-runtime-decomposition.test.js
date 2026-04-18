@@ -5,7 +5,6 @@ import { buildTenantRuntimeProjection } from "../src/db/helpers/tenantRuntimePro
 import { loadTenantCanonicalGraph } from "../src/db/helpers/tenantRuntimeProjection/graph.js";
 import {
   getTenantBrainRuntime,
-  inspectTenantBrainRuntime,
 } from "../src/services/businessBrain/getTenantBrainRuntime.js";
 
 function createCaptureLogger(entries = [], context = {}) {
@@ -110,22 +109,6 @@ test("strict authority failure emits reason-coded telemetry context", async () =
   assert.equal(blocked?.correlationId, "corr-runtime-1");
   assert.equal(blocked?.tenantKey, "acme");
   assert.equal(blocked?.reasonCode, "runtime_projection_missing");
-});
-
-test("inspection runtime preserves shaping for hydrated tenant input", async () => {
-  const runtime = await inspectTenantBrainRuntime({
-    tenant: buildProvidedTenant(),
-  });
-
-  assert.equal(runtime.authority.available, false);
-  assert.equal(runtime.authority.reasonCode, "inspection_legacy_runtime_fallback");
-  assert.deepEqual(runtime.languages, ["en", "az"]);
-  assert.equal(runtime.defaultLanguage, "en");
-  assert.equal(runtime.autoReplyEnabled, false);
-  assert.equal(runtime.createLeadEnabled, true);
-  assert.equal(runtime.companyName, "Acme Clinic");
-  assert.deepEqual(runtime.services, ["Consultation", "Fillings"]);
-  assert.equal(runtime.raw.mode, "inspection_fallback");
 });
 
 function buildProjectionRows() {

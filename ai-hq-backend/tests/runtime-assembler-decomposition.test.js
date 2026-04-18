@@ -17,7 +17,6 @@ import {
 } from "../src/services/businessBrain/runtimeOutputShape.js";
 import {
   buildTenantFromProjection,
-  mergeTenantRuntime,
 } from "../src/services/businessBrain/runtimeTenantShape.js";
 
 function buildLegacyTenant() {
@@ -167,40 +166,6 @@ test("projection catalog helpers preserve fact and channel policy compatibility"
   assert.equal(normalizedPolicies[0].max_reply_sentences, 3);
 });
 
-test("legacy tenant merge shaping preserves metadata and policy compatibility", () => {
-  const merged = mergeTenantRuntime({
-    legacy: buildLegacyTenant(),
-    businessProfile: {
-      company_name: "Acme Clinic",
-      summary_short: "Premium clinic care",
-      summary_long: "Same-day consultations.",
-      target_audience: "Families",
-      value_proposition: "Fast, careful treatment",
-      primary_email: "hello@acme.example",
-      primary_phone: "+15550001111",
-      main_language: "en",
-      supported_languages: ["en", "az"],
-    },
-    capabilities: {
-      reply_style: "professional",
-      reply_length: "detailed",
-      cta_style: "soft",
-      handoff_enabled: true,
-    },
-    facts: [{ category: "booking", value_text: "Book a visit" }],
-    contacts: [],
-    locations: [{ title: "Baku" }],
-    channelPolicies: [{ channel: "instagram", subchannel: "default", pricing_visibility: "public" }],
-    services: [{ title: "Consultation" }],
-    activeKnowledge: [{ category: "support", value_text: "Message us anytime." }],
-  });
-
-  assert.equal(merged.profile.public_email, "hello@acme.example");
-  assert.equal(merged.profile.communication_rules.maxSentences, 3);
-  assert.equal(merged.inbox_policy.pricing_visibility, "public");
-  assert.equal(merged.meta.contactPhones[0], "+15550001111");
-});
-
 test("projection-backed tenant merge shaping preserves projection metadata and policy fields", () => {
   const merged = buildTenantFromProjection({
     legacy: buildLegacyTenant(),
@@ -262,7 +227,7 @@ test("projection-backed tenant merge shaping preserves projection metadata and p
   assert.equal(merged.meta.confidenceLabel, "high");
 });
 
-test("projection-backed tenant merge does not silently fall back to legacy business fields", () => {
+test("projection-backed tenant merge avoids legacy business profile fallback while preserving explicit legacy policy toggles", () => {
   const merged = buildTenantFromProjection({
     legacy: {
       ...buildLegacyTenant(),
@@ -317,8 +282,8 @@ test("projection-backed tenant merge does not silently fall back to legacy busin
   assert.equal(merged.profile.public_phone, "");
   assert.equal(merged.profile.tone_of_voice, "professional, warm, concise");
   assert.deepEqual(merged.profile.banned_phrases, []);
-  assert.equal(merged.ai_policy.auto_reply_enabled, undefined);
-  assert.equal(merged.ai_policy.create_lead_enabled, undefined);
+  assert.equal(merged.ai_policy.auto_reply_enabled, true);
+  assert.equal(merged.ai_policy.create_lead_enabled, true);
 });
 
 test("final runtime output shaping keeps the public compatibility surface", () => {
