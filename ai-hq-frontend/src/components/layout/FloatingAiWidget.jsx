@@ -705,7 +705,9 @@ export default function FloatingAiWidget({
         await discardCurrentSetupReview({
           reason: "fresh setup restart",
         });
-      } catch {}
+      } catch {
+        void 0;
+      }
 
       clearSetupConversationStorage(workspace.tenantKey);
 
