@@ -12,6 +12,7 @@ import { deliverChannelOutbound } from "./channelDelivery.js";
 import {
   getMessageById,
   getThreadById,
+  refreshThread,
   markOutboundAttemptDead,
   markOutboundAttemptFailed,
   markOutboundAttemptSent,
@@ -404,22 +405,63 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   const payload = obj(execution.payload_summary);
   const attemptId = s(metadata.inboxOutboundAttemptId);
   const messageId = s(execution.message_id || metadata.messageId);
-  const threadId = s(execution.thread_id || metadata.threadId);
+  const executionThreadId = s(execution.thread_id || metadata.threadId);
   const provider = resolveExecutionProvider(execution);
+  const tenantKey = s(execution.tenant_key || metadata.tenantKey || "");
 
   const message = await getMessageById(db, messageId);
-  const thread = await getThreadById(db, threadId);
+  const messageThreadId = s(message?.thread_id);
+  let resolvedThreadId = executionThreadId || messageThreadId || "";
+
+  let thread = await getThreadById(db, resolvedThreadId, tenantKey);
+
+  if (!thread && messageThreadId && messageThreadId !== resolvedThreadId) {
+    thread = await getThreadById(db, messageThreadId, tenantKey);
+    if (thread) {
+      resolvedThreadId = messageThreadId;
+    }
+  }
+
+  if (!thread && messageThreadId) {
+    thread = await refreshThread(db, messageThreadId, null, tenantKey);
+    if (thread) {
+      resolvedThreadId = messageThreadId;
+    }
+  }
+
+  if (
+    thread &&
+    executionThreadId &&
+    messageThreadId &&
+    executionThreadId !== messageThreadId
+  ) {
+    logger.warn("durable_execution.thread_link_recovered", {
+      executionId: execution.id,
+      provider,
+      executionThreadId,
+      messageThreadId,
+      resolvedThreadId,
+      tenantKey,
+    });
+  }
 
   if (!message || !thread) {
     const missing = !message ? "message_missing" : "thread_missing";
+    const missingMessage =
+      missing === "message_missing" ? "message not found" : "thread not found";
 
     if (attemptId) {
       await markOutboundAttemptFailed({
         db,
         attemptId,
-        error: missing === "message_missing" ? "message not found" : "thread not found",
+        error: missingMessage,
         errorCode: missing,
-        providerResponse: {},
+        providerResponse: {
+          executionThreadId,
+          messageThreadId,
+          resolvedThreadId,
+          tenantKey,
+        },
         retryDelaySeconds: 300,
       });
     }
@@ -429,26 +471,49 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         db,
         messageId,
         status: "failed",
-        error: missing === "message_missing" ? "message not found" : "thread not found",
+        error: missingMessage,
         errorCode: missing,
-        providerResponse: {},
+        providerResponse: {
+          executionThreadId,
+          messageThreadId,
+          resolvedThreadId,
+          tenantKey,
+        },
       });
     }
+
+    logger.warn("durable_execution.runtime_missing", {
+      executionId: execution.id,
+      provider,
+      missing,
+      tenantKey,
+      messageId,
+      executionThreadId,
+      messageThreadId,
+      resolvedThreadId,
+    });
 
     return {
       ok: false,
       retryable: true,
       errorCode: missing,
-      errorMessage:
-        missing === "message_missing" ? "message not found" : "thread not found",
+      errorMessage: missingMessage,
       classification: "runtime_missing",
-      resultSummary: {},
+      resultSummary: {
+        executionThreadId,
+        messageThreadId,
+        resolvedThreadId,
+        tenantKey,
+      },
     };
   }
 
   const delivery = await deliverChannelOutbound({
     db,
-    execution,
+    execution: {
+      ...execution,
+      thread_id: resolvedThreadId,
+    },
     payload,
     message,
     thread,
@@ -491,7 +556,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         objectType: "durable_execution",
         objectId: execution.id,
         meta: {
-          threadId,
+          threadId: resolvedThreadId,
           messageId,
           provider,
           errorCode: failure.errorCode,
@@ -507,6 +572,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       status: failure.status,
       retryable: failure.retryable,
       errorCode: failure.errorCode,
+      resolvedThreadId,
     });
 
     return {
@@ -518,6 +584,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       resultSummary: {
         provider,
         providerStatus: failure.status,
+        resolvedThreadId,
       },
     };
   }
@@ -548,7 +615,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       objectType: "durable_execution",
       objectId: execution.id,
       meta: {
-        threadId,
+        threadId: resolvedThreadId,
         messageId,
         provider,
         providerMessageId: s(providerMessageId),
@@ -576,6 +643,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       provider,
       providerMessageId: s(providerMessageId),
       providerStatus: Number(delivery?.status || 0),
+      resolvedThreadId,
     },
   };
 }
