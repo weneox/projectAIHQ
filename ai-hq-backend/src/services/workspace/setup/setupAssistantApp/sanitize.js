@@ -6,17 +6,42 @@ import {
   hasOwn,
   inferContactType,
   normalizeBehaviorPolicyKey,
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
+  normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
   normalizeSourceType,
   normalizeWebsiteUrl,
   slugify,
   sourceTypeLabel,
   uniqueStrings,
 } from "./shared.js";
+
+const normalizePricingBehaviorModeSafe =
+  typeof importedNormalizePricingBehaviorMode === "function"
+    ? importedNormalizePricingBehaviorMode
+    : () => "";
+
+const normalizeLocationBehaviorModeSafe =
+  typeof importedNormalizeLocationBehaviorMode === "function"
+    ? importedNormalizeLocationBehaviorMode
+    : () => "";
+
+const normalizeBookingBehaviorModeSafe =
+  typeof importedNormalizeBookingBehaviorMode === "function"
+    ? importedNormalizeBookingBehaviorMode
+    : () => "";
+
+const normalizeContactBehaviorModeSafe =
+  typeof importedNormalizeContactBehaviorMode === "function"
+    ? importedNormalizeContactBehaviorMode
+    : () => "";
+
+const normalizeHandoffBehaviorModeSafe =
+  typeof importedNormalizeHandoffBehaviorMode === "function"
+    ? importedNormalizeHandoffBehaviorMode
+    : () => "";
 
 export function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
@@ -227,7 +252,7 @@ export function sanitizePricingPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
 
   const mode =
-    normalizePricingBehaviorMode(source.mode || source.defaultBehavior) ||
+    normalizePricingBehaviorModeSafe(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   const preferredTargetType =
@@ -276,7 +301,7 @@ export function sanitizeLocationPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
 
   const mode =
-    normalizeLocationBehaviorMode(source.mode || source.defaultBehavior) ||
+    normalizeLocationBehaviorModeSafe(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -311,7 +336,7 @@ export function sanitizeBookingPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
 
   const mode =
-    normalizeBookingBehaviorMode(source.mode || source.defaultBehavior) ||
+    normalizeBookingBehaviorModeSafe(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -346,7 +371,7 @@ export function sanitizeContactPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
 
   const mode =
-    normalizeContactBehaviorMode(source.mode || source.defaultBehavior) ||
+    normalizeContactBehaviorModeSafe(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -372,7 +397,7 @@ export function sanitizeHandoffPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
 
   const mode =
-    normalizeHandoffBehaviorMode(source.mode || source.defaultBehavior) ||
+    normalizeHandoffBehaviorModeSafe(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({

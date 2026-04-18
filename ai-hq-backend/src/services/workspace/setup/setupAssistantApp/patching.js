@@ -12,11 +12,11 @@ import {
   buildUrlCandidate,
   inferContactType,
   normalizeBehaviorPolicyKey,
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
+  normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
   normalizeWebsiteUrl,
   nowIso,
   splitAnswerList,
@@ -28,6 +28,7 @@ import {
   mergeSourceMetadata,
   sanitizeAssistantBehaviorDraft,
   sanitizeAssistantState,
+  sanitizeBookingPolicy,
   sanitizeBusinessProfile,
   sanitizeContactPolicy,
   sanitizeContacts,
@@ -39,8 +40,32 @@ import {
   sanitizeProgress,
   sanitizeServices,
   sanitizeSourceMetadata,
-  sanitizeBookingPolicy,
 } from "./sanitize.js";
+
+const normalizePricingBehaviorModeSafe =
+  typeof importedNormalizePricingBehaviorMode === "function"
+    ? importedNormalizePricingBehaviorMode
+    : () => "";
+
+const normalizeLocationBehaviorModeSafe =
+  typeof importedNormalizeLocationBehaviorMode === "function"
+    ? importedNormalizeLocationBehaviorMode
+    : () => "";
+
+const normalizeBookingBehaviorModeSafe =
+  typeof importedNormalizeBookingBehaviorMode === "function"
+    ? importedNormalizeBookingBehaviorMode
+    : () => "";
+
+const normalizeContactBehaviorModeSafe =
+  typeof importedNormalizeContactBehaviorMode === "function"
+    ? importedNormalizeContactBehaviorMode
+    : () => "";
+
+const normalizeHandoffBehaviorModeSafe =
+  typeof importedNormalizeHandoffBehaviorMode === "function"
+    ? importedNormalizeHandoffBehaviorMode
+    : () => "";
 
 function normalizeStep(value = "") {
   const raw = s(value).toLowerCase();
@@ -507,7 +532,7 @@ function buildPricingBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).pricingPolicy);
 
   const explicitMode =
-    normalizePricingBehaviorMode(text) ||
+    normalizePricingBehaviorModeSafe(text) ||
     (/xidmət|service/.test(lower) && /soruş|ask/.test(lower)
       ? "ask_service_first"
       : "") ||
@@ -560,7 +585,7 @@ function buildLocationBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).locationPolicy);
 
   const explicitMode =
-    normalizeLocationBehaviorMode(text) ||
+    normalizeLocationBehaviorModeSafe(text) ||
     (/birbaşa.*(xəritə|map)|map first/i.test(lower)
       ? "map_first"
       : "") ||
@@ -599,7 +624,7 @@ function buildBookingBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).bookingPolicy);
 
   const explicitMode =
-    normalizeBookingBehaviorMode(text) ||
+    normalizeBookingBehaviorModeSafe(text) ||
     (/whatsapp|wa\.me/i.test(lower) ? "route_whatsapp" : "") ||
     (/instagram|dm/i.test(lower) ? "route_instagram" : "") ||
     (/website|site|booking page|reservation page|appointment page/i.test(lower)
@@ -636,7 +661,7 @@ function buildContactBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).contactPolicy);
 
   const explicitMode =
-    normalizeContactBehaviorMode(text) ||
+    normalizeContactBehaviorModeSafe(text) ||
     (/whatsapp|wa\.me/i.test(lower) ? "whatsapp_first" : "") ||
     (/zəng|call|phone/i.test(lower) ? "call_first" : "") ||
     (/email|mail/i.test(lower) ? "email_first" : "") ||
@@ -676,7 +701,7 @@ function buildHandoffBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).handoffPolicy);
 
   const explicitMode =
-    normalizeHandoffBehaviorMode(text) ||
+    normalizeHandoffBehaviorModeSafe(text) ||
     (/birbaşa|direct/i.test(lower) ? "direct_handoff" : "") ||
     (/səbəb|reason|niyə|why|clarify|explain/i.test(lower)
       ? "ask_then_handoff"
@@ -1172,9 +1197,7 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
       8
     ),
     tone: s(acceptedAiBehavior.tone || currentDraft.tone),
-    greetingStyle: s(
-      acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle
-    ),
+    greetingStyle: s(acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle),
     afterHoursBehavior: s(
       acceptedAiBehavior.afterHoursBehavior || currentDraft.afterHoursBehavior
     ),
