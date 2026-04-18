@@ -358,6 +358,22 @@ test(
         "integration-test"
       );
 
+      const refreshedOperationalRuntime = await refreshTenantRuntimeProjectionStrict(
+        {
+          tenantId: tenant.id,
+          tenantKey,
+          triggerType: "source_change",
+          requestedBy: "integration-test",
+        },
+        client
+      );
+
+      assert.ok(
+        s(refreshedOperationalRuntime?.projection?.id),
+        "operational runtime projection should refresh after channel config changes"
+      );
+      assert.equal(refreshedOperationalRuntime?.freshness?.stale, false);
+
       const runtime = await getTenantBrainRuntime({
         db: client,
         tenantId: tenant.id,
