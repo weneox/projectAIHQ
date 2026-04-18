@@ -1,4 +1,5 @@
 import { db } from "../../index.js";
+import { dbListTenantChannels } from "../settings.js";
 import { s, pickDb, one, many, parseObject } from "./shared.js";
 import {
   normalizeContacts,
@@ -15,6 +16,136 @@ import {
   normalizeFacts,
   normalizeChannelPolicies,
 } from "./normalizers.js";
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function lower(v) {
+  return s(v).toLowerCase();
+}
+
+function normalizeOperationalChannelType(value = "") {
+  const x = lower(value);
+
+  if (!x) return "";
+  if (x === "ig") return "instagram";
+  if (x === "insta") return "instagram";
+  if (x === "messenger") return "facebook";
+  if (x === "fb") return "facebook";
+  if (x === "wa") return "whatsapp";
+  if (x === "tg") return "telegram";
+  if (x === "telegram_dm" || x === "telegram-dm") return "telegram";
+  if (x === "telegram_bot" || x === "telegram-bot") return "telegram";
+  if (x === "website" || x === "web") return "website_widget";
+  if (x === "website_widget" || x === "website-widget") return "website_widget";
+  if (x === "website_chat" || x === "website-chat") return "website_widget";
+  if (x === "webchat") return "website_widget";
+  if (x === "widget") return "website_widget";
+  if (x === "mail") return "email";
+  if (x === "email_inbox" || x === "email-inbox") return "email";
+  if (x === "linkedin_dm" || x === "linkedin-dm") return "linkedin";
+
+  return x;
+}
+
+function isConnectedStatus(status = "") {
+  const x = lower(status);
+  return ["connected", "active", "ready", "live"].includes(x);
+}
+
+function operationalChannelsToProjectionRows(rows = []) {
+  return rows.map((row) => {
+    const safe = obj(row);
+    const channelType = normalizeOperationalChannelType(
+      safe.channel_type || safe.channelType
+    );
+    const status = lower(safe.status || "disconnected");
+    const config = obj(safe.config);
+    const health = obj(safe.health);
+
+    const endpoint =
+      s(config.webhook_url) ||
+      s(config.endpoint) ||
+      s(config.url) ||
+      "";
+
+    const externalChannelId =
+      s(safe.external_page_id) ||
+      s(safe.external_user_id) ||
+      s(safe.external_account_id) ||
+      "";
+
+    return {
+      id: s(safe.id),
+      source_id: "",
+      social_account_id: "",
+      channel_key: s(safe.channel_key || safe.channel_type || safe.channelType || channelType),
+      channel_type: channelType,
+      label: s(safe.display_name || channelType),
+      endpoint,
+      external_channel_id: externalChannelId,
+      is_primary: Boolean(safe.is_primary),
+      is_connected: isConnectedStatus(status),
+      is_active: status !== "disconnected",
+      supports_inbound: true,
+      supports_outbound: ["instagram", "facebook", "whatsapp", "telegram", "website_widget", "email", "linkedin"].includes(channelType),
+      supports_comments: channelType === "facebook" || channelType === "instagram",
+      supports_calls: channelType === "voice",
+      supports_handoff: true,
+      status,
+      config_json: config,
+      metadata_json: {
+        source: "tenant_channels",
+        provider: s(safe.provider),
+        secretsRef: s(safe.secrets_ref),
+        externalUsername: s(safe.external_username),
+        externalAccountId: s(safe.external_account_id),
+        externalPageId: s(safe.external_page_id),
+        externalUserId: s(safe.external_user_id),
+        health,
+        lastSyncAt: safe.last_sync_at || null,
+      },
+    };
+  });
+}
+
+function mergeProjectionChannels(primary = [], supplemental = []) {
+  const byKey = new Map();
+
+  for (const item of [...supplemental, ...primary]) {
+    const row = obj(item);
+    const key = lower(row.channelType || row.channel_type || row.channelKey || row.channel_key);
+    if (!key) continue;
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, row);
+      continue;
+    }
+
+    const existingConnected =
+      existing.isConnected === true || existing.is_connected === true;
+    const nextConnected =
+      row.isConnected === true || row.is_connected === true;
+
+    if (!existingConnected && nextConnected) {
+      byKey.set(key, row);
+      continue;
+    }
+
+    const existingPrimary =
+      existing.isPrimary === true || existing.is_primary === true;
+    const nextPrimary =
+      row.isPrimary === true || row.is_primary === true;
+
+    if (!existingPrimary && nextPrimary) {
+      byKey.set(key, row);
+    }
+  }
+
+  return Array.from(byKey.values());
+}
 
 export async function resolveTenant(
   client,
@@ -65,7 +196,8 @@ export async function loadTenantCanonicalGraph(
     faqRows,
     policiesRows,
     socialRows,
-    channelRows,
+    businessChannelRows,
+    operationalChannelRows,
     mediaRows,
     knowledgeRows,
     factsRows,
@@ -181,6 +313,7 @@ export async function loadTenantCanonicalGraph(
       `,
       [tenant.id]
     ),
+    dbListTenantChannels(client, tenant.id),
     many(
       client,
       `
@@ -349,6 +482,15 @@ export async function loadTenantCanonicalGraph(
     ? normalizeFacts(publishedTruthVersion.truth_facts_snapshot_json)
     : legacyFacts;
 
+  const canonicalBusinessChannels = normalizeChannels(businessChannelRows);
+  const operationalConnectivityChannels = normalizeChannels(
+    operationalChannelsToProjectionRows(operationalChannelRows)
+  );
+  const mergedChannels = mergeProjectionChannels(
+    canonicalBusinessChannels,
+    operationalConnectivityChannels
+  );
+
   return {
     tenant,
     profile,
@@ -368,7 +510,7 @@ export async function loadTenantCanonicalGraph(
     faq: normalizeFaq(faqRows),
     policies: normalizePolicies(policiesRows),
     socialAccounts: normalizeSocialAccounts(socialRows),
-    channels: normalizeChannels(channelRows),
+    channels: mergedChannels,
     mediaAssets: normalizeMediaAssets(mediaRows),
     knowledge: normalizeKnowledge(knowledgeRows),
     facts: [...publishedTruthFacts, ...operationalFacts],
