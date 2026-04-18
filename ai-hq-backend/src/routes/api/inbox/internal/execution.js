@@ -182,6 +182,7 @@ export async function persistOutboundMessage({
     "text"
   );
   const deliveryStatus = providerMessageId ? "sent" : "pending";
+  const sentAt = nowIso();
 
   const mergedMeta = {
     ...normalizeObj(meta),
@@ -195,7 +196,7 @@ export async function persistOutboundMessage({
       pending: !providerMessageId,
       failed: false,
       providerMessageId: s(providerMessageId || "") || null,
-      updatedAt: nowIso(),
+      updatedAt: sentAt,
     },
   };
 
@@ -222,7 +223,7 @@ export async function persistOutboundMessage({
       text,
       JSON.stringify(Array.isArray(attachments) ? attachments : []),
       JSON.stringify(mergedMeta),
-      providerMessageId ? nowIso() : null,
+      sentAt,
     ]
   );
 
