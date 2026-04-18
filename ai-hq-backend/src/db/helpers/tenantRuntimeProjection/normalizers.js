@@ -7,6 +7,43 @@ import {
   parseObject,
 } from "./shared.js";
 
+function normalizeChannelKey(value = "") {
+  const x = s(value).toLowerCase();
+
+  if (!x) return "";
+  if (x === "ig") return "instagram";
+  if (x === "insta") return "instagram";
+  if (x === "instagram_dm" || x === "instagram-dm") return "instagram";
+
+  if (x === "fb") return "facebook";
+  if (x === "messenger") return "facebook";
+  if (x === "facebook_messenger" || x === "facebook-messenger") return "facebook";
+
+  if (x === "wa") return "whatsapp";
+  if (x === "whatsapp_business" || x === "whatsapp-business") return "whatsapp";
+
+  if (x === "tg") return "telegram";
+  if (x === "telegram_dm" || x === "telegram-dm") return "telegram";
+  if (x === "telegram_bot" || x === "telegram-bot") return "telegram";
+
+  if (x === "website" || x === "web") return "website_widget";
+  if (x === "website_chat" || x === "website-chat") return "website_widget";
+  if (x === "website_widget" || x === "website-widget") return "website_widget";
+  if (x === "webchat") return "website_widget";
+  if (x === "widget") return "website_widget";
+
+  if (x === "mail") return "email";
+  if (x === "email_inbox" || x === "email-inbox") return "email";
+
+  if (x === "linkedin_dm" || x === "linkedin-dm") return "linkedin";
+
+  return x;
+}
+
+function uniqStrings(values = []) {
+  return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
+}
+
 export function normalizeProfile(tenant, profile) {
   const supportedLanguages = parseArray(profile?.supported_languages);
   const profileJson = parseObject(profile?.profile_json);
@@ -42,7 +79,10 @@ export function normalizeProfile(tenant, profile) {
     targetAudience: s(profile?.target_audience || profile?.targetAudience),
     toneProfile: s(profile?.tone_profile || profile?.toneProfile || profile?.tone),
     mainLanguage: s(
-      profile?.main_language || profile?.mainLanguage || tenant?.default_language || "az"
+      profile?.main_language ||
+        profile?.mainLanguage ||
+        tenant?.default_language ||
+        "az"
     ),
     supportedLanguages: fallbackSupportedLanguages,
     websiteUrl: s(profile?.website_url || profile?.websiteUrl),
@@ -51,7 +91,9 @@ export function normalizeProfile(tenant, profile) {
     primaryAddress: s(profile?.primary_address || profile?.primaryAddress),
     profileStatus: s(profile?.profile_status || profile?.profileStatus || "draft"),
     confidence: num(profile?.confidence, 0),
-    confidenceLabel: s(profile?.confidence_label || profile?.confidenceLabel || "low"),
+    confidenceLabel: s(
+      profile?.confidence_label || profile?.confidenceLabel || "low"
+    ),
     profileJson,
     sourceSummaryJson,
     metadataJson,
@@ -63,13 +105,106 @@ export function normalizeCapabilities(capabilities, profile) {
     parseArray(capabilities?.supported_languages).length > 0
       ? parseArray(capabilities?.supported_languages)
       : parseArray(capabilities?.supportedLanguages).length > 0
-      ? parseArray(capabilities?.supportedLanguages)
-      : parseArray(profile?.supported_languages);
+        ? parseArray(capabilities?.supportedLanguages)
+        : parseArray(profile?.supported_languages);
+
+  const supportsInstagramDm = bool(
+    capabilities?.supports_instagram_dm ?? capabilities?.supportsInstagramDm,
+    false
+  );
+
+  const supportsFacebookMessenger = bool(
+    capabilities?.supports_facebook_messenger ??
+      capabilities?.supportsFacebookMessenger ??
+      capabilities?.supports_messenger ??
+      capabilities?.supportsMessenger,
+    false
+  );
+
+  const supportsWhatsapp = bool(
+    capabilities?.supports_whatsapp ?? capabilities?.supportsWhatsapp,
+    false
+  );
+
+  const supportsTelegram = bool(
+    capabilities?.supports_telegram ??
+      capabilities?.supportsTelegram ??
+      capabilities?.supports_telegram_dm ??
+      capabilities?.supportsTelegramDm ??
+      capabilities?.supports_telegram_bot ??
+      capabilities?.supportsTelegramBot,
+    false
+  );
+
+  const supportsTelegramDm = bool(
+    capabilities?.supports_telegram_dm ??
+      capabilities?.supportsTelegramDm,
+    supportsTelegram
+  );
+
+  const supportsTelegramBot = bool(
+    capabilities?.supports_telegram_bot ??
+      capabilities?.supportsTelegramBot,
+    supportsTelegram
+  );
+
+  const supportsWebsiteWidget = bool(
+    capabilities?.supports_website_widget ??
+      capabilities?.supportsWebsiteWidget ??
+      capabilities?.supports_website_chat ??
+      capabilities?.supportsWebsiteChat ??
+      capabilities?.supports_webchat ??
+      capabilities?.supportsWebchat,
+    false
+  );
+
+  const supportsEmail = bool(
+    capabilities?.supports_email ?? capabilities?.supportsEmail,
+    false
+  );
+
+  const supportsLinkedin = bool(
+    capabilities?.supports_linkedin ?? capabilities?.supportsLinkedin,
+    false
+  );
+
+  const supportsComments = bool(
+    capabilities?.supports_comments ?? capabilities?.supportsComments,
+    false
+  );
+
+  const supportsVoice = bool(
+    capabilities?.supports_voice ?? capabilities?.supportsVoice,
+    false
+  );
+
+  const supportsAnyInboxChannel =
+    supportsInstagramDm ||
+    supportsFacebookMessenger ||
+    supportsWhatsapp ||
+    supportsTelegram ||
+    supportsWebsiteWidget ||
+    supportsEmail ||
+    supportsLinkedin;
+
+  const supportedInboxChannels = uniqStrings([
+    supportsInstagramDm ? "instagram" : "",
+    supportsFacebookMessenger ? "facebook" : "",
+    supportsWhatsapp ? "whatsapp" : "",
+    supportsTelegram ? "telegram" : "",
+    supportsWebsiteWidget ? "website_widget" : "",
+    supportsEmail ? "email" : "",
+    supportsLinkedin ? "linkedin" : "",
+  ]);
 
   return {
-    canSharePrices: bool(capabilities?.can_share_prices ?? capabilities?.canSharePrices, false),
+    canSharePrices: bool(
+      capabilities?.can_share_prices ?? capabilities?.canSharePrices,
+      false
+    ),
     canShareStartingPrices: bool(
-      capabilities?.can_share_starting_prices ?? capabilities?.canShareStartingPrices,
+      capabilities?.can_share_starting_prices ??
+        capabilities?.canShareStartingPrices,
       false
     ),
     requiresHumanForCustomQuote: bool(
@@ -78,33 +213,52 @@ export function normalizeCapabilities(capabilities, profile) {
       true
     ),
 
-    canCaptureLeads: bool(capabilities?.can_capture_leads ?? capabilities?.canCaptureLeads, true),
-    canCapturePhone: bool(capabilities?.can_capture_phone ?? capabilities?.canCapturePhone, true),
-    canCaptureEmail: bool(capabilities?.can_capture_email ?? capabilities?.canCaptureEmail, true),
+    canCaptureLeads: bool(
+      capabilities?.can_capture_leads ?? capabilities?.canCaptureLeads,
+      true
+    ),
+    canCapturePhone: bool(
+      capabilities?.can_capture_phone ?? capabilities?.canCapturePhone,
+      true
+    ),
+    canCaptureEmail: bool(
+      capabilities?.can_capture_email ?? capabilities?.canCaptureEmail,
+      true
+    ),
 
-    canOfferBooking: bool(capabilities?.can_offer_booking ?? capabilities?.canOfferBooking, false),
+    canOfferBooking: bool(
+      capabilities?.can_offer_booking ?? capabilities?.canOfferBooking,
+      false
+    ),
     canOfferConsultation: bool(
       capabilities?.can_offer_consultation ?? capabilities?.canOfferConsultation,
       false
     ),
-    canOfferCallback: bool(capabilities?.can_offer_callback ?? capabilities?.canOfferCallback, true),
+    canOfferCallback: bool(
+      capabilities?.can_offer_callback ?? capabilities?.canOfferCallback,
+      true
+    ),
 
-    supportsInstagramDm: bool(
-      capabilities?.supports_instagram_dm ?? capabilities?.supportsInstagramDm,
-      false
-    ),
-    supportsFacebookMessenger: bool(
-      capabilities?.supports_facebook_messenger ??
-        capabilities?.supportsFacebookMessenger,
-      false
-    ),
-    supportsWhatsapp: bool(capabilities?.supports_whatsapp ?? capabilities?.supportsWhatsapp, false),
-    supportsComments: bool(capabilities?.supports_comments ?? capabilities?.supportsComments, false),
-    supportsVoice: bool(capabilities?.supports_voice ?? capabilities?.supportsVoice, false),
-    supportsEmail: bool(capabilities?.supports_email ?? capabilities?.supportsEmail, false),
+    supportsInstagramDm,
+    supportsFacebookMessenger,
+    supportsMessenger: supportsFacebookMessenger,
+    supportsWhatsapp,
+    supportsTelegram,
+    supportsTelegramDm,
+    supportsTelegramBot,
+    supportsWebsiteWidget,
+    supportsWebsiteChat: supportsWebsiteWidget,
+    supportsWebchat: supportsWebsiteWidget,
+    supportsComments,
+    supportsVoice,
+    supportsEmail,
+    supportsLinkedin,
+    supportsAnyInboxChannel,
+    supportedInboxChannels,
 
     supportsMultilanguage: bool(
-      capabilities?.supports_multilanguage ?? capabilities?.supportsMultilanguage,
+      capabilities?.supports_multilanguage ??
+        capabilities?.supportsMultilanguage,
       supportedLanguages.length > 1
     ),
     primaryLanguage: s(
@@ -116,7 +270,10 @@ export function normalizeCapabilities(capabilities, profile) {
     ),
     supportedLanguages,
 
-    handoffEnabled: bool(capabilities?.handoff_enabled ?? capabilities?.handoffEnabled, true),
+    handoffEnabled: bool(
+      capabilities?.handoff_enabled ?? capabilities?.handoffEnabled,
+      true
+    ),
     autoHandoffOnHumanRequest: bool(
       capabilities?.auto_handoff_on_human_request ??
         capabilities?.autoHandoffOnHumanRequest,
@@ -134,7 +291,8 @@ export function normalizeCapabilities(capabilities, profile) {
       true
     ),
     shouldAvoidLegalClaims: bool(
-      capabilities?.should_avoid_legal_claims ?? capabilities?.shouldAvoidLegalClaims,
+      capabilities?.should_avoid_legal_claims ??
+        capabilities?.shouldAvoidLegalClaims,
       true
     ),
     shouldAvoidUnverifiedPromises: bool(
@@ -143,14 +301,28 @@ export function normalizeCapabilities(capabilities, profile) {
       true
     ),
 
-    replyStyle: s(capabilities?.reply_style || capabilities?.replyStyle || "professional"),
-    replyLength: s(capabilities?.reply_length || capabilities?.replyLength || "medium"),
-    emojiLevel: s(capabilities?.emoji_level || capabilities?.emojiLevel || "low"),
-    ctaStyle: s(capabilities?.cta_style || capabilities?.ctaStyle || "soft"),
+    replyStyle: s(
+      capabilities?.reply_style || capabilities?.replyStyle || "professional"
+    ),
+    replyLength: s(
+      capabilities?.reply_length || capabilities?.replyLength || "medium"
+    ),
+    emojiLevel: s(
+      capabilities?.emoji_level || capabilities?.emojiLevel || "low"
+    ),
+    ctaStyle: s(
+      capabilities?.cta_style || capabilities?.ctaStyle || "soft"
+    ),
 
-    pricingMode: s(capabilities?.pricing_mode || capabilities?.pricingMode || "custom_quote"),
-    bookingMode: s(capabilities?.booking_mode || capabilities?.bookingMode || "manual"),
-    salesMode: s(capabilities?.sales_mode || capabilities?.salesMode || "consultative"),
+    pricingMode: s(
+      capabilities?.pricing_mode || capabilities?.pricingMode || "custom_quote"
+    ),
+    bookingMode: s(
+      capabilities?.booking_mode || capabilities?.bookingMode || "manual"
+    ),
+    salesMode: s(
+      capabilities?.sales_mode || capabilities?.salesMode || "consultative"
+    ),
 
     capabilitiesJson: parseObject(capabilities?.capabilities_json),
     metadataJson: parseObject(capabilities?.metadata_json),
@@ -161,7 +333,7 @@ export function normalizeContacts(rows = []) {
   return rows.map((r) => ({
     id: s(r.id || r.contactId || r.contact_id),
     contactKey: s(r.contact_key || r.contactKey || r.key),
-    channel: s(r.channel),
+    channel: normalizeChannelKey(r.channel),
     label: s(r.label),
     value: s(r.value),
     isPrimary: bool(r.is_primary ?? r.isPrimary, false),
@@ -220,7 +392,9 @@ export function normalizeServices(rows = []) {
     description: s(r.description || r.summary),
     category: s(r.category),
     priceFrom:
-      r.price_from == null && r.priceFrom == null ? null : Number(r.price_from ?? r.priceFrom),
+      r.price_from == null && r.priceFrom == null
+        ? null
+        : Number(r.price_from ?? r.priceFrom),
     currency: s(r.currency || "AZN"),
     pricingModel: s(r.pricing_model || r.pricingModel || "custom_quote"),
     durationMinutes:
@@ -286,7 +460,7 @@ export function normalizeSocialAccounts(rows = []) {
     id: s(r.id),
     sourceId: s(r.source_id),
     accountKey: s(r.account_key),
-    platform: s(r.platform),
+    platform: normalizeChannelKey(r.platform),
     handle: s(r.handle),
     displayName: s(r.display_name),
     profileUrl: s(r.profile_url),
@@ -305,7 +479,7 @@ export function normalizeChannels(rows = []) {
     sourceId: s(r.source_id),
     socialAccountId: s(r.social_account_id),
     channelKey: s(r.channel_key),
-    channelType: s(r.channel_type),
+    channelType: normalizeChannelKey(r.channel_type),
     label: s(r.label),
     endpoint: s(r.endpoint),
     externalChannelId: s(r.external_channel_id),
@@ -376,7 +550,9 @@ export function normalizeFacts(rows = []) {
     valueText: s(r.value_text || r.valueText),
     valueJson: parseObject(r.value_json || r.valueJson),
     language: s(r.language || "en"),
-    channelScope: parseArray(r.channel_scope || r.channelScope),
+    channelScope: parseArray(r.channel_scope || r.channelScope).map(
+      normalizeChannelKey
+    ),
     usecaseScope: parseArray(r.usecase_scope || r.usecaseScope),
     priority: num(r.priority, 100),
     enabled: bool(r.enabled, true),
@@ -389,7 +565,7 @@ export function normalizeFacts(rows = []) {
 export function normalizeChannelPolicies(rows = []) {
   return rows.map((r) => ({
     id: s(r.id),
-    channel: s(r.channel),
+    channel: normalizeChannelKey(r.channel),
     subchannel: s(r.subchannel || "default"),
     enabled: bool(r.enabled, true),
     autoReplyEnabled: bool(r.auto_reply_enabled, true),
