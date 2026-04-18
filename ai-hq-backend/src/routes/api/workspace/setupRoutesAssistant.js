@@ -1,8 +1,14 @@
 import { readSetupAssistantView } from "../../../services/workspace/setup/setupAssistantApp.js";
+import {
+  attachBuildHeaders,
+  buildInfo,
+  withBuildMeta,
+} from "../../../utils/buildInfo.js";
 
 function hasRenderableAssistantView(body = {}) {
   const root = body && typeof body === "object" ? body : {};
-  const session = root.session && typeof root.session === "object" ? root.session : {};
+  const session =
+    root.session && typeof root.session === "object" ? root.session : {};
   const setup = root.setup && typeof root.setup === "object" ? root.setup : {};
   const assistant =
     setup.assistant && typeof setup.assistant === "object"
@@ -34,6 +40,17 @@ export function registerSetupAssistantRoutes(
     return Number(result?.status || 500) === 200 && result?.body?.ok !== false;
   }
 
+  function sendJson(res, status, body, extra = {}) {
+    attachBuildHeaders(res);
+    return res.status(status).json(
+      withBuildMeta(body, {
+        route: "setup_assistant",
+        responseStatus: Number(status || 0),
+        ...extra,
+      })
+    );
+  }
+
   async function runReadView(req, res, actor) {
     try {
       const result = await readSetupAssistantView(
@@ -46,13 +63,24 @@ export function registerSetupAssistantRoutes(
         }
       );
 
-      return res.status(result.status).json(result.body);
-    } catch (error) {
-      return res.status(500).json({
-        ok: false,
-        error: "SetupAssistantReadFailed",
-        reason: s(error?.message || "failed to read setup assistant view"),
+      return sendJson(res, result.status, result.body, {
+        action: "read_current",
       });
+    } catch (error) {
+      return sendJson(
+        res,
+        500,
+        {
+          ok: false,
+          error: "SetupAssistantReadFailed",
+          reason: s(error?.message || "failed to read setup assistant view"),
+        },
+        {
+          action: "read_current",
+          failure: "exception",
+          errorName: s(error?.name),
+        }
+      );
     }
   }
 
@@ -65,20 +93,27 @@ export function registerSetupAssistantRoutes(
       });
 
       if (!responseOk(updated)) {
-        return res.status(updated.status).json(updated.body);
-      }
-
-      // Fast path:
-      // updateSetupAssistantDraft now returns a full optimistic assistant view.
-      // Avoid a second DB reread on every message turn.
-      if (hasRenderableAssistantView(updated?.body)) {
-        return res.status(updated.status).json({
-          ...updated.body,
-          message: s(updated?.body?.message || "Setup assistant draft updated"),
+        return sendJson(res, updated.status, updated.body, {
+          action: "update_current",
+          responseKind: "service_error",
         });
       }
 
-      // Safety fallback only if the returned payload is unexpectedly incomplete.
+      if (hasRenderableAssistantView(updated?.body)) {
+        return sendJson(
+          res,
+          updated.status,
+          {
+            ...updated.body,
+            message: s(updated?.body?.message || "Setup assistant draft updated"),
+          },
+          {
+            action: "update_current",
+            responseKind: "fast_path",
+          }
+        );
+      }
+
       try {
         const view = await readSetupAssistantView(
           {
@@ -91,25 +126,67 @@ export function registerSetupAssistantRoutes(
         );
 
         if (responseOk(view)) {
-          return res.status(view.status).json({
-            ...view.body,
-            message: s(updated?.body?.message || "Setup assistant draft updated"),
-          });
+          return sendJson(
+            res,
+            view.status,
+            {
+              ...view.body,
+              message: s(updated?.body?.message || "Setup assistant draft updated"),
+            },
+            {
+              action: "update_current",
+              responseKind: "fallback_reread",
+            }
+          );
         }
       } catch {}
 
-      return res.status(updated.status).json({
-        ...updated.body,
-        message: s(updated?.body?.message || "Setup assistant draft updated"),
-      });
+      return sendJson(
+        res,
+        updated.status,
+        {
+          ...updated.body,
+          message: s(updated?.body?.message || "Setup assistant draft updated"),
+        },
+        {
+          action: "update_current",
+          responseKind: "service_payload",
+        }
+      );
     } catch (error) {
-      return res.status(500).json({
-        ok: false,
-        error: "SetupAssistantDraftUpdateFailed",
-        reason: s(error?.message || "failed to update setup assistant draft"),
-      });
+      return sendJson(
+        res,
+        500,
+        {
+          ok: false,
+          error: "SetupAssistantDraftUpdateFailed",
+          reason: s(error?.message || "failed to update setup assistant draft"),
+        },
+        {
+          action: "update_current",
+          failure: "exception",
+          errorName: s(error?.name),
+        }
+      );
     }
   }
+
+  router.get("/setup/assistant/__build", (_req, res) => {
+    return sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        service: "ai-hq-backend",
+        feature: "setup_assistant",
+        summary: buildInfo.summary,
+      },
+      {
+        action: "build_probe",
+        buildSummary: buildInfo.summary,
+      }
+    );
+  });
 
   router.post("/setup/assistant/session/start", async (req, res) => {
     const actor = requireSetupActor(req, res);
@@ -122,19 +199,28 @@ export function registerSetupAssistantRoutes(
       });
 
       if (!responseOk(started)) {
-        return res.status(started.status).json(started.body);
+        return sendJson(res, started.status, started.body, {
+          action: "start_session",
+          responseKind: "service_error",
+        });
       }
 
-      // Start path is less latency-sensitive, but if the service already returned
-      // a complete payload, do not reread unnecessarily.
       if (hasRenderableAssistantView(started?.body)) {
-        return res.status(started.status).json({
-          ...started.body,
-          created: started?.body?.created === true,
-          message: s(
-            started?.body?.message || "Setup assistant session started"
-          ),
-        });
+        return sendJson(
+          res,
+          started.status,
+          {
+            ...started.body,
+            created: started?.body?.created === true,
+            message: s(
+              started?.body?.message || "Setup assistant session started"
+            ),
+          },
+          {
+            action: "start_session",
+            responseKind: "fast_path",
+          }
+        );
       }
 
       try {
@@ -149,27 +235,52 @@ export function registerSetupAssistantRoutes(
         );
 
         if (responseOk(view)) {
-          return res.status(view.status).json({
-            ...view.body,
-            created: started?.body?.created === true,
-            message: s(
-              started?.body?.message || "Setup assistant session started"
-            ),
-          });
+          return sendJson(
+            res,
+            view.status,
+            {
+              ...view.body,
+              created: started?.body?.created === true,
+              message: s(
+                started?.body?.message || "Setup assistant session started"
+              ),
+            },
+            {
+              action: "start_session",
+              responseKind: "fallback_reread",
+            }
+          );
         }
       } catch {}
 
-      return res.status(started.status).json({
-        ...started.body,
-        created: started?.body?.created === true,
-        message: s(started?.body?.message || "Setup assistant session started"),
-      });
+      return sendJson(
+        res,
+        started.status,
+        {
+          ...started.body,
+          created: started?.body?.created === true,
+          message: s(started?.body?.message || "Setup assistant session started"),
+        },
+        {
+          action: "start_session",
+          responseKind: "service_payload",
+        }
+      );
     } catch (error) {
-      return res.status(500).json({
-        ok: false,
-        error: "SetupAssistantSessionStartFailed",
-        reason: s(error?.message || "failed to start setup assistant session"),
-      });
+      return sendJson(
+        res,
+        500,
+        {
+          ok: false,
+          error: "SetupAssistantSessionStartFailed",
+          reason: s(error?.message || "failed to start setup assistant session"),
+        },
+        {
+          action: "start_session",
+          failure: "exception",
+          errorName: s(error?.name),
+        }
+      );
     }
   });
 
