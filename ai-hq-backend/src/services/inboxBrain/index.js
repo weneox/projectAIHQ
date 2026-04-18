@@ -314,6 +314,96 @@ function finalizeInboxDecisionResult(result = {}) {
   };
 }
 
+function getRuntimeReplyGateSnapshot(runtime = {}) {
+  const safeRuntime = obj(runtime);
+  const tenant = obj(safeRuntime.tenant);
+  const aiPolicy = obj(
+    safeRuntime.aiPolicy || safeRuntime.ai_policy || tenant.ai_policy
+  );
+  const inboxPolicy = obj(
+    safeRuntime.inboxPolicy || safeRuntime.inbox_policy || tenant.inbox_policy
+  );
+
+  return {
+    runtimeAiAutoReplyEnabled:
+      typeof aiPolicy.auto_reply_enabled === "boolean"
+        ? aiPolicy.auto_reply_enabled
+        : typeof aiPolicy.autoReplyEnabled === "boolean"
+          ? aiPolicy.autoReplyEnabled
+          : null,
+    runtimeCreateLeadEnabled:
+      typeof aiPolicy.create_lead_enabled === "boolean"
+        ? aiPolicy.create_lead_enabled
+        : typeof aiPolicy.createLeadEnabled === "boolean"
+          ? aiPolicy.createLeadEnabled
+          : null,
+    runtimeInboxEnabled:
+      typeof inboxPolicy.enabled === "boolean"
+        ? inboxPolicy.enabled
+        : null,
+    runtimeInboxAiReplyEnabled:
+      typeof inboxPolicy.ai_reply_enabled === "boolean"
+        ? inboxPolicy.ai_reply_enabled
+        : typeof inboxPolicy.aiReplyEnabled === "boolean"
+          ? inboxPolicy.aiReplyEnabled
+          : null,
+  };
+}
+
+function logInboxReplyGate(label = "", payload = {}) {
+  try {
+    console.log(`[ai-hq] inbox ${label}`, payload);
+  } catch {}
+}
+
+function buildSuppressionDebugPayload({
+  tenantKey = "",
+  channel = "",
+  policy = {},
+  runtime = {},
+  ai = {},
+  handoff = {},
+  reliability = {},
+  quietHoursApplied = false,
+  duplicateReply = false,
+  shouldReply = false,
+  shouldTyping = false,
+  replyText = "",
+  suppressedReason = "",
+  thread = null,
+  message = null,
+} = {}) {
+  return {
+    tenantKey: s(tenantKey),
+    channel: s(channel),
+    threadId: s(thread?.id),
+    messageId: s(message?.id),
+    quietHoursApplied: Boolean(quietHoursApplied),
+    aiNoReply: Boolean(ai?.noReply),
+    shouldReply: Boolean(shouldReply),
+    shouldTyping: Boolean(shouldTyping),
+    duplicateReply: Boolean(duplicateReply),
+    suppressedReason: s(suppressedReason),
+    replyTextPresent: Boolean(s(replyText)),
+    replyPreview: s(replyText).slice(0, 180),
+    handoffActive: Boolean(handoff?.active),
+    handoffReason: s(handoff?.reason),
+    operatorRecentlyReplied: Boolean(reliability?.operatorRecentlyReplied),
+    duplicateOfLastAiReply: Boolean(reliability?.duplicateOfLastAiReply),
+    lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || "").slice(0, 180),
+    awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
+    repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
+    leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
+    policyAutoReplyEnabled: Boolean(policy?.autoReplyEnabled),
+    policyCreateLeadEnabled: Boolean(policy?.createLeadEnabled),
+    policyHandoffEnabled: Boolean(policy?.handoffEnabled),
+    policyMarkSeenEnabled: Boolean(policy?.markSeenEnabled),
+    policyTypingIndicatorEnabled: Boolean(policy?.typingIndicatorEnabled),
+    policySuppressAiDuringHandoff: Boolean(policy?.suppressAiDuringHandoff),
+    ...getRuntimeReplyGateSnapshot(runtime),
+  };
+}
+
 function buildInboxActionsFallback({
   text,
   channel,
@@ -476,6 +566,7 @@ function buildInboxActionsFallback({
       threadState: effectiveThreadState || {},
       matchedKnowledgeTitles: matchedKnowledge.map((x) => x.title).filter(Boolean),
       matchedPlaybookName: s(matchedPlaybook?.name),
+      ...getRuntimeReplyGateSnapshot(profile),
     },
   });
 
@@ -523,14 +614,33 @@ function buildInboxActionsFallback({
       })
     );
   } else {
+    const suppressedReason = buildSuppressedReplyReason({
+      quietHoursApplied,
+      reliability,
+      handoffActive: handoffState.active,
+      duplicateReply,
+    });
+
+    logInboxReplyGate("fallback reply suppressed", buildSuppressionDebugPayload({
+      tenantKey,
+      channel,
+      policy,
+      runtime: profile,
+      handoff: handoffState,
+      reliability,
+      quietHoursApplied,
+      duplicateReply,
+      shouldReply,
+      shouldTyping,
+      replyText,
+      suppressedReason,
+      thread,
+      message,
+    }));
+
     actions.push(
       noReplyAction({
-        reason: buildSuppressedReplyReason({
-          quietHoursApplied,
-          reliability,
-          handoffActive: handoffState.active,
-          duplicateReply,
-        }),
+        reason: suppressedReason,
         meta: commonMeta,
       })
     );
@@ -608,6 +718,20 @@ export async function buildInboxActions({
 
   const effectiveThreadState = resolvedRuntime.threadState || threadState || null;
 
+  logInboxReplyGate("runtime reply gate inputs", {
+    tenantKey: resolvedTenantKey,
+    channel: s(channel),
+    threadId: s(thread?.id),
+    messageId: s(message?.id),
+    policyAutoReplyEnabled: Boolean(policy.autoReplyEnabled),
+    policyCreateLeadEnabled: Boolean(policy.createLeadEnabled),
+    policyHandoffEnabled: Boolean(policy.handoffEnabled),
+    policyMarkSeenEnabled: Boolean(policy.markSeenEnabled),
+    policyTypingIndicatorEnabled: Boolean(policy.typingIndicatorEnabled),
+    policySuppressAiDuringHandoff: Boolean(policy.suppressAiDuringHandoff),
+    ...getRuntimeReplyGateSnapshot(resolvedRuntime),
+  });
+
   const incoming = lower(text);
   const actions = [];
   const handoff = getThreadHandoffState(thread, effectiveThreadState);
@@ -657,6 +781,7 @@ export async function buildInboxActions({
     repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
     leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
     lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
+    ...getRuntimeReplyGateSnapshot(profile),
   };
 
   if (!policy.channelAllowed) {
@@ -945,14 +1070,33 @@ export async function buildInboxActions({
         })
       );
     } else {
+      const suppressedReason = buildSuppressedReplyReason({
+        quietHoursApplied,
+        reliability,
+        handoffActive: handoff.active,
+        duplicateReply,
+      });
+
+      logInboxReplyGate("behavior reply suppressed", buildSuppressionDebugPayload({
+        tenantKey: resolvedTenantKey,
+        channel,
+        policy,
+        runtime: profile,
+        handoff,
+        reliability,
+        quietHoursApplied,
+        duplicateReply,
+        shouldReply,
+        shouldTyping,
+        replyText,
+        suppressedReason,
+        thread,
+        message,
+      }));
+
       actions.push(
         noReplyAction({
-          reason: buildSuppressedReplyReason({
-            quietHoursApplied,
-            reliability,
-            handoffActive: handoff.active,
-            duplicateReply,
-          }),
+          reason: suppressedReason,
           meta: commonMeta,
         })
       );
@@ -1051,14 +1195,33 @@ export async function buildInboxActions({
         })
       );
     } else {
+      const suppressedReason = buildSuppressedReplyReason({
+        quietHoursApplied,
+        reliability,
+        handoffActive: handoff.active,
+        duplicateReply,
+      });
+
+      logInboxReplyGate("playbook reply suppressed", buildSuppressionDebugPayload({
+        tenantKey: resolvedTenantKey,
+        channel,
+        policy,
+        runtime: profile,
+        handoff,
+        reliability,
+        quietHoursApplied,
+        duplicateReply,
+        shouldReply,
+        shouldTyping,
+        replyText,
+        suppressedReason,
+        thread,
+        message,
+      }));
+
       actions.push(
         noReplyAction({
-          reason: buildSuppressedReplyReason({
-            quietHoursApplied,
-            reliability,
-            handoffActive: handoff.active,
-            duplicateReply,
-          }),
+          reason: suppressedReason,
           meta: commonMeta,
         })
       );
@@ -1131,14 +1294,33 @@ export async function buildInboxActions({
           })
         );
       } else {
+        const suppressedReason = buildSuppressedReplyReason({
+          quietHoursApplied,
+          reliability,
+          handoffActive: handoff.active,
+          duplicateReply,
+        });
+
+        logInboxReplyGate("knowledge reply suppressed", buildSuppressionDebugPayload({
+          tenantKey: resolvedTenantKey,
+          channel,
+          policy,
+          runtime: profile,
+          handoff,
+          reliability,
+          quietHoursApplied,
+          duplicateReply,
+          shouldReply,
+          shouldTyping,
+          replyText,
+          suppressedReason,
+          thread,
+          message,
+        }));
+
         actions.push(
           noReplyAction({
-            reason: buildSuppressedReplyReason({
-              quietHoursApplied,
-              reliability,
-              handoffActive: handoff.active,
-              duplicateReply,
-            }),
+            reason: suppressedReason,
             meta: commonMeta,
           })
         );
@@ -1264,6 +1446,29 @@ export async function buildInboxActions({
       shouldTyping = false;
     }
 
+    logInboxReplyGate("ai reply gating", buildSuppressionDebugPayload({
+      tenantKey: resolvedTenantKey,
+      channel,
+      policy,
+      runtime: aiProfile,
+      ai,
+      handoff,
+      reliability,
+      quietHoursApplied,
+      duplicateReply,
+      shouldReply,
+      shouldTyping,
+      replyText,
+      suppressedReason: !shouldReply || !replyText ? buildSuppressedReplyReason({
+        quietHoursApplied,
+        reliability,
+        handoffActive: handoff.active,
+        duplicateReply,
+      }) : "",
+      thread,
+      message,
+    }));
+
     const commonMeta = buildMeta({
       tenantKey: resolvedTenantKey,
       thread,
@@ -1295,6 +1500,7 @@ export async function buildInboxActions({
         threadState: effectiveThreadState || {},
         matchedKnowledgeTitles: (ai.matchedKnowledge || matchedKnowledge).map((x) => x.title).filter(Boolean),
         matchedPlaybookName: s((ai.matchedPlaybook || matchedPlaybook)?.name),
+        ...getRuntimeReplyGateSnapshot(aiProfile),
       },
     });
 
@@ -1342,14 +1548,34 @@ export async function buildInboxActions({
         })
       );
     } else {
+      const suppressedReason = buildSuppressedReplyReason({
+        quietHoursApplied,
+        reliability,
+        handoffActive: handoff.active,
+        duplicateReply,
+      });
+
+      logInboxReplyGate("ai reply suppressed", buildSuppressionDebugPayload({
+        tenantKey: resolvedTenantKey,
+        channel,
+        policy,
+        runtime: aiProfile,
+        ai,
+        handoff,
+        reliability,
+        quietHoursApplied,
+        duplicateReply,
+        shouldReply,
+        shouldTyping,
+        replyText,
+        suppressedReason,
+        thread,
+        message,
+      }));
+
       actions.push(
         noReplyAction({
-          reason: buildSuppressedReplyReason({
-            quietHoursApplied,
-            reliability,
-            handoffActive: handoff.active,
-            duplicateReply,
-          }),
+          reason: suppressedReason,
           meta: commonMeta,
         })
       );
