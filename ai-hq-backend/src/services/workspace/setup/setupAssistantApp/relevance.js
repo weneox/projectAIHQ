@@ -222,6 +222,13 @@ function words(value = "") {
     .filter(Boolean);
 }
 
+function splitMeaningfulChunks(value = "") {
+  return String(value || "")
+    .split(/\n|,|;|\u2022|\/+/g)
+    .map((item) => s(item))
+    .filter(Boolean);
+}
+
 function hasDigits(value = "") {
   return /\d/.test(String(value || ""));
 }
@@ -245,6 +252,20 @@ function extractRecognizedUrl(value = "") {
 function containsAnyKeyword(value = "", keywords = []) {
   const text = normalizeText(value);
   return keywords.some((keyword) => text.includes(normalizeText(keyword)));
+}
+
+function countKeywordMatches(value = "", keywords = []) {
+  const text = normalizeText(value);
+  const matched = new Set();
+
+  for (const keyword of keywords) {
+    const safeKeyword = normalizeText(keyword);
+    if (safeKeyword && text.includes(safeKeyword)) {
+      matched.add(safeKeyword);
+    }
+  }
+
+  return matched.size;
 }
 
 function hasAnyPattern(value = "", patterns = []) {
@@ -393,8 +414,16 @@ function hasMeaningfulHandoffText(value = "") {
 
   if (hasHandoffKeyword && hasConditionKeyword) return true;
 
+  const chunkMatches = splitMeaningfulChunks(text).filter((chunk) =>
+    containsAnyKeyword(chunk, HANDOFF_KEYWORDS)
+  ).length;
+
+  if (chunkMatches >= 1) return true;
+
+  if (countKeywordMatches(text, HANDOFF_KEYWORDS) >= 2) return true;
+
   return /if|when|əgər|eger|hallarda|olanda/i.test(text) &&
-    /operator|insan|human|manager|doctor|admin/i.test(text);
+    /operator|insan|human|manager|admin|doctor|həkim|hekim/i.test(text);
 }
 
 function hasMeaningfulDescriptionText(value = "") {

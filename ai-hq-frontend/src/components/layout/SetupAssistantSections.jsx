@@ -74,6 +74,18 @@ const SUPPRESSED_INTERNAL_ERRORS = new Set([
   "openai_setup_polisher_empty_output",
 ]);
 
+const INTERNAL_REVIEW_PATTERNS = [
+  /^openai_setup_/i,
+  /^setup_assistant_/i,
+  /^reasoner_/i,
+  /^polisher_/i,
+  /_timeout$/i,
+  /_empty_output$/i,
+  /_failed$/i,
+  /_unavailable$/i,
+  /_fallback$/i,
+];
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -377,6 +389,13 @@ function shouldSuppressVisibleError(error = "") {
   return SUPPRESSED_INTERNAL_ERRORS.has(safeError);
 }
 
+function shouldSuppressReviewNote(note = "") {
+  const safe = lower(note);
+  if (!safe) return true;
+  if (SUPPRESSED_INTERNAL_ERRORS.has(safe)) return true;
+  return INTERNAL_REVIEW_PATTERNS.some((pattern) => pattern.test(safe));
+}
+
 function resolveVisibleErrorMessage({
   localError = "",
   externalError = "",
@@ -409,7 +428,7 @@ function buildDraftReviewFlags(model = {}) {
 
   for (const item of arr(model.rejectedInputs)) {
     const reason = s(item?.reason || item?.input);
-    if (!reason) continue;
+    if (!reason || shouldSuppressReviewNote(reason)) continue;
     flags.push({
       level: "high",
       title: "High risk",
@@ -419,7 +438,7 @@ function buildDraftReviewFlags(model = {}) {
 
   for (const item of arr(obj(model.confidence).unclear)) {
     const text = s(item).replace(/_/g, " ").trim();
-    if (!text) continue;
+    if (!text || shouldSuppressReviewNote(text)) continue;
     flags.push({
       level: "medium",
       title: "Needs review",
@@ -429,7 +448,7 @@ function buildDraftReviewFlags(model = {}) {
 
   for (const item of arr(obj(model.recommendation).notes)) {
     const note = s(item);
-    if (!note) continue;
+    if (!note || shouldSuppressReviewNote(note)) continue;
 
     const safeLevel =
       /high risk|should be corrected|did not clearly answer/i.test(note)
