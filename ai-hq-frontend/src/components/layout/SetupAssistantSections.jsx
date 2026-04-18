@@ -145,6 +145,42 @@ function normalizeTimelineEntry(value = {}) {
   };
 }
 
+function normalizeQuestionCopy(question = {}) {
+  const key = lower(question?.key || question?.step || "company");
+  const local = obj(LOCALIZED_QUESTION_COPY[key]);
+
+  return {
+    body: s(question?.prompt || local.body),
+    placeholder: s(question?.placeholder || local.placeholder),
+  };
+}
+
+function normalizeComparableMessage(value = "") {
+  return s(value).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function responseTimelineFromPayload(payload = {}) {
+  return arr(
+    obj(payload?.setup?.assistant).timeline ||
+      payload?.setup?.timeline ||
+      obj(payload?.assistant).timeline ||
+      payload?.timeline
+  )
+    .map(normalizeTimelineEntry)
+    .filter((item) => item.body);
+}
+
+function timelineHasUserMessage(timeline = [], text = "") {
+  const target = normalizeComparableMessage(text);
+  if (!target) return false;
+
+  return arr(timeline).some(
+    (item) =>
+      item?.role === "user" &&
+      normalizeComparableMessage(item?.body) === target
+  );
+}
+
 function mapServiceItems(items = []) {
   return uniqueStrings(
     arr(items).map((item) => s(item?.title || item?.name || item?.label)),
@@ -196,16 +232,6 @@ function formatHoursItem(item = {}) {
 
 function mapHoursItems(items = []) {
   return uniqueStrings(arr(items).map((item) => formatHoursItem(item)), 24);
-}
-
-function getQuestionCopy(question = {}) {
-  const key = lower(question?.key || question?.step || "company");
-  const local = obj(LOCALIZED_QUESTION_COPY[key]);
-
-  return {
-    body: s(question?.prompt || local.body),
-    placeholder: s(question?.placeholder || local.placeholder),
-  };
 }
 
 function buildCanonicalAssistantState(reviewPayload = null, assistantState = {}) {
@@ -405,10 +431,10 @@ function pickSoftReviewNote(model = {}) {
 
 function bubbleShell(role = "assistant") {
   if (role === "user") {
-    return "rounded-[22px] rounded-br-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,#0f172a,#111827)] text-white shadow-[0_16px_34px_rgba(2,6,23,0.16)]";
+    return "rounded-[20px] rounded-br-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,#0f172a,#111827)] text-white shadow-[0_16px_34px_rgba(2,6,23,0.16)]";
   }
 
-  return "rounded-[22px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] text-text shadow-[0_10px_28px_rgba(15,23,42,0.05)]";
+  return "rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] text-text shadow-[0_10px_28px_rgba(15,23,42,0.05)]";
 }
 
 const bubbleMotion = {
@@ -429,7 +455,7 @@ function ChatBubble({ role = "assistant", body = "" }) {
       <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
         <div className={`max-w-[76%] px-4 py-3 ${bubbleShell(role)}`}>
           <div
-            className={`whitespace-pre-wrap text-[14px] leading-[1.72] tracking-[-0.01em] ${
+            className={`whitespace-pre-wrap text-[14px] leading-[1.68] tracking-[-0.01em] ${
               isUser ? "text-white/96" : "text-[rgba(15,23,42,0.92)]"
             }`}
           >
@@ -491,7 +517,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-11 items-center gap-2 rounded-[14px] px-4 text-[13px] font-medium tracking-[-0.01em] transition-all disabled:cursor-not-allowed disabled:opacity-45 ${styles}`}
+      className={`inline-flex h-10 items-center gap-2 rounded-[14px] px-4 text-[13px] font-medium tracking-[-0.01em] transition-all disabled:cursor-not-allowed disabled:opacity-45 ${styles}`}
     >
       {children}
     </button>
@@ -504,7 +530,7 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
       initial={{ opacity: 0, y: 12, scale: 0.992 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-      className="relative overflow-hidden rounded-[28px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] px-5 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.07)]"
+      className="relative overflow-hidden rounded-[26px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] px-5 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.07)]"
     >
       <div className="pointer-events-none absolute right-0 top-0 h-[220px] w-[220px] bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.07),transparent_68%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.18),rgba(15,23,42,0))]" />
@@ -512,16 +538,16 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
       <div className="relative">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
           <Sparkles className="h-4 w-4 text-brand" />
-          Ask AI
+          Setup
         </div>
 
-        <div className="mt-4 text-[22px] font-semibold tracking-[-0.045em] text-text">
-          Salam. Setup-u buradan sakit və səliqəli başlayaq.
+        <div className="mt-4 text-[21px] font-semibold tracking-[-0.045em] text-text">
+          Salam. Gəlin bunu səliqəli quraq.
         </div>
 
         <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
-          Kanalları sonra da qura bilərsiniz. İndi isə biznesiniz üçün əsas
-          truth draft-ını bir neçə təmiz sual ilə yığaq.
+          Kanalları sonra da bağlaya bilərsiniz. Əvvəl biznesiniz üçün təmiz və
+          professional bir setup draft yığaq.
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -552,7 +578,7 @@ function Composer({
 
   return (
     <div className="bg-transparent px-5 pb-5 pt-3">
-      <div className="relative overflow-hidden rounded-[24px] rounded-bl-[14px] rounded-tr-[18px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_18px_54px_rgba(15,23,42,0.08)]">
+      <div className="relative overflow-hidden rounded-[22px] rounded-bl-[14px] rounded-tr-[18px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_18px_54px_rgba(15,23,42,0.08)]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.16),rgba(15,23,42,0))]" />
 
         <div className="flex items-end gap-3">
@@ -568,7 +594,7 @@ function Composer({
               }
             }}
             placeholder={placeholder}
-            className="min-h-[88px] flex-1 resize-none appearance-none border-0 bg-transparent px-1 py-1.5 text-[14px] leading-[1.72] tracking-[-0.01em] text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+            className="min-h-[84px] flex-1 resize-none appearance-none border-0 bg-transparent px-1 py-1.5 text-[14px] leading-[1.68] tracking-[-0.01em] text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
             style={{ boxShadow: "none" }}
           />
 
@@ -702,7 +728,7 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
     <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
       <div className="flex justify-start">
         <div className="max-w-[88%] min-w-0">
-          <div className="relative overflow-hidden rounded-[28px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,252,0.98))] shadow-[0_26px_80px_rgba(15,23,42,0.09)]">
+          <div className="relative overflow-hidden rounded-[26px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,252,0.98))] shadow-[0_26px_80px_rgba(15,23,42,0.09)]">
             <div className="pointer-events-none absolute inset-0 opacity-[0.58]">
               <div className="absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.2),rgba(15,23,42,0))]" />
               <div className="absolute right-0 top-0 h-[240px] w-[240px] bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_68%)]" />
@@ -716,7 +742,7 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
                     Setup draft
                   </div>
 
-                  <div className="mt-3 text-[24px] font-semibold tracking-[-0.05em] text-text">
+                  <div className="mt-3 text-[23px] font-semibold tracking-[-0.05em] text-text">
                     Draft ready
                   </div>
 
@@ -827,7 +853,7 @@ function SetupAssistantSectionsContent({
 
   const currentQuestion = finalModel.nextQuestion;
   const questionCopy = useMemo(
-    () => getQuestionCopy(currentQuestion),
+    () => normalizeQuestionCopy(currentQuestion),
     [currentQuestion]
   );
 
@@ -844,6 +870,11 @@ function SetupAssistantSectionsContent({
     [serverTimeline]
   );
 
+  const hasServerUserTurn = useMemo(
+    () => serverTimeline.some((item) => item.role === "user" && s(item.body)),
+    [serverTimeline]
+  );
+
   const showWelcome = !setupPrimed && serverTimeline.length === 0 && !busy;
 
   const composerPlaceholder = useMemo(() => {
@@ -851,8 +882,6 @@ function SetupAssistantSectionsContent({
     if (s(questionCopy.placeholder)) return questionCopy.placeholder;
     return DEFAULT_COMPOSER_PLACEHOLDER;
   }, [showWelcome, questionCopy.placeholder]);
-
-  const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
   const staticAssistantMessage = useMemo(() => {
     if (showWelcome) return "";
@@ -867,20 +896,19 @@ function SetupAssistantSectionsContent({
     questionCopy.body,
   ]);
 
+  const visiblePendingUserMessage = useMemo(() => {
+    if (!s(pendingUserMessage)) return "";
+    if (timelineHasUserMessage(serverTimeline, pendingUserMessage)) return "";
+    return pendingUserMessage;
+  }, [pendingUserMessage, serverTimeline]);
+
   const softReviewNote = useMemo(() => {
     if (showWelcome) return null;
     if (smartDraftReady) return null;
     if (busy) return null;
-    if (!serverTimeline.length && !s(staticAssistantMessage)) return null;
+    if (!hasServerUserTurn) return null;
     return pickSoftReviewNote(finalModel);
-  }, [
-    showWelcome,
-    smartDraftReady,
-    busy,
-    serverTimeline.length,
-    staticAssistantMessage,
-    finalModel,
-  ]);
+  }, [showWelcome, smartDraftReady, busy, hasServerUserTurn, finalModel]);
 
   const visibleErrorMessage = useMemo(
     () =>
@@ -893,7 +921,10 @@ function SetupAssistantSectionsContent({
   );
 
   useEffect(() => {
-    if (!busy) return undefined;
+    if (!busy) {
+      setShowTypingBubble(false);
+      return undefined;
+    }
 
     const timer = window.setTimeout(() => {
       setShowTypingBubble(true);
@@ -904,6 +935,13 @@ function SetupAssistantSectionsContent({
       setShowTypingBubble(false);
     };
   }, [busy]);
+
+  useEffect(() => {
+    if (!pendingUserMessage) return;
+    if (timelineHasUserMessage(serverTimeline, pendingUserMessage)) {
+      setPendingUserMessage("");
+    }
+  }, [serverTimeline, pendingUserMessage]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -951,7 +989,7 @@ function SetupAssistantSectionsContent({
     setComposerValue("");
 
     try {
-      await onParseMessage?.({
+      const response = await onParseMessage?.({
         mode: "message",
         message: text,
         text,
@@ -962,10 +1000,14 @@ function SetupAssistantSectionsContent({
         questionKey: s(currentQuestion?.key),
       });
 
+      const responseTimeline = responseTimelineFromPayload(response);
+      if (timelineHasUserMessage(responseTimeline, text)) {
+        setPendingUserMessage("");
+      }
+
       requestAnimationFrame(() => {
         textareaRef.current?.focus?.();
       });
-      setPendingUserMessage("");
     } catch (error) {
       setPendingUserMessage("");
       setLocalError(s(error?.message, "Message processing failed."));
@@ -996,7 +1038,7 @@ function SetupAssistantSectionsContent({
             <ChatBubble role="assistant" body={staticAssistantMessage} />
           ) : null}
 
-          {visiblePendingUserMessage ? (
+          {s(visiblePendingUserMessage) ? (
             <ChatBubble role="user" body={visiblePendingUserMessage} />
           ) : null}
 

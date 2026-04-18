@@ -205,6 +205,18 @@ function buildAssistantFromApi(base = {}, response = {}) {
   const root = obj(response);
   const setup = obj(root.setup);
 
+  const responseAssistant =
+    Object.keys(obj(setup.assistant)).length > 0
+      ? obj(setup.assistant)
+      : obj(root.assistant);
+
+  const responseTimeline = arr(
+    obj(setup.assistant).timeline ||
+      setup.timeline ||
+      root.timeline ||
+      obj(root.assistant).timeline
+  );
+
   return normalizeAssistantState({
     ...base,
     session: obj(root.session),
@@ -212,10 +224,12 @@ function buildAssistantFromApi(base = {}, response = {}) {
     websitePrefill: obj(setup.websitePrefill),
     setupSummary: obj(setup.summary),
     draft: obj(setup.draft),
-    assistant:
-      Object.keys(obj(setup.assistant)).length > 0
-        ? obj(setup.assistant)
-        : obj(root.assistant),
+    assistant: {
+      ...responseAssistant,
+      timeline: responseTimeline,
+    },
+    assistantTimeline: responseTimeline,
+    timeline: responseTimeline,
   });
 }
 

@@ -1037,11 +1037,26 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   const setup = obj(baseBody.setup);
   const assistant = obj(setup.assistant);
 
+  const timeline = arr(setup.timeline || assistant.timeline).map(
+    normalizeTimelineTurn
+  );
+
   if (!turn) {
+    const baseAssistant = compactDraftObject({
+      ...assistant,
+      timeline,
+    });
+
     return {
       ok: true,
       ...baseBody,
-      timeline: arr(setup.timeline || assistant.timeline),
+      setup: {
+        ...setup,
+        assistant: baseAssistant,
+        timeline,
+      },
+      assistant: baseAssistant,
+      timeline,
     };
   }
 
@@ -1108,6 +1123,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
           ? compactText(s(safeTurn.assistantMessage || safeTurn.message), 420)
           : "",
     },
+    timeline,
   });
 
   const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
@@ -1134,10 +1150,6 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       s(obj(resolvedNextQuestion).key) ||
       s(session.currentStep),
   };
-
-  const timeline = arr(setup.timeline || assistant.timeline).map(
-    normalizeTimelineTurn
-  );
 
   return {
     ok: true,
