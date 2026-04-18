@@ -1,31 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
 import {
-  analyzeSetupIntake,
+  discardCurrentSetupReview,
+  finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
-  importGoogleMapsForSetup,
-  importWebsiteForSetup,
+  sendSetupAssistantMessage,
   startSetupAssistantSession,
-  updateCurrentSetupAssistantDraft,
 } from "../../../api/setup.js";
 
 const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../../api/setup.js", () => ({
-  analyzeSetupIntake: vi.fn(),
+  discardCurrentSetupReview: vi.fn(),
   finalizeSetupAssistantSession: vi.fn(),
   getCurrentSetupAssistantSession: vi.fn(),
   getCurrentSetupReview: vi.fn(),
-  importGoogleMapsForSetup: vi.fn(),
-  importWebsiteForSetup: vi.fn(),
   sendSetupAssistantMessage: vi.fn(),
   startSetupAssistantSession: vi.fn(),
-  updateCurrentSetupAssistantDraft: vi.fn(),
 }));
 
 vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
@@ -55,8 +52,8 @@ function createAssistant(overrides = {}) {
       websiteUrl: "",
     },
     session: {
-      id: "session-1",
-      draftVersion: 1,
+      id: "",
+      draftVersion: 0,
     },
     setupSummary: {},
     draft: {
@@ -69,7 +66,7 @@ function createAssistant(overrides = {}) {
       sourceMetadata: {},
       assistantState: {},
       progress: {},
-      version: 1,
+      version: 0,
       updatedAt: null,
     },
     assistant: {
@@ -111,17 +108,15 @@ function renderWidget(assistant = createAssistant()) {
   const client = createQueryClient();
 
   return render(
-    <QueryClientProvider client={client}>
-      <FloatingAiWidget
-        open
-        onOpenChange={vi.fn()}
-        assistant={assistant}
-      />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <FloatingAiWidget open onOpenChange={vi.fn()} assistant={assistant} />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
-describe("FloatingAiWidget source intake", () => {
+describe("FloatingAiWidget", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.HTMLElement.prototype.scrollTo = vi.fn();
@@ -134,163 +129,91 @@ describe("FloatingAiWidget source intake", () => {
 
     vi.mocked(getCurrentSetupAssistantSession).mockResolvedValue(null);
     vi.mocked(getCurrentSetupReview).mockResolvedValue({ review: {} });
+    vi.mocked(discardCurrentSetupReview).mockResolvedValue({ ok: true });
+    vi.mocked(finalizeSetupAssistantSession).mockResolvedValue({ ok: true });
+  });
+
+  it("starts a setup session from the welcome state", async () => {
     vi.mocked(startSetupAssistantSession).mockResolvedValue({
       ok: true,
       session: { id: "session-1", draftVersion: 1 },
-      setup: { draft: {} },
+      setup: {
+        draft: {},
+      },
+      assistant: {
+        nextQuestion: {
+          key: "company",
+          step: "company",
+          prompt: "What is your company name?",
+        },
+        readyForApproval: false,
+      },
     });
-    vi.mocked(importWebsiteForSetup).mockResolvedValue({ ok: true });
-    vi.mocked(importGoogleMapsForSetup).mockResolvedValue({ ok: true });
-    vi.mocked(updateCurrentSetupAssistantDraft).mockResolvedValue({
+
+    renderWidget();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start setup" }));
+
+    await waitFor(() => {
+      expect(startSetupAssistantSession).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  });
+
+  it("routes submitted answers through sendSetupAssistantMessage for the active step", async () => {
+    vi.mocked(startSetupAssistantSession).mockResolvedValue({
+      ok: true,
+      session: { id: "session-1", draftVersion: 1 },
+      setup: {
+        draft: {},
+      },
+      assistant: {
+        nextQuestion: {
+          key: "company",
+          step: "company",
+          prompt: "What is your company name?",
+        },
+        readyForApproval: false,
+      },
+    });
+
+    vi.mocked(sendSetupAssistantMessage).mockResolvedValue({
       ok: true,
       session: { id: "session-1", draftVersion: 2 },
       setup: {
-        draft: {
-          sourceMetadata: {},
+        draft: {},
+      },
+      assistant: {
+        nextQuestion: {
+          key: "description",
+          step: "description",
+          prompt: "What does the business do?",
         },
+        readyForApproval: false,
       },
     });
-    vi.mocked(analyzeSetupIntake).mockResolvedValue({ ok: true });
-  });
 
-  it("routes website intake through the website import path", async () => {
     renderWidget();
 
-    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
-      target: { value: "lunasmile.az" },
+    fireEvent.click(screen.getByRole("button", { name: "Start setup" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    await waitFor(() =>
-      expect(importWebsiteForSetup).toHaveBeenCalledWith({
-        url: "https://lunasmile.az",
-        allowSessionReuse: true,
-        waitForCompletion: true,
-      })
-    );
-
-    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
-    expect(updateCurrentSetupAssistantDraft).not.toHaveBeenCalled();
-    expect(analyzeSetupIntake).not.toHaveBeenCalled();
-  });
-
-  it("routes google maps intake through the maps import path", async () => {
-    renderWidget();
-
-    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
-      target: { value: "https://maps.google.com/?cid=123" },
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "Luna Smile" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    await waitFor(() =>
-      expect(importGoogleMapsForSetup).toHaveBeenCalledWith({
-        url: "https://maps.google.com/?cid=123",
-        allowSessionReuse: true,
-        waitForCompletion: true,
-      })
-    );
-
-    expect(importWebsiteForSetup).not.toHaveBeenCalled();
-    expect(updateCurrentSetupAssistantDraft).not.toHaveBeenCalled();
-    expect(analyzeSetupIntake).not.toHaveBeenCalled();
-  });
-
-  it("keeps instagram handles out of the website import path", async () => {
-    renderWidget();
-
-    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
-      target: { value: "@lunasmile" },
+    await waitFor(() => {
+      expect(sendSetupAssistantMessage).toHaveBeenCalledWith({
+        step: "company",
+        answer: "Luna Smile",
+      });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await waitFor(() =>
-      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
-        sourceMetadata: {
-          primarySourceType: "instagram",
-          primarySourceUrl: "https://instagram.com/lunasmile",
-          sourceLabels: ["Instagram"],
-          evidenceSummary: ["Instagram supplied by operator"],
-        },
-      })
-    );
-
-    await waitFor(() =>
-      expect(analyzeSetupIntake).toHaveBeenCalledWith({
-        manualText: "Instagram: https://instagram.com/lunasmile",
-        answers: {
-          instagramUrl: "https://instagram.com/lunasmile",
-        },
-        note: "instagram source",
-      })
-    );
-
-    expect(importWebsiteForSetup).not.toHaveBeenCalled();
-    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
-  });
-
-  it("keeps facebook links out of the website import path", async () => {
-    renderWidget();
-
-    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
-      target: { value: "https://facebook.com/lunasmileclinic" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await waitFor(() =>
-      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
-        sourceMetadata: {
-          primarySourceType: "facebook",
-          primarySourceUrl: "https://facebook.com/lunasmileclinic",
-          sourceLabels: ["Facebook"],
-          evidenceSummary: ["Facebook supplied by operator"],
-        },
-      })
-    );
-
-    await waitFor(() =>
-      expect(analyzeSetupIntake).toHaveBeenCalledWith({
-        manualText: "Facebook: https://facebook.com/lunasmileclinic",
-        answers: {
-          facebookUrl: "https://facebook.com/lunasmileclinic",
-        },
-        note: "facebook source",
-      })
-    );
-
-    expect(importWebsiteForSetup).not.toHaveBeenCalled();
-    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
-  });
-
-  it("keeps manual notes in the fallback analyze path", async () => {
-    renderWidget();
-
-    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
-      target: {
-        value: "Premium dental clinic in Baku with WhatsApp bookings and cosmetic care.",
-      },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await waitFor(() =>
-      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
-        sourceMetadata: {
-          primarySourceType: "manual",
-          primarySourceUrl: "",
-          sourceLabels: ["Manual note"],
-          evidenceSummary: ["Manual note captured"],
-        },
-      })
-    );
-
-    await waitFor(() =>
-      expect(analyzeSetupIntake).toHaveBeenCalledWith({
-        manualText:
-          "Premium dental clinic in Baku with WhatsApp bookings and cosmetic care.",
-        note: "manual business note",
-      })
-    );
-
-    expect(importWebsiteForSetup).not.toHaveBeenCalled();
-    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
   });
 });

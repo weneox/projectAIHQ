@@ -42,9 +42,18 @@ describe("SetupAssistantSections", () => {
     window.HTMLElement.prototype.scrollTo = vi.fn();
   });
 
+  async function startSetup() {
+    fireEvent.click(screen.getByRole("button", { name: "Start setup" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+    });
+  }
+
   it("reads the canonical assistant state without any legacy assistantBrain fallback", async () => {
     render(
       <SetupAssistantSections
+        sessionHydrated
         assistant={createAssistant()}
         reviewPayload={{
           assistant: {
@@ -74,10 +83,7 @@ describe("SetupAssistantSections", () => {
       />
     );
 
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "https://alpha.example" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await startSetup();
 
     await waitFor(() => {
       expect(
@@ -89,6 +95,7 @@ describe("SetupAssistantSections", () => {
   it("keeps the smart draft curated and hides the old analysis-heavy headings", async () => {
     render(
       <SetupAssistantSections
+        sessionHydrated
         assistant={createAssistant({
           assistant: {
             nextQuestion: {},
@@ -128,17 +135,16 @@ describe("SetupAssistantSections", () => {
       />
     );
 
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "https://alpha.example" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await startSetup();
 
     await waitFor(() => {
-      expect(screen.getByText("Draft")).toBeInTheDocument();
+      expect(screen.getByText("Draft ready")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Follow-up notes")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve truth" })).toBeInTheDocument();
+    expect(screen.getByText("Review intelligence")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve and finish setup" })
+    ).toBeInTheDocument();
     expect(screen.queryByText("Strongest evidence")).not.toBeInTheDocument();
     expect(screen.queryByText("What the system noticed")).not.toBeInTheDocument();
     expect(screen.queryByText("What looks strong")).not.toBeInTheDocument();
@@ -150,6 +156,7 @@ describe("SetupAssistantSections", () => {
   it("does not treat legacy review readiness as approval readiness", async () => {
     render(
       <SetupAssistantSections
+        sessionHydrated
         assistant={createAssistant({
           review: {
             finalizeAvailable: false,
@@ -188,17 +195,14 @@ describe("SetupAssistantSections", () => {
       />
     );
 
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "https://alpha.example" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await startSetup();
 
     await waitFor(() => {
-      expect(screen.getByText("Draft")).toBeInTheDocument();
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
     expect(
-      screen.queryByRole("button", { name: "Approve truth" })
+      screen.queryByRole("button", { name: "Approve and finish setup" })
     ).not.toBeInTheDocument();
   });
 });
