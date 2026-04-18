@@ -27,6 +27,11 @@ import {
   isAllowedOrigin,
   requireSafeDiagnostics,
 } from "./src/utils/securitySurface.js";
+import {
+  attachBuildHeaders,
+  buildInfo,
+  withBuildMeta,
+} from "./src/utils/buildInfo.js";
 
 import { createDurableExecutionWorker } from "./src/workers/durableExecutionWorker.js";
 import { createDraftScheduleWorker } from "./src/workers/draftScheduleWorker.js";
@@ -217,6 +222,10 @@ async function main() {
   app.use(express.json({ limit: "8mb" }));
   app.use(express.urlencoded({ extended: false }));
   app.use(requestContextMiddleware({ logger }));
+  app.use((req, res, next) => {
+    attachBuildHeaders(res);
+    next();
+  });
 
   const diagnosticsGuard = (req, res, next) =>
     requireSafeDiagnostics(req, res, next, { env: cfg.app.env });
@@ -274,17 +283,19 @@ async function main() {
 
   app.get("/__buildcheck", diagnosticsGuard, (_req, res) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    return res.status(200).json({
-      ok: true,
-      service: "ai-hq-backend",
-      marker: "BUILD_CHECK_V4_FEATURES",
-      env: cfg.app.env,
-      port: cfg.app.port,
-      time: new Date().toISOString(),
-      publicBaseUrl: s(cfg.urls.publicBaseUrl),
-      userSessionCookieName: s(cfg.auth.userSessionCookieName),
-      hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
-    });
+    return res.status(200).json(
+      withBuildMeta({
+        ok: true,
+        service: "ai-hq-backend",
+        marker: buildInfo.marker,
+        env: cfg.app.env,
+        port: cfg.app.port,
+        time: new Date().toISOString(),
+        publicBaseUrl: s(cfg.urls.publicBaseUrl),
+        userSessionCookieName: s(cfg.auth.userSessionCookieName),
+        hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
+      })
+    );
   });
 
   app.get("/health", async (_req, res) => {
@@ -776,17 +787,19 @@ async function main() {
 
   app.get("/api/__buildcheck", diagnosticsGuard, (_req, res) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    return res.status(200).json({
-      ok: true,
-      service: "ai-hq-backend",
-      marker: "API_BUILD_CHECK_V4_FEATURES",
-      env: cfg.app.env,
-      port: cfg.app.port,
-      time: new Date().toISOString(),
-      publicBaseUrl: s(cfg.urls.publicBaseUrl),
-      userSessionCookieName: s(cfg.auth.userSessionCookieName),
-      hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
-    });
+    return res.status(200).json(
+      withBuildMeta({
+        ok: true,
+        service: "ai-hq-backend",
+        marker: buildInfo.marker,
+        env: cfg.app.env,
+        port: cfg.app.port,
+        time: new Date().toISOString(),
+        publicBaseUrl: s(cfg.urls.publicBaseUrl),
+        userSessionCookieName: s(cfg.auth.userSessionCookieName),
+        hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
+      })
+    );
   });
 
   app.use("/api", adminAuthRoutes({ db, wsHub }));
@@ -905,6 +918,13 @@ async function main() {
       draftScheduleWorkerEnabled: !!cfg.workers.draftScheduleWorkerEnabled,
       mediaJobWorkerEnabled: !!cfg.workers.mediaJobWorkerEnabled,
       openaiModel: cfg.ai.openaiModel,
+      build: {
+        version: buildInfo.version,
+        sha: buildInfo.shortSha || "unknown",
+        fullSha: buildInfo.fullSha || "unknown",
+        bootId: buildInfo.bootId,
+        marker: buildInfo.marker,
+      },
     });
   });
 
@@ -955,7 +975,16 @@ async function main() {
 main().catch((e) => {
   createLogger({ service: "ai-hq-backend", env: cfg.app.env }).error(
     "app.fatal",
-    e
+    e,
+    {
+      build: {
+        version: buildInfo.version,
+        sha: buildInfo.shortSha || "unknown",
+        fullSha: buildInfo.fullSha || "unknown",
+        bootId: buildInfo.bootId,
+        marker: buildInfo.marker,
+      },
+    }
   );
   process.exit(1);
 });
