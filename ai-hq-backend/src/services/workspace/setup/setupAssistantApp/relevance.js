@@ -5,7 +5,40 @@ import {
   parseServicesNote,
 } from "../setupAssistantParser.js";
 import { isBehaviorStepRelevant, normalizeQuestionKey } from "./questions.js";
-import { buildRecognizedSourceCandidate, inferContactType } from "./shared.js";
+import {
+  buildRecognizedSourceCandidate,
+  inferContactType,
+  normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
+  normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
+} from "./shared.js";
+
+const normalizePricingBehaviorMode =
+  typeof importedNormalizePricingBehaviorMode === "function"
+    ? importedNormalizePricingBehaviorMode
+    : () => "";
+
+const normalizeLocationBehaviorMode =
+  typeof importedNormalizeLocationBehaviorMode === "function"
+    ? importedNormalizeLocationBehaviorMode
+    : () => "";
+
+const normalizeBookingBehaviorMode =
+  typeof importedNormalizeBookingBehaviorMode === "function"
+    ? importedNormalizeBookingBehaviorMode
+    : () => "";
+
+const normalizeContactBehaviorMode =
+  typeof importedNormalizeContactBehaviorMode === "function"
+    ? importedNormalizeContactBehaviorMode
+    : () => "";
+
+const normalizeHandoffBehaviorMode =
+  typeof importedNormalizeHandoffBehaviorMode === "function"
+    ? importedNormalizeHandoffBehaviorMode
+    : () => "";
 
 const GREETING_WORDS = new Set([
   "salam",
