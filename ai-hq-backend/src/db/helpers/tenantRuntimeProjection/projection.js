@@ -101,7 +101,8 @@ export function buildTenantRuntimeProjection(graph) {
     capabilities,
     graph.services,
     graph.contacts,
-    operationalChannelPolicies
+    operationalChannelPolicies,
+    graph.channels
   );
 
   const commentsJson = buildCommentsJson(
@@ -220,6 +221,11 @@ export function buildTenantRuntimeProjection(graph) {
           source: "tenant_channel_policies",
           governanceModel: "operational_runtime_config",
           count: operationalChannelPolicies.length,
+        },
+        channels: {
+          source: "tenant_channels",
+          governanceModel: "operational_connectivity_state",
+          count: arr(graph.channels).length,
         },
       },
       behaviorContractVersion: 1,

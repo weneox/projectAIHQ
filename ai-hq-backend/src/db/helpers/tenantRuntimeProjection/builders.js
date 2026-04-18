@@ -47,6 +47,16 @@ function getChannelKey(value = "") {
   if (normalized === "fb") return "facebook";
   if (normalized === "wa") return "whatsapp";
   if (normalized === "tg") return "telegram";
+  if (normalized === "telegram_dm" || normalized === "telegram-dm") return "telegram";
+  if (normalized === "telegram_bot" || normalized === "telegram-bot") return "telegram";
+  if (normalized === "website" || normalized === "web") return "website_widget";
+  if (normalized === "website_widget" || normalized === "website-widget") return "website_widget";
+  if (normalized === "website_chat" || normalized === "website-chat") return "website_widget";
+  if (normalized === "webchat") return "website_widget";
+  if (normalized === "widget") return "website_widget";
+  if (normalized === "mail") return "email";
+  if (normalized === "email_inbox" || normalized === "email-inbox") return "email";
+  if (normalized === "linkedin_dm" || normalized === "linkedin-dm") return "linkedin";
 
   return normalized;
 }
@@ -73,7 +83,9 @@ function resolveChannelPolicyEnabled(policy = {}, fallback = true) {
 }
 
 function findFirstChannelPolicy(channelPolicies = [], channelKeys = []) {
-  const normalizedKeys = new Set(arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean));
+  const normalizedKeys = new Set(
+    arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean)
+  );
 
   return (
     arr(channelPolicies).find((item) =>
@@ -83,13 +95,62 @@ function findFirstChannelPolicy(channelPolicies = [], channelKeys = []) {
 }
 
 function hasEnabledChannelPolicy(channelPolicies = [], channelKeys = []) {
-  const normalizedKeys = new Set(arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean));
+  const normalizedKeys = new Set(
+    arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean)
+  );
+
   const matches = arr(channelPolicies).filter((item) =>
     normalizedKeys.has(getChannelKey(item?.channel))
   );
 
   if (!matches.length) return false;
   return matches.some((item) => resolveChannelPolicyEnabled(item, true));
+}
+
+function getConnectedInboxChannels(channels = []) {
+  const inboxTypes = new Set([
+    "instagram",
+    "facebook",
+    "whatsapp",
+    "telegram",
+    "website_widget",
+    "email",
+    "linkedin",
+  ]);
+
+  const out = [];
+
+  for (const item of arr(channels)) {
+    const row = obj(item);
+    const channelType = getChannelKey(row.channelType || row.channel_type);
+    if (!channelType || !inboxTypes.has(channelType)) continue;
+
+    const isActive =
+      typeof row.isActive === "boolean"
+        ? row.isActive
+        : typeof row.is_active === "boolean"
+          ? row.is_active
+          : true;
+
+    const isConnected =
+      typeof row.isConnected === "boolean"
+        ? row.isConnected
+        : typeof row.is_connected === "boolean"
+          ? row.is_connected
+          : true;
+
+    const supportsInbound =
+      typeof row.supportsInbound === "boolean"
+        ? row.supportsInbound
+        : typeof row.supports_inbound === "boolean"
+          ? row.supports_inbound
+          : true;
+
+    if (!isActive || !isConnected || !supportsInbound) continue;
+    out.push(channelType);
+  }
+
+  return uniqStrings(out);
 }
 
 function hasMeaningfulProfileData(profile = {}) {
@@ -148,6 +209,16 @@ function hasCapabilitySignals(capabilities = {}) {
     value.supports_telegram_dm,
     value.supportsTelegramBot,
     value.supports_telegram_bot,
+    value.supportsWebsiteWidget,
+    value.supports_website_widget,
+    value.supportsWebsiteChat,
+    value.supports_website_chat,
+    value.supportsWebchat,
+    value.supports_webchat,
+    value.supportsEmail,
+    value.supports_email,
+    value.supportsLinkedin,
+    value.supports_linkedin,
     value.supportsComments,
     value.supports_comments,
     value.supportsVoice,
@@ -379,7 +450,13 @@ export function buildRuntimeContextText({
   return compactText(parts.filter(Boolean).join("\n"), 24000);
 }
 
-export function buildInboxJson(capabilities, services, contacts, channelPolicies) {
+export function buildInboxJson(
+  capabilities,
+  services,
+  contacts,
+  channelPolicies,
+  channels = []
+) {
   const normalizedCapabilities = obj(capabilities);
 
   const supportsInstagram =
@@ -388,7 +465,9 @@ export function buildInboxJson(capabilities, services, contacts, channelPolicies
 
   const supportsFacebook =
     normalizedCapabilities.supportsFacebookMessenger === true ||
-    normalizedCapabilities.supports_facebook_messenger === true;
+    normalizedCapabilities.supports_facebook_messenger === true ||
+    normalizedCapabilities.supportsMessenger === true ||
+    normalizedCapabilities.supports_messenger === true;
 
   const supportsWhatsapp =
     normalizedCapabilities.supportsWhatsapp === true ||
@@ -401,6 +480,22 @@ export function buildInboxJson(capabilities, services, contacts, channelPolicies
     normalizedCapabilities.supports_telegram_dm === true ||
     normalizedCapabilities.supportsTelegramBot === true ||
     normalizedCapabilities.supports_telegram_bot === true;
+
+  const supportsWebsiteWidget =
+    normalizedCapabilities.supportsWebsiteWidget === true ||
+    normalizedCapabilities.supports_website_widget === true ||
+    normalizedCapabilities.supportsWebsiteChat === true ||
+    normalizedCapabilities.supports_website_chat === true ||
+    normalizedCapabilities.supportsWebchat === true ||
+    normalizedCapabilities.supports_webchat === true;
+
+  const supportsEmail =
+    normalizedCapabilities.supportsEmail === true ||
+    normalizedCapabilities.supports_email === true;
+
+  const supportsLinkedin =
+    normalizedCapabilities.supportsLinkedin === true ||
+    normalizedCapabilities.supports_linkedin === true;
 
   const instagramPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
     "instagram",
@@ -419,6 +514,24 @@ export function buildInboxJson(capabilities, services, contacts, channelPolicies
     "telegram",
   ]);
 
+  const websiteWidgetPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "website_widget",
+    "website",
+    "webchat",
+    "widget",
+  ]);
+
+  const emailPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "email",
+    "mail",
+  ]);
+
+  const linkedinPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "linkedin",
+  ]);
+
+  const connectedChannels = getConnectedInboxChannels(channels);
+
   const dmPolicy =
     findFirstChannelPolicy(channelPolicies, [
       "instagram",
@@ -426,28 +539,46 @@ export function buildInboxJson(capabilities, services, contacts, channelPolicies
       "facebook",
       "whatsapp",
       "telegram",
+      "website_widget",
+      "website",
+      "webchat",
+      "widget",
+      "email",
+      "mail",
+      "linkedin",
     ]) || null;
 
-  const enabled =
-    supportsInstagram ||
-    supportsFacebook ||
-    supportsWhatsapp ||
-    supportsTelegram ||
-    instagramPolicyEnabled ||
-    facebookPolicyEnabled ||
-    whatsappPolicyEnabled ||
-    telegramPolicyEnabled;
+  const supportedChannels = uniqStrings([
+    supportsInstagram || instagramPolicyEnabled || connectedChannels.includes("instagram")
+      ? "instagram"
+      : "",
+    supportsFacebook || facebookPolicyEnabled || connectedChannels.includes("facebook")
+      ? "facebook"
+      : "",
+    supportsWhatsapp || whatsappPolicyEnabled || connectedChannels.includes("whatsapp")
+      ? "whatsapp"
+      : "",
+    supportsTelegram || telegramPolicyEnabled || connectedChannels.includes("telegram")
+      ? "telegram"
+      : "",
+    supportsWebsiteWidget ||
+    websiteWidgetPolicyEnabled ||
+    connectedChannels.includes("website_widget")
+      ? "website_widget"
+      : "",
+    supportsEmail || emailPolicyEnabled || connectedChannels.includes("email")
+      ? "email"
+      : "",
+    supportsLinkedin || linkedinPolicyEnabled || connectedChannels.includes("linkedin")
+      ? "linkedin"
+      : "",
+  ]);
+
+  const enabled = supportedChannels.length > 0;
 
   const aiReplyEnabled = dmPolicy
     ? resolveChannelPolicyEnabled(dmPolicy, enabled)
     : enabled;
-
-  const supportedChannels = uniqStrings([
-    supportsInstagram || instagramPolicyEnabled ? "instagram" : "",
-    supportsFacebook || facebookPolicyEnabled ? "facebook" : "",
-    supportsWhatsapp || whatsappPolicyEnabled ? "whatsapp" : "",
-    supportsTelegram || telegramPolicyEnabled ? "telegram" : "",
-  ]);
 
   return {
     enabled,
@@ -463,7 +594,11 @@ export function buildInboxJson(capabilities, services, contacts, channelPolicies
     serviceCount: arr(services).length,
     contactCount: arr(contacts).length,
     supportedChannels,
+    connectedChannels,
     supportsTelegram: supportedChannels.includes("telegram"),
+    supportsWebsiteWidget: supportedChannels.includes("website_widget"),
+    supportsEmail: supportedChannels.includes("email"),
+    supportsLinkedin: supportedChannels.includes("linkedin"),
   };
 }
 
