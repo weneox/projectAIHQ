@@ -145,13 +145,22 @@ function normalizeTimelineEntry(value = {}) {
   };
 }
 
-function normalizeQuestionCopy(question = {}) {
-  const key = lower(question?.key || question?.step || "company");
+function normalizeQuestionCopy(question = null) {
+  const safeQuestion = obj(question);
+  const key = lower(safeQuestion.key || safeQuestion.step);
+
+  if (!key) {
+    return {
+      body: "",
+      placeholder: "",
+    };
+  }
+
   const local = obj(LOCALIZED_QUESTION_COPY[key]);
 
   return {
-    body: s(question?.prompt || local.body),
-    placeholder: s(question?.placeholder || local.placeholder),
+    body: s(safeQuestion.prompt || local.body),
+    placeholder: s(safeQuestion.placeholder || local.placeholder),
   };
 }
 
@@ -324,18 +333,42 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
   };
 }
 
-function hasStrongDraft(model = {}) {
-  const draft = obj(model.draft);
+function isDraftReadyMessage(text = "") {
+  const value = lower(text);
+  if (!value) return false;
+
+  return (
+    value.includes("draft hazırdır") ||
+    value.includes("draft hazirdir") ||
+    value.includes("draft ready") ||
+    value.includes("ready for approval") ||
+    value.includes("approval")
+  );
+}
+
+function hasAnyDraftContent(draft = {}) {
+  const safeDraft = obj(draft);
 
   return Boolean(
-    model.readyForApproval === true &&
-      s(draft.businessName) &&
-      s(draft.whatThisBusinessIs) &&
-      arr(draft.coreServices).length > 0 &&
-      arr(draft.contactRoutes).length > 0 &&
-      s(draft.pricingPosture) &&
-      s(draft.humanHandoff)
+    s(safeDraft.businessName) ||
+      s(safeDraft.whatThisBusinessIs) ||
+      s(safeDraft.websiteUrl) ||
+      arr(safeDraft.coreServices).length > 0 ||
+      arr(safeDraft.contactRoutes).length > 0 ||
+      arr(safeDraft.hours).length > 0 ||
+      s(safeDraft.pricingPosture) ||
+      s(safeDraft.humanHandoff)
   );
+}
+
+function shouldShowSmartDraft(model = {}) {
+  const draft = obj(model.draft);
+  const hasDraft = hasAnyDraftContent(draft);
+  const backendReady = model.readyForApproval === true;
+  const messageReady = isDraftReadyMessage(model.message);
+
+  if (!hasDraft) return false;
+  return backendReady || messageReady;
 }
 
 function shouldSuppressVisibleError(error = "") {
@@ -712,11 +745,14 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
   ].filter(([, value]) => s(value));
 
   const hasHighRisk = reviewFlags.some((item) => item.level === "high");
-  const statusLabel = hasHighRisk
-    ? "Review required"
-    : reviewFlags.length > 0
-      ? "Ready with notes"
-      : "Ready for approval";
+  const statusLabel =
+    model.readyForApproval === true || isDraftReadyMessage(model.message)
+      ? hasHighRisk
+        ? "Review required"
+        : reviewFlags.length > 0
+          ? "Ready with notes"
+          : "Ready for approval"
+      : "In progress";
 
   const statusTone = hasHighRisk
     ? "text-[#991b1b]"
@@ -847,7 +883,7 @@ function SetupAssistantSectionsContent({
   );
 
   const smartDraftReady = useMemo(
-    () => hasStrongDraft(finalModel),
+    () => shouldShowSmartDraft(finalModel),
     [finalModel]
   );
 
@@ -877,11 +913,18 @@ function SetupAssistantSectionsContent({
 
   const showWelcome = !setupPrimed && serverTimeline.length === 0 && !busy;
 
+  const hideComposer =
+    !showWelcome &&
+    sessionHydrated &&
+    smartDraftReady &&
+    !s(currentQuestion?.key || currentQuestion?.step);
+
   const composerPlaceholder = useMemo(() => {
     if (showWelcome) return DEFAULT_COMPOSER_PLACEHOLDER;
+    if (hideComposer) return "";
     if (s(questionCopy.placeholder)) return questionCopy.placeholder;
     return DEFAULT_COMPOSER_PLACEHOLDER;
-  }, [showWelcome, questionCopy.placeholder]);
+  }, [showWelcome, hideComposer, questionCopy.placeholder]);
 
   const staticAssistantMessage = useMemo(() => {
     if (showWelcome) return "";
@@ -951,9 +994,9 @@ function SetupAssistantSectionsContent({
   ]);
 
   useEffect(() => {
-    if (!sessionHydrated || showWelcome || busy) return;
+    if (!sessionHydrated || showWelcome || busy || hideComposer) return;
     textareaRef.current?.focus?.();
-  }, [sessionHydrated, showWelcome, busy, serverTimeline.length]);
+  }, [sessionHydrated, showWelcome, busy, hideComposer, serverTimeline.length]);
 
   async function handleStartSetupClick() {
     if (busy) return;
@@ -972,7 +1015,7 @@ function SetupAssistantSectionsContent({
 
   async function handleMessageSubmit() {
     const text = s(composerValue);
-    if (!text || busy) return;
+    if (!text || busy || hideComposer) return;
 
     setLocalError("");
     setPendingUserMessage(text);
@@ -996,7 +1039,9 @@ function SetupAssistantSectionsContent({
       }
 
       requestAnimationFrame(() => {
-        textareaRef.current?.focus?.();
+        if (!hideComposer) {
+          textareaRef.current?.focus?.();
+        }
       });
     } catch (error) {
       setPendingUserMessage("");
@@ -1046,7 +1091,7 @@ function SetupAssistantSectionsContent({
         </div>
       </div>
 
-      {!showWelcome && sessionHydrated ? (
+      {!showWelcome && sessionHydrated && !hideComposer ? (
         <Composer
           value={composerValue}
           busy={busy}
