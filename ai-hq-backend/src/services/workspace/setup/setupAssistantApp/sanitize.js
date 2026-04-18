@@ -43,6 +43,12 @@ const normalizeHandoffBehaviorModeSafe =
     ? importedNormalizeHandoffBehaviorMode
     : () => "";
 
+const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
+const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
+const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
+const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
+const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
+
 export function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
   return compactDraftObject({
@@ -252,7 +258,7 @@ export function sanitizePricingPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
 
   const mode =
-    normalizePricingBehaviorModeSafe(source.mode || source.defaultBehavior) ||
+    normalizePricingBehaviorMode(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   const preferredTargetType =
@@ -301,7 +307,7 @@ export function sanitizeLocationPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
 
   const mode =
-    normalizeLocationBehaviorModeSafe(source.mode || source.defaultBehavior) ||
+    normalizeLocationBehaviorMode(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -336,7 +342,7 @@ export function sanitizeBookingPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
 
   const mode =
-    normalizeBookingBehaviorModeSafe(source.mode || source.defaultBehavior) ||
+    normalizeBookingBehaviorMode(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -371,7 +377,7 @@ export function sanitizeContactPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
 
   const mode =
-    normalizeContactBehaviorModeSafe(source.mode || source.defaultBehavior) ||
+    normalizeContactBehaviorMode(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({
@@ -397,7 +403,7 @@ export function sanitizeHandoffPolicy(value = {}) {
   const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
 
   const mode =
-    normalizeHandoffBehaviorModeSafe(source.mode || source.defaultBehavior) ||
+    normalizeHandoffBehaviorMode(source.mode || source.defaultBehavior) ||
     defaults.mode;
 
   return compactDraftObject({

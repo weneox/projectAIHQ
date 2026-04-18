@@ -67,6 +67,12 @@ const normalizeHandoffBehaviorModeSafe =
     ? importedNormalizeHandoffBehaviorMode
     : () => "";
 
+const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
+const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
+const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
+const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
+const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
+
 function normalizeStep(value = "") {
   const raw = s(value).toLowerCase();
   const normalized = normalizeQuestionKey(raw);
@@ -532,7 +538,7 @@ function buildPricingBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).pricingPolicy);
 
   const explicitMode =
-    normalizePricingBehaviorModeSafe(text) ||
+    normalizePricingBehaviorMode(text) ||
     (/xidmət|service/.test(lower) && /soruş|ask/.test(lower)
       ? "ask_service_first"
       : "") ||
@@ -585,7 +591,7 @@ function buildLocationBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).locationPolicy);
 
   const explicitMode =
-    normalizeLocationBehaviorModeSafe(text) ||
+    normalizeLocationBehaviorMode(text) ||
     (/birbaşa.*(xəritə|map)|map first/i.test(lower)
       ? "map_first"
       : "") ||
@@ -624,7 +630,7 @@ function buildBookingBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).bookingPolicy);
 
   const explicitMode =
-    normalizeBookingBehaviorModeSafe(text) ||
+    normalizeBookingBehaviorMode(text) ||
     (/whatsapp|wa\.me/i.test(lower) ? "route_whatsapp" : "") ||
     (/instagram|dm/i.test(lower) ? "route_instagram" : "") ||
     (/website|site|booking page|reservation page|appointment page/i.test(lower)
@@ -661,7 +667,7 @@ function buildContactBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).contactPolicy);
 
   const explicitMode =
-    normalizeContactBehaviorModeSafe(text) ||
+    normalizeContactBehaviorMode(text) ||
     (/whatsapp|wa\.me/i.test(lower) ? "whatsapp_first" : "") ||
     (/zəng|call|phone/i.test(lower) ? "call_first" : "") ||
     (/email|mail/i.test(lower) ? "email_first" : "") ||
@@ -701,7 +707,7 @@ function buildHandoffBehaviorPatch(answer = "", current = {}) {
   const currentPolicy = obj(obj(current.assistantBehaviorDraft).handoffPolicy);
 
   const explicitMode =
-    normalizeHandoffBehaviorModeSafe(text) ||
+    normalizeHandoffBehaviorMode(text) ||
     (/birbaşa|direct/i.test(lower) ? "direct_handoff" : "") ||
     (/səbəb|reason|niyə|why|clarify|explain/i.test(lower)
       ? "ask_then_handoff"
