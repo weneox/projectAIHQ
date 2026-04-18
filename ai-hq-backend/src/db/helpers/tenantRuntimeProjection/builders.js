@@ -20,6 +20,78 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, normalized));
 }
 
+function isTrueLike(value) {
+  if (typeof value === "boolean") return value;
+
+  const normalized = s(value).toLowerCase();
+  if (!normalized) return false;
+
+  return [
+    "1",
+    "true",
+    "yes",
+    "y",
+    "on",
+    "enabled",
+    "active",
+  ].includes(normalized);
+}
+
+function getChannelKey(value = "") {
+  const normalized = s(value).toLowerCase();
+
+  if (!normalized) return "";
+  if (normalized === "ig") return "instagram";
+  if (normalized === "insta") return "instagram";
+  if (normalized === "messenger") return "facebook";
+  if (normalized === "fb") return "facebook";
+  if (normalized === "wa") return "whatsapp";
+  if (normalized === "tg") return "telegram";
+
+  return normalized;
+}
+
+function resolveChannelPolicyEnabled(policy = {}, fallback = true) {
+  const value = obj(policy);
+  const candidates = [
+    value.enabled,
+    value.isEnabled,
+    value.is_enabled,
+    value.active,
+    value.channelEnabled,
+    value.channel_enabled,
+    value.aiReplyEnabled,
+    value.ai_reply_enabled,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "boolean") return candidate;
+    if (s(candidate)) return isTrueLike(candidate);
+  }
+
+  return fallback;
+}
+
+function findFirstChannelPolicy(channelPolicies = [], channelKeys = []) {
+  const normalizedKeys = new Set(arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean));
+
+  return (
+    arr(channelPolicies).find((item) =>
+      normalizedKeys.has(getChannelKey(item?.channel))
+    ) || null
+  );
+}
+
+function hasEnabledChannelPolicy(channelPolicies = [], channelKeys = []) {
+  const normalizedKeys = new Set(arr(channelKeys).map((item) => getChannelKey(item)).filter(Boolean));
+  const matches = arr(channelPolicies).filter((item) =>
+    normalizedKeys.has(getChannelKey(item?.channel))
+  );
+
+  if (!matches.length) return false;
+  return matches.some((item) => resolveChannelPolicyEnabled(item, true));
+}
+
 function hasMeaningfulProfileData(profile = {}) {
   const value = obj(profile);
 
@@ -70,6 +142,12 @@ function hasCapabilitySignals(capabilities = {}) {
     value.supports_facebook_messenger,
     value.supportsWhatsapp,
     value.supports_whatsapp,
+    value.supportsTelegram,
+    value.supports_telegram,
+    value.supportsTelegramDm,
+    value.supports_telegram_dm,
+    value.supportsTelegramBot,
+    value.supports_telegram_bot,
     value.supportsComments,
     value.supports_comments,
     value.supportsVoice,
@@ -302,25 +380,90 @@ export function buildRuntimeContextText({
 }
 
 export function buildInboxJson(capabilities, services, contacts, channelPolicies) {
+  const normalizedCapabilities = obj(capabilities);
+
+  const supportsInstagram =
+    normalizedCapabilities.supportsInstagramDm === true ||
+    normalizedCapabilities.supports_instagram_dm === true;
+
+  const supportsFacebook =
+    normalizedCapabilities.supportsFacebookMessenger === true ||
+    normalizedCapabilities.supports_facebook_messenger === true;
+
+  const supportsWhatsapp =
+    normalizedCapabilities.supportsWhatsapp === true ||
+    normalizedCapabilities.supports_whatsapp === true;
+
+  const supportsTelegram =
+    normalizedCapabilities.supportsTelegram === true ||
+    normalizedCapabilities.supports_telegram === true ||
+    normalizedCapabilities.supportsTelegramDm === true ||
+    normalizedCapabilities.supports_telegram_dm === true ||
+    normalizedCapabilities.supportsTelegramBot === true ||
+    normalizedCapabilities.supports_telegram_bot === true;
+
+  const instagramPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "instagram",
+  ]);
+
+  const facebookPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "facebook",
+    "messenger",
+  ]);
+
+  const whatsappPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "whatsapp",
+  ]);
+
+  const telegramPolicyEnabled = hasEnabledChannelPolicy(channelPolicies, [
+    "telegram",
+  ]);
+
   const dmPolicy =
-    arr(channelPolicies).find((x) =>
-      ["instagram", "messenger", "whatsapp"].includes(x.channel)
-    ) || null;
+    findFirstChannelPolicy(channelPolicies, [
+      "instagram",
+      "messenger",
+      "facebook",
+      "whatsapp",
+      "telegram",
+    ]) || null;
+
+  const enabled =
+    supportsInstagram ||
+    supportsFacebook ||
+    supportsWhatsapp ||
+    supportsTelegram ||
+    instagramPolicyEnabled ||
+    facebookPolicyEnabled ||
+    whatsappPolicyEnabled ||
+    telegramPolicyEnabled;
+
+  const aiReplyEnabled = dmPolicy
+    ? resolveChannelPolicyEnabled(dmPolicy, enabled)
+    : enabled;
+
+  const supportedChannels = uniqStrings([
+    supportsInstagram || instagramPolicyEnabled ? "instagram" : "",
+    supportsFacebook || facebookPolicyEnabled ? "facebook" : "",
+    supportsWhatsapp || whatsappPolicyEnabled ? "whatsapp" : "",
+    supportsTelegram || telegramPolicyEnabled ? "telegram" : "",
+  ]);
 
   return {
-    enabled:
-      capabilities.supportsInstagramDm ||
-      capabilities.supportsFacebookMessenger ||
-      capabilities.supportsWhatsapp,
-    replyStyle: capabilities.replyStyle,
-    replyLength: capabilities.replyLength,
-    pricingMode: capabilities.pricingMode,
-    canCaptureLeads: capabilities.canCaptureLeads,
-    handoffEnabled: capabilities.handoffEnabled,
+    enabled,
+    aiReplyEnabled,
+    autoReplyEnabled: aiReplyEnabled,
+    replyStyle: normalizedCapabilities.replyStyle,
+    replyLength: normalizedCapabilities.replyLength,
+    pricingMode: normalizedCapabilities.pricingMode,
+    canCaptureLeads: normalizedCapabilities.canCaptureLeads,
+    handoffEnabled: normalizedCapabilities.handoffEnabled,
     contactCaptureMode: dmPolicy?.contactCaptureMode || "inherit",
     escalationMode: dmPolicy?.escalationMode || "inherit",
     serviceCount: arr(services).length,
     contactCount: arr(contacts).length,
+    supportedChannels,
+    supportsTelegram: supportedChannels.includes("telegram"),
   };
 }
 

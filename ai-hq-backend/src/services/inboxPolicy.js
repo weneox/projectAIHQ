@@ -1,5 +1,5 @@
 // src/services/inboxPolicy.js
-// FINAL v4.1 — tenant-safe + new tenant schema aware + strict policy normalization
+// FINAL v4.2 — tenant-safe + strict policy normalization + telegram first-class
 
 import { getDefaultTenantKey, resolveTenantKey } from "../tenancy/index.js";
 
@@ -15,8 +15,12 @@ function b(v, d = true) {
   if (typeof v === "boolean") return v;
   const x = lower(v);
   if (!x) return d;
-  if (["1", "true", "yes", "y", "on"].includes(x)) return true;
-  if (["0", "false", "no", "n", "off"].includes(x)) return false;
+  if (["1", "true", "yes", "y", "on", "enabled", "active"].includes(x)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off", "disabled", "inactive"].includes(x)) {
+    return false;
+  }
   return d;
 }
 
@@ -43,6 +47,9 @@ export function normalizeInboxChannel(v) {
   if (ch === "ig") return "instagram";
   if (ch === "insta") return "instagram";
   if (ch === "tg") return "telegram";
+  if (ch === "telegram_bot") return "telegram";
+  if (ch === "telegram-dm") return "telegram";
+  if (ch === "telegram_dm") return "telegram";
   if (ch === "fb") return "facebook";
   if (ch === "messenger") return "facebook";
   if (ch === "wa") return "whatsapp";
@@ -58,7 +65,7 @@ const DEFAULT_POLICY = {
   typingIndicatorEnabled: true,
   suppressAiDuringHandoff: true,
   autoReleaseOnOperatorReply: false,
-  allowedChannels: ["instagram", "facebook", "whatsapp"],
+  allowedChannels: ["instagram", "facebook", "whatsapp", "telegram"],
   quietHoursEnabled: false,
   quietHoursStart: 0,
   quietHoursEnd: 0,
@@ -158,12 +165,16 @@ export function normalizePolicy(raw = {}, root = {}) {
 
   return {
     autoReplyEnabled: b(
-      safeRaw.autoReplyEnabled ?? safeRaw.auto_reply_enabled ?? safeRoot.auto_reply_enabled,
+      safeRaw.autoReplyEnabled ??
+        safeRaw.auto_reply_enabled ??
+        safeRoot.auto_reply_enabled,
       DEFAULT_POLICY.autoReplyEnabled
     ),
 
     createLeadEnabled: b(
-      safeRaw.createLeadEnabled ?? safeRaw.create_lead_enabled ?? safeRoot.create_lead_enabled,
+      safeRaw.createLeadEnabled ??
+        safeRaw.create_lead_enabled ??
+        safeRoot.create_lead_enabled,
       DEFAULT_POLICY.createLeadEnabled
     ),
 
@@ -176,7 +187,9 @@ export function normalizePolicy(raw = {}, root = {}) {
     ),
 
     markSeenEnabled: b(
-      safeRaw.markSeenEnabled ?? safeRaw.mark_seen_enabled ?? safeRoot.mark_seen_enabled,
+      safeRaw.markSeenEnabled ??
+        safeRaw.mark_seen_enabled ??
+        safeRoot.mark_seen_enabled,
       DEFAULT_POLICY.markSeenEnabled
     ),
 
@@ -195,7 +208,8 @@ export function normalizePolicy(raw = {}, root = {}) {
     ),
 
     autoReleaseOnOperatorReply: b(
-      safeRaw.autoReleaseOnOperatorReply ?? safeRaw.auto_release_on_operator_reply,
+      safeRaw.autoReleaseOnOperatorReply ??
+        safeRaw.auto_release_on_operator_reply,
       DEFAULT_POLICY.autoReleaseOnOperatorReply
     ),
 
@@ -253,7 +267,9 @@ export function isPolicyQuietHours(policy) {
 
   const start = toHour(policy?.quietHoursStart, 0);
   const end = toHour(policy?.quietHoursEnd, 0);
-  const nowHour = getLocalHourForTimezone(policy?.timezone || getDefaultTimezone());
+  const nowHour = getLocalHourForTimezone(
+    policy?.timezone || getDefaultTimezone()
+  );
 
   if (start === end) return false;
 
@@ -303,13 +319,13 @@ export function getInboxPolicy({ tenantKey, channel, tenant = null } = {}) {
 
   const policy = normalizePolicy(mergedRaw, rootPolicy);
   const ch = normalizeInboxChannel(channel);
-  const timezone = s(tenant?.timezone || getDefaultTimezone()) || getDefaultTimezone();
+  const timezone =
+    s(tenant?.timezone || getDefaultTimezone()) || getDefaultTimezone();
   const resolvedTenantKey = resolveTenantKey(
     tenantKey || tenant?.tenant_key,
     getDefaultTenantKey()
   );
-  const channelAllowed =
-    !ch || policy.allowedChannels.includes(ch) || ch === "telegram";
+  const channelAllowed = !ch || policy.allowedChannels.includes(ch);
   const telegramControlsDisabled = ch === "telegram";
 
   return {

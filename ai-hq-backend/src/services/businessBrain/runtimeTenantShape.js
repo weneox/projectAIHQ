@@ -14,6 +14,186 @@ import {
   uniqStrings,
 } from "./runtimeShared.js";
 
+function isTrueLike(value) {
+  if (typeof value === "boolean") return value;
+
+  const normalized = s(value).toLowerCase();
+  if (!normalized) return false;
+
+  return [
+    "1",
+    "true",
+    "yes",
+    "y",
+    "on",
+    "enabled",
+    "active",
+  ].includes(normalized);
+}
+
+function getChannelKey(value = "") {
+  const normalized = s(value).toLowerCase();
+
+  if (!normalized) return "";
+  if (normalized === "ig") return "instagram";
+  if (normalized === "insta") return "instagram";
+  if (normalized === "messenger") return "facebook";
+  if (normalized === "fb") return "facebook";
+  if (normalized === "wa") return "whatsapp";
+  if (normalized === "tg") return "telegram";
+
+  return normalized;
+}
+
+function resolveBooleanCandidate(...values) {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    if (s(value)) return isTrueLike(value);
+  }
+  return undefined;
+}
+
+function resolveChannelPolicyEnabled(policy = {}, fallback = true) {
+  const value = obj(policy);
+
+  const resolved = resolveBooleanCandidate(
+    value.enabled,
+    value.isEnabled,
+    value.is_enabled,
+    value.active,
+    value.channelEnabled,
+    value.channel_enabled,
+    value.aiReplyEnabled,
+    value.ai_reply_enabled
+  );
+
+  return typeof resolved === "boolean" ? resolved : fallback;
+}
+
+function findPreferredInboxChannelPolicy(channelPolicies = []) {
+  const preferredOrder = ["telegram", "instagram", "facebook", "whatsapp"];
+
+  for (const key of preferredOrder) {
+    const match = arr(channelPolicies).find(
+      (item) => getChannelKey(item?.channel) === key
+    );
+    if (match) return match;
+  }
+
+  return (
+    arr(channelPolicies).find((item) =>
+      ["telegram", "instagram", "facebook", "whatsapp"].includes(
+        getChannelKey(item?.channel)
+      )
+    ) || null
+  );
+}
+
+function resolveInboxSurfaceEnabled({
+  inboxJson = {},
+  channelPolicies = [],
+  capabilities = {},
+} = {}) {
+  const inbox = obj(inboxJson);
+  const capabilityBag = obj(capabilities);
+
+  const explicitInboxEnabled = resolveBooleanCandidate(
+    inbox.enabled,
+    inbox.isEnabled,
+    inbox.is_enabled
+  );
+  if (typeof explicitInboxEnabled === "boolean") return explicitInboxEnabled;
+
+  const supportsInboxChannel = resolveBooleanCandidate(
+    capabilityBag.supportsInstagramDm,
+    capabilityBag.supports_instagram_dm,
+    capabilityBag.supportsFacebookMessenger,
+    capabilityBag.supports_facebook_messenger,
+    capabilityBag.supportsWhatsapp,
+    capabilityBag.supports_whatsapp,
+    capabilityBag.supportsTelegram,
+    capabilityBag.supports_telegram,
+    capabilityBag.supportsTelegramDm,
+    capabilityBag.supports_telegram_dm,
+    capabilityBag.supportsTelegramBot,
+    capabilityBag.supports_telegram_bot
+  );
+
+  if (typeof supportsInboxChannel === "boolean" && supportsInboxChannel) {
+    return true;
+  }
+
+  const preferredPolicy = findPreferredInboxChannelPolicy(channelPolicies);
+  if (preferredPolicy) {
+    return resolveChannelPolicyEnabled(preferredPolicy, true);
+  }
+
+  return undefined;
+}
+
+function resolveInboxAutoReplyEnabled({
+  inboxJson = {},
+  legacyAutoReplyEnabled,
+  channelPolicies = [],
+  fallbackEnabled,
+} = {}) {
+  const inbox = obj(inboxJson);
+
+  const explicit = resolveBooleanCandidate(
+    inbox.aiReplyEnabled,
+    inbox.ai_reply_enabled,
+    inbox.autoReplyEnabled,
+    inbox.auto_reply_enabled
+  );
+  if (typeof explicit === "boolean") return explicit;
+
+  if (typeof legacyAutoReplyEnabled === "boolean") {
+    return legacyAutoReplyEnabled;
+  }
+
+  const preferredPolicy = findPreferredInboxChannelPolicy(channelPolicies);
+  if (preferredPolicy) {
+    const fromPolicy = resolveBooleanCandidate(
+      preferredPolicy.aiReplyEnabled,
+      preferredPolicy.ai_reply_enabled,
+      preferredPolicy.enabled,
+      preferredPolicy.isEnabled,
+      preferredPolicy.is_enabled
+    );
+    if (typeof fromPolicy === "boolean") return fromPolicy;
+  }
+
+  if (typeof fallbackEnabled === "boolean") return fallbackEnabled;
+  return undefined;
+}
+
+function resolveCreateLeadEnabled({
+  leadCaptureJson = {},
+  legacyCreateLeadEnabled,
+  capabilities = {},
+} = {}) {
+  const leadCapture = obj(leadCaptureJson);
+  const capabilityBag = obj(capabilities);
+
+  const explicit = resolveBooleanCandidate(
+    leadCapture.enabled,
+    leadCapture.isEnabled,
+    leadCapture.is_enabled,
+    leadCapture.canCaptureLeads,
+    leadCapture.can_capture_leads
+  );
+  if (typeof explicit === "boolean") return explicit;
+
+  if (typeof legacyCreateLeadEnabled === "boolean") {
+    return legacyCreateLeadEnabled;
+  }
+
+  return resolveBooleanCandidate(
+    capabilityBag.canCaptureLeads,
+    capabilityBag.can_capture_leads
+  );
+}
+
 function mergeTenantRuntime({
   legacy,
   businessProfile,
@@ -105,26 +285,21 @@ function mergeTenantRuntime({
       ? ["Do not make promises you cannot verify."]
       : []),
   ]);
-  const displayName =
-    s(businessProfile?.display_name) ||
-    s(businessProfile?.company_name) ||
-    s(legacy?.profile?.brand_name) ||
-    s(legacy?.company_name) ||
-    s(legacy?.tenant_key);
-  const channelPolicy =
-    arr(channelPolicies).find(
-      (x) => lower(x.channel) === "instagram" && lower(x.subchannel || "default") === "default"
-    ) ||
-    arr(channelPolicies).find(
-      (x) => lower(x.channel) === "comments" && lower(x.subchannel || "default") === "default"
-    ) ||
-    arr(channelPolicies)[0] ||
-    null;
+  const channelPolicy = findPreferredInboxChannelPolicy(channelPolicies);
+  const inboxEnabled = channelPolicy
+    ? resolveChannelPolicyEnabled(channelPolicy, true)
+    : undefined;
   const autoReplyEnabled =
     typeof legacy?.ai_policy?.auto_reply_enabled === "boolean"
       ? legacy.ai_policy.auto_reply_enabled
-      : typeof channelPolicy?.ai_reply_enabled === "boolean"
-        ? channelPolicy.ai_reply_enabled
+      : channelPolicy
+        ? resolveBooleanCandidate(
+            channelPolicy.ai_reply_enabled,
+            channelPolicy.aiReplyEnabled,
+            channelPolicy.enabled,
+            channelPolicy.isEnabled,
+            channelPolicy.is_enabled
+          )
         : undefined;
   const createLeadEnabled =
     typeof legacy?.ai_policy?.create_lead_enabled === "boolean"
@@ -221,6 +396,8 @@ function mergeTenantRuntime({
     },
     inbox_policy: {
       ...obj(legacy?.inbox_policy),
+      enabled: inboxEnabled,
+      ai_reply_enabled: autoReplyEnabled,
       reply_style: s(capabilities?.reply_style || ""),
       max_reply_sentences: maxSentences,
       pricing_visibility: s(channelPolicy?.pricing_visibility || ""),
@@ -321,6 +498,35 @@ function buildTenantFromProjection({
     arr(channelPolicies)[0] ||
     null;
 
+  const legacyAutoReplyEnabled =
+    typeof legacy?.ai_policy?.auto_reply_enabled === "boolean"
+      ? legacy.ai_policy.auto_reply_enabled
+      : undefined;
+
+  const legacyCreateLeadEnabled =
+    typeof legacy?.ai_policy?.create_lead_enabled === "boolean"
+      ? legacy.ai_policy.create_lead_enabled
+      : undefined;
+
+  const inboxEnabled = resolveInboxSurfaceEnabled({
+    inboxJson,
+    channelPolicies,
+    capabilities: capabilitiesJson,
+  });
+
+  const autoReplyEnabled = resolveInboxAutoReplyEnabled({
+    inboxJson,
+    legacyAutoReplyEnabled,
+    channelPolicies,
+    fallbackEnabled: inboxEnabled,
+  });
+
+  const createLeadEnabled = resolveCreateLeadEnabled({
+    leadCaptureJson,
+    legacyCreateLeadEnabled,
+    capabilities: capabilitiesJson,
+  });
+
   return {
     id: s(identity.tenantId || legacy?.id),
     tenant_key: s(identity.tenantKey || legacy?.tenant_key),
@@ -398,19 +604,15 @@ function buildTenantFromProjection({
       confidenceLabel: s(projection?.confidence_label || projection?.confidenceLabel),
     },
     ai_policy: {
-      auto_reply_enabled:
-        typeof inboxJson.enabled === "boolean"
-          ? inboxJson.enabled
-          : undefined,
-      create_lead_enabled:
-        typeof leadCaptureJson.enabled === "boolean"
-          ? leadCaptureJson.enabled
-          : undefined,
+      auto_reply_enabled: autoReplyEnabled,
+      create_lead_enabled: createLeadEnabled,
       businessContext: businessSummary,
       toneText: toneOfVoice,
       servicesText: uniqStrings(arr(services).map((x) => s(x.title))).join(", "),
     },
     inbox_policy: {
+      enabled: inboxEnabled,
+      ai_reply_enabled: autoReplyEnabled,
       reply_style: s(capabilitiesJson.replyStyle || ""),
       max_reply_sentences: maxSentences,
       pricing_visibility: s(preferredChannelPolicy?.pricing_visibility || ""),
