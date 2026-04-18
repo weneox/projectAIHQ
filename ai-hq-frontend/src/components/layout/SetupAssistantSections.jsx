@@ -921,7 +921,10 @@ function SetupAssistantSectionsContent({
   );
 
   useEffect(() => {
-    if (!busy) return undefined;
+    if (!busy) {
+      setShowTypingBubble(false);
+      return undefined;
+    }
 
     const timer = window.setTimeout(() => {
       setShowTypingBubble(true);
@@ -932,6 +935,13 @@ function SetupAssistantSectionsContent({
       setShowTypingBubble(false);
     };
   }, [busy]);
+
+  useEffect(() => {
+    if (!pendingUserMessage) return;
+    if (timelineHasUserMessage(serverTimeline, pendingUserMessage)) {
+      setPendingUserMessage("");
+    }
+  }, [serverTimeline, pendingUserMessage]);
 
   useEffect(() => {
     if (!scrollRef.current) return;

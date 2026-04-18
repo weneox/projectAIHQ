@@ -162,7 +162,9 @@ function normalizeAssistantState(input = null) {
   const draft = obj(source.draft);
   const decisionAssistant = normalizeDecisionAssistant(obj(source.assistant));
   const assistantTimeline = arr(
-    obj(source.assistant).timeline || source.assistantTimeline || source.timeline
+    obj(source.assistant).timeline ||
+      source.assistantTimeline ||
+      source.timeline
   );
 
   return {
@@ -235,28 +237,46 @@ function buildAssistantFromApi(base = {}, response = {}) {
 
 function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
   const reviewRoot = obj(reviewPayload);
-  const assistant = normalizeDecisionAssistant(
-    Object.keys(obj(reviewRoot.assistant)).length
-      ? reviewRoot.assistant
-      : obj(assistantState.assistant)
+
+  const localAssistant = normalizeDecisionAssistant(obj(assistantState.assistant));
+  const localTimeline = arr(
+    obj(assistantState.assistant).timeline ||
+      assistantState.assistantTimeline ||
+      assistantState.timeline
   );
+
+  const reviewAssistant = normalizeDecisionAssistant(obj(reviewRoot.assistant));
+  const reviewTimeline = arr(
+    obj(reviewRoot.assistant).timeline || reviewRoot.timeline
+  );
+
+  const hasLocalLiveState = Boolean(
+    localTimeline.length ||
+      s(localAssistant.message || localAssistant.assistantMessage) ||
+      s(obj(localAssistant.nextQuestion).key) ||
+      localAssistant.readyForApproval === true
+  );
+
+  const mergedAssistant = hasLocalLiveState
+    ? {
+        ...reviewAssistant,
+        ...localAssistant,
+        timeline: localTimeline,
+      }
+    : {
+        ...reviewAssistant,
+        timeline: reviewTimeline,
+      };
 
   return {
     ...reviewRoot,
     review: obj(reviewRoot.review),
-    timeline: arr(reviewRoot.timeline),
+    timeline: hasLocalLiveState ? localTimeline : reviewTimeline,
     bundleSources: arr(reviewRoot.bundleSources),
     contributionSummary: obj(reviewRoot.contributionSummary),
     fieldProvenance: obj(reviewRoot.fieldProvenance),
     reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
-    assistant: {
-      ...assistant,
-      timeline: arr(
-        obj(reviewRoot.assistant).timeline ||
-          reviewRoot.timeline ||
-          obj(assistantState.assistant).timeline
-      ),
-    },
+    assistant: mergedAssistant,
   };
 }
 
@@ -469,6 +489,13 @@ export default function FloatingAiWidget({
     });
 
     queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+
+    if (nextAssistant) {
+      queryClient.setQueryData(setupReviewQueryKey, (previous) =>
+        buildMergedReviewPayload(previous, nextAssistant)
+      );
+    }
+
     return nextAssistant;
   }
 
@@ -678,9 +705,7 @@ export default function FloatingAiWidget({
         await discardCurrentSetupReview({
           reason: "fresh setup restart",
         });
-      } catch {
-        // ignore missing session cases
-      }
+      } catch {}
 
       clearSetupConversationStorage(workspace.tenantKey);
 
