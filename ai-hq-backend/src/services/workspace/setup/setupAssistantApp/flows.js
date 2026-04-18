@@ -44,6 +44,50 @@ function uniqueStrings(items = [], max = 24) {
   );
 }
 
+function compactFailureText(value = "", max = 160) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
+
+function buildSetupAssistantFailureBody({
+  stage = "",
+  error = null,
+  messageMode = false,
+  latestStep = "",
+  latestMessage = "",
+  rawTurn = null,
+  responseTurn = null,
+} = {}) {
+  const safeRawTurn = obj(rawTurn);
+  const safeResponseTurn = obj(responseTurn);
+  const nextQuestion = obj(
+    safeResponseTurn.nextQuestion || safeRawTurn.nextQuestion
+  );
+  const rejectedInputs =
+    arr(safeResponseTurn.rejectedInputs).length > 0
+      ? arr(safeResponseTurn.rejectedInputs)
+      : arr(safeRawTurn.rejectedInputs);
+
+  return {
+    ok: false,
+    error: "SetupAssistantDraftUpdateFailed",
+    reason: s(error?.message || "failed to update setup assistant draft"),
+    failureStage: s(stage),
+    errorName: s(error?.name || "Error"),
+    messageMode: messageMode === true,
+    currentStep: s(latestStep),
+    latestMessagePreview: compactFailureText(latestMessage, 160),
+    provider: s(safeResponseTurn.provider || safeRawTurn.provider),
+    model: s(safeResponseTurn.model || safeRawTurn.model),
+    phase: s(safeResponseTurn.phase || safeRawTurn.phase),
+    nextQuestion: s(nextQuestion.key || nextQuestion.step),
+    usedFallback:
+      safeResponseTurn.usedFallback === true || safeRawTurn.usedFallback === true,
+    rejectedInputsCount: rejectedInputs.length,
+  };
+}
+
 function resolveStartedBy(actor = {}) {
   return (
     safeUuidOrNull(actor?.user?.id) ||
@@ -774,286 +818,361 @@ export async function updateSetupAssistantDraft(
     deps.runSetupAssistantOpenAIOrchestrator ||
     runSetupAssistantOpenAIOrchestrator;
 
-  const review = await getCurrentReviewHelper(actor.tenantId);
-
-  if (!review?.session?.id) {
-    return {
-      status: 404,
-      body: {
-        ok: false,
-        error: "SetupAssistantSessionNotFound",
-        reason: "start a setup assistant session before updating the draft",
-      },
-    };
-  }
-
-  const reviewForBrain = buildReviewForBrain(review);
-  const existingDraftPayload = obj(review?.draft?.draftPayload);
-  const seed = buildSetupAssistantSeedFromReview(reviewForBrain);
-
-  const currentSetupAssistant = normalizeStoredSetupAssistantPayload(
-    readStoredSetupAssistantDraftPayload(existingDraftPayload),
-    seed
-  );
-
-  const latestMessage = s(
-    body.message || body.text || body.value || body.answer
-  );
-
-  const latestStep = s(
-    body.step ||
-      body.questionKey ||
-      obj(currentSetupAssistant.progress).currentQuestionKey ||
-      obj(review.session).currentStep ||
-      SETUP_ASSISTANT_CURRENT_STEP
-  ).toLowerCase();
-
-  const messageMode =
-    body.mode === "message" || isMessageModeBody(body) || Boolean(latestMessage);
-
-  let mergedSetupAssistant = currentSetupAssistant;
+  let stage = "load_review";
+  let review = null;
+  let reviewForBrain = null;
+  let existingDraftPayload = {};
+  let seed = {};
+  let currentSetupAssistant = {};
+  let latestMessage = "";
+  let latestStep = "";
+  let messageMode = false;
+  let mergedSetupAssistant = {};
   let rawTurn = null;
   let responseTurn = null;
   let updatedFields = [];
-  let nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
+  let nextTimeline = [];
+  let nextDraftPayload = {};
+  let persisted = false;
+  let optimisticReview = null;
+  let baseResponsePayload = {};
+  let finalResponseBody = {};
+  let approvalBlockers = [];
 
-  if (messageMode) {
-    const supplementalPatch = buildSafeSupplementalMessagePatch(
-      currentSetupAssistant,
-      latestMessage || (isMessageSkip(body) ? "continue" : ""),
-      latestStep
-    );
+  try {
+    review = await getCurrentReviewHelper(actor.tenantId);
 
-    const draftForBrain = Object.keys(supplementalPatch).length
-      ? mergeSetupAssistantDraft(currentSetupAssistant, supplementalPatch, seed)
-      : currentSetupAssistant;
-
-    rawTurn = await runSetupBrain({
-      session: obj(review.session),
-      draft: draftForBrain,
-      sources: arr(reviewForBrain.sources),
-      review: reviewForBrain,
-      latestStep,
-      latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
-    });
-
-    const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
-      rawTurn,
-      draftForBrain
-    );
-
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      draftForBrain,
-      orchestratorPatch,
-      seed
-    );
-
-    responseTurn = buildStoredSetupAssistantBrainPayload(
-      resolveAssistantTurnPayload(rawTurn)
-    );
-
-    const hiddenSynthesisPatch = buildSilentSynthesisPatch({
-      currentSetupAssistant: draftForBrain,
-      mergedSetupAssistant,
-      latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
-      latestStep,
-      responseTurn,
-      includeRawEvidence: true,
-    });
-
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      mergedSetupAssistant,
-      hiddenSynthesisPatch,
-      seed
-    );
-
-    nextTimeline = appendSetupAssistantTimeline(existingDraftPayload, [
-      {
-        role: "user",
-        text: latestMessage || (isMessageSkip(body) ? "continue" : ""),
-        questionKey: latestStep,
-        phase: s(rawTurn.phase || "interview"),
-        createdAt: nowIso(),
-      },
-      {
-        role: "assistant",
-        text: s(
-          obj(responseTurn).assistantMessage ||
-            obj(responseTurn).message ||
-            obj(responseTurn).nextQuestion?.prompt
-        ),
-        meta: "",
-        questionKey: s(obj(responseTurn).nextQuestion?.key),
-        phase: s(responseTurn.phase || rawTurn.phase),
-        provider: s(responseTurn.provider || rawTurn.provider),
-        model: s(responseTurn.model || rawTurn.model),
-        usedFallback: responseTurn.usedFallback === true,
-        error: s(responseTurn.error || rawTurn.error),
-        createdAt: nowIso(),
-      },
-    ]);
-
-    updatedFields = [
-      ...Object.keys(obj(supplementalPatch)),
-      ...Object.keys(obj(orchestratorPatch)),
-      "silentSynthesis",
-      "setupAssistantBrain",
-      "setupAssistantTimeline",
-    ];
-  } else {
-    const directPatch = normalizeSetupAssistantDraftPatchBody(
-      body,
-      currentSetupAssistant
-    );
-
-    if (!Object.keys(directPatch).length) {
+    if (!review?.session?.id) {
       return {
-        status: 400,
+        status: 404,
         body: {
           ok: false,
-          error: "SetupAssistantDraftInvalid",
-          reason: "no valid setup assistant draft fields were provided",
+          error: "SetupAssistantSessionNotFound",
+          reason: "start a setup assistant session before updating the draft",
         },
       };
     }
 
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      currentSetupAssistant,
-      directPatch,
+    stage = "build_review_for_brain";
+    reviewForBrain = buildReviewForBrain(review);
+
+    stage = "normalize_existing_payload";
+    existingDraftPayload = obj(review?.draft?.draftPayload);
+    seed = buildSetupAssistantSeedFromReview(reviewForBrain);
+
+    currentSetupAssistant = normalizeStoredSetupAssistantPayload(
+      readStoredSetupAssistantDraftPayload(existingDraftPayload),
       seed
     );
 
-    rawTurn = await runSetupBrain({
-      session: obj(review.session),
-      draft: mergedSetupAssistant,
-      sources: arr(reviewForBrain.sources),
-      review: reviewForBrain,
-      latestStep,
-      latestMessage: "",
-    });
-
-    const brainDerivedPatch = buildSetupAssistantPatchFromOrchestrator(
-      rawTurn,
-      mergedSetupAssistant
+    latestMessage = s(
+      body.message || body.text || body.value || body.answer
     );
 
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      mergedSetupAssistant,
-      brainDerivedPatch,
-      seed
-    );
+    latestStep = s(
+      body.step ||
+        body.questionKey ||
+        obj(currentSetupAssistant.progress).currentQuestionKey ||
+        obj(review.session).currentStep ||
+        SETUP_ASSISTANT_CURRENT_STEP
+    ).toLowerCase();
 
-    responseTurn = buildStoredSetupAssistantBrainPayload(
-      resolveAssistantTurnPayload(rawTurn)
-    );
+    messageMode =
+      body.mode === "message" || isMessageModeBody(body) || Boolean(latestMessage);
 
-    const hiddenSynthesisPatch = buildSilentSynthesisPatch({
-      currentSetupAssistant,
-      mergedSetupAssistant,
-      latestMessage: "",
-      latestStep,
-      responseTurn,
-      includeRawEvidence: false,
-    });
+    mergedSetupAssistant = currentSetupAssistant;
+    nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      mergedSetupAssistant,
-      hiddenSynthesisPatch,
-      seed
-    );
+    if (messageMode) {
+      let supplementalPatch = {};
+      let draftForBrain = {};
+      let orchestratorPatch = {};
+      let hiddenSynthesisPatch = {};
 
-    updatedFields = [
-      ...Object.keys(obj(directPatch)),
-      ...Object.keys(obj(brainDerivedPatch)),
-      "silentSynthesis",
-      "setupAssistantBrain",
-    ];
-  }
+      stage = "message_build_supplemental_patch";
+      supplementalPatch = buildSafeSupplementalMessagePatch(
+        currentSetupAssistant,
+        latestMessage || (isMessageSkip(body) ? "continue" : ""),
+        latestStep
+      );
 
-  const nextDraftPayload = buildNextSetupAssistantDraftPayload({
-    review,
-    mergedSetupAssistant,
-    brainSnapshot: responseTurn,
-    nextTimeline,
-  });
+      stage = "message_merge_supplemental_patch";
+      draftForBrain = Object.keys(supplementalPatch).length
+        ? mergeSetupAssistantDraft(currentSetupAssistant, supplementalPatch, seed)
+        : currentSetupAssistant;
 
-  const persisted = await persistSetupAssistantState({
-    review,
-    actor,
-    mergedSetupAssistant,
-    brainSnapshot: responseTurn,
-    nextTimeline,
-    nextDraftPayload,
-    deps,
-  });
+      stage = "message_run_setup_brain";
+      rawTurn = await runSetupBrain({
+        session: obj(review.session),
+        draft: draftForBrain,
+        sources: arr(reviewForBrain.sources),
+        review: reviewForBrain,
+        latestStep,
+        latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
+      });
 
-  await maybeUpdateReviewSessionStep({
-    reviewSessionId: review.session.id,
-    nextQuestion: obj(responseTurn.nextQuestion),
-    deps,
-  });
+      stage = "message_build_orchestrator_patch";
+      orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
+        rawTurn,
+        draftForBrain
+      );
 
-  const optimisticReview = buildOptimisticSetupAssistantReview({
-    review,
-    nextDraftPayload,
-    nextQuestion: obj(responseTurn.nextQuestion),
-    persisted,
-  });
+      stage = "message_merge_after_orchestrator";
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        draftForBrain,
+        orchestratorPatch,
+        seed
+      );
 
-  const baseResponsePayload = buildSetupAssistantSessionPayload(optimisticReview);
-  const finalResponseBody = buildSetupAssistantResponseBody(
-    baseResponsePayload,
-    responseTurn
-  );
-  const approvalBlockers = extractApprovalBlockersFromPayload(finalResponseBody);
+      stage = "message_build_response_turn";
+      responseTurn = buildStoredSetupAssistantBrainPayload(
+        resolveAssistantTurnPayload(rawTurn)
+      );
 
-  await audit(
-    db,
-    actor,
-    "setup_assistant.draft.updated",
-    "tenant_setup_review_session",
-    s(optimisticReview?.session?.id || review.session.id),
-    {
-      reviewSessionId: s(optimisticReview?.session?.id || review.session.id),
-      draftVersion: Number(
-        optimisticReview?.draft?.version || review?.draft?.version || 0
-      ),
-      updatedFields: [...new Set(updatedFields)].filter(Boolean),
-      source: "home_widget",
-      sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-      namespace: SETUP_ASSISTANT_NAMESPACE,
-      brainNamespace: "setupAssistantBrain",
-      timelineNamespace: "setupAssistantTimeline",
-      timelineLength: nextTimeline.length,
-      draftOnly: true,
-      hiddenSynthesisEnabled: true,
-      messageMode,
-      skipped: isMessageSkip(body),
-      nextQuestion: s(obj(responseTurn).nextQuestion?.key),
-      canonicalBridge: true,
-      brainProvider: s(responseTurn?.provider),
-      brainModel: s(responseTurn?.model),
-      brainUsedFallback: responseTurn?.usedFallback === true,
-      brainError: s(responseTurn?.error),
-      latestMessagePreview: s(latestMessage).slice(0, 160),
-      orchestrationModel: "ask_ai_setup_brain_v4",
-      readyForApproval:
-        finalResponseBody?.setup?.assistant?.readyForApproval === true,
-      finalizeAvailable:
-        finalResponseBody?.setup?.assistant?.finalizeAvailable === true,
-      approvalBlockerCount: approvalBlockers.length,
-      approvalBlockerSteps: approvalBlockers.map((item) => item.step).filter(Boolean),
-      approvalBlockerReasonCodes: approvalBlockers
-        .map((item) => item.reasonCode)
-        .filter(Boolean),
+      stage = "message_build_hidden_synthesis";
+      hiddenSynthesisPatch = buildSilentSynthesisPatch({
+        currentSetupAssistant: draftForBrain,
+        mergedSetupAssistant,
+        latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
+        latestStep,
+        responseTurn,
+        includeRawEvidence: true,
+      });
+
+      stage = "message_merge_hidden_synthesis";
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        mergedSetupAssistant,
+        hiddenSynthesisPatch,
+        seed
+      );
+
+      stage = "message_append_timeline";
+      nextTimeline = appendSetupAssistantTimeline(existingDraftPayload, [
+        {
+          role: "user",
+          text: latestMessage || (isMessageSkip(body) ? "continue" : ""),
+          questionKey: latestStep,
+          phase: s(rawTurn.phase || "interview"),
+          createdAt: nowIso(),
+        },
+        {
+          role: "assistant",
+          text: s(
+            obj(responseTurn).assistantMessage ||
+              obj(responseTurn).message ||
+              obj(responseTurn).nextQuestion?.prompt
+          ),
+          meta: "",
+          questionKey: s(obj(responseTurn).nextQuestion?.key),
+          phase: s(responseTurn.phase || rawTurn.phase),
+          provider: s(responseTurn.provider || rawTurn.provider),
+          model: s(responseTurn.model || rawTurn.model),
+          usedFallback: responseTurn.usedFallback === true,
+          error: s(responseTurn.error || rawTurn.error),
+          createdAt: nowIso(),
+        },
+      ]);
+
+      stage = "message_collect_updated_fields";
+      updatedFields = [
+        ...Object.keys(obj(supplementalPatch)),
+        ...Object.keys(obj(orchestratorPatch)),
+        "silentSynthesis",
+        "setupAssistantBrain",
+        "setupAssistantTimeline",
+      ];
+    } else {
+      let directPatch = {};
+      let brainDerivedPatch = {};
+      let hiddenSynthesisPatch = {};
+
+      stage = "patch_build_direct_patch";
+      directPatch = normalizeSetupAssistantDraftPatchBody(
+        body,
+        currentSetupAssistant
+      );
+
+      if (!Object.keys(directPatch).length) {
+        return {
+          status: 400,
+          body: {
+            ok: false,
+            error: "SetupAssistantDraftInvalid",
+            reason: "no valid setup assistant draft fields were provided",
+          },
+        };
+      }
+
+      stage = "patch_merge_direct_patch";
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        currentSetupAssistant,
+        directPatch,
+        seed
+      );
+
+      stage = "patch_run_setup_brain";
+      rawTurn = await runSetupBrain({
+        session: obj(review.session),
+        draft: mergedSetupAssistant,
+        sources: arr(reviewForBrain.sources),
+        review: reviewForBrain,
+        latestStep,
+        latestMessage: "",
+      });
+
+      stage = "patch_build_orchestrator_patch";
+      brainDerivedPatch = buildSetupAssistantPatchFromOrchestrator(
+        rawTurn,
+        mergedSetupAssistant
+      );
+
+      stage = "patch_merge_after_orchestrator";
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        mergedSetupAssistant,
+        brainDerivedPatch,
+        seed
+      );
+
+      stage = "patch_build_response_turn";
+      responseTurn = buildStoredSetupAssistantBrainPayload(
+        resolveAssistantTurnPayload(rawTurn)
+      );
+
+      stage = "patch_build_hidden_synthesis";
+      hiddenSynthesisPatch = buildSilentSynthesisPatch({
+        currentSetupAssistant,
+        mergedSetupAssistant,
+        latestMessage: "",
+        latestStep,
+        responseTurn,
+        includeRawEvidence: false,
+      });
+
+      stage = "patch_merge_hidden_synthesis";
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        mergedSetupAssistant,
+        hiddenSynthesisPatch,
+        seed
+      );
+
+      stage = "patch_collect_updated_fields";
+      updatedFields = [
+        ...Object.keys(obj(directPatch)),
+        ...Object.keys(obj(brainDerivedPatch)),
+        "silentSynthesis",
+        "setupAssistantBrain",
+      ];
     }
-  );
 
-  return {
-    status: 200,
-    body: {
-      ...finalResponseBody,
-      message: "Setup assistant draft updated",
-    },
-  };
+    stage = "build_next_draft_payload";
+    nextDraftPayload = buildNextSetupAssistantDraftPayload({
+      review,
+      mergedSetupAssistant,
+      brainSnapshot: responseTurn,
+      nextTimeline,
+    });
+
+    stage = "persist_setup_state";
+    persisted = await persistSetupAssistantState({
+      review,
+      actor,
+      mergedSetupAssistant,
+      brainSnapshot: responseTurn,
+      nextTimeline,
+      nextDraftPayload,
+      deps,
+    });
+
+    stage = "update_review_session_step";
+    await maybeUpdateReviewSessionStep({
+      reviewSessionId: review.session.id,
+      nextQuestion: obj(responseTurn.nextQuestion),
+      deps,
+    });
+
+    stage = "build_optimistic_review";
+    optimisticReview = buildOptimisticSetupAssistantReview({
+      review,
+      nextDraftPayload,
+      nextQuestion: obj(responseTurn.nextQuestion),
+      persisted,
+    });
+
+    stage = "build_base_response_payload";
+    baseResponsePayload = buildSetupAssistantSessionPayload(optimisticReview);
+
+    stage = "build_final_response_body";
+    finalResponseBody = buildSetupAssistantResponseBody(
+      baseResponsePayload,
+      responseTurn
+    );
+
+    stage = "extract_approval_blockers";
+    approvalBlockers = extractApprovalBlockersFromPayload(finalResponseBody);
+
+    stage = "audit_update";
+    await audit(
+      db,
+      actor,
+      "setup_assistant.draft.updated",
+      "tenant_setup_review_session",
+      s(optimisticReview?.session?.id || review.session.id),
+      {
+        reviewSessionId: s(optimisticReview?.session?.id || review.session.id),
+        draftVersion: Number(
+          optimisticReview?.draft?.version || review?.draft?.version || 0
+        ),
+        updatedFields: [...new Set(updatedFields)].filter(Boolean),
+        source: "home_widget",
+        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+        namespace: SETUP_ASSISTANT_NAMESPACE,
+        brainNamespace: "setupAssistantBrain",
+        timelineNamespace: "setupAssistantTimeline",
+        timelineLength: nextTimeline.length,
+        draftOnly: true,
+        hiddenSynthesisEnabled: true,
+        messageMode,
+        skipped: isMessageSkip(body),
+        nextQuestion: s(obj(responseTurn).nextQuestion?.key),
+        canonicalBridge: true,
+        brainProvider: s(responseTurn?.provider),
+        brainModel: s(responseTurn?.model),
+        brainUsedFallback: responseTurn?.usedFallback === true,
+        brainError: s(responseTurn?.error),
+        latestMessagePreview: s(latestMessage).slice(0, 160),
+        orchestrationModel: "ask_ai_setup_brain_v4",
+        readyForApproval:
+          finalResponseBody?.setup?.assistant?.readyForApproval === true,
+        finalizeAvailable:
+          finalResponseBody?.setup?.assistant?.finalizeAvailable === true,
+        approvalBlockerCount: approvalBlockers.length,
+        approvalBlockerSteps: approvalBlockers.map((item) => item.step).filter(Boolean),
+        approvalBlockerReasonCodes: approvalBlockers
+          .map((item) => item.reasonCode)
+          .filter(Boolean),
+      }
+    );
+
+    stage = "return_success";
+    return {
+      status: 200,
+      body: {
+        ...finalResponseBody,
+        message: "Setup assistant draft updated",
+      },
+    };
+  } catch (error) {
+    return {
+      status: 500,
+      body: buildSetupAssistantFailureBody({
+        stage,
+        error,
+        messageMode,
+        latestStep,
+        latestMessage,
+        rawTurn,
+        responseTurn,
+      }),
+    };
+  }
 }
