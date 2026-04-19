@@ -13,7 +13,48 @@ import {
 } from "./shared.js";
 import { resolveBehaviorProfile } from "./behavior/resolveBehaviorProfile.js";
 
-export function normalizeIndustry(value) {
+const GENERIC_PRIMARY_CTA_VALUES = new Set([
+  "soft",
+  "software",
+  "service",
+  "services",
+  "website",
+  "web site",
+  "web",
+  "site",
+  "sayt",
+  "veb sayt",
+  "vebsayt",
+  "product",
+  "products",
+  "solution",
+  "solutions",
+  "project",
+  "projects",
+  "help",
+  "support",
+  "contact",
+  "contact us",
+  "message",
+  "reply",
+  "quote",
+  "pricing",
+  "sales",
+  "lead",
+  "consultation",
+  "consulting",
+  "call",
+  "booking",
+  "reservation",
+  "whatsapp",
+  "telegram",
+  "instagram",
+  "dm",
+  "chat",
+  "business",
+]);
+
+function normalizeIndustry(value) {
   const x = lower(value);
   if (!x) return "generic_business";
 
@@ -103,6 +144,73 @@ function normalizeStringList(value = []) {
   return uniqStrings(arr(value).map((item) => s(item)).filter(Boolean));
 }
 
+function normalizePhraseKey(value = "") {
+  return lower(s(value))
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sanitizePrompt(value = "") {
+  return s(value)
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,.;:!?\-–—]+/u, "")
+    .replace(/[\s,.;:!?\-–—]+$/u, "")
+    .trim();
+}
+
+function isGenericPrimaryCta(value = "") {
+  const key = normalizePhraseKey(value);
+  if (!key) return true;
+  if (GENERIC_PRIMARY_CTA_VALUES.has(key)) return true;
+  if (key.length <= 4) return true;
+  return false;
+}
+
+function stripUnsafePrimaryCtaPrefix(value = "") {
+  const text = sanitizePrompt(value);
+  if (!text) return "";
+
+  const match = text.match(/^(.{1,40}?)\s+(üçün|ucun|for)\s+(.+)$/iu);
+  if (!match) return text;
+
+  const prefix = sanitizePrompt(match[1]);
+  const remainder = sanitizePrompt(match[3]);
+  if (!remainder) return "";
+
+  return isGenericPrimaryCta(prefix) ? remainder : text;
+}
+
+function sanitizeConversationPromptCandidate(value = "") {
+  const stripped = stripUnsafePrimaryCtaPrefix(value);
+  const cleaned = sanitizePrompt(stripped);
+  if (!cleaned) return "";
+
+  const key = normalizePhraseKey(cleaned);
+  if (!key) return "";
+
+  if ([
+    "soft",
+    "website",
+    "service",
+    "services",
+    "product",
+    "help",
+    "support",
+  ].includes(key)) {
+    return "";
+  }
+
+  return cleaned;
+}
+
+function sanitizePrimaryCtaForConversation(value = "") {
+  const cleaned = sanitizePrompt(value);
+  if (!cleaned) return "";
+  if (isGenericPrimaryCta(cleaned)) return "";
+  return cleaned;
+}
+
 function pickFirstString(...values) {
   for (const value of values) {
     const text = s(value);
@@ -127,7 +235,11 @@ function normalizeLanguageList(...sources) {
 function normalizeQualificationQuestions(...sources) {
   const values = [];
   for (const source of sources) values.push(...arr(source));
-  return normalizeStringList(values);
+  return uniqStrings(
+    values
+      .map((item) => sanitizeConversationPromptCandidate(item))
+      .filter(Boolean)
+  );
 }
 
 function normalizeBehaviorObject(...sources) {
@@ -151,7 +263,7 @@ function buildServiceModeDefaults(service = {}) {
   };
 }
 
-export function normalizeServiceEntry(item) {
+function normalizeServiceEntry(item) {
   const x = obj(item);
 
   const name = pickFirstString(
@@ -211,7 +323,7 @@ export function normalizeServiceEntry(item) {
   };
 }
 
-export function normalizeKnowledgeEntry(item) {
+function normalizeKnowledgeEntry(item) {
   const x = obj(item);
 
   const title = pickFirstString(x.title, x.question, x.name);
@@ -250,7 +362,7 @@ export function normalizeKnowledgeEntry(item) {
   };
 }
 
-export function normalizePlaybook(item) {
+function normalizePlaybook(item) {
   const x = obj(item);
 
   const triggerKeywords = normalizeStringList([
@@ -347,7 +459,7 @@ function buildFallbackBehavior({
   });
 }
 
-export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
+function getTenantBusinessProfile(tenant, tenantKey, services = []) {
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
 
   const safeTenant = obj(tenant);
@@ -421,14 +533,14 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       brand?.languages,
       [safeTenant?.default_language || "az", "en"]
     ),
-    tone: behavior.tone,
-    toneProfile: behavior.toneProfile,
-    formality: behavior.formality,
-    warmth: behavior.warmth,
-    brevity: behavior.brevity,
-    emojiPolicy: behavior.emojiPolicy,
-    maxSentences: behavior.maxSentences,
-    leadPrompts: behavior.leadPrompts,
+    tone: s(behavior.tone),
+    toneProfile: s(behavior.toneProfile),
+    formality: s(behavior.formality),
+    warmth: s(behavior.warmth),
+    brevity: s(behavior.brevity),
+    emojiPolicy: s(behavior.emojiPolicy),
+    maxSentences: Number(behavior.maxSentences || 2),
+    leadPrompts: normalizeQualificationQuestions(behavior.leadPrompts),
     forbiddenClaims: normalizeStringList(
       profile?.banned_phrases,
       meta?.forbiddenClaims,
@@ -440,10 +552,12 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       meta?.conversionGoal,
       meta?.conversion_goal
     ),
-    primaryCta: pickFirstString(
-      profile?.primary_cta,
-      meta?.primaryCta,
-      meta?.primary_cta
+    primaryCta: sanitizePrimaryCtaForConversation(
+      pickFirstString(
+        profile?.primary_cta,
+        meta?.primaryCta,
+        meta?.primary_cta
+      )
     ),
     leadQualificationMode: pickFirstString(
       profile?.lead_qualification_mode,
@@ -480,7 +594,7 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
   };
 }
 
-export function getRuntimeFactory() {
+function getRuntimeFactory() {
   const directCandidates = [
     businessRuntimeApi?.getTenantBrainRuntime,
     businessRuntimeApi?.getTenantBusinessRuntime,
@@ -595,7 +709,7 @@ function extractRawPlaybooks(container = {}) {
       : arr(container.response_playbooks);
 }
 
-export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
+function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
   const strictAuthority = options?.strictAuthority === true;
   const container = obj(rawRuntime?.runtime || rawRuntime?.data || rawRuntime);
 
@@ -742,14 +856,14 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
             ]
           : arr(fallback.languages)
     ),
-    tone: resolvedBehavior.tone,
-    toneProfile: resolvedBehavior.toneProfile,
-    formality: resolvedBehavior.formality,
-    warmth: resolvedBehavior.warmth,
-    brevity: resolvedBehavior.brevity,
-    emojiPolicy: resolvedBehavior.emojiPolicy,
-    maxSentences: resolvedBehavior.maxSentences,
-    leadPrompts: resolvedBehavior.leadPrompts,
+    tone: s(resolvedBehavior.tone),
+    toneProfile: s(resolvedBehavior.toneProfile),
+    formality: s(resolvedBehavior.formality),
+    warmth: s(resolvedBehavior.warmth),
+    brevity: s(resolvedBehavior.brevity),
+    emojiPolicy: s(resolvedBehavior.emojiPolicy),
+    maxSentences: Number(resolvedBehavior.maxSentences || 2),
+    leadPrompts: normalizeQualificationQuestions(resolvedBehavior.leadPrompts),
     forbiddenClaims: normalizeStringList(
       arr(container.forbiddenClaims).length
         ? container.forbiddenClaims
@@ -766,12 +880,14 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.conversion_goal,
       fallback.conversionGoal
     ),
-    primaryCta: pickFirstString(
-      container.primaryCta,
-      container.primary_cta,
-      rawBehavior.primaryCta,
-      rawBehavior.primary_cta,
-      fallback.primaryCta
+    primaryCta: sanitizePrimaryCtaForConversation(
+      pickFirstString(
+        container.primaryCta,
+        container.primary_cta,
+        rawBehavior.primaryCta,
+        rawBehavior.primary_cta,
+        fallback.primaryCta
+      )
     ),
     leadQualificationMode: pickFirstString(
       container.leadQualificationMode,
@@ -811,7 +927,7 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
   };
 }
 
-export async function resolveInboxRuntime({
+async function resolveInboxRuntime({
   tenantKey,
   tenant = null,
   services = [],
@@ -887,24 +1003,24 @@ export async function resolveInboxRuntime({
   }
 }
 
-export function buildServiceLine(profile) {
+function buildServiceLine(profile) {
   const services = normalizeStringList(profile?.services || []);
   if (!services.length) return "";
   return services.slice(0, 12).join(", ");
 }
 
-export function buildDisabledServiceLine(profile) {
+function buildDisabledServiceLine(profile) {
   const services = normalizeStringList(profile?.disabledServices || []);
   if (!services.length) return "";
   return services.slice(0, 12).join(", ");
 }
 
-export function pickLeadPrompt(profile) {
-  const list = normalizeStringList(profile?.leadPrompts || []);
-  return s(list[0] || "Əsas ehtiyacınızı bir cümlə ilə yaza bilərsiniz?");
+function pickLeadPrompt(profile) {
+  const list = normalizeQualificationQuestions(profile?.leadPrompts || []);
+  return s(list[0] || "Daha düzgün yönləndirmə üçün əsas məqsədi və 1-2 vacib detalı yazın.");
 }
 
-export function pickBehaviorLeadPrompt(profile) {
+function pickBehaviorLeadPrompt(profile) {
   const qualificationQuestions = normalizeQualificationQuestions(
     profile?.qualificationQuestions
   );
@@ -912,42 +1028,36 @@ export function pickBehaviorLeadPrompt(profile) {
   const inboxBehavior = obj(
     profile?.channelBehavior?.inbox || resolvedBehavior?.channelBehavior?.inbox
   );
-  const primaryCta = s(profile?.primaryCta).replace(/_/g, " ");
   const qualificationDepth = lower(inboxBehavior?.qualificationDepth || "");
   const toneProfile = lower(profile?.toneProfile || resolvedBehavior?.toneProfile || "");
-  const firstQuestion = s(qualificationQuestions[0]);
+  const firstQuestion = sanitizeConversationPromptCandidate(qualificationQuestions[0]);
+
+  if (firstQuestion && qualificationDepth === "guided") {
+    return sanitizePrompt(firstQuestion);
+  }
+
+  if (firstQuestion) {
+    return sanitizePrompt(firstQuestion);
+  }
 
   let prompt = pickLeadPrompt(profile);
 
   if (toneProfile.includes("calm") || toneProfile.includes("reassuring")) {
-    prompt = "Daha dəqiq kömək üçün bir qısa sualı cavablandıra bilərsiniz.";
+    prompt = "Daha düzgün yönləndirmə üçün əsas ehtiyacı və vacib detalı qısa yazın.";
   } else if (toneProfile.includes("warm") || toneProfile.includes("welcoming")) {
-    prompt = "Sizi düzgün yönləndirmək üçün bunu qısa yazın.";
+    prompt = "Daha düzgün kömək üçün nə istədiyinizi və əsas detalı qısa yazın.";
   } else if (toneProfile.includes("formal") || toneProfile.includes("confident")) {
-    prompt = "Düzgün yönləndirmə üçün bunu qeyd edin.";
-  }
-
-  if (firstQuestion && qualificationDepth === "guided") {
-    const ctaLead = primaryCta ? `${primaryCta} üçün ` : "";
-    return sanitizePrompt(`${ctaLead}${prompt} ${firstQuestion}`);
-  }
-
-  if (primaryCta) {
-    return sanitizePrompt(`${primaryCta} üçün ${prompt}`);
+    prompt = "Dəqiq yönləndirmə üçün məqsədi və əsas tələbi qısa qeyd edin.";
   }
 
   return sanitizePrompt(prompt);
-}
-
-function sanitizePrompt(value = "") {
-  return s(value).replace(/\s+/g, " ").trim();
 }
 
 /**
  * Compatibility helper only.
  * Industry hints should not drive understanding logic anymore.
  */
-export function getIndustryHints(industry) {
+function getIndustryHints(industry) {
   const normalized = normalizeIndustry(industry);
 
   const map = {
@@ -995,3 +1105,19 @@ export function getIndustryHints(industry) {
 
   return map[normalized] || map.generic_business;
 }
+
+export {
+  normalizeIndustry,
+  normalizeServiceEntry,
+  normalizeKnowledgeEntry,
+  normalizePlaybook,
+  getTenantBusinessProfile,
+  getRuntimeFactory,
+  normalizeRuntimeResult,
+  resolveInboxRuntime,
+  buildServiceLine,
+  buildDisabledServiceLine,
+  pickLeadPrompt,
+  pickBehaviorLeadPrompt,
+  getIndustryHints,
+};
