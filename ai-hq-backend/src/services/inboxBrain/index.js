@@ -13,8 +13,6 @@ import { aiDecideInbox } from "./ai.js";
 import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import {
   buildFallbackReply,
-  buildKnowledgeReply,
-  buildPlaybookReply,
   buildUnsupportedServiceReply,
 } from "./fallback.js";
 import { isAckOnlyText, normalizeRecentMessages } from "./messages.js";
@@ -49,11 +47,36 @@ import {
 function getBehaviorKeywords(trigger) {
   switch (lower(trigger)) {
     case "urgent_health_claim":
-      return ["urgent", "tecili", "pain", "bleeding", "emergency", "diaqnoz", "diagnosis"];
+      return [
+        "urgent",
+        "tecili",
+        "pain",
+        "bleeding",
+        "emergency",
+        "diaqnoz",
+        "diagnosis",
+      ];
     case "legal_risk_claim":
-      return ["court", "mahkeme", "məhkəmə", "legal advice", "qanuni", "muqavile", "müqavilə"];
+      return [
+        "court",
+        "mahkeme",
+        "məhkəmə",
+        "legal advice",
+        "qanuni",
+        "muqavile",
+        "müqavilə",
+      ];
     case "financing_or_document_review":
-      return ["mortgage", "credit", "loan", "approval", "document", "contract", "sened", "sənəd"];
+      return [
+        "mortgage",
+        "credit",
+        "loan",
+        "approval",
+        "document",
+        "contract",
+        "sened",
+        "sənəd",
+      ];
     case "human_request":
       return [];
     default:
@@ -64,11 +87,31 @@ function getBehaviorKeywords(trigger) {
 function getDisallowedClaimKeywords(claim) {
   switch (lower(claim)) {
     case "diagnosis_or_treatment_guarantees":
-      return ["diaqnoz", "diagnosis", "treatment guarantee", "guarantee", "zemanet", "zəmanət"];
+      return [
+        "diaqnoz",
+        "diagnosis",
+        "treatment guarantee",
+        "guarantee",
+        "zemanet",
+        "zəmanət",
+      ];
     case "legal_advice_or_guarantees":
-      return ["legal advice", "court win", "guarantee", "zemanet", "zəmanət"];
+      return [
+        "legal advice",
+        "court win",
+        "guarantee",
+        "zemanet",
+        "zəmanət",
+      ];
     case "guaranteed_roi_or_approval":
-      return ["roi", "approval", "approved", "guarantee", "zemanet", "zəmanət"];
+      return [
+        "roi",
+        "approval",
+        "approved",
+        "guarantee",
+        "zemanet",
+        "zəmanət",
+      ];
     case "instant_result_guarantees":
       return ["instant result", "guarantee", "zemanet", "zəmanət"];
     case "unverified_outcome_promises":
@@ -119,100 +162,6 @@ function buildBehaviorSafeReply(profile, signals) {
   }
 
   return sanitizeReplyText(leadPrompt);
-}
-
-function buildInboxReplayTrace({
-  profile,
-  channel,
-  policy = {},
-  intent,
-  promptBundle = null,
-  matchedHandoffTrigger = "",
-  matchedDisallowedClaim = "",
-  handoffReason = "",
-  handoffPriority = "",
-  shouldReply = null,
-  shouldHandoff = null,
-  qualificationStatus = "",
-}) {
-  return buildAgentReplayTrace({
-    runtime: profile,
-    behavior: profile?.behavior || profile,
-    policy,
-    promptBundle,
-    channel: channel || "inbox",
-    usecase: "inbox.reply",
-    decisions: {
-      cta: {
-        selected: s(profile?.primaryCta),
-        reason: s(profile?.primaryCta) ? "approved_runtime_behavior" : "",
-      },
-      qualification: {
-        mode: obj(profile?.channelBehavior?.inbox).qualificationDepth,
-        questionCount: arr(profile?.qualificationQuestions).length,
-        reason:
-          arr(profile?.qualificationQuestions).length > 0
-            ? "approved_runtime_behavior"
-            : "",
-      },
-      handoff: {
-        trigger: s(matchedHandoffTrigger),
-        reason: s(handoffReason || (intent === "handoff_request" ? "handoff_request" : "")),
-        priority: s(handoffPriority),
-      },
-      claimBlock: {
-        blocked: Boolean(matchedDisallowedClaim),
-        claim: s(matchedDisallowedClaim),
-        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
-      },
-    },
-    evaluation: {
-      outcome: s(
-        shouldHandoff === true
-          ? "handoff_recommended"
-          : shouldReply === true
-            ? "reply_recommended"
-            : shouldReply === false
-              ? "no_reply_recommended"
-              : intent
-      ),
-      ctaDirection: s(
-        shouldHandoff === true
-          ? "handoff"
-          : shouldReply === true
-            ? "reply_with_cta"
-            : shouldReply === false
-              ? "none"
-              : ""
-      ),
-      qualification: {
-        status:
-          s(qualificationStatus) ||
-          (arr(profile?.qualificationQuestions).length > 0 ? "guided" : "none"),
-        questionCount: arr(profile?.qualificationQuestions).length,
-      },
-      handoff: {
-        status: shouldHandoff === true ? "recommended" : "clear",
-        trigger: s(matchedHandoffTrigger),
-        reason: s(handoffReason || (intent === "handoff_request" ? "handoff_request" : "")),
-        priority: s(handoffPriority),
-      },
-      claimBlock: {
-        status: matchedDisallowedClaim ? "blocked" : "clear",
-        blocked: Boolean(matchedDisallowedClaim),
-        claim: s(matchedDisallowedClaim),
-        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
-      },
-    },
-    decisionPath: buildInboxDecisionPath({
-      intent,
-      matchedDisallowedClaim,
-      handoffReason,
-      handoffPriority,
-      shouldReply,
-      shouldHandoff,
-    }),
-  });
 }
 
 function buildInboxDecisionPath({
@@ -290,6 +239,104 @@ function buildInboxDecisionPath({
   };
 }
 
+function buildInboxReplayTrace({
+  profile,
+  channel,
+  policy = {},
+  intent,
+  promptBundle = null,
+  matchedHandoffTrigger = "",
+  matchedDisallowedClaim = "",
+  handoffReason = "",
+  handoffPriority = "",
+  shouldReply = null,
+  shouldHandoff = null,
+  qualificationStatus = "",
+}) {
+  return buildAgentReplayTrace({
+    runtime: profile,
+    behavior: profile?.behavior || profile,
+    policy,
+    promptBundle,
+    channel: channel || "inbox",
+    usecase: "inbox.reply",
+    decisions: {
+      cta: {
+        selected: s(profile?.primaryCta),
+        reason: s(profile?.primaryCta) ? "approved_runtime_behavior" : "",
+      },
+      qualification: {
+        mode: obj(profile?.channelBehavior?.inbox).qualificationDepth,
+        questionCount: arr(profile?.qualificationQuestions).length,
+        reason:
+          arr(profile?.qualificationQuestions).length > 0
+            ? "approved_runtime_behavior"
+            : "",
+      },
+      handoff: {
+        trigger: s(matchedHandoffTrigger),
+        reason: s(
+          handoffReason || (intent === "handoff_request" ? "handoff_request" : "")
+        ),
+        priority: s(handoffPriority),
+      },
+      claimBlock: {
+        blocked: Boolean(matchedDisallowedClaim),
+        claim: s(matchedDisallowedClaim),
+        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
+      },
+    },
+    evaluation: {
+      outcome: s(
+        shouldHandoff === true
+          ? "handoff_recommended"
+          : shouldReply === true
+            ? "reply_recommended"
+            : shouldReply === false
+              ? "no_reply_recommended"
+              : intent
+      ),
+      ctaDirection: s(
+        shouldHandoff === true
+          ? "handoff"
+          : shouldReply === true
+            ? "reply_with_cta"
+            : shouldReply === false
+              ? "none"
+              : ""
+      ),
+      qualification: {
+        status:
+          s(qualificationStatus) ||
+          (arr(profile?.qualificationQuestions).length > 0 ? "guided" : "none"),
+        questionCount: arr(profile?.qualificationQuestions).length,
+      },
+      handoff: {
+        status: shouldHandoff === true ? "recommended" : "clear",
+        trigger: s(matchedHandoffTrigger),
+        reason: s(
+          handoffReason || (intent === "handoff_request" ? "handoff_request" : "")
+        ),
+        priority: s(handoffPriority),
+      },
+      claimBlock: {
+        status: matchedDisallowedClaim ? "blocked" : "clear",
+        blocked: Boolean(matchedDisallowedClaim),
+        claim: s(matchedDisallowedClaim),
+        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
+      },
+    },
+    decisionPath: buildInboxDecisionPath({
+      intent,
+      matchedDisallowedClaim,
+      handoffReason,
+      handoffPriority,
+      shouldReply,
+      shouldHandoff,
+    }),
+  });
+}
+
 function attachReplayTraceToActions(actions = [], trace = null) {
   const replayTrace = obj(trace);
   if (!Object.keys(replayTrace).length) return arr(actions);
@@ -338,9 +385,7 @@ function getRuntimeReplyGateSnapshot(runtime = {}) {
           ? aiPolicy.createLeadEnabled
           : null,
     runtimeInboxEnabled:
-      typeof inboxPolicy.enabled === "boolean"
-        ? inboxPolicy.enabled
-        : null,
+      typeof inboxPolicy.enabled === "boolean" ? inboxPolicy.enabled : null,
     runtimeInboxAiReplyEnabled:
       typeof inboxPolicy.ai_reply_enabled === "boolean"
         ? inboxPolicy.ai_reply_enabled
@@ -404,6 +449,42 @@ function buildSuppressionDebugPayload({
   };
 }
 
+function buildAiMetaExtra({
+  metaBase = {},
+  ai = {},
+  profile = {},
+  reliability = {},
+  quietHoursApplied = false,
+}) {
+  return {
+    ...metaBase,
+    quietHoursApplied,
+    engine: "ai",
+    brandName: profile.displayName,
+    industry: profile.industry,
+    services: profile.services,
+    disabledServices: profile.disabledServices,
+    conversionGoal: s(profile.conversionGoal),
+    primaryCta: s(profile.primaryCta),
+    leadQualificationMode: s(profile.leadQualificationMode),
+    toneProfile: s(profile.toneProfile),
+    channelBehaviorInbox: obj(profile.channelBehavior?.inbox),
+    aiStage: s(ai.stage || ""),
+    aiReplyStyle: s(ai.replyStyle || ""),
+    aiAnswerFirst: s(ai.answerFirst || ""),
+    aiRecommendedNextQuestion: s(ai.recommendedNextQuestion || ""),
+    aiKnownFacts: arr(ai.knownFacts || []),
+    aiMissingFacts: arr(ai.missingFacts || []),
+    operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
+    duplicateOfLastAiReply: Boolean(reliability.duplicateOfLastAiReply),
+    lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
+    awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
+    repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
+    leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
+    ...getRuntimeReplyGateSnapshot(profile),
+  };
+}
+
 function buildInboxActionsFallback({
   text,
   channel,
@@ -423,9 +504,7 @@ function buildInboxActionsFallback({
   runtime = null,
 }) {
   const actions = [];
-  const profile =
-    runtime ||
-    getTenantBusinessProfile(tenant, tenantKey, services);
+  const profile = runtime || getTenantBusinessProfile(tenant, tenantKey, services);
   const behaviorSignals = detectBehaviorSignals(text, profile);
 
   const runtimeKnowledge = Array.isArray(runtime?.knowledgeEntries)
@@ -448,9 +527,6 @@ function buildInboxActionsFallback({
   if (matchedPlaybook) {
     intent = "playbook";
     leadScore = Math.max(leadScore, matchedPlaybook.createLead ? 60 : 28);
-  } else if (matchedKnowledge.length && ["general", "support", "service_interest"].includes(intent)) {
-    intent = "knowledge_answer";
-    leadScore = Math.max(leadScore, 32);
   }
 
   let replyText = sanitizeReplyText(
@@ -464,7 +540,9 @@ function buildInboxActionsFallback({
 
   let shouldCreateLead =
     Boolean(matchedPlaybook?.createLead) ||
-    ["pricing", "service_interest", "handoff_request", "urgent_interest", "general"].includes(intent);
+    ["pricing", "service_interest", "handoff_request", "urgent_interest", "general"].includes(
+      intent
+    );
 
   let shouldHandoff =
     Boolean(matchedPlaybook?.handoff) ||
@@ -509,7 +587,10 @@ function buildInboxActionsFallback({
     shouldTyping = false;
   }
 
-  if (reliability?.operatorRecentlyReplied && getThreadHandoffState(thread, effectiveThreadState).active) {
+  if (
+    reliability?.operatorRecentlyReplied &&
+    getThreadHandoffState(thread, effectiveThreadState).active
+  ) {
     shouldReply = false;
     shouldTyping = false;
   }
@@ -543,7 +624,7 @@ function buildInboxActionsFallback({
       policyTypingIndicatorEnabled: Boolean(policy.typingIndicatorEnabled),
       policySuppressAiDuringHandoff: Boolean(policy.suppressAiDuringHandoff),
       timezone: s(policy.timezone || "Asia/Baku"),
-      engine: matchedPlaybook ? "playbook" : matchedKnowledge.length ? "knowledge" : "fallback",
+      engine: "fallback",
       brandName: profile.displayName,
       industry: profile.industry,
       niche: s(profile.niche || profile.businessType),
@@ -621,22 +702,25 @@ function buildInboxActionsFallback({
       duplicateReply,
     });
 
-    logInboxReplyGate("fallback reply suppressed", buildSuppressionDebugPayload({
-      tenantKey,
-      channel,
-      policy,
-      runtime: profile,
-      handoff: handoffState,
-      reliability,
-      quietHoursApplied,
-      duplicateReply,
-      shouldReply,
-      shouldTyping,
-      replyText,
-      suppressedReason,
-      thread,
-      message,
-    }));
+    logInboxReplyGate(
+      "fallback reply suppressed",
+      buildSuppressionDebugPayload({
+        tenantKey,
+        channel,
+        policy,
+        runtime: profile,
+        handoff: handoffState,
+        reliability,
+        quietHoursApplied,
+        duplicateReply,
+        shouldReply,
+        shouldTyping,
+        replyText,
+        suppressedReason,
+        thread,
+        message,
+      })
+    );
 
     actions.push(
       noReplyAction({
@@ -1077,22 +1161,25 @@ export async function buildInboxActions({
         duplicateReply,
       });
 
-      logInboxReplyGate("behavior reply suppressed", buildSuppressionDebugPayload({
-        tenantKey: resolvedTenantKey,
-        channel,
-        policy,
-        runtime: profile,
-        handoff,
-        reliability,
-        quietHoursApplied,
-        duplicateReply,
-        shouldReply,
-        shouldTyping,
-        replyText,
-        suppressedReason,
-        thread,
-        message,
-      }));
+      logInboxReplyGate(
+        "behavior reply suppressed",
+        buildSuppressionDebugPayload({
+          tenantKey: resolvedTenantKey,
+          channel,
+          policy,
+          runtime: profile,
+          handoff,
+          reliability,
+          quietHoursApplied,
+          duplicateReply,
+          shouldReply,
+          shouldTyping,
+          replyText,
+          suppressedReason,
+          thread,
+          message,
+        })
+      );
 
       actions.push(
         noReplyAction({
@@ -1123,227 +1210,6 @@ export async function buildInboxActions({
         shouldHandoff,
       }),
     });
-  }
-
-  if (matchedPlaybook && matchedPlaybook.replyTemplate) {
-    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
-    const intent = "playbook";
-    const leadScore = matchedPlaybook.createLead ? 60 : 28;
-    const shouldReply = Boolean(policy.autoReplyEnabled) && !quietHoursApplied;
-    const shouldTyping = Boolean(policy.typingIndicatorEnabled) && shouldReply;
-    const shouldMarkSeen = Boolean(policy.markSeenEnabled);
-    let shouldCreateLead = Boolean(policy.createLeadEnabled && matchedPlaybook.createLead);
-    const shouldHandoff = Boolean(policy.handoffEnabled && matchedPlaybook.handoff);
-
-    if (reliability?.leadAlreadyCreated) shouldCreateLead = false;
-
-    const commonMeta = buildMeta({
-      tenantKey: resolvedTenantKey,
-      thread,
-      message,
-      intent,
-      score: leadScore,
-      extra: {
-        ...metaBase,
-        engine: "playbook",
-      },
-    });
-
-    if (shouldMarkSeen) {
-      actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-    }
-
-    if (shouldCreateLead) {
-      actions.push(
-        createLeadAction({
-          channel,
-          externalUserId,
-          thread,
-          text,
-          intent,
-          meta: commonMeta,
-        })
-      );
-    }
-
-    if (shouldHandoff) {
-      actions.push(
-        handoffAction({
-          channel,
-          externalUserId,
-          thread,
-          reason: matchedPlaybook.handoffReason || "manual_review",
-          priority: matchedPlaybook.handoffPriority || "normal",
-          meta: commonMeta,
-        })
-      );
-    }
-
-    const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
-
-    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
-      actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-    }
-
-    if (shouldReply && replyText && !duplicateReply) {
-      actions.push(
-        sendMessageAction({
-          channel,
-          recipientId: externalUserId,
-          text: replyText,
-          meta: commonMeta,
-        })
-      );
-    } else {
-      const suppressedReason = buildSuppressedReplyReason({
-        quietHoursApplied,
-        reliability,
-        handoffActive: handoff.active,
-        duplicateReply,
-      });
-
-      logInboxReplyGate("playbook reply suppressed", buildSuppressionDebugPayload({
-        tenantKey: resolvedTenantKey,
-        channel,
-        policy,
-        runtime: profile,
-        handoff,
-        reliability,
-        quietHoursApplied,
-        duplicateReply,
-        shouldReply,
-        shouldTyping,
-        replyText,
-        suppressedReason,
-        thread,
-        message,
-      }));
-
-      actions.push(
-        noReplyAction({
-          reason: suppressedReason,
-          meta: commonMeta,
-        })
-      );
-    }
-
-    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
-      actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-    }
-
-    return finalizeInboxDecisionResult({
-      intent,
-      leadScore,
-      policy,
-      actions,
-      trace: buildInboxReplayTrace({
-        profile,
-        channel,
-        policy,
-        intent,
-        handoffReason: matchedPlaybook.handoffReason || "manual_review",
-        handoffPriority: matchedPlaybook.handoffPriority || "normal",
-        shouldReply,
-        shouldHandoff,
-      }),
-    });
-  }
-
-  if (
-    matchedKnowledge.length &&
-    !includesAny(incoming, profile?.humanKeywords) &&
-    !includesAny(incoming, profile?.urgentKeywords)
-  ) {
-    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
-    if (replyText) {
-      const intent = "knowledge_answer";
-      const leadScore = 30;
-      const shouldReply = Boolean(policy.autoReplyEnabled) && !quietHoursApplied;
-      const shouldTyping = Boolean(policy.typingIndicatorEnabled) && shouldReply;
-      const shouldMarkSeen = Boolean(policy.markSeenEnabled);
-
-      const commonMeta = buildMeta({
-        tenantKey: resolvedTenantKey,
-        thread,
-        message,
-        intent,
-        score: leadScore,
-        extra: {
-          ...metaBase,
-          engine: "knowledge",
-        },
-      });
-
-      if (shouldMarkSeen) {
-        actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-      }
-
-      const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
-
-      if (shouldReply && shouldTyping && replyText && !duplicateReply) {
-        actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-      }
-
-      if (shouldReply && replyText && !duplicateReply) {
-        actions.push(
-          sendMessageAction({
-            channel,
-            recipientId: externalUserId,
-            text: replyText,
-            meta: commonMeta,
-          })
-        );
-      } else {
-        const suppressedReason = buildSuppressedReplyReason({
-          quietHoursApplied,
-          reliability,
-          handoffActive: handoff.active,
-          duplicateReply,
-        });
-
-        logInboxReplyGate("knowledge reply suppressed", buildSuppressionDebugPayload({
-          tenantKey: resolvedTenantKey,
-          channel,
-          policy,
-          runtime: profile,
-          handoff,
-          reliability,
-          quietHoursApplied,
-          duplicateReply,
-          shouldReply,
-          shouldTyping,
-          replyText,
-          suppressedReason,
-          thread,
-          message,
-        }));
-
-        actions.push(
-          noReplyAction({
-            reason: suppressedReason,
-            meta: commonMeta,
-          })
-        );
-      }
-
-      if (shouldReply && shouldTyping && replyText && !duplicateReply) {
-        actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
-      }
-
-      return finalizeInboxDecisionResult({
-        intent,
-        leadScore,
-        policy,
-        actions,
-        trace: buildInboxReplayTrace({
-          profile,
-          channel,
-          policy,
-          intent,
-          shouldReply,
-        }),
-      });
-    }
   }
 
   const ai = await aiDecideInbox({
@@ -1381,8 +1247,7 @@ export async function buildInboxActions({
       ["pricing", "service_interest", "general"].includes(intent);
 
     let shouldHandoff =
-      Boolean(ai.handoff) &&
-      shouldAllowHandoffByText(text, aiProfile);
+      Boolean(ai.handoff) && shouldAllowHandoffByText(text, aiProfile);
 
     let shouldReply = Boolean(policy.autoReplyEnabled) && !Boolean(ai.noReply);
     let shouldMarkSeen = Boolean(policy.markSeenEnabled);
@@ -1419,7 +1284,15 @@ export async function buildInboxActions({
 
     if (
       !replyText &&
-      ["greeting", "pricing", "service_interest", "support", "general", "unsupported_service", "knowledge_answer"].includes(intent)
+      [
+        "greeting",
+        "pricing",
+        "service_interest",
+        "support",
+        "general",
+        "unsupported_service",
+        "knowledge_answer",
+      ].includes(intent)
     ) {
       replyText = sanitizeReplyText(
         buildFallbackReply({
@@ -1434,7 +1307,15 @@ export async function buildInboxActions({
 
     if (
       ai.noReply &&
-      ["greeting", "pricing", "service_interest", "support", "general", "unsupported_service", "knowledge_answer"].includes(intent)
+      [
+        "greeting",
+        "pricing",
+        "service_interest",
+        "support",
+        "general",
+        "unsupported_service",
+        "knowledge_answer",
+      ].includes(intent)
     ) {
       shouldReply = true;
     }
@@ -1446,28 +1327,34 @@ export async function buildInboxActions({
       shouldTyping = false;
     }
 
-    logInboxReplyGate("ai reply gating", buildSuppressionDebugPayload({
-      tenantKey: resolvedTenantKey,
-      channel,
-      policy,
-      runtime: aiProfile,
-      ai,
-      handoff,
-      reliability,
-      quietHoursApplied,
-      duplicateReply,
-      shouldReply,
-      shouldTyping,
-      replyText,
-      suppressedReason: !shouldReply || !replyText ? buildSuppressedReplyReason({
-        quietHoursApplied,
+    logInboxReplyGate(
+      "ai reply gating",
+      buildSuppressionDebugPayload({
+        tenantKey: resolvedTenantKey,
+        channel,
+        policy,
+        runtime: aiProfile,
+        ai,
+        handoff,
         reliability,
-        handoffActive: handoff.active,
+        quietHoursApplied,
         duplicateReply,
-      }) : "",
-      thread,
-      message,
-    }));
+        shouldReply,
+        shouldTyping,
+        replyText,
+        suppressedReason:
+          !shouldReply || !replyText
+            ? buildSuppressedReplyReason({
+                quietHoursApplied,
+                reliability,
+                handoffActive: handoff.active,
+                duplicateReply,
+              })
+            : "",
+        thread,
+        message,
+      })
+    );
 
     const commonMeta = buildMeta({
       tenantKey: resolvedTenantKey,
@@ -1475,33 +1362,13 @@ export async function buildInboxActions({
       message,
       intent,
       score: leadScore,
-      extra: {
+      extra: buildAiMetaExtra({
+        metaBase,
+        ai,
+        profile: aiProfile,
+        reliability,
         quietHoursApplied,
-        recentMessageCount: normalizeRecentMessages(recentMessages).length,
-        policyAutoReplyEnabled: Boolean(policy.autoReplyEnabled),
-        policyCreateLeadEnabled: Boolean(policy.createLeadEnabled),
-        policyHandoffEnabled: Boolean(policy.handoffEnabled),
-        policyMarkSeenEnabled: Boolean(policy.markSeenEnabled),
-        policyTypingIndicatorEnabled: Boolean(policy.typingIndicatorEnabled),
-        policySuppressAiDuringHandoff: Boolean(policy.suppressAiDuringHandoff),
-        timezone: s(policy.timezone || "Asia/Baku"),
-        engine: "ai",
-        brandName: aiProfile.displayName,
-        industry: aiProfile.industry,
-        services: aiProfile.services,
-        disabledServices: aiProfile.disabledServices,
-        operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
-        duplicateOfLastAiReply: Boolean(reliability.duplicateOfLastAiReply),
-        duplicateReplyCandidate: duplicateReply,
-        lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
-        awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
-        repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
-        leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
-        threadState: effectiveThreadState || {},
-        matchedKnowledgeTitles: (ai.matchedKnowledge || matchedKnowledge).map((x) => x.title).filter(Boolean),
-        matchedPlaybookName: s((ai.matchedPlaybook || matchedPlaybook)?.name),
-        ...getRuntimeReplyGateSnapshot(aiProfile),
-      },
+      }),
     });
 
     if (shouldMarkSeen) {
@@ -1555,23 +1422,26 @@ export async function buildInboxActions({
         duplicateReply,
       });
 
-      logInboxReplyGate("ai reply suppressed", buildSuppressionDebugPayload({
-        tenantKey: resolvedTenantKey,
-        channel,
-        policy,
-        runtime: aiProfile,
-        ai,
-        handoff,
-        reliability,
-        quietHoursApplied,
-        duplicateReply,
-        shouldReply,
-        shouldTyping,
-        replyText,
-        suppressedReason,
-        thread,
-        message,
-      }));
+      logInboxReplyGate(
+        "ai reply suppressed",
+        buildSuppressionDebugPayload({
+          tenantKey: resolvedTenantKey,
+          channel,
+          policy,
+          runtime: aiProfile,
+          ai,
+          handoff,
+          reliability,
+          quietHoursApplied,
+          duplicateReply,
+          shouldReply,
+          shouldTyping,
+          replyText,
+          suppressedReason,
+          thread,
+          message,
+        })
+      );
 
       actions.push(
         noReplyAction({
@@ -1590,18 +1460,22 @@ export async function buildInboxActions({
       leadScore,
       policy,
       actions,
-      trace: buildInboxReplayTrace({
-        profile: aiProfile,
-        channel,
-        policy,
-        intent,
-        promptBundle: ai.promptBundle || null,
-        matchedHandoffTrigger: behaviorSignals.matchedHandoffTrigger,
-        handoffReason,
-        handoffPriority,
-        shouldReply,
-        shouldHandoff,
-      }),
+      trace:
+        obj(ai.trace) && Object.keys(obj(ai.trace)).length
+          ? ai.trace
+          : buildInboxReplayTrace({
+              profile: aiProfile,
+              channel,
+              policy,
+              intent,
+              promptBundle: ai.promptBundle || null,
+              matchedHandoffTrigger: behaviorSignals.matchedHandoffTrigger,
+              handoffReason,
+              handoffPriority,
+              shouldReply,
+              shouldHandoff,
+              qualificationStatus: s(ai.stage || ""),
+            }),
     });
   }
 
