@@ -1,12 +1,12 @@
 import { getInboxPolicy } from "../inboxPolicy.js";
-import { aiDecideInbox } from "./ai.js";
 import {
   isAckOnlyText,
   normalizeRecentMessages,
   stripLeadingCommand,
 } from "./messages.js";
 import { resolveInboxRuntime } from "./runtime.js";
-import { getResolvedTenantKey, lower, obj, s, sanitizeReplyText } from "./shared.js";
+import { runTenantAwareConversationEngine } from "./conversationEngine.js";
+import { getResolvedTenantKey, lower, s } from "./shared.js";
 
 function normalizeLanguage(value = "") {
   const x = lower(value);
@@ -14,6 +14,19 @@ function normalizeLanguage(value = "") {
   if (x.startsWith("az")) return "az";
   if (x.startsWith("tr")) return "tr";
   if (x.startsWith("ru")) return "ru";
+  if (x.startsWith("es")) return "es";
+  if (x.startsWith("de")) return "de";
+  if (x.startsWith("fr")) return "fr";
+  if (x.startsWith("it")) return "it";
+  if (x.startsWith("pt")) return "pt";
+  if (x.startsWith("ar")) return "ar";
+  if (x.startsWith("nl")) return "nl";
+  if (x.startsWith("pl")) return "pl";
+  if (x.startsWith("uk")) return "uk";
+  if (x.startsWith("zh")) return "zh";
+  if (x.startsWith("ja")) return "ja";
+  if (x.startsWith("ko")) return "ko";
+  if (x.startsWith("hi")) return "hi";
   return "en";
 }
 
@@ -30,95 +43,39 @@ function countTokens(value = "") {
   return normalized.split(" ").filter(Boolean).length;
 }
 
-function hasAny(text = "", words = []) {
-  const haystack = normalizeFreeText(text);
-  if (!haystack) return false;
-
-  return words.some((word) => {
-    const needle = normalizeFreeText(word);
-    return needle && haystack.includes(needle);
-  });
-}
-
 function isMeaningfulCustomerNeed(text = "") {
   const cleaned = stripLeadingCommand(text);
   if (!cleaned) return false;
   if (isAckOnlyText(cleaned)) return false;
 
   const normalized = normalizeFreeText(cleaned);
-  const tokenCount = countTokens(normalized);
+  if (!normalized) return false;
 
-  if (
-    hasAny(normalized, [
-      "need",
-      "want",
-      "looking for",
-      "help",
-      "problem",
-      "issue",
-      "price",
-      "pricing",
-      "quote",
-      "book",
-      "booking",
-      "reservation",
-      "website",
-      "web site",
-      "web sayt",
-      "sayt",
-      "site",
-      "qiymet",
-      "qiymət",
-      "destek",
-      "dəstək",
-      "support",
-      "rezerv",
-      "reservation",
-      "mene",
-      "mənə",
-      "lazim",
-      "lazımdır",
-      "lazimdi",
-      "isteyirem",
-      "istəyirəm",
-      "istiyirem",
-      "problemim",
-      "sorun",
-      "xeta",
-      "xəta",
-    ])
-  ) {
-    return true;
-  }
-
-  if (tokenCount >= 4) return true;
+  if (countTokens(normalized) >= 4) return true;
   if (cleaned.length >= 18) return true;
+  if (/[?؟]/u.test(cleaned)) return true;
 
   return false;
 }
 
-function inferNeedCategory(text = "") {
-  const normalized = normalizeFreeText(stripLeadingCommand(text));
+function pickLanguage(engine = {}, runtime = {}) {
+  return normalizeLanguage(
+    engine?.language || runtime?.languages?.[0] || runtime?.profile?.language || "en"
+  );
+}
+
+function inferNeedCategoryFromEngine(engine = {}, runtime = {}, customerText = "") {
+  const detectedService = s(engine?.detectedService || "");
+  if (detectedService) return "service_interest";
+
+  const askCategory = lower(engine?.askCategory || "");
+  if (askCategory) return askCategory;
+
+  const normalized = normalizeFreeText(customerText);
+  if (!normalized) return "general";
 
   if (
-    hasAny(normalized, [
-      "website",
-      "web site",
-      "web",
-      "site",
-      "sayt",
-      "web sayt",
-      "landing page",
-      "ecommerce",
-      "e commerce",
-      "online store",
-    ])
-  ) {
-    return "website";
-  }
-
-  if (
-    hasAny(normalized, [
+    [
       "price",
       "pricing",
       "quote",
@@ -127,13 +84,14 @@ function inferNeedCategory(text = "") {
       "qiymət",
       "teklif",
       "budget",
-    ])
+      "fee",
+    ].some((word) => normalized.includes(normalizeFreeText(word)))
   ) {
     return "pricing";
   }
 
   if (
-    hasAny(normalized, [
+    [
       "problem",
       "issue",
       "bug",
@@ -145,13 +103,13 @@ function inferNeedCategory(text = "") {
       "dəstək",
       "destek",
       "help",
-    ])
+    ].some((word) => normalized.includes(normalizeFreeText(word)))
   ) {
     return "support";
   }
 
   if (
-    hasAny(normalized, [
+    [
       "book",
       "booking",
       "reservation",
@@ -161,190 +119,64 @@ function inferNeedCategory(text = "") {
       "bron",
       "gorus",
       "görüş",
-    ])
+    ].some((word) => normalized.includes(normalizeFreeText(word)))
   ) {
     return "booking";
   }
 
+  const activeServices = Array.isArray(runtime?.services) ? runtime.services : [];
   if (
-    hasAny(normalized, [
-      "service",
-      "xidmet",
-      "xidmət",
-      "offer",
-      "offerings",
-      "what do you do",
-    ])
+    activeServices.some((item) =>
+      normalized.includes(normalizeFreeText(item))
+    )
   ) {
-    return "service";
+    return "service_interest";
   }
 
   return "general";
 }
 
-const GENERIC_REPEAT_PATTERNS = [
-  "tell me briefly what you need",
-  "tell me briefly what you need help with",
-  "share what you need",
-  "describe the issue briefly",
-  "tell me the topic briefly",
-  "write briefly what you need",
-  "qisa olaraq neye ehtiyaciniz oldugunu yazin",
-  "qisa olaraq neye ehtiyaciniz oldugunu yazin",
-  "ne ile bagli komek lazim oldugunu qisa yazin",
-  "mövzunu qısa yazın",
-  "problemi qisa yazin",
-  "nəyə ehtiyacınız olduğunu yazın",
-  "nə ilə bağlı kömək lazım olduğunu qısa yazın",
-  "kısaca neye ihtiyacınız olduğunu yazın",
-  "hangi konuda yardıma ihtiyacınız olduğunu kısaca yazın",
-  "kratko napishite chto vam nuzhno",
-];
-
-function isGenericRepeatReply(replyText = "") {
-  const normalized = normalizeFreeText(replyText);
-  if (!normalized) return true;
-
-  return GENERIC_REPEAT_PATTERNS.some((pattern) =>
-    normalized.includes(normalizeFreeText(pattern))
-  );
-}
-
-function pickLanguage(ai = {}, runtime = {}) {
-  return normalizeLanguage(
-    ai?.language || runtime?.languages?.[0] || runtime?.profile?.language || "en"
-  );
-}
-
-function getLocalizedCopy(language = "en") {
-  const lang = normalizeLanguage(language);
-
-  if (lang === "az") {
-    return {
-      ack: "Başa düşdüm.",
-      categories: {
-        website: "Sizə veb sayt lazımdır.",
-        pricing: "Qiymətlə bağlı soruşursunuz.",
-        support: "Problemlə bağlı yazırsınız.",
-        booking: "Rezervasiya ilə bağlı yazırsınız.",
-        service: "Xidmətlə bağlı soruşursunuz.",
-        general: "Mövzunu anladım.",
-      },
-      questions: {
-        website:
-          "Daha düzgün yönləndirmək üçün birini yazın: sayt sıfırdan qurulacaq, yoxsa mövcud sayt yenilənəcək?",
-        pricing:
-          "Daha düzgün cavab vermək üçün qiyməti hansı xidmət üçün istədiyinizi yazın.",
-        support:
-          "Dəqiq kömək etmək üçün problemin harada göründüyünü bir cümlə ilə yazın.",
-        booking:
-          "Dəqiq yönləndirmək üçün hansı xidmət üçün rezervasiya istədiyinizi yazın.",
-        service:
-          "Dəqiq yönləndirmək üçün sizə konkret hansı xidmətin lazım olduğunu yazın.",
-        general:
-          "Dəqiq yönləndirmək üçün əsas məqsədinizi bir cümlə ilə yazın.",
-      },
-    };
-  }
-
-  if (lang === "tr") {
-    return {
-      ack: "Anladım.",
-      categories: {
-        website: "Size web sitesi gerekiyor.",
-        pricing: "Fiyat tarafını soruyorsunuz.",
-        support: "Bir problem desteği istiyorsunuz.",
-        booking: "Rezervasyon tarafını soruyorsunuz.",
-        service: "Hizmet tarafını soruyorsunuz.",
-        general: "Konuyu anladım.",
-      },
-      questions: {
-        website:
-          "Daha net yönlendirmem için şunu yazın: site sıfırdan mı yapılacak, yoksa mevcut site mi yenilenecek?",
-        pricing:
-          "Daha net cevap verebilmem için fiyatı hangi hizmet için istediğinizi yazın.",
-        support:
-          "Daha doğru yardımcı olabilmem için sorunun nerede göründüğünü tek cümleyle yazın.",
-        booking:
-          "Daha doğru yönlendirmem için hangi hizmet için rezervasyon istediğinizi yazın.",
-        service:
-          "Daha net yönlendirmem için tam olarak hangi hizmete ihtiyacınız olduğunu yazın.",
-        general:
-          "Daha net yönlendirmem için ana amacınızı tek cümleyle yazın.",
-      },
-    };
-  }
-
-  if (lang === "ru") {
-    return {
-      ack: "Понял.",
-      categories: {
-        website: "Вам нужен сайт.",
-        pricing: "Вы спрашиваете о стоимости.",
-        support: "Вы пишете по проблеме.",
-        booking: "Вы пишете по бронированию.",
-        service: "Вы спрашиваете об услуге.",
-        general: "Я понял тему.",
-      },
-      questions: {
-        website:
-          "Чтобы точнее сориентировать, напишите одно: сайт нужен с нуля или требуется обновление существующего?",
-        pricing:
-          "Чтобы ответить точнее, напишите, для какой именно услуги нужна стоимость.",
-        support:
-          "Чтобы помочь точнее, напишите одним предложением, где именно проявляется проблема.",
-        booking:
-          "Чтобы правильно направить дальше, напишите, для какой услуги нужно бронирование.",
-        service:
-          "Чтобы точнее направить дальше, напишите, какая именно услуга вам нужна.",
-        general:
-          "Чтобы точнее направить дальше, напишите одной фразой вашу основную цель.",
-      },
-    };
-  }
-
+function buildDiagnostics({
+  customerText = "",
+  explicitNeed = false,
+  category = "general",
+  ackOnly = false,
+  commandOnly = false,
+  engine = null,
+}) {
   return {
-    ack: "Understood.",
-    categories: {
-      website: "You need a website.",
-      pricing: "You are asking about pricing.",
-      support: "You are writing about a problem.",
-      booking: "You are asking about booking.",
-      service: "You are asking about a service.",
-      general: "I understand the topic.",
-    },
-    questions: {
-      website:
-        "To guide this properly, tell me one thing: do you need a brand new site, or an update to an existing one?",
-      pricing:
-        "To answer this properly, tell me which service you want pricing for.",
-      support:
-        "To help accurately, write in one sentence where the problem appears.",
-      booking:
-        "To guide this properly, tell me which service you want to book.",
-      service:
-        "To guide this properly, tell me which exact service you need.",
-      general:
-        "To guide this properly, write your main goal in one sentence.",
-    },
+    explicitNeed,
+    inferredNeedCategory: s(category || "general"),
+    genericClarifierDetected: false,
+    ackOnly,
+    commandOnly,
+    usedRecovery: false,
+    customerTextPreview: s(customerText).slice(0, 220),
+    aiIntent: s(engine?.intent || ""),
+    aiAskCategory: s(engine?.askCategory || ""),
+    aiStage: s(engine?.stage || ""),
+    aiReplyMode: s(engine?.replyMode || ""),
+    aiSemanticFailureReason: s(engine?.semanticFailureReason || ""),
+    detectedService: s(engine?.detectedService || ""),
+    shouldAskQuestion: Boolean(engine?.shouldAskQuestion),
+    fallbackReason: s(engine?.fallbackReason || ""),
+    replyPreview: s(engine?.replyText || "").slice(0, 220),
   };
 }
 
-function buildNeedAwareRecoveryReply({
-  customerText = "",
-  language = "en",
-  category = "general",
-}) {
-  const copy = getLocalizedCopy(language);
-  const safeCategory = copy.categories[category] ? category : "general";
-
-  const pieces = [
-    copy.ack,
-    copy.categories[safeCategory],
-    copy.questions[safeCategory],
-  ].filter(Boolean);
-
-  return sanitizeReplyText(pieces.join(" "));
+function buildControl(engine = {}) {
+  return {
+    intent: s(engine?.intent || "general"),
+    askCategory: s(engine?.askCategory || "general"),
+    stage: s(engine?.stage || "general"),
+    leadScore: Number(engine?.leadScore || 0),
+    createLeadSuggested: engine?.createLead === true,
+    handoffSuggested: engine?.handoff === true,
+    handoffReason: s(engine?.handoffReason || ""),
+    handoffPriority: s(engine?.handoffPriority || "normal"),
+    noReplySuggested: engine?.noReply === true,
+    confidence: Number(engine?.confidence || 0),
+  };
 }
 
 function buildNoReply({
@@ -354,66 +186,24 @@ function buildNoReply({
   language = "en",
   diagnostics = {},
   control = {},
+  engine = null,
 }) {
   return {
     ok: true,
     runtime,
     policy,
-    ai: null,
+    ai: engine,
     reply: {
       shouldReply: false,
       text: "",
       mode: "suppressed",
       reasonCode: s(reasonCode),
       language: normalizeLanguage(language),
-      confidence: 0,
+      confidence: Number(engine?.confidence || 0),
       usedRecovery: false,
     },
     control,
     diagnostics,
-  };
-}
-
-function buildDiagnostics({
-  customerText = "",
-  category = "general",
-  explicitNeed = false,
-  genericClarifierDetected = false,
-  ackOnly = false,
-  commandOnly = false,
-  usedRecovery = false,
-  ai = null,
-  replyText = "",
-}) {
-  return {
-    explicitNeed,
-    inferredNeedCategory: s(category),
-    genericClarifierDetected,
-    ackOnly,
-    commandOnly,
-    usedRecovery,
-    customerTextPreview: s(customerText).slice(0, 220),
-    aiIntent: s(ai?.intent || ""),
-    aiAskCategory: s(ai?.askCategory || ""),
-    aiStage: s(ai?.stage || ""),
-    aiReplyMode: s(ai?.replyMode || ""),
-    aiSemanticFailureReason: s(ai?.semanticFailureReason || ""),
-    replyPreview: s(replyText).slice(0, 220),
-  };
-}
-
-function buildControl(ai = {}) {
-  return {
-    intent: s(ai?.intent || "general"),
-    askCategory: s(ai?.askCategory || "general"),
-    stage: s(ai?.stage || "general"),
-    leadScore: Number(ai?.leadScore || 0),
-    createLeadSuggested: ai?.createLead === true,
-    handoffSuggested: ai?.handoff === true,
-    handoffReason: s(ai?.handoffReason || ""),
-    handoffPriority: s(ai?.handoffPriority || "normal"),
-    noReplySuggested: ai?.noReply === true,
-    confidence: Number(ai?.confidence || 0),
   };
 }
 
@@ -467,8 +257,7 @@ export async function buildRealtimeReplyDecision({
     tenant: resolvedRuntime?.tenant || tenant,
   });
 
-  const language = pickLanguage({}, resolvedRuntime);
-  const category = inferNeedCategory(cleanedCustomerText);
+  const baseLanguage = pickLanguage({}, resolvedRuntime);
   const explicitNeed = isMeaningfulCustomerNeed(cleanedCustomerText);
 
   if (!policy.channelAllowed) {
@@ -476,11 +265,11 @@ export async function buildRealtimeReplyDecision({
       runtime: resolvedRuntime,
       policy,
       reasonCode: "channel_not_allowed",
-      language,
+      language: baseLanguage,
       diagnostics: buildDiagnostics({
         customerText: cleanedCustomerText,
-        category,
         explicitNeed,
+        category: "general",
         ackOnly,
         commandOnly,
       }),
@@ -493,11 +282,11 @@ export async function buildRealtimeReplyDecision({
       runtime: resolvedRuntime,
       policy,
       reasonCode: "empty_text",
-      language,
+      language: baseLanguage,
       diagnostics: buildDiagnostics({
         customerText: cleanedCustomerText,
-        category,
         explicitNeed,
+        category: "general",
         ackOnly,
         commandOnly,
       }),
@@ -510,11 +299,11 @@ export async function buildRealtimeReplyDecision({
       runtime: resolvedRuntime,
       policy,
       reasonCode: "ack_only",
-      language,
+      language: baseLanguage,
       diagnostics: buildDiagnostics({
         customerText: cleanedCustomerText,
-        category,
         explicitNeed,
+        category: "general",
         ackOnly,
         commandOnly,
       }),
@@ -522,7 +311,7 @@ export async function buildRealtimeReplyDecision({
     });
   }
 
-  const ai = await aiDecideInbox({
+  const engine = await runTenantAwareConversationEngine({
     text: customerText,
     channel,
     externalUserId,
@@ -545,68 +334,46 @@ export async function buildRealtimeReplyDecision({
     runtime: resolvedRuntime,
   });
 
-  const aiLanguage = pickLanguage(ai, resolvedRuntime);
-  const aiReplyText = sanitizeReplyText(
-    ai?.replyText || ai?.replyBodyText || ai?.answerFirst || ""
+  const language = pickLanguage(engine, resolvedRuntime);
+  const inferredCategory = inferNeedCategoryFromEngine(
+    engine,
+    resolvedRuntime,
+    cleanedCustomerText
   );
-  const genericClarifierDetected = isGenericRepeatReply(aiReplyText);
 
-  let replyText = aiReplyText;
-  let replyMode = s(ai?.replyMode || "semantic") || "semantic";
-  let shouldReply =
-    policy.autoReplyEnabled &&
-    !ai?.noReply &&
-    Boolean(replyText);
-
-  let usedRecovery = false;
-  if (
-    explicitNeed &&
-    (genericClarifierDetected || !replyText) &&
-    !commandOnly
-  ) {
-    replyText = buildNeedAwareRecoveryReply({
-      customerText: cleanedCustomerText,
-      language: aiLanguage,
-      category,
-    });
-    replyMode = "recovered_need_aware";
-    shouldReply = policy.autoReplyEnabled && Boolean(replyText);
-    usedRecovery = Boolean(replyText);
-  }
-
-  if (!policy.autoReplyEnabled) {
-    shouldReply = false;
-  }
-
-  const control = buildControl(ai);
   const diagnostics = buildDiagnostics({
     customerText: cleanedCustomerText,
-    category,
     explicitNeed,
-    genericClarifierDetected,
+    category: inferredCategory,
     ackOnly,
     commandOnly,
-    usedRecovery,
-    ai,
-    replyText,
+    engine,
   });
+
+  const control = buildControl(engine);
+
+  const replyText = s(engine?.replyText || "");
+  const shouldReply =
+    policy.autoReplyEnabled &&
+    !engine?.noReply &&
+    Boolean(replyText);
 
   if (!shouldReply) {
     return {
       ok: true,
       runtime: resolvedRuntime,
       policy,
-      ai,
+      ai: engine,
       reply: {
         shouldReply: false,
         text: "",
         mode: "suppressed",
         reasonCode: !policy.autoReplyEnabled
           ? "auto_reply_disabled"
-          : s(ai?.noReply ? "ai_no_reply" : "reply_unavailable"),
-        language: aiLanguage,
-        confidence: Number(ai?.confidence || 0),
-        usedRecovery,
+          : s(engine?.noReply ? "conversation_engine_no_reply" : "reply_unavailable"),
+        language,
+        confidence: Number(engine?.confidence || 0),
+        usedRecovery: false,
       },
       control,
       diagnostics,
@@ -617,15 +384,15 @@ export async function buildRealtimeReplyDecision({
     ok: true,
     runtime: resolvedRuntime,
     policy,
-    ai,
+    ai: engine,
     reply: {
       shouldReply: true,
       text: replyText,
-      mode: replyMode,
-      reasonCode: usedRecovery ? "need_aware_recovery" : "",
-      language: aiLanguage,
-      confidence: Number(ai?.confidence || 0),
-      usedRecovery,
+      mode: s(engine?.replyMode || "conversation_engine"),
+      reasonCode: s(engine?.fallbackReason || ""),
+      language,
+      confidence: Number(engine?.confidence || 0),
+      usedRecovery: false,
     },
     control,
     diagnostics,
@@ -635,7 +402,5 @@ export async function buildRealtimeReplyDecision({
 export const __test__ = {
   normalizeLanguage,
   isMeaningfulCustomerNeed,
-  inferNeedCategory,
-  isGenericRepeatReply,
-  buildNeedAwareRecoveryReply,
+  inferNeedCategoryFromEngine,
 };
