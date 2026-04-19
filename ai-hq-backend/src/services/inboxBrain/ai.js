@@ -8,7 +8,14 @@ import {
   buildPlaybookReply,
   buildUnsupportedServiceReply,
 } from "./fallback.js";
-import { arr, getResolvedTenantKey, lower, obj, s, sanitizeReplyText } from "./shared.js";
+import {
+  arr,
+  getResolvedTenantKey,
+  lower,
+  obj,
+  s,
+  sanitizeReplyText,
+} from "./shared.js";
 import {
   buildHistorySnippet,
   extractText,
@@ -25,7 +32,6 @@ import { buildSemanticSystemPrompt } from "./prompts/system.semantic.js";
 import { buildSemanticUserPrompt } from "./prompts/user.semantic.js";
 import { getSemanticDecisionJsonSchemaObject } from "./prompts/schema.semantic.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
-import { tryFastLaneInboxDecision } from "./fastLane.js";
 
 let openaiSingleton = null;
 
@@ -37,7 +43,10 @@ function summarizeOpenAIConfig() {
   const apiKey = s(cfg?.ai?.openaiApiKey || "");
   const model = s(cfg?.ai?.openaiModel || "gpt-4.1-mini") || "gpt-4.1-mini";
   const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 320);
-  const maxOutputTokens = Math.max(180, Math.min(420, configuredMaxTokens || 320));
+  const maxOutputTokens = Math.max(
+    180,
+    Math.min(420, configuredMaxTokens || 320)
+  );
 
   return {
     hasApiKey: Boolean(apiKey),
@@ -237,7 +246,10 @@ function buildRuntimeSnapshot(profile = {}) {
       key: s(item.key),
       name: s(item.name),
       description: s(item.description),
-      aliases: arr(item.aliases).map((x) => s(x)).filter(Boolean).slice(0, 8),
+      aliases: arr(item.aliases)
+        .map((x) => s(x))
+        .filter(Boolean)
+        .slice(0, 8),
       pricingMode: s(item.pricingMode),
       responseMode: s(item.responseMode),
       contactCaptureMode: s(item.contactCaptureMode),
@@ -250,7 +262,10 @@ function buildRuntimeSnapshot(profile = {}) {
     .map((item) => ({
       key: s(item.key),
       name: s(item.name),
-      aliases: arr(item.aliases).map((x) => s(x)).filter(Boolean).slice(0, 6),
+      aliases: arr(item.aliases)
+        .map((x) => s(x))
+        .filter(Boolean)
+        .slice(0, 6),
       disabledReplyText: s(item.disabledReplyText),
     }))
     .slice(0, 6);
@@ -259,18 +274,39 @@ function buildRuntimeSnapshot(profile = {}) {
     displayName: s(profile?.displayName),
     industry: s(profile?.industry),
     businessSummary: s(profile?.businessSummary),
-    services: arr(profile?.services).map((x) => s(x)).filter(Boolean).slice(0, 12),
-    disabledServices: arr(profile?.disabledServices).map((x) => s(x)).filter(Boolean).slice(0, 12),
-    languages: arr(profile?.languages).map((x) => s(x)).filter(Boolean).slice(0, 6),
+    services: arr(profile?.services)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 12),
+    disabledServices: arr(profile?.disabledServices)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 12),
+    languages: arr(profile?.languages)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 6),
     tone: s(profile?.tone),
     toneProfile: s(profile?.toneProfile),
     conversionGoal: s(profile?.conversionGoal),
     leadQualificationMode: s(profile?.leadQualificationMode),
     bookingFlowType: s(profile?.bookingFlowType),
-    qualificationQuestions: arr(profile?.qualificationQuestions).map((x) => s(x)).filter(Boolean).slice(0, 3),
-    leadPrompts: arr(profile?.leadPrompts).map((x) => s(x)).filter(Boolean).slice(0, 3),
-    handoffTriggers: arr(profile?.handoffTriggers).map((x) => s(x)).filter(Boolean).slice(0, 6),
-    disallowedClaims: arr(profile?.disallowedClaims).map((x) => s(x)).filter(Boolean).slice(0, 8),
+    qualificationQuestions: arr(profile?.qualificationQuestions)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 3),
+    leadPrompts: arr(profile?.leadPrompts)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 3),
+    handoffTriggers: arr(profile?.handoffTriggers)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 6),
+    disallowedClaims: arr(profile?.disallowedClaims)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 8),
     channelBehaviorInbox: obj(profile?.channelBehavior?.inbox),
     behaviorSource: s(profile?.behavior?.source),
     greetingEnabled: Boolean(profile?.behavior?.greetingEnabled),
@@ -287,7 +323,10 @@ function buildPromptKnowledge(matchedKnowledge = []) {
     title: s(item?.title),
     question: s(item?.question),
     answer: s(item?.answer),
-    keywords: arr(item?.keywords).map((x) => s(x)).filter(Boolean).slice(0, 8),
+    keywords: arr(item?.keywords)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 8),
     language: s(item?.language),
   }));
 }
@@ -296,7 +335,10 @@ function buildPromptPlaybook(matchedPlaybook = null) {
   if (!matchedPlaybook) return {};
   return {
     name: s(matchedPlaybook.name),
-    triggerKeywords: arr(matchedPlaybook.triggerKeywords).map((x) => s(x)).filter(Boolean).slice(0, 8),
+    triggerKeywords: arr(matchedPlaybook.triggerKeywords)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 8),
     replyTemplate: s(matchedPlaybook.replyTemplate),
     actionType: s(matchedPlaybook.actionType),
     createLead: Boolean(matchedPlaybook.createLead),
@@ -322,7 +364,8 @@ function buildConversationSnapshot({
 
   return {
     latestCustomerMessage: latestMessage,
-    latestCustomerMessageWithoutCommand: latestMessageWithoutCommand || latestMessage,
+    latestCustomerMessageWithoutCommand:
+      latestMessageWithoutCommand || latestMessage,
     historySnippet: normalizedHistory || "(empty)",
     commandOnly: isCommandOnly(latestMessage),
     customerContext: obj(customerContext),
@@ -412,7 +455,9 @@ function buildFallbackSemanticDecision({
     s(conversation?.latestCustomerMessage);
 
   if (matchedPlaybook) {
-    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
+    const replyText = sanitizeReplyText(
+      buildPlaybookReply(matchedPlaybook, profile)
+    );
     return {
       language: s(matchedPlaybook?.language || profile?.languages?.[0] || "en"),
       semanticIntent: "playbook",
@@ -439,7 +484,9 @@ function buildFallbackSemanticDecision({
   }
 
   if (matchedKnowledge.length) {
-    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
+    const replyText = sanitizeReplyText(
+      buildKnowledgeReply(matchedKnowledge, profile)
+    );
     const first = arr(matchedKnowledge)[0];
 
     return {
@@ -529,14 +576,19 @@ function shouldUseSafeFallbackGuardrail({
 
   const parsedIntent = lower(s(parsed?.semanticIntent || parsed?.intent || ""));
   const parsedAskCategory = lower(s(parsed?.askCategory || ""));
-  const parsedStage = lower(s(parsed?.conversationStage || parsed?.stage || ""));
+  const parsedStage = lower(
+    s(parsed?.conversationStage || parsed?.stage || "")
+  );
   const replyText = sanitizeReplyText(
-    s(parsed?.replyText || "") || joinReplyParts(parsed?.answerFirst, parsed?.recommendedNextQuestion)
+    s(parsed?.replyText || "") ||
+      joinReplyParts(parsed?.answerFirst, parsed?.recommendedNextQuestion)
   );
   const customerGoal = s(parsed?.customerGoal || "");
 
   if (!replyText) return true;
-  if (parsedIntent === "greeting" || parsedAskCategory === "greeting") return true;
+  if (parsedIntent === "greeting" || parsedAskCategory === "greeting") {
+    return true;
+  }
   if (parsedStage === "greeting" && !customerGoal) return true;
   if (replyText.length < 12 && !customerGoal) return true;
 
@@ -570,12 +622,13 @@ function normalizeAiResult({
     replyText = sanitizeReplyText(fallbackDecision.replyText || "");
   }
 
-  const intent = s(
-    parsed?.semanticIntent ||
-      parsed?.intent ||
-      fallbackDecision.semanticIntent ||
-      "general"
-  ) || "general";
+  const intent =
+    s(
+      parsed?.semanticIntent ||
+        parsed?.intent ||
+        fallbackDecision.semanticIntent ||
+        "general"
+    ) || "general";
 
   const askCategory = normalizeAskCategory(
     parsed?.askCategory || fallbackDecision.askCategory || "general"
@@ -587,7 +640,12 @@ function normalizeAiResult({
   }
 
   const result = {
-    language: s(parsed?.language || fallbackDecision.language || profile?.languages?.[0] || "en"),
+    language: s(
+      parsed?.language ||
+        fallbackDecision.language ||
+        profile?.languages?.[0] ||
+        "en"
+    ),
     intent,
     askCategory,
     stage: normalizeStage(
@@ -600,26 +658,27 @@ function normalizeAiResult({
       parsed?.replyStyle || fallbackDecision.replyStyle || "consultative"
     ),
     customerGoal: s(parsed?.customerGoal || fallbackDecision.customerGoal || ""),
-    answerFirst: answerFirst || sanitizeSentence(fallbackDecision.answerFirst || ""),
+    answerFirst:
+      answerFirst || sanitizeSentence(fallbackDecision.answerFirst || ""),
     recommendedNextQuestion:
       recommendedNextQuestion ||
       sanitizeSentence(fallbackDecision.recommendedNextQuestion || ""),
     replyText: finalReplyText,
-    knownFacts:
-      coerceStringArray(parsed?.knownFacts).length
-        ? coerceStringArray(parsed?.knownFacts)
-        : coerceStringArray(fallbackDecision.knownFacts),
-    missingFacts:
-      coerceStringArray(parsed?.missingFacts).length
-        ? coerceStringArray(parsed?.missingFacts)
-        : coerceStringArray(fallbackDecision.missingFacts),
-    groundedFactsUsed:
-      coerceStringArray(parsed?.groundedFactsUsed).length
-        ? coerceStringArray(parsed?.groundedFactsUsed)
-        : coerceStringArray(fallbackDecision.groundedFactsUsed),
+    knownFacts: coerceStringArray(parsed?.knownFacts).length
+      ? coerceStringArray(parsed?.knownFacts)
+      : coerceStringArray(fallbackDecision.knownFacts),
+    missingFacts: coerceStringArray(parsed?.missingFacts).length
+      ? coerceStringArray(parsed?.missingFacts)
+      : coerceStringArray(fallbackDecision.missingFacts),
+    groundedFactsUsed: coerceStringArray(parsed?.groundedFactsUsed).length
+      ? coerceStringArray(parsed?.groundedFactsUsed)
+      : coerceStringArray(fallbackDecision.groundedFactsUsed),
     confidence: Math.max(
       0,
-      Math.min(1, coerceNumber(parsed?.confidence, fallbackDecision.confidence || 0.45))
+      Math.min(
+        1,
+        coerceNumber(parsed?.confidence, fallbackDecision.confidence || 0.45)
+      )
     ),
     leadScore: Math.max(
       0,
@@ -634,8 +693,13 @@ function normalizeAiResult({
       parsed?.createLead,
       Boolean(fallbackDecision.createLead)
     ),
-    handoff: coerceBoolean(parsed?.handoff, Boolean(fallbackDecision.handoff)),
-    handoffReason: s(parsed?.handoffReason || fallbackDecision.handoffReason || ""),
+    handoff: coerceBoolean(
+      parsed?.handoff,
+      Boolean(fallbackDecision.handoff)
+    ),
+    handoffReason: s(
+      parsed?.handoffReason || fallbackDecision.handoffReason || ""
+    ),
     handoffPriority: normalizePriority(
       parsed?.handoffPriority || fallbackDecision.handoffPriority || "normal"
     ),
@@ -643,9 +707,10 @@ function normalizeAiResult({
     raw,
     replyMode,
     usedFallback:
-      replyMode === "fallback_safe" || replyMode === "semantic_guardrail_safe_fallback",
-    usedFastLane: replyMode.startsWith("fast_lane"),
-    fastLaneReason: s(parsed?.fastLaneReason || ""),
+      replyMode === "fallback_safe" ||
+      replyMode === "semantic_guardrail_safe_fallback",
+    usedFastLane: false,
+    fastLaneReason: "",
     semanticFailureReason: s(semanticFailureReason || ""),
     profile,
     matchedKnowledge,
@@ -700,8 +765,12 @@ function applyReplyComposer({
     greetingMode: s(composed.greetingMode),
     usedCustomGreeting: Boolean(composed.usedCustomGreeting),
     introModeUsed: s(composed.introModeUsed),
-    behaviorSource: s(composed.behaviorSource || profile?.behavior?.source || ""),
-    language: s(composed.language || result.language || profile?.languages?.[0] || "en"),
+    behaviorSource: s(
+      composed.behaviorSource || profile?.behavior?.source || ""
+    ),
+    language: s(
+      composed.language || result.language || profile?.languages?.[0] || "en"
+    ),
     greetingOnly: Boolean(composed.greetingOnly),
   };
 }
@@ -802,18 +871,21 @@ function buildSemanticPromptInput({
     runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile), 3500),
     knowledgeJson: compactJson(buildPromptKnowledge(matchedKnowledge), 1800),
     playbookJson: compactJson(buildPromptPlaybook(matchedPlaybook), 1200),
-    additionalContextJson: compactJson({
-      customerContext: conversation.customerContext,
-      formData: conversation.formData,
-      leadContext: conversation.leadContext,
-      conversationContext: conversation.conversationContext,
-      threadState: conversation.threadState,
-      policy: {
-        autoReplyEnabled: Boolean(policy?.autoReplyEnabled),
-        createLeadEnabled: Boolean(policy?.createLeadEnabled),
-        handoffEnabled: Boolean(policy?.handoffEnabled),
+    additionalContextJson: compactJson(
+      {
+        customerContext: conversation.customerContext,
+        formData: conversation.formData,
+        leadContext: conversation.leadContext,
+        conversationContext: conversation.conversationContext,
+        threadState: conversation.threadState,
+        policy: {
+          autoReplyEnabled: Boolean(policy?.autoReplyEnabled),
+          createLeadEnabled: Boolean(policy?.createLeadEnabled),
+          handoffEnabled: Boolean(policy?.handoffEnabled),
+        },
       },
-    }, 2200),
+      2200
+    ),
   };
 }
 
@@ -957,45 +1029,6 @@ export async function aiDecideInbox({
       }),
     },
   });
-
-  const fastLaneDecision = tryFastLaneInboxDecision({
-    text,
-    profile,
-    matchedKnowledge,
-    matchedPlaybook,
-  });
-
-  if (fastLaneDecision) {
-    const fastLaneResult = applyReplyComposer({
-      result: normalizeAiResult({
-        parsed: fastLaneDecision,
-        fallbackDecision,
-        profile,
-        matchedKnowledge,
-        matchedPlaybook,
-        resolvedRuntime,
-        promptBundle,
-        channel,
-        policy,
-        raw: "",
-        replyMode: `fast_lane_${s(fastLaneDecision.fastLaneReason || "direct")}`,
-        semanticFailureReason: "",
-      }),
-      profile,
-      text,
-      recentMessages,
-    });
-
-    logInboxAi("fast_lane_hit", {
-      tenantKey: resolvedTenantKey,
-      channel: s(channel || "inbox"),
-      reason: s(fastLaneDecision.fastLaneReason || ""),
-      replyMode: fastLaneResult.replyMode,
-      replyPreview: safePreview(fastLaneResult.replyText, 180),
-    });
-
-    return fastLaneResult;
-  }
 
   if (!openai) {
     logInboxAiWarn("unavailable_using_fallback", {
