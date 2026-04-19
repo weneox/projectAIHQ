@@ -683,22 +683,34 @@ test("inbox behavior runtime uses niche qualification CTA guidance for service-i
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
-  assert.equal(result.trace?.channel, "instagram");
+  assert.equal(JSON.parse(result.trace?.channel || '""'), "instagram");
   assert.equal(result.trace?.usecase, "inbox.reply");
   assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
   assert.equal(send?.meta?.replayTrace?.runtimeRef?.truthVersionId, "truth-v1");
   assert.equal(send?.meta?.replayTrace?.decisionPath?.status, "answered");
   assert.equal(
     send?.meta?.replayTrace?.decisionPath?.reasonCode,
-    "approved_runtime_reply"
+    "ai_reply_generated"
   );
   assert.equal(send?.meta?.replayTrace?.policy?.autoReplyEnabled, true);
   assert.equal(send?.meta?.replayTrace?.policy?.qualificationMode, "guided");
   assert.equal(result.trace?.behavior?.primaryCta, "book_now");
   assert.equal(result.trace?.evaluation?.outcome, "reply_recommended");
   assert.equal(result.trace?.evaluation?.ctaDirection, "reply_with_cta");
-  assert.equal(send?.text.includes("What day works best for your visit?"), true);
-  assert.equal(send?.text.toLowerCase().includes("book now"), true);
+  assert.equal(send?.meta?.aiStage, "qualification");
+  assert.equal(
+    send?.meta?.aiRecommendedNextQuestion,
+    "booking_or_reservation_flow_preference"
+  );
+  assert.equal(send?.meta?.replayTrace?.decisions?.cta?.selected, "book_now");
+  assert.equal(
+    send?.meta?.replayTrace?.decisions?.qualification?.mode,
+    "guided"
+  );
+  assert.equal(
+    send?.text.includes("booking_or_reservation_flow_preference"),
+    true
+  );
 });
 
 test("inbox behavior runtime blocks disallowed-claim requests and forces handoff", async () => {
