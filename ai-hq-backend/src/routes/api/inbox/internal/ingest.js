@@ -1,10 +1,5 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
-import {
-  applyExecutionPolicyToActions,
-  buildExecutionPolicyDecisionAuditShape,
-  mapExecutionOutcomeToDecisionEventType,
-} from "../../../../services/executionPolicy.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { applyHandoffActions, persistLeadActions } from "../mutations.js";
 import {
@@ -160,102 +155,189 @@ function summarizeRuntimeAuthority(runtime = {}) {
   };
 }
 
-function summarizeExecutionPolicySurface(runtime = {}, surface = "inbox") {
-  const executionPolicy = obj(runtime?.executionPolicy);
-  const surfaceSummary = obj(executionPolicy?.[surface]);
+function summarizeBrainDecision(brain = {}) {
+  const reply = obj(brain?.reply);
+  const control = obj(brain?.control);
+  const diagnostics = obj(brain?.diagnostics);
 
   return {
-    surface: s(surfaceSummary.surface || surface),
-    channelType: s(surfaceSummary.channelType),
-    lowRiskOutcome: s(surfaceSummary.lowRiskOutcome),
-    mediumRiskOutcome: s(surfaceSummary.mediumRiskOutcome),
-    highRiskOutcome: s(surfaceSummary.highRiskOutcome),
-    blocked: typeof surfaceSummary.blocked === "boolean"
-      ? surfaceSummary.blocked
-      : null,
-    blockedUntilRepair: typeof surfaceSummary.blockedUntilRepair === "boolean"
-      ? surfaceSummary.blockedUntilRepair
-      : null,
-    humanReviewRequired: typeof surfaceSummary.humanReviewRequired === "boolean"
-      ? surfaceSummary.humanReviewRequired
-      : null,
-    handoffRequired: typeof surfaceSummary.handoffRequired === "boolean"
-      ? surfaceSummary.handoffRequired
-      : null,
-    reasonCodes: uniq(surfaceSummary.reasonCodes),
-    signals: {
-      authorityAvailable:
-        surfaceSummary?.signals?.authorityAvailable ?? null,
-      projectionHealthStatus: s(
-        surfaceSummary?.signals?.projectionHealthStatus
-      ),
-      truthApprovalOutcome: s(
-        surfaceSummary?.signals?.truthApprovalOutcome
-      ),
-      truthRiskLevel: s(surfaceSummary?.signals?.truthRiskLevel),
-      policyControlMode: s(surfaceSummary?.signals?.policyControlMode),
+    intent: s(brain?.intent || control?.intent || "general"),
+    leadScore: Number(brain?.leadScore || control?.leadScore || 0),
+    reply: {
+      shouldReply: Boolean(reply?.shouldReply),
+      mode: s(reply?.mode),
+      reasonCode: s(reply?.reasonCode),
+      language: s(reply?.language),
+      confidence:
+        typeof reply?.confidence === "number" ? reply.confidence : null,
+      usedRecovery: Boolean(reply?.usedRecovery),
+      textPreview: s(reply?.text).slice(0, 220),
     },
-    policyControl: {
-      controlMode: s(surfaceSummary?.policyControl?.controlMode),
-      policyReason: s(surfaceSummary?.policyControl?.policyReason),
-      operatorNote: s(surfaceSummary?.policyControl?.operatorNote),
-      changedBy: s(surfaceSummary?.policyControl?.changedBy),
-      changedAt: s(surfaceSummary?.policyControl?.changedAt),
+    control: {
+      explicitHumanRequest: Boolean(control?.explicitHumanRequest),
+      shouldCreateLead: Boolean(control?.shouldCreateLead),
+      shouldStartHandoff: Boolean(control?.shouldStartHandoff),
+      shouldMarkSeen: Boolean(control?.shouldMarkSeen),
+      shouldTyping: Boolean(control?.shouldTyping),
+      shouldSendMessage: Boolean(control?.shouldSendMessage),
+      shouldNoReply: Boolean(control?.shouldNoReply),
+      handoffReason: s(control?.handoffReason),
+      handoffPriority: s(control?.handoffPriority),
+      askCategory: s(control?.askCategory),
+      stage: s(control?.stage),
+    },
+    diagnostics: {
+      explicitNeed: Boolean(diagnostics?.explicitNeed),
+      inferredNeedCategory: s(diagnostics?.inferredNeedCategory),
+      genericClarifierDetected: Boolean(
+        diagnostics?.genericClarifierDetected
+      ),
+      usedRecovery: Boolean(diagnostics?.usedRecovery),
+      quietHoursApplied: Boolean(diagnostics?.quietHoursApplied),
+      noReplyReason: s(diagnostics?.noReplyReason),
+      operatorRecentlyReplied: Boolean(
+        diagnostics?.operatorRecentlyReplied
+      ),
     },
   };
 }
 
-function summarizePolicyApplication(executionPolicy = {}, actions = []) {
-  const summary = obj(executionPolicy?.summary);
-  const decisions = arr(executionPolicy?.decisions);
-  const filteredActions = arr(executionPolicy?.filteredActions);
+function mapBrainOutcomeToDecisionEventType(brain = {}) {
+  const reply = obj(brain?.reply);
+  const control = obj(brain?.control);
+  const diagnostics = obj(brain?.diagnostics);
+  const noReplyReason = lower(
+    diagnostics?.noReplyReason || reply?.reasonCode || ""
+  );
+
+  if (control?.shouldStartHandoff) {
+    return "handoff_required_action_outcome";
+  }
+
+  if (
+    [
+      "channel_not_allowed",
+      "quiet_hours",
+      "auto_reply_disabled",
+      "human_request_waiting_for_operator",
+      "handoff_active_operator_recently_replied",
+    ].includes(noReplyReason)
+  ) {
+    return "blocked_action_outcome";
+  }
+
+  return "execution_policy_decision";
+}
+
+function buildDecisionEventFromBrain({
+  brain = {},
+  tenantId = "",
+  tenantKey = "",
+  channel = "",
+  thread = null,
+  message = null,
+} = {}) {
+  const runtime = obj(brain?.runtime);
+  const reply = obj(brain?.reply);
+  const control = obj(brain?.control);
+  const diagnostics = obj(brain?.diagnostics);
+  const authority = summarizeRuntimeAuthority(runtime);
+
+  const reasonCodes = uniq([
+    reply?.reasonCode,
+    diagnostics?.noReplyReason,
+    control?.handoffReason,
+    authority?.reasonCode,
+    diagnostics?.inferredNeedCategory,
+  ].filter(Boolean));
+
+  const policyOutcome = control?.shouldStartHandoff
+    ? "handoff_required"
+    : control?.shouldSendMessage
+      ? "reply_generated"
+      : "no_reply";
+
+  const recommendedNextAction = control?.shouldStartHandoff
+    ? {
+        type: "operator_handoff",
+        reason: s(control?.handoffReason || "manual_review"),
+        priority: s(control?.handoffPriority || "normal"),
+      }
+    : !control?.shouldSendMessage && control?.shouldNoReply
+      ? {
+          type: "no_reply",
+          reason: s(diagnostics?.noReplyReason || reply?.reasonCode),
+        }
+      : control?.shouldCreateLead
+        ? {
+            type: "create_lead",
+          }
+        : {};
 
   return {
-    strictestOutcome: s(summary.strictestOutcome),
-    requiredExecutionLevel: s(summary.requiredExecutionLevel),
-    allowedActionCount: Number(summary.allowedActionCount || 0),
-    filteredActionCount: Number(summary.filteredActionCount || 0),
-    humanReviewRequired:
-      typeof summary.humanReviewRequired === "boolean"
-        ? summary.humanReviewRequired
-        : null,
-    handoffRequired:
-      typeof summary.handoffRequired === "boolean"
-        ? summary.handoffRequired
-        : null,
-    operatorOnly:
-      typeof summary.operatorOnly === "boolean" ? summary.operatorOnly : null,
-    blocked: typeof summary.blocked === "boolean" ? summary.blocked : null,
-    blockedUntilRepair:
-      typeof summary.blockedUntilRepair === "boolean"
-        ? summary.blockedUntilRepair
-        : null,
-    reasonCodes: uniq(summary.reasonCodes),
-    outcomes: uniq(summary.outcomes),
-    policyControlModes: uniq(summary.policyControlModes),
-    proposedActionTypes: uniq(arr(actions).map((item) => s(item?.type))),
-    filteredActionTypes: uniq(
-      filteredActions.map((item) => s(item?.type))
-    ),
-    decisions: decisions.map((decision) => ({
-      outcome: s(decision?.outcome),
-      actionType: s(decision?.risk?.actionType),
-      intent: s(decision?.risk?.intent),
-      riskLevel: s(decision?.risk?.level),
-      reasonCodes: uniq(decision?.reasonCodes),
-      runtimeAuthorityAvailable:
-        decision?.signals?.runtimeAuthorityAvailable ?? null,
-      runtimeAuthoritySource: s(decision?.signals?.runtimeAuthoritySource),
-      runtimeAuthorityMode: s(decision?.signals?.runtimeAuthorityMode),
-      runtimeProjectionId: s(decision?.signals?.runtimeProjectionId),
-      projectionHealthStatus: s(decision?.signals?.projectionHealthStatus),
-      projectionHealthReasonCode: s(
-        decision?.signals?.projectionHealthReasonCode
-      ),
-      truthApprovalOutcome: s(decision?.signals?.truthApprovalOutcome),
-      truthRiskLevel: s(decision?.signals?.truthRiskLevel),
-      policyControlMode: s(decision?.signals?.policyControlMode),
-    })),
+    tenantId: s(tenantId),
+    tenantKey: s(tenantKey),
+    eventType: mapBrainOutcomeToDecisionEventType(brain),
+    actor: "system",
+    source: "inbox.ingest",
+    surface: "inbox",
+    channelType: s(channel),
+    policyOutcome,
+    reasonCodes,
+    healthState: {
+      runtimeAuthority: authority,
+    },
+    approvalPosture: {
+      runtimeSource: s(authority.source),
+      runtimeAvailable: authority.available === true,
+      runtimeStale: authority.stale === true,
+      runtimeReasonCode: s(authority.reasonCode),
+    },
+    executionPosture: {
+      reply: {
+        shouldReply: Boolean(reply?.shouldReply),
+        mode: s(reply?.mode),
+        reasonCode: s(reply?.reasonCode),
+        usedRecovery: Boolean(reply?.usedRecovery),
+      },
+      actions: {
+        shouldCreateLead: Boolean(control?.shouldCreateLead),
+        shouldStartHandoff: Boolean(control?.shouldStartHandoff),
+        shouldMarkSeen: Boolean(control?.shouldMarkSeen),
+        shouldTyping: Boolean(control?.shouldTyping),
+        shouldSendMessage: Boolean(control?.shouldSendMessage),
+        shouldNoReply: Boolean(control?.shouldNoReply),
+      },
+    },
+    controlState: {
+      explicitHumanRequest: Boolean(control?.explicitHumanRequest),
+      handoffReason: s(control?.handoffReason),
+      handoffPriority: s(control?.handoffPriority),
+      askCategory: s(control?.askCategory),
+      stage: s(control?.stage),
+      diagnostics: {
+        explicitNeed: Boolean(diagnostics?.explicitNeed),
+        genericClarifierDetected: Boolean(
+          diagnostics?.genericClarifierDetected
+        ),
+        inferredNeedCategory: s(diagnostics?.inferredNeedCategory),
+        quietHoursApplied: Boolean(diagnostics?.quietHoursApplied),
+        noReplyReason: s(diagnostics?.noReplyReason),
+      },
+    },
+    runtimeProjectionId: s(authority.runtimeProjectionId),
+    affectedSurfaces: ["inbox"],
+    recommendedNextAction,
+    decisionContext: {
+      threadId: s(thread?.id),
+      messageId: s(message?.id),
+      intent: s(brain?.intent || control?.intent || "general"),
+      leadScore: Number(brain?.leadScore || control?.leadScore || 0),
+      actionTypes: arr(brain?.actions)
+        .map((item) => s(item?.type))
+        .filter(Boolean),
+      textPreview: s(reply?.text).slice(0, 220),
+    },
   };
 }
 
@@ -424,14 +506,6 @@ export function createInboxIngestHandler({
         authority: summarizeRuntimeAuthority(runtime),
       });
 
-      logInfo("inbox runtime execution policy surface", {
-        tenantKey: input.tenantKey,
-        channel: input.channel,
-        externalThreadId: input.externalThreadId,
-        externalUserId: input.externalUserId,
-        inbox: summarizeExecutionPolicySurface(runtime, "inbox"),
-      });
-
       stage = "build_inbox_actions";
       const brain = await buildActions({
         text: input.text,
@@ -457,144 +531,29 @@ export function createInboxIngestHandler({
         runtime,
       });
 
-      const proposedActions = Array.isArray(brain?.actions) ? brain.actions : [];
+      const actions = Array.isArray(brain?.actions) ? brain.actions : [];
 
-      stage = "apply_execution_policy";
-      const executionPolicy = applyExecutionPolicyToActions({
-        runtime,
-        actions: proposedActions,
-        surface: "inbox",
-        channelType: input.channel,
-        currentState: {
-          handoffActive:
-            runtime?.threadState?.handoffActive ??
-            runtime?.threadState?.handoff_active ??
-            thread?.handoff_active,
-        },
-      });
-
-      logInfo("inbox execution policy decision", {
+      logInfo("inbox realtime/control decision", {
         tenantKey: input.tenantKey,
         channel: input.channel,
         externalThreadId: input.externalThreadId,
         externalUserId: input.externalUserId,
-        policy: summarizePolicyApplication(executionPolicy, proposedActions),
-      });
-
-      const actions = executionPolicy.actions.length
-        ? executionPolicy.actions
-        : executionPolicy.summary.strictestOutcome === "allowed_with_human_review" ||
-          executionPolicy.summary.strictestOutcome === "handoff_required" ||
-          executionPolicy.summary.strictestOutcome === "operator_only" ||
-          executionPolicy.summary.strictestOutcome === "blocked" ||
-          executionPolicy.summary.strictestOutcome === "blocked_until_repair"
-        ? [
-            {
-              type: "no_reply",
-              reason: `execution_policy_${executionPolicy.summary.strictestOutcome}`,
-              meta: {
-                executionPolicy: executionPolicy.summary,
-              },
-            },
-          ]
-        : [];
-
-      const brainWithPolicy = {
-        ...brain,
-        proposedActions,
-        executionPolicy: executionPolicy.summary,
-      };
-
-      stage = "build_decision_audit";
-      const decisionAudit = buildExecutionPolicyDecisionAuditShape({
-        tenantId: String(tenant?.id || tenantId),
-        tenantKey: input.tenantKey,
-        source: "inbox.ingest",
-        actor: "system",
-        surface: "inbox",
-        channelType: input.channel,
-        runtime,
-        summary: executionPolicy.summary,
-        actions: proposedActions,
-        currentState: {
-          handoffActive:
-            runtime?.threadState?.handoffActive ??
-            runtime?.threadState?.handoff_active ??
-            thread?.handoff_active,
-        },
+        brain: summarizeBrainDecision(brain),
+        actionTypes: actions.map((item) => s(item?.type)).filter(Boolean),
       });
 
       stage = "append_decision_event";
-      await safeAppendDecisionEvent(client, {
-        ...decisionAudit,
-        decisionContext: {
-          ...decisionAudit.decisionContext,
-          threadId: String(thread?.id || ""),
-          messageId: String(message?.id || ""),
-          proposedActionCount: proposedActions.length,
-          allowedActionCount: executionPolicy.summary.allowedActionCount,
-          filteredActionCount: executionPolicy.summary.filteredActionCount,
-          proposedActionTypes: proposedActions
-            .map((item) => item?.type)
-            .filter(Boolean),
-          allowedActionTypes: executionPolicy.actions
-            .map((item) => item?.type)
-            .filter(Boolean),
-          filteredActionTypes: executionPolicy.filteredActions
-            .map((item) => item?.type)
-            .filter(Boolean),
-        },
-      });
-
-      if (
-        executionPolicy.summary.strictestOutcome &&
-        mapExecutionOutcomeToDecisionEventType(
-          executionPolicy.summary.strictestOutcome
-        ) !== "execution_policy_decision"
-      ) {
-        stage = "append_blocked_decision_event_prepare";
-        const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
+      await safeAppendDecisionEvent(
+        client,
+        buildDecisionEventFromBrain({
+          brain,
           tenantId: String(tenant?.id || tenantId),
           tenantKey: input.tenantKey,
-          source: "inbox.ingest",
-          actor: "system",
-          surface: "inbox",
-          channelType: input.channel,
-          runtime,
-          summary: executionPolicy.summary,
-          actions: proposedActions,
-          currentState: {
-            handoffActive:
-              runtime?.threadState?.handoffActive ??
-              runtime?.threadState?.handoff_active ??
-              thread?.handoff_active,
-          },
-        });
-
-        stage = "append_blocked_decision_event";
-        await safeAppendDecisionEvent(client, {
-          ...blockedDecisionAudit,
-          eventType: mapExecutionOutcomeToDecisionEventType(
-            executionPolicy.summary.strictestOutcome
-          ),
-          decisionContext: {
-            ...blockedDecisionAudit.decisionContext,
-            threadId: String(thread?.id || ""),
-            messageId: String(message?.id || ""),
-            blockedActionTypes: executionPolicy.filteredActions
-              .map((item) => item?.type)
-              .filter(Boolean),
-          },
-        });
-      }
-
-      logInfo("inbox brain result", {
-        tenantKey: input.tenantKey,
-        intent: brainWithPolicy?.intent || "",
-        leadScore: Number(brainWithPolicy?.leadScore || 0),
-        actionsCount: actions.length,
-        executionPolicyOutcome: executionPolicy.summary.strictestOutcome,
-      });
+          channel: input.channel,
+          thread,
+          message,
+        })
+      );
 
       stage = "persist_lead_actions";
       const leadResults = await persistLead({
@@ -636,7 +595,7 @@ export function createInboxIngestHandler({
           tenant,
           tenantKey: input.tenantKey,
           priorState: priorThreadState,
-          brain: brainWithPolicy,
+          brain,
           actions,
           leadResults,
           handoffResults,
@@ -668,7 +627,7 @@ export function createInboxIngestHandler({
           threadState: nextThreadState,
           message,
           tenant,
-          brain: brainWithPolicy,
+          brain,
           actions,
           leadResults,
           handoffResults,
@@ -692,3 +651,10 @@ export function createInboxIngestHandler({
     }
   };
 }
+
+export const __test__ = {
+  summarizeRuntimeAuthority,
+  summarizeBrainDecision,
+  mapBrainOutcomeToDecisionEventType,
+  buildDecisionEventFromBrain,
+};
