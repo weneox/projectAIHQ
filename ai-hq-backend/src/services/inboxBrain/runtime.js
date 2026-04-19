@@ -108,7 +108,7 @@ function normalizeStringList(value = []) {
   return uniqStrings(arr(value).map((item) => s(item)).filter(Boolean));
 }
 
-function sanitizeLooseText(value = "") {
+function normalizeLooseText(value = "") {
   return s(value).replace(/\s+/g, " ").trim();
 }
 
@@ -177,6 +177,7 @@ function normalizeBehaviorObject(...sources) {
 
 function normalizePromptList(...sources) {
   const values = [];
+
   for (const source of sources) {
     if (Array.isArray(source)) {
       values.push(...source);
@@ -189,7 +190,7 @@ function normalizePromptList(...sources) {
 
   return uniqStrings(
     values
-      .map((item) => sanitizeLooseText(item))
+      .map((item) => normalizeLooseText(item))
       .filter(Boolean)
   );
 }
@@ -386,20 +387,21 @@ function buildNormalizedServiceNames(serviceCatalog = [], active = true) {
 }
 
 function extractConversationAssets({
-  tenant = {},
   profile = {},
   meta = {},
   behavior = {},
   rawBehavior = {},
 }) {
   return {
-    primaryCtaRaw: pickFirstString(
-      profile?.primary_cta,
-      profile?.primaryCta,
-      meta?.primaryCta,
-      meta?.primary_cta,
-      rawBehavior?.primaryCta,
-      rawBehavior?.primary_cta
+    primaryCtaRaw: normalizeLooseText(
+      pickFirstString(
+        profile?.primary_cta,
+        profile?.primaryCta,
+        meta?.primaryCta,
+        meta?.primary_cta,
+        rawBehavior?.primaryCta,
+        rawBehavior?.primary_cta
+      )
     ),
     qualificationQuestions: normalizePromptList(
       profile?.qualificationQuestions,
@@ -412,7 +414,7 @@ function extractConversationAssets({
       rawBehavior?.leadPrompts,
       rawBehavior?.lead_prompts
     ),
-    customGreeting: sanitizeLooseText(
+    customGreeting: normalizeLooseText(
       pickFirstString(
         behavior?.customGreeting,
         rawBehavior?.customGreeting,
@@ -492,7 +494,6 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
   });
 
   const conversationAssets = extractConversationAssets({
-    tenant: safeTenant,
     profile,
     meta,
     behavior,
@@ -769,7 +770,6 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
   });
 
   const conversationAssets = extractConversationAssets({
-    tenant: strictAuthority ? rawTenant : { ...obj(fallback.tenant), ...rawTenant },
     profile: strictAuthority ? rawProfile : { ...obj(fallback.profile), ...rawProfile },
     meta: obj(rawTenant?.meta),
     behavior: resolvedBehavior,
@@ -1018,10 +1018,6 @@ function pickBehaviorLeadPrompt(profile) {
   );
 }
 
-/**
- * Compatibility helper only.
- * Industry hints should not drive understanding logic anymore.
- */
 function getIndustryHints(industry) {
   const normalized = normalizeIndustry(industry);
 
