@@ -223,42 +223,34 @@ function clipReplyByBehavior(text = "", behavior = {}, profile = {}) {
 }
 
 function getSafeGreeting(language = "en", mode = "neutral", brandName = "") {
-  if (["az", "en", "tr", "ru"].includes(language)) {
-    return sanitizeReplyText(
-      getLocalizedGreeting({
-        language,
-        mode,
-        brandName,
-      })
-    );
-  }
-
-  return "Hello.";
+  return sanitizeReplyText(
+    getLocalizedGreeting({
+      language,
+      mode,
+      brandName,
+    })
+  );
 }
 
 function getSafeGreetingFollowup(language = "en") {
-  if (["az", "en", "tr", "ru"].includes(language)) {
-    return sanitizeReplyText(getLocalizedGreetingFollowup(language));
-  }
-
-  return "How can I help?";
+  return sanitizeReplyText(getLocalizedGreetingFollowup(language));
 }
 
 function resolveGreetingMode(behavior = {}, brandName = "") {
-  const explicitGreetingMode = lower(behavior?.greetingMode || "neutral");
+  const explicitGreetingMode = lower(behavior?.greetingMode || "warm");
   const brandedIntroMode = lower(behavior?.brandedIntroMode || "auto");
 
   if (s(behavior?.customGreeting || "")) return "custom";
 
   if (explicitGreetingMode && explicitGreetingMode !== "auto") {
-    if (explicitGreetingMode === "branded" && !brandName) return "neutral";
+    if (explicitGreetingMode === "branded" && !brandName) return "warm";
     return explicitGreetingMode;
   }
 
   if (brandedIntroMode === "always" && brandName) return "branded";
-  if (brandedIntroMode === "never") return "neutral";
+  if (brandedIntroMode === "never") return "warm";
 
-  return "neutral";
+  return "warm";
 }
 
 function shouldApplyIntro({
@@ -266,6 +258,7 @@ function shouldApplyIntro({
   result = {},
   recentMessages = [],
   greetingOnly = false,
+  bodyText = "",
 }) {
   const greetingEnabled =
     typeof behavior?.greetingEnabled === "boolean" ? behavior.greetingEnabled : true;
@@ -281,9 +274,26 @@ function shouldApplyIntro({
       : true;
 
   const firstTurn = !hasPreviousOutbound(recentMessages);
-  if (introOnFirstTurnOnly && !firstTurn) return false;
+  const fastLaneReason = lower(result?.fastLaneReason || "");
+  const greetingIntent = isGreetingIntent(result);
 
-  return greetingOnly && isGreetingIntent(result);
+  if (introOnFirstTurnOnly && !firstTurn) {
+    return false;
+  }
+
+  if (fastLaneReason === "start_command") {
+    return true;
+  }
+
+  if (!greetingIntent) {
+    return false;
+  }
+
+  if (greetingOnly) {
+    return true;
+  }
+
+  return firstTurn && Boolean(bodyText);
 }
 
 function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
@@ -340,6 +350,7 @@ export function composeTenantAwareReply({
     result,
     recentMessages,
     greetingOnly,
+    bodyText: bodyCandidate,
   });
 
   const greeting = applyIntro
@@ -384,7 +395,9 @@ export function composeTenantAwareReply({
   }
 
   if (!finalReply && greetingOnly) {
-    finalReply = getSafeGreetingFollowup(greeting.language);
+    finalReply = `${greeting.greetingText ? `${greeting.greetingText} ` : ""}${getSafeGreetingFollowup(
+      greeting.language
+    )}`.trim();
   }
 
   return {

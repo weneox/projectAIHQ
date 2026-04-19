@@ -23,6 +23,7 @@ import {
 import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
 import { buildSemanticSystemPrompt } from "./prompts/system.semantic.js";
 import { buildSemanticUserPrompt } from "./prompts/user.semantic.js";
+import { getSemanticDecisionJsonSchemaObject } from "./prompts/schema.semantic.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
 import { tryFastLaneInboxDecision } from "./fastLane.js";
 
@@ -34,9 +35,9 @@ function uniqStrings(values = []) {
 
 function summarizeOpenAIConfig() {
   const apiKey = s(cfg?.ai?.openaiApiKey || "");
-  const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
-  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 800);
-  const maxOutputTokens = Math.max(180, Math.min(420, configuredMaxTokens || 420));
+  const model = s(cfg?.ai?.openaiModel || "gpt-4.1-mini") || "gpt-4.1-mini";
+  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 320);
+  const maxOutputTokens = Math.max(180, Math.min(420, configuredMaxTokens || 320));
 
   return {
     hasApiKey: Boolean(apiKey),
@@ -82,7 +83,7 @@ function ensureOpenAI() {
   return openaiSingleton;
 }
 
-function compactJson(value, max = 7000) {
+function compactJson(value, max = 5000) {
   try {
     const raw = JSON.stringify(value ?? {});
     if (raw.length <= max) return raw;
@@ -241,33 +242,35 @@ function buildRuntimeSnapshot(profile = {}) {
       responseMode: s(item.responseMode),
       contactCaptureMode: s(item.contactCaptureMode),
       handoffMode: s(item.handoffMode),
-    }));
+    }))
+    .slice(0, 8);
 
   const disabledServiceCatalog = arr(profile?.serviceCatalog)
     .filter((item) => !item?.active && item?.visibleInAi)
     .map((item) => ({
       key: s(item.key),
       name: s(item.name),
-      aliases: arr(item.aliases).map((x) => s(x)).filter(Boolean).slice(0, 8),
+      aliases: arr(item.aliases).map((x) => s(x)).filter(Boolean).slice(0, 6),
       disabledReplyText: s(item.disabledReplyText),
-    }));
+    }))
+    .slice(0, 6);
 
   return {
     displayName: s(profile?.displayName),
     industry: s(profile?.industry),
     businessSummary: s(profile?.businessSummary),
-    services: arr(profile?.services).map((x) => s(x)).filter(Boolean),
-    disabledServices: arr(profile?.disabledServices).map((x) => s(x)).filter(Boolean),
-    languages: arr(profile?.languages).map((x) => s(x)).filter(Boolean),
+    services: arr(profile?.services).map((x) => s(x)).filter(Boolean).slice(0, 12),
+    disabledServices: arr(profile?.disabledServices).map((x) => s(x)).filter(Boolean).slice(0, 12),
+    languages: arr(profile?.languages).map((x) => s(x)).filter(Boolean).slice(0, 6),
     tone: s(profile?.tone),
     toneProfile: s(profile?.toneProfile),
     conversionGoal: s(profile?.conversionGoal),
     leadQualificationMode: s(profile?.leadQualificationMode),
     bookingFlowType: s(profile?.bookingFlowType),
-    qualificationQuestions: arr(profile?.qualificationQuestions).map((x) => s(x)).filter(Boolean),
-    leadPrompts: arr(profile?.leadPrompts).map((x) => s(x)).filter(Boolean),
-    handoffTriggers: arr(profile?.handoffTriggers).map((x) => s(x)).filter(Boolean),
-    disallowedClaims: arr(profile?.disallowedClaims).map((x) => s(x)).filter(Boolean),
+    qualificationQuestions: arr(profile?.qualificationQuestions).map((x) => s(x)).filter(Boolean).slice(0, 3),
+    leadPrompts: arr(profile?.leadPrompts).map((x) => s(x)).filter(Boolean).slice(0, 3),
+    handoffTriggers: arr(profile?.handoffTriggers).map((x) => s(x)).filter(Boolean).slice(0, 6),
+    disallowedClaims: arr(profile?.disallowedClaims).map((x) => s(x)).filter(Boolean).slice(0, 8),
     channelBehaviorInbox: obj(profile?.channelBehavior?.inbox),
     behaviorSource: s(profile?.behavior?.source),
     greetingEnabled: Boolean(profile?.behavior?.greetingEnabled),
@@ -280,11 +283,11 @@ function buildRuntimeSnapshot(profile = {}) {
 }
 
 function buildPromptKnowledge(matchedKnowledge = []) {
-  return matchedKnowledge.map((item) => ({
+  return matchedKnowledge.slice(0, 3).map((item) => ({
     title: s(item?.title),
     question: s(item?.question),
     answer: s(item?.answer),
-    keywords: arr(item?.keywords).map((x) => s(x)).filter(Boolean).slice(0, 12),
+    keywords: arr(item?.keywords).map((x) => s(x)).filter(Boolean).slice(0, 8),
     language: s(item?.language),
   }));
 }
@@ -293,7 +296,7 @@ function buildPromptPlaybook(matchedPlaybook = null) {
   if (!matchedPlaybook) return {};
   return {
     name: s(matchedPlaybook.name),
-    triggerKeywords: arr(matchedPlaybook.triggerKeywords).map((x) => s(x)).filter(Boolean),
+    triggerKeywords: arr(matchedPlaybook.triggerKeywords).map((x) => s(x)).filter(Boolean).slice(0, 8),
     replyTemplate: s(matchedPlaybook.replyTemplate),
     actionType: s(matchedPlaybook.actionType),
     createLead: Boolean(matchedPlaybook.createLead),
@@ -315,7 +318,7 @@ function buildConversationSnapshot({
 }) {
   const latestMessage = s(text);
   const latestMessageWithoutCommand = stripLeadingCommand(latestMessage);
-  const normalizedHistory = buildHistorySnippet(recentMessages, 8);
+  const normalizedHistory = buildHistorySnippet(recentMessages, 6);
 
   return {
     latestCustomerMessage: latestMessage,
@@ -703,17 +706,69 @@ function applyReplyComposer({
   };
 }
 
-async function runOpenAiText({
+function modelLikelySupportsStructuredOutputs(model = "") {
+  const x = lower(model);
+  return (
+    x.startsWith("gpt-4o") ||
+    x.startsWith("gpt-4.1") ||
+    x.startsWith("gpt-5") ||
+    x.startsWith("o1") ||
+    x.startsWith("o3") ||
+    x.startsWith("o4")
+  );
+}
+
+function buildSemanticTextFormat(model = "") {
+  if (modelLikelySupportsStructuredOutputs(model)) {
+    return {
+      type: "json_schema",
+      name: "semantic_inbox_decision",
+      strict: true,
+      schema: getSemanticDecisionJsonSchemaObject(),
+    };
+  }
+
+  return {
+    type: "json_object",
+  };
+}
+
+function extractResponseRefusal(resp = {}) {
+  for (const outputItem of arr(resp?.output)) {
+    for (const contentItem of arr(outputItem?.content)) {
+      if (contentItem?.type === "refusal") {
+        return s(contentItem?.refusal || contentItem?.text || "");
+      }
+    }
+  }
+  return "";
+}
+
+function parseStructuredModelOutput(raw = "", model = "") {
+  if (!s(raw)) return null;
+  if (modelLikelySupportsStructuredOutputs(model)) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return parseJsonLoose(raw);
+}
+
+async function runOpenAiStructuredDecision({
   openai,
   model,
   maxOutputTokens,
   systemPrompt,
   userPrompt,
 }) {
-  const resp = await openai.responses.create({
+  const response = await openai.responses.create({
     model,
-    text: { format: { type: "text" } },
     max_output_tokens: maxOutputTokens,
+    text: {
+      format: buildSemanticTextFormat(model),
+    },
     input: [
       {
         role: "system",
@@ -726,11 +781,12 @@ async function runOpenAiText({
     ],
   });
 
-  return extractText(resp);
+  const refusal = extractResponseRefusal(response);
+  const raw = extractText(response);
+  return { raw, refusal };
 }
 
 function buildSemanticPromptInput({
-  promptBundle,
   profile,
   conversation,
   matchedKnowledge,
@@ -738,15 +794,14 @@ function buildSemanticPromptInput({
   policy,
 }) {
   return {
-    fullPrompt: promptBundle.fullPrompt,
     latestMessageJson: JSON.stringify(conversation.latestCustomerMessage),
     latestMessageWithoutCommandJson: JSON.stringify(
       conversation.latestCustomerMessageWithoutCommand
     ),
     historySnippet: conversation.historySnippet,
-    runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile)),
-    knowledgeJson: compactJson(buildPromptKnowledge(matchedKnowledge)),
-    playbookJson: compactJson(buildPromptPlaybook(matchedPlaybook)),
+    runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile), 3500),
+    knowledgeJson: compactJson(buildPromptKnowledge(matchedKnowledge), 1800),
+    playbookJson: compactJson(buildPromptPlaybook(matchedPlaybook), 1200),
     additionalContextJson: compactJson({
       customerContext: conversation.customerContext,
       formData: conversation.formData,
@@ -758,7 +813,7 @@ function buildSemanticPromptInput({
         createLeadEnabled: Boolean(policy?.createLeadEnabled),
         handoffEnabled: Boolean(policy?.handoffEnabled),
       },
-    }),
+    }, 2200),
   };
 }
 
@@ -817,7 +872,7 @@ export async function aiDecideInbox({
   const matchedKnowledge = matchKnowledgeEntries(
     text,
     resolvedRuntime.knowledgeEntries,
-    5
+    3
   );
   const matchedPlaybook = matchPlaybook(text, resolvedRuntime.responsePlaybooks);
 
@@ -974,7 +1029,6 @@ export async function aiDecideInbox({
   }
 
   const semanticPromptInput = buildSemanticPromptInput({
-    promptBundle,
     profile,
     conversation,
     matchedKnowledge,
@@ -995,7 +1049,7 @@ export async function aiDecideInbox({
   });
 
   try {
-    const raw = await runOpenAiText({
+    const { raw, refusal } = await runOpenAiStructuredDecision({
       openai,
       model,
       maxOutputTokens,
@@ -1003,13 +1057,27 @@ export async function aiDecideInbox({
       userPrompt: buildSemanticUserPrompt(semanticPromptInput),
     });
 
-    let parsed = parseJsonLoose(raw);
+    let parsed = null;
     let replyMode = "semantic";
     let semanticFailureReason = "";
 
+    if (refusal) {
+      replyMode = "fallback_safe";
+      semanticFailureReason = "model_refusal";
+
+      logInboxAiWarn("model_refusal_using_fallback", {
+        tenantKey: resolvedTenantKey,
+        channel: s(channel || "inbox"),
+        model,
+        refusalPreview: safePreview(refusal),
+      });
+    } else {
+      parsed = parseStructuredModelOutput(raw, model);
+    }
+
     if (!parsed || typeof parsed !== "object") {
       replyMode = "fallback_safe";
-      semanticFailureReason = "invalid_json";
+      semanticFailureReason = semanticFailureReason || "invalid_json";
 
       logInboxAiWarn("invalid_json_using_fallback", {
         tenantKey: resolvedTenantKey,
