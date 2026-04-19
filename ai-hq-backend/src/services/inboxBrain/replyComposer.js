@@ -1,7 +1,16 @@
 import { getLatestOutbound, normalizeRecentMessages } from "./messages.js";
-import { arr, lower, normalizeTextForCompare, obj, s, sanitizeReplyText } from "./shared.js";
+import {
+  arr,
+  lower,
+  normalizeTextForCompare,
+  obj,
+  s,
+  sanitizeReplyText,
+} from "./shared.js";
+import { pickBehaviorLeadPrompt } from "./runtime.js";
 import {
   getLocalizedGreeting,
+  getLocalizedGreetingFollowup,
   interpolateBrand,
 } from "./prompts/reply.copy.js";
 
@@ -22,11 +31,19 @@ function splitSentences(text = "") {
     .filter(Boolean);
 }
 
-function clipSentences(text = "", maxSentences = 2) {
-  const safeMax = Math.max(1, Math.min(4, Number(maxSentences || 2)));
-  const parts = splitSentences(text);
-  if (!parts.length) return "";
-  return sanitizeReplyText(parts.slice(0, safeMax).join(" "));
+function joinReplyParts(answerFirst = "", nextQuestion = "") {
+  const first = sanitizeReplyText(answerFirst);
+  const second = sanitizeReplyText(nextQuestion);
+
+  if (!first && !second) return "";
+  if (first && !second) return first;
+  if (!first && second) return second;
+
+  const firstBase = lower(first.replace(/[.?!]+$/g, ""));
+  const secondBase = lower(second.replace(/[.?!]+$/g, ""));
+  if (firstBase && firstBase === secondBase) return first;
+
+  return sanitizeReplyText(`${first} ${second}`);
 }
 
 function looksLikeGreetingLine(text = "") {
@@ -73,9 +90,14 @@ function hasSubstantiveBusinessNeed(result = {}, text = "") {
   if (s(result?.customerGoal || "")) return true;
   if (arr(result?.knownFacts).length) return true;
   if (arr(result?.missingFacts).length) return true;
+  if (s(result?.answerFirst || "")) return true;
 
   const cleaned = s(text).trim();
   return cleaned.length >= 12;
+}
+
+function isGreetingOnlyTurn(result = {}, text = "") {
+  return isGreetingIntent(result) && !hasSubstantiveBusinessNeed(result, text);
 }
 
 function shouldApplyIntro({
@@ -103,17 +125,16 @@ function shouldApplyIntro({
       : true;
 
   const firstTurn = !hasPreviousOutbound(recentMessages);
+  const greetingOnly = isGreetingOnlyTurn(result, text);
+
+  if (greetingOnly) return true;
+  if (s(behavior.customGreeting || "") && firstTurn) return true;
+  if (introMode === "always") return true;
 
   if (introOnFirstTurnOnly && !firstTurn) return false;
   if (suppressRepeatedIntro && !firstTurn) return false;
 
-  if (introMode === "always") return true;
-  if (introMode === "minimal") return firstTurn && isGreetingIntent(result);
-  if (introMode === "adaptive") {
-    return firstTurn && (isGreetingIntent(result) || hasSubstantiveBusinessNeed(result, text));
-  }
-
-  return firstTurn;
+  return false;
 }
 
 function resolveGreetingMode(behavior = {}, brandName = "") {
@@ -130,7 +151,7 @@ function resolveGreetingMode(behavior = {}, brandName = "") {
   if (brandedIntroMode === "always" && brandName) return "branded";
   if (brandedIntroMode === "never") return "neutral";
 
-  return brandName ? "branded" : "neutral";
+  return "neutral";
 }
 
 function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
@@ -166,6 +187,117 @@ function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
   };
 }
 
+function buildGreetingOnlyBody({ profile = {}, behavior = {}, language = "az" }) {
+  const tenantSpecificPrompt =
+    arr(behavior?.leadPrompts).length || arr(profile?.qualificationQuestions).length
+      ? sanitizeReplyText(pickBehaviorLeadPrompt(profile))
+      : "";
+
+  if (tenantSpecificPrompt) return tenantSpecificPrompt;
+  return sanitizeReplyText(getLocalizedGreetingFollowup(language));
+}
+
+function buildBodyCandidate(result = {}) {
+  const structured = joinReplyParts(
+    s(result?.answerFirst || ""),
+    s(result?.recommendedNextQuestion || "")
+  );
+
+  const raw = sanitizeReplyText(result?.replyText || "");
+  const candidate = structured || raw;
+  return stripLeadingGreetingSentence(candidate);
+}
+
+function escapeRegExp(value = "") {
+  return s(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyForbiddenPhraseRules(text = "", behavior = {}) {
+  let out = sanitizeReplyText(text);
+  if (!out) return "";
+
+  const forbidden = [
+    ...arr(behavior?.forbiddenPhrases),
+    ...arr(behavior?.doNotSay),
+  ]
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  for (const phrase of forbidden) {
+    const escaped = escapeRegExp(phrase);
+    if (!escaped) continue;
+    out = out.replace(new RegExp(escaped, "gi"), " ");
+  }
+
+  return sanitizeReplyText(out);
+}
+
+function isGenericHelperSentence(text = "") {
+  const normalized = normalizeTextForCompare(text);
+
+  return [
+    "ne ile komek ede bilerik",
+    "size nece komek ede bilerik",
+    "buyurun nece komek ede bilerik",
+    "hazirda size en vacib olan ehtiyaci bir cumle ile yazin",
+    "eses ehtiyacinizi bir cumle ile yazin",
+    "sizin ucun en vacib netice nedir",
+    "ehtiyacinizi bir cumle ile yazin",
+  ].some((item) => normalized === item);
+}
+
+function dropGenericTrailingQuestionIfAnswerPresent(text = "") {
+  const parts = splitSentences(text);
+  if (parts.length < 2) return sanitizeReplyText(text);
+
+  const last = parts[parts.length - 1];
+  if (!/[?؟]$/.test(last)) return sanitizeReplyText(text);
+  if (!isGenericHelperSentence(last)) return sanitizeReplyText(text);
+
+  return sanitizeReplyText(parts.slice(0, -1).join(" "));
+}
+
+function enforceSingleQuestion(text = "") {
+  const parts = splitSentences(text);
+  if (!parts.length) return "";
+
+  const output = [];
+  let seenQuestion = false;
+
+  for (const part of parts) {
+    const isQuestion = /[?؟]$/.test(part);
+    if (isQuestion) {
+      if (seenQuestion) continue;
+      seenQuestion = true;
+      output.push(part);
+      continue;
+    }
+    output.push(part);
+  }
+
+  return sanitizeReplyText(output.join(" "));
+}
+
+function clipReplyByBehavior(text = "", behavior = {}, profile = {}) {
+  const maxSentences = Math.max(
+    1,
+    Math.min(
+      4,
+      Number(
+        behavior.maxSentences ||
+          profile?.maxSentences ||
+          obj(behavior.channelBehavior?.inbox).maxSentences ||
+          2
+      )
+    )
+  );
+
+  const parts = splitSentences(text);
+  if (!parts.length) return "";
+
+  return sanitizeReplyText(parts.slice(0, maxSentences).join(" "));
+}
+
 export function composeTenantAwareReply({
   result = {},
   profile = {},
@@ -173,8 +305,7 @@ export function composeTenantAwareReply({
   recentMessages = [],
 }) {
   const behavior = obj(profile?.behavior);
-  const baseBody = sanitizeReplyText(result?.replyText || result?.answerFirst || "");
-  const bodyWithoutGreeting = stripLeadingGreetingSentence(baseBody);
+  const greetingOnly = isGreetingOnlyTurn(result, text);
 
   const applyIntro = shouldApplyIntro({
     behavior,
@@ -196,28 +327,34 @@ export function composeTenantAwareReply({
         language: resolveLanguage(result, profile),
       };
 
-  const combined = greeting.greetingText
-    ? sanitizeReplyText(`${greeting.greetingText} ${bodyWithoutGreeting || ""}`)
-    : sanitizeReplyText(bodyWithoutGreeting || baseBody);
+  let bodyText = greetingOnly
+    ? buildGreetingOnlyBody({
+        profile,
+        behavior,
+        language: greeting.language,
+      })
+    : buildBodyCandidate(result);
 
-  const maxSentences = Math.max(
-    1,
-    Math.min(
-      4,
-      Number(
-        behavior.maxSentences ||
-          profile?.maxSentences ||
-          obj(behavior.channelBehavior?.inbox).maxSentences ||
-          2
-      )
-    )
+  bodyText = applyForbiddenPhraseRules(bodyText, behavior);
+
+  if (!greetingOnly) {
+    bodyText = dropGenericTrailingQuestionIfAnswerPresent(bodyText);
+  }
+
+  bodyText = enforceSingleQuestion(bodyText);
+  bodyText = clipReplyByBehavior(bodyText, behavior, profile);
+
+  const combined = greeting.greetingText
+    ? sanitizeReplyText(`${greeting.greetingText} ${bodyText || ""}`)
+    : sanitizeReplyText(bodyText || "");
+
+  const finalReply = enforceSingleQuestion(
+    clipReplyByBehavior(combined, behavior, profile)
   );
 
-  const replyText = clipSentences(combined, maxSentences) || combined || baseBody;
-
   return {
-    replyText: sanitizeReplyText(replyText),
-    replyBodyText: sanitizeReplyText(bodyWithoutGreeting || baseBody),
+    replyText: sanitizeReplyText(finalReply),
+    replyBodyText: sanitizeReplyText(bodyText),
     greetingApplied: Boolean(greeting.greetingText),
     greetingText: greeting.greetingText,
     greetingMode: greeting.greetingMode,
@@ -225,5 +362,6 @@ export function composeTenantAwareReply({
     introModeUsed: s(behavior.introMode || "adaptive"),
     behaviorSource: s(behavior.source || ""),
     language: greeting.language,
+    greetingOnly,
   };
 }

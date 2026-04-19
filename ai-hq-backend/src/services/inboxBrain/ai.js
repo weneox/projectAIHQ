@@ -26,6 +26,7 @@ import { buildSemanticUserPrompt } from "./prompts/user.semantic.js";
 import { buildSemanticRepairSystemPrompt } from "./prompts/system.repair.js";
 import { buildSemanticRepairUserPrompt } from "./prompts/user.repair.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
+import { tryFastLaneInboxDecision } from "./fastLane.js";
 
 let openaiSingleton = null;
 
@@ -582,6 +583,8 @@ function normalizeAiResult({
     repairRaw,
     replyMode,
     usedFallback: replyMode === "fallback",
+    usedFastLane: replyMode.startsWith("fast_lane"),
+    fastLaneReason: s(parsed?.fastLaneReason || ""),
     semanticFailureReason: s(semanticFailureReason || ""),
     profile,
     matchedKnowledge,
@@ -638,6 +641,7 @@ function applyReplyComposer({
     introModeUsed: s(composed.introModeUsed),
     behaviorSource: s(composed.behaviorSource || profile?.behavior?.source || ""),
     language: s(composed.language || result.language || profile?.languages?.[0] || "az"),
+    greetingOnly: Boolean(composed.greetingOnly),
   };
 }
 
@@ -911,6 +915,46 @@ export async function aiDecideInbox({
     },
   });
 
+  const fastLaneDecision = tryFastLaneInboxDecision({
+    text,
+    profile,
+    matchedKnowledge,
+    matchedPlaybook,
+  });
+
+  if (fastLaneDecision) {
+    const fastLaneResult = applyReplyComposer({
+      result: normalizeAiResult({
+        parsed: fastLaneDecision,
+        fallbackDecision,
+        profile,
+        matchedKnowledge,
+        matchedPlaybook,
+        resolvedRuntime,
+        promptBundle,
+        channel,
+        policy,
+        raw: "",
+        repairRaw: "",
+        replyMode: `fast_lane_${s(fastLaneDecision.fastLaneReason || "direct")}`,
+        semanticFailureReason: "",
+      }),
+      profile,
+      text,
+      recentMessages,
+    });
+
+    logInboxAi("fast_lane_hit", {
+      tenantKey: resolvedTenantKey,
+      channel: s(channel || "inbox"),
+      reason: s(fastLaneDecision.fastLaneReason || ""),
+      replyMode: fastLaneResult.replyMode,
+      replyPreview: safePreview(fastLaneResult.replyText, 180),
+    });
+
+    return fastLaneResult;
+  }
+
   if (!openai) {
     logInboxAiWarn("unavailable_using_fallback", {
       tenantKey: resolvedTenantKey,
@@ -978,7 +1022,10 @@ export async function aiDecideInbox({
     let replyMode = "semantic";
     let semanticFailureReason = "";
 
-    if (!parsed || typeof parsed !== "object") {
+    const shouldAttemptRepair =
+      s(text).trim().length >= 10 || matchedKnowledge.length > 0 || matchedPlaybook;
+
+    if ((!parsed || typeof parsed !== "object") && shouldAttemptRepair) {
       logInboxAiWarn("invalid_json", {
         tenantKey: resolvedTenantKey,
         channel: s(channel || "inbox"),
@@ -1019,7 +1066,10 @@ export async function aiDecideInbox({
           repairRawPreview: safePreview(repairRaw),
         });
       }
-    } else if (!hasMeaningfulSemanticPayload(parsed)) {
+    } else if ((!parsed || typeof parsed !== "object") && !shouldAttemptRepair) {
+      replyMode = "fallback";
+      semanticFailureReason = "invalid_json_no_repair";
+    } else if (!hasMeaningfulSemanticPayload(parsed) && shouldAttemptRepair) {
       logInboxAiWarn("weak_semantic_payload", {
         tenantKey: resolvedTenantKey,
         channel: s(channel || "inbox"),
@@ -1060,6 +1110,9 @@ export async function aiDecideInbox({
           repairRawPreview: safePreview(repairRaw),
         });
       }
+    } else if (!hasMeaningfulSemanticPayload(parsed) && !shouldAttemptRepair) {
+      replyMode = "fallback";
+      semanticFailureReason = "weak_payload_no_repair";
     }
 
     const result = applyReplyComposer({
@@ -1103,6 +1156,8 @@ export async function aiDecideInbox({
       missingFacts: result.missingFacts,
       replyMode: result.replyMode,
       usedFallback: result.usedFallback,
+      usedFastLane: result.usedFastLane,
+      fastLaneReason: result.fastLaneReason,
       semanticFailureReason: result.semanticFailureReason,
       greetingApplied: result.greetingApplied,
       greetingMode: result.greetingMode,

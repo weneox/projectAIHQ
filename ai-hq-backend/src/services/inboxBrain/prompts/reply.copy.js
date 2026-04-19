@@ -17,10 +17,10 @@ export function getLocalizedGreeting({ language = "az", mode = "neutral", brandN
   const safeMode = String(mode || "neutral").trim().toLowerCase();
 
   const brandedMap = {
-    az: `Salam, ${brandName}-dan yazırıq.`,
-    en: `Hello, this is ${brandName}.`,
-    tr: `Merhaba, ${brandName} olarak yazıyoruz.`,
-    ru: `Здравствуйте, это ${brandName}.`,
+    az: `Salam. ${brandName} komandası ilə əlaqədəsiniz.`,
+    en: `Hello. You’re connected with the ${brandName} team.`,
+    tr: `Merhaba. ${brandName} ekibiyle bağlantıdasınız.`,
+    ru: `Здравствуйте. Вы на связи с командой ${brandName}.`,
   };
 
   const neutralMap = {
@@ -31,14 +31,14 @@ export function getLocalizedGreeting({ language = "az", mode = "neutral", brandN
   };
 
   const warmMap = {
-    az: "Salam, xoş gördük.",
+    az: "Salam, buyurun.",
     en: "Hello, welcome.",
-    tr: "Merhaba, hoş geldiniz.",
-    ru: "Здравствуйте, рады вас приветствовать.",
+    tr: "Merhaba, buyurun.",
+    ru: "Здравствуйте, пожалуйста.",
   };
 
   const formalMap = {
-    az: "Salam, xoş gördük.",
+    az: "Salam.",
     en: "Hello.",
     tr: "Merhaba.",
     ru: "Здравствуйте.",
@@ -63,8 +63,21 @@ export function getLocalizedGreeting({ language = "az", mode = "neutral", brandN
   }
 
   if (safeMode === "auto" && brandName) {
-    return brandedMap[lang] || brandedMap.az;
+    return neutralMap[lang] || neutralMap.az;
   }
 
   return neutralMap[lang] || neutralMap.az;
+}
+
+export function getLocalizedGreetingFollowup(language = "az") {
+  const lang = normalizeLanguage(language);
+
+  const map = {
+    az: "Buyurun.",
+    en: "How can I help?",
+    tr: "Buyurun.",
+    ru: "Чем могу помочь?",
+  };
+
+  return map[lang] || map.az;
 }
