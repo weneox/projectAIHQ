@@ -265,6 +265,7 @@ function shouldApplyIntro({
   behavior = {},
   result = {},
   recentMessages = [],
+  greetingOnly = false,
 }) {
   const greetingEnabled =
     typeof behavior?.greetingEnabled === "boolean" ? behavior.greetingEnabled : true;
@@ -282,7 +283,7 @@ function shouldApplyIntro({
   const firstTurn = !hasPreviousOutbound(recentMessages);
   if (introOnFirstTurnOnly && !firstTurn) return false;
 
-  return isGreetingIntent(result);
+  return greetingOnly && isGreetingIntent(result);
 }
 
 function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
@@ -331,12 +332,14 @@ export function composeTenantAwareReply({
   recentMessages = [],
 }) {
   const behavior = obj(profile?.behavior);
-  const greetingOnly = isGreetingIntent(result) && !buildBodyCandidate(result);
+  const bodyCandidate = buildBodyCandidate(result);
+  const greetingOnly = isGreetingIntent(result) && !bodyCandidate;
 
   const applyIntro = shouldApplyIntro({
     behavior,
     result,
     recentMessages,
+    greetingOnly,
   });
 
   const greeting = applyIntro
@@ -357,7 +360,7 @@ export function composeTenantAwareReply({
         result,
         profile,
       })
-    : buildBodyCandidate(result);
+    : bodyCandidate;
 
   bodyText = applyForbiddenPhraseRules(bodyText, behavior);
 
