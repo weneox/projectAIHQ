@@ -9,51 +9,65 @@ const START_COMMANDS = new Set([
   "/start@bot",
 ]);
 
-const GREETING_TOKENS = new Set([
+const ACK_ONLY_TOKENS = new Set([
+  "ok",
+  "okay",
+  "okey",
+  "thanks",
+  "thankyou",
+  "thank you",
+  "thx",
+  "gotit",
+  "got it",
+  "sure",
+  "fine",
+  "great",
+  "perfect",
+  "done",
+  "understood",
+  "noted",
+]);
+
+const GREETING_PHRASES = [
   // English
   "hi",
   "hello",
   "hey",
+  "good morning",
+  "good afternoon",
+  "good evening",
   "greetings",
-  "morning",
-  "afternoon",
-  "evening",
 
   // Azerbaijani / Turkish
   "salam",
   "salamlar",
+  "salam aleykum",
   "salamaleykum",
-  "salaməleyküm",
-  "aleykum",
-  "aleyküm",
-  "selam",
+  "aleykum salam",
   "merhaba",
+  "selam",
 
   // Russian
   "privet",
   "zdravstvuyte",
 
-  // Spanish / Portuguese / Italian / French / German / Dutch
+  // European
   "hola",
-  "ola",
-  "olá",
-  "ciao",
   "bonjour",
   "hallo",
-  "hei",
+  "ciao",
+  "ola",
+  "olá",
 
-  // Arabic / Persian transliterations
+  // Arabic / South Asia / East Asia transliterations
   "marhaba",
-  "salaam",
-  "salaamalaikum",
-  "salamalaikum",
-
-  // South / East Asia transliterations
   "namaste",
+  "ni hao",
   "nihao",
   "konnichiwa",
   "annyeong",
-]);
+  "annyeonghaseyo",
+];
 
 function normalizeForFastCheck(text = "") {
   return lower(text)
@@ -91,6 +105,10 @@ function overlapScore(sourceTokens = new Set(), candidateTokens = new Set()) {
   return hits / Math.max(1, candidateTokens.size);
 }
 
+function normalizeCompactToken(text = "") {
+  return normalizeForFastCheck(text).replace(/\s+/g, "");
+}
+
 function isStartCommand(text = "") {
   const normalized = normalizeForFastCheck(text);
   if (!normalized) return false;
@@ -104,9 +122,29 @@ function isGreetingOnlyTurn(text = "") {
   if (isStartCommand(normalized)) return true;
 
   const tokens = tokenize(normalized);
-  if (!tokens.length || tokens.length > 4) return false;
+  if (!tokens.length || tokens.length > 5) return false;
 
-  return tokens.every((token) => GREETING_TOKENS.has(token));
+  const phraseMatch = GREETING_PHRASES.some((phrase) => {
+    const normalizedPhrase = normalizeForFastCheck(phrase);
+    if (!normalizedPhrase) return false;
+    return normalized === normalizedPhrase;
+  });
+
+  if (phraseMatch) return true;
+
+  const compact = normalizeCompactToken(normalized);
+  return GREETING_PHRASES.some((phrase) => {
+    const candidate = normalizeCompactToken(phrase);
+    return candidate && compact === candidate;
+  });
+}
+
+function isAckOnlyTurn(text = "") {
+  const normalized = normalizeForFastCheck(text);
+  if (!normalized) return false;
+
+  const compact = normalized.replace(/\s+/g, "");
+  return ACK_ONLY_TOKENS.has(normalized) || ACK_ONLY_TOKENS.has(compact);
 }
 
 function hasStrongPlaybookMatch(text = "", matchedPlaybook = null) {
@@ -175,8 +213,34 @@ function buildGreetingFastLaneDecision(profile = {}, reason = "greeting_only") {
     handoffReason: "",
     handoffPriority: "normal",
     noReply: false,
-    confidence: 0.96,
-    leadScore: 6,
+    confidence: 0.98,
+    leadScore: 4,
+    heuristic: false,
+    fastLaneReason: reason,
+  };
+}
+
+function buildAckNoReplyFastLaneDecision(profile = {}, reason = "ack_only") {
+  return {
+    language: s(profile?.languages?.[0] || "en"),
+    semanticIntent: "acknowledgement",
+    askCategory: "general",
+    conversationStage: "general",
+    replyStyle: "concise",
+    customerGoal: "",
+    knownFacts: [],
+    missingFacts: [],
+    groundedFactsUsed: ["fast_lane_ack"],
+    answerFirst: "",
+    recommendedNextQuestion: "",
+    replyText: "",
+    createLead: false,
+    handoff: false,
+    handoffReason: "",
+    handoffPriority: "normal",
+    noReply: true,
+    confidence: 0.97,
+    leadScore: 0,
     heuristic: false,
     fastLaneReason: reason,
   };
@@ -236,7 +300,7 @@ function buildKnowledgeFastLaneDecision(matchedKnowledge = [], profile = {}) {
     handoffPriority: "normal",
     noReply: false,
     confidence: 0.88,
-    leadScore: 20,
+    leadScore: 18,
     heuristic: false,
     fastLaneReason: "matched_knowledge",
   };
@@ -257,6 +321,10 @@ export function tryFastLaneInboxDecision({
 
   if (isGreetingOnlyTurn(cleaned)) {
     return buildGreetingFastLaneDecision(profile, "greeting_only");
+  }
+
+  if (isAckOnlyTurn(cleaned)) {
+    return buildAckNoReplyFastLaneDecision(profile, "ack_only");
   }
 
   if (matchedPlaybook && hasStrongPlaybookMatch(cleaned, matchedPlaybook)) {
