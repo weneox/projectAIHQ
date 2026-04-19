@@ -169,10 +169,17 @@ function isSemanticBusinessTurn(ai = {}, text = "") {
   return isSubstantiveText(text);
 }
 
+function getGreetingRepeatSuppressMs() {
+  const raw = Number(process.env.INBOX_GREETING_REPEAT_SUPPRESS_MS || 120000);
+  if (!Number.isFinite(raw)) return 120000;
+  return Math.max(0, raw);
+}
+
 function shouldSilenceGreetingOnlyTurn({
   ai = {},
   reliability = {},
   text = "",
+  replyText = "",
 }) {
   const askCategory = normalizeSemanticClass(ai?.askCategory);
   const stage = normalizeSemanticClass(ai?.stage);
@@ -188,7 +195,18 @@ function shouldSilenceGreetingOnlyTurn({
   if (!s(reliability?.awaitingCustomerAnswerTo || "")) return false;
   if (isSubstantiveText(cleaned)) return false;
 
-  return countWordLikeTokens(cleaned) <= 3 && cleaned.length <= 24;
+  const tokenCount = countWordLikeTokens(cleaned);
+  if (tokenCount > 3 || cleaned.length > 24) return false;
+
+  const lastAiOutboundAgeMs = Number(reliability?.lastAiOutboundAgeMs);
+  const hasRecentAiReply =
+    Number.isFinite(lastAiOutboundAgeMs) &&
+    lastAiOutboundAgeMs >= 0 &&
+    lastAiOutboundAgeMs <= getGreetingRepeatSuppressMs();
+
+  const duplicateCandidate = isDuplicateReplyCandidate(replyText, reliability);
+
+  return hasRecentAiReply || duplicateCandidate;
 }
 
 function shouldBypassDuplicateSuppression({
@@ -250,6 +268,19 @@ function buildSuppressionDebugPayload({
     handoffReason: s(handoff?.reason),
     operatorRecentlyReplied: Boolean(reliability?.operatorRecentlyReplied),
     duplicateOfLastAiReply: Boolean(reliability?.duplicateOfLastAiReply),
+    latestOutboundAgeMs:
+      Number.isFinite(Number(reliability?.latestOutboundAgeMs))
+        ? Number(reliability.latestOutboundAgeMs)
+        : null,
+    operatorOutboundAgeMs:
+      Number.isFinite(Number(reliability?.operatorOutboundAgeMs))
+        ? Number(reliability.operatorOutboundAgeMs)
+        : null,
+    lastAiOutboundAgeMs:
+      Number.isFinite(Number(reliability?.lastAiOutboundAgeMs))
+        ? Number(reliability.lastAiOutboundAgeMs)
+        : null,
+    latestOutboundSenderType: s(reliability?.latestOutboundSenderType || ""),
     lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || "").slice(0, 220),
     awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
     repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
@@ -727,7 +758,14 @@ export async function buildInboxActions({
     shouldCreateLead = false;
   }
 
-  if (shouldSilenceGreetingOnlyTurn({ ai, reliability, text })) {
+  const greetingOnlySuppressed = shouldSilenceGreetingOnlyTurn({
+    ai,
+    reliability,
+    text,
+    replyText,
+  });
+
+  if (greetingOnlySuppressed) {
     shouldReply = false;
     shouldTyping = false;
   }
@@ -744,7 +782,7 @@ export async function buildInboxActions({
 
   const suppressedReason =
     !shouldReply || !replyText
-      ? shouldSilenceGreetingOnlyTurn({ ai, reliability, text })
+      ? greetingOnlySuppressed
         ? "greeting_without_new_information"
         : buildSuppressedReplyReason({
             quietHoursApplied,
