@@ -11,6 +11,7 @@ import {
   s,
   uniqStrings,
 } from "./shared.js";
+import { resolveBehaviorProfile } from "./behavior/resolveBehaviorProfile.js";
 
 export function normalizeIndustry(value) {
   const x = lower(value);
@@ -116,24 +117,16 @@ function normalizePriority(value, fallback = 100) {
   return n;
 }
 
-function normalizeMaxSentences(value, fallback = 2) {
-  return Math.max(1, Math.min(4, Number(value || fallback || 2)));
-}
-
 function normalizeLanguageList(...sources) {
   const values = [];
-  for (const source of sources) {
-    values.push(...arr(source));
-  }
+  for (const source of sources) values.push(...arr(source));
   const normalized = normalizeStringList(values);
   return normalized.length ? normalized : ["az"];
 }
 
 function normalizeQualificationQuestions(...sources) {
   const values = [];
-  for (const source of sources) {
-    values.push(...arr(source));
-  }
+  for (const source of sources) values.push(...arr(source));
   return normalizeStringList(values);
 }
 
@@ -336,71 +329,22 @@ function buildNormalizedServiceNames(serviceCatalog = [], active = true) {
   );
 }
 
-function buildFallbackBehavior(tenant = {}, profile = {}, meta = {}) {
-  const communicationRules = obj(profile?.communication_rules);
-  const channelBehavior =
-    normalizeBehaviorObject(
-      meta?.channelBehavior,
-      meta?.channel_behavior,
-      profile?.channelBehavior,
-      profile?.channel_behavior
-    ) || {};
-
-  return {
-    tone: pickFirstString(
-      profile?.tone_of_voice,
-      communicationRules?.tone,
-      meta?.tone,
-      tenant?.brand?.tone,
-      "professional, warm, concise"
-    ),
-    toneProfile: pickFirstString(
-      profile?.tone_profile,
-      meta?.toneProfile,
-      meta?.tone_profile
-    ),
-    conversionGoal: pickFirstString(
-      profile?.conversion_goal,
-      meta?.conversionGoal,
-      meta?.conversion_goal
-    ),
-    primaryCta: pickFirstString(
-      profile?.primary_cta,
-      meta?.primaryCta,
-      meta?.primary_cta
-    ),
-    leadQualificationMode: pickFirstString(
-      profile?.lead_qualification_mode,
-      meta?.leadQualificationMode,
-      meta?.lead_qualification_mode
-    ),
-    bookingFlowType: pickFirstString(
-      profile?.booking_flow_type,
-      meta?.bookingFlowType,
-      meta?.booking_flow_type
-    ),
-    qualificationQuestions: normalizeQualificationQuestions(
-      profile?.qualificationQuestions,
-      profile?.qualification_questions,
-      meta?.qualificationQuestions,
-      meta?.qualification_questions
-    ),
-    handoffTriggers: normalizeStringList(
-      meta?.handoffTriggers,
-      meta?.handoff_triggers
-    ),
-    disallowedClaims: normalizeStringList(
-      meta?.disallowedClaims,
-      meta?.disallowed_claims,
-      profile?.banned_phrases
-    ),
-    channelBehavior,
-    maxSentences: normalizeMaxSentences(
-      communicationRules?.maxSentences || meta?.replyMaxSentences || 2,
-      2
-    ),
-    leadPrompts: normalizeStringList(meta?.leadPrompts),
-  };
+function buildFallbackBehavior({
+  tenant = {},
+  profile = {},
+  meta = {},
+  industry = "generic_business",
+}) {
+  return resolveBehaviorProfile({
+    industry,
+    tenant,
+    profile,
+    meta,
+    runtimeBehavior: {},
+    runtimeChannelBehavior: {},
+    fallbackBehavior: {},
+    fallbackChannelBehavior: {},
+  });
 }
 
 export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
@@ -445,7 +389,12 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     brand?.tagline
   );
 
-  const behavior = buildFallbackBehavior(safeTenant, profile, meta);
+  const behavior = buildFallbackBehavior({
+    tenant: safeTenant,
+    profile,
+    meta,
+    industry,
+  });
 
   return {
     tenantKey: resolvedTenantKey,
@@ -474,27 +423,57 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     ),
     tone: behavior.tone,
     toneProfile: behavior.toneProfile,
+    formality: behavior.formality,
+    warmth: behavior.warmth,
+    brevity: behavior.brevity,
+    emojiPolicy: behavior.emojiPolicy,
     maxSentences: behavior.maxSentences,
     leadPrompts: behavior.leadPrompts,
-    forbiddenClaims: normalizeStringList(profile?.banned_phrases, meta?.forbiddenClaims),
-    conversionGoal: behavior.conversionGoal,
-    primaryCta: behavior.primaryCta,
-    leadQualificationMode: behavior.leadQualificationMode,
-    qualificationQuestions: behavior.qualificationQuestions,
-    bookingFlowType: behavior.bookingFlowType,
-    handoffTriggers: behavior.handoffTriggers,
-    disallowedClaims: behavior.disallowedClaims,
-    behavior: {
-      niche: pickFirstString(meta?.niche),
-      conversionGoal: behavior.conversionGoal,
-      primaryCta: behavior.primaryCta,
-      toneProfile: behavior.toneProfile,
-      disallowedClaims: behavior.disallowedClaims,
-      handoffTriggers: behavior.handoffTriggers,
-      channelBehavior: behavior.channelBehavior,
-    },
+    forbiddenClaims: normalizeStringList(
+      profile?.banned_phrases,
+      meta?.forbiddenClaims,
+      behavior.forbiddenPhrases,
+      behavior.doNotSay
+    ),
+    conversionGoal: pickFirstString(
+      profile?.conversion_goal,
+      meta?.conversionGoal,
+      meta?.conversion_goal
+    ),
+    primaryCta: pickFirstString(
+      profile?.primary_cta,
+      meta?.primaryCta,
+      meta?.primary_cta
+    ),
+    leadQualificationMode: pickFirstString(
+      profile?.lead_qualification_mode,
+      meta?.leadQualificationMode,
+      meta?.lead_qualification_mode
+    ),
+    qualificationQuestions: normalizeQualificationQuestions(
+      profile?.qualificationQuestions,
+      profile?.qualification_questions,
+      meta?.qualificationQuestions,
+      meta?.qualification_questions
+    ),
+    bookingFlowType: pickFirstString(
+      profile?.booking_flow_type,
+      meta?.bookingFlowType,
+      meta?.booking_flow_type
+    ),
+    handoffTriggers: normalizeStringList(
+      meta?.handoffTriggers,
+      meta?.handoff_triggers
+    ),
+    disallowedClaims: normalizeStringList(
+      meta?.disallowedClaims,
+      meta?.disallowed_claims,
+      profile?.banned_phrases
+    ),
+    behavior,
     channelBehavior: behavior.channelBehavior,
     aiPolicy,
+    inboxPolicy,
     profile,
     tenant: safeTenant,
     threadState: null,
@@ -541,6 +520,7 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     tenant: null,
     profile: {},
     aiPolicy: {},
+    inboxPolicy: {},
     threadState: threadState || null,
     displayName: "",
     industry: "generic_business",
@@ -556,6 +536,10 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     languages: ["az"],
     tone: "",
     toneProfile: "",
+    formality: "",
+    warmth: "",
+    brevity: "",
+    emojiPolicy: "",
     maxSentences: 2,
     leadPrompts: [],
     forbiddenClaims: [],
@@ -618,6 +602,7 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
   const rawTenant = obj(container.tenant);
   const rawProfile = obj(container.profile);
   const rawAiPolicy = obj(container.aiPolicy || container.ai_policy);
+  const rawInboxPolicy = obj(container.inboxPolicy || container.inbox_policy);
   const rawThreadState = obj(
     container.threadState || container.thread_state || container.state
   );
@@ -650,53 +635,6 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       ? []
       : arr(fallback.responsePlaybooks);
 
-  const fallbackBehavior = obj(fallback.behavior);
-  const effectiveBehavior = {
-    niche: pickFirstString(
-      container.niche,
-      rawBehavior.niche,
-      fallbackBehavior.niche
-    ),
-    conversionGoal: pickFirstString(
-      container.conversionGoal,
-      container.conversion_goal,
-      rawBehavior.conversionGoal,
-      rawBehavior.conversion_goal,
-      fallbackBehavior.conversionGoal
-    ),
-    primaryCta: pickFirstString(
-      container.primaryCta,
-      container.primary_cta,
-      rawBehavior.primaryCta,
-      rawBehavior.primary_cta,
-      fallbackBehavior.primaryCta
-    ),
-    toneProfile: pickFirstString(
-      container.toneProfile,
-      container.tone_profile,
-      rawBehavior.toneProfile,
-      rawBehavior.tone_profile,
-      fallbackBehavior.toneProfile
-    ),
-    disallowedClaims: normalizeStringList(
-      container.disallowedClaims,
-      container.disallowed_claims,
-      rawBehavior.disallowedClaims,
-      rawBehavior.disallowed_claims,
-      fallbackBehavior.disallowedClaims
-    ),
-    handoffTriggers: normalizeStringList(
-      container.handoffTriggers,
-      container.handoff_triggers,
-      rawBehavior.handoffTriggers,
-      rawBehavior.handoff_triggers,
-      fallbackBehavior.handoffTriggers
-    ),
-    channelBehavior: Object.keys(rawChannelBehavior).length
-      ? rawChannelBehavior
-      : obj(fallback.channelBehavior),
-  };
-
   const services = normalizeStringList(
     arr(container.services).length
       ? container.services
@@ -709,13 +647,24 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       : buildNormalizedServiceNames(normalizedCatalog, false)
   );
 
-  const qualificationQuestions = normalizeQualificationQuestions(
-    container.qualificationQuestions,
-    container.qualification_questions,
-    rawBehavior.qualificationQuestions,
-    rawBehavior.qualification_questions,
-    strictAuthority ? [] : fallback.qualificationQuestions
+  const effectiveIndustry = normalizeIndustry(
+    container.industry ||
+      container.industryKey ||
+      rawProfile.industry_key ||
+      rawTenant.industry_key ||
+      fallback.industry
   );
+
+  const resolvedBehavior = resolveBehaviorProfile({
+    industry: effectiveIndustry,
+    tenant: strictAuthority ? rawTenant : { ...obj(fallback.tenant), ...rawTenant },
+    profile: strictAuthority ? rawProfile : { ...obj(fallback.profile), ...rawProfile },
+    meta: obj(rawTenant?.meta),
+    runtimeBehavior: rawBehavior,
+    runtimeChannelBehavior: rawChannelBehavior,
+    fallbackBehavior: obj(fallback.behavior),
+    fallbackChannelBehavior: obj(fallback.channelBehavior),
+  });
 
   return {
     ...fallback,
@@ -735,6 +684,11 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
         ? rawAiPolicy
         : { ...obj(fallback.aiPolicy), ...rawAiPolicy }
       : fallback.aiPolicy,
+    inboxPolicy: Object.keys(rawInboxPolicy).length
+      ? strictAuthority
+        ? rawInboxPolicy
+        : { ...obj(fallback.inboxPolicy), ...rawInboxPolicy }
+      : fallback.inboxPolicy,
     threadState: Object.keys(rawThreadState).length
       ? rawThreadState
       : fallback.threadState,
@@ -746,13 +700,7 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawTenant.company_name,
       fallback.displayName
     ),
-    industry: normalizeIndustry(
-      container.industry ||
-        container.industryKey ||
-        rawProfile.industry_key ||
-        rawTenant.industry_key ||
-        fallback.industry
-    ),
+    industry: effectiveIndustry,
     businessSummary: pickFirstString(
       container.businessSummary,
       container.summary,
@@ -794,39 +742,37 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
             ]
           : arr(fallback.languages)
     ),
-    tone: pickFirstString(
-      container.tone,
-      container.toneText,
-      strictAuthority ? rawProfile.tone_of_voice : fallback.tone
-    ),
-    toneProfile: pickFirstString(
-      container.toneProfile,
-      container.tone_profile,
-      rawBehavior.toneProfile,
-      rawBehavior.tone_profile,
-      fallback.toneProfile
-    ),
-    maxSentences: normalizeMaxSentences(
-      container.maxSentences,
-      fallback.maxSentences || 2
-    ),
-    leadPrompts: normalizeStringList(
-      arr(container.leadPrompts).length
-        ? container.leadPrompts
-        : strictAuthority
-          ? []
-          : arr(fallback.leadPrompts)
-    ),
+    tone: resolvedBehavior.tone,
+    toneProfile: resolvedBehavior.toneProfile,
+    formality: resolvedBehavior.formality,
+    warmth: resolvedBehavior.warmth,
+    brevity: resolvedBehavior.brevity,
+    emojiPolicy: resolvedBehavior.emojiPolicy,
+    maxSentences: resolvedBehavior.maxSentences,
+    leadPrompts: resolvedBehavior.leadPrompts,
     forbiddenClaims: normalizeStringList(
       arr(container.forbiddenClaims).length
         ? container.forbiddenClaims
         : strictAuthority
           ? []
           : arr(fallback.forbiddenClaims),
-      effectiveBehavior.disallowedClaims
+      resolvedBehavior.forbiddenPhrases,
+      resolvedBehavior.doNotSay
     ),
-    conversionGoal: effectiveBehavior.conversionGoal,
-    primaryCta: effectiveBehavior.primaryCta,
+    conversionGoal: pickFirstString(
+      container.conversionGoal,
+      container.conversion_goal,
+      rawBehavior.conversionGoal,
+      rawBehavior.conversion_goal,
+      fallback.conversionGoal
+    ),
+    primaryCta: pickFirstString(
+      container.primaryCta,
+      container.primary_cta,
+      rawBehavior.primaryCta,
+      rawBehavior.primary_cta,
+      fallback.primaryCta
+    ),
     leadQualificationMode: pickFirstString(
       container.leadQualificationMode,
       container.lead_qualification_mode,
@@ -834,7 +780,11 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.lead_qualification_mode,
       fallback.leadQualificationMode
     ),
-    qualificationQuestions,
+    qualificationQuestions: normalizeQualificationQuestions(
+      container.qualificationQuestions,
+      container.qualification_questions,
+      strictAuthority ? [] : fallback.qualificationQuestions
+    ),
     bookingFlowType: pickFirstString(
       container.bookingFlowType,
       container.booking_flow_type,
@@ -842,10 +792,22 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.booking_flow_type,
       fallback.bookingFlowType
     ),
-    handoffTriggers: effectiveBehavior.handoffTriggers,
-    disallowedClaims: effectiveBehavior.disallowedClaims,
-    behavior: effectiveBehavior,
-    channelBehavior: effectiveBehavior.channelBehavior,
+    handoffTriggers: normalizeStringList(
+      container.handoffTriggers,
+      container.handoff_triggers,
+      rawBehavior.handoffTriggers,
+      rawBehavior.handoff_triggers,
+      fallback.handoffTriggers
+    ),
+    disallowedClaims: normalizeStringList(
+      container.disallowedClaims,
+      container.disallowed_claims,
+      rawBehavior.disallowedClaims,
+      rawBehavior.disallowed_claims,
+      fallback.disallowedClaims
+    ),
+    behavior: resolvedBehavior,
+    channelBehavior: resolvedBehavior.channelBehavior,
   };
 }
 
@@ -946,17 +908,20 @@ export function pickBehaviorLeadPrompt(profile) {
   const qualificationQuestions = normalizeQualificationQuestions(
     profile?.qualificationQuestions
   );
-  const inboxBehavior = obj(profile?.channelBehavior?.inbox);
+  const resolvedBehavior = obj(profile?.behavior);
+  const inboxBehavior = obj(
+    profile?.channelBehavior?.inbox || resolvedBehavior?.channelBehavior?.inbox
+  );
   const primaryCta = s(profile?.primaryCta).replace(/_/g, " ");
   const qualificationDepth = lower(inboxBehavior?.qualificationDepth || "");
-  const toneProfile = lower(profile?.toneProfile || "");
+  const toneProfile = lower(profile?.toneProfile || resolvedBehavior?.toneProfile || "");
   const firstQuestion = s(qualificationQuestions[0]);
 
   let prompt = pickLeadPrompt(profile);
 
   if (toneProfile.includes("calm") || toneProfile.includes("reassuring")) {
     prompt = "Daha dəqiq kömək üçün bir qısa sualı cavablandıra bilərsiniz.";
-  } else if (toneProfile.includes("warm") || toneProfile.includes("hospitable")) {
+  } else if (toneProfile.includes("warm") || toneProfile.includes("welcoming")) {
     prompt = "Sizi düzgün yönləndirmək üçün bunu qısa yazın.";
   } else if (toneProfile.includes("formal") || toneProfile.includes("confident")) {
     prompt = "Düzgün yönləndirmə üçün bunu qeyd edin.";

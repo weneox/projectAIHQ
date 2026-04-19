@@ -8,11 +8,12 @@ import {
   buildPlaybookReply,
   buildUnsupportedServiceReply,
 } from "./fallback.js";
-import { arr, getResolvedTenantKey, obj, s, sanitizeReplyText } from "./shared.js";
+import { arr, getResolvedTenantKey, lower, obj, s, sanitizeReplyText } from "./shared.js";
 import {
   buildHistorySnippet,
   extractText,
   parseJsonLoose,
+  stripLeadingCommand,
 } from "./messages.js";
 import {
   buildDisabledServiceLine,
@@ -20,6 +21,11 @@ import {
   resolveInboxRuntime,
 } from "./runtime.js";
 import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
+import { buildSemanticSystemPrompt } from "./prompts/system.semantic.js";
+import { buildSemanticUserPrompt } from "./prompts/user.semantic.js";
+import { buildSemanticRepairSystemPrompt } from "./prompts/system.repair.js";
+import { buildSemanticRepairUserPrompt } from "./prompts/user.repair.js";
+import { composeTenantAwareReply } from "./replyComposer.js";
 
 let openaiSingleton = null;
 
@@ -74,10 +80,6 @@ function ensureOpenAI() {
   }
 
   return openaiSingleton;
-}
-
-function lower(value = "") {
-  return s(value).toLowerCase();
 }
 
 function compactJson(value, max = 7000) {
@@ -199,12 +201,6 @@ function joinReplyParts(answerFirst = "", nextQuestion = "") {
   return sanitizeReplyText(`${first} ${second}`);
 }
 
-function stripLeadingCommand(text = "") {
-  const source = s(text).trim();
-  if (!source.startsWith("/")) return source;
-  return source.replace(/^\/[^\s]+\s*/u, "").trim();
-}
-
 function isCommandOnly(text = "") {
   const raw = s(text).trim();
   if (!raw.startsWith("/")) return false;
@@ -251,6 +247,11 @@ function buildRuntimeSnapshot(profile = {}) {
     handoffTriggers: arr(profile?.handoffTriggers).map((x) => s(x)).filter(Boolean),
     disallowedClaims: arr(profile?.disallowedClaims).map((x) => s(x)).filter(Boolean),
     channelBehaviorInbox: obj(profile?.channelBehavior?.inbox),
+    behaviorSource: s(profile?.behavior?.source),
+    greetingEnabled: Boolean(profile?.behavior?.greetingEnabled),
+    greetingMode: s(profile?.behavior?.greetingMode),
+    introMode: s(profile?.behavior?.introMode),
+    customGreeting: s(profile?.behavior?.customGreeting),
     enabledServiceCatalog,
     disabledServiceCatalog,
   };
@@ -303,102 +304,6 @@ function buildConversationSnapshot({
     conversationContext: obj(conversationContext),
     threadState: obj(threadState),
   };
-}
-
-function buildSemanticSystemPrompt() {
-  return [
-    "You are the semantic inbox brain for a multi-tenant business system.",
-    "Understand the customer's real meaning, then plan a high-quality business reply.",
-    "Do not rely on shallow keyword matching.",
-    "If a greeting and a real request appear together, the request is primary.",
-    "Use tenant runtime truth as the source of what the business offers and how it should speak.",
-    "If grounded knowledge exists, use it.",
-    "If a playbook clearly fits, align with it.",
-    "Always answer first, then ask at most one next question only if it truly helps.",
-    "Never ask the customer to repeat facts already present in the message or history.",
-    "Do not invent pricing, timelines, capabilities, or policies.",
-    "Do not mention unavailable or disabled services as if they exist.",
-    "Avoid robotic lead-capture phrasing and vague filler.",
-    "The customer should feel understood by a smart human operator.",
-    "Return only valid JSON.",
-  ].join(" ");
-}
-
-function buildSemanticPrompt({
-  promptBundle,
-  profile,
-  conversation,
-  matchedKnowledge,
-  matchedPlaybook,
-  policy,
-}) {
-  return `${promptBundle.fullPrompt}
-
-SEMANTIC TASK
-
-LATEST MESSAGE:
-${JSON.stringify(conversation.latestCustomerMessage)}
-
-LATEST MESSAGE WITHOUT LEADING COMMAND:
-${JSON.stringify(conversation.latestCustomerMessageWithoutCommand)}
-
-RECENT HISTORY:
-${conversation.historySnippet}
-
-TENANT RUNTIME TRUTH:
-${compactJson(buildRuntimeSnapshot(profile))}
-
-MATCHED KNOWLEDGE:
-${compactJson(buildPromptKnowledge(matchedKnowledge))}
-
-MATCHED PLAYBOOK:
-${compactJson(buildPromptPlaybook(matchedPlaybook))}
-
-ADDITIONAL CONTEXT:
-${compactJson({
-    customerContext: conversation.customerContext,
-    formData: conversation.formData,
-    leadContext: conversation.leadContext,
-    conversationContext: conversation.conversationContext,
-    threadState: conversation.threadState,
-    policy: {
-      autoReplyEnabled: Boolean(policy?.autoReplyEnabled),
-      createLeadEnabled: Boolean(policy?.createLeadEnabled),
-      handoffEnabled: Boolean(policy?.handoffEnabled),
-    },
-  })}
-
-INSTRUCTIONS:
-1. First interpret what the customer actually wants in this turn.
-2. Treat greeting-only language as secondary if the turn also contains a business need.
-3. Identify what is already known and what is still missing.
-4. If the customer asked something concrete, answer it first.
-5. Ask at most one next question, and only if it advances the conversation.
-6. If no next question is needed, recommendedNextQuestion must be empty.
-7. If the service seems unavailable, be honest and safe.
-8. Keep the final reply concise, natural, premium, and useful.
-
-Return only JSON in this exact shape:
-{
-  "language": string,
-  "semanticIntent": string,
-  "askCategory": "greeting"|"service_interest"|"recommendation"|"pricing"|"timeline"|"comparison"|"availability"|"booking"|"reservation"|"quote"|"support"|"faq"|"handoff_request"|"general",
-  "conversationStage": "greeting"|"discovery"|"recommendation"|"pricing"|"timeline"|"qualification"|"objection"|"handoff"|"support"|"answer"|"closing"|"general",
-  "replyStyle": "consultative"|"direct"|"reassuring"|"concise"|"sales"|"supportive"|"professional",
-  "customerGoal": string,
-  "knownFacts": string[],
-  "missingFacts": string[],
-  "groundedFactsUsed": string[],
-  "answerFirst": string,
-  "recommendedNextQuestion": string,
-  "replyText": string,
-  "createLead": boolean,
-  "handoff": boolean,
-  "handoffReason": string,
-  "handoffPriority": "low"|"normal"|"high"|"urgent",
-  "noReply": boolean,
-  "confidence": number
-}`;
 }
 
 function buildTraceFromDecision({
@@ -561,6 +466,20 @@ function buildFallbackSemanticDecision({
   };
 }
 
+function hasMeaningfulSemanticPayload(parsed = {}) {
+  if (!parsed || typeof parsed !== "object") return false;
+
+  return Boolean(
+    s(parsed.semanticIntent || parsed.intent) ||
+      s(parsed.replyText) ||
+      s(parsed.answerFirst) ||
+      s(parsed.recommendedNextQuestion) ||
+      s(parsed.customerGoal) ||
+      arr(parsed.knownFacts).length ||
+      arr(parsed.missingFacts).length
+  );
+}
+
 function normalizeAiResult({
   parsed,
   fallbackDecision,
@@ -572,6 +491,9 @@ function normalizeAiResult({
   channel,
   policy,
   raw = "",
+  repairRaw = "",
+  replyMode = "semantic",
+  semanticFailureReason = "",
 }) {
   const answerFirst = sanitizeSentence(parsed?.answerFirst || "");
   const recommendedNextQuestion = sanitizeSentence(
@@ -657,6 +579,10 @@ function normalizeAiResult({
     ),
     noReply: coerceBoolean(parsed?.noReply, false),
     raw,
+    repairRaw,
+    replyMode,
+    usedFallback: replyMode === "fallback",
+    semanticFailureReason: s(semanticFailureReason || ""),
     profile,
     matchedKnowledge,
     matchedPlaybook,
@@ -688,6 +614,162 @@ function normalizeAiResult({
   return result;
 }
 
+function applyReplyComposer({
+  result,
+  profile,
+  text,
+  recentMessages,
+}) {
+  const composed = composeTenantAwareReply({
+    result,
+    profile,
+    text,
+    recentMessages,
+  });
+
+  return {
+    ...result,
+    replyBodyText: composed.replyBodyText,
+    replyText: composed.replyText || result.replyText,
+    greetingApplied: Boolean(composed.greetingApplied),
+    greetingText: s(composed.greetingText),
+    greetingMode: s(composed.greetingMode),
+    usedCustomGreeting: Boolean(composed.usedCustomGreeting),
+    introModeUsed: s(composed.introModeUsed),
+    behaviorSource: s(composed.behaviorSource || profile?.behavior?.source || ""),
+    language: s(composed.language || result.language || profile?.languages?.[0] || "az"),
+  };
+}
+
+async function runOpenAiText({
+  openai,
+  model,
+  maxOutputTokens,
+  systemPrompt,
+  userPrompt,
+}) {
+  const resp = await openai.responses.create({
+    model,
+    text: { format: { type: "text" } },
+    max_output_tokens: maxOutputTokens,
+    input: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ],
+  });
+
+  return extractText(resp);
+}
+
+function buildSemanticPromptInput({
+  promptBundle,
+  profile,
+  conversation,
+  matchedKnowledge,
+  matchedPlaybook,
+  policy,
+}) {
+  return {
+    fullPrompt: promptBundle.fullPrompt,
+    latestMessageJson: JSON.stringify(conversation.latestCustomerMessage),
+    latestMessageWithoutCommandJson: JSON.stringify(
+      conversation.latestCustomerMessageWithoutCommand
+    ),
+    historySnippet: conversation.historySnippet,
+    runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile)),
+    knowledgeJson: compactJson(buildPromptKnowledge(matchedKnowledge)),
+    playbookJson: compactJson(buildPromptPlaybook(matchedPlaybook)),
+    additionalContextJson: compactJson({
+      customerContext: conversation.customerContext,
+      formData: conversation.formData,
+      leadContext: conversation.leadContext,
+      conversationContext: conversation.conversationContext,
+      threadState: conversation.threadState,
+      policy: {
+        autoReplyEnabled: Boolean(policy?.autoReplyEnabled),
+        createLeadEnabled: Boolean(policy?.createLeadEnabled),
+        handoffEnabled: Boolean(policy?.handoffEnabled),
+      },
+    }),
+  };
+}
+
+async function tryRepairSemanticJson({
+  openai,
+  model,
+  maxOutputTokens,
+  conversation,
+  profile,
+  raw,
+  fallbackDecision,
+}) {
+  if (!s(raw)) {
+    return {
+      parsed: null,
+      repairRaw: "",
+      semanticFailureReason: "empty_semantic_output",
+    };
+  }
+
+  const repairSystemPrompt = buildSemanticRepairSystemPrompt();
+  const repairUserPrompt = buildSemanticRepairUserPrompt({
+    latestMessageJson: JSON.stringify(conversation.latestCustomerMessage),
+    latestMessageWithoutCommandJson: JSON.stringify(
+      conversation.latestCustomerMessageWithoutCommand
+    ),
+    historySnippet: conversation.historySnippet,
+    runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile)),
+    rawModelOutputJson: JSON.stringify(raw),
+    fallbackReferenceJson: compactJson(fallbackDecision),
+  });
+
+  try {
+    const repairRaw = await runOpenAiText({
+      openai,
+      model,
+      maxOutputTokens,
+      systemPrompt: repairSystemPrompt,
+      userPrompt: repairUserPrompt,
+    });
+
+    const repaired = parseJsonLoose(repairRaw);
+
+    if (!repaired || typeof repaired !== "object") {
+      return {
+        parsed: null,
+        repairRaw,
+        semanticFailureReason: "semantic_repair_invalid_json",
+      };
+    }
+
+    if (!hasMeaningfulSemanticPayload(repaired)) {
+      return {
+        parsed: null,
+        repairRaw,
+        semanticFailureReason: "semantic_repair_weak_payload",
+      };
+    }
+
+    return {
+      parsed: repaired,
+      repairRaw,
+      semanticFailureReason: "",
+    };
+  } catch (error) {
+    return {
+      parsed: null,
+      repairRaw: "",
+      semanticFailureReason: s(error?.message || "semantic_repair_failed"),
+    };
+  }
+}
+
 export async function aiDecideInbox({
   text,
   channel,
@@ -714,7 +796,7 @@ export async function aiDecideInbox({
   const openai = ensureOpenAI();
 
   const model = openAiConfig.model;
-  const max_output_tokens = openAiConfig.maxOutputTokens;
+  const maxOutputTokens = openAiConfig.maxOutputTokens;
 
   const resolvedRuntime =
     runtime ||
@@ -839,21 +921,29 @@ export async function aiDecideInbox({
       apiKeyLength: openAiConfig.apiKeyLength,
     });
 
-    return normalizeAiResult({
-      parsed: fallbackDecision,
-      fallbackDecision,
+    return applyReplyComposer({
+      result: normalizeAiResult({
+        parsed: fallbackDecision,
+        fallbackDecision,
+        profile,
+        matchedKnowledge,
+        matchedPlaybook,
+        resolvedRuntime,
+        promptBundle,
+        channel,
+        policy,
+        raw: "",
+        repairRaw: "",
+        replyMode: "fallback",
+        semanticFailureReason: "openai_api_key_missing",
+      }),
       profile,
-      matchedKnowledge,
-      matchedPlaybook,
-      resolvedRuntime,
-      promptBundle,
-      channel,
-      policy,
-      raw: "",
+      text,
+      recentMessages,
     });
   }
 
-  const prompt = buildSemanticPrompt({
+  const semanticPromptInput = buildSemanticPromptInput({
     promptBundle,
     profile,
     conversation,
@@ -866,7 +956,7 @@ export async function aiDecideInbox({
     tenantKey: resolvedTenantKey,
     channel: s(channel || "inbox"),
     model,
-    maxOutputTokens: max_output_tokens,
+    maxOutputTokens,
     quietHoursApplied: Boolean(quietHoursApplied),
     matchedKnowledgeCount: matchedKnowledge.length,
     hasMatchedPlaybook: Boolean(matchedPlaybook),
@@ -875,35 +965,106 @@ export async function aiDecideInbox({
   });
 
   try {
-    const resp = await openai.responses.create({
+    const raw = await runOpenAiText({
+      openai,
       model,
-      text: { format: { type: "text" } },
-      max_output_tokens,
-      input: [
-        {
-          role: "system",
-          content: buildSemanticSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      maxOutputTokens,
+      systemPrompt: buildSemanticSystemPrompt(),
+      userPrompt: buildSemanticUserPrompt(semanticPromptInput),
     });
 
-    const raw = extractText(resp);
-    const parsed = parseJsonLoose(raw);
+    let parsed = parseJsonLoose(raw);
+    let repairRaw = "";
+    let replyMode = "semantic";
+    let semanticFailureReason = "";
 
     if (!parsed || typeof parsed !== "object") {
-      logInboxAiWarn("invalid_json_using_fallback", {
+      logInboxAiWarn("invalid_json", {
         tenantKey: resolvedTenantKey,
         channel: s(channel || "inbox"),
         model,
         rawPreview: safePreview(raw),
       });
 
-      const result = normalizeAiResult({
-        parsed: fallbackDecision,
+      const repaired = await tryRepairSemanticJson({
+        openai,
+        model,
+        maxOutputTokens,
+        conversation,
+        profile,
+        raw,
+        fallbackDecision,
+      });
+
+      parsed = repaired.parsed;
+      repairRaw = repaired.repairRaw;
+      semanticFailureReason = repaired.semanticFailureReason;
+
+      if (parsed) {
+        replyMode = "semantic_repaired";
+        logInboxAi("repair_succeeded", {
+          tenantKey: resolvedTenantKey,
+          channel: s(channel || "inbox"),
+          model,
+          repairRawPreview: safePreview(repairRaw),
+        });
+      } else {
+        replyMode = "fallback";
+        logInboxAiWarn("repair_failed_using_fallback", {
+          tenantKey: resolvedTenantKey,
+          channel: s(channel || "inbox"),
+          model,
+          semanticFailureReason,
+          rawPreview: safePreview(raw),
+          repairRawPreview: safePreview(repairRaw),
+        });
+      }
+    } else if (!hasMeaningfulSemanticPayload(parsed)) {
+      logInboxAiWarn("weak_semantic_payload", {
+        tenantKey: resolvedTenantKey,
+        channel: s(channel || "inbox"),
+        model,
+        rawPreview: safePreview(raw),
+      });
+
+      const repaired = await tryRepairSemanticJson({
+        openai,
+        model,
+        maxOutputTokens,
+        conversation,
+        profile,
+        raw,
+        fallbackDecision,
+      });
+
+      parsed = repaired.parsed;
+      repairRaw = repaired.repairRaw;
+      semanticFailureReason = repaired.semanticFailureReason || "weak_semantic_payload";
+
+      if (parsed) {
+        replyMode = "semantic_repaired";
+        logInboxAi("repair_succeeded", {
+          tenantKey: resolvedTenantKey,
+          channel: s(channel || "inbox"),
+          model,
+          repairRawPreview: safePreview(repairRaw),
+        });
+      } else {
+        replyMode = "fallback";
+        logInboxAiWarn("weak_payload_using_fallback", {
+          tenantKey: resolvedTenantKey,
+          channel: s(channel || "inbox"),
+          model,
+          semanticFailureReason,
+          rawPreview: safePreview(raw),
+          repairRawPreview: safePreview(repairRaw),
+        });
+      }
+    }
+
+    const result = applyReplyComposer({
+      result: normalizeAiResult({
+        parsed: replyMode === "fallback" ? fallbackDecision : parsed,
         fallbackDecision,
         profile,
         matchedKnowledge,
@@ -913,40 +1074,13 @@ export async function aiDecideInbox({
         channel,
         policy,
         raw,
-      });
-
-      logInboxAi("decision", {
-        tenantKey: resolvedTenantKey,
-        channel: s(channel || "inbox"),
-        model,
-        intent: result.intent,
-        askCategory: result.askCategory,
-        stage: result.stage,
-        noReply: result.noReply,
-        createLead: result.createLead,
-        handoff: result.handoff,
-        handoffReason: result.handoffReason,
-        handoffPriority: result.handoffPriority,
-        leadScore: result.leadScore,
-        confidence: result.confidence,
-        heuristic: true,
-        replyPreview: safePreview(result.replyText, 180),
-      });
-
-      return result;
-    }
-
-    const result = normalizeAiResult({
-      parsed,
-      fallbackDecision,
+        repairRaw,
+        replyMode,
+        semanticFailureReason,
+      }),
       profile,
-      matchedKnowledge,
-      matchedPlaybook,
-      resolvedRuntime,
-      promptBundle,
-      channel,
-      policy,
-      raw,
+      text,
+      recentMessages,
     });
 
     logInboxAi("decision", {
@@ -967,6 +1101,14 @@ export async function aiDecideInbox({
       groundedFactsUsed: result.groundedFactsUsed,
       knownFacts: result.knownFacts,
       missingFacts: result.missingFacts,
+      replyMode: result.replyMode,
+      usedFallback: result.usedFallback,
+      semanticFailureReason: result.semanticFailureReason,
+      greetingApplied: result.greetingApplied,
+      greetingMode: result.greetingMode,
+      usedCustomGreeting: result.usedCustomGreeting,
+      introModeUsed: result.introModeUsed,
+      behaviorSource: result.behaviorSource,
       replyPreview: safePreview(result.replyText, 180),
     });
 
@@ -988,17 +1130,25 @@ export async function aiDecideInbox({
       errorRawMessage: s(error?.error?.message),
     });
 
-    return normalizeAiResult({
-      parsed: fallbackDecision,
-      fallbackDecision,
+    return applyReplyComposer({
+      result: normalizeAiResult({
+        parsed: fallbackDecision,
+        fallbackDecision,
+        profile,
+        matchedKnowledge,
+        matchedPlaybook,
+        resolvedRuntime,
+        promptBundle,
+        channel,
+        policy,
+        raw: "",
+        repairRaw: "",
+        replyMode: "fallback",
+        semanticFailureReason: s(error?.message || "openai_request_failed"),
+      }),
       profile,
-      matchedKnowledge,
-      matchedPlaybook,
-      resolvedRuntime,
-      promptBundle,
-      channel,
-      policy,
-      raw: "",
+      text,
+      recentMessages,
     });
   }
 }

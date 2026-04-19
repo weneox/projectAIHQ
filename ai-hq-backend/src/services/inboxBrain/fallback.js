@@ -3,6 +3,16 @@ import {
   buildServiceLine,
   pickBehaviorLeadPrompt,
 } from "./runtime.js";
+import {
+  getFallbackDefaultQuestion,
+  getFallbackQuestionByIntent,
+  getHandoffLeadSentence,
+  getPricingLeadSentence,
+  getSupportLeadSentence,
+  getUnsupportedCheckSentence,
+  getUnsupportedExamplesSentence,
+  getUrgentLeadSentence,
+} from "./prompts/fallback.copy.js";
 
 function splitSentences(text = "") {
   return s(text)
@@ -48,18 +58,18 @@ function buildOfferLead(profile = {}) {
   return sanitizeReplyText(`${brand} olaraq kömək edə bilərik.`);
 }
 
-function buildSingleQuestion(profile = {}, fallback = "") {
+function buildSingleQuestion(profile = {}, intent = "general") {
   const configured = arr(profile?.qualificationQuestions)
     .map((item) => sanitizeReplyText(item))
     .filter(Boolean);
 
   if (configured.length) return configured[0];
 
-  const prompt = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
-  if (prompt) return prompt;
+  const behaviorPrompt = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
+  if (behaviorPrompt) return behaviorPrompt;
 
   return sanitizeReplyText(
-    fallback || "Hazırda sizə ən vacib olan nəticəni bir cümlə ilə yaza bilərsiniz?"
+    getFallbackQuestionByIntent(intent) || getFallbackDefaultQuestion()
   );
 }
 
@@ -71,6 +81,15 @@ function buildServiceExamples(profile = {}, limit = 3) {
 
   if (!names.length) return "";
   return sanitizeReplyText(names.join(", "));
+}
+
+function joinParts(parts = []) {
+  return sanitizeReplyText(
+    arr(parts)
+      .map((part) => sanitizeReplyText(part))
+      .filter(Boolean)
+      .join(" ")
+  );
 }
 
 function buildKnowledgeReplyCore(matches = [], profile = {}) {
@@ -90,112 +109,90 @@ export function buildUnsupportedServiceReply(profile = {}) {
 
   const offerLead = buildOfferLead(profile);
   const examples = buildServiceExamples(profile, 4);
-  const question = buildSingleQuestion(
-    profile,
-    "Ehtiyacınızı bir cümlə ilə yazın, uyğun olub-olmadığını dəqiqləşdirək."
-  );
+  const question = buildSingleQuestion(profile, "unsupported_service");
 
   if (examples) {
-    return sanitizeReplyText(
-      `${offerLead} Hazırda daha çox ${examples} kimi istiqamətlər üzrə işləyirik. ${question}`
-    );
+    return joinParts([
+      offerLead,
+      getUnsupportedExamplesSentence(examples),
+      question,
+    ]);
   }
 
-  return sanitizeReplyText(
-    `${offerLead} Bu mövzunun bizdə uyğun olub-olmadığını dəqiqləşdirmək üçün ehtiyacınızı bir cümlə ilə yazın.`
-  );
+  return joinParts([
+    offerLead,
+    getUnsupportedCheckSentence(),
+    question,
+  ]);
 }
 
 export function buildKnowledgeReply(matches = [], profile = {}) {
   const answer = buildKnowledgeReplyCore(matches, profile);
   if (answer) return answer;
 
-  return sanitizeReplyText(
-    `${buildOfferLead(profile)} ${buildSingleQuestion(
-      profile,
-      "Nəyi dəqiqləşdirmək istədiyinizi bir cümlə ilə yazın."
-    )}`
-  );
+  return joinParts([
+    buildOfferLead(profile),
+    buildSingleQuestion(profile, "knowledge_answer"),
+  ]);
 }
 
 export function buildPlaybookReply(playbook, fallbackProfile = {}) {
   const reply = sanitizeReplyText(playbook?.replyTemplate || "");
   if (reply) return reply;
 
-  return sanitizeReplyText(
-    `${buildOfferLead(fallbackProfile)} ${buildSingleQuestion(
-      fallbackProfile,
-      "Hazırda əsas ehtiyacınızı bir cümlə ilə yazın."
-    )}`
-  );
+  return joinParts([
+    buildOfferLead(fallbackProfile),
+    buildSingleQuestion(fallbackProfile, "general"),
+  ]);
 }
 
 function buildGreetingReply(profile = {}) {
-  const offerLead = buildOfferLead(profile);
-  const question = buildSingleQuestion(
-    profile,
-    "Hazırda nə almaq, qurmaq və ya həll etmək istədiyinizi bir cümlə ilə yazın."
-  );
-
-  return sanitizeReplyText(`${offerLead} ${question}`);
+  return joinParts([
+    buildOfferLead(profile),
+    buildSingleQuestion(profile, "greeting"),
+  ]);
 }
 
 function buildPricingReply(profile = {}) {
-  const question = buildSingleQuestion(
-    profile,
-    "Təxmini yönləndirmə üçün nə istədiyinizi və əsas 1-2 tələbinizi yazın."
-  );
-
-  return sanitizeReplyText(
-    `Dəqiq qiymət işin scope-u və tələblərə görə dəyişir, ona görə təsdiqlənməmiş rəqəm demirik. ${question}`
-  );
+  return joinParts([
+    getPricingLeadSentence(),
+    buildSingleQuestion(profile, "pricing"),
+  ]);
 }
 
 function buildServiceInterestReply(profile = {}) {
-  const offerLead = buildOfferLead(profile);
-  const question = buildSingleQuestion(
-    profile,
-    "Sizə ən vacib olan nəticəni bir cümlə ilə yazın."
-  );
-
-  return sanitizeReplyText(`${offerLead} ${question}`);
+  return joinParts([
+    buildOfferLead(profile),
+    buildSingleQuestion(profile, "service_interest"),
+  ]);
 }
 
 function buildSupportReply(profile = {}) {
-  const question = buildSingleQuestion(
-    profile,
-    "Problemi və harada baş verdiyini bir cümlə ilə yazın."
-  );
-
-  return sanitizeReplyText(`Kömək edək. ${question}`);
+  return joinParts([
+    getSupportLeadSentence(),
+    buildSingleQuestion(profile, "support"),
+  ]);
 }
 
 function buildHandoffReply(profile = {}) {
-  const question = buildSingleQuestion(
-    profile,
-    "Komanda üzvünə düzgün yönləndirmək üçün mövzunu bir cümlə ilə yazın."
-  );
-
-  return sanitizeReplyText(`Əlbəttə, bunu komanda üzvünə yönləndirə bilərik. ${question}`);
+  return joinParts([
+    getHandoffLeadSentence(),
+    buildSingleQuestion(profile, "handoff_request"),
+  ]);
 }
 
 function buildUrgentReply(profile = {}) {
-  const question = buildSingleQuestion(
-    profile,
-    "Mövzunu bir cümlə ilə yazın, prioritetlə yönləndirək."
-  );
-
-  return sanitizeReplyText(`Qeyd etdik. ${question}`);
+  return joinParts([
+    getUrgentLeadSentence(),
+    buildSingleQuestion(profile, "urgent_interest"),
+  ]);
 }
 
 function buildGeneralReply(profile = {}) {
-  const offerLead = buildOfferLead(profile);
-  const question = buildSingleQuestion(
-    profile,
-    "Hazırda sizə ən vacib olan ehtiyacı bir cümlə ilə yazın."
-  );
-
-  return sanitizeReplyText(`${offerLead} ${question}`);
+  return joinParts([
+    buildOfferLead(profile),
+    buildSingleQuestion(profile, "general"),
+  ]);
 }
 
 export function buildFallbackReply({
