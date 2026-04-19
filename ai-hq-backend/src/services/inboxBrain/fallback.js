@@ -66,11 +66,15 @@ function joinParts(parts = []) {
 }
 
 function getActiveVisibleCatalog(profile = {}) {
-  return arr(profile?.serviceCatalog).filter((item) => item?.active && item?.visibleInAi);
+  return arr(profile?.serviceCatalog).filter(
+    (item) => item?.active && item?.visibleInAi
+  );
 }
 
 function getDisabledVisibleCatalog(profile = {}) {
-  return arr(profile?.serviceCatalog).filter((item) => !item?.active && item?.visibleInAi);
+  return arr(profile?.serviceCatalog).filter(
+    (item) => !item?.active && item?.visibleInAi
+  );
 }
 
 function buildServiceExamples(profile = {}, limit = 3) {
@@ -82,24 +86,9 @@ function buildServiceExamples(profile = {}, limit = 3) {
   return sanitizeReplyText(names.join(", "));
 }
 
-function getConfiguredPrompt(profile = {}) {
-  const conversationAssets = profile?.conversationAssets || {};
-  return sanitizeReplyText(
-    s(conversationAssets?.qualificationQuestions?.[0]) ||
-      s(profile?.qualificationQuestions?.[0]) ||
-      s(conversationAssets?.leadPrompts?.[0]) ||
-      s(profile?.leadPrompts?.[0]) ||
-      ""
-  );
-}
-
-function buildSafeQuestion(profile = {}, intent = "general", language = "en") {
-  const configured = getConfiguredPrompt(profile);
-  if (configured) return configured;
-
+function buildSafeQuestion(intent = "general", language = "en") {
   const byIntent = sanitizeReplyText(getFallbackQuestionByIntent(intent, language));
   if (byIntent) return byIntent;
-
   return sanitizeReplyText(getFallbackDefaultQuestion(language));
 }
 
@@ -111,39 +100,39 @@ function buildKnowledgeReplyCore(matches = [], profile = {}) {
   return sanitizeReplyText(answer);
 }
 
-function buildGeneralReply(profile = {}, language = "en") {
-  return buildSafeQuestion(profile, "general", language);
+function buildGeneralReply(language = "en") {
+  return buildSafeQuestion("general", language);
 }
 
-function buildGreetingReply(profile = {}, language = "en") {
-  return buildSafeQuestion(profile, "greeting", language);
+function buildGreetingReply(language = "en") {
+  return buildSafeQuestion("greeting", language);
 }
 
-function buildPricingReply(profile = {}, language = "en") {
+function buildPricingReply(language = "en") {
   return joinParts([
     getPricingLeadSentence(language),
-    buildSafeQuestion(profile, "pricing", language),
+    buildSafeQuestion("pricing", language),
   ]);
 }
 
-function buildSupportReply(profile = {}, language = "en") {
+function buildSupportReply(language = "en") {
   return joinParts([
     getSupportLeadSentence(language),
-    buildSafeQuestion(profile, "support", language),
+    buildSafeQuestion("support", language),
   ]);
 }
 
-function buildHandoffReply(profile = {}, language = "en") {
+function buildHandoffReply(language = "en") {
   return joinParts([
     getHandoffLeadSentence(language),
-    buildSafeQuestion(profile, "handoff_request", language),
+    buildSafeQuestion("handoff_request", language),
   ]);
 }
 
-function buildUrgentReply(profile = {}, language = "en") {
+function buildUrgentReply(language = "en") {
   return joinParts([
     getUrgentLeadSentence(language),
-    buildSafeQuestion(profile, "urgent_interest", language),
+    buildSafeQuestion("urgent_interest", language),
   ]);
 }
 
@@ -174,7 +163,7 @@ function buildKnowledgeReply(matches = [], profile = {}) {
   const answer = buildKnowledgeReplyCore(matches, profile);
 
   if (answer) return answer;
-  return buildSafeQuestion(profile, "knowledge_answer", language);
+  return buildSafeQuestion("knowledge_answer", language);
 }
 
 function buildPlaybookReply(playbook, fallbackProfile = {}) {
@@ -182,7 +171,7 @@ function buildPlaybookReply(playbook, fallbackProfile = {}) {
   if (reply) return reply;
 
   const language = resolveLanguage(fallbackProfile, playbook);
-  return buildGeneralReply(fallbackProfile, language);
+  return buildGeneralReply(language);
 }
 
 function buildFallbackReply({
@@ -208,26 +197,26 @@ function buildFallbackReply({
       return buildUnsupportedServiceReply(profile);
 
     case "greeting":
-      return buildGreetingReply(profile, language);
+      return buildGreetingReply(language);
 
     case "pricing":
     case "quote":
-      return buildPricingReply(profile, language);
+      return buildPricingReply(language);
 
     case "support":
-      return buildSupportReply(profile, language);
+      return buildSupportReply(language);
 
     case "handoff_request":
-      return buildHandoffReply(profile, language);
+      return buildHandoffReply(language);
 
     case "urgent_interest":
-      return buildUrgentReply(profile, language);
+      return buildUrgentReply(language);
 
     case "knowledge_answer":
       return buildKnowledgeReply(knowledgeEntries, profile);
 
     default:
-      return buildGeneralReply(profile, language);
+      return buildGeneralReply(language);
   }
 }
 

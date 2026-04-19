@@ -23,8 +23,6 @@ import {
 import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
 import { buildSemanticSystemPrompt } from "./prompts/system.semantic.js";
 import { buildSemanticUserPrompt } from "./prompts/user.semantic.js";
-import { buildSemanticRepairSystemPrompt } from "./prompts/system.repair.js";
-import { buildSemanticRepairUserPrompt } from "./prompts/user.repair.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
 import { tryFastLaneInboxDecision } from "./fastLane.js";
 
@@ -37,7 +35,8 @@ function uniqStrings(values = []) {
 function summarizeOpenAIConfig() {
   const apiKey = s(cfg?.ai?.openaiApiKey || "");
   const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
-  const maxOutputTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 800);
+  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 800);
+  const maxOutputTokens = Math.max(180, Math.min(420, configuredMaxTokens || 420));
 
   return {
     hasApiKey: Boolean(apiKey),
@@ -552,7 +551,6 @@ function normalizeAiResult({
   channel,
   policy,
   raw = "",
-  repairRaw = "",
   replyMode = "semantic",
   semanticFailureReason = "",
 }) {
@@ -640,7 +638,6 @@ function normalizeAiResult({
     ),
     noReply: coerceBoolean(parsed?.noReply, false),
     raw,
-    repairRaw,
     replyMode,
     usedFallback:
       replyMode === "fallback_safe" || replyMode === "semantic_guardrail_safe_fallback",
@@ -763,76 +760,6 @@ function buildSemanticPromptInput({
       },
     }),
   };
-}
-
-async function tryRepairSemanticJson({
-  openai,
-  model,
-  maxOutputTokens,
-  conversation,
-  profile,
-  raw,
-  fallbackDecision,
-}) {
-  if (!s(raw)) {
-    return {
-      parsed: null,
-      repairRaw: "",
-      semanticFailureReason: "empty_semantic_output",
-    };
-  }
-
-  const repairSystemPrompt = buildSemanticRepairSystemPrompt();
-  const repairUserPrompt = buildSemanticRepairUserPrompt({
-    latestMessageJson: JSON.stringify(conversation.latestCustomerMessage),
-    latestMessageWithoutCommandJson: JSON.stringify(
-      conversation.latestCustomerMessageWithoutCommand
-    ),
-    historySnippet: conversation.historySnippet,
-    runtimeSnapshotJson: compactJson(buildRuntimeSnapshot(profile)),
-    rawModelOutputJson: JSON.stringify(raw),
-    fallbackReferenceJson: compactJson(fallbackDecision),
-  });
-
-  try {
-    const repairRaw = await runOpenAiText({
-      openai,
-      model,
-      maxOutputTokens,
-      systemPrompt: repairSystemPrompt,
-      userPrompt: repairUserPrompt,
-    });
-
-    const repaired = parseJsonLoose(repairRaw);
-
-    if (!repaired || typeof repaired !== "object") {
-      return {
-        parsed: null,
-        repairRaw,
-        semanticFailureReason: "semantic_repair_invalid_json",
-      };
-    }
-
-    if (!hasMeaningfulSemanticPayload(repaired)) {
-      return {
-        parsed: null,
-        repairRaw,
-        semanticFailureReason: "semantic_repair_weak_payload",
-      };
-    }
-
-    return {
-      parsed: repaired,
-      repairRaw,
-      semanticFailureReason: "",
-    };
-  } catch (error) {
-    return {
-      parsed: null,
-      repairRaw: "",
-      semanticFailureReason: s(error?.message || "semantic_repair_failed"),
-    };
-  }
 }
 
 export async function aiDecideInbox({
@@ -996,7 +923,6 @@ export async function aiDecideInbox({
         channel,
         policy,
         raw: "",
-        repairRaw: "",
         replyMode: `fast_lane_${s(fastLaneDecision.fastLaneReason || "direct")}`,
         semanticFailureReason: "",
       }),
@@ -1038,7 +964,6 @@ export async function aiDecideInbox({
         channel,
         policy,
         raw: "",
-        repairRaw: "",
         replyMode: "fallback_safe",
         semanticFailureReason: "openai_api_key_missing",
       }),
@@ -1079,116 +1004,41 @@ export async function aiDecideInbox({
     });
 
     let parsed = parseJsonLoose(raw);
-    let repairRaw = "";
     let replyMode = "semantic";
     let semanticFailureReason = "";
 
-    const shouldAttemptRepair =
-      s(text).trim().length >= 10 || matchedKnowledge.length > 0 || matchedPlaybook;
+    if (!parsed || typeof parsed !== "object") {
+      replyMode = "fallback_safe";
+      semanticFailureReason = "invalid_json";
 
-    if ((!parsed || typeof parsed !== "object") && shouldAttemptRepair) {
-      logInboxAiWarn("invalid_json", {
+      logInboxAiWarn("invalid_json_using_fallback", {
         tenantKey: resolvedTenantKey,
         channel: s(channel || "inbox"),
         model,
         rawPreview: safePreview(raw),
       });
-
-      const repaired = await tryRepairSemanticJson({
-        openai,
-        model,
-        maxOutputTokens,
-        conversation,
-        profile,
-        raw,
-        fallbackDecision,
-      });
-
-      parsed = repaired.parsed;
-      repairRaw = repaired.repairRaw;
-      semanticFailureReason = repaired.semanticFailureReason;
-
-      if (parsed) {
-        replyMode = "semantic_repaired";
-        logInboxAi("repair_succeeded", {
-          tenantKey: resolvedTenantKey,
-          channel: s(channel || "inbox"),
-          model,
-          repairRawPreview: safePreview(repairRaw),
-        });
-      } else {
-        replyMode = "fallback_safe";
-        logInboxAiWarn("repair_failed_using_fallback", {
-          tenantKey: resolvedTenantKey,
-          channel: s(channel || "inbox"),
-          model,
-          semanticFailureReason,
-          rawPreview: safePreview(raw),
-          repairRawPreview: safePreview(repairRaw),
-        });
-      }
-    } else if ((!parsed || typeof parsed !== "object") && !shouldAttemptRepair) {
+    } else if (!hasMeaningfulSemanticPayload(parsed)) {
       replyMode = "fallback_safe";
-      semanticFailureReason = "invalid_json_no_repair";
-    } else if (!hasMeaningfulSemanticPayload(parsed) && shouldAttemptRepair) {
-      logInboxAiWarn("weak_semantic_payload", {
+      semanticFailureReason = "weak_semantic_payload";
+
+      logInboxAiWarn("weak_semantic_payload_using_fallback", {
         tenantKey: resolvedTenantKey,
         channel: s(channel || "inbox"),
         model,
         rawPreview: safePreview(raw),
       });
-
-      const repaired = await tryRepairSemanticJson({
-        openai,
-        model,
-        maxOutputTokens,
-        conversation,
-        profile,
-        raw,
-        fallbackDecision,
-      });
-
-      parsed = repaired.parsed;
-      repairRaw = repaired.repairRaw;
-      semanticFailureReason = repaired.semanticFailureReason || "weak_semantic_payload";
-
-      if (parsed) {
-        replyMode = "semantic_repaired";
-        logInboxAi("repair_succeeded", {
-          tenantKey: resolvedTenantKey,
-          channel: s(channel || "inbox"),
-          model,
-          repairRawPreview: safePreview(repairRaw),
-        });
-      } else {
-        replyMode = "fallback_safe";
-        logInboxAiWarn("weak_payload_using_fallback", {
-          tenantKey: resolvedTenantKey,
-          channel: s(channel || "inbox"),
-          model,
-          semanticFailureReason,
-          rawPreview: safePreview(raw),
-          repairRawPreview: safePreview(repairRaw),
-        });
-      }
-    } else if (!hasMeaningfulSemanticPayload(parsed) && !shouldAttemptRepair) {
-      replyMode = "fallback_safe";
-      semanticFailureReason = "weak_payload_no_repair";
     }
 
     if (
+      replyMode !== "fallback_safe" &&
       shouldUseSafeFallbackGuardrail({
         parsed,
         conversation,
       })
     ) {
       parsed = fallbackDecision;
-      replyMode =
-        replyMode === "semantic" || replyMode === "semantic_repaired"
-          ? "semantic_guardrail_safe_fallback"
-          : "fallback_safe";
-      semanticFailureReason =
-        semanticFailureReason || "semantic_guardrail_safe_fallback";
+      replyMode = "semantic_guardrail_safe_fallback";
+      semanticFailureReason = "semantic_guardrail_safe_fallback";
 
       logInboxAiWarn("safe_fallback_guardrail_override", {
         tenantKey: resolvedTenantKey,
@@ -1223,7 +1073,6 @@ export async function aiDecideInbox({
         channel,
         policy,
         raw,
-        repairRaw,
         replyMode,
         semanticFailureReason,
       }),
@@ -1294,7 +1143,6 @@ export async function aiDecideInbox({
         channel,
         policy,
         raw: "",
-        repairRaw: "",
         replyMode: "fallback_safe",
         semanticFailureReason: s(error?.message || "openai_request_failed"),
       }),
