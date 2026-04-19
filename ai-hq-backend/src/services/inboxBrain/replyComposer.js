@@ -77,6 +77,15 @@ function hasPreviousOutbound(recentMessages = []) {
   return Boolean(getLatestOutbound(normalizeRecentMessages(recentMessages)));
 }
 
+function countWordLikeTokens(text = "") {
+  const cleaned = s(text)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return 0;
+  return cleaned.split(" ").filter(Boolean).length;
+}
+
 function isGreetingIntent(result = {}) {
   const askCategory = lower(result?.askCategory || "");
   const stage = lower(result?.stage || "");
@@ -85,15 +94,28 @@ function isGreetingIntent(result = {}) {
   return askCategory === "greeting" || stage === "greeting" || intent === "greeting";
 }
 
+function hasConcreteReplyContent(result = {}) {
+  const answerFirst = stripLeadingGreetingSentence(s(result?.answerFirst || ""));
+  const replyText = stripLeadingGreetingSentence(s(result?.replyText || ""));
+  const recommendedNextQuestion = sanitizeReplyText(
+    s(result?.recommendedNextQuestion || "")
+  );
+
+  return Boolean(answerFirst || replyText || recommendedNextQuestion);
+}
+
 function hasSubstantiveBusinessNeed(result = {}, text = "") {
   if (lower(result?.askCategory || "") !== "greeting") return true;
   if (s(result?.customerGoal || "")) return true;
   if (arr(result?.knownFacts).length) return true;
   if (arr(result?.missingFacts).length) return true;
-  if (s(result?.answerFirst || "")) return true;
+  if (hasConcreteReplyContent(result)) return true;
 
   const cleaned = s(text).trim();
-  return cleaned.length >= 12;
+  if (cleaned.length >= 18) return true;
+  if (countWordLikeTokens(cleaned) >= 4) return true;
+
+  return false;
 }
 
 function isGreetingOnlyTurn(result = {}, text = "") {
@@ -126,15 +148,15 @@ function shouldApplyIntro({
 
   const firstTurn = !hasPreviousOutbound(recentMessages);
   const greetingOnly = isGreetingOnlyTurn(result, text);
+  const substantiveBusinessNeed = hasSubstantiveBusinessNeed(result, text);
 
-  if (greetingOnly) return true;
-  if (s(behavior.customGreeting || "") && firstTurn) return true;
-  if (introMode === "always") return true;
+  if (substantiveBusinessNeed) return false;
+  if (!greetingOnly) return false;
 
-  if (introOnFirstTurnOnly && !firstTurn) return false;
+  if (introOnFirstTurnOnly) return firstTurn;
   if (suppressRepeatedIntro && !firstTurn) return false;
 
-  return false;
+  return firstTurn;
 }
 
 function resolveGreetingMode(behavior = {}, brandName = "") {
@@ -240,9 +262,11 @@ function isGenericHelperSentence(text = "") {
     "size nece komek ede bilerik",
     "buyurun nece komek ede bilerik",
     "hazirda size en vacib olan ehtiyaci bir cumle ile yazin",
-    "eses ehtiyacinizi bir cumle ile yazin",
+    "esas ehtiyacinizi bir cumle ile yazin",
     "sizin ucun en vacib netice nedir",
     "ehtiyacinizi bir cumle ile yazin",
+    "qisa olaraq size hansi xidmet ve ya mehsul lazim oldugunu yazin",
+    "ne qurmaq almaq ve ya hell etmek istediyinizi bir cumle ile yazin",
   ].some((item) => normalized === item);
 }
 

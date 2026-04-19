@@ -18,6 +18,7 @@ import {
 import {
   buildDisabledServiceLine,
   buildServiceLine,
+  pickBehaviorLeadPrompt,
   resolveInboxRuntime,
 } from "./runtime.js";
 import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
@@ -29,6 +30,130 @@ import { composeTenantAwareReply } from "./replyComposer.js";
 import { tryFastLaneInboxDecision } from "./fastLane.js";
 
 let openaiSingleton = null;
+
+const WEBSITE_KEYWORDS = [
+  "veb sayt",
+  "vebsayt",
+  "web sayt",
+  "website",
+  "site",
+  "sayt",
+  "landing page",
+  "landing",
+];
+
+const ECOMMERCE_KEYWORDS = [
+  "ecommerce",
+  "e-commerce",
+  "magaza",
+  "mağaza",
+  "online shop",
+  "shop",
+  "store",
+  "satis",
+  "satış",
+  "product catalog",
+  "katalog",
+];
+
+const SOFTWARE_KEYWORDS = [
+  "software",
+  "soft",
+  "sistem",
+  "system",
+  "platform",
+  "crm",
+  "erp",
+  "app",
+  "application",
+  "mobile app",
+  "dashboard",
+  "admin panel",
+  "portal",
+  "automation",
+  "chatbot",
+  "bot",
+];
+
+const BOOKING_KEYWORDS = [
+  "booking",
+  "rezervasiya",
+  "reservation",
+  "bron",
+  "appointment",
+  "randevu",
+  "calendar",
+];
+
+const PRICING_KEYWORDS = [
+  "qiymet",
+  "qiymət",
+  "price",
+  "pricing",
+  "cost",
+  "budget",
+  "büdcə",
+  "budce",
+  "neceye",
+  "neçəyə",
+  "how much",
+  "quote",
+];
+
+const TIMELINE_KEYWORDS = [
+  "ne vaxta",
+  "nə vaxta",
+  "ne vaxta",
+  "timeline",
+  "deadline",
+  "müddət",
+  "muddet",
+  "how long",
+  "when",
+  "tez",
+  "urgent",
+  "təcili",
+  "tecili",
+];
+
+const RECOMMENDATION_KEYWORDS = [
+  "hangi",
+  "hansı",
+  "which",
+  "recommend",
+  "məsləhət",
+  "meslehet",
+  "tovsiyə",
+  "tovsiye",
+  "what should",
+];
+
+const SUPPORT_KEYWORDS = [
+  "problem",
+  "issue",
+  "error",
+  "xeta",
+  "xəta",
+  "duzelt",
+  "düzəlt",
+  "support",
+  "help",
+  "kömək",
+  "komek",
+  "işləmir",
+  "islemir",
+  "broken",
+  "bug",
+];
+
+const DOMAIN_HINTS = [
+  { label: "hotel", keywords: ["hotel", "otel", "resort"] },
+  { label: "clinic", keywords: ["clinic", "klinika", "hospital", "doctor", "dentist", "medical"] },
+  { label: "restaurant", keywords: ["restaurant", "restoran", "cafe", "kafe"] },
+  { label: "salon", keywords: ["salon", "spa", "beauty", "gözəllik", "gozellik"] },
+  { label: "real_estate", keywords: ["real estate", "daşınmaz", "dasinmaz", "property"] },
+  { label: "education", keywords: ["academy", "course", "kurs", "school", "məktəb", "mekteb"] },
+];
 
 function uniqStrings(values = []) {
   return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
@@ -208,6 +333,348 @@ function isCommandOnly(text = "") {
   return stripLeadingCommand(raw) === "";
 }
 
+function normalizeForIntent(text = "") {
+  return lower(s(text))
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasAnyKeyword(text = "", keywords = []) {
+  const normalized = normalizeForIntent(text);
+  if (!normalized) return false;
+  return arr(keywords).some((keyword) => normalized.includes(lower(keyword)));
+}
+
+function detectDomainHint(text = "") {
+  const normalized = normalizeForIntent(text);
+  if (!normalized) return "";
+
+  for (const hint of DOMAIN_HINTS) {
+    if (arr(hint?.keywords).some((keyword) => normalized.includes(lower(keyword)))) {
+      return s(hint?.label);
+    }
+  }
+
+  return "";
+}
+
+function detectHeuristicIntent(text = "") {
+  const normalized = normalizeForIntent(text);
+  if (!normalized) {
+    return {
+      intent: "general",
+      askCategory: "general",
+      stage: "general",
+      customerGoal: "",
+      domainHint: "",
+      detectedNeeds: [],
+      shouldUseHeuristicFallback: false,
+    };
+  }
+
+  const detectedNeeds = [];
+  const domainHint = detectDomainHint(normalized);
+
+  if (hasAnyKeyword(normalized, WEBSITE_KEYWORDS)) detectedNeeds.push("website");
+  if (hasAnyKeyword(normalized, ECOMMERCE_KEYWORDS)) detectedNeeds.push("ecommerce");
+  if (hasAnyKeyword(normalized, SOFTWARE_KEYWORDS)) detectedNeeds.push("software");
+  if (hasAnyKeyword(normalized, BOOKING_KEYWORDS)) detectedNeeds.push("booking");
+  if (hasAnyKeyword(normalized, PRICING_KEYWORDS)) detectedNeeds.push("pricing");
+  if (hasAnyKeyword(normalized, TIMELINE_KEYWORDS)) detectedNeeds.push("timeline");
+  if (hasAnyKeyword(normalized, RECOMMENDATION_KEYWORDS)) detectedNeeds.push("recommendation");
+  if (hasAnyKeyword(normalized, SUPPORT_KEYWORDS)) detectedNeeds.push("support");
+
+  const shouldUseHeuristicFallback =
+    detectedNeeds.length > 0 || normalized.length >= 18 || normalized.split(" ").length >= 4;
+
+  if (detectedNeeds.includes("support")) {
+    return {
+      intent: "support",
+      askCategory: "support",
+      stage: "support",
+      customerGoal: s(text),
+      domainHint,
+      detectedNeeds,
+      shouldUseHeuristicFallback,
+    };
+  }
+
+  if (detectedNeeds.includes("pricing")) {
+    return {
+      intent: "pricing",
+      askCategory: "pricing",
+      stage: "pricing",
+      customerGoal: s(text),
+      domainHint,
+      detectedNeeds,
+      shouldUseHeuristicFallback,
+    };
+  }
+
+  if (detectedNeeds.includes("timeline")) {
+    return {
+      intent: "timeline",
+      askCategory: "timeline",
+      stage: "timeline",
+      customerGoal: s(text),
+      domainHint,
+      detectedNeeds,
+      shouldUseHeuristicFallback,
+    };
+  }
+
+  if (detectedNeeds.includes("recommendation")) {
+    return {
+      intent: "service_interest",
+      askCategory: "recommendation",
+      stage: "recommendation",
+      customerGoal: s(text),
+      domainHint,
+      detectedNeeds,
+      shouldUseHeuristicFallback,
+    };
+  }
+
+  if (
+    detectedNeeds.includes("website") ||
+    detectedNeeds.includes("ecommerce") ||
+    detectedNeeds.includes("software") ||
+    detectedNeeds.includes("booking")
+  ) {
+    return {
+      intent: "service_interest",
+      askCategory: "service_interest",
+      stage: "discovery",
+      customerGoal: s(text),
+      domainHint,
+      detectedNeeds,
+      shouldUseHeuristicFallback: true,
+    };
+  }
+
+  return {
+    intent: "general",
+    askCategory: "general",
+    stage: "discovery",
+    customerGoal: s(text),
+    domainHint,
+    detectedNeeds,
+    shouldUseHeuristicFallback,
+  };
+}
+
+function buildHeuristicServiceInterestReply({
+  text = "",
+  profile = {},
+  heuristic = {},
+}) {
+  const brandName = s(profile?.displayName || "Biz");
+  const primaryLeadPrompt = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
+  const domainHint = s(heuristic?.domainHint || "");
+  const needs = arr(heuristic?.detectedNeeds).map((x) => s(x)).filter(Boolean);
+
+  const domainLeadMap = {
+    hotel: "Hotel üçün",
+    clinic: "Klinika üçün",
+    restaurant: "Restoran üçün",
+    salon: "Salon üçün",
+    real_estate: "Daşınmaz əmlak üçün",
+    education: "Təhsil layihəsi üçün",
+  };
+
+  let projectType = "";
+  if (needs.includes("ecommerce")) {
+    projectType = "online satış yönümlü sayt";
+  } else if (needs.includes("software")) {
+    projectType = "xüsusi software həlli";
+  } else if (needs.includes("booking")) {
+    projectType = "rezervasiya/booking axını olan sayt və ya sistem";
+  } else if (needs.includes("website")) {
+    projectType = "veb sayt";
+  }
+
+  const leadPrefix = domainHint && domainLeadMap[domainHint] ? domainLeadMap[domainHint] : "";
+  const leadSentence =
+    leadPrefix && projectType
+      ? `${leadPrefix} ${projectType} üzrə kömək edə bilərik.`
+      : projectType
+        ? `${brandName} olaraq ${projectType} üzrə kömək edə bilərik.`
+        : `${brandName} olaraq bu istiqamətdə kömək edə bilərik.`;
+
+  const nextQuestion = primaryLeadPrompt
+    ? primaryLeadPrompt
+    : "Daha düzgün yönləndirmə üçün əsas məqsədi və 1-2 vacib tələbi yazın.";
+
+  return sanitizeReplyText(`${leadSentence} ${nextQuestion}`);
+}
+
+function buildHeuristicPricingReply({
+  profile = {},
+  heuristic = {},
+}) {
+  const needs = arr(heuristic?.detectedNeeds).map((x) => s(x)).filter(Boolean);
+
+  let pricingObject = "layihə";
+  if (needs.includes("website")) pricingObject = "veb sayt";
+  if (needs.includes("ecommerce")) pricingObject = "e-commerce layihəsi";
+  if (needs.includes("software")) pricingObject = "software həlli";
+  if (needs.includes("booking")) pricingObject = "booking funksiyalı layihə";
+
+  return sanitizeReplyText(
+    `Dəqiq qiymət ${pricingObject} üzrə scope, funksiyalar və iş həcminə görə dəyişir. Təxmini yönləndirmə üçün əsas məqsədi, vacib funksiyaları və varsa deadline-i yazın.`
+  );
+}
+
+function buildHeuristicTimelineReply({
+  profile = {},
+  heuristic = {},
+}) {
+  const needs = arr(heuristic?.detectedNeeds).map((x) => s(x)).filter(Boolean);
+
+  let timelineObject = "layihə";
+  if (needs.includes("website")) timelineObject = "veb sayt";
+  if (needs.includes("ecommerce")) timelineObject = "e-commerce sayt";
+  if (needs.includes("software")) timelineObject = "software layihəsi";
+
+  return sanitizeReplyText(
+    `${timelineObject} üzrə müddət scope və təsdiqlənən funksiyalardan asılı olur. Dəqiq yönləndirmə üçün nə qurmaq istədiyinizi və əsas prioritetləri yazın.`
+  );
+}
+
+function buildHeuristicSupportReply() {
+  return sanitizeReplyText(
+    "Kömək edək. Problemin nə olduğunu və harada baş verdiyini qısa yazın."
+  );
+}
+
+function buildHeuristicGeneralReply({
+  profile = {},
+  heuristic = {},
+}) {
+  const brandName = s(profile?.displayName || "Biz");
+  const nextQuestion = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
+
+  if (s(heuristic?.customerGoal || "")) {
+    return sanitizeReplyText(
+      `${brandName} olaraq bu mövzu üzrə kömək edə bilərik. ${nextQuestion || "Daha düzgün yönləndirmə üçün məqsədinizi bir az daha konkret yazın."}`
+    );
+  }
+
+  return sanitizeReplyText(
+    `${brandName} olaraq kömək edə bilərik. ${nextQuestion || "Əsas ehtiyacınızı qısa yazın."}`
+  );
+}
+
+function buildHeuristicFallbackDecision({
+  text = "",
+  profile = {},
+  matchedKnowledge = [],
+  matchedPlaybook = null,
+}) {
+  if (matchedPlaybook) {
+    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
+    return {
+      language: s(profile?.languages?.[0] || "az"),
+      semanticIntent: "playbook",
+      askCategory: "general",
+      conversationStage: "answer",
+      replyStyle: "consultative",
+      customerGoal: s(text),
+      knownFacts: [],
+      missingFacts: [],
+      groundedFactsUsed: ["heuristic_playbook"],
+      answerFirst: replyText,
+      recommendedNextQuestion: "",
+      replyText,
+      createLead: Boolean(matchedPlaybook.createLead),
+      handoff: Boolean(matchedPlaybook.handoff),
+      handoffReason: s(matchedPlaybook.handoffReason || ""),
+      handoffPriority: s(matchedPlaybook.handoffPriority || "normal"),
+      noReply: false,
+      confidence: 0.74,
+      leadScore: matchedPlaybook.createLead ? 64 : 28,
+      heuristic: true,
+      heuristicReason: "matched_playbook",
+    };
+  }
+
+  if (matchedKnowledge.length) {
+    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
+    return {
+      language: s(profile?.languages?.[0] || "az"),
+      semanticIntent: "knowledge_answer",
+      askCategory: "faq",
+      conversationStage: "answer",
+      replyStyle: "consultative",
+      customerGoal: s(text),
+      knownFacts: [],
+      missingFacts: [],
+      groundedFactsUsed: ["heuristic_knowledge"],
+      answerFirst: replyText,
+      recommendedNextQuestion: "",
+      replyText,
+      createLead: false,
+      handoff: false,
+      handoffReason: "",
+      handoffPriority: "normal",
+      noReply: false,
+      confidence: 0.68,
+      leadScore: 24,
+      heuristic: true,
+      heuristicReason: "matched_knowledge",
+    };
+  }
+
+  const heuristic = detectHeuristicIntent(text);
+
+  let replyText = "";
+  if (heuristic.intent === "pricing") {
+    replyText = buildHeuristicPricingReply({ profile, heuristic });
+  } else if (heuristic.intent === "timeline") {
+    replyText = buildHeuristicTimelineReply({ profile, heuristic });
+  } else if (heuristic.intent === "support") {
+    replyText = buildHeuristicSupportReply();
+  } else if (heuristic.intent === "service_interest") {
+    replyText = buildHeuristicServiceInterestReply({ text, profile, heuristic });
+  } else {
+    replyText = buildHeuristicGeneralReply({ profile, heuristic });
+  }
+
+  return {
+    language: s(profile?.languages?.[0] || "az"),
+    semanticIntent: heuristic.intent || "general",
+    askCategory: heuristic.askCategory || "general",
+    conversationStage: heuristic.stage || "general",
+    replyStyle: "consultative",
+    customerGoal: s(heuristic.customerGoal || text),
+    knownFacts: [],
+    missingFacts: [],
+    groundedFactsUsed: ["heuristic_message_understanding"],
+    answerFirst: replyText,
+    recommendedNextQuestion: "",
+    replyText,
+    createLead: heuristic.intent === "service_interest" || heuristic.intent === "pricing",
+    handoff: false,
+    handoffReason: "",
+    handoffPriority: "normal",
+    noReply: false,
+    confidence: heuristic.shouldUseHeuristicFallback ? 0.62 : 0.42,
+    leadScore:
+      heuristic.intent === "service_interest"
+        ? 58
+        : heuristic.intent === "pricing"
+          ? 54
+          : heuristic.intent === "timeline"
+            ? 50
+            : heuristic.intent === "support"
+              ? 38
+              : 26,
+    heuristic: true,
+    heuristicReason: "message_intent_guardrail",
+  };
+}
+
 function buildRuntimeSnapshot(profile = {}) {
   const enabledServiceCatalog = arr(profile?.serviceCatalog)
     .filter((item) => item?.active && item?.visibleInAi)
@@ -381,90 +848,12 @@ function buildFallbackSemanticDecision({
   matchedPlaybook = null,
   conversation,
 }) {
-  if (matchedPlaybook) {
-    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
-    return {
-      language: s(profile?.languages?.[0] || "az"),
-      semanticIntent: "playbook",
-      askCategory: "general",
-      conversationStage: "answer",
-      replyStyle: "consultative",
-      customerGoal: "",
-      knownFacts: [],
-      missingFacts: [],
-      groundedFactsUsed: ["matched_playbook"],
-      answerFirst: replyText,
-      recommendedNextQuestion: "",
-      replyText,
-      createLead: Boolean(matchedPlaybook.createLead),
-      handoff: Boolean(matchedPlaybook.handoff),
-      handoffReason: s(matchedPlaybook.handoffReason || ""),
-      handoffPriority: s(matchedPlaybook.handoffPriority || "normal"),
-      noReply: false,
-      confidence: 0.72,
-      leadScore: matchedPlaybook.createLead ? 62 : 28,
-      heuristic: true,
-    };
-  }
-
-  if (matchedKnowledge.length) {
-    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
-    return {
-      language: s(profile?.languages?.[0] || "az"),
-      semanticIntent: "knowledge_answer",
-      askCategory: "faq",
-      conversationStage: "answer",
-      replyStyle: "consultative",
-      customerGoal: "",
-      knownFacts: [],
-      missingFacts: [],
-      groundedFactsUsed: ["matched_knowledge"],
-      answerFirst: replyText,
-      recommendedNextQuestion: "",
-      replyText,
-      createLead: false,
-      handoff: false,
-      handoffReason: "",
-      handoffPriority: "normal",
-      noReply: false,
-      confidence: 0.66,
-      leadScore: 24,
-      heuristic: true,
-    };
-  }
-
-  const fallbackIntent = conversation.commandOnly ? "greeting" : "general";
-  const replyText = sanitizeReplyText(
-    buildFallbackReply({
-      intent: fallbackIntent,
-      profile,
-      knowledgeEntries: [],
-      playbook: null,
-    })
-  );
-
-  return {
-    language: s(profile?.languages?.[0] || "az"),
-    semanticIntent: fallbackIntent,
-    askCategory: fallbackIntent === "greeting" ? "greeting" : "general",
-    conversationStage: fallbackIntent === "greeting" ? "greeting" : "discovery",
-    replyStyle: "consultative",
-    customerGoal: "",
-    knownFacts: [],
-    missingFacts: [],
-    groundedFactsUsed: ["runtime_fallback"],
-    answerFirst: replyText,
-    recommendedNextQuestion: "",
-    replyText,
-    createLead: false,
-    handoff: false,
-    handoffReason: "",
-    handoffPriority: "normal",
-    noReply: false,
-    confidence: 0.4,
-    leadScore: 20,
-    heuristic: true,
-  };
+  return buildHeuristicFallbackDecision({
+    text: conversation?.latestCustomerMessageWithoutCommand || conversation?.latestCustomerMessage || "",
+    profile,
+    matchedKnowledge,
+    matchedPlaybook,
+  });
 }
 
 function hasMeaningfulSemanticPayload(parsed = {}) {
@@ -479,6 +868,73 @@ function hasMeaningfulSemanticPayload(parsed = {}) {
       arr(parsed.knownFacts).length ||
       arr(parsed.missingFacts).length
   );
+}
+
+function looksGenericRestateReply(replyText = "", customerGoal = "") {
+  const reply = normalizeForIntent(replyText);
+  const goal = normalizeForIntent(customerGoal);
+
+  if (!reply) return false;
+
+  const genericPatterns = [
+    "esas ehtiyacinizi bir cumle ile yazin",
+    "hazirda size en vacib olan ehtiyaci bir cumle ile yazin",
+    "ne qurmaq almaq ve ya hell etmek istediyinizi bir cumle ile yazin",
+    "sizin ucun en vacib neticeni bir cumle ile yazin",
+    "qisa olaraq size hansi xidmet ve ya mehsul lazim oldugunu yazin",
+    "ehtiyacinizi bir cumle ile yazin",
+  ];
+
+  const isGeneric = genericPatterns.some((pattern) => reply.includes(pattern));
+  if (!isGeneric) return false;
+
+  return goal.length >= 16 || goal.split(" ").length >= 4;
+}
+
+function shouldUseHeuristicGuardrail({
+  parsed = null,
+  fallbackDecision = {},
+  conversation = {},
+}) {
+  const goal = s(
+    conversation?.latestCustomerMessageWithoutCommand ||
+      conversation?.latestCustomerMessage ||
+      ""
+  );
+
+  const heuristic = detectHeuristicIntent(goal);
+  if (!heuristic.shouldUseHeuristicFallback) return false;
+
+  if (!parsed || typeof parsed !== "object") return true;
+
+  const parsedIntent = s(parsed?.semanticIntent || parsed?.intent || "").toLowerCase();
+  const parsedReply = sanitizeReplyText(parsed?.replyText || parsed?.answerFirst || "");
+  const parsedGoal = s(parsed?.customerGoal || "");
+
+  if (!parsedIntent) return true;
+  if (!parsedReply) return true;
+
+  if (
+    heuristic.intent === "service_interest" &&
+    ["greeting", "general"].includes(parsedIntent) &&
+    looksGenericRestateReply(parsedReply, goal)
+  ) {
+    return true;
+  }
+
+  if (
+    heuristic.intent === "pricing" &&
+    !["pricing", "quote"].includes(parsed?.askCategory || "") &&
+    looksGenericRestateReply(parsedReply, goal)
+  ) {
+    return true;
+  }
+
+  if (!parsedGoal && goal.length >= 18 && looksGenericRestateReply(parsedReply, goal)) {
+    return true;
+  }
+
+  return false;
 }
 
 function normalizeAiResult({
@@ -582,7 +1038,7 @@ function normalizeAiResult({
     raw,
     repairRaw,
     replyMode,
-    usedFallback: replyMode === "fallback",
+    usedFallback: replyMode === "fallback" || replyMode === "fallback_heuristic",
     usedFastLane: replyMode.startsWith("fast_lane"),
     fastLaneReason: s(parsed?.fastLaneReason || ""),
     semanticFailureReason: s(semanticFailureReason || ""),
@@ -593,6 +1049,7 @@ function normalizeAiResult({
     promptBundle,
     trace: {},
     heuristic: Boolean(fallbackDecision?.heuristic),
+    heuristicReason: s(fallbackDecision?.heuristicReason || ""),
   };
 
   if (!result.replyText) {
@@ -911,6 +1368,7 @@ export async function aiDecideInbox({
         askCategory: fallbackDecision.askCategory,
         stage: fallbackDecision.conversationStage,
         replyText: fallbackDecision.replyText,
+        heuristicReason: fallbackDecision.heuristicReason,
       }),
     },
   });
@@ -978,7 +1436,7 @@ export async function aiDecideInbox({
         policy,
         raw: "",
         repairRaw: "",
-        replyMode: "fallback",
+        replyMode: "fallback_heuristic",
         semanticFailureReason: "openai_api_key_missing",
       }),
       profile,
@@ -1056,7 +1514,7 @@ export async function aiDecideInbox({
           repairRawPreview: safePreview(repairRaw),
         });
       } else {
-        replyMode = "fallback";
+        replyMode = "fallback_heuristic";
         logInboxAiWarn("repair_failed_using_fallback", {
           tenantKey: resolvedTenantKey,
           channel: s(channel || "inbox"),
@@ -1067,7 +1525,7 @@ export async function aiDecideInbox({
         });
       }
     } else if ((!parsed || typeof parsed !== "object") && !shouldAttemptRepair) {
-      replyMode = "fallback";
+      replyMode = "fallback_heuristic";
       semanticFailureReason = "invalid_json_no_repair";
     } else if (!hasMeaningfulSemanticPayload(parsed) && shouldAttemptRepair) {
       logInboxAiWarn("weak_semantic_payload", {
@@ -1100,7 +1558,7 @@ export async function aiDecideInbox({
           repairRawPreview: safePreview(repairRaw),
         });
       } else {
-        replyMode = "fallback";
+        replyMode = "fallback_heuristic";
         logInboxAiWarn("weak_payload_using_fallback", {
           tenantKey: resolvedTenantKey,
           channel: s(channel || "inbox"),
@@ -1111,13 +1569,47 @@ export async function aiDecideInbox({
         });
       }
     } else if (!hasMeaningfulSemanticPayload(parsed) && !shouldAttemptRepair) {
-      replyMode = "fallback";
+      replyMode = "fallback_heuristic";
       semanticFailureReason = "weak_payload_no_repair";
+    }
+
+    if (
+      shouldUseHeuristicGuardrail({
+        parsed,
+        fallbackDecision,
+        conversation,
+      })
+    ) {
+      parsed = fallbackDecision;
+      replyMode =
+        replyMode === "semantic" || replyMode === "semantic_repaired"
+          ? "semantic_guardrail_heuristic"
+          : "fallback_heuristic";
+      semanticFailureReason =
+        semanticFailureReason || "semantic_generic_restate_guardrail";
+      logInboxAiWarn("heuristic_guardrail_override", {
+        tenantKey: resolvedTenantKey,
+        channel: s(channel || "inbox"),
+        model,
+        replyMode,
+        semanticFailureReason,
+        fallbackHeuristicReason: s(fallbackDecision?.heuristicReason || ""),
+        customerGoal: s(
+          conversation?.latestCustomerMessageWithoutCommand ||
+            conversation?.latestCustomerMessage ||
+            ""
+        ),
+        rawPreview: safePreview(raw),
+      });
     }
 
     const result = applyReplyComposer({
       result: normalizeAiResult({
-        parsed: replyMode === "fallback" ? fallbackDecision : parsed,
+        parsed:
+          replyMode === "fallback_heuristic" ||
+          replyMode === "semantic_guardrail_heuristic"
+            ? fallbackDecision
+            : parsed,
         fallbackDecision,
         profile,
         matchedKnowledge,
@@ -1159,6 +1651,7 @@ export async function aiDecideInbox({
       usedFastLane: result.usedFastLane,
       fastLaneReason: result.fastLaneReason,
       semanticFailureReason: result.semanticFailureReason,
+      heuristicReason: result.heuristicReason,
       greetingApplied: result.greetingApplied,
       greetingMode: result.greetingMode,
       usedCustomGreeting: result.usedCustomGreeting,
@@ -1198,7 +1691,7 @@ export async function aiDecideInbox({
         policy,
         raw: "",
         repairRaw: "",
-        replyMode: "fallback",
+        replyMode: "fallback_heuristic",
         semanticFailureReason: s(error?.message || "openai_request_failed"),
       }),
       profile,
