@@ -8,39 +8,71 @@ import {
   toMs,
 } from "./shared.js";
 
+function safeMessageTimestamp(message = {}) {
+  return toMs(message?.sent_at || message?.created_at);
+}
+
+function normalizeDirection(value = "") {
+  const x = s(value).trim().toLowerCase();
+  if (x === "incoming") return "inbound";
+  if (x === "outgoing") return "outbound";
+  return x;
+}
+
+function normalizeSenderType(value = "") {
+  const x = s(value).trim().toLowerCase();
+  if (x === "assistant") return "ai";
+  if (x === "human") return "operator";
+  return x;
+}
+
+function normalizeMessageActor(message = {}) {
+  if (message.direction === "inbound") return "customer";
+  if (message.sender_type === "agent" || message.sender_type === "operator") {
+    return "operator";
+  }
+  return "ai";
+}
+
+export function stripLeadingCommand(text = "") {
+  const source = s(text).trim();
+  if (!source.startsWith("/")) return source;
+  return source.replace(/^\/[^\s]+\s*/u, "").trim();
+}
+
 export function extractText(resp) {
   if (!resp) return "";
 
   const direct = pickString(resp.output_text).trim();
   if (direct) return fixMojibake(direct);
 
-  const out = resp.output;
-  if (Array.isArray(out)) {
+  const output = resp.output;
+  if (Array.isArray(output)) {
     const parts = [];
 
-    for (const item of out) {
+    for (const item of output) {
       const content = item?.content;
 
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block?.type === "output_text") {
-            const t = pickStringDeep(block?.text);
-            if (t) parts.push(t);
+            const blockText = pickStringDeep(block?.text);
+            if (blockText) parts.push(blockText);
             continue;
           }
 
-          const t1 = pickStringDeep(block?.text);
-          if (t1) parts.push(t1);
+          const blockText = pickStringDeep(block?.text);
+          if (blockText) parts.push(blockText);
 
-          const t2 = pickStringDeep(block?.transcript);
-          if (t2) parts.push(t2);
+          const transcript = pickStringDeep(block?.transcript);
+          if (transcript) parts.push(transcript);
         }
       } else if (typeof content === "string") {
         parts.push(content);
       }
 
-      const tItem = pickStringDeep(item?.text);
-      if (tItem) parts.push(tItem);
+      const itemText = pickStringDeep(item?.text);
+      if (itemText) parts.push(itemText);
     }
 
     const joined = parts.join("\n").trim();
@@ -51,7 +83,7 @@ export function extractText(resp) {
 }
 
 export function parseJsonLoose(text) {
-  const raw = String(text || "").trim();
+  const raw = s(text).trim();
   if (!raw) return null;
 
   try {
@@ -68,11 +100,11 @@ export function parseJsonLoose(text) {
     } catch {}
   }
 
-  const first = raw.indexOf("{");
-  const last = raw.lastIndexOf("}");
-  if (first >= 0 && last > first) {
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
     try {
-      return JSON.parse(raw.slice(first, last + 1));
+      return JSON.parse(raw.slice(firstBrace, lastBrace + 1));
     } catch {}
   }
 
@@ -83,24 +115,24 @@ export function normalizeRecentMessages(input) {
   if (!Array.isArray(input)) return [];
 
   return input
-    .map((m) => ({
-      id: s(m?.id),
-      direction: String(m?.direction || "").trim().toLowerCase(),
-      sender_type: String(m?.sender_type || "").trim().toLowerCase(),
-      text: fixMojibake(s(m?.text)),
-      sent_at: m?.sent_at || null,
-      created_at: m?.created_at || null,
-      meta: obj(m?.meta),
+    .map((message) => ({
+      id: s(message?.id),
+      direction: normalizeDirection(message?.direction),
+      sender_type: normalizeSenderType(message?.sender_type),
+      text: fixMojibake(s(message?.text)),
+      sent_at: message?.sent_at || null,
+      created_at: message?.created_at || null,
+      meta: obj(message?.meta),
     }))
-    .filter((m) => m.id || m.text)
-    .sort((a, b) => toMs(a.sent_at || a.created_at) - toMs(b.sent_at || b.created_at));
+    .filter((message) => message.id || message.text)
+    .sort((a, b) => safeMessageTimestamp(a) - safeMessageTimestamp(b));
 }
 
 export function getLatestOutbound(messages) {
   const list = normalizeRecentMessages(messages);
   for (let i = list.length - 1; i >= 0; i -= 1) {
-    const m = list[i];
-    if (m.direction === "outbound") return m;
+    const message = list[i];
+    if (message.direction === "outbound") return message;
   }
   return null;
 }
@@ -108,9 +140,12 @@ export function getLatestOutbound(messages) {
 export function getLatestOperatorOutbound(messages) {
   const list = normalizeRecentMessages(messages);
   for (let i = list.length - 1; i >= 0; i -= 1) {
-    const m = list[i];
-    if (m.direction === "outbound" && (m.sender_type === "agent" || m.sender_type === "operator")) {
-      return m;
+    const message = list[i];
+    if (
+      message.direction === "outbound" &&
+      (message.sender_type === "agent" || message.sender_type === "operator")
+    ) {
+      return message;
     }
   }
   return null;
@@ -119,9 +154,12 @@ export function getLatestOperatorOutbound(messages) {
 export function getLastAiOutbound(messages) {
   const list = normalizeRecentMessages(messages);
   for (let i = list.length - 1; i >= 0; i -= 1) {
-    const m = list[i];
-    if (m.direction === "outbound" && (m.sender_type === "ai" || m.sender_type === "assistant")) {
-      return m;
+    const message = list[i];
+    if (
+      message.direction === "outbound" &&
+      (message.sender_type === "ai" || message.sender_type === "assistant")
+    ) {
+      return message;
     }
   }
   return null;
@@ -135,17 +173,17 @@ export function isAckOnlyText(text) {
     "👍",
     "👌",
     "ok",
-    "oks",
     "okay",
+    "oks",
     "thanks",
     "thank you",
     "tesekkur",
     "təşəkkür",
     "sag ol",
     "sağ ol",
-    "super",
     "ela",
     "əla",
+    "super",
     "got it",
     "anladim",
     "anladım",
@@ -157,17 +195,12 @@ export function isAckOnlyText(text) {
 }
 
 export function buildHistorySnippet(messages = [], limit = 6) {
-  const list = normalizeRecentMessages(messages).slice(-limit);
+  const list = normalizeRecentMessages(messages).slice(-Math.max(1, Number(limit || 6)));
 
   return list
-    .map((m) => {
-      const who =
-        m.direction === "inbound"
-          ? "customer"
-          : m.sender_type === "agent" || m.sender_type === "operator"
-            ? "operator"
-            : "ai";
-      return `${who}: ${s(m.text).slice(0, 320)}`;
+    .map((message) => {
+      const actor = normalizeMessageActor(message);
+      return `${actor}: ${s(message.text).slice(0, 320)}`;
     })
     .join("\n");
 }

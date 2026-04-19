@@ -12,8 +12,8 @@ import {
   uniqStrings,
 } from "./shared.js";
 
-export function normalizeIndustry(v) {
-  const x = lower(v);
+export function normalizeIndustry(value) {
+  const x = lower(value);
   if (!x) return "generic_business";
 
   const aliases = {
@@ -87,45 +87,118 @@ export function normalizeIndustry(v) {
   return aliases[x] || x || "generic_business";
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const x = lower(value);
+    if (["true", "1", "yes"].includes(x)) return true;
+    if (["false", "0", "no"].includes(x)) return false;
+  }
+  return fallback;
+}
+
+function normalizeStringList(value = []) {
+  return uniqStrings(arr(value).map((item) => s(item)).filter(Boolean));
+}
+
+function pickFirstString(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizePriority(value, fallback = 100) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return n;
+}
+
+function normalizeMaxSentences(value, fallback = 2) {
+  return Math.max(1, Math.min(4, Number(value || fallback || 2)));
+}
+
+function normalizeLanguageList(...sources) {
+  const values = [];
+  for (const source of sources) {
+    values.push(...arr(source));
+  }
+  const normalized = normalizeStringList(values);
+  return normalized.length ? normalized : ["az"];
+}
+
+function normalizeQualificationQuestions(...sources) {
+  const values = [];
+  for (const source of sources) {
+    values.push(...arr(source));
+  }
+  return normalizeStringList(values);
+}
+
+function normalizeBehaviorObject(...sources) {
+  for (const source of sources) {
+    const safe = obj(source);
+    if (Object.keys(safe).length) return safe;
+  }
+  return {};
+}
+
+function buildServiceModeDefaults(service = {}) {
+  const x = obj(service);
+
+  return {
+    responseMode: s(x.response_mode || x.responseMode || "template"),
+    pricingMode: s(x.pricing_mode || x.pricingMode || "quote_required"),
+    contactCaptureMode: s(
+      x.contact_capture_mode || x.contactCaptureMode || "optional"
+    ),
+    handoffMode: s(x.handoff_mode || x.handoffMode || "optional"),
+  };
+}
+
 export function normalizeServiceEntry(item) {
   const x = obj(item);
 
-  const name =
-    s(x.title) ||
-    s(x.name) ||
-    s(x.service_name) ||
-    s(x.label);
+  const name = pickFirstString(
+    x.title,
+    x.name,
+    x.service_name,
+    x.label
+  );
 
-  const description =
-    s(x.description_full) ||
-    s(x.description_short) ||
-    s(x.description) ||
-    s(x.summary) ||
-    s(x.details) ||
-    s(x.value_proposition);
+  const description = pickFirstString(
+    x.description_full,
+    x.description_short,
+    x.description,
+    x.summary,
+    x.details,
+    x.value_proposition
+  );
 
-  const aliases = uniqStrings([
+  const aliases = normalizeStringList([
     ...arr(x.aliases),
     ...arr(x.keywords),
     ...arr(x.synonyms),
     ...arr(x.example_requests),
   ]);
 
-  const active =
-    typeof x.active === "boolean"
-      ? x.active
-      : typeof x.enabled === "boolean"
-        ? x.enabled
-        : typeof x.is_active === "boolean"
-          ? x.is_active
-          : true;
+  const active = normalizeBoolean(
+    x.active,
+    typeof x.enabled === "boolean"
+      ? x.enabled
+      : typeof x.is_active === "boolean"
+        ? x.is_active
+        : true
+  );
 
-  const visibleInAi =
-    typeof x.visible_in_ai === "boolean"
-      ? x.visible_in_ai
-      : typeof x.visibleInAi === "boolean"
-        ? x.visibleInAi
-        : true;
+  const visibleInAi = normalizeBoolean(
+    x.visible_in_ai,
+    typeof x.visibleInAi === "boolean" ? x.visibleInAi : true
+  );
+
+  const modes = buildServiceModeDefaults(x);
 
   return {
     id: s(x.id || x.service_id),
@@ -133,14 +206,14 @@ export function normalizeServiceEntry(item) {
     name,
     description,
     aliases,
-    active: Boolean(active),
-    visibleInAi: Boolean(visibleInAi),
-    faqAnswer: s(x.faq_answer),
-    disabledReplyText: s(x.disabled_reply_text),
-    responseMode: s(x.response_mode || "template"),
-    pricingMode: s(x.pricing_mode || "quote_required"),
-    contactCaptureMode: s(x.contact_capture_mode || "optional"),
-    handoffMode: s(x.handoff_mode || "optional"),
+    active,
+    visibleInAi,
+    faqAnswer: s(x.faq_answer || x.faqAnswer),
+    disabledReplyText: s(x.disabled_reply_text || x.disabledReplyText),
+    responseMode: modes.responseMode,
+    pricingMode: modes.pricingMode,
+    contactCaptureMode: modes.contactCaptureMode,
+    handoffMode: modes.handoffMode,
     meta: x,
   };
 }
@@ -148,31 +221,26 @@ export function normalizeServiceEntry(item) {
 export function normalizeKnowledgeEntry(item) {
   const x = obj(item);
 
-  const title =
-    s(x.title) ||
-    s(x.question) ||
-    s(x.name);
+  const title = pickFirstString(x.title, x.question, x.name);
+  const answer = pickFirstString(
+    x.answer,
+    x.content,
+    x.text,
+    x.body,
+    x.description
+  );
 
-  const answer =
-    s(x.answer) ||
-    s(x.content) ||
-    s(x.text) ||
-    s(x.body) ||
-    s(x.description);
-
-  const keywords = uniqStrings([
+  const keywords = normalizeStringList([
     ...arr(x.keywords),
     ...arr(x.aliases),
     s(x.question),
     s(x.title),
   ]);
 
-  const active =
-    typeof x.active === "boolean"
-      ? x.active
-      : typeof x.enabled === "boolean"
-        ? x.enabled
-        : true;
+  const active = normalizeBoolean(
+    x.active,
+    typeof x.enabled === "boolean" ? x.enabled : true
+  );
 
   return {
     id: s(x.id || x.entry_id),
@@ -180,11 +248,11 @@ export function normalizeKnowledgeEntry(item) {
     question: s(x.question),
     answer,
     keywords,
-    active: Boolean(active),
-    intentKey: s(x.intent_key),
-    serviceKey: s(x.service_key),
+    active,
+    intentKey: s(x.intent_key || x.intentKey),
+    serviceKey: s(x.service_key || x.serviceKey),
     language: s(x.language || "az"),
-    priority: Number(x.priority || 100),
+    priority: normalizePriority(x.priority, 100),
     meta: x,
   };
 }
@@ -192,7 +260,7 @@ export function normalizeKnowledgeEntry(item) {
 export function normalizePlaybook(item) {
   const x = obj(item);
 
-  const triggerKeywords = uniqStrings([
+  const triggerKeywords = normalizeStringList([
     ...arr(x.triggerKeywords),
     ...arr(x.triggers),
     ...arr(x.keywords),
@@ -201,22 +269,20 @@ export function normalizePlaybook(item) {
     s(x.service_key),
   ]);
 
-  const replyTemplate =
-    s(x.ideal_reply) ||
-    s(x.replyTemplate) ||
-    s(x.reply) ||
-    s(x.response) ||
-    s(x.template);
+  const replyTemplate = pickFirstString(
+    x.ideal_reply,
+    x.replyTemplate,
+    x.reply,
+    x.response,
+    x.template
+  );
 
-  const actionType =
-    lower(x.actionType || x.action || x.type || x.cta_type);
+  const actionType = lower(x.actionType || x.action || x.type || x.cta_type);
 
-  const active =
-    typeof x.active === "boolean"
-      ? x.active
-      : typeof x.enabled === "boolean"
-        ? x.enabled
-        : true;
+  const active = normalizeBoolean(
+    x.active,
+    typeof x.enabled === "boolean" ? x.enabled : true
+  );
 
   return {
     id: s(x.id || x.playbook_id),
@@ -225,233 +291,212 @@ export function normalizePlaybook(item) {
     replyTemplate,
     actionType,
     createLead:
-      Boolean(x.createLead) ||
+      normalizeBoolean(x.createLead, false) ||
       ["lead", "contact", "quote", "book", "capture_lead"].includes(actionType),
     handoff:
-      Boolean(x.handoff) ||
+      normalizeBoolean(x.handoff, false) ||
       ["handoff", "operator", "human"].includes(actionType),
     handoffReason: s(x.handoffReason || x.intent_key || ""),
     handoffPriority: s(x.handoffPriority || "normal") || "normal",
     intentKey: s(x.intent_key),
     serviceKey: s(x.service_key),
     language: s(x.language || "az"),
-    priority: Number(x.priority || 100),
-    active: Boolean(active),
+    priority: normalizePriority(x.priority, 100),
+    active,
     meta: x,
+  };
+}
+
+function normalizeServiceCatalogList(rawList = []) {
+  return arr(rawList)
+    .map(normalizeServiceEntry)
+    .filter((item) => item.name);
+}
+
+function normalizeKnowledgeList(rawList = []) {
+  return arr(rawList)
+    .map(normalizeKnowledgeEntry)
+    .filter((item) => item.active && (item.title || item.answer || item.question));
+}
+
+function normalizePlaybookList(rawList = []) {
+  return arr(rawList)
+    .map(normalizePlaybook)
+    .filter((item) => item.active);
+}
+
+function buildNormalizedServiceNames(serviceCatalog = [], active = true) {
+  return uniqStrings(
+    arr(serviceCatalog)
+      .filter((item) =>
+        active ? item?.active && item?.visibleInAi : !item?.active && item?.visibleInAi
+      )
+      .map((item) => s(item?.name))
+      .filter(Boolean)
+  );
+}
+
+function buildFallbackBehavior(tenant = {}, profile = {}, meta = {}) {
+  const communicationRules = obj(profile?.communication_rules);
+  const channelBehavior =
+    normalizeBehaviorObject(
+      meta?.channelBehavior,
+      meta?.channel_behavior,
+      profile?.channelBehavior,
+      profile?.channel_behavior
+    ) || {};
+
+  return {
+    tone: pickFirstString(
+      profile?.tone_of_voice,
+      communicationRules?.tone,
+      meta?.tone,
+      tenant?.brand?.tone,
+      "professional, warm, concise"
+    ),
+    toneProfile: pickFirstString(
+      profile?.tone_profile,
+      meta?.toneProfile,
+      meta?.tone_profile
+    ),
+    conversionGoal: pickFirstString(
+      profile?.conversion_goal,
+      meta?.conversionGoal,
+      meta?.conversion_goal
+    ),
+    primaryCta: pickFirstString(
+      profile?.primary_cta,
+      meta?.primaryCta,
+      meta?.primary_cta
+    ),
+    leadQualificationMode: pickFirstString(
+      profile?.lead_qualification_mode,
+      meta?.leadQualificationMode,
+      meta?.lead_qualification_mode
+    ),
+    bookingFlowType: pickFirstString(
+      profile?.booking_flow_type,
+      meta?.bookingFlowType,
+      meta?.booking_flow_type
+    ),
+    qualificationQuestions: normalizeQualificationQuestions(
+      profile?.qualificationQuestions,
+      profile?.qualification_questions,
+      meta?.qualificationQuestions,
+      meta?.qualification_questions
+    ),
+    handoffTriggers: normalizeStringList(
+      meta?.handoffTriggers,
+      meta?.handoff_triggers
+    ),
+    disallowedClaims: normalizeStringList(
+      meta?.disallowedClaims,
+      meta?.disallowed_claims,
+      profile?.banned_phrases
+    ),
+    channelBehavior,
+    maxSentences: normalizeMaxSentences(
+      communicationRules?.maxSentences || meta?.replyMaxSentences || 2,
+      2
+    ),
+    leadPrompts: normalizeStringList(meta?.leadPrompts),
   };
 }
 
 export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
 
-  const profile = obj(tenant?.profile);
-  const brand = obj(tenant?.brand);
-  const meta = obj(tenant?.meta);
-  const aiPolicy = obj(tenant?.ai_policy);
-  const inboxPolicy = obj(tenant?.inbox_policy);
-  const features = obj(tenant?.features);
+  const safeTenant = obj(tenant);
+  const profile = obj(safeTenant?.profile);
+  const brand = obj(safeTenant?.brand);
+  const meta = obj(safeTenant?.meta);
+  const aiPolicy = obj(safeTenant?.ai_policy);
+  const inboxPolicy = obj(safeTenant?.inbox_policy);
 
-  const normalizedServices = arr(services)
-    .map(normalizeServiceEntry)
-    .filter((x) => x.name);
+  const normalizedServices = normalizeServiceCatalogList(services);
+  const serviceNames = buildNormalizedServiceNames(normalizedServices, true);
+  const disabledServiceNames = buildNormalizedServiceNames(normalizedServices, false);
 
-  const activeVisibleServices = normalizedServices.filter((x) => x.active && x.visibleInAi);
-  const disabledVisibleServices = normalizedServices.filter((x) => !x.active && x.visibleInAi);
-
-  const displayName =
-    s(profile?.brand_name) ||
-    s(profile?.brandName) ||
-    s(brand?.displayName) ||
-    s(brand?.name) ||
-    s(tenant?.company_name) ||
-    s(tenant?.name) ||
-    resolvedTenantKey;
-
-  const industry =
-    normalizeIndustry(
-      profile?.industry_key ||
-        tenant?.industry_key ||
-        meta?.industry ||
-        brand?.industry ||
-        features?.industry ||
-        "generic_business"
-    );
-
-  const businessSummary =
-    s(profile?.brand_summary) ||
-    s(profile?.services_summary) ||
-    s(profile?.value_proposition) ||
-    s(meta?.businessSummary) ||
-    s(meta?.business_description) ||
-    s(meta?.about) ||
-    s(brand?.tagline) ||
-    "";
-
-  const fallbackServices = uniqStrings(
-    arr(profile?.services).length
-      ? profile.services
-      : arr(meta?.services).length
-        ? meta.services
-        : arr(meta?.products).length
-          ? meta.products
-          : arr(meta?.categories).length
-            ? meta.categories
-            : []
+  const displayName = pickFirstString(
+    profile?.brand_name,
+    profile?.brandName,
+    brand?.displayName,
+    brand?.name,
+    safeTenant?.company_name,
+    safeTenant?.name,
+    resolvedTenantKey
   );
 
-  const serviceNames = uniqStrings(
-    activeVisibleServices.length ? activeVisibleServices.map((x) => x.name) : fallbackServices
+  const industry = normalizeIndustry(
+    profile?.industry_key ||
+      safeTenant?.industry_key ||
+      meta?.industry ||
+      brand?.industry ||
+      "generic_business"
   );
 
-  const disabledServiceNames = uniqStrings(
-    disabledVisibleServices.map((x) => x.name)
+  const businessSummary = pickFirstString(
+    profile?.brand_summary,
+    profile?.services_summary,
+    profile?.value_proposition,
+    meta?.businessSummary,
+    meta?.business_description,
+    meta?.about,
+    brand?.tagline
   );
 
-  const languages = uniqStrings(
-    arr(tenant?.supported_languages).length
-      ? tenant.supported_languages
-      : arr(tenant?.enabled_languages).length
-        ? tenant.enabled_languages
-        : arr(profile?.languages).length
-          ? profile.languages
-          : arr(meta?.languages).length
-            ? meta.languages
-            : arr(brand?.languages).length
-              ? brand.languages
-              : [s(tenant?.default_language || "en"), "en"]
-  );
-
-  const communicationRules = obj(profile?.communication_rules);
-  const tone =
-    s(profile?.tone_of_voice) ||
-    s(communicationRules?.tone) ||
-    s(meta?.tone) ||
-    s(brand?.tone) ||
-    "professional, warm, concise";
-
-  const maxSentences = Math.max(
-    1,
-    Math.min(
-      3,
-      Number(
-        communicationRules?.maxSentences ||
-          meta?.replyMaxSentences ||
-          2
-      )
-    )
-  );
-
-  const leadPrompts = uniqStrings(
-    arr(meta?.leadPrompts).length
-      ? meta.leadPrompts
-      : [
-          "Qısa olaraq sizə hansı xidmət və ya məhsul lazım olduğunu yazın.",
-          "Uyğun yönləndirmə üçün ehtiyacınızı qısa qeyd edin.",
-        ]
-  );
-
-  const forbiddenClaims = uniqStrings(
-    arr(profile?.banned_phrases).length
-      ? profile.banned_phrases
-      : arr(meta?.forbiddenClaims).length
-        ? meta.forbiddenClaims
-        : [
-            "Do not invent prices.",
-            "Do not promise unavailable features.",
-            "Do not guarantee timelines unless known.",
-          ]
-  );
-
-  const urgentKeywords = uniqStrings(
-    arr(inboxPolicy?.urgentKeywords).length
-      ? inboxPolicy.urgentKeywords
-      : arr(meta?.urgentKeywords).length
-        ? meta.urgentKeywords
-        : ["urgent", "təcili", "tecili", "asap", "today", "indi", "hemen"]
-  );
-
-  const pricingKeywords = uniqStrings(
-    arr(inboxPolicy?.pricingKeywords).length
-      ? inboxPolicy.pricingKeywords
-      : arr(meta?.pricingKeywords).length
-        ? meta.pricingKeywords
-        : [
-            "qiymət",
-            "qiymet",
-            "price",
-            "cost",
-            "tarif",
-            "paket",
-            "neçəyə",
-            "neceye",
-            "əlaqə nömrəsi",
-            "elaqe nomresi",
-            "nömrə",
-            "nomre",
-          ]
-  );
-
-  const humanKeywords = uniqStrings(
-    arr(inboxPolicy?.humanKeywords).length
-      ? inboxPolicy.humanKeywords
-      : arr(meta?.humanKeywords).length
-        ? meta.humanKeywords
-        : [
-            "operator",
-            "human",
-            "canlı",
-            "canli",
-            "manager",
-            "satış",
-            "satis",
-            "biri ilə danışım",
-            "insanla danışım",
-          ]
-  );
-
-  const supportKeywords = uniqStrings(
-    arr(inboxPolicy?.supportKeywords).length
-      ? inboxPolicy.supportKeywords
-      : arr(meta?.supportKeywords).length
-        ? meta.supportKeywords
-        : ["problem", "issue", "dəstək", "destek", "support", "help", "kömək", "komek"]
-  );
+  const behavior = buildFallbackBehavior(safeTenant, profile, meta);
 
   return {
     tenantKey: resolvedTenantKey,
     displayName,
     industry,
-    businessType: "",
-    niche: "",
-    subNiche: "",
     businessSummary,
+    businessType: pickFirstString(
+      profile?.business_type,
+      meta?.businessType,
+      meta?.business_type
+    ),
+    niche: pickFirstString(meta?.niche),
+    subNiche: pickFirstString(meta?.subNiche, meta?.sub_niche),
     services: serviceNames,
     disabledServices: disabledServiceNames,
     serviceCatalog: normalizedServices,
     knowledgeEntries: [],
     responsePlaybooks: [],
-    languages,
-    tone,
-    toneProfile: "",
-    maxSentences,
-    leadPrompts,
-    forbiddenClaims,
-    conversionGoal: "",
-    primaryCta: "",
-    leadQualificationMode: "",
-    qualificationQuestions: [],
-    bookingFlowType: "",
-    handoffTriggers: [],
-    disallowedClaims: [],
-    behavior: {},
-    channelBehavior: {},
-    urgentKeywords,
-    pricingKeywords,
-    humanKeywords,
-    supportKeywords,
+    languages: normalizeLanguageList(
+      safeTenant?.supported_languages,
+      safeTenant?.enabled_languages,
+      profile?.languages,
+      meta?.languages,
+      brand?.languages,
+      [safeTenant?.default_language || "az", "en"]
+    ),
+    tone: behavior.tone,
+    toneProfile: behavior.toneProfile,
+    maxSentences: behavior.maxSentences,
+    leadPrompts: behavior.leadPrompts,
+    forbiddenClaims: normalizeStringList(profile?.banned_phrases, meta?.forbiddenClaims),
+    conversionGoal: behavior.conversionGoal,
+    primaryCta: behavior.primaryCta,
+    leadQualificationMode: behavior.leadQualificationMode,
+    qualificationQuestions: behavior.qualificationQuestions,
+    bookingFlowType: behavior.bookingFlowType,
+    handoffTriggers: behavior.handoffTriggers,
+    disallowedClaims: behavior.disallowedClaims,
+    behavior: {
+      niche: pickFirstString(meta?.niche),
+      conversionGoal: behavior.conversionGoal,
+      primaryCta: behavior.primaryCta,
+      toneProfile: behavior.toneProfile,
+      disallowedClaims: behavior.disallowedClaims,
+      handoffTriggers: behavior.handoffTriggers,
+      channelBehavior: behavior.channelBehavior,
+    },
+    channelBehavior: behavior.channelBehavior,
     aiPolicy,
     profile,
-    tenant,
+    tenant: safeTenant,
     threadState: null,
   };
 }
@@ -508,7 +553,7 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     responsePlaybooks: [],
     services: [],
     disabledServices: [],
-    languages: [],
+    languages: ["az"],
     tone: "",
     toneProfile: "",
     maxSentences: 2,
@@ -523,16 +568,13 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     disallowedClaims: [],
     behavior: {},
     channelBehavior: {},
-    urgentKeywords: [],
-    pricingKeywords: [],
-    humanKeywords: [],
-    supportKeywords: [],
   };
 }
 
 function assertAuthoritativeRuntimeTenant(runtime, tenantKey) {
   const container = obj(runtime?.runtime || runtime?.data || runtime);
   const tenant = obj(container?.tenant);
+
   if (tenant?.id || tenant?.tenant_key) return tenant;
 
   throw createRuntimeAuthorityError({
@@ -545,90 +587,135 @@ function assertAuthoritativeRuntimeTenant(runtime, tenantKey) {
   });
 }
 
-export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
-  const strictAuthority = options?.strictAuthority === true;
-  const container = obj(rawRuntime?.runtime || rawRuntime?.data || rawRuntime);
-  const rawTenant = obj(container.tenant);
-  const rawProfile = obj(container.profile);
-  const rawAiPolicy = obj(container.aiPolicy || container.ai_policy);
-  const rawThreadState = obj(container.threadState || container.thread_state || container.state);
-  const rawBehavior = obj(container.behavior || container.behavior_json);
-  const rawChannelBehavior = obj(
-    container.channelBehavior ||
-      container.channel_behavior ||
-      rawBehavior.channelBehavior ||
-      rawBehavior.channel_behavior
-  );
-
-  const rawServiceCatalog = arr(container.serviceCatalog).length
+function extractRawServiceCatalog(container = {}) {
+  return arr(container.serviceCatalog).length
     ? arr(container.serviceCatalog)
     : arr(container.servicesDetailed).length
       ? arr(container.servicesDetailed)
       : arr(container.service_catalog);
+}
 
-  const rawKnowledgeEntries = arr(container.knowledgeEntries).length
+function extractRawKnowledgeEntries(container = {}) {
+  return arr(container.knowledgeEntries).length
     ? arr(container.knowledgeEntries)
     : arr(container.knowledge).length
       ? arr(container.knowledge)
       : arr(container.knowledge_entries);
+}
 
-  const rawPlaybooks = arr(container.responsePlaybooks).length
+function extractRawPlaybooks(container = {}) {
+  return arr(container.responsePlaybooks).length
     ? arr(container.responsePlaybooks)
     : arr(container.playbooks).length
       ? arr(container.playbooks)
       : arr(container.response_playbooks);
+}
 
-  const normalizedCatalog = rawServiceCatalog.length
-    ? rawServiceCatalog.map(normalizeServiceEntry).filter((x) => x.name)
+export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
+  const strictAuthority = options?.strictAuthority === true;
+  const container = obj(rawRuntime?.runtime || rawRuntime?.data || rawRuntime);
+
+  const rawTenant = obj(container.tenant);
+  const rawProfile = obj(container.profile);
+  const rawAiPolicy = obj(container.aiPolicy || container.ai_policy);
+  const rawThreadState = obj(
+    container.threadState || container.thread_state || container.state
+  );
+  const rawBehavior = normalizeBehaviorObject(
+    container.behavior,
+    container.behavior_json
+  );
+  const rawChannelBehavior = normalizeBehaviorObject(
+    container.channelBehavior,
+    container.channel_behavior,
+    rawBehavior.channelBehavior,
+    rawBehavior.channel_behavior
+  );
+
+  const normalizedCatalog = extractRawServiceCatalog(container).length
+    ? normalizeServiceCatalogList(extractRawServiceCatalog(container))
     : strictAuthority
       ? []
       : arr(fallback.serviceCatalog);
 
-  const normalizedKnowledge = rawKnowledgeEntries.length
-    ? rawKnowledgeEntries
-        .map(normalizeKnowledgeEntry)
-        .filter((x) => x.active && (x.title || x.answer))
+  const normalizedKnowledge = extractRawKnowledgeEntries(container).length
+    ? normalizeKnowledgeList(extractRawKnowledgeEntries(container))
     : strictAuthority
       ? []
       : arr(fallback.knowledgeEntries);
 
-  const normalizedPlaybooks = rawPlaybooks.length
-    ? rawPlaybooks.map(normalizePlaybook).filter((x) => x.active)
+  const normalizedPlaybooks = extractRawPlaybooks(container).length
+    ? normalizePlaybookList(extractRawPlaybooks(container))
     : strictAuthority
       ? []
       : arr(fallback.responsePlaybooks);
 
-  const activeVisibleServices = normalizedCatalog.filter((x) => x.active && x.visibleInAi);
-  const disabledVisibleServices = normalizedCatalog.filter((x) => !x.active && x.visibleInAi);
+  const fallbackBehavior = obj(fallback.behavior);
+  const effectiveBehavior = {
+    niche: pickFirstString(
+      container.niche,
+      rawBehavior.niche,
+      fallbackBehavior.niche
+    ),
+    conversionGoal: pickFirstString(
+      container.conversionGoal,
+      container.conversion_goal,
+      rawBehavior.conversionGoal,
+      rawBehavior.conversion_goal,
+      fallbackBehavior.conversionGoal
+    ),
+    primaryCta: pickFirstString(
+      container.primaryCta,
+      container.primary_cta,
+      rawBehavior.primaryCta,
+      rawBehavior.primary_cta,
+      fallbackBehavior.primaryCta
+    ),
+    toneProfile: pickFirstString(
+      container.toneProfile,
+      container.tone_profile,
+      rawBehavior.toneProfile,
+      rawBehavior.tone_profile,
+      fallbackBehavior.toneProfile
+    ),
+    disallowedClaims: normalizeStringList(
+      container.disallowedClaims,
+      container.disallowed_claims,
+      rawBehavior.disallowedClaims,
+      rawBehavior.disallowed_claims,
+      fallbackBehavior.disallowedClaims
+    ),
+    handoffTriggers: normalizeStringList(
+      container.handoffTriggers,
+      container.handoff_triggers,
+      rawBehavior.handoffTriggers,
+      rawBehavior.handoff_triggers,
+      fallbackBehavior.handoffTriggers
+    ),
+    channelBehavior: Object.keys(rawChannelBehavior).length
+      ? rawChannelBehavior
+      : obj(fallback.channelBehavior),
+  };
 
-  const services = uniqStrings(
+  const services = normalizeStringList(
     arr(container.services).length
-      ? arr(container.services)
-      : activeVisibleServices.map((x) => x.name)
+      ? container.services
+      : buildNormalizedServiceNames(normalizedCatalog, true)
   );
 
-  const disabledServices = uniqStrings(
+  const disabledServices = normalizeStringList(
     arr(container.disabledServices).length
-      ? arr(container.disabledServices)
-      : disabledVisibleServices.map((x) => x.name)
+      ? container.disabledServices
+      : buildNormalizedServiceNames(normalizedCatalog, false)
   );
 
-  const disallowedClaims = uniqStrings(
-    arr(container.disallowedClaims).length
-      ? container.disallowedClaims
-      : arr(rawBehavior.disallowedClaims).length
-        ? rawBehavior.disallowedClaims
-        : arr(rawBehavior.disallowed_claims)
+  const qualificationQuestions = normalizeQualificationQuestions(
+    container.qualificationQuestions,
+    container.qualification_questions,
+    rawBehavior.qualificationQuestions,
+    rawBehavior.qualification_questions,
+    strictAuthority ? [] : fallback.qualificationQuestions
   );
-
-  const forbiddenClaims = uniqStrings([
-    ...(arr(container.forbiddenClaims).length
-      ? container.forbiddenClaims
-      : strictAuthority
-        ? []
-        : arr(fallback.forbiddenClaims)),
-    ...disallowedClaims,
-  ]);
 
   return {
     ...fallback,
@@ -648,14 +735,17 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
         ? rawAiPolicy
         : { ...obj(fallback.aiPolicy), ...rawAiPolicy }
       : fallback.aiPolicy,
-    threadState: Object.keys(rawThreadState).length ? rawThreadState : fallback.threadState,
-    displayName:
-      s(container.displayName) ||
-      s(container.companyName) ||
-      s(rawProfile.brand_name) ||
-      s(rawProfile.displayName) ||
-      s(rawTenant.company_name) ||
-      s(fallback.displayName),
+    threadState: Object.keys(rawThreadState).length
+      ? rawThreadState
+      : fallback.threadState,
+    displayName: pickFirstString(
+      container.displayName,
+      container.companyName,
+      rawProfile.brand_name,
+      rawProfile.displayName,
+      rawTenant.company_name,
+      fallback.displayName
+    ),
     industry: normalizeIndustry(
       container.industry ||
         container.industryKey ||
@@ -663,25 +753,26 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
         rawTenant.industry_key ||
         fallback.industry
     ),
-    businessSummary:
-      s(container.businessSummary) ||
-      s(container.summary) ||
-      s(container.summaryShort) ||
-      s(container.valueProposition) ||
-      s(fallback.businessSummary),
-    businessType: s(
-      container.businessType ||
-        rawBehavior.businessType ||
-        rawBehavior.business_type ||
-        fallback.businessType
+    businessSummary: pickFirstString(
+      container.businessSummary,
+      container.summary,
+      container.summaryShort,
+      container.valueProposition,
+      fallback.businessSummary
     ),
-    niche: s(container.niche || rawBehavior.niche || fallback.niche),
-    subNiche: s(
-      container.subNiche ||
-        container.sub_niche ||
-        rawBehavior.subNiche ||
-        rawBehavior.sub_niche ||
-        fallback.subNiche
+    businessType: pickFirstString(
+      container.businessType,
+      rawBehavior.businessType,
+      rawBehavior.business_type,
+      fallback.businessType
+    ),
+    niche: pickFirstString(container.niche, rawBehavior.niche, fallback.niche),
+    subNiche: pickFirstString(
+      container.subNiche,
+      container.sub_niche,
+      rawBehavior.subNiche,
+      rawBehavior.sub_niche,
+      fallback.subNiche
     ),
     serviceCatalog: normalizedCatalog,
     knowledgeEntries: normalizedKnowledge,
@@ -692,7 +783,7 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       : strictAuthority
         ? []
         : arr(fallback.disabledServices),
-    languages: uniqStrings(
+    languages: normalizeLanguageList(
       arr(container.languages).length
         ? container.languages
         : strictAuthority
@@ -700,114 +791,61 @@ export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
               ...arr(rawTenant.supported_languages),
               ...arr(rawTenant.enabled_languages),
               s(rawTenant.default_language),
-            ].filter(Boolean)
+            ]
           : arr(fallback.languages)
     ),
-    tone: s(
-      container.tone ||
-        container.toneText ||
-        (strictAuthority ? rawProfile.tone_of_voice : fallback.tone)
+    tone: pickFirstString(
+      container.tone,
+      container.toneText,
+      strictAuthority ? rawProfile.tone_of_voice : fallback.tone
     ),
-    toneProfile: s(
-      container.toneProfile ||
-        container.tone_profile ||
-        rawBehavior.toneProfile ||
-        rawBehavior.tone_profile ||
-        fallback.toneProfile
+    toneProfile: pickFirstString(
+      container.toneProfile,
+      container.tone_profile,
+      rawBehavior.toneProfile,
+      rawBehavior.tone_profile,
+      fallback.toneProfile
     ),
-    maxSentences: Math.max(
-      1,
-      Math.min(4, Number(container.maxSentences || fallback.maxSentences || 2))
+    maxSentences: normalizeMaxSentences(
+      container.maxSentences,
+      fallback.maxSentences || 2
     ),
-    leadPrompts: uniqStrings(arr(container.leadPrompts).length ? container.leadPrompts : arr(fallback.leadPrompts)),
-    forbiddenClaims,
-    conversionGoal: s(
-      container.conversionGoal ||
-        container.conversion_goal ||
-        rawBehavior.conversionGoal ||
-        rawBehavior.conversion_goal ||
-        fallback.conversionGoal
-    ),
-    primaryCta: s(
-      container.primaryCta ||
-        container.primary_cta ||
-        rawBehavior.primaryCta ||
-        rawBehavior.primary_cta ||
-        fallback.primaryCta
-    ),
-    leadQualificationMode: s(
-      container.leadQualificationMode ||
-        container.lead_qualification_mode ||
-        rawBehavior.leadQualificationMode ||
-        rawBehavior.lead_qualification_mode ||
-        fallback.leadQualificationMode
-    ),
-    qualificationQuestions: uniqStrings(
-      arr(container.qualificationQuestions).length
-        ? container.qualificationQuestions
-        : arr(container.qualification_questions).length
-          ? container.qualification_questions
-          : arr(rawBehavior.qualificationQuestions).length
-            ? rawBehavior.qualificationQuestions
-            : arr(rawBehavior.qualification_questions).length
-              ? rawBehavior.qualification_questions
-              : strictAuthority
-                ? []
-                : arr(fallback.qualificationQuestions)
-    ),
-    bookingFlowType: s(
-      container.bookingFlowType ||
-        container.booking_flow_type ||
-        rawBehavior.bookingFlowType ||
-        rawBehavior.booking_flow_type ||
-        fallback.bookingFlowType
-    ),
-    handoffTriggers: uniqStrings(
-      arr(container.handoffTriggers).length
-        ? container.handoffTriggers
-        : arr(container.handoff_triggers).length
-          ? container.handoff_triggers
-          : arr(rawBehavior.handoffTriggers).length
-            ? rawBehavior.handoffTriggers
-            : arr(rawBehavior.handoff_triggers).length
-              ? rawBehavior.handoff_triggers
-              : strictAuthority
-                ? []
-                : arr(fallback.handoffTriggers)
-    ),
-    disallowedClaims,
-    behavior: Object.keys(rawBehavior).length ? rawBehavior : obj(fallback.behavior),
-    channelBehavior: Object.keys(rawChannelBehavior).length
-      ? rawChannelBehavior
-      : obj(fallback.channelBehavior),
-    urgentKeywords: uniqStrings(
-      arr(container.urgentKeywords).length
-        ? container.urgentKeywords
+    leadPrompts: normalizeStringList(
+      arr(container.leadPrompts).length
+        ? container.leadPrompts
         : strictAuthority
           ? []
-          : arr(fallback.urgentKeywords)
+          : arr(fallback.leadPrompts)
     ),
-    pricingKeywords: uniqStrings(
-      arr(container.pricingKeywords).length
-        ? container.pricingKeywords
+    forbiddenClaims: normalizeStringList(
+      arr(container.forbiddenClaims).length
+        ? container.forbiddenClaims
         : strictAuthority
           ? []
-          : arr(fallback.pricingKeywords)
+          : arr(fallback.forbiddenClaims),
+      effectiveBehavior.disallowedClaims
     ),
-    humanKeywords: uniqStrings(
-      arr(container.humanKeywords).length
-        ? container.humanKeywords
-        : strictAuthority
-          ? []
-          : arr(fallback.humanKeywords)
+    conversionGoal: effectiveBehavior.conversionGoal,
+    primaryCta: effectiveBehavior.primaryCta,
+    leadQualificationMode: pickFirstString(
+      container.leadQualificationMode,
+      container.lead_qualification_mode,
+      rawBehavior.leadQualificationMode,
+      rawBehavior.lead_qualification_mode,
+      fallback.leadQualificationMode
     ),
-    supportKeywords: uniqStrings(
-      arr(container.supportKeywords).length
-        ? container.supportKeywords
-        : strictAuthority
-          ? []
-          : arr(fallback.supportKeywords)
+    qualificationQuestions,
+    bookingFlowType: pickFirstString(
+      container.bookingFlowType,
+      container.booking_flow_type,
+      rawBehavior.bookingFlowType,
+      rawBehavior.booking_flow_type,
+      fallback.bookingFlowType
     ),
+    handoffTriggers: effectiveBehavior.handoffTriggers,
+    disallowedClaims: effectiveBehavior.disallowedClaims,
+    behavior: effectiveBehavior,
+    channelBehavior: effectiveBehavior.channelBehavior,
   };
 }
 
@@ -888,26 +926,26 @@ export async function resolveInboxRuntime({
 }
 
 export function buildServiceLine(profile) {
-  const services = uniqStrings(profile?.services || []);
+  const services = normalizeStringList(profile?.services || []);
   if (!services.length) return "";
   return services.slice(0, 12).join(", ");
 }
 
 export function buildDisabledServiceLine(profile) {
-  const services = uniqStrings(profile?.disabledServices || []);
+  const services = normalizeStringList(profile?.disabledServices || []);
   if (!services.length) return "";
   return services.slice(0, 12).join(", ");
 }
 
 export function pickLeadPrompt(profile) {
-  const list = arr(profile?.leadPrompts);
-  return s(list[0] || "Qısa olaraq ehtiyacınızı yazın.");
+  const list = normalizeStringList(profile?.leadPrompts || []);
+  return s(list[0] || "Əsas ehtiyacınızı bir cümlə ilə yaza bilərsiniz?");
 }
 
 export function pickBehaviorLeadPrompt(profile) {
-  const qualificationQuestions = arr(profile?.qualificationQuestions)
-    .map((x) => s(x))
-    .filter(Boolean);
+  const qualificationQuestions = normalizeQualificationQuestions(
+    profile?.qualificationQuestions
+  );
   const inboxBehavior = obj(profile?.channelBehavior?.inbox);
   const primaryCta = s(profile?.primaryCta).replace(/_/g, " ");
   const qualificationDepth = lower(inboxBehavior?.qualificationDepth || "");
@@ -917,63 +955,71 @@ export function pickBehaviorLeadPrompt(profile) {
   let prompt = pickLeadPrompt(profile);
 
   if (toneProfile.includes("calm") || toneProfile.includes("reassuring")) {
-    prompt = "Daha deqiq komek ucun bir suali cavablandirin.";
+    prompt = "Daha dəqiq kömək üçün bir qısa sualı cavablandıra bilərsiniz.";
   } else if (toneProfile.includes("warm") || toneProfile.includes("hospitable")) {
-    prompt = "Sizi duzgun yonlendirmek ucun bunu yazin.";
+    prompt = "Sizi düzgün yönləndirmək üçün bunu qısa yazın.";
   } else if (toneProfile.includes("formal") || toneProfile.includes("confident")) {
-    prompt = "Duzgun yonlendirme ucun bunu qeyd edin.";
+    prompt = "Düzgün yönləndirmə üçün bunu qeyd edin.";
   }
 
   if (firstQuestion && qualificationDepth === "guided") {
-    const ctaLead = primaryCta ? `${primaryCta} ucun ` : "";
-    return `${ctaLead}${prompt} ${firstQuestion}`;
+    const ctaLead = primaryCta ? `${primaryCta} üçün ` : "";
+    return sanitizePrompt(`${ctaLead}${prompt} ${firstQuestion}`);
   }
 
   if (primaryCta) {
-    return `${primaryCta} ucun ${prompt}`;
+    return sanitizePrompt(`${primaryCta} üçün ${prompt}`);
   }
 
-  return prompt;
+  return sanitizePrompt(prompt);
 }
 
+function sanitizePrompt(value = "") {
+  return s(value).replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Compatibility helper only.
+ * Industry hints should not drive understanding logic anymore.
+ */
 export function getIndustryHints(industry) {
-  const x = normalizeIndustry(industry);
+  const normalized = normalizeIndustry(industry);
 
   const map = {
     clinic: {
-      keywords: ["müayinə", "muayine", "implant", "ortodont", "dental", "clinic", "appointment", "randevu"],
+      keywords: [],
       pricingHint: "Qiymət xidmət növü və vəziyyətə görə dəyişə bilər.",
     },
     hospitality: {
-      keywords: ["reservation", "booking", "otaq", "room", "hotel", "stay"],
+      keywords: [],
       pricingHint: "Qiymət tarix və xidmət paketinə görə dəyişə bilər.",
     },
     restaurant: {
-      keywords: ["menu", "booking", "masa", "rezerv", "delivery", "restaurant"],
-      pricingHint: "Qiymət məhsul və sifariş tərkibinə görə dəyişə bilər.",
+      keywords: [],
+      pricingHint: "Qiymət xidmət və tələblərə görə dəyişə bilər.",
     },
     legal: {
-      keywords: ["məsləhət", "meslehet", "consultation", "law", "legal", "müqavilə", "muqavile", "court"],
+      keywords: [],
       pricingHint: "Qiymət işin növü və mürəkkəbliyinə görə dəyişə bilər.",
     },
     finance: {
-      keywords: ["loan", "credit", "investment", "insurance", "finance"],
+      keywords: [],
       pricingHint: "Qiymət və komissiya xidmət növündən asılıdır.",
     },
     education: {
-      keywords: ["course", "dərs", "ders", "training", "education", "program"],
+      keywords: [],
       pricingHint: "Qiymət proqram və formatdan asılıdır.",
     },
     ecommerce: {
-      keywords: ["product", "məhsul", "mehsul", "shipping", "çatdırılma", "catdirilma", "order"],
+      keywords: [],
       pricingHint: "Qiymət məhsul və çatdırılma şərtlərinə görə dəyişə bilər.",
     },
     technology: {
-      keywords: ["software", "saas", "app", "integration", "automation", "website", "xidmət", "xidmet", "whatsapp", "instagram", "bot", "ai", "chatbot", "məhsul", "mehsul"],
+      keywords: [],
       pricingHint: "Qiymət scope və funksionallığa görə dəyişə bilər.",
     },
     creative_agency: {
-      keywords: ["branding", "design", "creative", "smm", "content", "campaign"],
+      keywords: [],
       pricingHint: "Qiymət görüləcək işin həcminə görə dəyişə bilər.",
     },
     generic_business: {
@@ -982,5 +1028,5 @@ export function getIndustryHints(industry) {
     },
   };
 
-  return map[x] || map.generic_business;
+  return map[normalized] || map.generic_business;
 }

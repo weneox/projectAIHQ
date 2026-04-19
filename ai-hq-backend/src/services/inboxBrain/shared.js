@@ -1,38 +1,30 @@
 import { getDefaultTenantKey, resolveTenantKey } from "../../tenancy/index.js";
 
-export function s(v) {
-  return String(v ?? "").trim();
+export function s(value) {
+  return String(value ?? "").trim();
 }
 
-export function lower(v) {
-  return s(v).toLowerCase();
+export function lower(value) {
+  return s(value).toLowerCase();
 }
 
-export function arr(v) {
-  return Array.isArray(v) ? v : [];
+export function arr(value) {
+  return Array.isArray(value) ? value : [];
 }
 
-export function obj(v) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+export function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-export function includesAny(text, words = []) {
-  const hay = lower(text);
-  return arr(words).some((w) => {
-    const needle = lower(w);
-    return needle && hay.includes(needle);
-  });
+export function pickString(value) {
+  return typeof value === "string" ? value : "";
 }
 
-export function pickString(x) {
-  return typeof x === "string" ? x : "";
-}
-
-export function pickStringDeep(x) {
-  if (typeof x === "string") return x;
-  if (x && typeof x === "object") {
-    if (typeof x.value === "string") return x.value;
-    if (typeof x.text === "string") return x.text;
+export function pickStringDeep(value) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    if (typeof value.value === "string") return value.value;
+    if (typeof value.text === "string") return value.text;
   }
   return "";
 }
@@ -41,14 +33,14 @@ export function nowMs() {
   return Date.now();
 }
 
-export function toMs(v) {
-  if (!v) return 0;
+export function toMs(value) {
+  if (!value) return 0;
 
-  const n = Number(v);
+  const n = Number(value);
   if (Number.isFinite(n) && n > 0) return n;
 
-  const t = Date.parse(String(v));
-  return Number.isFinite(t) ? t : 0;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export function uniqStrings(list = []) {
@@ -56,34 +48,50 @@ export function uniqStrings(list = []) {
   const seen = new Set();
 
   for (const item of arr(list)) {
-    const x = s(item);
-    if (!x) continue;
-    const k = lower(x);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(x);
+    const text = s(item);
+    if (!text) continue;
+
+    const key = lower(text);
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    out.push(text);
   }
 
   return out;
 }
 
-export function fixMojibake(input) {
-  const t = String(input || "");
-  if (!t) return t;
+export function includesAny(text, words = []) {
+  const haystack = lower(text);
+  if (!haystack) return false;
 
-  if (!/[ÃÂ]|â€™|â€œ|â€�|â€“|â€”|â€¦/.test(t)) return t;
+  return arr(words).some((word) => {
+    const needle = lower(word);
+    return needle && haystack.includes(needle);
+  });
+}
+
+export function fixMojibake(input) {
+  const raw = String(input || "");
+  if (!raw) return raw;
+
+  if (!/[ÃÂ]|â€™|â€œ|â€�|â€“|â€”|â€¦/.test(raw)) return raw;
 
   try {
-    const fixed = Buffer.from(t, "latin1").toString("utf8");
-    if (/[�]/.test(fixed) && !/[�]/.test(t)) return t;
+    const fixed = Buffer.from(raw, "latin1").toString("utf8");
+    if (/[�]/.test(fixed) && !/[�]/.test(raw)) return raw;
     return fixed;
   } catch {
-    return t;
+    return raw;
   }
 }
 
 export function getResolvedTenantKey(tenantKey) {
   return resolveTenantKey(tenantKey, getDefaultTenantKey());
+}
+
+export function normalizeWhitespace(text) {
+  return s(text).replace(/\s+/g, " ").trim();
 }
 
 export function normalizeTextForCompare(text) {
@@ -94,7 +102,7 @@ export function normalizeTextForCompare(text) {
 }
 
 export function sanitizeReplyText(text) {
-  let out = fixMojibake(s(text));
+  let out = fixMojibake(normalizeWhitespace(text));
   if (!out) return "";
 
   out = out
