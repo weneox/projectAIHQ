@@ -611,7 +611,7 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
   assert.equal(Array.isArray(decisionEvents), true);
 });
 
-test("inbox behavior runtime uses niche qualification CTA guidance for fallback replies", async () => {
+test("inbox behavior runtime uses niche qualification CTA guidance for service-interest fallback replies", async () => {
   const result = await buildInboxActions({
     text: "Salam",
     channel: "instagram",
@@ -679,7 +679,7 @@ test("inbox behavior runtime uses niche qualification CTA guidance for fallback 
 
   const send = result.actions.find((action) => action.type === "send_message");
 
-  assert.equal(result.intent, "greeting");
+  assert.equal(result.intent, "service_interest");
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
