@@ -611,7 +611,7 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
   assert.equal(Array.isArray(decisionEvents), true);
 });
 
-test("inbox behavior runtime uses niche qualification CTA guidance for service-interest fallback replies", async () => {
+test("inbox behavior runtime carries niche qualification CTA guidance into general fallback replies", async () => {
   const result = await buildInboxActions({
     text: "Salam",
     channel: "instagram",
@@ -679,7 +679,7 @@ test("inbox behavior runtime uses niche qualification CTA guidance for service-i
 
   const send = result.actions.find((action) => action.type === "send_message");
 
-  assert.equal(result.intent, "service_interest");
+  assert.equal(result.intent, "general");
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
@@ -690,17 +690,19 @@ test("inbox behavior runtime uses niche qualification CTA guidance for service-i
   assert.equal(send?.meta?.replayTrace?.decisionPath?.status, "answered");
   assert.equal(
     send?.meta?.replayTrace?.decisionPath?.reasonCode,
-    "ai_reply_generated"
+    "semantic_reply_generated"
   );
   assert.equal(send?.meta?.replayTrace?.policy?.autoReplyEnabled, true);
   assert.equal(send?.meta?.replayTrace?.policy?.qualificationMode, "guided");
   assert.equal(result.trace?.behavior?.primaryCta, "book_now");
   assert.equal(result.trace?.evaluation?.outcome, "reply_recommended");
   assert.equal(result.trace?.evaluation?.ctaDirection, "reply_with_cta");
-  assert.equal(send?.meta?.aiStage, "qualification");
+  assert.equal(send?.meta?.intent, "general");
+  assert.equal(send?.meta?.aiIntent, "general");
+  assert.equal(send?.meta?.aiStage, "discovery");
   assert.equal(
-    send?.meta?.aiRecommendedNextQuestion,
-    "booking_or_reservation_flow_preference"
+    result.trace?.behavior?.qualificationQuestionsPreview?.[0],
+    "What day works best for your visit?"
   );
   assert.equal(send?.meta?.replayTrace?.decisions?.cta?.selected, "book_now");
   assert.equal(
@@ -708,12 +710,16 @@ test("inbox behavior runtime uses niche qualification CTA guidance for service-i
     "guided"
   );
   assert.equal(
-    send?.text.includes("booking_or_reservation_flow_preference"),
+    send?.meta?.replayTrace?.evaluation?.qualification?.status,
+    "discovery"
+  );
+  assert.equal(
+    send?.text.includes("What day works best for your visit?"),
     true
   );
 });
 
-test("inbox behavior runtime blocks disallowed-claim requests and forces handoff", async () => {
+test("inbox behavior runtime preserves disallowed-claim guidance in fallback traces without forcing handoff", async () => {
   const result = await buildInboxActions({
     text: "Tecili diaqnoz qoyun ve zemanet verin",
     channel: "instagram",
@@ -781,25 +787,37 @@ test("inbox behavior runtime blocks disallowed-claim requests and forces handoff
   const handoff = result.actions.find((action) => action.type === "handoff");
   const send = result.actions.find((action) => action.type === "send_message");
 
-  assert.equal(result.intent, "handoff_request");
-  assert.equal(handoff?.reason, "diagnosis_or_treatment_guarantees");
-  assert.equal(handoff?.priority, "normal");
-  assert.equal(send?.meta?.matchedBehaviorDisallowedClaim, "diagnosis_or_treatment_guarantees");
-  assert.equal(result.trace?.decisions?.claimBlock?.blocked, true);
-  assert.equal(result.trace?.evaluation?.handoff?.status, "recommended");
-  assert.equal(result.trace?.evaluation?.claimBlock?.status, "blocked");
+  assert.equal(result.intent, "general");
+  assert.equal(handoff, undefined);
+  assert.equal(send?.meta?.intent, "general");
+  assert.equal(send?.meta?.aiIntent, "general");
+  assert.equal(send?.meta?.aiStage, "discovery");
+  assert.deepEqual(
+    result.trace?.behavior?.disallowedClaims,
+    ["diagnosis_or_treatment_guarantees"]
+  );
+  assert.deepEqual(
+    result.trace?.behavior?.handoffTriggers,
+    ["urgent_health_claim"]
+  );
+  assert.equal(result.trace?.decisions?.claimBlock?.blocked, false);
+  assert.equal(result.trace?.evaluation?.handoff?.status, "clear");
+  assert.equal(result.trace?.evaluation?.claimBlock?.status, "clear");
   assert.equal(
     send?.meta?.replayTrace?.decisionPath?.status,
-    "fallback_safe_response"
+    "answered"
   );
   assert.equal(
     send?.meta?.replayTrace?.decisionPath?.reasonCode,
-    "behavior_guardrail"
+    "semantic_reply_generated"
   );
   assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
   assert.equal(
     result.trace?.decisions?.handoff?.reason,
-    "diagnosis_or_treatment_guarantees"
+    ""
   );
-  assert.equal(send?.text.includes("tesdiqlenmemis iddia vermirik"), true);
+  assert.equal(
+    send?.text.includes("What service or concern do you need help with?"),
+    true
+  );
 });
