@@ -3,6 +3,7 @@ import {
   nowMs,
   obj,
   s,
+  toMs,
 } from "./shared.js";
 import {
   getLastAiOutbound,
@@ -11,18 +12,27 @@ import {
   normalizeRecentMessages,
 } from "./messages.js";
 
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function hasMeaningfulValue(value) {
+  return value !== undefined && value !== null && value !== "";
+}
+
 export function getStateField(state, ...keys) {
   const src = obj(state);
   const meta = obj(src.last_decision_meta || src.lastDecisionMeta);
 
   for (const key of keys) {
     const value = src?.[key];
-    if (value !== undefined && value !== null && value !== "") return value;
+    if (hasMeaningfulValue(value)) return value;
   }
 
   for (const key of keys) {
     const value = meta?.[key];
-    if (value !== undefined && value !== null && value !== "") return value;
+    if (hasMeaningfulValue(value)) return value;
   }
 
   return null;
@@ -31,22 +41,25 @@ export function getStateField(state, ...keys) {
 export function getThreadStateSignals(threadState = null) {
   const state = obj(threadState);
 
+  const handoffActive =
+    Boolean(getStateField(state, "handoffActive", "handoff_active")) ||
+    Boolean(
+      getStateField(
+        state,
+        "suppressed_until_operator_reply",
+        "suppressedUntilOperatorReply"
+      )
+    );
+
   return {
-    handoffActive:
-      Boolean(getStateField(state, "handoffActive", "handoff_active")) ||
-      Boolean(
-        getStateField(
-          state,
-          "suppressed_until_operator_reply",
-          "suppressedUntilOperatorReply"
-        )
-      ),
+    handoffActive,
     handoffReason: s(
       getStateField(state, "handoffReason", "handoff_reason") || ""
     ),
     handoffPriority:
       s(getStateField(state, "handoffPriority", "handoff_priority") || "normal") ||
       "normal",
+
     operatorRecentlyReplied: Boolean(
       getStateField(
         state,
@@ -54,19 +67,25 @@ export function getThreadStateSignals(threadState = null) {
         "operator_recently_replied"
       )
     ),
+
     closedLike: Boolean(getStateField(state, "closedLike", "closed_like")),
+
     lastAiReplyText: s(
       getStateField(state, "last_ai_reply_text", "lastAiReplyText") || ""
     ),
     lastAiReplyHash: s(
       getStateField(state, "last_ai_reply_hash", "lastAiReplyHash") || ""
     ),
+
     lastCustomerIntent: s(
       getStateField(state, "last_customer_intent", "lastCustomerIntent") || ""
     ),
-    repeatIntentCount: Number(
-      getStateField(state, "repeat_intent_count", "repeatIntentCount") || 0
+
+    repeatIntentCount: safeNumber(
+      getStateField(state, "repeat_intent_count", "repeatIntentCount"),
+      0
     ),
+
     awaitingCustomerAnswerTo: s(
       getStateField(
         state,
@@ -74,13 +93,17 @@ export function getThreadStateSignals(threadState = null) {
         "awaitingCustomerAnswerTo"
       ) || ""
     ),
+
     leadAlreadyCreated: Boolean(
       getStateField(state, "lead_created_at", "leadCreatedAt")
     ),
+
     contactRequestedAt:
       getStateField(state, "contact_requested_at", "contactRequestedAt") || null,
+
     pricingExplainedAt:
       getStateField(state, "pricing_explained_at", "pricingExplainedAt") || null,
+
     suppressedUntilOperatorReply: Boolean(
       getStateField(
         state,
@@ -88,6 +111,9 @@ export function getThreadStateSignals(threadState = null) {
         "suppressedUntilOperatorReply"
       )
     ),
+
+    lastDecisionAt:
+      getStateField(state, "last_decision_at", "lastDecisionAt") || null,
   };
 }
 
@@ -114,7 +140,7 @@ export function buildSuppressedReplyReason({
 }) {
   if (quietHoursApplied) return "quiet_hours";
   if (duplicateReply) return "duplicate_ai_reply_guard";
-  if (reliability?.operatorRecentlyReplied && handoffActive) {
+  if (handoffActive && reliability?.operatorRecentlyReplied) {
     return "operator_recently_replied";
   }
   return "reply_suppressed";
@@ -145,6 +171,30 @@ export function getThreadHandoffState(thread, threadState = null) {
   };
 }
 
+function getLatestTimestamps(messages = []) {
+  const latestOutbound = getLatestOutbound(messages);
+  const latestOperatorOutbound = getLatestOperatorOutbound(messages);
+  const lastAiOutbound = getLastAiOutbound(messages);
+
+  return {
+    latestOutbound,
+    latestOperatorOutbound,
+    lastAiOutbound,
+    latestOutboundAt: toMs(latestOutbound?.sent_at || latestOutbound?.created_at),
+    latestOperatorOutboundAt: toMs(
+      latestOperatorOutbound?.sent_at || latestOperatorOutbound?.created_at
+    ),
+    lastAiOutboundAt: toMs(lastAiOutbound?.sent_at || lastAiOutbound?.created_at),
+  };
+}
+
+function getOperatorCooldownMs() {
+  return Math.max(
+    0,
+    Number(process.env.INBOX_OPERATOR_REPLY_SUPPRESS_MS || 300000)
+  );
+}
+
 export function getReliabilityFlags({
   text,
   thread,
@@ -154,29 +204,37 @@ export function getReliabilityFlags({
   threadState = null,
 }) {
   const list = normalizeRecentMessages(recentMessages);
-  const latestOutbound = getLatestOutbound(list);
-  const lastOperatorOutbound = getLatestOperatorOutbound(list);
   const stateSignals = getThreadStateSignals(threadState);
 
   const now = nowMs();
-  const operatorCooldownMs = Math.max(
-    0,
-    Number(process.env.INBOX_OPERATOR_REPLY_SUPPRESS_MS || 300000)
-  );
+  const operatorCooldownMs = getOperatorCooldownMs();
 
-  const latestOutboundAgeMs = latestOutbound
-    ? Math.max(0, now - Date.parse(String(latestOutbound.sent_at || latestOutbound.created_at || 0)))
-    : null;
+  const {
+    latestOutbound,
+    latestOperatorOutbound,
+    lastAiOutbound,
+    latestOutboundAt,
+    latestOperatorOutboundAt,
+    lastAiOutboundAt,
+  } = getLatestTimestamps(list);
 
-  const operatorOutboundAgeMs = lastOperatorOutbound
-    ? Math.max(0, now - Date.parse(String(lastOperatorOutbound.sent_at || lastOperatorOutbound.created_at || 0)))
-    : null;
+  const latestOutboundAgeMs =
+    latestOutboundAt > 0 ? Math.max(0, now - latestOutboundAt) : null;
+
+  const operatorOutboundAgeMs =
+    latestOperatorOutboundAt > 0
+      ? Math.max(0, now - latestOperatorOutboundAt)
+      : null;
+
+  const lastAiOutboundAgeMs =
+    lastAiOutboundAt > 0 ? Math.max(0, now - lastAiOutboundAt) : null;
 
   const lastKnownAiReplyText = getLatestKnownAiReplyText(list, threadState);
 
   const duplicateOfLastAiReply =
     Boolean(lastKnownAiReplyText) &&
-    normalizeTextForCompare(lastKnownAiReplyText) === normalizeTextForCompare(text);
+    normalizeTextForCompare(lastKnownAiReplyText) ===
+      normalizeTextForCompare(text);
 
   const operatorRecentlyReplied =
     Boolean(stateSignals.operatorRecentlyReplied) ||
@@ -193,6 +251,7 @@ export function getReliabilityFlags({
     latestOutboundAgeMs,
     operatorRecentlyReplied,
     operatorOutboundAgeMs,
+    lastAiOutboundAgeMs,
     duplicateOfLastAiReply,
     quietHoursApplied: Boolean(quietHoursApplied),
     channelAllowed: Boolean(policy?.channelAllowed),
@@ -203,5 +262,13 @@ export function getReliabilityFlags({
     leadAlreadyCreated: stateSignals.leadAlreadyCreated,
     contactRequestedAt: stateSignals.contactRequestedAt,
     pricingExplainedAt: stateSignals.pricingExplainedAt,
+    handoffActive: stateSignals.handoffActive,
+    handoffReason: stateSignals.handoffReason,
+    handoffPriority: stateSignals.handoffPriority,
+    suppressedUntilOperatorReply: stateSignals.suppressedUntilOperatorReply,
+    lastDecisionAt: stateSignals.lastDecisionAt,
+    latestOutboundSenderType: s(latestOutbound?.sender_type || ""),
+    latestOperatorOutboundId: s(latestOperatorOutbound?.id || ""),
+    lastAiOutboundId: s(lastAiOutbound?.id || ""),
   };
 }
