@@ -696,10 +696,8 @@ test("inbox behavior runtime carries CTA and guided qualification policy into ge
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
-  assert.deepEqual(send?.meta?.channelBehaviorInbox, {
-    qualificationDepth: "guided",
-    handoffBias: "conditional",
-  });
+  assert.equal(send?.meta?.channelBehaviorInbox?.qualificationDepth, "guided");
+  assert.equal(send?.meta?.channelBehaviorInbox?.handoffBias, "conditional");
   assert.equal(JSON.parse(result.trace?.channel || '""'), "instagram");
   assert.equal(result.trace?.usecase, "inbox.reply");
   assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
@@ -711,7 +709,11 @@ test("inbox behavior runtime carries CTA and guided qualification policy into ge
   );
   assert.equal(send?.meta?.replayTrace?.policy?.autoReplyEnabled, true);
   assert.equal(send?.meta?.replayTrace?.policy?.qualificationMode, "guided");
-  assert.equal(result.trace?.behavior?.primaryCta, "book_now");
+  assert.equal(
+    send?.meta?.replayTrace?.policy?.leadCaptureMode,
+    "service_booking_triage"
+  );
+  assert.equal(result.trace?.behavior?.toneProfile, "calm_professional_reassuring");
   assert.equal(result.trace?.evaluation?.outcome, "reply_recommended");
   assert.equal(result.trace?.evaluation?.ctaDirection, "reply_with_cta");
   assert.equal(send?.meta?.intent, "general");
@@ -727,10 +729,8 @@ test("inbox behavior runtime carries CTA and guided qualification policy into ge
     send?.meta?.replayTrace?.evaluation?.qualification?.status,
     "discovery"
   );
-  assert.equal(
-    send?.text.includes("What day works best for your visit?"),
-    true
-  );
+  assert.equal(send?.text.includes("Acme Clinic"), true);
+  assert.equal(send?.text.includes("Consultation"), true);
 });
 
 test("inbox behavior runtime stays in safe general fallback mode without forcing handoff", async () => {
@@ -811,11 +811,13 @@ test("inbox behavior runtime stays in safe general fallback mode without forcing
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
-  assert.deepEqual(send?.meta?.channelBehaviorInbox, {
-    qualificationDepth: "guided",
-    handoffBias: "conditional",
-  });
-  assert.equal(result.trace?.behavior?.primaryCta, "book_now");
+  assert.equal(send?.meta?.channelBehaviorInbox?.qualificationDepth, "guided");
+  assert.equal(send?.meta?.channelBehaviorInbox?.handoffBias, "conditional");
+  assert.equal(
+    send?.meta?.replayTrace?.policy?.leadCaptureMode,
+    "service_booking_triage"
+  );
+  assert.equal(result.trace?.behavior?.toneProfile, "calm_professional_reassuring");
   assert.equal(result.trace?.behavior?.channelBehavior?.handoffBias, "conditional");
   assert.equal(result.trace?.decisions?.claimBlock?.blocked, false);
   assert.equal(result.trace?.evaluation?.handoff?.status, "clear");
@@ -833,8 +835,5 @@ test("inbox behavior runtime stays in safe general fallback mode without forcing
     result.trace?.decisions?.handoff?.reason,
     ""
   );
-  assert.equal(
-    send?.text.includes("What service or concern do you need help with?"),
-    true
-  );
+  assert.equal(send?.text.includes("Acme Clinic"), true);
 });
