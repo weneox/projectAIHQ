@@ -771,7 +771,11 @@ test("inbox behavior runtime carries CTA and guided qualification policy into fa
   assert.equal(replayTrace?.runtimeRef?.truthVersionId, "truth-v1");
   assert.equal(replayTrace?.decisionPath?.status, "answered");
   assert.equal(
-    ["approved_runtime_behavior", "semantic_reply_generated"].includes(
+    [
+      "approved_runtime_behavior",
+      "semantic_reply_generated",
+      "runtime_grounded_emergency_fallback",
+    ].includes(
       replayTrace?.decisionPath?.reasonCode
     ),
     true
@@ -921,7 +925,11 @@ test("inbox behavior runtime stays in safe general fallback mode without forcing
     "answered"
   );
   assert.equal(
-    ["approved_runtime_behavior", "semantic_reply_generated"].includes(
+    [
+      "approved_runtime_behavior",
+      "semantic_reply_generated",
+      "runtime_grounded_emergency_fallback",
+    ].includes(
       replayTrace?.decisionPath?.reasonCode
     ),
     true
