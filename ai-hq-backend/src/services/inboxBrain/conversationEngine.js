@@ -3,7 +3,6 @@ import { cfg } from "../../config.js";
 import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import { buildPromptBundle } from "../promptBundle.js";
 import {
-  buildFallbackReply,
   buildKnowledgeReply,
   buildPlaybookReply,
   buildUnsupportedServiceReply,
@@ -93,34 +92,6 @@ function safeJsonPreview(value, max = 900) {
   } catch {
     return "";
   }
-}
-
-function summarizeResponseShape(response = {}) {
-  const output = Array.isArray(response?.output) ? response.output : [];
-  const firstOutput = output[0] || null;
-  const firstContent = Array.isArray(firstOutput?.content)
-    ? firstOutput.content[0] || null
-    : null;
-
-  return {
-    topLevelKeys: Object.keys(obj(response)).slice(0, 20),
-    hasOutputText: Boolean(s(response?.output_text || "")),
-    hasTopLevelParsed: Boolean(response?.output_parsed || response?.parsed),
-    outputLength: output.length,
-    outputTypes: output.map((item) => s(item?.type)).filter(Boolean).slice(0, 10),
-    contentTypes: output
-      .flatMap((item) =>
-        Array.isArray(item?.content)
-          ? item.content.map((block) => s(block?.type)).filter(Boolean)
-          : []
-      )
-      .slice(0, 20),
-    firstOutputType: s(firstOutput?.type || ""),
-    firstContentType: s(firstContent?.type || ""),
-    firstOutputPreview: safeJsonPreview(firstOutput, 700),
-    firstContentPreview: safeJsonPreview(firstContent, 700),
-    outputTextPreview: safePreview(s(response?.output_text || ""), 280),
-  };
 }
 
 function logConversationEngine(event = "", payload = {}) {
@@ -250,18 +221,50 @@ function extractResponseRefusal(resp = {}) {
   return "";
 }
 
-async function runStructuredDecision({
-  openai,
+function summarizeResponseShape(response = {}) {
+  const output = Array.isArray(response?.output) ? response.output : [];
+  const firstOutput = output[0] || null;
+  const firstContent = Array.isArray(firstOutput?.content)
+    ? firstOutput.content[0] || null
+    : null;
+
+  return {
+    topLevelKeys: Object.keys(obj(response)).slice(0, 30),
+    status: s(response?.status || ""),
+    hasOutputText: Boolean(s(response?.output_text || "")),
+    hasTopLevelParsed: Boolean(response?.output_parsed || response?.parsed),
+    outputLength: output.length,
+    outputTypes: output.map((item) => s(item?.type)).filter(Boolean).slice(0, 10),
+    contentTypes: output
+      .flatMap((item) =>
+        Array.isArray(item?.content)
+          ? item.content.map((block) => s(block?.type)).filter(Boolean)
+          : []
+      )
+      .slice(0, 20),
+    firstOutputType: s(firstOutput?.type || ""),
+    firstContentType: s(firstContent?.type || ""),
+    firstOutputPreview: safeJsonPreview(firstOutput, 700),
+    firstContentPreview: safeJsonPreview(firstContent, 700),
+    outputTextPreview: safePreview(s(response?.output_text || ""), 280),
+  };
+}
+
+function buildResponseCreateArgs({
   model,
   maxOutputTokens,
   systemPrompt,
   userPrompt,
 }) {
-  const response = await openai.responses.create({
+  const isGpt5 = lower(model).startsWith("gpt-5");
+
+  return {
     model,
+    ...(isGpt5 ? { reasoning: { effort: "minimal" } } : {}),
     max_output_tokens: maxOutputTokens,
     text: {
       format: buildStructuredTextFormat(model),
+      ...(isGpt5 ? { verbosity: "low" } : {}),
     },
     input: [
       {
@@ -273,24 +276,136 @@ async function runStructuredDecision({
         content: userPrompt,
       },
     ],
-  });
+  };
+}
 
-  const refusal = extractResponseRefusal(response);
+function isReasoningOnlyEmptyResponse({
+  parsed = null,
+  raw = "",
+  refusal = "",
+  response = {},
+}) {
+  if (refusal) return false;
+  if (parsed && typeof parsed === "object") return false;
+  if (s(raw)) return false;
+
+  const output = Array.isArray(response?.output) ? response.output : [];
+  if (!output.length) return true;
+
+  const onlyReasoning = output.every(
+    (item) => s(item?.type) === "reasoning" || !s(item?.type)
+  );
+
+  return onlyReasoning;
+}
+
+async function requestStructuredDecisionOnce({
+  openai,
+  model,
+  maxOutputTokens,
+  systemPrompt,
+  userPrompt,
+}) {
+  const response = await openai.responses.create(
+    buildResponseCreateArgs({
+      model,
+      maxOutputTokens,
+      systemPrompt,
+      userPrompt,
+    })
+  );
+
   const parsed = extractStructuredPayload(response);
   const raw = parsed ? JSON.stringify(parsed) : extractText(response);
+  const refusal = extractResponseRefusal(response);
+  const shape = summarizeResponseShape(response);
 
-  logConversationEngine("response_shape", summarizeResponseShape(response));
+  logConversationEngine("response_shape", {
+    model,
+    ...shape,
+  });
+
   logConversationEngine("response_extract", {
+    model,
     hasParsed: Boolean(parsed),
-    parsedKeys: parsed && typeof parsed === "object" ? Object.keys(parsed).slice(0, 20) : [],
+    parsedKeys:
+      parsed && typeof parsed === "object" ? Object.keys(parsed).slice(0, 20) : [],
     rawPreview: safePreview(raw, 500),
     refusalPreview: safePreview(refusal, 220),
   });
 
   return {
+    response,
+    parsed,
     raw,
     refusal,
-    parsed,
+  };
+}
+
+async function runStructuredDecision({
+  openai,
+  model,
+  maxOutputTokens,
+  systemPrompt,
+  userPrompt,
+}) {
+  const primary = await requestStructuredDecisionOnce({
+    openai,
+    model,
+    maxOutputTokens,
+    systemPrompt,
+    userPrompt,
+  });
+
+  if (
+    !isReasoningOnlyEmptyResponse({
+      parsed: primary.parsed,
+      raw: primary.raw,
+      refusal: primary.refusal,
+      response: primary.response,
+    })
+  ) {
+    return {
+      raw: primary.raw,
+      refusal: primary.refusal,
+      parsed: primary.parsed,
+      modelUsed: model,
+    };
+  }
+
+  const fallbackModel = lower(model).startsWith("gpt-5")
+    ? s(cfg?.ai?.openaiStructuredFallbackModel || "gpt-4.1-mini") ||
+      "gpt-4.1-mini"
+    : "";
+
+  if (!fallbackModel || lower(fallbackModel) === lower(model)) {
+    return {
+      raw: primary.raw,
+      refusal: primary.refusal,
+      parsed: primary.parsed,
+      modelUsed: model,
+    };
+  }
+
+  logConversationEngineWarn("reasoning_only_empty_response_retrying", {
+    primaryModel: model,
+    fallbackModel,
+    maxOutputTokens,
+  });
+
+  const fallback = await requestStructuredDecisionOnce({
+    openai,
+    model: fallbackModel,
+    maxOutputTokens: Math.max(1200, maxOutputTokens),
+    systemPrompt,
+    userPrompt,
+  });
+
+  return {
+    raw: fallback.raw,
+    refusal: fallback.refusal,
+    parsed: fallback.parsed,
+    modelUsed: fallbackModel,
   };
 }
 
@@ -469,7 +584,10 @@ function buildRuntimeGrounding(profile = {}) {
     businessType: s(profile?.businessType),
     niche: s(profile?.niche),
     subNiche: s(profile?.subNiche),
-    languages: arr(profile?.languages).map((x) => s(x)).filter(Boolean).slice(0, 6),
+    languages: arr(profile?.languages)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 6),
     tone: s(profile?.tone),
     toneProfile: s(profile?.toneProfile),
     conversionGoal: s(profile?.conversionGoal),
@@ -497,7 +615,10 @@ function buildRuntimeGrounding(profile = {}) {
         key: s(item?.key),
         name: s(item?.name),
         description: s(item?.description),
-        aliases: arr(item?.aliases).map((x) => s(x)).filter(Boolean).slice(0, 10),
+        aliases: arr(item?.aliases)
+          .map((x) => s(x))
+          .filter(Boolean)
+          .slice(0, 10),
         active: item?.active === true,
         faqAnswer: s(item?.faqAnswer),
         disabledReplyText: s(item?.disabledReplyText),
@@ -507,7 +628,10 @@ function buildRuntimeGrounding(profile = {}) {
         handoffMode: s(item?.handoffMode),
       }))
       .slice(0, 24),
-    activeServiceNames: arr(profile?.services).map((x) => s(x)).filter(Boolean).slice(0, 20),
+    activeServiceNames: arr(profile?.services)
+      .map((x) => s(x))
+      .filter(Boolean)
+      .slice(0, 20),
     disabledServiceNames: arr(profile?.disabledServices)
       .map((x) => s(x))
       .filter(Boolean)
@@ -744,7 +868,8 @@ function localizedEmergencyCopy(language = "en") {
       ack: "Понял.",
       serviceLead: (serviceName) => `Вы пишете по теме ${serviceName}.`,
       generalLead: "Я могу помочь с этим.",
-      unsupportedLead: "Этот запрос сейчас не выглядит как активная услуга бизнеса.",
+      unsupportedLead:
+        "Этот запрос сейчас не выглядит как активная услуга бизнеса.",
       serviceQuestion:
         "Чтобы точнее сориентировать, напишите одной фразой вашу основную цель по этому вопросу.",
       generalQuestion:
@@ -774,7 +899,9 @@ function buildRuntimeGroundedEmergencyFallback({
   const language = pickPrimaryLanguage(profile, "en");
 
   if (matchedPlaybook) {
-    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
+    const replyText = sanitizeReplyText(
+      buildPlaybookReply(matchedPlaybook, profile)
+    );
     return {
       intent: "playbook",
       askCategory: "general",
@@ -785,7 +912,10 @@ function buildRuntimeGroundedEmergencyFallback({
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: ["matched_playbook", "runtime_grounded_emergency_fallback"],
+      groundedFactsUsed: [
+        "matched_playbook",
+        "runtime_grounded_emergency_fallback",
+      ],
       shouldAskQuestion: false,
       shouldCreateLead: Boolean(matchedPlaybook.createLead),
       shouldHandoff: Boolean(matchedPlaybook.handoff),
@@ -802,7 +932,9 @@ function buildRuntimeGroundedEmergencyFallback({
   }
 
   if (matchedKnowledge.length) {
-    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
+    const replyText = sanitizeReplyText(
+      buildKnowledgeReply(matchedKnowledge, profile)
+    );
     return {
       intent: "knowledge_answer",
       askCategory: "faq",
@@ -813,7 +945,10 @@ function buildRuntimeGroundedEmergencyFallback({
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: ["matched_knowledge", "runtime_grounded_emergency_fallback"],
+      groundedFactsUsed: [
+        "matched_knowledge",
+        "runtime_grounded_emergency_fallback",
+      ],
       shouldAskQuestion: false,
       shouldCreateLead: false,
       shouldHandoff: false,
@@ -845,7 +980,10 @@ function buildRuntimeGroundedEmergencyFallback({
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: ["disabled_service_match", "runtime_grounded_emergency_fallback"],
+      groundedFactsUsed: [
+        "disabled_service_match",
+        "runtime_grounded_emergency_fallback",
+      ],
       shouldAskQuestion: false,
       shouldCreateLead: false,
       shouldHandoff: false,
@@ -857,7 +995,9 @@ function buildRuntimeGroundedEmergencyFallback({
       fallbackReason: "disabled_service_match",
       language,
       understoodIntent: "unsupported_service",
-      detectedService: s(matchedDisabledService?.name || matchedDisabledService?.key),
+      detectedService: s(
+        matchedDisabledService?.name || matchedDisabledService?.key
+      ),
     };
   }
 
@@ -865,7 +1005,9 @@ function buildRuntimeGroundedEmergencyFallback({
     const replyText = sanitizeReplyText(
       [
         copy.ack,
-        copy.serviceLead(s(matchedActiveService?.name || matchedActiveService?.key)),
+        copy.serviceLead(
+          s(matchedActiveService?.name || matchedActiveService?.key)
+        ),
         copy.serviceQuestion,
       ].join(" ")
     );
@@ -877,12 +1019,20 @@ function buildRuntimeGroundedEmergencyFallback({
       replyStyle: "consultative",
       customerGoal: s(text),
       answerFirst: sanitizeReplyText(
-        [copy.ack, copy.serviceLead(s(matchedActiveService?.name || matchedActiveService?.key))].join(" ")
+        [
+          copy.ack,
+          copy.serviceLead(
+            s(matchedActiveService?.name || matchedActiveService?.key)
+          ),
+        ].join(" ")
       ),
       nextQuestion: copy.serviceQuestion,
       replyText,
       missingInformation: ["service_scope"],
-      groundedFactsUsed: ["active_service_match", "runtime_grounded_emergency_fallback"],
+      groundedFactsUsed: [
+        "active_service_match",
+        "runtime_grounded_emergency_fallback",
+      ],
       shouldAskQuestion: true,
       shouldCreateLead: false,
       shouldHandoff: false,
@@ -894,7 +1044,9 @@ function buildRuntimeGroundedEmergencyFallback({
       fallbackReason: "active_service_match",
       language,
       understoodIntent: "service_interest",
-      detectedService: s(matchedActiveService?.name || matchedActiveService?.key),
+      detectedService: s(
+        matchedActiveService?.name || matchedActiveService?.key
+      ),
     };
   }
 
@@ -998,7 +1150,10 @@ function normalizeConversationDecision(parsed = {}, fallbackLanguage = "en") {
     shouldHandoff: coerceBoolean(parsed?.shouldHandoff, false),
     handoffReason: s(parsed?.handoffReason || ""),
     handoffPriority: normalizePriority(parsed?.handoffPriority || "normal"),
-    confidence: Math.max(0, Math.min(1, coerceNumber(parsed?.confidence, 0.45))),
+    confidence: Math.max(
+      0,
+      Math.min(1, coerceNumber(parsed?.confidence, 0.45))
+    ),
     leadScore: Math.max(
       0,
       Math.min(100, Math.round(coerceNumber(parsed?.leadScore, 20)))
@@ -1014,8 +1169,6 @@ function validateConversationDecision({
   parsed = {},
   customerText = "",
   profile = {},
-  matchedKnowledge = [],
-  matchedPlaybook = null,
 }) {
   const normalized = normalizeConversationDecision(
     parsed,
@@ -1225,7 +1378,10 @@ function finalizeConversationResult({
       composed.behaviorSource || profile?.behavior?.source || ""
     ),
     language: s(
-      composed.language || baseResult.language || profile?.languages?.[0] || "en"
+      composed.language ||
+        baseResult.language ||
+        profile?.languages?.[0] ||
+        "en"
     ),
     greetingOnly: Boolean(composed.greetingOnly),
   };
@@ -1267,9 +1423,13 @@ export async function runTenantAwareConversationEngine({
   runtime = null,
 }) {
   const openai = ensureOpenAI();
-  const model = s(cfg?.ai?.openaiModel || "gpt-4.1-mini") || "gpt-4.1-mini";
-  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 650);
-  const maxOutputTokens = Math.max(220, Math.min(650, configuredMaxTokens || 650));
+  const configuredModel =
+    s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
+  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 2200);
+  const maxOutputTokens = Math.max(
+    1200,
+    Math.min(4000, configuredMaxTokens || 2200)
+  );
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
 
   const resolvedRuntime =
@@ -1380,7 +1540,8 @@ export async function runTenantAwareConversationEngine({
       raw: "",
       replyMode: "conversation_engine_emergency_fallback",
       semanticFailureReason: "openai_api_key_missing",
-      fallbackReason: fallback.fallbackReason || "runtime_grounded_emergency_fallback",
+      fallbackReason:
+        fallback.fallbackReason || "runtime_grounded_emergency_fallback",
     });
   }
 
@@ -1396,7 +1557,7 @@ export async function runTenantAwareConversationEngine({
   logConversationEngine("request_start", {
     tenantKey: resolvedTenantKey,
     channel: s(channel || "inbox"),
-    model,
+    model: configuredModel,
     maxOutputTokens,
     matchedKnowledgeCount: matchedKnowledge.length,
     hasMatchedPlaybook: Boolean(matchedPlaybook),
@@ -1415,10 +1576,11 @@ export async function runTenantAwareConversationEngine({
     let parsed = null;
     let semanticFailureReason = "";
     let replyMode = "conversation_engine";
+    let modelUsed = configuredModel;
 
     const firstPass = await runStructuredDecision({
       openai,
-      model,
+      model: configuredModel,
       maxOutputTokens,
       systemPrompt,
       userPrompt,
@@ -1426,7 +1588,8 @@ export async function runTenantAwareConversationEngine({
 
     raw = firstPass.raw;
     refusal = firstPass.refusal;
-    parsed = firstPass.parsed || parseStructuredOutput(raw, model);
+    parsed = firstPass.parsed || parseStructuredOutput(raw, modelUsed);
+    modelUsed = firstPass.modelUsed || configuredModel;
 
     const firstValidation = validateConversationDecision({
       parsed,
@@ -1434,8 +1597,6 @@ export async function runTenantAwareConversationEngine({
         conversation.latestCustomerMessageWithoutCommand ||
         conversation.latestCustomerMessage,
       profile,
-      matchedKnowledge,
-      matchedPlaybook,
     });
 
     if (refusal) {
@@ -1460,7 +1621,8 @@ export async function runTenantAwareConversationEngine({
         raw,
         replyMode: "conversation_engine_emergency_fallback",
         semanticFailureReason,
-        fallbackReason: fallback.fallbackReason || "runtime_grounded_emergency_fallback",
+        fallbackReason:
+          fallback.fallbackReason || "runtime_grounded_emergency_fallback",
       });
     }
 
@@ -1471,11 +1633,12 @@ export async function runTenantAwareConversationEngine({
         reasons: firstValidation.reasons,
         rawPreview: safePreview(raw, 400),
         parsedPreview: safeJsonPreview(parsed, 700),
+        modelUsed,
       });
 
       const repairPass = await runStructuredDecision({
         openai,
-        model,
+        model: modelUsed,
         maxOutputTokens,
         systemPrompt,
         userPrompt: buildRepairPrompt({
@@ -1488,7 +1651,8 @@ export async function runTenantAwareConversationEngine({
 
       raw = repairPass.raw;
       refusal = repairPass.refusal;
-      parsed = repairPass.parsed || parseStructuredOutput(raw, model);
+      modelUsed = repairPass.modelUsed || modelUsed;
+      parsed = repairPass.parsed || parseStructuredOutput(raw, modelUsed);
 
       const repairValidation = validateConversationDecision({
         parsed,
@@ -1496,8 +1660,6 @@ export async function runTenantAwareConversationEngine({
           conversation.latestCustomerMessageWithoutCommand ||
           conversation.latestCustomerMessage,
         profile,
-        matchedKnowledge,
-        matchedPlaybook,
       });
 
       if (!repairValidation.ok || refusal) {
@@ -1515,9 +1677,13 @@ export async function runTenantAwareConversationEngine({
         logConversationEngineWarn("repair_failed_using_emergency_fallback", {
           tenantKey: resolvedTenantKey,
           channel: s(channel || "inbox"),
-          reasons: refusal ? ["repair_model_refusal"] : repairValidation.reasons,
+          reasons: refusal
+            ? ["repair_model_refusal"]
+            : repairValidation.reasons,
           fallbackReason: fallback.fallbackReason,
           rawPreview: safePreview(raw, 400),
+          parsedPreview: safeJsonPreview(parsed, 700),
+          modelUsed,
         });
 
         return finalizeConversationResult({
@@ -1563,7 +1729,8 @@ export async function runTenantAwareConversationEngine({
     logConversationEngine("decision", {
       tenantKey: resolvedTenantKey,
       channel: s(channel || "inbox"),
-      model,
+      configuredModel,
+      modelUsed,
       intent: result.intent,
       detectedService: s(result.detectedService),
       askCategory: result.askCategory,
@@ -1589,7 +1756,7 @@ export async function runTenantAwareConversationEngine({
     logConversationEngineError("failed_using_emergency_fallback", {
       tenantKey: resolvedTenantKey,
       channel: s(channel || "inbox"),
-      model,
+      model: configuredModel,
       errorName: s(error?.name || "Error"),
       errorMessage: s(error?.message || "Unknown conversation engine error"),
       errorCode: s(error?.code),
@@ -1620,7 +1787,9 @@ export async function runTenantAwareConversationEngine({
       policy,
       raw: "",
       replyMode: "conversation_engine_emergency_fallback",
-      semanticFailureReason: s(error?.message || "conversation_engine_failed"),
+      semanticFailureReason: s(
+        error?.message || "conversation_engine_failed"
+      ),
       fallbackReason:
         fallback.fallbackReason || "runtime_grounded_emergency_fallback",
     });
