@@ -13,47 +13,6 @@ import {
 } from "./shared.js";
 import { resolveBehaviorProfile } from "./behavior/resolveBehaviorProfile.js";
 
-const GENERIC_PRIMARY_CTA_VALUES = new Set([
-  "soft",
-  "software",
-  "service",
-  "services",
-  "website",
-  "web site",
-  "web",
-  "site",
-  "sayt",
-  "veb sayt",
-  "vebsayt",
-  "product",
-  "products",
-  "solution",
-  "solutions",
-  "project",
-  "projects",
-  "help",
-  "support",
-  "contact",
-  "contact us",
-  "message",
-  "reply",
-  "quote",
-  "pricing",
-  "sales",
-  "lead",
-  "consultation",
-  "consulting",
-  "call",
-  "booking",
-  "reservation",
-  "whatsapp",
-  "telegram",
-  "instagram",
-  "dm",
-  "chat",
-  "business",
-]);
-
 function normalizeIndustry(value) {
   const x = lower(value);
   if (!x) return "generic_business";
@@ -140,75 +99,64 @@ function normalizeBoolean(value, fallback = false) {
   return fallback;
 }
 
+function normalizePriority(value, fallback = 100) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function normalizeStringList(value = []) {
   return uniqStrings(arr(value).map((item) => s(item)).filter(Boolean));
 }
 
-function normalizePhraseKey(value = "") {
-  return lower(s(value))
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function sanitizeLooseText(value = "") {
+  return s(value).replace(/\s+/g, " ").trim();
 }
 
-function sanitizePrompt(value = "") {
-  return s(value)
-    .replace(/\s+/g, " ")
-    .replace(/^[\s,.;:!?\-–—]+/u, "")
-    .replace(/[\s,.;:!?\-–—]+$/u, "")
-    .trim();
+function normalizeLanguageCode(value = "") {
+  const x = lower(value);
+  if (!x) return "";
+
+  if (["az", "aze", "azerbaijani"].includes(x)) return "az";
+  if (["en", "eng", "english"].includes(x)) return "en";
+  if (["tr", "tur", "turkish"].includes(x)) return "tr";
+  if (["ru", "rus", "russian"].includes(x)) return "ru";
+  if (["es", "spa", "spanish"].includes(x)) return "es";
+  if (["de", "deu", "ger", "german"].includes(x)) return "de";
+  if (["fr", "fra", "fre", "french"].includes(x)) return "fr";
+  if (["it", "ita", "italian"].includes(x)) return "it";
+  if (["pt", "por", "portuguese"].includes(x)) return "pt";
+  if (["ar", "ara", "arabic"].includes(x)) return "ar";
+  if (["nl", "dut", "nld", "dutch"].includes(x)) return "nl";
+  if (["pl", "pol", "polish"].includes(x)) return "pl";
+  if (["uk", "ukr", "ukrainian"].includes(x)) return "uk";
+  if (["zh", "zho", "chi", "chinese"].includes(x)) return "zh";
+  if (["ja", "jpn", "japanese"].includes(x)) return "ja";
+  if (["ko", "kor", "korean"].includes(x)) return "ko";
+  if (["hi", "hin", "hindi"].includes(x)) return "hi";
+
+  return x;
 }
 
-function isGenericPrimaryCta(value = "") {
-  const key = normalizePhraseKey(value);
-  if (!key) return true;
-  if (GENERIC_PRIMARY_CTA_VALUES.has(key)) return true;
-  if (key.length <= 4) return true;
-  return false;
-}
+function normalizeLanguageList(...sources) {
+  const values = [];
 
-function stripUnsafePrimaryCtaPrefix(value = "") {
-  const text = sanitizePrompt(value);
-  if (!text) return "";
-
-  const match = text.match(/^(.{1,40}?)\s+(üçün|ucun|for)\s+(.+)$/iu);
-  if (!match) return text;
-
-  const prefix = sanitizePrompt(match[1]);
-  const remainder = sanitizePrompt(match[3]);
-  if (!remainder) return "";
-
-  return isGenericPrimaryCta(prefix) ? remainder : text;
-}
-
-function sanitizeConversationPromptCandidate(value = "") {
-  const stripped = stripUnsafePrimaryCtaPrefix(value);
-  const cleaned = sanitizePrompt(stripped);
-  if (!cleaned) return "";
-
-  const key = normalizePhraseKey(cleaned);
-  if (!key) return "";
-
-  if ([
-    "soft",
-    "website",
-    "service",
-    "services",
-    "product",
-    "help",
-    "support",
-  ].includes(key)) {
-    return "";
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      values.push(...source);
+      continue;
+    }
+    if (typeof source === "string") {
+      values.push(source);
+    }
   }
 
-  return cleaned;
-}
+  const normalized = uniqStrings(
+    values
+      .map((item) => normalizeLanguageCode(item))
+      .filter(Boolean)
+  );
 
-function sanitizePrimaryCtaForConversation(value = "") {
-  const cleaned = sanitizePrompt(value);
-  if (!cleaned) return "";
-  if (isGenericPrimaryCta(cleaned)) return "";
-  return cleaned;
+  return normalized.length ? normalized : ["en"];
 }
 
 function pickFirstString(...values) {
@@ -219,35 +167,31 @@ function pickFirstString(...values) {
   return "";
 }
 
-function normalizePriority(value, fallback = 100) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return n;
-}
-
-function normalizeLanguageList(...sources) {
-  const values = [];
-  for (const source of sources) values.push(...arr(source));
-  const normalized = normalizeStringList(values);
-  return normalized.length ? normalized : ["az"];
-}
-
-function normalizeQualificationQuestions(...sources) {
-  const values = [];
-  for (const source of sources) values.push(...arr(source));
-  return uniqStrings(
-    values
-      .map((item) => sanitizeConversationPromptCandidate(item))
-      .filter(Boolean)
-  );
-}
-
 function normalizeBehaviorObject(...sources) {
   for (const source of sources) {
     const safe = obj(source);
     if (Object.keys(safe).length) return safe;
   }
   return {};
+}
+
+function normalizePromptList(...sources) {
+  const values = [];
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      values.push(...source);
+      continue;
+    }
+    if (typeof source === "string") {
+      values.push(source);
+    }
+  }
+
+  return uniqStrings(
+    values
+      .map((item) => sanitizeLooseText(item))
+      .filter(Boolean)
+  );
 }
 
 function buildServiceModeDefaults(service = {}) {
@@ -356,7 +300,7 @@ function normalizeKnowledgeEntry(item) {
     active,
     intentKey: s(x.intent_key || x.intentKey),
     serviceKey: s(x.service_key || x.serviceKey),
-    language: s(x.language || "az"),
+    language: normalizeLanguageCode(x.language || "en") || "en",
     priority: normalizePriority(x.priority, 100),
     meta: x,
   };
@@ -405,7 +349,7 @@ function normalizePlaybook(item) {
     handoffPriority: s(x.handoffPriority || "normal") || "normal",
     intentKey: s(x.intent_key),
     serviceKey: s(x.service_key),
-    language: s(x.language || "az"),
+    language: normalizeLanguageCode(x.language || "en") || "en",
     priority: normalizePriority(x.priority, 100),
     active,
     meta: x,
@@ -439,6 +383,45 @@ function buildNormalizedServiceNames(serviceCatalog = [], active = true) {
       .map((item) => s(item?.name))
       .filter(Boolean)
   );
+}
+
+function extractConversationAssets({
+  tenant = {},
+  profile = {},
+  meta = {},
+  behavior = {},
+  rawBehavior = {},
+}) {
+  return {
+    primaryCtaRaw: pickFirstString(
+      profile?.primary_cta,
+      profile?.primaryCta,
+      meta?.primaryCta,
+      meta?.primary_cta,
+      rawBehavior?.primaryCta,
+      rawBehavior?.primary_cta
+    ),
+    qualificationQuestions: normalizePromptList(
+      profile?.qualificationQuestions,
+      profile?.qualification_questions,
+      meta?.qualificationQuestions,
+      meta?.qualification_questions
+    ),
+    leadPrompts: normalizePromptList(
+      behavior?.leadPrompts,
+      rawBehavior?.leadPrompts,
+      rawBehavior?.lead_prompts
+    ),
+    customGreeting: sanitizeLooseText(
+      pickFirstString(
+        behavior?.customGreeting,
+        rawBehavior?.customGreeting,
+        rawBehavior?.custom_greeting,
+        profile?.customGreeting,
+        meta?.customGreeting
+      )
+    ),
+  };
 }
 
 function buildFallbackBehavior({
@@ -508,6 +491,14 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     industry,
   });
 
+  const conversationAssets = extractConversationAssets({
+    tenant: safeTenant,
+    profile,
+    meta,
+    behavior,
+    rawBehavior: {},
+  });
+
   return {
     tenantKey: resolvedTenantKey,
     displayName,
@@ -531,7 +522,8 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       profile?.languages,
       meta?.languages,
       brand?.languages,
-      [safeTenant?.default_language || "az", "en"]
+      safeTenant?.default_language,
+      "en"
     ),
     tone: s(behavior.tone),
     toneProfile: s(behavior.toneProfile),
@@ -540,7 +532,6 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     brevity: s(behavior.brevity),
     emojiPolicy: s(behavior.emojiPolicy),
     maxSentences: Number(behavior.maxSentences || 2),
-    leadPrompts: normalizeQualificationQuestions(behavior.leadPrompts),
     forbiddenClaims: normalizeStringList(
       profile?.banned_phrases,
       meta?.forbiddenClaims,
@@ -552,24 +543,14 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       meta?.conversionGoal,
       meta?.conversion_goal
     ),
-    primaryCta: sanitizePrimaryCtaForConversation(
-      pickFirstString(
-        profile?.primary_cta,
-        meta?.primaryCta,
-        meta?.primary_cta
-      )
-    ),
+    primaryCta: "",
     leadQualificationMode: pickFirstString(
       profile?.lead_qualification_mode,
       meta?.leadQualificationMode,
       meta?.lead_qualification_mode
     ),
-    qualificationQuestions: normalizeQualificationQuestions(
-      profile?.qualificationQuestions,
-      profile?.qualification_questions,
-      meta?.qualificationQuestions,
-      meta?.qualification_questions
-    ),
+    qualificationQuestions: conversationAssets.qualificationQuestions,
+    leadPrompts: conversationAssets.leadPrompts,
     bookingFlowType: pickFirstString(
       profile?.booking_flow_type,
       meta?.bookingFlowType,
@@ -591,6 +572,7 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     profile,
     tenant: safeTenant,
     threadState: null,
+    conversationAssets,
   };
 }
 
@@ -647,7 +629,7 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     responsePlaybooks: [],
     services: [],
     disabledServices: [],
-    languages: ["az"],
+    languages: ["en"],
     tone: "",
     toneProfile: "",
     formality: "",
@@ -666,6 +648,12 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     disallowedClaims: [],
     behavior: {},
     channelBehavior: {},
+    conversationAssets: {
+      primaryCtaRaw: "",
+      qualificationQuestions: [],
+      leadPrompts: [],
+      customGreeting: "",
+    },
   };
 }
 
@@ -780,6 +768,14 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     fallbackChannelBehavior: obj(fallback.channelBehavior),
   });
 
+  const conversationAssets = extractConversationAssets({
+    tenant: strictAuthority ? rawTenant : { ...obj(fallback.tenant), ...rawTenant },
+    profile: strictAuthority ? rawProfile : { ...obj(fallback.profile), ...rawProfile },
+    meta: obj(rawTenant?.meta),
+    behavior: resolvedBehavior,
+    rawBehavior,
+  });
+
   return {
     ...fallback,
     ...container,
@@ -863,7 +859,7 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     brevity: s(resolvedBehavior.brevity),
     emojiPolicy: s(resolvedBehavior.emojiPolicy),
     maxSentences: Number(resolvedBehavior.maxSentences || 2),
-    leadPrompts: normalizeQualificationQuestions(resolvedBehavior.leadPrompts),
+    leadPrompts: conversationAssets.leadPrompts,
     forbiddenClaims: normalizeStringList(
       arr(container.forbiddenClaims).length
         ? container.forbiddenClaims
@@ -880,15 +876,7 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.conversion_goal,
       fallback.conversionGoal
     ),
-    primaryCta: sanitizePrimaryCtaForConversation(
-      pickFirstString(
-        container.primaryCta,
-        container.primary_cta,
-        rawBehavior.primaryCta,
-        rawBehavior.primary_cta,
-        fallback.primaryCta
-      )
-    ),
+    primaryCta: "",
     leadQualificationMode: pickFirstString(
       container.leadQualificationMode,
       container.lead_qualification_mode,
@@ -896,11 +884,7 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.lead_qualification_mode,
       fallback.leadQualificationMode
     ),
-    qualificationQuestions: normalizeQualificationQuestions(
-      container.qualificationQuestions,
-      container.qualification_questions,
-      strictAuthority ? [] : fallback.qualificationQuestions
-    ),
+    qualificationQuestions: conversationAssets.qualificationQuestions,
     bookingFlowType: pickFirstString(
       container.bookingFlowType,
       container.booking_flow_type,
@@ -924,6 +908,7 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     ),
     behavior: resolvedBehavior,
     channelBehavior: resolvedBehavior.channelBehavior,
+    conversationAssets,
   };
 }
 
@@ -1016,41 +1001,21 @@ function buildDisabledServiceLine(profile) {
 }
 
 function pickLeadPrompt(profile) {
-  const list = normalizeQualificationQuestions(profile?.leadPrompts || []);
-  return s(list[0] || "Daha düzgün yönləndirmə üçün əsas məqsədi və 1-2 vacib detalı yazın.");
+  return s(
+    profile?.conversationAssets?.leadPrompts?.[0] ||
+      profile?.leadPrompts?.[0] ||
+      ""
+  );
 }
 
 function pickBehaviorLeadPrompt(profile) {
-  const qualificationQuestions = normalizeQualificationQuestions(
-    profile?.qualificationQuestions
+  return s(
+    profile?.conversationAssets?.qualificationQuestions?.[0] ||
+      profile?.qualificationQuestions?.[0] ||
+      profile?.conversationAssets?.leadPrompts?.[0] ||
+      profile?.leadPrompts?.[0] ||
+      ""
   );
-  const resolvedBehavior = obj(profile?.behavior);
-  const inboxBehavior = obj(
-    profile?.channelBehavior?.inbox || resolvedBehavior?.channelBehavior?.inbox
-  );
-  const qualificationDepth = lower(inboxBehavior?.qualificationDepth || "");
-  const toneProfile = lower(profile?.toneProfile || resolvedBehavior?.toneProfile || "");
-  const firstQuestion = sanitizeConversationPromptCandidate(qualificationQuestions[0]);
-
-  if (firstQuestion && qualificationDepth === "guided") {
-    return sanitizePrompt(firstQuestion);
-  }
-
-  if (firstQuestion) {
-    return sanitizePrompt(firstQuestion);
-  }
-
-  let prompt = pickLeadPrompt(profile);
-
-  if (toneProfile.includes("calm") || toneProfile.includes("reassuring")) {
-    prompt = "Daha düzgün yönləndirmə üçün əsas ehtiyacı və vacib detalı qısa yazın.";
-  } else if (toneProfile.includes("warm") || toneProfile.includes("welcoming")) {
-    prompt = "Daha düzgün kömək üçün nə istədiyinizi və əsas detalı qısa yazın.";
-  } else if (toneProfile.includes("formal") || toneProfile.includes("confident")) {
-    prompt = "Dəqiq yönləndirmə üçün məqsədi və əsas tələbi qısa qeyd edin.";
-  }
-
-  return sanitizePrompt(prompt);
 }
 
 /**
@@ -1063,43 +1028,43 @@ function getIndustryHints(industry) {
   const map = {
     clinic: {
       keywords: [],
-      pricingHint: "Qiymət xidmət növü və vəziyyətə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary by service type and case complexity.",
     },
     hospitality: {
       keywords: [],
-      pricingHint: "Qiymət tarix və xidmət paketinə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on dates, scope, and package details.",
     },
     restaurant: {
       keywords: [],
-      pricingHint: "Qiymət xidmət və tələblərə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on the service and request details.",
     },
     legal: {
       keywords: [],
-      pricingHint: "Qiymət işin növü və mürəkkəbliyinə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on matter type and complexity.",
     },
     finance: {
       keywords: [],
-      pricingHint: "Qiymət və komissiya xidmət növündən asılıdır.",
+      pricingHint: "Pricing and fees can vary depending on the product and case details.",
     },
     education: {
       keywords: [],
-      pricingHint: "Qiymət proqram və formatdan asılıdır.",
+      pricingHint: "Pricing can vary depending on the program and format.",
     },
     ecommerce: {
       keywords: [],
-      pricingHint: "Qiymət məhsul və çatdırılma şərtlərinə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on products, delivery, and scope.",
     },
     technology: {
       keywords: [],
-      pricingHint: "Qiymət scope və funksionallığa görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on scope, features, and implementation depth.",
     },
     creative_agency: {
       keywords: [],
-      pricingHint: "Qiymət görüləcək işin həcminə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on scope, quality level, and deliverables.",
     },
     generic_business: {
       keywords: [],
-      pricingHint: "Qiymət xidmət və ya məhsulun növünə görə dəyişə bilər.",
+      pricingHint: "Pricing can vary depending on the service, scope, and requirements.",
     },
   };
 

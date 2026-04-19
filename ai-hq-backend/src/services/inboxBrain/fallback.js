@@ -1,145 +1,41 @@
-import { arr, s, sanitizeReplyText } from "./shared.js";
-import {
-  buildServiceLine,
-  pickBehaviorLeadPrompt,
-} from "./runtime.js";
-import {
-  getFallbackDefaultQuestion,
-  getFallbackQuestionByIntent,
-  getHandoffLeadSentence,
-  getPricingLeadSentence,
-  getSupportLeadSentence,
-  getUnsupportedCheckSentence,
-  getUnsupportedExamplesSentence,
-  getUrgentLeadSentence,
-} from "./prompts/fallback.copy.js";
+import { arr, lower, s, sanitizeReplyText } from "./shared.js";
 
-const WEBSITE_KEYWORDS = [
-  "veb sayt",
-  "vebsayt",
-  "web sayt",
-  "website",
-  "site",
-  "sayt",
-  "landing page",
-  "landing",
-];
+function resolveLanguage(profile = {}, playbook = null, matches = []) {
+  const candidates = [
+    s(playbook?.language),
+    s(arr(matches)[0]?.language),
+    s(arr(profile?.languages)[0]),
+    "en",
+  ];
 
-const ECOMMERCE_KEYWORDS = [
-  "ecommerce",
-  "e-commerce",
-  "magaza",
-  "mağaza",
-  "online shop",
-  "shop",
-  "store",
-  "satis",
-  "satış",
-  "product catalog",
-  "katalog",
-];
+  for (const candidate of candidates) {
+    const x = lower(candidate);
+    if (!x) continue;
+    if (x.startsWith("az")) return "az";
+    if (x.startsWith("en")) return "en";
+    if (x.startsWith("tr")) return "tr";
+    if (x.startsWith("ru")) return "ru";
+    if (x.startsWith("es")) return "es";
+    if (x.startsWith("de")) return "de";
+    if (x.startsWith("fr")) return "fr";
+    if (x.startsWith("it")) return "it";
+    if (x.startsWith("pt")) return "pt";
+    if (x.startsWith("ar")) return "ar";
+    if (x.startsWith("nl")) return "nl";
+    if (x.startsWith("pl")) return "pl";
+    if (x.startsWith("uk")) return "uk";
+    if (x.startsWith("zh")) return "zh";
+    if (x.startsWith("ja")) return "ja";
+    if (x.startsWith("ko")) return "ko";
+    if (x.startsWith("hi")) return "hi";
+  }
 
-const SOFTWARE_KEYWORDS = [
-  "software",
-  "soft",
-  "sistem",
-  "system",
-  "platform",
-  "crm",
-  "erp",
-  "app",
-  "application",
-  "mobile app",
-  "dashboard",
-  "admin panel",
-  "portal",
-  "automation",
-  "chatbot",
-  "bot",
-];
-
-const BOOKING_KEYWORDS = [
-  "booking",
-  "rezervasiya",
-  "reservation",
-  "bron",
-  "appointment",
-  "randevu",
-  "calendar",
-];
-
-const PRICING_KEYWORDS = [
-  "qiymet",
-  "qiymət",
-  "price",
-  "pricing",
-  "cost",
-  "budget",
-  "büdcə",
-  "budce",
-  "neceye",
-  "neçəyə",
-  "how much",
-  "quote",
-];
-
-const TIMELINE_KEYWORDS = [
-  "ne vaxta",
-  "nə vaxta",
-  "deadline",
-  "timeline",
-  "müddət",
-  "muddet",
-  "how long",
-  "when",
-  "tez",
-  "urgent",
-  "təcili",
-  "tecili",
-];
-
-const SUPPORT_KEYWORDS = [
-  "problem",
-  "issue",
-  "error",
-  "xeta",
-  "xəta",
-  "duzelt",
-  "düzəlt",
-  "support",
-  "help",
-  "kömək",
-  "komek",
-  "işləmir",
-  "islemir",
-  "broken",
-  "bug",
-];
-
-const RECOMMENDATION_KEYWORDS = [
-  "hangi",
-  "hansı",
-  "which",
-  "recommend",
-  "məsləhət",
-  "meslehet",
-  "tovsiyə",
-  "tovsiye",
-  "what should",
-];
-
-const DOMAIN_HINTS = [
-  { label: "hotel", keywords: ["hotel", "otel", "resort"] },
-  { label: "clinic", keywords: ["clinic", "klinika", "hospital", "doctor", "dentist", "medical"] },
-  { label: "restaurant", keywords: ["restaurant", "restoran", "cafe", "kafe"] },
-  { label: "salon", keywords: ["salon", "spa", "beauty", "gözəllik", "gozellik"] },
-  { label: "real_estate", keywords: ["real estate", "daşınmaz", "dasinmaz", "property"] },
-  { label: "education", keywords: ["academy", "course", "kurs", "school", "məktəb", "mekteb"] },
-];
+  return "en";
+}
 
 function splitSentences(text = "") {
   return s(text)
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?؟])\s+/)
     .map((part) => sanitizeReplyText(part))
     .filter(Boolean);
 }
@@ -147,84 +43,6 @@ function splitSentences(text = "") {
 function clipSentences(text = "", maxSentences = 2) {
   const safeMax = Math.max(1, Math.min(4, Number(maxSentences || 2)));
   return sanitizeReplyText(splitSentences(text).slice(0, safeMax).join(" "));
-}
-
-function normalizeForIntent(text = "") {
-  return s(text)
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasAnyKeyword(text = "", keywords = []) {
-  const normalized = normalizeForIntent(text);
-  if (!normalized) return false;
-  return arr(keywords).some((keyword) => normalized.includes(String(keyword || "").toLowerCase()));
-}
-
-function countWords(text = "") {
-  const normalized = normalizeForIntent(text);
-  if (!normalized) return 0;
-  return normalized.split(" ").filter(Boolean).length;
-}
-
-function hasSubstantiveMessage(text = "") {
-  const normalized = normalizeForIntent(text);
-  if (!normalized) return false;
-
-  if (normalized.length >= 18) return true;
-  if (countWords(normalized) >= 4) return true;
-
-  return (
-    hasAnyKeyword(normalized, WEBSITE_KEYWORDS) ||
-    hasAnyKeyword(normalized, ECOMMERCE_KEYWORDS) ||
-    hasAnyKeyword(normalized, SOFTWARE_KEYWORDS) ||
-    hasAnyKeyword(normalized, BOOKING_KEYWORDS) ||
-    hasAnyKeyword(normalized, PRICING_KEYWORDS) ||
-    hasAnyKeyword(normalized, TIMELINE_KEYWORDS) ||
-    hasAnyKeyword(normalized, SUPPORT_KEYWORDS) ||
-    hasAnyKeyword(normalized, RECOMMENDATION_KEYWORDS)
-  );
-}
-
-function detectDomainHint(text = "") {
-  const normalized = normalizeForIntent(text);
-  if (!normalized) return "";
-
-  for (const hint of DOMAIN_HINTS) {
-    if (arr(hint?.keywords).some((keyword) => normalized.includes(String(keyword || "").toLowerCase()))) {
-      return s(hint?.label);
-    }
-  }
-
-  return "";
-}
-
-function getVisibleCatalog(profile = {}) {
-  return arr(profile?.serviceCatalog).filter((item) => item?.visibleInAi);
-}
-
-function getActiveVisibleCatalog(profile = {}) {
-  return getVisibleCatalog(profile).filter((item) => item?.active);
-}
-
-function getDisabledVisibleCatalog(profile = {}) {
-  return getVisibleCatalog(profile).filter((item) => !item?.active);
-}
-
-function buildBrandLead(profile = {}) {
-  return s(profile?.displayName || "Biz");
-}
-
-function buildServiceExamples(profile = {}, limit = 3) {
-  const names = getActiveVisibleCatalog(profile)
-    .map((item) => s(item?.name))
-    .filter(Boolean)
-    .slice(0, limit);
-
-  if (!names.length) return "";
-  return sanitizeReplyText(names.join(", "));
 }
 
 function joinParts(parts = []) {
@@ -236,269 +54,212 @@ function joinParts(parts = []) {
   );
 }
 
+function getActiveVisibleCatalog(profile = {}) {
+  return arr(profile?.serviceCatalog).filter((item) => item?.active && item?.visibleInAi);
+}
+
+function getDisabledVisibleCatalog(profile = {}) {
+  return arr(profile?.serviceCatalog).filter((item) => !item?.active && item?.visibleInAi);
+}
+
+function buildServiceExamples(profile = {}, limit = 3) {
+  const names = getActiveVisibleCatalog(profile)
+    .map((item) => s(item?.name))
+    .filter(Boolean)
+    .slice(0, limit);
+
+  return sanitizeReplyText(names.join(", "));
+}
+
+function getCopy(language = "en") {
+  const map = {
+    en: {
+      hello: "Hello.",
+      generalLead: "I can help with that.",
+      pricingLead: "Pricing usually depends on scope, requirements, and delivery expectations.",
+      timelineLead: "Timing usually depends on scope, requirements, and delivery expectations.",
+      supportLead: "I can help with that.",
+      handoffLead: "Sure — I can route this to a team member.",
+      urgentLead: "Understood.",
+      unsupportedLead: "I may not be able to confirm that request yet.",
+      unsupportedExamples: (examples) => `What we currently support most clearly includes ${examples}.`,
+      unsupportedQuestion: "Share the main goal and the key requirement, and I’ll guide this correctly.",
+      generalQuestion: "Share the main goal and one or two important details so I can guide this correctly.",
+      pricingQuestion: "Share the goal, the main requirements, and any budget or delivery expectation you already have.",
+      timelineQuestion: "Share the goal, the required scope, and any target timeline you already have.",
+      supportQuestion: "Share the issue and where it happens, and I’ll help narrow it down.",
+      handoffQuestion: "Share the topic briefly so I can route it correctly.",
+      greetingQuestion: "How can I help?",
+      knowledgeFallback: "Here’s what I can confirm right now.",
+    },
+    az: {
+      hello: "Salam.",
+      generalLead: "Bununla bağlı kömək edə bilərəm.",
+      pricingLead: "Qiymət adətən scope, tələblər və çatdırılma gözləntilərindən asılı olur.",
+      timelineLead: "Müddət adətən scope, tələblər və çatdırılma gözləntilərindən asılı olur.",
+      supportLead: "Bununla bağlı kömək edə bilərəm.",
+      handoffLead: "Əlbəttə, bunu komanda üzvünə yönləndirə bilərəm.",
+      urgentLead: "Qeyd etdim.",
+      unsupportedLead: "Bu sorğunu hazırda dəqiq təsdiqləyə bilməyə bilərəm.",
+      unsupportedExamples: (examples) => `Hazırda daha aydın dəstəklənən istiqamətlərə ${examples} daxildir.`,
+      unsupportedQuestion: "Əsas məqsədi və vacib tələbi yazın, düzgün yönləndirim.",
+      generalQuestion: "Əsas məqsədi və 1-2 vacib detalı yazın ki, düzgün yönləndirə bilim.",
+      pricingQuestion: "Məqsədi, əsas tələbləri və varsa büdcə və ya çatdırılma gözləntisini yazın.",
+      timelineQuestion: "Məqsədi, lazım olan scope-u və varsa hədəf müddəti yazın.",
+      supportQuestion: "Problemi və harada baş verdiyini yazın, dəqiqləşdirim.",
+      handoffQuestion: "Mövzunu qısa yazın ki, düzgün yönləndirim.",
+      greetingQuestion: "Necə kömək edə bilərəm?",
+      knowledgeFallback: "Hazırda təsdiqləyə bildiyim hissə budur.",
+    },
+    tr: {
+      hello: "Merhaba.",
+      generalLead: "Bununla ilgili yardımcı olabilirim.",
+      pricingLead: "Fiyat genelde kapsam, gereksinimler ve teslim beklentilerine göre değişir.",
+      timelineLead: "Süre genelde kapsam, gereksinimler ve teslim beklentilerine göre değişir.",
+      supportLead: "Bununla ilgili yardımcı olabilirim.",
+      handoffLead: "Elbette, bunu bir ekip üyesine yönlendirebilirim.",
+      urgentLead: "Anladım.",
+      unsupportedLead: "Bu talebi şu anda net olarak doğrulayamıyor olabilirim.",
+      unsupportedExamples: (examples) => `Şu anda en net desteklediğimiz alanlara ${examples} dahildir.`,
+      unsupportedQuestion: "Ana hedefi ve kritik gereksinimi yazın, doğru yönlendireyim.",
+      generalQuestion: "Ana hedefi ve 1-2 önemli detayı yazın, doğru yönlendireyim.",
+      pricingQuestion: "Hedefi, ana gereksinimleri ve varsa bütçe ya da teslim beklentisini yazın.",
+      timelineQuestion: "Hedefi, gerekli kapsamı ve varsa hedef zamanı yazın.",
+      supportQuestion: "Sorunu ve nerede olduğunu yazın, daraltayım.",
+      handoffQuestion: "Konuyu kısa yazın, doğru kişiye yönlendireyim.",
+      greetingQuestion: "Nasıl yardımcı olabilirim?",
+      knowledgeFallback: "Şu anda doğrulayabildiğim kısım bu.",
+    },
+    ru: {
+      hello: "Здравствуйте.",
+      generalLead: "Я могу помочь с этим.",
+      pricingLead: "Стоимость обычно зависит от объёма, требований и ожиданий по срокам.",
+      timelineLead: "Сроки обычно зависят от объёма, требований и ожиданий по результату.",
+      supportLead: "Я могу помочь с этим.",
+      handoffLead: "Конечно, я могу передать это сотруднику команды.",
+      urgentLead: "Понял.",
+      unsupportedLead: "Сейчас я не могу точно подтвердить этот запрос.",
+      unsupportedExamples: (examples) => `Сейчас наиболее понятно поддерживаются такие направления, как ${examples}.`,
+      unsupportedQuestion: "Напишите основную цель и ключевое требование, и я направлю вас точнее.",
+      generalQuestion: "Напишите основную цель и 1-2 важных детали, чтобы я мог точнее сориентировать.",
+      pricingQuestion: "Напишите цель, основные требования и, если есть, бюджет или ожидания по срокам.",
+      timelineQuestion: "Напишите цель, нужный объём и, если есть, желаемый срок.",
+      supportQuestion: "Опишите проблему и где она возникает, и я помогу сузить причину.",
+      handoffQuestion: "Кратко опишите тему, чтобы я направил вас правильно.",
+      greetingQuestion: "Чем могу помочь?",
+      knowledgeFallback: "Вот что я могу подтвердить прямо сейчас.",
+    },
+  };
+
+  return map[language] || map.en;
+}
+
+function getConfiguredPrompt(profile = {}) {
+  const conversationAssets = profile?.conversationAssets || {};
+  return sanitizeReplyText(
+    s(conversationAssets?.qualificationQuestions?.[0]) ||
+      s(profile?.qualificationQuestions?.[0]) ||
+      s(conversationAssets?.leadPrompts?.[0]) ||
+      s(profile?.leadPrompts?.[0])
+  );
+}
+
+function buildSafeQuestion(profile = {}, intent = "general", language = "en") {
+  const copy = getCopy(language);
+  const configured = getConfiguredPrompt(profile);
+  if (configured) return configured;
+
+  switch (s(intent)) {
+    case "greeting":
+      return copy.greetingQuestion;
+    case "pricing":
+      return copy.pricingQuestion;
+    case "timeline":
+      return copy.timelineQuestion;
+    case "support":
+      return copy.supportQuestion;
+    case "handoff_request":
+      return copy.handoffQuestion;
+    default:
+      return copy.generalQuestion;
+  }
+}
+
 function buildKnowledgeReplyCore(matches = [], profile = {}) {
   const first = arr(matches)[0];
+  if (!first) return "";
+
   const answer = clipSentences(first?.answer || "", profile?.maxSentences || 2);
   return sanitizeReplyText(answer);
 }
 
-function buildOfferLead(profile = {}) {
-  const brand = buildBrandLead(profile);
-  const serviceLine = buildServiceLine(profile);
-  const summary = clipSentences(profile?.businessSummary || "", 1);
+function buildGeneralReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
 
-  if (serviceLine) {
-    return sanitizeReplyText(`${brand} olaraq əsasən ${serviceLine} üzrə kömək edirik.`);
-  }
-
-  if (summary) {
-    return sanitizeReplyText(summary);
-  }
-
-  return sanitizeReplyText(`${brand} olaraq kömək edə bilərik.`);
-}
-
-function buildSingleQuestion(profile = {}, intent = "general") {
-  const configured = arr(profile?.qualificationQuestions)
-    .map((item) => sanitizeReplyText(item))
-    .filter(Boolean);
-
-  if (configured.length) return configured[0];
-
-  const behaviorPrompt = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
-  if (behaviorPrompt) return behaviorPrompt;
-
-  return sanitizeReplyText(
-    getFallbackQuestionByIntent(intent) || getFallbackDefaultQuestion()
-  );
-}
-
-function buildProjectObjectFromText(text = "") {
-  const normalized = normalizeForIntent(text);
-
-  if (hasAnyKeyword(normalized, ECOMMERCE_KEYWORDS)) {
-    return "online satış yönümlü sayt";
-  }
-
-  if (hasAnyKeyword(normalized, SOFTWARE_KEYWORDS)) {
-    return "xüsusi software həlli";
-  }
-
-  if (hasAnyKeyword(normalized, BOOKING_KEYWORDS) && hasAnyKeyword(normalized, WEBSITE_KEYWORDS)) {
-    return "rezervasiya funksiyalı sayt";
-  }
-
-  if (hasAnyKeyword(normalized, BOOKING_KEYWORDS)) {
-    return "rezervasiya axını";
-  }
-
-  if (hasAnyKeyword(normalized, WEBSITE_KEYWORDS)) {
-    return "veb sayt";
-  }
-
-  return "";
-}
-
-function buildDomainPrefixedObject(text = "") {
-  const domain = detectDomainHint(text);
-  const projectObject = buildProjectObjectFromText(text);
-
-  const domainMap = {
-    hotel: "Hotel üçün",
-    clinic: "Klinika üçün",
-    restaurant: "Restoran üçün",
-    salon: "Salon üçün",
-    real_estate: "Daşınmaz əmlak üçün",
-    education: "Təhsil layihəsi üçün",
-  };
-
-  if (domain && projectObject && domainMap[domain]) {
-    return `${domainMap[domain]} ${projectObject}`;
-  }
-
-  return projectObject;
-}
-
-function buildScopedLead(text = "", profile = {}) {
-  const brand = buildBrandLead(profile);
-  const scopedObject = buildDomainPrefixedObject(text);
-
-  if (scopedObject) {
-    return sanitizeReplyText(`${scopedObject} üzrə kömək edə bilərik.`);
-  }
-
-  const projectObject = buildProjectObjectFromText(text);
-  if (projectObject) {
-    return sanitizeReplyText(`${brand} olaraq ${projectObject} üzrə kömək edə bilərik.`);
-  }
-
-  return buildOfferLead(profile);
-}
-
-function buildScopedQuestion(text = "", profile = {}, intent = "general") {
-  const custom = sanitizeReplyText(pickBehaviorLeadPrompt(profile));
-  const normalized = normalizeForIntent(text);
-  const projectObject = buildProjectObjectFromText(normalized);
-
-  if (intent === "pricing") {
-    if (projectObject) {
-      return sanitizeReplyText(
-        `Təxmini yönləndirmə üçün ${projectObject} üzrə əsas məqsədi və vacib 1-2 funksiyanı yazın.`
-      );
-    }
-    return sanitizeReplyText(
-      "Təxmini yönləndirmə üçün əsas məqsədi və vacib 1-2 tələbi yazın."
-    );
-  }
-
-  if (intent === "timeline") {
-    if (projectObject) {
-      return sanitizeReplyText(
-        `${projectObject} üçün əsas scope-u və varsa deadline-i yazın.`
-      );
-    }
-    return sanitizeReplyText(
-      "Daha düzgün müddət yönləndirməsi üçün əsas scope-u və varsa deadline-i yazın."
-    );
-  }
-
-  if (intent === "support") {
-    return sanitizeReplyText(
-      "Problemin nə olduğunu və harada baş verdiyini qısa yazın."
-    );
-  }
-
-  if (projectObject) {
-    return sanitizeReplyText(
-      custom || `Daha düzgün yönləndirmə üçün ${projectObject} üzrə əsas məqsədi və vacib funksiyaları yazın.`
-    );
-  }
-
-  return sanitizeReplyText(custom || buildSingleQuestion(profile, intent));
-}
-
-function buildServiceInterestReplyFromMessage(text = "", profile = {}) {
   return joinParts([
-    buildScopedLead(text, profile),
-    buildScopedQuestion(text, profile, "service_interest"),
+    copy.generalLead,
+    buildSafeQuestion(profile, "general", language),
   ]);
 }
 
-function buildPricingReplyFromMessage(text = "", profile = {}) {
-  const normalized = normalizeForIntent(text);
-  const projectObject = buildProjectObjectFromText(normalized);
-
-  const leadSentence = projectObject
-    ? `Dəqiq qiymət ${projectObject} üzrə scope, funksiyalar və iş həcminə görə dəyişir.`
-    : getPricingLeadSentence();
+function buildGreetingReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
 
   return joinParts([
-    leadSentence,
-    buildScopedQuestion(text, profile, "pricing"),
+    copy.hello,
+    buildSafeQuestion(profile, "greeting", language),
   ]);
 }
 
-function buildTimelineReplyFromMessage(text = "", profile = {}) {
-  const normalized = normalizeForIntent(text);
-  const projectObject = buildProjectObjectFromText(normalized);
-
-  const leadSentence = projectObject
-    ? `${projectObject} üzrə müddət scope və təsdiqlənən funksiyalardan asılı olur.`
-    : "Müddət scope və təsdiqlənən iş həcminə görə dəyişir.";
+function buildPricingReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
 
   return joinParts([
-    leadSentence,
-    buildScopedQuestion(text, profile, "timeline"),
+    copy.pricingLead,
+    buildSafeQuestion(profile, "pricing", language),
   ]);
 }
 
-function buildSupportReplyFromMessage(text = "", profile = {}) {
+function buildTimelineReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
+
   return joinParts([
-    getSupportLeadSentence(),
-    buildScopedQuestion(text, profile, "support"),
+    copy.timelineLead,
+    buildSafeQuestion(profile, "timeline", language),
   ]);
 }
 
-function buildRecommendationReplyFromMessage(text = "", profile = {}) {
+function buildSupportReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
+
   return joinParts([
-    buildScopedLead(text, profile),
-    buildScopedQuestion(text, profile, "service_interest"),
+    copy.supportLead,
+    buildSafeQuestion(profile, "support", language),
   ]);
 }
 
-function buildGeneralReplyFromMessage(text = "", profile = {}) {
-  if (hasSubstantiveMessage(text)) {
-    return joinParts([
-      buildScopedLead(text, profile),
-      buildScopedQuestion(text, profile, "general"),
-    ]);
-  }
+function buildHandoffReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
 
   return joinParts([
-    buildOfferLead(profile),
-    buildSingleQuestion(profile, "general"),
+    copy.handoffLead,
+    buildSafeQuestion(profile, "handoff_request", language),
   ]);
 }
 
-function buildGreetingReply(profile = {}) {
+function buildUrgentReply(profile = {}, language = "en") {
+  const copy = getCopy(language);
+
   return joinParts([
-    buildOfferLead(profile),
-    buildSingleQuestion(profile, "greeting"),
+    copy.urgentLead,
+    buildSafeQuestion(profile, "general", language),
   ]);
 }
 
-function buildPricingReply(profile = {}, text = "") {
-  if (hasSubstantiveMessage(text)) {
-    return buildPricingReplyFromMessage(text, profile);
-  }
+function buildUnsupportedServiceReply(profile = {}) {
+  const language = resolveLanguage(profile);
+  const copy = getCopy(language);
 
-  return joinParts([
-    getPricingLeadSentence(),
-    buildSingleQuestion(profile, "pricing"),
-  ]);
-}
-
-function buildServiceInterestReply(profile = {}, text = "") {
-  if (hasSubstantiveMessage(text)) {
-    return buildServiceInterestReplyFromMessage(text, profile);
-  }
-
-  return joinParts([
-    buildOfferLead(profile),
-    buildSingleQuestion(profile, "service_interest"),
-  ]);
-}
-
-function buildSupportReply(profile = {}, text = "") {
-  if (hasSubstantiveMessage(text)) {
-    return buildSupportReplyFromMessage(text, profile);
-  }
-
-  return joinParts([
-    getSupportLeadSentence(),
-    buildSingleQuestion(profile, "support"),
-  ]);
-}
-
-function buildHandoffReply(profile = {}) {
-  return joinParts([
-    getHandoffLeadSentence(),
-    buildSingleQuestion(profile, "handoff_request"),
-  ]);
-}
-
-function buildUrgentReply(profile = {}) {
-  return joinParts([
-    getUrgentLeadSentence(),
-    buildSingleQuestion(profile, "urgent_interest"),
-  ]);
-}
-
-function buildGeneralReply(profile = {}, text = "") {
-  return buildGeneralReplyFromMessage(text, profile);
-}
-
-export function buildUnsupportedServiceReply(profile = {}) {
   const disabledSpecific = getDisabledVisibleCatalog(profile).find(
     (item) => s(item?.disabledReplyText)
   );
@@ -507,64 +268,56 @@ export function buildUnsupportedServiceReply(profile = {}) {
     return sanitizeReplyText(disabledSpecific.disabledReplyText);
   }
 
-  const offerLead = buildOfferLead(profile);
   const examples = buildServiceExamples(profile, 4);
-  const question = buildSingleQuestion(profile, "unsupported_service");
 
   if (examples) {
     return joinParts([
-      offerLead,
-      getUnsupportedExamplesSentence(examples),
-      question,
+      copy.unsupportedLead,
+      copy.unsupportedExamples(examples),
+      copy.unsupportedQuestion,
     ]);
   }
 
   return joinParts([
-    offerLead,
-    getUnsupportedCheckSentence(),
-    question,
+    copy.unsupportedLead,
+    copy.unsupportedQuestion,
   ]);
 }
 
-export function buildKnowledgeReply(matches = [], profile = {}) {
+function buildKnowledgeReply(matches = [], profile = {}) {
+  const language = resolveLanguage(profile, null, matches);
+  const copy = getCopy(language);
   const answer = buildKnowledgeReplyCore(matches, profile);
+
   if (answer) return answer;
 
   return joinParts([
-    buildOfferLead(profile),
-    buildSingleQuestion(profile, "knowledge_answer"),
+    copy.knowledgeFallback,
+    buildSafeQuestion(profile, "general", language),
   ]);
 }
 
-export function buildPlaybookReply(playbook, fallbackProfile = {}) {
+function buildPlaybookReply(playbook, fallbackProfile = {}) {
   const reply = sanitizeReplyText(playbook?.replyTemplate || "");
   if (reply) return reply;
 
-  return joinParts([
-    buildOfferLead(fallbackProfile),
-    buildSingleQuestion(fallbackProfile, "general"),
-  ]);
+  const language = resolveLanguage(fallbackProfile, playbook);
+  return buildGeneralReply(fallbackProfile, language);
 }
 
-export function buildFallbackReply({
+function buildFallbackReply({
   intent,
   profile,
   knowledgeEntries = [],
   playbook = null,
-  text = "",
-  latestMessageText = "",
-  customerGoal = "",
 }) {
-  const effectiveText =
-    s(latestMessageText) ||
-    s(customerGoal) ||
-    s(text);
+  const language = resolveLanguage(profile, playbook, knowledgeEntries);
 
   if (playbook) {
     return buildPlaybookReply(playbook, profile);
   }
 
-  if (intent === "knowledge_answer") {
+  if (s(intent) === "knowledge_answer") {
     const answer = buildKnowledgeReplyCore(knowledgeEntries, profile);
     if (answer) return answer;
   }
@@ -574,33 +327,35 @@ export function buildFallbackReply({
       return buildUnsupportedServiceReply(profile);
 
     case "greeting":
-      return buildGreetingReply(profile);
+      return buildGreetingReply(profile, language);
 
     case "pricing":
-      return buildPricingReply(profile, effectiveText);
+    case "quote":
+      return buildPricingReply(profile, language);
 
     case "timeline":
-      return buildTimelineReplyFromMessage(effectiveText, profile);
-
-    case "service_interest":
-      return buildServiceInterestReply(profile, effectiveText);
-
-    case "recommendation":
-      return buildRecommendationReplyFromMessage(effectiveText, profile);
+      return buildTimelineReply(profile, language);
 
     case "support":
-      return buildSupportReply(profile, effectiveText);
+      return buildSupportReply(profile, language);
 
     case "handoff_request":
-      return buildHandoffReply(profile);
+      return buildHandoffReply(profile, language);
 
     case "urgent_interest":
-      return buildUrgentReply(profile);
+      return buildUrgentReply(profile, language);
 
     case "knowledge_answer":
       return buildKnowledgeReply(knowledgeEntries, profile);
 
     default:
-      return buildGeneralReply(profile, effectiveText);
+      return buildGeneralReply(profile, language);
   }
 }
+
+export {
+  buildUnsupportedServiceReply,
+  buildKnowledgeReply,
+  buildPlaybookReply,
+  buildFallbackReply,
+};

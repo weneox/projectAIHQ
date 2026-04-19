@@ -4,33 +4,55 @@ import {
 } from "./fallback.js";
 import { arr, lower, s, sanitizeReplyText } from "./shared.js";
 
+const START_COMMANDS = new Set([
+  "/start",
+  "/start@bot",
+]);
+
 const GREETING_TOKENS = new Set([
+  // English
+  "hi",
+  "hello",
+  "hey",
+  "greetings",
+  "morning",
+  "afternoon",
+  "evening",
+
+  // Azerbaijani / Turkish
   "salam",
   "salamlar",
   "salamaleykum",
   "salaməleyküm",
   "aleykum",
   "aleyküm",
-  "hi",
-  "hello",
-  "hey",
-  "goodmorning",
-  "goodafternoon",
-  "goodevening",
-  "sabahiniz",
-  "sabahınız",
-  "axsaminiz",
-  "axşamınız",
-  "morning",
-  "evening",
-  "merhaba",
   "selam",
-  "zdravstvuyte",
-]);
+  "merhaba",
 
-const START_COMMANDS = new Set([
-  "/start",
-  "/start@bot",
+  // Russian
+  "privet",
+  "zdravstvuyte",
+
+  // Spanish / Portuguese / Italian / French / German / Dutch
+  "hola",
+  "ola",
+  "olá",
+  "ciao",
+  "bonjour",
+  "hallo",
+  "hei",
+
+  // Arabic / Persian transliterations
+  "marhaba",
+  "salaam",
+  "salaamalaikum",
+  "salamalaikum",
+
+  // South / East Asia transliterations
+  "namaste",
+  "nihao",
+  "konnichiwa",
+  "annyeong",
 ]);
 
 function normalizeForFastCheck(text = "") {
@@ -46,15 +68,15 @@ function tokenize(text = "") {
   return normalized.split(" ").filter(Boolean);
 }
 
+function toTokenSet(text = "") {
+  return new Set(tokenize(text));
+}
+
 function phraseIncludes(source = "", candidate = "") {
   const a = normalizeForFastCheck(source);
   const b = normalizeForFastCheck(candidate);
   if (!a || !b) return false;
   return a.includes(b);
-}
-
-function toTokenSet(text = "") {
-  return new Set(tokenize(text));
 }
 
 function overlapScore(sourceTokens = new Set(), candidateTokens = new Set()) {
@@ -73,9 +95,7 @@ function isStartCommand(text = "") {
   const normalized = normalizeForFastCheck(text);
   if (!normalized) return false;
   if (START_COMMANDS.has(normalized)) return true;
-
-  const tokens = tokenize(normalized);
-  return tokens.length === 1 && normalized.startsWith("/start");
+  return normalized.startsWith("/start");
 }
 
 function isGreetingOnlyTurn(text = "") {
@@ -85,6 +105,7 @@ function isGreetingOnlyTurn(text = "") {
 
   const tokens = tokenize(normalized);
   if (!tokens.length || tokens.length > 4) return false;
+
   return tokens.every((token) => GREETING_TOKENS.has(token));
 }
 
@@ -120,17 +141,45 @@ function hasStrongKnowledgeMatch(text = "", matchedKnowledge = []) {
   if (!first) return false;
 
   const sourceText = normalizeForFastCheck(text);
+  const sourceTokens = toTokenSet(sourceText);
   const score = Number(first?._score || 0);
-  const answer = s(first?.answer || "");
   const title = s(first?.title || "");
   const question = s(first?.question || "");
+  const answer = s(first?.answer || "");
   const keywords = arr(first?.keywords).map((item) => s(item)).filter(Boolean);
 
   if (title && phraseIncludes(sourceText, title)) return true;
   if (question && phraseIncludes(sourceText, question)) return true;
   if (keywords.some((keyword) => phraseIncludes(sourceText, keyword))) return true;
 
-  return score >= 4 || (score >= 2.8 && answer.length > 0 && answer.length <= 320);
+  const answerOverlap = overlapScore(sourceTokens, toTokenSet(answer));
+  return score >= 4 || (score >= 2.8 && answer.length > 0 && answerOverlap >= 0.08);
+}
+
+function buildGreetingFastLaneDecision(profile = {}, reason = "greeting_only") {
+  return {
+    language: s(profile?.languages?.[0] || "en"),
+    semanticIntent: "greeting",
+    askCategory: "greeting",
+    conversationStage: "greeting",
+    replyStyle: "consultative",
+    customerGoal: "",
+    knownFacts: [],
+    missingFacts: [],
+    groundedFactsUsed: ["fast_lane_greeting"],
+    answerFirst: "",
+    recommendedNextQuestion: "",
+    replyText: "",
+    createLead: false,
+    handoff: false,
+    handoffReason: "",
+    handoffPriority: "normal",
+    noReply: false,
+    confidence: 0.96,
+    leadScore: 6,
+    heuristic: false,
+    fastLaneReason: reason,
+  };
 }
 
 function buildPlaybookFastLaneDecision(matchedPlaybook = null, profile = {}) {
@@ -138,7 +187,7 @@ function buildPlaybookFastLaneDecision(matchedPlaybook = null, profile = {}) {
   if (!replyText) return null;
 
   return {
-    language: s(profile?.languages?.[0] || "az"),
+    language: s(matchedPlaybook?.language || profile?.languages?.[0] || "en"),
     semanticIntent: "playbook",
     askCategory: "general",
     conversationStage: "answer",
@@ -166,8 +215,10 @@ function buildKnowledgeFastLaneDecision(matchedKnowledge = [], profile = {}) {
   const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
   if (!replyText) return null;
 
+  const first = arr(matchedKnowledge)[0];
+
   return {
-    language: s(profile?.languages?.[0] || "az"),
+    language: s(first?.language || profile?.languages?.[0] || "en"),
     semanticIntent: "knowledge_answer",
     askCategory: "faq",
     conversationStage: "answer",
@@ -188,32 +239,6 @@ function buildKnowledgeFastLaneDecision(matchedKnowledge = [], profile = {}) {
     leadScore: 20,
     heuristic: false,
     fastLaneReason: "matched_knowledge",
-  };
-}
-
-function buildGreetingFastLaneDecision(profile = {}, reason = "greeting_only") {
-  return {
-    language: s(profile?.languages?.[0] || "az"),
-    semanticIntent: "greeting",
-    askCategory: "greeting",
-    conversationStage: "greeting",
-    replyStyle: "consultative",
-    customerGoal: "",
-    knownFacts: [],
-    missingFacts: [],
-    groundedFactsUsed: ["fast_lane_greeting"],
-    answerFirst: "",
-    recommendedNextQuestion: "",
-    replyText: "",
-    createLead: false,
-    handoff: false,
-    handoffReason: "",
-    handoffPriority: "normal",
-    noReply: false,
-    confidence: 0.96,
-    leadScore: 6,
-    heuristic: false,
-    fastLaneReason: reason,
   };
 }
 

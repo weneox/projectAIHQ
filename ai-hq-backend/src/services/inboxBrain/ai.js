@@ -230,24 +230,6 @@ function isSubstantiveCustomerTurn(text = "") {
   return false;
 }
 
-function looksGenericRestateReply(replyText = "") {
-  const normalized = normalizeFreeText(replyText);
-  if (!normalized) return false;
-
-  const genericPatterns = [
-    "esas ehtiyacinizi bir cumle ile yazin",
-    "hazirda size en vacib olan ehtiyaci bir cumle ile yazin",
-    "ehtiyacinizi bir cumle ile yazin",
-    "qisa olaraq size hansi xidmet ve ya mehsul lazim oldugunu yazin",
-    "ne qurmaq almaq ve ya hell etmek istediyinizi bir cumle ile yazin",
-    "sizin ucun en vacib neticeni bir cumle ile yazin",
-    "daha duzgun yonlendirme ucun esas meqsedi ve 1 2 vacib detali yazin",
-    "daha duzgun komek ucun ne istediyinizi ve esas detali qisa yazin",
-  ];
-
-  return genericPatterns.some((pattern) => normalized.includes(pattern));
-}
-
 function buildRuntimeSnapshot(profile = {}) {
   const enabledServiceCatalog = arr(profile?.serviceCatalog)
     .filter((item) => item?.active && item?.visibleInAi)
@@ -281,10 +263,10 @@ function buildRuntimeSnapshot(profile = {}) {
     tone: s(profile?.tone),
     toneProfile: s(profile?.toneProfile),
     conversionGoal: s(profile?.conversionGoal),
-    primaryCta: s(profile?.primaryCta),
     leadQualificationMode: s(profile?.leadQualificationMode),
     bookingFlowType: s(profile?.bookingFlowType),
     qualificationQuestions: arr(profile?.qualificationQuestions).map((x) => s(x)).filter(Boolean),
+    leadPrompts: arr(profile?.leadPrompts).map((x) => s(x)).filter(Boolean),
     handoffTriggers: arr(profile?.handoffTriggers).map((x) => s(x)).filter(Boolean),
     disallowedClaims: arr(profile?.disallowedClaims).map((x) => s(x)).filter(Boolean),
     channelBehaviorInbox: obj(profile?.channelBehavior?.inbox),
@@ -292,7 +274,7 @@ function buildRuntimeSnapshot(profile = {}) {
     greetingEnabled: Boolean(profile?.behavior?.greetingEnabled),
     greetingMode: s(profile?.behavior?.greetingMode),
     introMode: s(profile?.behavior?.introMode),
-    customGreeting: s(profile?.behavior?.customGreeting),
+    customGreeting: s(profile?.conversationAssets?.customGreeting || ""),
     enabledServiceCatalog,
     disabledServiceCatalog,
   };
@@ -304,6 +286,7 @@ function buildPromptKnowledge(matchedKnowledge = []) {
     question: s(item?.question),
     answer: s(item?.answer),
     keywords: arr(item?.keywords).map((x) => s(x)).filter(Boolean).slice(0, 12),
+    language: s(item?.language),
   }));
 }
 
@@ -318,6 +301,7 @@ function buildPromptPlaybook(matchedPlaybook = null) {
     handoff: Boolean(matchedPlaybook.handoff),
     handoffReason: s(matchedPlaybook.handoffReason),
     handoffPriority: s(matchedPlaybook.handoffPriority || "normal"),
+    language: s(matchedPlaybook.language),
   };
 }
 
@@ -363,8 +347,8 @@ function buildTraceFromDecision({
     usecase: "inbox.reply",
     decisions: {
       cta: {
-        selected: resolvedRuntime.primaryCta,
-        reason: "approved_runtime_behavior",
+        selected: "",
+        reason: "none",
       },
       qualification: {
         mode: obj(resolvedRuntime.channelBehavior?.inbox).qualificationDepth,
@@ -428,7 +412,7 @@ function buildFallbackSemanticDecision({
   if (matchedPlaybook) {
     const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
     return {
-      language: s(profile?.languages?.[0] || "az"),
+      language: s(matchedPlaybook?.language || profile?.languages?.[0] || "en"),
       semanticIntent: "playbook",
       askCategory: "general",
       conversationStage: "answer",
@@ -454,8 +438,10 @@ function buildFallbackSemanticDecision({
 
   if (matchedKnowledge.length) {
     const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
+    const first = arr(matchedKnowledge)[0];
+
     return {
-      language: s(profile?.languages?.[0] || "az"),
+      language: s(first?.language || profile?.languages?.[0] || "en"),
       semanticIntent: "knowledge_answer",
       askCategory: "faq",
       conversationStage: "answer",
@@ -486,22 +472,19 @@ function buildFallbackSemanticDecision({
       profile,
       knowledgeEntries: [],
       playbook: null,
-      text: latestMessageText,
-      latestMessageText,
-      customerGoal: latestMessageText,
     })
   );
 
   return {
-    language: s(profile?.languages?.[0] || "az"),
+    language: s(profile?.languages?.[0] || "en"),
     semanticIntent: fallbackIntent,
     askCategory: fallbackIntent === "greeting" ? "greeting" : "general",
-    conversationStage: fallbackIntent === "greeting" ? "greeting" : "discovery",
+    conversationStage: fallbackIntent === "greeting" ? "greeting" : "general",
     replyStyle: "consultative",
     customerGoal: latestMessageText,
     knownFacts: [],
     missingFacts: [],
-    groundedFactsUsed: ["runtime_fallback"],
+    groundedFactsUsed: ["safe_fallback"],
     answerFirst: replyText,
     recommendedNextQuestion: "",
     replyText,
@@ -511,9 +494,9 @@ function buildFallbackSemanticDecision({
     handoffPriority: "normal",
     noReply: false,
     confidence: 0.42,
-    leadScore: 20,
+    leadScore: 18,
     heuristic: false,
-    fallbackReason: "runtime_fallback",
+    fallbackReason: "safe_fallback",
   };
 }
 
@@ -543,25 +526,17 @@ function shouldUseSafeFallbackGuardrail({
   if (!parsed || typeof parsed !== "object") return true;
 
   const parsedIntent = lower(s(parsed?.semanticIntent || parsed?.intent || ""));
+  const parsedAskCategory = lower(s(parsed?.askCategory || ""));
+  const parsedStage = lower(s(parsed?.conversationStage || parsed?.stage || ""));
   const replyText = sanitizeReplyText(
     s(parsed?.replyText || "") || joinReplyParts(parsed?.answerFirst, parsed?.recommendedNextQuestion)
   );
   const customerGoal = s(parsed?.customerGoal || "");
 
   if (!replyText) return true;
-
-  if (looksGenericRestateReply(replyText)) {
-    if (!customerGoal || normalizeFreeText(customerGoal) === normalizeFreeText(latestMessageText)) {
-      return true;
-    }
-  }
-
-  if (
-    ["greeting", "general"].includes(parsedIntent) &&
-    looksGenericRestateReply(replyText)
-  ) {
-    return true;
-  }
+  if (parsedIntent === "greeting" || parsedAskCategory === "greeting") return true;
+  if (parsedStage === "greeting" && !customerGoal) return true;
+  if (replyText.length < 12 && !customerGoal) return true;
 
   return false;
 }
@@ -611,7 +586,7 @@ function normalizeAiResult({
   }
 
   const result = {
-    language: s(parsed?.language || fallbackDecision.language || profile?.languages?.[0] || "az"),
+    language: s(parsed?.language || fallbackDecision.language || profile?.languages?.[0] || "en"),
     intent,
     askCategory,
     stage: normalizeStage(
@@ -726,7 +701,7 @@ function applyReplyComposer({
     usedCustomGreeting: Boolean(composed.usedCustomGreeting),
     introModeUsed: s(composed.introModeUsed),
     behaviorSource: s(composed.behaviorSource || profile?.behavior?.source || ""),
-    language: s(composed.language || result.language || profile?.languages?.[0] || "az"),
+    language: s(composed.language || result.language || profile?.languages?.[0] || "en"),
     greetingOnly: Boolean(composed.greetingOnly),
   };
 }
@@ -944,7 +919,7 @@ export async function aiDecideInbox({
       companyName: profile.displayName,
       brandName: profile.displayName,
       industryKey: profile.industry,
-      outputLanguage: profile.languages?.[0] || "az",
+      outputLanguage: profile.languages?.[0] || "en",
       toneText: profile.tone,
       services: profile.services,
       servicesText: servicesLine || "general business services",
@@ -956,7 +931,6 @@ export async function aiDecideInbox({
       behavior: {
         niche: s(profile.industry),
         conversionGoal: s(profile.conversionGoal),
-        primaryCta: s(profile.primaryCta),
         toneProfile: s(profile.toneProfile),
         disallowedClaims: arr(profile.disallowedClaims),
         handoffTriggers: arr(profile.handoffTriggers),
@@ -1214,7 +1188,7 @@ export async function aiDecideInbox({
           ? "semantic_guardrail_safe_fallback"
           : "fallback_safe";
       semanticFailureReason =
-        semanticFailureReason || "semantic_generic_restate_guardrail";
+        semanticFailureReason || "semantic_guardrail_safe_fallback";
 
       logInboxAiWarn("safe_fallback_guardrail_override", {
         tenantKey: resolvedTenantKey,
