@@ -34,6 +34,148 @@ function normalizeMessageActor(message = {}) {
   return "ai";
 }
 
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function maybeParseJsonString(value = "") {
+  const raw = s(value).trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return isPlainObject(parsed) ? parsed : null;
+  } catch {}
+
+  const fenced =
+    raw.match(/```json\s*([\s\S]*?)```/i) ||
+    raw.match(/```\s*([\s\S]*?)```/i);
+
+  if (fenced?.[1]) {
+    try {
+      const parsed = JSON.parse(fenced[1].trim());
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {}
+  }
+
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {}
+  }
+
+  return null;
+}
+
+function looksLikeStructuredDecisionObject(value = {}) {
+  if (!isPlainObject(value)) return false;
+
+  const keys = Object.keys(value);
+  if (!keys.length) return false;
+
+  return [
+    "replyText",
+    "answerFirst",
+    "nextQuestion",
+    "understoodIntent",
+    "detectedService",
+    "customerGoal",
+    "missingInformation",
+    "shouldAskQuestion",
+    "shouldCreateLead",
+    "shouldHandoff",
+    "handoffReason",
+    "confidence",
+    "leadScore",
+    "askCategory",
+    "stage",
+    "replyStyle",
+    "noReply",
+  ].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function candidateToStructuredObject(candidate) {
+  if (!candidate) return null;
+
+  if (looksLikeStructuredDecisionObject(candidate)) {
+    return candidate;
+  }
+
+  if (typeof candidate === "string") {
+    const parsed = maybeParseJsonString(candidate);
+    if (looksLikeStructuredDecisionObject(parsed)) {
+      return parsed;
+    }
+  }
+
+  if (isPlainObject(candidate)) {
+    for (const key of ["parsed", "json", "value", "data", "output_parsed"]) {
+      const nested = candidateToStructuredObject(candidate[key]);
+      if (nested) return nested;
+    }
+
+    if (typeof candidate.text === "string") {
+      const parsed = maybeParseJsonString(candidate.text);
+      if (looksLikeStructuredDecisionObject(parsed)) {
+        return parsed;
+      }
+    }
+
+    if (typeof candidate.arguments === "string") {
+      const parsed = maybeParseJsonString(candidate.arguments);
+      if (looksLikeStructuredDecisionObject(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  if (Array.isArray(candidate)) {
+    for (const item of candidate) {
+      const nested = candidateToStructuredObject(item);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
+export function extractStructuredPayload(resp) {
+  if (!resp) return null;
+
+  const directCandidates = [
+    resp?.output_parsed,
+    resp?.parsed,
+    resp?.response?.output_parsed,
+    resp?.response?.parsed,
+    resp?.output_text,
+    resp?.text,
+    resp?.content,
+    resp?.output,
+  ];
+
+  for (const candidate of directCandidates) {
+    const found = candidateToStructuredObject(candidate);
+    if (found) return found;
+  }
+
+  const output = Array.isArray(resp?.output) ? resp.output : [];
+  for (const item of output) {
+    const itemHit = candidateToStructuredObject(item);
+    if (itemHit) return itemHit;
+
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const block of content) {
+      const blockHit = candidateToStructuredObject(block);
+      if (blockHit) return blockHit;
+    }
+  }
+
+  return null;
+}
+
 export function stripLeadingCommand(text = "") {
   const source = s(text).trim();
   if (!source.startsWith("/")) return source;
@@ -42,6 +184,13 @@ export function stripLeadingCommand(text = "") {
 
 export function extractText(resp) {
   if (!resp) return "";
+
+  const structured = extractStructuredPayload(resp);
+  if (structured) {
+    try {
+      return fixMojibake(JSON.stringify(structured));
+    } catch {}
+  }
 
   const direct = pickString(resp.output_text).trim();
   if (direct) return fixMojibake(direct);
@@ -66,6 +215,10 @@ export function extractText(resp) {
 
           const transcript = pickStringDeep(block?.transcript);
           if (transcript) parts.push(transcript);
+
+          if (typeof block?.arguments === "string") {
+            parts.push(block.arguments);
+          }
         }
       } else if (typeof content === "string") {
         parts.push(content);
@@ -73,6 +226,10 @@ export function extractText(resp) {
 
       const itemText = pickStringDeep(item?.text);
       if (itemText) parts.push(itemText);
+
+      if (typeof item?.arguments === "string") {
+        parts.push(item.arguments);
+      }
     }
 
     const joined = parts.join("\n").trim();
@@ -195,7 +352,9 @@ export function isAckOnlyText(text) {
 }
 
 export function buildHistorySnippet(messages = [], limit = 6) {
-  const list = normalizeRecentMessages(messages).slice(-Math.max(1, Number(limit || 6)));
+  const list = normalizeRecentMessages(messages).slice(
+    -Math.max(1, Number(limit || 6))
+  );
 
   return list
     .map((message) => {

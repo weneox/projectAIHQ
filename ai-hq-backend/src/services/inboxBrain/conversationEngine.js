@@ -26,6 +26,7 @@ import {
 } from "./shared.js";
 import {
   buildHistorySnippet,
+  extractStructuredPayload,
   extractText,
   parseJsonLoose,
   stripLeadingCommand,
@@ -236,9 +237,14 @@ async function runStructuredDecision({
     ],
   });
 
+  const parsed = extractStructuredPayload(response);
+  const raw = parsed ? JSON.stringify(parsed) : extractText(response);
+  const refusal = extractResponseRefusal(response);
+
   return {
-    raw: extractText(response),
-    refusal: extractResponseRefusal(response),
+    raw,
+    refusal,
+    parsed,
   };
 }
 
@@ -744,6 +750,8 @@ function buildRuntimeGroundedEmergencyFallback({
       noReply: false,
       fallbackReason: "matched_playbook",
       language,
+      understoodIntent: "playbook",
+      detectedService: "",
     };
   }
 
@@ -770,6 +778,8 @@ function buildRuntimeGroundedEmergencyFallback({
       noReply: false,
       fallbackReason: "matched_knowledge",
       language,
+      understoodIntent: "knowledge_answer",
+      detectedService: "",
     };
   }
 
@@ -800,6 +810,8 @@ function buildRuntimeGroundedEmergencyFallback({
       noReply: false,
       fallbackReason: "disabled_service_match",
       language,
+      understoodIntent: "unsupported_service",
+      detectedService: s(matchedDisabledService?.name || matchedDisabledService?.key),
     };
   }
 
@@ -835,6 +847,8 @@ function buildRuntimeGroundedEmergencyFallback({
       noReply: false,
       fallbackReason: "active_service_match",
       language,
+      understoodIntent: "service_interest",
+      detectedService: s(matchedActiveService?.name || matchedActiveService?.key),
     };
   }
 
@@ -863,6 +877,8 @@ function buildRuntimeGroundedEmergencyFallback({
     noReply: false,
     fallbackReason: "runtime_grounded_emergency_fallback",
     language,
+    understoodIntent: "general",
+    detectedService: "",
   };
 }
 
@@ -892,7 +908,7 @@ function looksLikeGenericClarifier(replyText = "") {
 }
 
 function looksLikeGreetingOnly(parsed = {}) {
-  const intent = lower(parsed?.understoodIntent || "");
+  const intent = lower(parsed?.understoodIntent || parsed?.intent || "");
   const askCategory = lower(parsed?.askCategory || "");
   const stage = lower(parsed?.stage || "");
   const customerGoal = s(parsed?.customerGoal || "");
@@ -922,7 +938,8 @@ function normalizeConversationDecision(parsed = {}, fallbackLanguage = "en") {
 
   return {
     language: normalizeLanguage(parsed?.language || fallbackLanguage || "en"),
-    understoodIntent: s(parsed?.understoodIntent || "general") || "general",
+    understoodIntent:
+      s(parsed?.understoodIntent || parsed?.intent || "general") || "general",
     detectedService: s(parsed?.detectedService || ""),
     customerGoal: s(parsed?.customerGoal || ""),
     answerFirst,
@@ -990,7 +1007,8 @@ function validateConversationDecision({
   if (
     matchedDisabledService &&
     normalized.detectedService &&
-    lower(normalized.detectedService) === lower(matchedDisabledService?.name || matchedDisabledService?.key) &&
+    lower(normalized.detectedService) ===
+      lower(matchedDisabledService?.name || matchedDisabledService?.key) &&
     !/unsupported|outside|not available|not active|uygun deyil|aktiv deyil/i.test(
       normalized.replyText
     )
@@ -1204,8 +1222,8 @@ export async function runTenantAwareConversationEngine({
 }) {
   const openai = ensureOpenAI();
   const model = s(cfg?.ai?.openaiModel || "gpt-4.1-mini") || "gpt-4.1-mini";
-  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 420);
-  const maxOutputTokens = Math.max(220, Math.min(650, configuredMaxTokens || 420));
+  const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 650);
+  const maxOutputTokens = Math.max(220, Math.min(650, configuredMaxTokens || 650));
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
 
   const resolvedRuntime =
@@ -1339,7 +1357,8 @@ export async function runTenantAwareConversationEngine({
     threadId: s(thread?.id),
     messageId: s(message?.id),
     latestMessagePreview: safePreview(
-      conversation.latestCustomerMessageWithoutCommand || conversation.latestCustomerMessage,
+      conversation.latestCustomerMessageWithoutCommand ||
+        conversation.latestCustomerMessage,
       180
     ),
   });
@@ -1361,10 +1380,20 @@ export async function runTenantAwareConversationEngine({
 
     raw = firstPass.raw;
     refusal = firstPass.refusal;
+    parsed = firstPass.parsed || parseStructuredOutput(raw, model);
+
+    const firstValidation = validateConversationDecision({
+      parsed,
+      customerText:
+        conversation.latestCustomerMessageWithoutCommand ||
+        conversation.latestCustomerMessage,
+      profile,
+      matchedKnowledge,
+      matchedPlaybook,
+    });
 
     if (refusal) {
       semanticFailureReason = "model_refusal";
-      replyMode = "conversation_engine_emergency_fallback";
 
       const fallback = buildRuntimeGroundedEmergencyFallback({
         text,
@@ -1383,23 +1412,11 @@ export async function runTenantAwareConversationEngine({
         channel,
         policy,
         raw,
-        replyMode,
+        replyMode: "conversation_engine_emergency_fallback",
         semanticFailureReason,
         fallbackReason: fallback.fallbackReason || "runtime_grounded_emergency_fallback",
       });
     }
-
-    parsed = parseStructuredOutput(raw, model);
-
-    const firstValidation = validateConversationDecision({
-      parsed,
-      customerText:
-        conversation.latestCustomerMessageWithoutCommand ||
-        conversation.latestCustomerMessage,
-      profile,
-      matchedKnowledge,
-      matchedPlaybook,
-    });
 
     if (!firstValidation.ok) {
       logConversationEngineWarn("repair_attempt", {
@@ -1424,10 +1441,7 @@ export async function runTenantAwareConversationEngine({
 
       raw = repairPass.raw;
       refusal = repairPass.refusal;
-
-      if (!refusal) {
-        parsed = parseStructuredOutput(raw, model);
-      }
+      parsed = repairPass.parsed || parseStructuredOutput(raw, model);
 
       const repairValidation = validateConversationDecision({
         parsed,
