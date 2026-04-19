@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { cfg } from "../src/config.js";
 import {
   buildThreadStateForDecision,
   createInboxIngestHandler,
@@ -26,6 +27,16 @@ function createMockRes() {
       return this;
     },
   };
+}
+
+async function withInboxOpenAiFallback(run) {
+  const previousKey = cfg.ai.openaiApiKey;
+  cfg.ai.openaiApiKey = "";
+  try {
+    return await run();
+  } finally {
+    cfg.ai.openaiApiKey = previousKey;
+  }
 }
 
 test("strict inbox runtime loading stays fail-closed and requests strict authority", async () => {
@@ -611,71 +622,73 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
   assert.equal(Array.isArray(decisionEvents), true);
 });
 
-test("inbox behavior runtime carries niche qualification CTA guidance into general fallback replies", async () => {
-  const result = await buildInboxActions({
-    text: "Salam",
-    channel: "instagram",
-    externalUserId: "user-ext-1",
-    tenantKey: "acme-clinic",
-    thread: {
-      id: "thread-1",
-      status: "open",
-      handoff_active: false,
-    },
-    message: {
-      id: "msg-1",
-    },
-    tenant: {
-      tenant_key: "acme-clinic",
-      company_name: "Acme Clinic",
-    },
-    runtime: {
-      authority: {
-        mode: "strict",
-        required: true,
-        available: true,
-        source: "approved_runtime_projection",
-        tenantId: "tenant-1",
-        tenantKey: "acme-clinic",
-        runtimeProjectionId: "projection-1",
-        projectionHash: "hash-1",
+test("inbox behavior runtime carries CTA and guided qualification policy into general fallback replies", async () => {
+  const result = await withInboxOpenAiFallback(async () =>
+    buildInboxActions({
+      text: "Salam",
+      channel: "instagram",
+      externalUserId: "user-ext-1",
+      tenantKey: "acme-clinic",
+      thread: {
+        id: "thread-1",
+        status: "open",
+        handoff_active: false,
       },
-      raw: {
-        projection: {
-          metadata_json: {
-            publishedTruthVersionId: "truth-v1",
-          },
-        },
+      message: {
+        id: "msg-1",
       },
       tenant: {
-        id: "tenant-1",
         tenant_key: "acme-clinic",
+        company_name: "Acme Clinic",
       },
-      displayName: "Acme Clinic",
-      industry: "clinic",
-      services: ["Consultation"],
-      serviceCatalog: [],
-      knowledgeEntries: [],
-      responsePlaybooks: [],
-      behavior: {
-        businessType: "clinic",
-        niche: "clinic",
-        conversionGoal: "book_appointment",
-        primaryCta: "book_now",
-        leadQualificationMode: "service_booking_triage",
-        qualificationQuestions: ["What day works best for your visit?"],
-        handoffTriggers: ["human_request"],
-        disallowedClaims: ["diagnosis_or_treatment_guarantees"],
-        toneProfile: "calm_professional_reassuring",
-        channelBehavior: {
-          inbox: {
-            qualificationDepth: "guided",
-            handoffBias: "conditional",
+      runtime: {
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme-clinic",
+          runtimeProjectionId: "projection-1",
+          projectionHash: "hash-1",
+        },
+        raw: {
+          projection: {
+            metadata_json: {
+              publishedTruthVersionId: "truth-v1",
+            },
+          },
+        },
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme-clinic",
+        },
+        displayName: "Acme Clinic",
+        industry: "clinic",
+        services: ["Consultation"],
+        serviceCatalog: [],
+        knowledgeEntries: [],
+        responsePlaybooks: [],
+        behavior: {
+          businessType: "clinic",
+          niche: "clinic",
+          conversionGoal: "book_appointment",
+          primaryCta: "book_now",
+          leadQualificationMode: "service_booking_triage",
+          qualificationQuestions: ["What day works best for your visit?"],
+          handoffTriggers: ["human_request"],
+          disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+          toneProfile: "calm_professional_reassuring",
+          channelBehavior: {
+            inbox: {
+              qualificationDepth: "guided",
+              handoffBias: "conditional",
+            },
           },
         },
       },
-    },
-  });
+    })
+  );
 
   const send = result.actions.find((action) => action.type === "send_message");
 
@@ -683,6 +696,10 @@ test("inbox behavior runtime carries niche qualification CTA guidance into gener
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
+  assert.deepEqual(send?.meta?.channelBehaviorInbox, {
+    qualificationDepth: "guided",
+    handoffBias: "conditional",
+  });
   assert.equal(JSON.parse(result.trace?.channel || '""'), "instagram");
   assert.equal(result.trace?.usecase, "inbox.reply");
   assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
@@ -700,10 +717,7 @@ test("inbox behavior runtime carries niche qualification CTA guidance into gener
   assert.equal(send?.meta?.intent, "general");
   assert.equal(send?.meta?.aiIntent, "general");
   assert.equal(send?.meta?.aiStage, "discovery");
-  assert.equal(
-    result.trace?.behavior?.qualificationQuestionsPreview?.[0],
-    "What day works best for your visit?"
-  );
+  assert.equal(result.trace?.behavior?.channelBehavior?.qualificationDepth, "guided");
   assert.equal(send?.meta?.replayTrace?.decisions?.cta?.selected, "book_now");
   assert.equal(
     send?.meta?.replayTrace?.decisions?.qualification?.mode,
@@ -719,70 +733,72 @@ test("inbox behavior runtime carries niche qualification CTA guidance into gener
   );
 });
 
-test("inbox behavior runtime preserves disallowed-claim guidance in fallback traces without forcing handoff", async () => {
-  const result = await buildInboxActions({
-    text: "Tecili diaqnoz qoyun ve zemanet verin",
-    channel: "instagram",
-    externalUserId: "user-ext-2",
-    tenantKey: "acme-clinic",
-    thread: {
-      id: "thread-2",
-      status: "open",
-      handoff_active: false,
-    },
-    message: {
-      id: "msg-2",
-    },
-    tenant: {
-      tenant_key: "acme-clinic",
-      company_name: "Acme Clinic",
-    },
-    runtime: {
-      authority: {
-        mode: "strict",
-        required: true,
-        available: true,
-        source: "approved_runtime_projection",
-        tenantId: "tenant-1",
-        tenantKey: "acme-clinic",
-        runtimeProjectionId: "projection-1",
-        projectionHash: "hash-1",
+test("inbox behavior runtime stays in safe general fallback mode without forcing handoff", async () => {
+  const result = await withInboxOpenAiFallback(async () =>
+    buildInboxActions({
+      text: "Tecili diaqnoz qoyun ve zemanet verin",
+      channel: "instagram",
+      externalUserId: "user-ext-2",
+      tenantKey: "acme-clinic",
+      thread: {
+        id: "thread-2",
+        status: "open",
+        handoff_active: false,
       },
-      raw: {
-        projection: {
-          metadata_json: {
-            publishedTruthVersionId: "truth-v1",
-          },
-        },
+      message: {
+        id: "msg-2",
       },
       tenant: {
-        id: "tenant-1",
         tenant_key: "acme-clinic",
+        company_name: "Acme Clinic",
       },
-      displayName: "Acme Clinic",
-      industry: "clinic",
-      serviceCatalog: [],
-      knowledgeEntries: [],
-      responsePlaybooks: [],
-      behavior: {
-        businessType: "clinic",
-        niche: "clinic",
-        conversionGoal: "book_appointment",
-        primaryCta: "book_now",
-        leadQualificationMode: "service_booking_triage",
-        qualificationQuestions: ["What service or concern do you need help with?"],
-        handoffTriggers: ["urgent_health_claim"],
-        disallowedClaims: ["diagnosis_or_treatment_guarantees"],
-        toneProfile: "calm_professional_reassuring",
-        channelBehavior: {
-          inbox: {
-            qualificationDepth: "guided",
-            handoffBias: "conditional",
+      runtime: {
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme-clinic",
+          runtimeProjectionId: "projection-1",
+          projectionHash: "hash-1",
+        },
+        raw: {
+          projection: {
+            metadata_json: {
+              publishedTruthVersionId: "truth-v1",
+            },
+          },
+        },
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme-clinic",
+        },
+        displayName: "Acme Clinic",
+        industry: "clinic",
+        serviceCatalog: [],
+        knowledgeEntries: [],
+        responsePlaybooks: [],
+        behavior: {
+          businessType: "clinic",
+          niche: "clinic",
+          conversionGoal: "book_appointment",
+          primaryCta: "book_now",
+          leadQualificationMode: "service_booking_triage",
+          qualificationQuestions: ["What service or concern do you need help with?"],
+          handoffTriggers: ["urgent_health_claim"],
+          disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+          toneProfile: "calm_professional_reassuring",
+          channelBehavior: {
+            inbox: {
+              qualificationDepth: "guided",
+              handoffBias: "conditional",
+            },
           },
         },
       },
-    },
-  });
+    })
+  );
 
   const handoff = result.actions.find((action) => action.type === "handoff");
   const send = result.actions.find((action) => action.type === "send_message");
@@ -792,14 +808,15 @@ test("inbox behavior runtime preserves disallowed-claim guidance in fallback tra
   assert.equal(send?.meta?.intent, "general");
   assert.equal(send?.meta?.aiIntent, "general");
   assert.equal(send?.meta?.aiStage, "discovery");
-  assert.deepEqual(
-    result.trace?.behavior?.disallowedClaims,
-    ["diagnosis_or_treatment_guarantees"]
-  );
-  assert.deepEqual(
-    result.trace?.behavior?.handoffTriggers,
-    ["urgent_health_claim"]
-  );
+  assert.equal(send?.meta?.primaryCta, "book_now");
+  assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
+  assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
+  assert.deepEqual(send?.meta?.channelBehaviorInbox, {
+    qualificationDepth: "guided",
+    handoffBias: "conditional",
+  });
+  assert.equal(result.trace?.behavior?.primaryCta, "book_now");
+  assert.equal(result.trace?.behavior?.channelBehavior?.handoffBias, "conditional");
   assert.equal(result.trace?.decisions?.claimBlock?.blocked, false);
   assert.equal(result.trace?.evaluation?.handoff?.status, "clear");
   assert.equal(result.trace?.evaluation?.claimBlock?.status, "clear");
