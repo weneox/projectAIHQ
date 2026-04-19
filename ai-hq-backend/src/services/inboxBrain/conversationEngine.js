@@ -85,6 +85,44 @@ function safePreview(value = "", max = 280) {
   return `${text.slice(0, max)}…`;
 }
 
+function safeJsonPreview(value, max = 900) {
+  try {
+    const raw = JSON.stringify(value ?? {});
+    if (raw.length <= max) return raw;
+    return `${raw.slice(0, max)}…`;
+  } catch {
+    return "";
+  }
+}
+
+function summarizeResponseShape(response = {}) {
+  const output = Array.isArray(response?.output) ? response.output : [];
+  const firstOutput = output[0] || null;
+  const firstContent = Array.isArray(firstOutput?.content)
+    ? firstOutput.content[0] || null
+    : null;
+
+  return {
+    topLevelKeys: Object.keys(obj(response)).slice(0, 20),
+    hasOutputText: Boolean(s(response?.output_text || "")),
+    hasTopLevelParsed: Boolean(response?.output_parsed || response?.parsed),
+    outputLength: output.length,
+    outputTypes: output.map((item) => s(item?.type)).filter(Boolean).slice(0, 10),
+    contentTypes: output
+      .flatMap((item) =>
+        Array.isArray(item?.content)
+          ? item.content.map((block) => s(block?.type)).filter(Boolean)
+          : []
+      )
+      .slice(0, 20),
+    firstOutputType: s(firstOutput?.type || ""),
+    firstContentType: s(firstContent?.type || ""),
+    firstOutputPreview: safeJsonPreview(firstOutput, 700),
+    firstContentPreview: safeJsonPreview(firstContent, 700),
+    outputTextPreview: safePreview(s(response?.output_text || ""), 280),
+  };
+}
+
 function logConversationEngine(event = "", payload = {}) {
   try {
     console.info(`[ai-hq] conversation engine ${event}`, payload);
@@ -237,9 +275,17 @@ async function runStructuredDecision({
     ],
   });
 
+  const refusal = extractResponseRefusal(response);
   const parsed = extractStructuredPayload(response);
   const raw = parsed ? JSON.stringify(parsed) : extractText(response);
-  const refusal = extractResponseRefusal(response);
+
+  logConversationEngine("response_shape", summarizeResponseShape(response));
+  logConversationEngine("response_extract", {
+    hasParsed: Boolean(parsed),
+    parsedKeys: parsed && typeof parsed === "object" ? Object.keys(parsed).slice(0, 20) : [],
+    rawPreview: safePreview(raw, 500),
+    refusalPreview: safePreview(refusal, 220),
+  });
 
   return {
     raw,
@@ -1424,6 +1470,7 @@ export async function runTenantAwareConversationEngine({
         channel: s(channel || "inbox"),
         reasons: firstValidation.reasons,
         rawPreview: safePreview(raw, 400),
+        parsedPreview: safeJsonPreview(parsed, 700),
       });
 
       const repairPass = await runStructuredDecision({
