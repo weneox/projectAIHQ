@@ -12,14 +12,28 @@ function createHomeState(overrides = {}) {
     isFetching: false,
     refetch: vi.fn(),
     availabilityNote: null,
-    launchPhaseLabel: "Connect launch channel",
-    launchHeadline: "Connect Telegram first.",
-    launchSummary:
-      "The launch lane stays blocked until the tenant Telegram bot is attached.",
     primaryAction: { label: "Open channels", path: "/channels?channel=telegram" },
     secondaryAction: { label: "Open AI setup", path: "/home?assistant=setup" },
     launchReady: false,
+    nextStep: { id: "channel" },
+    assistant: {
+      hasApprovedSetupBaseline: false,
+    },
+    truthRuntime: {
+      truthReady: false,
+      ready: false,
+    },
+    inboxState: {
+      status: "ready",
+      counts: {
+        unreadCount: 0,
+        openCount: 0,
+      },
+    },
     launchChannel: {
+      provider: "telegram",
+      connected: false,
+      deliveryReady: false,
       channelLabel: "Telegram",
       statusLabel: "Connect required",
       summary: "Use Channels to connect the Telegram bot for this workspace.",
@@ -81,10 +95,10 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Connect Telegram first.",
+        name: "Connect a live channel.",
       })
     ).toBeInTheDocument();
-    expect(screen.getByText("Main flow")).toBeInTheDocument();
+    expect(screen.getByText("What needs attention")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
 
@@ -99,10 +113,8 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByText("Setup is open in the assistant widget.")
+      screen.getByRole("heading", { name: "Connect a live channel." })
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Connect Telegram first." })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open AI setup" })).toBeInTheDocument();
   });
 });

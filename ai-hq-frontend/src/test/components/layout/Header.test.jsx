@@ -1,28 +1,17 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const navigate = vi.fn();
-const getAppAuthContext = vi.fn();
+const getAppSessionContext = vi.fn();
 const clearAppSessionContext = vi.fn();
 const logoutUser = vi.fn();
-const switchWorkspaceUser = vi.fn();
-
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => navigate,
-  };
-});
 
 vi.mock("../../../lib/appSession.js", () => ({
-  getAppAuthContext: (...args) => getAppAuthContext(...args),
+  getAppSessionContext: (...args) => getAppSessionContext(...args),
   clearAppSessionContext: (...args) => clearAppSessionContext(...args),
 }));
 
 vi.mock("../../../api/auth.js", () => ({
   logoutUser: (...args) => logoutUser(...args),
-  switchWorkspaceUser: (...args) => switchWorkspaceUser(...args),
 }));
 
 vi.mock("../../../components/layout/NotificationsPanel.jsx", () => ({
@@ -33,71 +22,57 @@ vi.mock("../../../components/layout/NotificationsPanel.jsx", () => ({
 
 import Header from "../../../components/layout/Header.jsx";
 
-describe("Header workspace switcher", () => {
+describe("Header", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAppAuthContext.mockResolvedValue({
-      workspace: {
-        membershipId: "membership-1",
-        tenantKey: "dental",
-        companyName: "Dental HQ",
-        active: true,
-      },
-      workspaces: [
-        {
-          membershipId: "membership-1",
-          tenantKey: "dental",
+    getAppSessionContext.mockResolvedValue({
+      bootstrap: {
+        workspace: {
           companyName: "Dental HQ",
-          role: "owner",
-          active: true,
-          workspaceReady: true,
-          switchToken: "token-1",
         },
-        {
-          membershipId: "membership-2",
-          tenantKey: "hotel",
-          companyName: "Hotel HQ",
-          role: "member",
-          active: false,
-          setupRequired: true,
-          switchToken: "token-2",
+        viewer: {
+          full_name: "Dr. Avery",
         },
-      ],
+        viewerRole: "Owner",
+      },
     });
   });
 
-  it("renders available workspaces and switches using the canonical switch endpoint", async () => {
-    switchWorkspaceUser.mockResolvedValue({
-      destination: { path: "/home?assistant=setup" },
-      workspace: { routeHint: "/home?assistant=setup" },
-    });
+  it("loads session workspace chrome and keeps ask-ai plus notification controls wired", async () => {
+    const setOpen = vi.fn();
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
-    const view = render(
+    render(
       <Header
-        notifications={{ open: false, setOpen: vi.fn(), unreadCount: 0, notifications: [] }}
-        shellSection={{ label: "Workspace" }}
-        activeContextItem={{ label: "AI HQ" }}
+        notifications={{ open: false, setOpen, unreadCount: 2, notifications: [] }}
+        workspaceMeta={{}}
       />
     );
 
     await waitFor(() => {
-      expect(getAppAuthContext).toHaveBeenCalledTimes(1);
+      expect(getAppSessionContext).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(view.getByRole("button", { name: /dental hq/i }));
-
-    expect(view.getByText("Switch workspace")).toBeInTheDocument();
-    expect(view.getByText("Current")).toBeInTheDocument();
-    expect(view.getByText("Setup required")).toBeInTheDocument();
-
-    fireEvent.click(view.getByRole("button", { name: /hotel hq/i }));
+    expect(screen.getByRole("button", { name: /open ask ai/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open notifications/i })).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(switchWorkspaceUser).toHaveBeenCalledWith({ switchToken: "token-2" });
+      expect(screen.getByRole("button", { name: /dental hq/i })).toBeInTheDocument();
     });
 
-    expect(clearAppSessionContext).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith("/home?assistant=setup", { replace: true });
+    fireEvent.click(screen.getByRole("button", { name: /open ask ai/i }));
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "aihq:open-assistant" })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /open notifications/i }));
+    expect(setOpen).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /dental hq/i }));
+
+    expect(await screen.findByText("Notifications")).toBeInTheDocument();
+    expect(screen.getByText("Sign out")).toBeInTheDocument();
+    expect(screen.getByText("Dr. Avery")).toBeInTheDocument();
   });
 });
 
