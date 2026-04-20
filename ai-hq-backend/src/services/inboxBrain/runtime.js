@@ -365,7 +365,11 @@ function listContactValues(list = [], types = []) {
 function extractRawContacts(container = {}, rawTenant = {}, rawProfile = {}) {
   const tenantMeta = obj(rawTenant?.meta);
   const tenantProfile = obj(rawTenant?.profile);
+  const tenantProfileExtra = obj(
+    tenantProfile?.extra_context || tenantProfile?.extraContext
+  );
   const profile = obj(rawProfile);
+  const profileExtra = obj(profile?.extra_context || profile?.extraContext);
   const raw = obj(container?.raw);
 
   const primitiveContacts = [
@@ -408,12 +412,18 @@ function extractRawContacts(container = {}, rawTenant = {}, rawProfile = {}) {
     ...arr(container?.contacts),
     ...arr(raw?.contacts),
     ...arr(tenantMeta?.contacts),
+    ...arr(tenantProfileExtra?.contacts),
+    ...arr(profileExtra?.contacts),
     ...primitiveContacts,
   ];
 }
 
 function extractRawLocations(container = {}, rawTenant = {}) {
   const tenantMeta = obj(rawTenant?.meta);
+  const tenantProfile = obj(rawTenant?.profile);
+  const tenantProfileExtra = obj(
+    tenantProfile?.extra_context || tenantProfile?.extraContext
+  );
   const raw = obj(container?.raw);
 
   const primitiveLocations = normalizeStringList(tenantMeta?.locations).map(
@@ -427,6 +437,7 @@ function extractRawLocations(container = {}, rawTenant = {}) {
     ...arr(container?.locations),
     ...arr(raw?.locations),
     ...arr(tenantMeta?.locationObjects),
+    ...arr(tenantProfileExtra?.locations),
     ...primitiveLocations,
   ];
 }
@@ -754,7 +765,7 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       safeTenant,
       profile
     ),
-  ]);
+  ]).filter((item) => item.public !== false);
 
   const locations = dedupeLocations(extractRawLocations({}, safeTenant));
   const primaryPhone = pickPrimaryContactValue(contacts, ["phone", "whatsapp"]);
@@ -765,8 +776,19 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     meta?.websiteUrl,
     meta?.website_url
   );
+  const primaryAddress = pickFirstString(
+    arr(locations).find((item) => item?.primary && s(item?.address))?.address,
+    arr(locations).find((item) => s(item?.address))?.address
+  );
   const contactPhones = listContactValues(contacts, ["phone", "whatsapp"]);
   const contactEmails = listContactValues(contacts, ["email"]);
+  const contactAddresses = normalizeStringList(
+    arr(locations).map((item) => s(item?.address))
+  );
+  const websiteUrls = normalizeStringList(
+    websiteUrl,
+    pickPrimaryContactValue(contacts, ["website"])
+  );
 
   return {
     tenantKey: resolvedTenantKey,
@@ -801,6 +823,7 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     brevity: s(behavior.brevity),
     emojiPolicy: s(behavior.emojiPolicy),
     maxSentences: Number(behavior.maxSentences || 2),
+    leadPrompts: conversationAssets.leadPrompts,
     forbiddenClaims: normalizeStringList(
       profile?.banned_phrases,
       meta?.forbiddenClaims,
@@ -821,7 +844,6 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       meta?.lead_qualification_mode
     ),
     qualificationQuestions: conversationAssets.qualificationQuestions,
-    leadPrompts: conversationAssets.leadPrompts,
     bookingFlowType: pickFirstString(
       profile?.booking_flow_type,
       meta?.bookingFlowType,
@@ -846,9 +868,20 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     conversationAssets,
     primaryPhone,
     primaryEmail,
+    primaryAddress,
     websiteUrl,
     contactPhones,
     contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks: normalizeStringList(
+      meta?.bookingLinks,
+      obj(profile?.extra_context)?.bookingLinks
+    ),
+    socialLinks: normalizeStringList(
+      meta?.socialLinks,
+      obj(profile?.extra_context)?.socialLinks
+    ),
     contacts,
     locations,
   };
@@ -934,9 +967,14 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
     },
     primaryPhone: "",
     primaryEmail: "",
+    primaryAddress: "",
     websiteUrl: "",
     contactPhones: [],
     contactEmails: [],
+    contactAddresses: [],
+    websiteUrls: [],
+    bookingLinks: [],
+    socialLinks: [],
     contacts: [],
     locations: [],
   };
@@ -1069,7 +1107,8 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
 
   const contacts = dedupeContacts(
     extractRawContacts(container, rawTenant, mergedProfile)
-  );
+  ).filter((item) => item.public !== false);
+
   const locations = dedupeLocations(extractRawLocations(container, rawTenant));
 
   const primaryPhone = pickFirstString(
@@ -1108,6 +1147,46 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     container.contactEmails,
     listContactValues(contacts, ["email"]),
     strictAuthority ? [] : fallback.contactEmails
+  );
+
+  const primaryAddress = pickFirstString(
+    container.primaryAddress,
+    arr(locations).find((item) => item?.primary && s(item?.address))?.address,
+    arr(locations).find((item) => s(item?.address))?.address,
+    mergedProfile?.primary_address,
+    obj(rawTenant?.profile)?.primary_address,
+    strictAuthority ? "" : fallback.primaryAddress
+  );
+
+  const contactAddresses = normalizeStringList(
+    container.contactAddresses,
+    arr(locations).map((item) => s(item?.address)),
+    strictAuthority ? [] : fallback.contactAddresses
+  );
+
+  const websiteUrls = normalizeStringList(
+    container.websiteUrls,
+    container.websiteUrl,
+    listContactValues(contacts, ["website"]),
+    mergedProfile?.website_url,
+    obj(rawTenant?.profile)?.website_url,
+    obj(rawTenant?.meta)?.websiteUrl,
+    obj(rawTenant?.meta)?.website_url,
+    strictAuthority ? [] : fallback.websiteUrls
+  );
+
+  const bookingLinks = normalizeStringList(
+    container.bookingLinks,
+    obj(rawTenant?.meta)?.bookingLinks,
+    obj(rawTenant?.profile?.extra_context)?.bookingLinks,
+    strictAuthority ? [] : fallback.bookingLinks
+  );
+
+  const socialLinks = normalizeStringList(
+    container.socialLinks,
+    obj(rawTenant?.meta)?.socialLinks,
+    obj(rawTenant?.profile?.extra_context)?.socialLinks,
+    strictAuthority ? [] : fallback.socialLinks
   );
 
   return {
@@ -1246,9 +1325,14 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     conversationAssets,
     primaryPhone,
     primaryEmail,
+    primaryAddress,
     websiteUrl,
     contactPhones,
     contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks,
+    socialLinks,
     contacts,
     locations,
   };
