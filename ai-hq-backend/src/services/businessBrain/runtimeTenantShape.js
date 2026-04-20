@@ -45,6 +45,30 @@ function getChannelKey(value = "") {
   return normalized;
 }
 
+function getContactChannelKey(value = "") {
+  const normalized = s(value).toLowerCase();
+
+  if (!normalized) return "";
+  if (["tel", "telephone", "mobile", "call", "voice", "phone_number"].includes(normalized)) {
+    return "phone";
+  }
+  if (
+    [
+      "wa",
+      "whatsapp_business",
+      "whatsapp-business",
+      "whatsapp_phone",
+      "whatsapp_number",
+    ].includes(normalized)
+  ) {
+    return "whatsapp";
+  }
+  if (["mail", "e-mail"].includes(normalized)) return "email";
+  if (["address", "location"].includes(normalized)) return "address";
+
+  return normalized;
+}
+
 function resolveBooleanCandidate(...values) {
   for (const value of values) {
     if (typeof value === "boolean") return value;
@@ -194,6 +218,58 @@ function resolveCreateLeadEnabled({
   );
 }
 
+function isShareableContact(contact = {}) {
+  const item = obj(contact);
+  if (!Object.keys(item).length) return false;
+  if (item.enabled === false) return false;
+  if (item.isActive === false || item.is_active === false) return false;
+  if (item.visiblePublic === false && item.visibleInAi === false) return false;
+  return true;
+}
+
+function collectContactValues(contacts = [], channels = []) {
+  const wanted = new Set(
+    arr(channels).map((x) => getContactChannelKey(x)).filter(Boolean)
+  );
+
+  return uniqStrings(
+    arr(contacts)
+      .filter((item) => isShareableContact(item))
+      .filter((item) => {
+        if (!wanted.size) return true;
+        return wanted.has(
+          getContactChannelKey(item?.channel || item?.type || item?.kind)
+        );
+      })
+      .map((item) =>
+        s(
+          item?.value ||
+            item?.phone ||
+            item?.email ||
+            item?.number ||
+            item?.url ||
+            ""
+        )
+      )
+      .filter(Boolean)
+  );
+}
+
+function collectLocationValues(locations = [], keys = []) {
+  return uniqStrings(
+    arr(locations)
+      .map((location) => {
+        const item = obj(location);
+        for (const key of arr(keys)) {
+          const text = s(item?.[key]);
+          if (text) return text;
+        }
+        return "";
+      })
+      .filter(Boolean)
+  );
+}
+
 function resolveProjectionPrimaryEmail({
   profileJson = {},
   contacts = [],
@@ -289,6 +365,9 @@ function mergeTenantRuntime({
   const listCanonical = (categories = []) =>
     listFactsByCategory(activeKnowledge, categories);
 
+  const visibleContacts = arr(contacts).filter((item) => isShareableContact(item));
+  const visibleLocations = arr(locations);
+
   const displayName =
     s(businessProfile?.display_name) ||
     s(businessProfile?.company_name) ||
@@ -339,19 +418,77 @@ function mergeTenantRuntime({
   const primaryEmail =
     s(legacy?.profile?.public_email) ||
     s(businessProfile?.primary_email) ||
-    pickPrimaryContact(contacts, ["email"]) ||
+    pickPrimaryContact(visibleContacts, ["email"]) ||
     firstCanonical(["contact"], ["email_primary", "primary_email"]) ||
     firstFact(facts, ["contact"]);
 
   const primaryPhone =
     s(legacy?.profile?.public_phone) ||
     s(businessProfile?.primary_phone) ||
-    pickPrimaryContact(contacts, ["phone", "whatsapp"]) ||
+    pickPrimaryContact(visibleContacts, ["phone", "whatsapp"]) ||
     firstCanonical(["contact"], ["phone_primary", "primary_phone"]) ||
     firstFact(facts, ["contact"]);
 
   const websiteUrl =
     s(legacy?.profile?.website_url) || s(businessProfile?.website_url);
+
+  const primaryAddress =
+    s(legacy?.profile?.primary_address) ||
+    s(businessProfile?.primary_address) ||
+    collectLocationValues(visibleLocations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "city",
+    ])[0] ||
+    "";
+
+  const contactPhones = uniqStrings([
+    primaryPhone,
+    ...collectContactValues(visibleContacts, [
+      "phone",
+      "mobile",
+      "telephone",
+      "tel",
+      "call",
+      "whatsapp",
+    ]),
+    ...collectLocationValues(visibleLocations, ["phone"]),
+  ]);
+
+  const contactEmails = uniqStrings([
+    primaryEmail,
+    ...collectContactValues(visibleContacts, ["email", "mail"]),
+    ...collectLocationValues(visibleLocations, ["email"]),
+  ]);
+
+  const contactAddresses = uniqStrings([
+    primaryAddress,
+    ...collectLocationValues(visibleLocations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "city",
+    ]),
+  ]);
+
+  const websiteUrls = uniqStrings([
+    websiteUrl,
+    ...listCanonical(["website"]),
+    ...listFactsByCategory(facts, ["website"]),
+  ]);
+
+  const bookingLinks = uniqStrings(
+    listCanonical(["booking"]).length
+      ? listCanonical(["booking"])
+      : listFactsByCategory(facts, ["booking"])
+  );
+
+  const socialLinks = uniqStrings(
+    listCanonical(["social_link"]).length
+      ? listCanonical(["social_link"])
+      : listFactsByCategory(facts, ["social_link"])
+  );
 
   const preferredCta =
     s(legacy?.profile?.preferred_cta) ||
@@ -437,12 +574,32 @@ function mergeTenantRuntime({
     default_language: defaultLanguage,
     supported_languages: supportedLanguages,
     enabled_languages: supportedLanguages,
+
+    publicPhone: primaryPhone,
+    primaryPhone,
+    publicEmail: primaryEmail,
+    primaryEmail,
+    primaryAddress,
+    websiteUrl,
+    contacts: visibleContacts,
+    locations: visibleLocations,
+    contactPhones,
+    contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks,
+    socialLinks,
+
     profile: {
       ...obj(legacy?.profile),
       brand_name: displayName,
       website_url: websiteUrl,
       public_email: primaryEmail,
       public_phone: primaryPhone,
+      primary_address: primaryAddress,
+      contact_emails: contactEmails,
+      contact_phones: contactPhones,
+      contact_addresses: contactAddresses,
       audience_summary: audienceSummary,
       services_summary: servicesText,
       value_proposition: valueProposition,
@@ -464,8 +621,11 @@ function mergeTenantRuntime({
         business_brain_enabled: true,
         canonical_priority: true,
         source_summary_json: obj(businessProfile?.source_summary_json),
-        contacts,
-        locations,
+        contacts: visibleContacts,
+        locations: visibleLocations,
+        bookingLinks,
+        socialLinks,
+        websiteUrls,
       },
     },
     brand: {
@@ -499,17 +659,14 @@ function mergeTenantRuntime({
         firstFact(facts, ["pricing_policy"]),
       supportMode:
         firstCanonical(["support"]) || firstFact(facts, ["support"]),
-      bookingLinks: listCanonical(["booking"]).length
-        ? listCanonical(["booking"])
-        : listFactsByCategory(facts, ["booking"]),
-      socialLinks: listCanonical(["social_link"]).length
-        ? listCanonical(["social_link"])
-        : listFactsByCategory(facts, ["social_link"]),
-      contactEmails: primaryEmail ? [primaryEmail] : [],
-      contactPhones: primaryPhone ? [primaryPhone] : [],
-      locations: arr(locations)
-        .map((x) => s(x.address_line || x.addressLine || x.title))
-        .filter(Boolean),
+      bookingLinks,
+      socialLinks,
+      contactEmails,
+      contactPhones,
+      contactAddresses,
+      contacts: visibleContacts,
+      locations: visibleLocations,
+      websiteUrls,
       preferredCta,
     },
     ai_policy: {
@@ -561,6 +718,9 @@ function buildTenantFromProjection({
   const leadCaptureJson = obj(projection?.lead_capture_json);
   const handoffJson = obj(projection?.handoff_json);
 
+  const visibleContacts = arr(contacts).filter((item) => isShareableContact(item));
+  const visibleLocations = arr(locations);
+
   const displayName =
     s(identity.displayName) ||
     s(profileJson.displayName) ||
@@ -603,14 +763,14 @@ function buildTenantFromProjection({
 
   const primaryEmail = resolveProjectionPrimaryEmail({
     profileJson,
-    contacts,
+    contacts: visibleContacts,
     activeKnowledge,
     facts,
   });
 
   const primaryPhone = resolveProjectionPrimaryPhone({
     profileJson,
-    contacts,
+    contacts: visibleContacts,
     activeKnowledge,
     facts,
   });
@@ -621,6 +781,63 @@ function buildTenantFromProjection({
     activeKnowledge,
     facts,
   });
+
+  const primaryAddress =
+    s(profileJson.primaryAddress) ||
+    collectLocationValues(visibleLocations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "city",
+    ])[0] ||
+    "";
+
+  const contactPhones = uniqStrings([
+    primaryPhone,
+    ...collectContactValues(visibleContacts, [
+      "phone",
+      "mobile",
+      "telephone",
+      "tel",
+      "call",
+      "whatsapp",
+    ]),
+    ...collectLocationValues(visibleLocations, ["phone"]),
+  ]);
+
+  const contactEmails = uniqStrings([
+    primaryEmail,
+    ...collectContactValues(visibleContacts, ["email", "mail"]),
+    ...collectLocationValues(visibleLocations, ["email"]),
+  ]);
+
+  const contactAddresses = uniqStrings([
+    primaryAddress,
+    ...collectLocationValues(visibleLocations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "city",
+    ]),
+  ]);
+
+  const websiteUrls = uniqStrings([
+    websiteUrl,
+    ...listFactsByCategory(activeKnowledge, ["website"]),
+    ...listFactsByCategory(facts, ["website"]),
+  ]);
+
+  const bookingLinks = uniqStrings(
+    listFactsByCategory(activeKnowledge, ["booking"]).length
+      ? listFactsByCategory(activeKnowledge, ["booking"])
+      : listFactsByCategory(facts, ["booking"])
+  );
+
+  const socialLinks = uniqStrings(
+    listFactsByCategory(activeKnowledge, ["social_link"]).length
+      ? listFactsByCategory(activeKnowledge, ["social_link"])
+      : listFactsByCategory(facts, ["social_link"])
+  );
 
   const toneOfVoice =
     s(profileJson.toneProfile) ||
@@ -694,11 +911,31 @@ function buildTenantFromProjection({
     default_language: defaultLanguage,
     supported_languages: supportedLanguages,
     enabled_languages: supportedLanguages,
+
+    publicPhone: primaryPhone,
+    primaryPhone,
+    publicEmail: primaryEmail,
+    primaryEmail,
+    primaryAddress,
+    websiteUrl,
+    contacts: visibleContacts,
+    locations: visibleLocations,
+    contactPhones,
+    contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks,
+    socialLinks,
+
     profile: {
       brand_name: displayName,
       website_url: websiteUrl,
       public_email: primaryEmail,
       public_phone: primaryPhone,
+      primary_address: primaryAddress,
+      contact_emails: contactEmails,
+      contact_phones: contactPhones,
+      contact_addresses: contactAddresses,
       audience_summary: s(profileJson.targetAudience),
       services_summary: uniqStrings(arr(services).map((x) => s(x.title))).join(
         ", "
@@ -723,8 +960,11 @@ function buildTenantFromProjection({
         projection_readiness: s(
           projection?.readiness_label || projection?.readinessLabel || ""
         ),
-        contacts,
-        locations,
+        contacts: visibleContacts,
+        locations: visibleLocations,
+        bookingLinks,
+        socialLinks,
+        websiteUrls,
       },
     },
     brand: {
@@ -756,17 +996,14 @@ function buildTenantFromProjection({
       supportMode:
         firstFact(activeKnowledge, ["support"]) ||
         firstFact(facts, ["support"]),
-      bookingLinks: listFactsByCategory(activeKnowledge, ["booking"]).length
-        ? listFactsByCategory(activeKnowledge, ["booking"])
-        : listFactsByCategory(facts, ["booking"]),
-      socialLinks: listFactsByCategory(activeKnowledge, ["social_link"]).length
-        ? listFactsByCategory(activeKnowledge, ["social_link"])
-        : listFactsByCategory(facts, ["social_link"]),
-      contactEmails: primaryEmail ? [primaryEmail] : [],
-      contactPhones: primaryPhone ? [primaryPhone] : [],
-      locations: arr(locations)
-        .map((x) => s(x.address_line || x.addressLine || x.title))
-        .filter(Boolean),
+      bookingLinks,
+      socialLinks,
+      contactEmails,
+      contactPhones,
+      contactAddresses,
+      contacts: visibleContacts,
+      locations: visibleLocations,
+      websiteUrls,
       preferredCta,
       runtimeProjectionId: s(projection?.id),
       readinessLabel: s(

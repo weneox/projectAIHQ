@@ -1,5 +1,5 @@
 // src/services/promptBundle.js
-// FINAL v4.2 — universal multi-industry + multi-tenant prompt bundle builder
+// FINAL v4.3 — universal multi-industry + multi-tenant prompt bundle builder
 //
 // ✅ tenant-aware
 // ✅ industry-aware
@@ -13,6 +13,7 @@
 // ✅ inbox.reply usecase support
 // ✅ approved contact data carried into prompt bundle
 // ✅ prevents false "contact not available" answers when truth/runtime has phone/email/site
+// ✅ reads rich projection truth from top-level contacts/locations and profile.extra_context
 
 import { deepFix, fixText } from "../utils/textFix.js";
 import {
@@ -169,6 +170,87 @@ function extractContactChannelValues(
   return uniqStrings(out);
 }
 
+function readProfileExtraContext(profile = {}) {
+  return obj(profile.extra_context || profile.extraContext);
+}
+
+function isVisibleRichContactEntry(entry = {}) {
+  const item = obj(entry);
+  if (!Object.keys(item).length) return false;
+
+  if (item.enabled === false) return false;
+  if (item.isActive === false || item.is_active === false) return false;
+
+  const visiblePublic =
+    typeof item.visiblePublic === "boolean"
+      ? item.visiblePublic
+      : typeof item.visible_public === "boolean"
+        ? item.visible_public
+        : undefined;
+
+  const visibleInAi =
+    typeof item.visibleInAi === "boolean"
+      ? item.visibleInAi
+      : typeof item.visible_in_ai === "boolean"
+        ? item.visible_in_ai
+        : undefined;
+
+  if (visiblePublic === false && visibleInAi === false) return false;
+  return true;
+}
+
+function filterVisibleRichContacts(items = []) {
+  return arr(items).filter((item) => isVisibleRichContactEntry(item));
+}
+
+function looksLikeEmail(value = "") {
+  return /@/.test(s(value));
+}
+
+function looksLikeUrl(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return (
+    text.startsWith("http://") ||
+    text.startsWith("https://") ||
+    text.startsWith("www.") ||
+    /^[a-z0-9-]+\.[a-z]{2,}(\/|$)/i.test(text)
+  );
+}
+
+function looksLikeSocialUrl(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return /(instagram\.com|facebook\.com|fb\.com|t\.me|telegram\.me|linkedin\.com|wa\.me|whatsapp\.com|youtube\.com|x\.com|twitter\.com|tiktok\.com)/i.test(
+    text
+  );
+}
+
+function looksLikeWebsiteUrl(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (!looksLikeUrl(text)) return false;
+  if (looksLikeSocialUrl(text)) return false;
+  if (/google\.[^/]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+function looksLikePhone(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (looksLikeEmail(text)) return false;
+  if (looksLikeUrl(text)) return false;
+
+  const digits = text.replace(/\D/g, "");
+  if (digits.length < 7) return false;
+
+  return /(?:\+|[0-9])/.test(text);
+}
+
 function normalizeLang(v) {
   const x = s(v).toLowerCase();
   if (!x) return "az";
@@ -271,12 +353,12 @@ function finalizeTenantDerivedFields(raw = {}) {
   ).filter(Boolean);
 
   const preferredPresets = uniqStrings(arr(t.preferredPresets));
-  const contactPhones = uniqStrings(arr(t.contactPhones));
-  const contactEmails = uniqStrings(arr(t.contactEmails));
+  const contactPhones = uniqStrings(arr(t.contactPhones).filter((x) => looksLikePhone(x)));
+  const contactEmails = uniqStrings(arr(t.contactEmails).filter((x) => looksLikeEmail(x)));
   const contactAddresses = uniqStrings(arr(t.contactAddresses));
-  const websiteUrls = uniqStrings(arr(t.websiteUrls));
-  const bookingLinks = uniqStrings(arr(t.bookingLinks));
-  const socialLinks = uniqStrings(arr(t.socialLinks));
+  const websiteUrls = uniqStrings(arr(t.websiteUrls).filter((x) => looksLikeWebsiteUrl(x)));
+  const bookingLinks = uniqStrings(arr(t.bookingLinks).filter((x) => looksLikeUrl(x)));
+  const socialLinks = uniqStrings(arr(t.socialLinks).filter((x) => looksLikeUrl(x)));
 
   const publicPhone =
     pickFirstNonEmpty(t.publicPhone, t.primaryPhone, contactPhones[0]) || "";
@@ -344,6 +426,19 @@ function normalizeTenantRuntime(raw = {}) {
       profile.visualStyle ||
       tenant.visualStyle
   );
+  const profileExtra = readProfileExtraContext(profile);
+
+  const visibleRichContacts = filterVisibleRichContacts([
+    ...arr(tenant.contacts),
+    ...arr(meta.contacts),
+    ...arr(profileExtra.contacts),
+  ]);
+
+  const richLocations = [
+    ...arr(tenant.locations),
+    ...arr(meta.locations),
+    ...arr(profileExtra.locations),
+  ];
 
   const tenantKey =
     pickFirstNonEmpty(
@@ -430,6 +525,7 @@ function normalizeTenantRuntime(raw = {}) {
     ...arr(tenant.services),
     ...arr(profile.services),
     ...arr(brand.services),
+    ...normalizeLooseValues(meta.services, ["value", "title", "label", "name"]),
   ]);
 
   const audiences = uniqStrings([
@@ -462,8 +558,14 @@ function normalizeTenantRuntime(raw = {}) {
       profile.primaryPhone,
       profile.phone
     ),
+    ...arr(tenant.contactPhones),
     ...normalizeLooseValues(meta.contactPhones, ["value", "phone", "number"]),
     ...normalizeLooseValues(profile.contactPhones, ["value", "phone", "number"]),
+    ...normalizeLooseValues(profileExtra.contactPhones, [
+      "value",
+      "phone",
+      "number",
+    ]),
     ...extractContactChannelValues(
       tenant.contacts,
       ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
@@ -474,7 +576,18 @@ function normalizeTenantRuntime(raw = {}) {
       ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
       ["value", "phone", "number"]
     ),
-  ]);
+    ...extractContactChannelValues(
+      profileExtra.contacts,
+      ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
+      ["value", "phone", "number"]
+    ),
+    ...extractContactChannelValues(
+      visibleRichContacts,
+      ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
+      ["value", "phone", "number"]
+    ),
+    ...normalizeLooseValues(richLocations, ["phone"]),
+  ]).filter((value) => looksLikePhone(value));
 
   const contactEmails = uniqStrings([
     pickFirstNonEmpty(
@@ -487,8 +600,10 @@ function normalizeTenantRuntime(raw = {}) {
       profile.primaryEmail,
       profile.email
     ),
+    ...arr(tenant.contactEmails),
     ...normalizeLooseValues(meta.contactEmails, ["value", "email"]),
     ...normalizeLooseValues(profile.contactEmails, ["value", "email"]),
+    ...normalizeLooseValues(profileExtra.contactEmails, ["value", "email"]),
     ...extractContactChannelValues(
       tenant.contacts,
       ["email", "mail"],
@@ -499,7 +614,18 @@ function normalizeTenantRuntime(raw = {}) {
       ["email", "mail"],
       ["value", "email"]
     ),
-  ]);
+    ...extractContactChannelValues(
+      profileExtra.contacts,
+      ["email", "mail"],
+      ["value", "email"]
+    ),
+    ...extractContactChannelValues(
+      visibleRichContacts,
+      ["email", "mail"],
+      ["value", "email"]
+    ),
+    ...normalizeLooseValues(richLocations, ["email"]),
+  ]).filter((value) => looksLikeEmail(value));
 
   const contactAddresses = uniqStrings([
     pickFirstNonEmpty(
@@ -509,22 +635,28 @@ function normalizeTenantRuntime(raw = {}) {
       profile.primaryAddress,
       profile.address
     ),
-    ...normalizeLooseValues(meta.locations, [
-      "addressLine",
-      "address_line",
-      "title",
-      "value",
-    ]),
-    ...normalizeLooseValues(tenant.locations, [
-      "addressLine",
-      "address_line",
-      "title",
-      "value",
-    ]),
+    ...arr(tenant.contactAddresses),
     ...normalizeLooseValues(meta.contactAddresses, [
       "value",
       "addressLine",
       "address_line",
+    ]),
+    ...normalizeLooseValues(profile.contactAddresses, [
+      "value",
+      "addressLine",
+      "address_line",
+    ]),
+    ...normalizeLooseValues(profileExtra.contactAddresses, [
+      "value",
+      "addressLine",
+      "address_line",
+    ]),
+    ...normalizeLooseValues(richLocations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "value",
+      "city",
     ]),
   ]);
 
@@ -536,19 +668,43 @@ function normalizeTenantRuntime(raw = {}) {
       profile.websiteUrl,
       meta.websiteUrl
     ),
-    ...normalizeLooseValues(meta.websiteUrls, ["value", "url", "websiteUrl", "website_url"]),
-    ...normalizeLooseValues(meta.socialLinks, ["value", "url"]),
-  ]);
+    ...arr(tenant.websiteUrls),
+    ...normalizeLooseValues(meta.websiteUrls, [
+      "value",
+      "url",
+      "websiteUrl",
+      "website_url",
+    ]),
+    ...normalizeLooseValues(profileExtra.websiteUrls, [
+      "value",
+      "url",
+      "websiteUrl",
+      "website_url",
+    ]),
+    ...normalizeLooseValues(profileExtra.contacts, [
+      "url",
+      "websiteUrl",
+      "website_url",
+      "value",
+    ]),
+  ]).filter((value) => looksLikeWebsiteUrl(value));
 
   const bookingLinks = uniqStrings([
+    ...arr(tenant.bookingLinks),
     ...normalizeLooseValues(meta.bookingLinks, ["value", "url"]),
-    ...normalizeLooseValues(tenant.bookingLinks, ["value", "url"]),
-  ]);
+    ...normalizeLooseValues(profileExtra.bookingLinks, ["value", "url"]),
+  ]).filter((value) => looksLikeUrl(value));
 
   const socialLinks = uniqStrings([
+    ...arr(tenant.socialLinks),
     ...normalizeLooseValues(meta.socialLinks, ["value", "url"]),
-    ...normalizeLooseValues(tenant.socialLinks, ["value", "url"]),
-  ]);
+    ...normalizeLooseValues(profileExtra.socialLinks, ["value", "url"]),
+    ...extractContactChannelValues(
+      visibleRichContacts,
+      ["instagram", "facebook", "telegram", "whatsapp", "linkedin", "tiktok", "youtube"],
+      ["value", "url"]
+    ),
+  ]).filter((value) => looksLikeUrl(value));
 
   return finalizeTenantDerivedFields({
     tenantKey,
@@ -608,6 +764,9 @@ function normalizeTenantRuntime(raw = {}) {
     primaryEmail: pickFirstNonEmpty(contactEmails[0]),
     primaryAddress: pickFirstNonEmpty(contactAddresses[0]),
     websiteUrl: pickFirstNonEmpty(websiteUrls[0]),
+
+    contacts: visibleRichContacts,
+    locations: richLocations,
 
     contactPhones,
     contactEmails,
