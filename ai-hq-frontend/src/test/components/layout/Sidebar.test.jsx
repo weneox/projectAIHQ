@@ -16,7 +16,7 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /ai hq home/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^home$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /inbox 3/i })).toHaveAttribute(
       "href",
       "/inbox"
