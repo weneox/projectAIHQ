@@ -443,22 +443,18 @@ export default function Shell() {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden text-text"
+      className="relative min-h-screen overflow-hidden bg-white text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[6] bg-[linear-gradient(180deg,#f4f5f7_0%,#f6f7f9_100%)]" />
-
-      <div className="pointer-events-none fixed inset-0 -z-[5] overflow-hidden">
-        <div className="absolute left-[6%] top-[-90px] h-[240px] w-[240px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.08)_0%,rgba(46,96,255,0.02)_44%,rgba(46,96,255,0)_74%)] blur-3xl" />
-      </div>
+      <div className="pointer-events-none fixed inset-0 -z-[6] bg-white" />
 
       <div
-        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-white shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)] transition-[width] duration-slow ease-premium md:block"
+        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-[rgb(244,245,247)] shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)] transition-[width] duration-slow ease-premium md:block"
         style={{ width: "var(--shell-sidebar-w)" }}
       />
 
       <div
-        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-white shadow-[inset_0_-1px_0_rgba(15,23,42,0.06)]"
+        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-[rgb(244,245,247)] shadow-[inset_0_-1px_0_rgba(15,23,42,0.06)]"
         style={{ height: `${SHELL_TOPBAR_HEIGHT}px` }}
       />
 
@@ -480,7 +476,7 @@ export default function Shell() {
 
         <main
           className={cx(
-            "relative",
+            "relative bg-white",
             shellMode === "immersive"
               ? "overflow-hidden"
               : "page-scroll overflow-y-auto"
@@ -490,12 +486,12 @@ export default function Shell() {
           {shellMode === "immersive" ? (
             <div
               style={{ height: contentMinHeight }}
-              className="min-h-0 overflow-hidden"
+              className="min-h-0 overflow-hidden bg-white"
             >
               <Outlet />
             </div>
           ) : (
-            <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-7 md:py-7">
+            <div className="relative mx-auto w-full max-w-shell-content bg-white px-5 py-6 md:px-7 md:py-7">
               <SharedStatsNotice message={shellStats?.message} />
 
               <AnimatePresence mode="wait" initial={false}>
