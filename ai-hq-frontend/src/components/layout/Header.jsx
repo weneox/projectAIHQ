@@ -30,16 +30,16 @@ function AskAiButton() {
           })
         );
       }}
-      className="inline-flex h-10 items-center gap-2 rounded-soft border border-line bg-white px-3.5 text-[13px] font-semibold text-text transition-[background-color,color,border-color] duration-base ease-premium hover:border-line-strong hover:bg-surface-subtle"
+      className="inline-flex h-9 items-center gap-2 rounded-[14px] border border-white/55 bg-white/70 px-3 text-[12px] font-semibold tracking-[-0.01em] text-text shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/75 hover:bg-white/92"
       aria-label="Open Ask AI"
     >
-      <Sparkles className="h-4 w-4" strokeWidth={2} />
+      <Sparkles className="h-[15px] w-[15px]" strokeWidth={1.95} />
       <span className="hidden sm:inline">Ask AI</span>
     </button>
   );
 }
 
-function WorkspaceControl({ notifications }) {
+function WorkspaceControl({ notifications, workspaceMeta }) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [session, setSession] = useState({
@@ -99,15 +99,22 @@ function WorkspaceControl({ notifications }) {
       ? notifications.unreadCount
       : 0;
 
-  const displayName = session.workspaceName || session.actorName || "Workspace";
-  const roleLabel = session.role || "Operator";
+  const displayName =
+    String(workspaceMeta?.workspaceName || "").trim() ||
+    session.workspaceName ||
+    session.actorName ||
+    "Workspace";
+
+  const roleLabel =
+    String(workspaceMeta?.userName || "").trim() || session.role || "";
+
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[248px] rounded-[18px] border border-white/70 bg-surface/96 p-2 shadow-panel-strong backdrop-blur">
+    <div className="dropdown-panel-anim w-[244px] rounded-[20px] border border-white/70 bg-white/92 p-2 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.32),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-subtle text-[12px] font-semibold text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-line-soft bg-surface text-[12px] font-semibold text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
             {initials}
           </div>
 
@@ -115,9 +122,11 @@ function WorkspaceControl({ notifications }) {
             <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
               {displayName}
             </div>
-            <div className="truncate text-[12px] text-text-muted">
-              {roleLabel}
-            </div>
+            {roleLabel ? (
+              <div className="truncate pt-0.5 text-[11px] text-text-subtle">
+                {roleLabel}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -130,7 +139,7 @@ function WorkspaceControl({ notifications }) {
           setOpen(false);
           notifications?.setOpen?.(!notifications?.open);
         }}
-        className="flex h-10 w-full items-center justify-between rounded-soft px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-subtle"
+        className="flex h-10 w-full items-center justify-between rounded-[14px] px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-subtle"
       >
         <span>Notifications</span>
         <span className="text-[12px] text-text-subtle">
@@ -141,7 +150,7 @@ function WorkspaceControl({ notifications }) {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-1 flex h-10 w-full items-center rounded-soft px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
+        className="mt-1 flex h-10 w-full items-center rounded-[14px] px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
       >
         {loggingOut ? "Signing out..." : "Sign out"}
       </button>
@@ -161,20 +170,19 @@ function WorkspaceControl({ notifications }) {
         aria-label={displayName}
         aria-expanded={open}
         className={cx(
-          "flex h-10 items-center gap-2.5 rounded-soft px-1.5 text-left transition-[background-color,color] duration-base ease-premium",
-          open ? "bg-surface-subtle" : "hover:bg-surface-subtle"
+          "flex h-9 items-center gap-2 rounded-[14px] border border-transparent px-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium",
+          open
+            ? "border-white/65 bg-white/72 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.78)]"
+            : "hover:border-white/45 hover:bg-white/56"
         )}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-subtle text-[11px] font-semibold text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[12px] border border-white/55 bg-white/74 text-[11px] font-semibold text-text shadow-[0_10px_24px_-22px_rgba(15,23,42,0.5),inset_0_1px_0_rgba(255,255,255,0.82)]">
           {initials}
         </div>
 
         <div className="hidden min-w-0 text-left lg:block">
           <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
             {displayName}
-          </div>
-          <div className="truncate text-[12px] text-text-muted">
-            {roleLabel}
           </div>
         </div>
 
@@ -200,40 +208,43 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-transparent bg-transparent text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/45 hover:bg-white/56 hover:text-text"
       aria-label="Open notifications"
     >
-      <Bell className="h-4 w-4" strokeWidth={1.9} />
+      <Bell className="h-[15px] w-[15px]" strokeWidth={1.95} />
       {unread > 0 ? (
-        <span className="absolute right-[8px] top-[8px] h-2 w-2 rounded-full bg-brand" />
+        <span className="absolute right-[7px] top-[7px] h-2 w-2 rounded-full bg-brand" />
       ) : null}
     </button>
   );
 }
 
-export default function Header({ onMenuClick, notifications }) {
+export default function Header({ onMenuClick, notifications, workspaceMeta }) {
   return (
     <>
       <header
         className="sticky top-0 z-[60]"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-3.5 md:px-5">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-transparent bg-transparent text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/45 hover:bg-white/56 hover:text-text md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-4 w-4" strokeWidth={2} />
+              <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 md:gap-2">
+          <div className="flex items-center gap-1.5">
             <AskAiButton />
             <NotificationsButton notifications={notifications} />
-            <WorkspaceControl notifications={notifications} />
+            <WorkspaceControl
+              notifications={notifications}
+              workspaceMeta={workspaceMeta}
+            />
           </div>
         </div>
       </header>
