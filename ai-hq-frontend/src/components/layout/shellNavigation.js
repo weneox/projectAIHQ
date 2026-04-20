@@ -1,27 +1,37 @@
-import {
-  House,
-  Inbox,
-  PlugZap,
-  ShieldCheck,
-} from "lucide-react";
+import dashboardIcon from "../../assets/channels/dashboard.png";
+import inboxIcon from "../../assets/channels/inbox.png";
+import connectIcon from "../../assets/channels/connect.png";
+import businessInformationsIcon from "../../assets/channels/businessinformations.png";
 
 const PRIMARY_SECTIONS = [
   {
     id: "home",
     label: "Home",
-    icon: House,
+    iconType: "image",
+    iconSrc: dashboardIcon,
     to: "/home",
     paths: ["/home"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Home", to: "/home" }] }],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Home", to: "/home" }],
+      },
+    ],
   },
   {
     id: "inbox",
     label: "Inbox",
-    icon: Inbox,
+    iconType: "image",
+    iconSrc: inboxIcon,
     to: "/inbox",
     badgeKey: "inboxUnread",
     paths: ["/inbox"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Inbox", to: "/inbox" }] }],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Inbox", to: "/inbox" }],
+      },
+    ],
   },
 ];
 
@@ -29,18 +39,30 @@ const SECONDARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    icon: PlugZap,
+    iconType: "image",
+    iconSrc: connectIcon,
     to: "/channels",
     paths: ["/channels"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Channels", to: "/channels" }] }],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Channels", to: "/channels" }],
+      },
+    ],
   },
   {
     id: "truth",
     label: "Truth",
-    icon: ShieldCheck,
+    iconType: "image",
+    iconSrc: businessInformationsIcon,
     to: "/truth",
     paths: ["/truth"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Truth", to: "/truth" }] }],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Truth", to: "/truth" }],
+      },
+    ],
   },
 ];
 

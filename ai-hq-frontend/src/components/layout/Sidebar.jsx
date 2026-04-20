@@ -20,10 +20,33 @@ function formatBadgeCount(count) {
   return count > 99 ? "99+" : String(count);
 }
 
+function SidebarImageIcon({
+  src,
+  label,
+  collapsed = false,
+  isActive = false,
+  className = "",
+}) {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      draggable="false"
+      className={cx(
+        "select-none object-contain transition-all duration-base ease-premium",
+        collapsed ? "h-[16px] w-[16px]" : "h-[15px] w-[15px]",
+        isActive ? "opacity-100" : "opacity-[0.72] group-hover:opacity-100",
+        className
+      )}
+    />
+  );
+}
+
 function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
-  const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
   const linkLabel = badgeCount ? `${item.label} ${badgeCount}` : item.label;
+  const Icon = item.icon;
 
   return (
     <NavLink
@@ -48,14 +71,23 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
             )}
           />
 
-          <Icon
-            className={cx(
-              "relative z-[1] shrink-0 transition-colors duration-base ease-premium",
-              collapsed ? "h-[16px] w-[16px]" : "h-[15px] w-[15px]",
-              isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
-            )}
-            strokeWidth={1.95}
-          />
+          {item.iconType === "image" && item.iconSrc ? (
+            <SidebarImageIcon
+              src={item.iconSrc}
+              label={item.label}
+              collapsed={collapsed}
+              isActive={isActive}
+            />
+          ) : Icon ? (
+            <Icon
+              className={cx(
+                "relative z-[1] shrink-0 transition-colors duration-base ease-premium",
+                collapsed ? "h-[16px] w-[16px]" : "h-[15px] w-[15px]",
+                isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
+              )}
+              strokeWidth={1.95}
+            />
+          ) : null}
 
           <div
             className={cx(
