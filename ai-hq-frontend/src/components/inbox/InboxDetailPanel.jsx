@@ -5,7 +5,6 @@ import {
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
-  Sparkles,
   UserCog,
   XCircle,
 } from "lucide-react";
@@ -19,27 +18,92 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function initialsFromName(value = "") {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "C";
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function resolveConversationTitle(thread) {
+  return (
+    s(thread?.customer_name) ||
+    s(thread?.external_username) ||
+    s(thread?.external_user_id) ||
+    "Conversation"
+  );
+}
+
+function resolveChannelLabel(thread) {
+  const raw =
+    s(thread?.channel_label) ||
+    s(thread?.channel_type) ||
+    s(thread?.provider) ||
+    s(thread?.source_type);
+
+  if (!raw) return "";
+
+  const normalized = raw.toLowerCase();
+
+  if (normalized === "webchat") return "Web Chat";
+  if (normalized === "web") return "Website";
+  if (normalized === "whatsapp") return "WhatsApp";
+  if (normalized === "telegram") return "Telegram";
+  if (normalized === "instagram") return "Instagram";
+  if (normalized === "facebook") return "Facebook";
+  if (normalized === "email") return "Email";
+
+  return raw
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatCustomerSince(value = "") {
+  const safe = s(value);
+  if (!safe) return "";
+
+  const date = new Date(safe);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return `Customer since ${date.toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  })}`;
+}
+
 function formatConversationMeta(thread) {
-  const safeThread =
-    thread && typeof thread === "object" && !Array.isArray(thread) ? thread : {};
+  const items = [];
 
-  const parts = [];
+  const channel = resolveChannelLabel(thread);
+  const customerSince = formatCustomerSince(thread?.created_at);
+  const status =
+    s(thread?.status_label) ||
+    s(thread?.status) ||
+    (thread?.handoff_active ? "handoff active" : "");
 
-  const channel =
-    s(safeThread.channel_label) ||
-    s(safeThread.channel_type) ||
-    s(safeThread.provider) ||
-    s(safeThread.source_type);
+  if (channel) items.push(channel);
+  if (customerSince) items.push(customerSince);
+  if (
+    status &&
+    !["open", "conversation"].includes(String(status).toLowerCase())
+  ) {
+    items.push(
+      status
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    );
+  }
 
-  const state =
-    s(safeThread.status_label) ||
-    s(safeThread.status) ||
-    (safeThread?.handoff_active ? "handoff" : "");
-
-  if (channel) parts.push(channel);
-  if (state && state.toLowerCase() !== "open") parts.push(state);
-
-  return parts.filter(Boolean).join(" • ");
+  return items;
 }
 
 function QuietIconButton({
@@ -57,14 +121,40 @@ function QuietIconButton({
       aria-label={label}
       title={label}
       className={[
-        "flex h-8 w-8 items-center justify-center rounded-[10px] bg-transparent transition-colors",
+        "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
         active
-          ? "text-text"
-          : "text-text-subtle hover:bg-[rgba(15,23,42,0.05)] hover:text-text",
-        disabled ? "cursor-not-allowed opacity-35" : "",
+          ? "border-[rgba(37,99,235,0.14)] bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.96)]"
+          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(71,85,105,0.92)] hover:border-[rgba(15,23,42,0.12)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.9)]",
+        disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
       {children}
+    </button>
+  );
+}
+
+function HeaderActionButton({
+  label,
+  onClick,
+  disabled = false,
+  tone = "default",
+  icon = null,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        "inline-flex h-10 items-center gap-2 rounded-[14px] border px-4 text-[13px] font-medium transition-all",
+        tone === "danger"
+          ? "border-[rgba(239,68,68,0.12)] bg-white text-[rgba(185,28,28,0.94)] hover:bg-[rgba(254,242,242,0.92)]"
+          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(15,23,42,0.88)] hover:bg-[rgba(248,250,252,0.96)]",
+        disabled ? "cursor-not-allowed opacity-45" : "",
+      ].join(" ")}
+    >
+      {icon}
+      <span>{label}</span>
     </button>
   );
 }
@@ -78,7 +168,6 @@ function DetailActionMenu({
   onAssign,
   onHandoff,
   onResolve,
-  onCloseThread,
   disabledMap,
 }) {
   const menuRef = useRef(null);
@@ -135,24 +224,16 @@ function DetailActionMenu({
     {
       key: "resolved",
       label: disabledMap.resolved ? "Resolving..." : "Resolve",
-      icon: Sparkles,
+      icon: CheckCheck,
       onClick: onResolve,
       disabled: disabledMap.resolved,
-    },
-    {
-      key: "closed",
-      label: disabledMap.closed ? "Closing..." : "Close",
-      icon: XCircle,
-      onClick: onCloseThread,
-      disabled: disabledMap.closed,
-      tone: "text-danger",
     },
   ].filter(Boolean);
 
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-[18px] border border-line bg-white p-1.5 shadow-[0_18px_60px_-34px_rgba(15,23,42,0.28)]"
+      className="absolute right-0 top-[calc(100%+10px)] z-30 w-56 overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white p-1.5 shadow-[0_22px_60px_-32px_rgba(15,23,42,0.24)]"
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -167,10 +248,9 @@ function DetailActionMenu({
             disabled={item.disabled}
             className={[
               "flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[13px] transition-colors",
-              item.tone || "text-text-muted",
               item.disabled
                 ? "cursor-not-allowed opacity-45"
-                : "hover:bg-[rgba(15,23,42,0.04)] hover:text-text",
+                : "text-[rgba(51,65,85,0.94)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.94)]",
             ].join(" ")}
           >
             <Icon className="h-4 w-4" />
@@ -189,19 +269,23 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
   const disabled = automationControl?.disabled === true;
 
   return (
-    <div className="flex items-center gap-2 rounded-pill border border-line bg-white px-2.5 py-1.5">
-      <span className="text-[12px] font-medium text-text">Auto-reply</span>
+    <div className="inline-flex items-center gap-3 rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] font-medium text-[rgba(15,23,42,0.88)]">
+          Auto-reply
+        </span>
 
-      <span
-        className={[
-          "hidden md:inline-flex rounded-pill px-2 py-0.5 text-[10px] font-medium",
-          enabled
-            ? "bg-[rgba(var(--color-success),0.12)] text-[rgb(var(--color-success))]"
-            : "bg-[rgba(var(--color-warning),0.14)] text-[rgb(var(--color-warning))]",
-        ].join(" ")}
-      >
-        {loading ? "Checking" : enabled ? "On" : "Off"}
-      </span>
+        <span
+          className={[
+            "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
+            enabled
+              ? "bg-[rgba(34,197,94,0.12)] text-[rgba(21,128,61,0.96)]"
+              : "bg-[rgba(148,163,184,0.14)] text-[rgba(71,85,105,0.96)]",
+          ].join(" ")}
+        >
+          {loading ? "Checking" : enabled ? "On" : "Off"}
+        </span>
+      </div>
 
       <button
         type="button"
@@ -219,20 +303,53 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
         }}
         disabled={disabled || loading || saving}
         className={[
-          "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-base ease-premium",
+          "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-200",
           enabled
-            ? "border-brand bg-brand"
-            : "border-line-strong bg-[rgba(15,23,42,0.08)]",
+            ? "border-[rgba(37,99,235,0.2)] bg-[rgba(37,99,235,0.98)]"
+            : "border-[rgba(15,23,42,0.12)] bg-[rgba(148,163,184,0.28)]",
           disabled || loading || saving ? "cursor-not-allowed opacity-60" : "",
         ].join(" ")}
       >
         <span
           className={[
-            "inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_8px_20px_-12px_rgba(15,23,42,0.45)] transition-transform duration-base ease-premium",
+            "inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_8px_18px_-10px_rgba(15,23,42,0.42)] transition-transform duration-200",
             enabled ? "translate-x-[20px]" : "translate-x-[3px]",
           ].join(" ")}
         />
       </button>
+    </div>
+  );
+}
+
+function ConversationIdentity({ thread }) {
+  const title = resolveConversationTitle(thread);
+  const metaItems = formatConversationMeta(thread);
+  const avatar = initialsFromName(title);
+
+  return (
+    <div className="flex min-w-0 items-center gap-4">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[16px] font-semibold text-[rgba(37,99,235,0.96)] ring-1 ring-[rgba(37,99,235,0.10)]">
+        {avatar}
+      </div>
+
+      <div className="min-w-0">
+        <div className="truncate text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+          {title}
+        </div>
+
+        {metaItems.length ? (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[rgba(100,116,139,0.96)]">
+            {metaItems.map((item, index) => (
+              <div key={`${item}-${index}`} className="inline-flex items-center gap-2">
+                {index > 0 ? (
+                  <span className="text-[rgba(203,213,225,0.96)]">•</span>
+                ) : null}
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -242,6 +359,7 @@ function ConversationHeader({
   unreadCount,
   onOpenDetails,
   onRefresh,
+  onCloseThread,
   onMenuToggle,
   menuOpen,
   menuAnchorRef,
@@ -249,39 +367,47 @@ function ConversationHeader({
   surface,
   automationControl,
   onToggleAutomation,
+  disabledMap,
 }) {
   const hasThread = Boolean(thread?.id);
-  const title =
-    s(thread?.customer_name) ||
-    s(thread?.external_username) ||
-    s(thread?.external_user_id) ||
-    "Conversation";
-  const meta = formatConversationMeta(thread);
 
   return (
-    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(255,255,255,0.84)] px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.76)]">
-      <div className="flex items-center justify-between gap-3">
+    <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
+      <div className="flex items-center justify-between gap-5 px-6 py-5">
         <div className="min-w-0 flex-1">
           {hasThread ? (
-            <>
-              <div className="truncate text-[14px] font-semibold text-text">
-                {title}
-              </div>
-              {meta ? (
-                <div className="mt-0.5 truncate text-[12px] text-text-muted">
-                  {meta}
-                </div>
-              ) : null}
-            </>
+            <ConversationIdentity thread={thread} />
           ) : (
-            <div className="h-[18px]" />
+            <div>
+              <div className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+                Inbox
+              </div>
+              <div className="mt-1 text-[12.5px] text-[rgba(100,116,139,0.96)]">
+                Select a conversation to view messages and reply.
+              </div>
+            </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
           <InboxAutomationSwitch
             automationControl={automationControl}
             onToggle={onToggleAutomation}
+          />
+
+          <HeaderActionButton
+            label="Details"
+            onClick={onOpenDetails}
+            disabled={!hasThread}
+            icon={<SlidersHorizontal className="h-4 w-4" />}
+          />
+
+          <HeaderActionButton
+            label={disabledMap.closed ? "Closing..." : "Mark as closed"}
+            onClick={onCloseThread}
+            disabled={!hasThread || disabledMap.closed}
+            tone="danger"
+            icon={<XCircle className="h-4 w-4" />}
           />
 
           <QuietIconButton
@@ -290,14 +416,6 @@ function ConversationHeader({
             label="Refresh conversation"
           >
             <RefreshCw className="h-4 w-4" />
-          </QuietIconButton>
-
-          <QuietIconButton
-            onClick={onOpenDetails}
-            disabled={!hasThread}
-            label="Open detail drawer"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
           </QuietIconButton>
 
           <div className="relative" ref={menuAnchorRef}>
@@ -314,7 +432,7 @@ function ConversationHeader({
           </div>
 
           {hasThread && unreadCount > 0 ? (
-            <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-pill bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
+            <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[rgba(37,99,235,0.98)] px-2 py-0.5 text-[11px] font-semibold text-white">
               {unreadCount}
             </span>
           ) : null}
@@ -326,19 +444,19 @@ function ConversationHeader({
 
 function EmptyComposerDock() {
   return (
-    <div className="w-full px-5 pb-5">
-      <div className="w-full rounded-[24px] border border-line bg-white px-5 py-4 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.22)]">
+    <div className="w-full px-6 pb-6">
+      <div className="mx-auto w-full max-w-[960px] rounded-[26px] border border-[rgba(15,23,42,0.08)] bg-white/92 px-5 py-4 shadow-[0_28px_70px_-46px_rgba(15,23,42,0.24)] backdrop-blur">
         <div className="flex items-end gap-4">
           <textarea
             disabled
             rows={1}
             placeholder="Write a reply"
-            className="min-h-[56px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-text placeholder:text-text-subtle outline-none disabled:cursor-not-allowed"
+            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[rgba(15,23,42,0.94)] placeholder:text-[rgba(148,163,184,0.96)] outline-none disabled:cursor-not-allowed"
           />
           <button
             type="button"
             disabled
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(15,23,42,0.08)] px-5 text-[13px] font-medium text-text-subtle"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(148,163,184,0.22)] px-5 text-[13px] font-medium text-[rgba(100,116,139,0.96)]"
           >
             Send
           </button>
@@ -351,8 +469,23 @@ function EmptyComposerDock() {
 function FloatingComposerSlot({ children }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-      <div className="bg-[linear-gradient(180deg,rgba(245,247,250,0)_0%,rgba(245,247,250,0.68)_34%,rgba(245,247,250,0.92)_72%,rgba(245,247,250,0.98)_100%)] pt-12">
+      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.70)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-14">
         <div className="pointer-events-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyConversationState() {
+  return (
+    <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
+      <div className="w-full max-w-[520px] rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
+        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+          Select a conversation
+        </div>
+        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
+          Choose a thread from the left to review the conversation and send a reply.
+        </div>
       </div>
     </div>
   );
@@ -435,14 +568,6 @@ export default function InboxDetailPanel({
     );
   }
 
-  const showSurfaceBanner =
-    hasThread &&
-    (surface?.unavailable ||
-      surface?.availability === "unavailable" ||
-      surface?.error ||
-      surface?.saveError ||
-      surface?.saveSuccess);
-
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
     [outboundAttempts]
@@ -459,19 +584,33 @@ export default function InboxDetailPanel({
 
   const canMarkRead = hasThread && unreadCount > 0;
 
+  const showSurfaceBanner =
+    hasThread &&
+    (surface?.unavailable ||
+      surface?.availability === "unavailable" ||
+      surface?.error ||
+      surface?.saveError ||
+      surface?.saveSuccess);
+
   return (
-    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
       <ConversationHeader
         thread={selectedThread}
         unreadCount={unreadCount}
         onOpenDetails={onOpenDetails}
         onRefresh={surface?.refresh}
+        onCloseThread={() => {
+          if (selectedThread?.id) {
+            setThreadStatus(selectedThread.id, "closed");
+          }
+        }}
         onMenuToggle={toggleMenu}
         menuOpen={menuOpen}
         menuAnchorRef={menuAnchorRef}
         surface={surface}
         automationControl={automationControl}
         onToggleAutomation={onToggleAutomation}
+        disabledMap={disabledMap}
         menu={
           <DetailActionMenu
             open={menuOpen}
@@ -492,64 +631,62 @@ export default function InboxDetailPanel({
                 setThreadStatus(selectedThread.id, "resolved");
               }
             }}
-            onCloseThread={() => {
-              if (selectedThread?.id) {
-                setThreadStatus(selectedThread.id, "closed");
-              }
-            }}
             disabledMap={disabledMap}
           />
         }
       />
 
-      {showSurfaceBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[62px] z-20 flex justify-center px-5 pt-3">
-          <div className="pointer-events-auto w-full max-w-[820px]">
-            <SurfaceBanner
-              surface={surface}
-              unavailableMessage="Conversation detail is temporarily unavailable."
-              refreshLabel="Refresh conversation"
-            />
-          </div>
-        </div>
-      ) : null}
-
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollViewportRef}
-          className="h-full overflow-y-auto bg-transparent pb-[176px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full overflow-y-auto pb-[194px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
-            <div className="h-full min-h-[260px] bg-transparent" />
-          ) : messages.length === 0 ? (
-            <div className="flex h-full min-h-[260px] flex-col items-center justify-center px-8 text-center">
-              <div className="text-[17px] font-semibold text-text">
-                No messages yet
-              </div>
-              <div className="mt-2 max-w-[30rem] text-[14px] leading-7 text-text-muted">
-                This conversation has no message history yet.
-              </div>
-            </div>
+            <EmptyConversationState />
           ) : (
-            <div className="mx-auto flex min-h-full w-full max-w-[980px] flex-col justify-end px-6 py-5">
-              <div className="space-y-3">
-                {messages.map((message) => (
-                  <InboxMessageBubble
-                    key={message.id}
-                    m={message}
-                    attemptsByCorrelation={attemptsByCorrelation}
+            <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-6 py-6">
+              {showSurfaceBanner ? (
+                <div className="mx-auto mb-4 w-full max-w-[920px]">
+                  <SurfaceBanner
+                    surface={surface}
+                    unavailableMessage="Conversation detail is temporarily unavailable."
+                    refreshLabel="Refresh conversation"
                   />
-                ))}
-              </div>
+                </div>
+              ) : null}
+
+              {!messages.length ? (
+                <div className="flex min-h-[320px] items-center justify-center">
+                  <div className="w-full max-w-[520px] rounded-[26px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.92)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
+                    <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+                      No messages yet
+                    </div>
+                    <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
+                      This conversation has no message history yet.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mx-auto mt-auto w-full max-w-[920px] space-y-4">
+                  {messages.map((message) => (
+                    <InboxMessageBubble
+                      key={message.id}
+                      m={message}
+                      attemptsByCorrelation={attemptsByCorrelation}
+                      enableInspect={false}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <FloatingComposerSlot>
           {hasThread && composer ? (
-            <div className="w-full px-5 pb-5 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
+            <div className="w-full px-6 pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
               {composer}
             </div>
           ) : (
