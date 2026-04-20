@@ -80,7 +80,9 @@ function operationalChannelsToProjectionRows(rows = []) {
       id: s(safe.id),
       source_id: "",
       social_account_id: "",
-      channel_key: s(safe.channel_key || safe.channel_type || safe.channelType || channelType),
+      channel_key: s(
+        safe.channel_key || safe.channel_type || safe.channelType || channelType
+      ),
       channel_type: channelType,
       label: s(safe.display_name || channelType),
       endpoint,
@@ -89,7 +91,15 @@ function operationalChannelsToProjectionRows(rows = []) {
       is_connected: isConnectedStatus(status),
       is_active: status !== "disconnected",
       supports_inbound: true,
-      supports_outbound: ["instagram", "facebook", "whatsapp", "telegram", "website_widget", "email", "linkedin"].includes(channelType),
+      supports_outbound: [
+        "instagram",
+        "facebook",
+        "whatsapp",
+        "telegram",
+        "website_widget",
+        "email",
+        "linkedin",
+      ].includes(channelType),
       supports_comments: channelType === "facebook" || channelType === "instagram",
       supports_calls: channelType === "voice",
       supports_handoff: true,
@@ -115,7 +125,9 @@ function mergeProjectionChannels(primary = [], supplemental = []) {
 
   for (const item of [...supplemental, ...primary]) {
     const row = obj(item);
-    const key = lower(row.channelType || row.channel_type || row.channelKey || row.channel_key);
+    const key = lower(
+      row.channelType || row.channel_type || row.channelKey || row.channel_key
+    );
     if (!key) continue;
 
     const existing = byKey.get(key);
@@ -145,6 +157,26 @@ function mergeProjectionChannels(primary = [], supplemental = []) {
   }
 
   return Array.from(byKey.values());
+}
+
+function chooseSnapshotOrCanonical({
+  snapshotEnabled = false,
+  snapshotRows = [],
+  canonicalRows = [],
+  normalize = (x) => x,
+} = {}) {
+  const normalizedSnapshot = snapshotEnabled ? normalize(snapshotRows) : [];
+  const normalizedCanonical = normalize(canonicalRows);
+
+  if (!snapshotEnabled) return normalizedCanonical;
+
+  // Critical rule:
+  // if approved snapshot exists but is empty while canonical rows are present,
+  // do NOT let the empty snapshot blind runtime.
+  if (normalizedSnapshot.length > 0) return normalizedSnapshot;
+  if (normalizedCanonical.length > 0) return normalizedCanonical;
+
+  return normalizedSnapshot;
 }
 
 export async function resolveTenant(
@@ -478,9 +510,33 @@ export async function loadTenantCanonicalGraph(
     })
   );
 
-  const publishedTruthFacts = publishedTruthVersion?.has_truth_facts_snapshot
-    ? normalizeFacts(publishedTruthVersion.truth_facts_snapshot_json)
-    : legacyFacts;
+  const publishedTruthFacts = chooseSnapshotOrCanonical({
+    snapshotEnabled: publishedTruthVersion?.has_truth_facts_snapshot === true,
+    snapshotRows: publishedTruthVersion?.truth_facts_snapshot_json || [],
+    canonicalRows: legacyFacts,
+    normalize: normalizeFacts,
+  });
+
+  const resolvedContacts = chooseSnapshotOrCanonical({
+    snapshotEnabled: publishedTruthVersion?.has_contacts_snapshot === true,
+    snapshotRows: publishedTruthVersion?.contacts_snapshot_json || [],
+    canonicalRows: contactsRows,
+    normalize: normalizeContacts,
+  });
+
+  const resolvedLocations = chooseSnapshotOrCanonical({
+    snapshotEnabled: publishedTruthVersion?.has_locations_snapshot === true,
+    snapshotRows: publishedTruthVersion?.locations_snapshot_json || [],
+    canonicalRows: locationsRows,
+    normalize: normalizeLocations,
+  });
+
+  const resolvedServices = chooseSnapshotOrCanonical({
+    snapshotEnabled: publishedTruthVersion?.has_services_snapshot === true,
+    snapshotRows: publishedTruthVersion?.services_snapshot_json || [],
+    canonicalRows: servicesRows,
+    normalize: normalizeServices,
+  });
 
   const canonicalBusinessChannels = normalizeChannels(businessChannelRows);
   const operationalConnectivityChannels = normalizeChannels(
@@ -496,16 +552,10 @@ export async function loadTenantCanonicalGraph(
     profile,
     capabilities,
     synthesis,
-    contacts: publishedTruthVersion?.has_contacts_snapshot
-      ? normalizeContacts(publishedTruthVersion.contacts_snapshot_json)
-      : normalizeContacts(contactsRows),
-    locations: publishedTruthVersion?.has_locations_snapshot
-      ? normalizeLocations(publishedTruthVersion.locations_snapshot_json)
-      : normalizeLocations(locationsRows),
+    contacts: resolvedContacts,
+    locations: resolvedLocations,
     hours: normalizeHours(hoursRows),
-    services: publishedTruthVersion?.has_services_snapshot
-      ? normalizeServices(publishedTruthVersion.services_snapshot_json)
-      : normalizeServices(servicesRows),
+    services: resolvedServices,
     products: normalizeProducts(productsRows),
     faq: normalizeFaq(faqRows),
     policies: normalizePolicies(policiesRows),
