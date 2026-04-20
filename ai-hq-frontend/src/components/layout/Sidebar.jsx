@@ -9,106 +9,18 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 272;
-const SIDEBAR_COLLAPSED_WIDTH = 84;
-const MOBILE_DRAWER_WIDTH = 304;
-const SHELL_TOPBAR_HEIGHT = 60;
-
-const NAV_STACK = [
-  ...PRIMARY_SECTIONS.map((item) => ({ type: "item", item })),
-  { type: "divider", id: "divider-primary-secondary" },
-  ...SECONDARY_SECTIONS.map((item) => ({ type: "item", item })),
-  ...(UTILITY_SECTIONS.length
-    ? [{ type: "divider", id: "divider-secondary-utility" }]
-    : []),
-  ...UTILITY_SECTIONS.map((item) => ({ type: "item", item })),
-];
+const SIDEBAR_WIDTH = 236;
+const SIDEBAR_COLLAPSED_WIDTH = 74;
+const MOBILE_DRAWER_WIDTH = 280;
+const SHELL_TOPBAR_HEIGHT = 56;
+const NAV_ITEMS = [...PRIMARY_SECTIONS, ...SECONDARY_SECTIONS, ...UTILITY_SECTIONS];
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
 }
 
-function BrandMark({ compact = false }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cx(
-        "relative shrink-0",
-        compact ? "h-6 w-6" : "h-7 w-7"
-      )}
-    >
-      <span className="absolute bottom-[2px] left-[1px] h-[2px] w-[18px] rounded-full bg-[linear-gradient(90deg,rgba(15,23,42,0.92),rgba(46,96,255,0.9))]" />
-      <span className="absolute left-[3px] top-[1px] h-[21px] w-[2px] rounded-full bg-[rgba(15,23,42,0.96)]" />
-      <span className="absolute left-[10px] top-[5px] h-[17px] w-[2px] rounded-full bg-[rgba(46,96,255,0.98)]" />
-      <span className="absolute left-[17px] top-[0px] h-[22px] w-[2px] rounded-full bg-[rgba(15,23,42,0.54)]" />
-    </span>
-  );
-}
-
-function SidebarBrand({
-  collapsed = false,
-  mobile = false,
-  onNavigate,
-  onClose,
-}) {
-  return (
-    <div
-      className={cx(
-        "relative flex h-[60px] items-center",
-        collapsed && !mobile ? "justify-center px-2" : "justify-between px-4"
-      )}
-    >
-      <NavLink
-        to="/home"
-        onClick={onNavigate}
-        aria-label="AI HQ Home"
-        className={cx(
-          "min-w-0 text-text",
-          collapsed && !mobile
-            ? "flex h-11 w-11 items-center justify-center"
-            : "flex min-w-0 flex-1 items-center gap-3"
-        )}
-      >
-        <BrandMark compact={collapsed && !mobile} />
-
-        <div
-          className={cx(
-            "min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-slow ease-premium",
-            collapsed && !mobile
-              ? "max-w-0 translate-x-1 opacity-0"
-              : "max-w-[160px] translate-x-0 opacity-100"
-          )}
-        >
-          <div className="truncate text-[15px] font-semibold tracking-[-0.04em] text-text">
-            AI HQ
-          </div>
-          <div className="mt-[1px] truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle/70">
-            Workspace OS
-          </div>
-        </div>
-      </NavLink>
-
-      {mobile ? (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close navigation"
-          className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-[color,opacity,transform] duration-base ease-premium hover:text-text"
-        >
-          <X className="h-4 w-4" strokeWidth={1.9} />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function SidebarItem({
-  item,
-  shellStats = {},
-  onNavigate,
-  collapsed = false,
-}) {
+function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
   const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
   const linkLabel = badgeCount ? `${item.label} ${badgeCount}` : item.label;
@@ -124,48 +36,45 @@ function SidebarItem({
       {({ isActive }) => (
         <div
           className={cx(
-            "group relative mx-2 flex items-center overflow-hidden transition-[transform,opacity] duration-base ease-premium",
-            collapsed ? "h-11 justify-center px-0" : "h-11 gap-3 px-4"
+            "group relative mx-2 flex items-center overflow-hidden transition-all duration-base ease-premium",
+            collapsed ? "h-12 justify-center" : "h-12 gap-3 px-3.5"
           )}
         >
           <span
             className={cx(
-              "pointer-events-none absolute inset-y-[4px] rounded-[13px] transition-[opacity,background-color,box-shadow,transform] duration-base ease-premium",
+              "pointer-events-none absolute inset-y-[4px] rounded-[14px] border transition-all duration-base ease-premium",
               collapsed ? "inset-x-[4px]" : "left-0 right-0",
               isActive
-                ? "bg-[linear-gradient(90deg,rgba(255,255,255,0.88),rgba(255,255,255,0.58))] opacity-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_22px_-18px_rgba(46,96,255,0.32)]"
-                : "bg-[linear-gradient(90deg,rgba(255,255,255,0.72),rgba(255,255,255,0.4))] opacity-0 group-hover:opacity-100"
+                ? "border-white/70 bg-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_16px_26px_-22px_rgba(46,96,255,0.72)]"
+                : "border-transparent bg-white/46 opacity-0 group-hover:border-white/55 group-hover:opacity-100"
             )}
           />
 
           {!collapsed ? (
             <span
               className={cx(
-                "absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full transition-[opacity,transform,background-color] duration-base ease-premium",
-                isActive ? "bg-brand opacity-100" : "opacity-0"
+                "absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-brand transition-opacity duration-base ease-premium",
+                isActive ? "opacity-100" : "opacity-0"
               )}
             />
           ) : null}
 
           <Icon
             className={cx(
-              "relative z-[1] h-[17px] w-[17px] shrink-0 transition-[color,transform] duration-base ease-premium",
-              isActive
-                ? "text-brand"
-                : "text-text-subtle group-hover:text-text"
+              "relative z-[1] shrink-0 transition-all duration-base ease-premium",
+              collapsed ? "h-[19px] w-[19px]" : "h-[18px] w-[18px]",
+              isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
             )}
-            strokeWidth={1.9}
+            strokeWidth={1.95}
           />
 
           <div
             className={cx(
-              "relative z-[1] min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-slow ease-premium",
-              collapsed
-                ? "max-w-0 translate-x-1 opacity-0"
-                : "max-w-[180px] translate-x-0 opacity-100"
+              "relative z-[1] min-w-0 overflow-hidden transition-all duration-slow ease-premium",
+              collapsed ? "max-w-0 translate-x-1 opacity-0" : "max-w-[160px] opacity-100"
             )}
           >
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
               <span
                 className={cx(
                   "min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.02em] transition-colors duration-base ease-premium",
@@ -174,36 +83,18 @@ function SidebarItem({
               >
                 {item.label}
               </span>
-
               {badgeCount ? (
-                <span className="shrink-0 text-[11px] font-medium text-text-subtle">
-                  {badgeCount}
-                </span>
+                <span className="shrink-0 text-[11px] font-medium text-text-subtle">{badgeCount}</span>
               ) : null}
             </div>
           </div>
 
           {collapsed && badgeCount ? (
-            <span className="absolute right-[8px] top-[7px] text-[10px] font-medium text-text-subtle">
-              {badgeCount}
-            </span>
+            <span className="absolute right-[8px] top-[7px] text-[10px] font-medium text-text-subtle">{badgeCount}</span>
           ) : null}
         </div>
       )}
     </NavLink>
-  );
-}
-
-function SidebarDivider({ collapsed = false }) {
-  return (
-    <div
-      className={cx(
-        "px-3 py-2 transition-opacity duration-base ease-premium",
-        collapsed ? "opacity-0" : "opacity-100"
-      )}
-    >
-      <div className="h-px bg-[rgba(15,23,42,0.06)]" />
-    </div>
   );
 }
 
@@ -217,17 +108,15 @@ function CollapseControl({ collapsed = false, onToggle }) {
       aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cx(
-        "inline-flex items-center text-text-muted transition-[color,opacity] duration-base ease-premium hover:text-text",
-        collapsed ? "h-10 w-10 justify-center" : "h-10 gap-2 px-2"
+        "inline-flex items-center rounded-[14px] border border-white/50 bg-white/56 text-text-muted shadow-[0_10px_30px_-26px_rgba(15,23,42,0.6),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur transition-all duration-base ease-premium hover:border-white/70 hover:bg-white/78 hover:text-text",
+        collapsed ? "h-10 w-10 justify-center" : "h-10 gap-2 px-3"
       )}
     >
-      <Icon className="h-4 w-4" strokeWidth={1.9} />
+      <Icon className="h-[15px] w-[15px]" strokeWidth={1.95} />
       <span
         className={cx(
-          "overflow-hidden text-[12px] font-medium tracking-[-0.01em] transition-[max-width,opacity,transform] duration-slow ease-premium",
-          collapsed
-            ? "max-w-0 translate-x-1 opacity-0"
-            : "max-w-[120px] translate-x-0 opacity-100"
+          "overflow-hidden text-[12px] font-medium tracking-[-0.01em] transition-all duration-slow ease-premium",
+          collapsed ? "max-w-0 opacity-0" : "max-w-[120px] opacity-100"
         )}
       >
         Collapse
@@ -246,41 +135,38 @@ function SidebarContent({
 }) {
   return (
     <div className="relative flex h-full flex-col">
-      <SidebarBrand
-        collapsed={collapsed}
-        mobile={mobile}
-        onNavigate={onNavigate}
-        onClose={onCloseMobile}
-      />
+      {mobile ? (
+        <div className="flex items-center justify-end px-3 pb-2 pt-3">
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Close navigation"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/50 bg-white/58 text-text-muted shadow-[0_10px_30px_-26px_rgba(15,23,42,0.6),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur transition-all duration-base ease-premium hover:border-white/70 hover:bg-white/78 hover:text-text"
+          >
+            <X className="h-[16px] w-[16px]" strokeWidth={1.95} />
+          </button>
+        </div>
+      ) : (
+        <div className="h-3" />
+      )}
 
-      <div className="sidebar-scroll flex-1 overflow-y-auto py-3">
-        <div className="space-y-[2px]">
-          {NAV_STACK.map((entry) => {
-            if (entry.type === "divider") {
-              return <SidebarDivider key={entry.id} collapsed={collapsed} />;
-            }
-
-            return (
-              <SidebarItem
-                key={entry.item.id}
-                item={entry.item}
-                shellStats={shellStats}
-                onNavigate={onNavigate}
-                collapsed={collapsed}
-              />
-            );
-          })}
+      <div className="sidebar-scroll flex-1 overflow-y-auto px-1 pb-3 pt-1">
+        <div className="space-y-[3px]">
+          {NAV_ITEMS.map((item) => (
+            <SidebarItem
+              key={item.id}
+              item={item}
+              shellStats={shellStats}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+            />
+          ))}
         </div>
       </div>
 
       {!mobile ? (
-        <div className={cx("px-4 pb-3", collapsed && "flex justify-center px-2")}>
-          <div className={cx(!collapsed && "border-t border-[rgba(15,23,42,0.06)] pt-2")}>
-            <CollapseControl
-              collapsed={collapsed}
-              onToggle={onToggleCollapse}
-            />
-          </div>
+        <div className={cx("px-3 pb-3 pt-2", collapsed && "flex justify-center px-2")}>
+          <CollapseControl collapsed={collapsed} onToggle={onToggleCollapse} />
         </div>
       ) : null}
     </div>
@@ -301,9 +187,9 @@ export default function Sidebar({
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         <div className="relative h-full">
-          <div className="absolute inset-0 bg-[rgb(244,245,247)]" />
-          <div className="absolute inset-0 shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)]" />
-          <div className="absolute left-[-18px] top-[-10px] h-[130px] w-[130px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.06)_0%,rgba(46,96,255,0.022)_46%,rgba(46,96,255,0)_76%)] blur-2xl" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(244,246,248,0.96),rgba(238,241,245,0.92))] backdrop-blur-xl" />
+          <div className="absolute inset-0 shadow-[inset_-1px_0_0_rgba(15,23,42,0.055)]" />
+          <div className="absolute left-[-38px] top-[-18px] h-[170px] w-[170px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.085)_0%,rgba(46,96,255,0.028)_46%,rgba(46,96,255,0)_74%)] blur-3xl" />
 
           <SidebarContent
             shellStats={shellStats}
@@ -322,16 +208,17 @@ export default function Sidebar({
         styles={{
           body: {
             padding: 0,
-            background: "rgb(244,245,247)",
+            background: "linear-gradient(180deg,rgba(244,246,248,0.98),rgba(238,241,245,0.96))",
+            backdropFilter: "blur(20px)",
           },
           header: { display: "none" },
           content: {
-            background: "rgb(244,245,247)",
-            boxShadow: "inset -1px 0 0 rgba(15,23,42,0.06)",
+            background: "linear-gradient(180deg,rgba(244,246,248,0.98),rgba(238,241,245,0.96))",
+            boxShadow: "inset -1px 0 0 rgba(15,23,42,0.055)",
           },
           mask: {
-            background: "rgba(15,23,42,0.24)",
-            backdropFilter: "blur(3px)",
+            background: "rgba(15,23,42,0.22)",
+            backdropFilter: "blur(4px)",
           },
         }}
       >
