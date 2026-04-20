@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
+import warningIcon from "../../assets/channels/warning.png";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
-import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
-  SHELL_TOPBAR_HEIGHT,
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
 } from "./Sidebar.jsx";
-import Header from "./Header.jsx";
+import Header, { HEADER_HEIGHT } from "./Header.jsx";
 
 const INITIAL_SHELL_STATS = {
   inboxUnread: null,
@@ -41,6 +40,7 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
+const GLOBAL_ALERT_HEIGHT = 42;
 
 const GENERIC_WORKSPACE_KEYS = new Set([
   "www",
@@ -395,17 +395,34 @@ function mergeWorkspaceMeta(currentMeta, nextMeta) {
   };
 }
 
-function SharedStatsNotice({ message }) {
+function GlobalWarningRibbon({ message, onClose }) {
   if (!message) return null;
 
   return (
-    <InlineNotice
-      tone="warning"
-      title="Workspace stats unavailable"
-      description={message}
-      className="mb-5"
-      compact
-    />
+    <div className="fixed left-0 right-0 top-0 z-[120] h-[42px] border-b border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]">
+      <div className="flex h-full items-center gap-3 px-4">
+        <img
+          src={warningIcon}
+          alt=""
+          className="h-[13px] w-[13px] shrink-0 object-contain"
+          draggable="false"
+        />
+
+        <div className="min-w-0 flex-1 truncate text-[12px] leading-none tracking-[-0.01em]">
+          <span className="mr-2 font-semibold">Workspace stats unavailable</span>
+          <span className="opacity-85">{message}</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close warning"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-[8px] text-[#6f5600]/80 transition-colors hover:bg-[#edd96f] hover:text-[#5f4a00]"
+        >
+          <X className="h-[14px] w-[14px]" strokeWidth={2.1} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -424,6 +441,7 @@ export default function Shell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     getInitialCollapsedState
   );
+  const [warningDismissed, setWarningDismissed] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -584,6 +602,12 @@ export default function Shell() {
     };
   }, [scheduleShellRefresh]);
 
+  useEffect(() => {
+    if (shellStats?.message) {
+      setWarningDismissed(false);
+    }
+  }, [shellStats?.message]);
+
   const handleWidgetOpenChange = useCallback(
     (nextOpen) => {
       setWidgetOpen(Boolean(nextOpen));
@@ -607,7 +631,8 @@ export default function Shell() {
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
-  const contentMinHeight = `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`;
+  const topWarningVisible = Boolean(shellStats?.message) && !warningDismissed;
+  const topOffset = topWarningVisible ? GLOBAL_ALERT_HEIGHT : 0;
 
   const pageTransition = {
     duration: 0.2,
@@ -616,22 +641,20 @@ export default function Shell() {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden bg-white text-text"
-      style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
+      className="relative h-screen overflow-hidden bg-[#f6f8fb] text-text"
+      style={{
+        "--shell-sidebar-w": `${shellSidebarWidth}px`,
+        "--shell-top-offset": `${topOffset}px`,
+      }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[8] bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_52%,#ffffff_100%)]" />
-      <div className="pointer-events-none fixed right-[-6%] top-[56px] -z-[7] h-[340px] w-[340px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.1)_0%,rgba(46,96,255,0.034)_42%,rgba(46,96,255,0)_74%)] blur-3xl" />
-      <div className="pointer-events-none fixed left-[18%] top-[34%] -z-[7] h-[280px] w-[280px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.045)_0%,rgba(15,23,42,0.014)_48%,rgba(15,23,42,0)_76%)] blur-3xl" />
-
-      <div
-        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-[linear-gradient(180deg,rgba(244,246,248,0.96),rgba(238,241,245,0.92))] shadow-[inset_-1px_0_0_rgba(15,23,42,0.055)] backdrop-blur-xl transition-[width] duration-slow ease-premium md:block"
-        style={{ width: "var(--shell-sidebar-w)" }}
+      <GlobalWarningRibbon
+        message={topWarningVisible ? shellStats?.message : ""}
+        onClose={() => setWarningDismissed(true)}
       />
 
-      <div
-        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-[linear-gradient(180deg,rgba(244,246,248,0.94),rgba(241,244,247,0.88))] shadow-[inset_0_-1px_0_rgba(15,23,42,0.055)] backdrop-blur-xl"
-        style={{ height: `${SHELL_TOPBAR_HEIGHT}px` }}
-      />
+      <div className="pointer-events-none fixed inset-0 -z-[8] bg-[linear-gradient(180deg,#f7f9fc_0%,#f5f7fa_48%,#f8fafc_100%)]" />
+      <div className="pointer-events-none fixed right-[-8%] top-[72px] -z-[7] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.09)_0%,rgba(46,96,255,0.028)_42%,rgba(46,96,255,0)_76%)] blur-3xl" />
+      <div className="pointer-events-none fixed left-[14%] top-[28%] -z-[7] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.04)_0%,rgba(15,23,42,0.012)_48%,rgba(15,23,42,0)_78%)] blur-3xl" />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -639,9 +662,10 @@ export default function Shell() {
         shellStats={shellStats}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        topOffset={topOffset}
       />
 
-      <div className="relative z-[2] min-h-screen transition-[padding-left] duration-slow ease-premium md:pl-[var(--shell-sidebar-w)]">
+      <div className="relative z-[2] flex h-full min-h-0 flex-col pt-[var(--shell-top-offset)] transition-[padding-left,padding-top] duration-slow ease-premium md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -649,37 +673,26 @@ export default function Shell() {
           workspaceMeta={workspaceMeta}
         />
 
-        <main
-          className={cx(
-            "relative bg-transparent",
-            shellMode === "immersive"
-              ? "overflow-hidden"
-              : "page-scroll overflow-y-auto"
-          )}
-          style={{ minHeight: contentMinHeight }}
-        >
+        <main className="relative min-h-0 flex-1 overflow-hidden bg-transparent">
           {shellMode === "immersive" ? (
-            <div
-              style={{ height: contentMinHeight }}
-              className="min-h-0 overflow-hidden bg-transparent"
-            >
+            <div className="h-full min-h-0 overflow-hidden bg-transparent">
               <Outlet />
             </div>
           ) : (
-            <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-6 md:py-6">
-              <SharedStatsNotice message={shellStats?.message} />
-
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={`${location.pathname}${location.search}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={pageTransition}
-                >
-                  <Outlet />
-                </motion.div>
-              </AnimatePresence>
+            <div className="page-scroll h-full min-h-0 overflow-y-auto">
+              <div className="relative mx-auto min-h-full w-full max-w-shell-content px-5 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={`${location.pathname}${location.search}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={pageTransition}
+                  >
+                    <Outlet />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
           )}
         </main>

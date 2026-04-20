@@ -1,14 +1,14 @@
 import { Dropdown } from "antd";
 import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { logoutUser } from "../../api/auth.js";
+import customerIcon from "../../assets/channels/customer.png";
 import {
   clearAppSessionContext,
   getAppSessionContext,
 } from "../../lib/appSession.js";
 import { cx } from "../../lib/cx.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
-import { SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 
 const GENERIC_WORKSPACE_NAMES = new Set([
   "workspace",
@@ -23,6 +23,8 @@ const GENERIC_WORKSPACE_NAMES = new Set([
   "web",
   "site",
 ]);
+
+const HEADER_HEIGHT = 64;
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -59,15 +61,6 @@ function pickFirstWorkspaceName(...values) {
     if (text) return text;
   }
   return "";
-}
-
-function getInitials(value = "") {
-  return String(value)
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
 }
 
 function resolveSessionWorkspaceName(sessionContext = {}) {
@@ -200,6 +193,17 @@ function resolveSessionRole(sessionContext = {}) {
   );
 }
 
+function WorkspaceGlyph({ className = "" }) {
+  return (
+    <img
+      src={customerIcon}
+      alt=""
+      className={cx("pointer-events-none select-none object-contain", className)}
+      draggable="false"
+    />
+  );
+}
+
 function AskAiButton() {
   return (
     <button
@@ -211,11 +215,11 @@ function AskAiButton() {
           })
         );
       }}
-      className="inline-flex h-9 items-center gap-2 rounded-[14px] border border-white/55 bg-white/70 px-3 text-[12px] font-semibold tracking-[-0.01em] text-text shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/75 hover:bg-white/92"
+      className="inline-flex h-9 items-center gap-2 px-1 text-[13px] font-semibold tracking-[-0.02em] text-text-muted transition-colors duration-base ease-premium hover:text-text"
       aria-label="Open Ask AI"
     >
       <Sparkles className="h-[15px] w-[15px]" strokeWidth={1.95} />
-      <span className="hidden sm:inline">Ask AI</span>
+      <span>Ask AI</span>
     </button>
   );
 }
@@ -289,15 +293,11 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     session.role
   );
 
-  const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
-
   const overlay = (
-    <div className="dropdown-panel-anim w-[244px] rounded-[20px] border border-white/70 bg-white/92 p-2 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.32),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl">
+    <div className="dropdown-panel-anim w-[262px] rounded-[18px] border border-white/70 bg-white/94 p-2.5 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.28)] backdrop-blur-xl">
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-line-soft bg-surface text-[12px] font-semibold text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-            {initials}
-          </div>
+          <WorkspaceGlyph className="h-9 w-9 shrink-0 opacity-[0.96]" />
 
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
@@ -320,7 +320,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           setOpen(false);
           notifications?.setOpen?.(!notifications?.open);
         }}
-        className="flex h-10 w-full items-center justify-between rounded-[14px] px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-subtle"
+        className="flex h-10 w-full items-center justify-between rounded-[12px] px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-black/[0.035]"
       >
         <span>Notifications</span>
         <span className="text-[12px] text-text-subtle">
@@ -331,7 +331,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-1 flex h-10 w-full items-center rounded-[14px] px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
+        className="mt-1 flex h-10 w-full items-center rounded-[12px] px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
       >
         {loggingOut ? "Signing out..." : "Sign out"}
       </button>
@@ -350,16 +350,9 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         type="button"
         aria-label={displayName}
         aria-expanded={open}
-        className={cx(
-          "flex h-9 items-center gap-2 rounded-[14px] border border-transparent px-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium",
-          open
-            ? "border-white/65 bg-white/72 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.78)]"
-            : "hover:border-white/45 hover:bg-white/56"
-        )}
+        className="flex h-9 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-[12px] border border-white/55 bg-white/74 text-[11px] font-semibold text-text shadow-[0_10px_24px_-22px_rgba(15,23,42,0.5),inset_0_1px_0_rgba(255,255,255,0.82)]">
-          {initials}
-        </div>
+        <WorkspaceGlyph className="h-[18px] w-[18px] shrink-0 opacity-[0.96]" />
 
         <div className="hidden min-w-0 text-left lg:block">
           <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
@@ -369,7 +362,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
         <ChevronDown
           className={cx(
-            "h-[14px] w-[14px] text-text-subtle transition-transform",
+            "h-[14px] w-[14px] text-text-subtle transition-transform duration-base ease-premium",
             open && "rotate-180"
           )}
           strokeWidth={2}
@@ -389,12 +382,12 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-transparent bg-transparent text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/45 hover:bg-white/56 hover:text-text"
+      className="relative inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
       aria-label="Open notifications"
     >
       <Bell className="h-[15px] w-[15px]" strokeWidth={1.95} />
       {unread > 0 ? (
-        <span className="absolute right-[7px] top-[7px] h-2 w-2 rounded-full bg-brand" />
+        <span className="absolute right-[7px] top-[7px] h-[5px] w-[5px] rounded-full bg-brand" />
       ) : null}
     </button>
   );
@@ -404,22 +397,22 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60]"
-        style={{ height: SHELL_TOPBAR_HEIGHT }}
+        className="sticky top-0 z-[60] bg-[rgba(246,248,251,0.82)] backdrop-blur-xl"
+        style={{ height: HEADER_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-3.5 md:px-5">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-3.5 md:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-transparent bg-transparent text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[border-color,background-color,color,box-shadow] duration-base ease-premium hover:border-white/45 hover:bg-white/56 hover:text-text md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
+              <Menu className="h-[16px] w-[16px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 md:gap-3">
             <AskAiButton />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl
@@ -446,3 +439,5 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
     </>
   );
 }
+
+export { HEADER_HEIGHT };

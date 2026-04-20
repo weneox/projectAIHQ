@@ -179,12 +179,17 @@ export default function Sidebar({
   shellStats = {},
   collapsed = false,
   setCollapsed,
+  topOffset = 0,
 }) {
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden transition-[width] duration-slow ease-premium md:block"
-        style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
+        className="fixed left-0 z-[70] hidden overflow-hidden transition-[width,top,height] duration-slow ease-premium md:block"
+        style={{
+          top: `${topOffset}px`,
+          height: `calc(100vh - ${topOffset}px)`,
+          width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+        }}
       >
         <div className="relative h-full">
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(244,246,248,0.96),rgba(238,241,245,0.92))] backdrop-blur-xl" />

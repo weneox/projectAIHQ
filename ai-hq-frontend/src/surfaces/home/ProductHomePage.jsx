@@ -10,10 +10,7 @@ import Button from "../../components/ui/Button.jsx";
 import {
   InlineNotice,
   LoadingSurface,
-  MetricCard,
-  MetricGrid,
   PageCanvas,
-  Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../../lib/cx.js";
 import {
@@ -32,12 +29,12 @@ function n(value, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
-function pluralize(count, noun) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
 function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
+}
+
+function pluralize(count, noun) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function hasSetupDraft(home) {
@@ -74,54 +71,74 @@ function channelHandle(channel = {}) {
   return s(channel.accountHandle);
 }
 
-function channelDisplayName(channel = {}) {
-  return (
-    s(channel.accountDisplayName) ||
-    s(channel.channelLabel) ||
-    shortChannelLabel(channel)
-  );
+function humanChannelState(home) {
+  const channel = home?.launchChannel || {};
+  const connected = channel.connected === true;
+  const deliveryReady = channel.deliveryReady === true;
+  const label = shortChannelLabel(channel);
+  const handle = channelHandle(channel);
+
+  if (connected && deliveryReady) {
+    return {
+      label: "Channel",
+      value: label,
+      hint: handle ? `${label} ${handle}` : `${label} is connected`,
+      tone: "success",
+    };
+  }
+
+  if (connected) {
+    return {
+      label: "Channel",
+      value: label,
+      hint: "Connected, but still gated",
+      tone: "warning",
+    };
+  }
+
+  return {
+    label: "Channel",
+    value: "Not connected",
+    hint: "Choose Instagram, Telegram, or website chat",
+    tone: "danger",
+  };
 }
 
 function humanSetupState(home) {
   const approved = home?.assistant?.hasApprovedSetupBaseline === true;
   const draftExists = hasSetupDraft(home);
-  const blockers = n(home?.assistant?.draft?.blockerCount, n(home?.blockerCount));
 
   if (approved && !draftExists) {
     return {
+      label: "Setup",
       value: "Approved",
-      hint: "Current business setup is already live.",
+      hint: "Current business setup is live",
       tone: "success",
     };
   }
 
   if (approved && draftExists) {
     return {
+      label: "Setup",
       value: "Updating",
-      hint: "Approved setup is live while new draft changes are being prepared.",
+      hint: "Live setup exists while changes are being prepared",
       tone: "info",
-    };
-  }
-
-  if (draftExists && blockers > 0) {
-    return {
-      value: "In progress",
-      hint: `${pluralize(blockers, "blocker")} still need review.`,
-      tone: "warning",
     };
   }
 
   if (draftExists) {
     return {
-      value: "Ready for review",
-      hint: "Draft exists and looks structurally ready.",
-      tone: "info",
+      label: "Setup",
+      value: "In progress",
+      hint: "A draft exists and still needs review",
+      tone: "warning",
     };
   }
 
   return {
+    label: "Setup",
     value: "Not started",
-    hint: "No structured business setup draft is visible yet.",
+    hint: "No structured business setup draft is visible yet",
     tone: "neutral",
   };
 }
@@ -132,23 +149,26 @@ function humanRuntimeState(home) {
 
   if (runtimeReady) {
     return {
+      label: "Runtime",
       value: "Healthy",
-      hint: "Approved setup is actively backing the workspace.",
+      hint: "Approved setup is backing the workspace",
       tone: "success",
     };
   }
 
   if (truthReady) {
     return {
+      label: "Runtime",
       value: "Repair needed",
-      hint: "Approved setup exists, but runtime still needs repair.",
+      hint: "Approved setup exists, but runtime still needs repair",
       tone: "warning",
     };
   }
 
   return {
+    label: "Runtime",
     value: "Needs review",
-    hint: "The current setup still needs approval before runtime goes live.",
+    hint: "Setup still needs approval before runtime goes live",
     tone: "danger",
   };
 }
@@ -160,81 +180,56 @@ function humanInboxState(home) {
 
   if (status === "unavailable") {
     return {
+      label: "Inbox",
       value: "Unavailable",
-      hint: "Inbox telemetry is temporarily unavailable.",
+      hint: "Inbox telemetry is temporarily unavailable",
       tone: "danger",
     };
   }
 
   if (unread > 0) {
     return {
+      label: "Inbox",
       value: `${unread} unread`,
-      hint: `${pluralize(openCount, "open conversation")} waiting now.`,
+      hint: `${pluralize(openCount, "open conversation")} waiting`,
       tone: "warning",
     };
   }
 
   if (status === "active") {
     return {
+      label: "Inbox",
       value: "Active",
-      hint: "Live work is present, but nothing unread is waiting.",
+      hint: "Live work is present",
       tone: "info",
     };
   }
 
   return {
+    label: "Inbox",
     value: "Ready",
-    hint: "No unread pressure right now.",
+    hint: "No unread pressure right now",
     tone: "success",
-  };
-}
-
-function humanChannelState(home) {
-  const channel = home?.launchChannel || {};
-  const connected = channel.connected === true;
-  const deliveryReady = channel.deliveryReady === true;
-  const handle = channelHandle(channel);
-  const name = shortChannelLabel(channel);
-
-  if (connected && deliveryReady) {
-    return {
-      value: name,
-      hint: handle ? `${name} ${handle}` : `${name} is connected and ready.`,
-      tone: "success",
-    };
-  }
-
-  if (connected) {
-    return {
-      value: name,
-      hint: "Connected, but still not safe to treat as fully live.",
-      tone: "warning",
-    };
-  }
-
-  return {
-    value: "Not connected",
-    hint: "Choose Instagram, Telegram, or website chat first.",
-    tone: "danger",
   };
 }
 
 function buildHeroCopy(home) {
   const channel = home?.launchChannel || {};
   const channelName = shortChannelLabel(channel);
-  const unread = unreadCount(home);
+  const connected = channel.connected === true;
   const approved = home?.assistant?.hasApprovedSetupBaseline === true;
   const draftExists = hasSetupDraft(home);
   const truthReady = home?.truthRuntime?.truthReady === true;
   const runtimeReady = home?.truthRuntime?.ready === true;
-  const connected = channel.connected === true;
+  const unread = unreadCount(home);
+  const inboxUnavailable = lower(home?.inboxState?.status) === "unavailable";
 
   if (home?.launchReady) {
     return {
       title: "Workspace is live.",
       summary:
         unread > 0
-          ? `${channelName} is connected and ${pluralize(unread, "unread message")} are waiting in the inbox.`
+          ? `${channelName} is connected and ${pluralize(unread, "unread message")} are waiting.`
           : `${channelName} is connected and the inbox is ready for live work.`,
     };
   }
@@ -259,15 +254,15 @@ function buildHeroCopy(home) {
     return {
       title: "Review the current setup.",
       summary:
-        "A draft already exists, but it still needs approval before the workspace should go live.",
+        "A setup draft already exists, but it still needs approval before the workspace should go live.",
     };
   }
 
   if (!truthReady) {
     return {
-      title: "Approve the current setup.",
+      title: "Approve the setup.",
       summary:
-        "The channel is connected, but live automation should wait until the setup is approved.",
+        "The channel is connected, but live automation should wait until setup is approved.",
     };
   }
 
@@ -275,50 +270,72 @@ function buildHeroCopy(home) {
     return {
       title: "Runtime still needs repair.",
       summary:
-        "Approved setup exists, but the runtime is not healthy enough for live automation yet.",
+        "Approved setup exists, but runtime is not healthy enough for live automation yet.",
     };
   }
 
-  if (lower(home?.inboxState?.status) === "unavailable") {
+  if (inboxUnavailable) {
     return {
       title: "Inbox signal is limited.",
       summary:
-        "Channel and setup are in place, but inbox telemetry is temporarily unavailable.",
+        "The workspace is mostly aligned, but inbox telemetry is temporarily unavailable.",
     };
   }
 
   return {
     title: "Finish the last step.",
-    summary: "Only one final live check remains before this workspace is fully clear.",
+    summary: "Only one final live check remains before this workspace is fully ready.",
   };
 }
 
-function heroSupportLine(home) {
-  const channel = home?.launchChannel || {};
-  const inbox = home?.inboxState || {};
-  const setupState = humanSetupState(home);
-  const unread = unreadCount(home);
+function buildMetaLine(home) {
   const parts = [];
+  const channel = home?.launchChannel || {};
+  const setup = humanSetupState(home);
+  const inbox = humanInboxState(home);
 
   if (channel.connected) {
-    const name = shortChannelLabel(channel);
+    const label = shortChannelLabel(channel);
     const handle = channelHandle(channel);
-    parts.push(handle ? `${name} ${handle}` : channelDisplayName(channel));
+    parts.push(handle ? `${label} ${handle}` : label);
   } else {
     parts.push("No live channel");
   }
 
-  parts.push(setupState.value === "Approved" ? "Approved setup" : setupState.value);
+  parts.push(setup.value);
 
-  if (lower(inbox.status) === "unavailable") {
-    parts.push("Inbox unavailable");
-  } else if (unread > 0) {
-    parts.push(`${pluralize(unread, "unread message")}`);
-  } else {
-    parts.push("Inbox ready");
+  if (inbox.value) {
+    parts.push(inbox.value);
   }
 
-  return parts.filter(Boolean);
+  return parts;
+}
+
+function toneClass(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "info") return "text-brand";
+  return "text-text-subtle";
+}
+
+function StatusStripItem({ item, last = false }) {
+  return (
+    <div
+      className={cx(
+        "min-w-0 py-3.5 md:px-4",
+        !last && "border-b border-line-soft md:border-b-0 md:border-r"
+      )}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {item.label}
+      </div>
+      <div className={cx("mt-2 text-[1.04rem] font-semibold tracking-[-0.03em]", toneClass(item.tone))}>
+        {item.value}
+      </div>
+      <div className="mt-1 text-[13px] leading-5 text-text-muted">{item.hint}</div>
+    </div>
+  );
 }
 
 function stepTone(step = {}) {
@@ -342,21 +359,13 @@ function stepTone(step = {}) {
 }
 
 function stepTitle(step = {}, home) {
-  switch (s(step.id).toLowerCase()) {
+  switch (lower(step.id)) {
     case "channel":
       return home?.launchChannel?.connected ? "Live channel" : "Connect a channel";
     case "setup":
-      return home?.assistant?.hasApprovedSetupBaseline === true && !hasSetupDraft(home)
-        ? "Business setup"
-        : hasSetupDraft(home)
-          ? "Setup draft"
-          : "Start setup";
+      return hasSetupDraft(home) ? "Setup draft" : "Start setup";
     case "approval":
-      return home?.truthRuntime?.ready === true
-        ? "Approved setup"
-        : home?.truthRuntime?.truthReady === true
-          ? "Runtime health"
-          : "Approve setup";
+      return home?.truthRuntime?.ready === true ? "Approved setup" : "Approve setup";
     case "live":
       return "Inbox";
     default:
@@ -364,85 +373,56 @@ function stepTitle(step = {}, home) {
   }
 }
 
+function stepStatus(step = {}, home) {
+  if (step.complete) {
+    if (lower(step.id) === "live" && unreadCount(home) > 0) return "Live now";
+    return "Done";
+  }
+
+  switch (lower(step.id)) {
+    case "channel":
+      return home?.launchChannel?.connected ? "Repair" : "Connect";
+    case "setup":
+      return hasSetupDraft(home) ? "Continue" : "Start";
+    case "approval":
+      return home?.truthRuntime?.truthReady === true ? "Repair" : "Review";
+    case "live":
+      return "Waiting";
+    default:
+      return s(step.statusLabel, "Pending");
+  }
+}
+
 function stepSummary(step = {}, home) {
-  const id = lower(step.id);
   const channel = home?.launchChannel || {};
   const setup = humanSetupState(home);
   const runtime = humanRuntimeState(home);
   const inbox = humanInboxState(home);
-  const unread = unreadCount(home);
-  const openCount = openConversationCount(home);
+  const id = lower(step.id);
 
   if (id === "channel") {
     if (channel.connected && channel.deliveryReady) {
       return `${shortChannelLabel(channel)} is connected and ready for live delivery.`;
     }
-
     if (channel.connected) {
       return "A live channel is attached, but it still needs repair before it should be trusted.";
     }
-
     return "Connect Instagram, Telegram, or website chat to open the live lane.";
   }
 
   if (id === "setup") {
-    if (setup.value === "Approved") {
-      return "The approved business setup is already in use.";
-    }
-
     return setup.hint;
   }
 
   if (id === "approval") {
-    if (runtime.value === "Healthy") {
-      return "Approved setup is active and the runtime is healthy.";
-    }
-
     return runtime.hint;
   }
 
   if (id === "live") {
-    if (unread > 0) {
-      return `${pluralize(unread, "unread message")} are waiting across ${pluralize(openCount, "open conversation")}.`;
-    }
-
     return inbox.hint;
   }
 
   return compactSentence(step.summary, "Needs attention.");
-}
-
-function stepStatus(step = {}, home) {
-  const id = lower(step.id);
-
-  if (step.complete) {
-    if (id === "live" && unreadCount(home) > 0) return "Live now";
-    return "Done";
-  }
-
-  if (id === "channel") {
-    return home?.launchChannel?.connected ? "Repair" : "Connect";
-  }
-
-  if (id === "setup") {
-    const setup = humanSetupState(home);
-    if (setup.value === "Not started") return "Start";
-    if (setup.value === "In progress") return "In progress";
-    if (setup.value === "Ready for review") return "Review";
-    if (setup.value === "Updating") return "Updating";
-  }
-
-  if (id === "approval") {
-    return home?.truthRuntime?.truthReady === true ? "Repair" : "Review";
-  }
-
-  if (id === "live") {
-    return home?.launchReady ? "Live" : "Waiting";
-  }
-
-  const label = s(step.statusLabel, "Pending");
-  if (!label) return "Pending";
-  return label;
 }
 
 function StepLeading({ step, active = false }) {
@@ -465,16 +445,6 @@ function StepLeading({ step, active = false }) {
   return <Circle className="h-4 w-4 text-text-subtle" />;
 }
 
-function statusClass(step = {}) {
-  const tone = stepTone(step);
-
-  if (step.complete) return "text-success";
-  if (tone === "danger") return "text-danger";
-  if (tone === "warning") return "text-warning";
-  if (tone === "info") return "text-brand";
-  return "text-text-subtle";
-}
-
 function StepRow({ step, home, active = false, last = false, onNavigate }) {
   const action = normalizeNavigationAction(step.action);
   const clickable = Boolean(action?.path);
@@ -482,14 +452,14 @@ function StepRow({ step, home, active = false, last = false, onNavigate }) {
   return (
     <button
       type="button"
-      disabled={!clickable}
       onClick={() => {
         if (clickable) onNavigate(action);
       }}
+      disabled={!clickable}
       className={cx(
-        "group grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-start gap-4 px-5 py-4.5 text-left transition-[background-color,border-color] duration-base ease-premium",
+        "group grid w-full grid-cols-[34px_minmax(0,1fr)_22px] items-start gap-4 px-4 py-3.5 text-left transition-[background-color] duration-base ease-premium",
         !last && "border-b border-line-soft",
-        active && "bg-[rgba(var(--color-brand),0.05)]",
+        active && "bg-surface-subtle",
         clickable ? "hover:bg-surface-subtle" : "cursor-default"
       )}
     >
@@ -502,12 +472,12 @@ function StepRow({ step, home, active = false, last = false, onNavigate }) {
           <div className="text-[15px] font-semibold tracking-[-0.02em] text-text">
             {stepTitle(step, home)}
           </div>
-          <div className={cx("text-[12px] font-medium", statusClass(step))}>
+          <div className={cx("text-[12px] font-medium", toneClass(stepTone(step)))}>
             {stepStatus(step, home)}
           </div>
         </div>
 
-        <div className="mt-1.5 max-w-[860px] text-[14px] leading-6 text-text-muted">
+        <div className="mt-1 text-[14px] leading-6 text-text-muted">
           {stepSummary(step, home)}
         </div>
       </div>
@@ -543,6 +513,9 @@ export default function ProductHomePage() {
     return <ProductHomeLoadingSurface />;
   }
 
+  const hero = buildHeroCopy(home);
+  const metaParts = buildMetaLine(home);
+
   const primaryAction = normalizeNavigationAction(
     home.primaryAction || home.assistant?.primaryAction
   );
@@ -559,51 +532,18 @@ export default function ProductHomePage() {
     secondaryAction = null;
   }
 
-  const hero = buildHeroCopy(home);
-  const support = heroSupportLine(home);
-
-  const checklistTitle = home.launchReady
-    ? "Everything is ready"
-    : home.blockerCount === 1
-      ? "One thing still needs attention"
-      : "What still needs attention";
-
-  const checklistDescription = home.launchReady
-    ? "Use inbox for live work. Open setup only when the business changes."
-    : "Only the live checklist stays here. Internal IDs and raw system language are removed.";
-
-  const heroGlowPrimary = home.launchReady
-    ? "bg-[radial-gradient(circle,rgba(34,197,94,0.16)_0%,rgba(34,197,94,0.06)_40%,rgba(34,197,94,0)_74%)]"
-    : "bg-[radial-gradient(circle,rgba(65,105,255,0.18)_0%,rgba(65,105,255,0.06)_42%,rgba(65,105,255,0)_74%)]";
-
-  const heroGlowSecondary = home.launchReady
-    ? "bg-[radial-gradient(circle,rgba(65,105,255,0.14)_0%,rgba(65,105,255,0.04)_44%,rgba(65,105,255,0)_76%)]"
-    : "bg-[radial-gradient(circle,rgba(245,158,11,0.14)_0%,rgba(245,158,11,0.04)_42%,rgba(245,158,11,0)_74%)]";
-
-  const metrics = [
-    {
-      label: "Channel",
-      ...humanChannelState(home),
-    },
-    {
-      label: "Setup",
-      ...humanSetupState(home),
-    },
-    {
-      label: "Runtime",
-      ...humanRuntimeState(home),
-    },
-    {
-      label: "Inbox",
-      ...humanInboxState(home),
-    },
+  const stripItems = [
+    humanChannelState(home),
+    humanSetupState(home),
+    humanRuntimeState(home),
+    humanInboxState(home),
   ];
 
-  const launchSteps = arr(home.launchSteps);
-  const activeStepId = s(home?.nextStep?.id) || (home.launchReady ? "live" : "");
+  const steps = arr(home.launchSteps);
+  const activeStepId = s(home?.nextStep?.id);
 
   return (
-    <PageCanvas className="space-y-6">
+    <PageCanvas className="space-y-5">
       {home.availabilityNote ? (
         <InlineNotice
           tone="warning"
@@ -613,19 +553,9 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <section className="relative overflow-hidden rounded-panel border border-line-soft bg-[linear-gradient(180deg,rgba(255,255,255,0.84),rgba(255,255,255,0.64))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.92)_inset] md:px-6 md:py-6">
-        <div
-          className={cx(
-            "pointer-events-none absolute right-[-8%] top-[-22%] h-[240px] w-[240px] rounded-full blur-3xl",
-            heroGlowPrimary
-          )}
-        />
-        <div
-          className={cx(
-            "pointer-events-none absolute left-[48%] top-[32%] h-[180px] w-[180px] rounded-full blur-3xl",
-            heroGlowSecondary
-          )}
-        />
+      <section className="relative border-b border-line-soft pb-5">
+        <div className="pointer-events-none absolute right-[-6%] top-[-28px] h-[180px] w-[180px] rounded-full bg-[radial-gradient(circle,rgba(65,105,255,0.12)_0%,rgba(65,105,255,0.04)_42%,rgba(65,105,255,0)_76%)] blur-3xl" />
+        <div className="pointer-events-none absolute left-[30%] top-[34px] h-[120px] w-[120px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.85)_0%,rgba(255,255,255,0.1)_58%,rgba(255,255,255,0)_82%)] blur-2xl" />
 
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 max-w-[860px]">
@@ -633,7 +563,7 @@ export default function ProductHomePage() {
               Home
             </div>
 
-            <h1 className="mt-3 text-[2rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.45rem]">
+            <h1 className="mt-3 text-[2rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.35rem]">
               {hero.title}
             </h1>
 
@@ -642,7 +572,7 @@ export default function ProductHomePage() {
             </p>
 
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
-              {support.map((item, index) => (
+              {metaParts.map((item, index) => (
                 <span key={`${item}-${index}`} className="inline-flex items-center gap-3">
                   {index > 0 ? <span className="text-line-strong">•</span> : null}
                   <span>{item}</span>
@@ -655,7 +585,8 @@ export default function ProductHomePage() {
             {primaryAction?.path ? (
               <Button
                 type="button"
-                size="hero"
+                size="md"
+                className="min-w-[148px] justify-center"
                 onClick={() => navigateFromAction(primaryAction)}
                 rightIcon={<ArrowRight className="h-4 w-4" />}
               >
@@ -667,7 +598,8 @@ export default function ProductHomePage() {
               <Button
                 type="button"
                 variant="secondary"
-                size="hero"
+                size="md"
+                className="min-w-[140px] justify-center"
                 onClick={() => navigateFromAction(secondaryAction)}
               >
                 {secondaryAction.label}
@@ -677,46 +609,42 @@ export default function ProductHomePage() {
         </div>
       </section>
 
-      <MetricGrid columns={4} className="gap-3">
-        {metrics.map((item) => (
-          <MetricCard
-            key={item.label}
-            label={item.label}
-            value={item.value}
-            hint={item.hint}
-            tone={item.tone}
-            className="min-h-[118px]"
-          />
-        ))}
-      </MetricGrid>
+      <section className="border-y border-line-soft">
+        <div className="grid md:grid-cols-4">
+          {stripItems.map((item, index) => (
+            <StatusStripItem
+              key={item.label}
+              item={item}
+              last={index === stripItems.length - 1}
+            />
+          ))}
+        </div>
+      </section>
 
       <section className="space-y-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-[760px]">
-            <div className="text-[1.24rem] font-semibold tracking-[-0.035em] text-text md:text-[1.34rem]">
-              {checklistTitle}
-            </div>
-            <div className="mt-1.5 text-[14px] leading-6 text-text-muted">
-              {checklistDescription}
-            </div>
+        <div>
+          <div className="text-[1.2rem] font-semibold tracking-[-0.035em] text-text">
+            {home.launchReady ? "Live checklist" : "What needs attention"}
+          </div>
+          <div className="mt-1.5 text-[14px] leading-6 text-text-muted">
+            {home.launchReady
+              ? "Everything important is aligned. Use inbox for live work."
+              : "Only the essential live path stays here."}
           </div>
         </div>
 
-        <Surface
-          padded={false}
-          className="overflow-hidden border-line-soft bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(255,255,255,0.52))]"
-        >
-          {launchSteps.map((step, index) => (
+        <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+          {steps.map((step, index) => (
             <StepRow
               key={step.id}
               step={step}
               home={home}
               active={s(step.id) === activeStepId}
-              last={index === launchSteps.length - 1}
+              last={index === steps.length - 1}
               onNavigate={navigateFromAction}
             />
           ))}
-        </Surface>
+        </div>
       </section>
     </PageCanvas>
   );
