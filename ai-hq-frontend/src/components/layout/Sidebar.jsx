@@ -133,8 +133,8 @@ function SidebarItem({
               "pointer-events-none absolute inset-y-[4px] rounded-[13px] transition-[opacity,background-color,box-shadow,transform] duration-base ease-premium",
               collapsed ? "inset-x-[4px]" : "left-0 right-0",
               isActive
-                ? "bg-[linear-gradient(90deg,rgba(46,96,255,0.14),rgba(46,96,255,0.045))] opacity-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_22px_-18px_rgba(46,96,255,0.58)]"
-                : "bg-[linear-gradient(90deg,rgba(255,255,255,0.92),rgba(255,255,255,0.52))] opacity-0 group-hover:opacity-100"
+                ? "bg-[linear-gradient(90deg,rgba(255,255,255,0.88),rgba(255,255,255,0.58))] opacity-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_22px_-18px_rgba(46,96,255,0.32)]"
+                : "bg-[linear-gradient(90deg,rgba(255,255,255,0.72),rgba(255,255,255,0.4))] opacity-0 group-hover:opacity-100"
             )}
           />
 
@@ -301,9 +301,9 @@ export default function Sidebar({
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         <div className="relative h-full">
-          <div className="absolute inset-0 bg-[rgb(255,255,255)]" />
+          <div className="absolute inset-0 bg-[rgb(244,245,247)]" />
           <div className="absolute inset-0 shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)]" />
-          <div className="absolute left-[-18px] top-[-10px] h-[130px] w-[130px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.10)_0%,rgba(46,96,255,0.034)_46%,rgba(46,96,255,0)_76%)] blur-2xl" />
+          <div className="absolute left-[-18px] top-[-10px] h-[130px] w-[130px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.06)_0%,rgba(46,96,255,0.022)_46%,rgba(46,96,255,0)_76%)] blur-2xl" />
 
           <SidebarContent
             shellStats={shellStats}
@@ -322,11 +322,11 @@ export default function Sidebar({
         styles={{
           body: {
             padding: 0,
-            background: "rgb(255,255,255)",
+            background: "rgb(244,245,247)",
           },
           header: { display: "none" },
           content: {
-            background: "rgb(255,255,255)",
+            background: "rgb(244,245,247)",
             boxShadow: "inset -1px 0 0 rgba(15,23,42,0.06)",
           },
           mask: {
