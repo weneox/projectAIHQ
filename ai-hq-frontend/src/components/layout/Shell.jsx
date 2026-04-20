@@ -449,6 +449,7 @@ export default function Shell() {
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
+  const warningMessageRef = useRef(INITIAL_SHELL_STATS.message);
 
   const assistantRequested = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
@@ -469,10 +470,20 @@ export default function Shell() {
     ])
       .then(([inboxRes, leadsRes]) => {
         const nextStats = buildShellStatsFromResponses(inboxRes, leadsRes);
+        const nextMessage = String(nextStats.message || "");
+
+        if (warningMessageRef.current !== nextMessage) {
+          warningMessageRef.current = nextMessage;
+
+          if (nextMessage) {
+            setWarningDismissed(false);
+          }
+        }
 
         setShellStats((prev) => ({
           ...prev,
           ...nextStats,
+          message: nextMessage,
         }));
       })
       .finally(() => {
@@ -601,12 +612,6 @@ export default function Shell() {
       unsubscribeStatus();
     };
   }, [scheduleShellRefresh]);
-
-  useEffect(() => {
-    if (shellStats?.message) {
-      setWarningDismissed(false);
-    }
-  }, [shellStats?.message]);
 
   const handleWidgetOpenChange = useCallback(
     (nextOpen) => {
