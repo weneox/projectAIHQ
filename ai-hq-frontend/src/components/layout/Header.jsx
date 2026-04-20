@@ -10,6 +10,57 @@ import { cx } from "../../lib/cx.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
 import { SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 
+const GENERIC_WORKSPACE_NAMES = new Set([
+  "workspace",
+  "local workspace",
+  "www",
+  "app",
+  "hq",
+  "dashboard",
+  "admin",
+  "portal",
+  "api",
+  "web",
+  "site",
+]);
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function normalizeWorkspaceName(value) {
+  const text = s(value);
+  if (!text) return "";
+
+  if (GENERIC_WORKSPACE_NAMES.has(text.toLowerCase())) {
+    return "";
+  }
+
+  return text;
+}
+
+function pickFirstText(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function pickFirstWorkspaceName(...values) {
+  for (const value of values) {
+    const text = normalizeWorkspaceName(value);
+    if (text) return text;
+  }
+  return "";
+}
+
 function getInitials(value = "") {
   return String(value)
     .trim()
@@ -17,6 +68,136 @@ function getInitials(value = "") {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
+}
+
+function resolveSessionWorkspaceName(sessionContext = {}) {
+  const bootstrap = obj(sessionContext.bootstrap);
+  const auth = obj(sessionContext.auth);
+
+  const bootstrapWorkspace = obj(bootstrap.workspace);
+  const bootstrapTenant = obj(bootstrap.tenant || bootstrapWorkspace.tenant);
+
+  const authWorkspace = obj(auth.workspace);
+  const authTenant = obj(auth.tenant || authWorkspace.tenant);
+
+  const membership = obj(auth.membership);
+
+  return pickFirstWorkspaceName(
+    bootstrapWorkspace.displayName,
+    bootstrapWorkspace.display_name,
+    bootstrapWorkspace.companyName,
+    bootstrapWorkspace.company_name,
+    bootstrapWorkspace.businessName,
+    bootstrapWorkspace.business_name,
+    bootstrapWorkspace.name,
+    bootstrapWorkspace.workspaceName,
+    bootstrapWorkspace.workspace_name,
+    bootstrapWorkspace.tenantName,
+    bootstrapWorkspace.tenant_name,
+
+    bootstrapTenant.displayName,
+    bootstrapTenant.display_name,
+    bootstrapTenant.companyName,
+    bootstrapTenant.company_name,
+    bootstrapTenant.businessName,
+    bootstrapTenant.business_name,
+    bootstrapTenant.name,
+    bootstrapTenant.workspaceName,
+    bootstrapTenant.workspace_name,
+    bootstrapTenant.tenantName,
+    bootstrapTenant.tenant_name,
+
+    bootstrap.workspaceName,
+    bootstrap.workspace_name,
+    bootstrap.companyName,
+    bootstrap.company_name,
+    bootstrap.businessName,
+    bootstrap.business_name,
+    bootstrap.tenantName,
+    bootstrap.tenant_name,
+
+    authWorkspace.displayName,
+    authWorkspace.display_name,
+    authWorkspace.companyName,
+    authWorkspace.company_name,
+    authWorkspace.businessName,
+    authWorkspace.business_name,
+    authWorkspace.name,
+    authWorkspace.workspaceName,
+    authWorkspace.workspace_name,
+    authWorkspace.tenantName,
+    authWorkspace.tenant_name,
+
+    authTenant.displayName,
+    authTenant.display_name,
+    authTenant.companyName,
+    authTenant.company_name,
+    authTenant.businessName,
+    authTenant.business_name,
+    authTenant.name,
+    authTenant.workspaceName,
+    authTenant.workspace_name,
+    authTenant.tenantName,
+    authTenant.tenant_name,
+
+    auth.workspaceName,
+    auth.workspace_name,
+    auth.companyName,
+    auth.company_name,
+    auth.businessName,
+    auth.business_name,
+    auth.tenantName,
+    auth.tenant_name,
+
+    membership.workspaceName,
+    membership.workspace_name,
+    membership.companyName,
+    membership.company_name,
+    membership.tenantName,
+    membership.tenant_name
+  );
+}
+
+function resolveSessionUserName(sessionContext = {}) {
+  const bootstrap = obj(sessionContext.bootstrap);
+  const auth = obj(sessionContext.auth);
+
+  const authUser = obj(auth.user);
+  const bootstrapViewer = obj(bootstrap.viewer);
+
+  return pickFirstText(
+    authUser.full_name,
+    authUser.fullName,
+    authUser.display_name,
+    authUser.displayName,
+    authUser.name,
+    bootstrapViewer.full_name,
+    bootstrapViewer.fullName,
+    bootstrapViewer.display_name,
+    bootstrapViewer.displayName,
+    bootstrapViewer.name,
+    sessionContext.actorName,
+    authUser.user_email,
+    auth.email
+  );
+}
+
+function resolveSessionRole(sessionContext = {}) {
+  const bootstrap = obj(sessionContext.bootstrap);
+  const auth = obj(sessionContext.auth);
+  const membership = obj(auth.membership);
+  const authUser = obj(auth.user);
+  const authWorkspace = obj(auth.workspace);
+
+  return pickFirstText(
+    sessionContext.viewerRole,
+    bootstrap.viewerRole,
+    bootstrap.role,
+    membership.role,
+    authWorkspace.role,
+    authUser.role,
+    auth.role
+  );
 }
 
 function AskAiButton() {
@@ -44,7 +225,8 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [session, setSession] = useState({
     actorName: "",
-    workspaceName: "Workspace",
+    userName: "",
+    workspaceName: "",
     role: "",
   });
 
@@ -52,17 +234,14 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     let alive = true;
 
     getAppSessionContext()
-      .then((auth) => {
+      .then((context) => {
         if (!alive) return;
 
         setSession({
-          actorName: String(auth?.actorName || "").trim(),
-          workspaceName: String(
-            auth?.bootstrap?.workspace?.companyName ||
-              auth?.auth?.tenant?.company_name ||
-              "Workspace"
-          ).trim(),
-          role: String(auth?.viewerRole || "").trim(),
+          actorName: pickFirstText(context?.actorName),
+          userName: resolveSessionUserName(context),
+          workspaceName: resolveSessionWorkspaceName(context),
+          role: resolveSessionRole(context),
         });
       })
       .catch(() => {});
@@ -100,13 +279,15 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       : 0;
 
   const displayName =
-    String(workspaceMeta?.workspaceName || "").trim() ||
-    session.workspaceName ||
-    session.actorName ||
+    pickFirstWorkspaceName(workspaceMeta?.workspaceName, session.workspaceName) ||
+    pickFirstText(session.actorName, session.userName) ||
     "Workspace";
 
-  const roleLabel =
-    String(workspaceMeta?.userName || "").trim() || session.role || "";
+  const roleLabel = pickFirstText(
+    workspaceMeta?.userName,
+    session.userName,
+    session.role
+  );
 
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 

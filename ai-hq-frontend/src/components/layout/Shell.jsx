@@ -25,7 +25,7 @@ const INITIAL_SHELL_STATS = {
 };
 
 const INITIAL_WORKSPACE_META = {
-  workspaceName: "Workspace",
+  workspaceName: "",
   workspaceKey: "",
   userName: "",
   userEmail: "",
@@ -41,6 +41,34 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
+
+const GENERIC_WORKSPACE_KEYS = new Set([
+  "www",
+  "app",
+  "hq",
+  "dashboard",
+  "admin",
+  "portal",
+  "api",
+  "web",
+  "site",
+  "localhost",
+  "local",
+]);
+
+const GENERIC_WORKSPACE_NAMES = new Set([
+  "workspace",
+  "local workspace",
+  "www",
+  "app",
+  "hq",
+  "dashboard",
+  "admin",
+  "portal",
+  "api",
+  "web",
+  "site",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -59,6 +87,26 @@ function arr(value, fallback = []) {
 function pickFirstString(...values) {
   for (const value of values) {
     const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeWorkspaceName(value, { allowGeneric = false } = {}) {
+  const text = s(value);
+  if (!text) return "";
+
+  const normalized = text.toLowerCase();
+  if (!allowGeneric && GENERIC_WORKSPACE_NAMES.has(normalized)) {
+    return "";
+  }
+
+  return text;
+}
+
+function pickFirstWorkspaceName(...values) {
+  for (const value of values) {
+    const text = normalizeWorkspaceName(value);
     if (text) return text;
   }
   return "";
@@ -125,6 +173,12 @@ function buildShellStatsFromResponses(inboxRes, leadsRes) {
   };
 }
 
+function humanizeHostKey(value = "") {
+  return s(value)
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function buildHostFallbackMeta() {
   if (typeof window === "undefined") return INITIAL_WORKSPACE_META;
 
@@ -140,12 +194,10 @@ function buildHostFallbackMeta() {
   }
 
   const key = hostname.split(".")[0] || "workspace";
-  const name = key
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
+  const isGenericKey = GENERIC_WORKSPACE_KEYS.has(key);
 
   return {
-    workspaceName: name,
+    workspaceName: isGenericKey ? "" : humanizeHostKey(key),
     workspaceKey: key,
     userName: "",
     userEmail: "",
@@ -154,53 +206,169 @@ function buildHostFallbackMeta() {
 
 function extractWorkspaceMeta(payload) {
   const root = obj(payload);
+  const bootstrap = obj(root.bootstrap);
+  const session = obj(root.session);
+  const auth = obj(root.auth);
+
   const workspace = obj(
     root.workspace ||
-      root.tenant ||
-      root.account ||
-      obj(root.bootstrap).workspace ||
-      obj(root.bootstrap).tenant ||
-      obj(root.session).workspace
+      bootstrap.workspace ||
+      session.workspace ||
+      auth.workspace ||
+      root.account
+  );
+
+  const tenant = obj(
+    root.tenant ||
+      bootstrap.tenant ||
+      workspace.tenant ||
+      session.tenant ||
+      auth.tenant ||
+      bootstrap.workspace?.tenant ||
+      auth.workspace?.tenant
+  );
+
+  const membership = obj(
+    root.membership ||
+      bootstrap.membership ||
+      session.membership ||
+      auth.membership ||
+      arr(root.memberships)[0] ||
+      arr(auth.memberships)[0]
   );
 
   const user = obj(
-    root.user || root.profile || obj(root.session).user || obj(root.auth).user
+    root.user ||
+      root.profile ||
+      root.viewer ||
+      bootstrap.viewer ||
+      session.user ||
+      auth.user
   );
 
-  const membership = obj(arr(root.memberships)[0]);
-
-  const workspaceName = pickFirstString(
+  const workspaceName = pickFirstWorkspaceName(
     workspace.displayName,
+    workspace.display_name,
+    workspace.companyName,
+    workspace.company_name,
+    workspace.businessName,
+    workspace.business_name,
     workspace.name,
     workspace.workspaceName,
+    workspace.workspace_name,
     workspace.tenantName,
+    workspace.tenant_name,
+
+    tenant.displayName,
+    tenant.display_name,
+    tenant.companyName,
+    tenant.company_name,
+    tenant.businessName,
+    tenant.business_name,
+    tenant.name,
+    tenant.workspaceName,
+    tenant.workspace_name,
+    tenant.tenantName,
+    tenant.tenant_name,
+
     membership.workspaceName,
+    membership.workspace_name,
+    membership.companyName,
+    membership.company_name,
     membership.tenantName,
+    membership.tenant_name,
+
     root.workspaceName,
-    root.tenantName
+    root.workspace_name,
+    root.companyName,
+    root.company_name,
+    root.businessName,
+    root.business_name,
+    root.tenantName,
+    root.tenant_name,
+
+    bootstrap.workspaceName,
+    bootstrap.workspace_name,
+    bootstrap.companyName,
+    bootstrap.company_name,
+    bootstrap.businessName,
+    bootstrap.business_name,
+    bootstrap.tenantName,
+    bootstrap.tenant_name,
+
+    session.workspaceName,
+    session.workspace_name,
+    session.companyName,
+    session.company_name,
+    session.tenantName,
+    session.tenant_name,
+
+    auth.workspaceName,
+    auth.workspace_name,
+    auth.companyName,
+    auth.company_name,
+    auth.tenantName,
+    auth.tenant_name
   );
 
   const workspaceKey = pickFirstString(
     workspace.key,
     workspace.slug,
     workspace.workspaceKey,
+    workspace.workspace_key,
     workspace.tenantKey,
+    workspace.tenant_key,
+
+    tenant.key,
+    tenant.slug,
+    tenant.workspaceKey,
+    tenant.workspace_key,
+    tenant.tenantKey,
+    tenant.tenant_key,
+
     membership.workspaceKey,
+    membership.workspace_key,
     membership.tenantKey,
+    membership.tenant_key,
+
     root.workspaceKey,
-    root.tenantKey
+    root.workspace_key,
+    root.tenantKey,
+    root.tenant_key,
+
+    bootstrap.workspaceKey,
+    bootstrap.workspace_key,
+    bootstrap.tenantKey,
+    bootstrap.tenant_key,
+
+    session.workspaceKey,
+    session.workspace_key,
+    session.tenantKey,
+    session.tenant_key,
+
+    auth.workspaceKey,
+    auth.workspace_key,
+    auth.tenantKey,
+    auth.tenant_key
   );
 
   const userName = pickFirstString(
     user.name,
     user.fullName,
+    user.full_name,
     user.displayName,
-    root.userName
+    user.display_name,
+    root.userName,
+    root.user_name,
+    root.viewerName,
+    root.viewer_name
   );
 
   const userEmail = pickFirstString(
     user.email,
+    user.user_email,
     root.userEmail,
+    root.user_email,
     membership.email
   );
 
@@ -214,7 +382,7 @@ function extractWorkspaceMeta(payload) {
 
 function mergeWorkspaceMeta(currentMeta, nextMeta) {
   return {
-    workspaceName: pickFirstString(
+    workspaceName: pickFirstWorkspaceName(
       nextMeta?.workspaceName,
       currentMeta?.workspaceName
     ),
@@ -318,9 +486,14 @@ export default function Shell() {
         if (cancelled) return;
 
         const extracted = extractWorkspaceMeta(response);
-        setWorkspaceMeta((prev) => mergeWorkspaceMeta(prev, extracted));
+        const hostFallback = buildHostFallbackMeta();
+
+        setWorkspaceMeta((prev) =>
+          mergeWorkspaceMeta(mergeWorkspaceMeta(prev, hostFallback), extracted)
+        );
       } catch {
         if (cancelled) return;
+
         setWorkspaceMeta((prev) =>
           mergeWorkspaceMeta(prev, buildHostFallbackMeta())
         );
