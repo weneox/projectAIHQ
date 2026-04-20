@@ -1,665 +1,450 @@
-import { useLocation, useNavigate } from "react-router-dom";
 import {
-  BadgeDollarSign,
-  BriefcaseBusiness,
-  Target,
-  Trophy,
-  Users,
-  RefreshCw,
-  CircleDot,
-  Link2,
-  ShieldCheck,
-  UserRound,
-  FolderKanban,
-  Save,
-  CalendarDays,
-  UserCog,
-  Flag,
-  FileText,
   ArrowUpRight,
-  Clock3,
-  Activity,
-  Mail,
+  Globe2,
+  MessageSquareText,
+  Radio,
+  UserRound,
+  X,
 } from "lucide-react";
 
 import {
-  fmtRelative,
-  fmtDateTime,
-  stageTone,
-  statusTone,
-  priorityTone,
-  formatMoneyAZN,
-  pickLeadValue,
-  prettySource,
-  leadName,
   leadHandle,
-  scoreBand,
-  scoreTone,
-  eventTone,
-  prettyEventType,
-} from "../features/leads/lead-utils.js";
+  leadName,
+  prettyLeadSource,
+} from "../../lib/inbox-ui.js";
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
+import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
 
-import { useLeadsData } from "../hooks/useLeadsData.js";
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
 
-import LeadStatCard from "../components/leads/LeadStatCard.jsx";
-import LeadRow from "../components/leads/LeadRow.jsx";
-import LeadMiniInfo from "../components/leads/LeadMiniInfo.jsx";
-import {
-  LeadField,
-  LeadInput,
-  LeadSelect,
-  LeadTextArea,
-} from "../components/leads/LeadFormControls.jsx";
-import { areInternalRoutesEnabled } from "../lib/appEntry.js";
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
 
-export default function Leads() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const showInternalDebug = areInternalRoutesEnabled();
+function initialsFromName(value = "") {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-  const requestedLeadId = String(location?.state?.selectedLeadId || "").trim();
+  if (!parts.length) return "C";
 
-  const {
-    selectedLead,
-    setSelectedLead,
-    stageFilter,
-    setStageFilter,
-    loading,
-    dbDisabled,
-    error,
-    wsState,
-    events,
-    eventsLoading,
-    savingField,
-    noteText,
-    setNoteText,
-    form,
-    setForm,
-    filteredLeads,
-    stats,
-    sourceMix,
-    stageMix,
-    loadLeadsData,
-    saveStage,
-    saveStatus,
-    saveOwner,
-    saveCoreFields,
-    saveFollowUp,
-    saveNote,
-    quickSetStage,
-    openInboxThread,
-  } = useLeadsData({
-    requestedLeadId,
-    navigate,
-  });
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
 
-  const sel = selectedLead;
-  const selExtra = sel?.extra && typeof sel.extra === "object" ? sel.extra : {};
-  const score = Number(sel?.score || 0);
+function avatarTone(seed = "") {
+  const tones = [
+    "bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[rgba(37,99,235,0.96)] ring-[rgba(37,99,235,0.10)]",
+    "bg-[linear-gradient(180deg,rgba(245,243,255,0.96),rgba(237,233,254,0.96))] text-[rgba(109,40,217,0.96)] ring-[rgba(109,40,217,0.10)]",
+    "bg-[linear-gradient(180deg,rgba(236,253,245,0.96),rgba(209,250,229,0.96))] text-[rgba(5,150,105,0.96)] ring-[rgba(5,150,105,0.10)]",
+    "bg-[linear-gradient(180deg,rgba(255,247,237,0.96),rgba(254,215,170,0.96))] text-[rgba(194,65,12,0.96)] ring-[rgba(194,65,12,0.10)]",
+    "bg-[linear-gradient(180deg,rgba(254,242,242,0.96),rgba(254,226,226,0.96))] text-[rgba(220,38,38,0.96)] ring-[rgba(220,38,38,0.10)]",
+  ];
+
+  const score = String(seed || "")
+    .split("")
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+
+  return tones[score % tones.length];
+}
+
+function resolveAvatarUrl(entity = {}) {
+  return (
+    s(entity.avatar_url) ||
+    s(entity.profile_image_url) ||
+    s(entity.customer_avatar_url) ||
+    s(entity.external_avatar_url) ||
+    s(entity.photo_url)
+  );
+}
+
+function resolveDisplayName(selectedThread = {}, relatedLead = null) {
+  return (
+    s(selectedThread?.customer_name) ||
+    s(selectedThread?.external_username) ||
+    s(relatedLead?.name) ||
+    s(selectedThread?.external_user_id) ||
+    "Conversation"
+  );
+}
+
+function resolveHandle(selectedThread = {}, relatedLead = null) {
+  return (
+    (relatedLead ? s(leadHandle(relatedLead)) : "") ||
+    s(selectedThread?.external_username) ||
+    s(selectedThread?.external_user_id)
+  );
+}
+
+function prettyThreadSource(value = "") {
+  const normalized = s(value).toLowerCase();
+  if (!normalized) return "Conversation";
+  if (["web", "website", "webchat"].includes(normalized)) return "Website chat";
+
+  return normalized
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function prettyStatus(selectedThread = {}, relatedLead = null) {
+  if (selectedThread?.handoff_active) return "In handoff";
+  if (relatedLead?.status) return s(relatedLead.status);
+  if (selectedThread?.status) {
+    return s(selectedThread.status)
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+  return "Active";
+}
+
+function prettyStage(relatedLead = null) {
+  const value = s(relatedLead?.stage || "");
+  if (!value) return "";
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function resolveWebsiteContext(selectedThread = {}) {
+  const widget = obj(selectedThread?.meta)?.websiteWidget || {};
+  const page = obj(widget.page);
+
+  return {
+    title: s(page.title),
+    url: s(page.url),
+    referrer: s(page.referrer),
+    visible: Boolean(s(page.title) || s(page.url) || s(page.referrer)),
+  };
+}
+
+function resolveRealtimeLabel(wsState = "") {
+  const next = s(wsState).toLowerCase();
+  if (!next) return "Connected";
+  if (next === "open") return "Connected";
+  if (next === "connecting") return "Connecting";
+  if (next === "closed") return "Offline";
+  return next.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function MetaBadge({ children, tone = "neutral" }) {
+  const tones = {
+    neutral:
+      "bg-[rgba(248,250,252,0.96)] text-[rgba(71,85,105,0.96)] border-[rgba(15,23,42,0.06)]",
+    brand:
+      "bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)] border-[rgba(37,99,235,0.12)]",
+    success:
+      "bg-[rgba(236,253,245,0.96)] text-[rgba(5,150,105,0.96)] border-[rgba(5,150,105,0.12)]",
+    warning:
+      "bg-[rgba(255,247,237,0.96)] text-[rgba(180,83,9,0.96)] border-[rgba(245,158,11,0.16)]",
+  };
 
   return (
-    <div className="px-6 pb-8 pt-3 md:px-8">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="text-sm text-text-muted">Revenue workspace</div>
-          <div className="mt-2 text-[32px] font-semibold tracking-[-0.055em] text-slate-950">
-            Leads
-          </div>
-          <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Leads from Inbox, direct messages, and sales follow-up in one workspace.
-          </div>
+    <span
+      className={[
+        "inline-flex items-center rounded-[10px] border px-2.5 py-1 text-[11px] font-semibold",
+        tones[tone] || tones.neutral,
+      ].join(" ")}
+    >
+      {children}
+    </span>
+  );
+}
+
+function DetailSection({ icon: Icon, title, action = null, children }) {
+  return (
+    <section className="rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] shadow-[0_24px_60px_-46px_rgba(15,23,42,0.16)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgba(15,23,42,0.05)] px-5 py-4">
+        <div className="flex items-center gap-2">
+          {Icon ? <Icon className="h-4 w-4 text-[rgba(100,116,139,0.96)]" /> : null}
+          <h3 className="text-[14px] font-semibold text-[rgba(15,23,42,0.94)]">
+            {title}
+          </h3>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="inline-flex h-8 items-center rounded-md border border-line bg-surface-muted px-3 text-sm text-text-muted">
-            WS: {wsState}
+        {action}
+      </div>
+
+      <div className="px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
+function InfoGrid({ items = [] }) {
+  return (
+    <div className="grid gap-3">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-4 rounded-[16px] bg-[rgba(248,250,252,0.78)] px-4 py-3"
+        >
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[rgba(148,163,184,0.96)]">
+            {item.label}
+          </div>
+          <div
+            className={[
+              "min-w-0 text-right text-[13px] leading-6",
+              item.strong
+                ? "font-medium text-[rgba(15,23,42,0.94)]"
+                : "text-[rgba(71,85,105,0.96)]",
+            ].join(" ")}
+          >
+            <div className="break-words">{item.value || "--"}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IdentityHero({ selectedThread, relatedLead, owner, wsState }) {
+  const name = resolveDisplayName(selectedThread, relatedLead);
+  const handle = resolveHandle(selectedThread, relatedLead);
+  const avatarUrl = resolveAvatarUrl(selectedThread);
+  const sourceLabel = relatedLead
+    ? prettyLeadSource(relatedLead)
+    : prettyThreadSource(selectedThread?.channel);
+  const stage = prettyStage(relatedLead);
+  const statusLabel = prettyStatus(selectedThread, relatedLead);
+
+  return (
+    <section className="rounded-[24px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-5 py-5 shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
+      <div className="flex items-start gap-4">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-[rgba(15,23,42,0.06)]"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className={[
+              "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-[18px] font-semibold ring-1",
+              avatarTone(name),
+            ].join(" ")}
+          >
+            {initialsFromName(name)}
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+            {name}
           </div>
 
-          {dbDisabled ? (
-            <div className="inline-flex h-8 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-sm text-amber-700">
-              DB disabled
+          {handle ? (
+            <div className="mt-1 truncate text-[13px] text-[rgba(100,116,139,0.96)]">
+              @{handle.replace(/^@/, "")}
             </div>
           ) : null}
 
+          <div className="mt-3 flex flex-wrap gap-2">
+            <MetaBadge tone="neutral">{sourceLabel || "Conversation"}</MetaBadge>
+            {stage ? <MetaBadge tone="brand">{stage}</MetaBadge> : null}
+            <MetaBadge tone={selectedThread?.handoff_active ? "warning" : "success"}>
+              {statusLabel}
+            </MetaBadge>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <div className="rounded-[16px] bg-[rgba(248,250,252,0.78)] px-4 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[rgba(148,163,184,0.96)]">
+            Owner
+          </div>
+          <div className="mt-1 text-[13px] font-medium text-[rgba(15,23,42,0.94)]">
+            {owner}
+          </div>
+        </div>
+
+        <div className="rounded-[16px] bg-[rgba(248,250,252,0.78)] px-4 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[rgba(148,163,184,0.96)]">
+            Realtime
+          </div>
+          <div className="mt-1 text-[13px] font-medium text-[rgba(15,23,42,0.94)]">
+            {resolveRealtimeLabel(wsState)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EmptyDrawerState() {
+  return (
+    <div className="px-5 py-8">
+      <div className="rounded-[24px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-5 py-8 text-center shadow-[0_24px_60px_-46px_rgba(15,23,42,0.16)]">
+        <div className="text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+          No conversation selected
+        </div>
+        <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
+          Select a thread to view profile, routing, and conversation context.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function InboxLeadPanel({
+  selectedThread,
+  surface,
+  relatedLead,
+  openLeadDetail,
+  operatorName = "",
+  wsState = "",
+  onClose,
+}) {
+  const hasThread = Boolean(selectedThread?.id);
+  const hasLead = Boolean(relatedLead?.id);
+
+  const owner = s(selectedThread?.assigned_to) || operatorName || "Unassigned";
+  const sourceLabel = hasLead
+    ? prettyLeadSource(relatedLead)
+    : prettyThreadSource(selectedThread?.channel || "--");
+  const websiteContext = resolveWebsiteContext(selectedThread);
+
+  const preview =
+    s(selectedThread?.last_message_text) ||
+    "No message preview is available yet for this conversation.";
+
+  const showSurfaceBanner =
+    surface?.unavailable ||
+    surface?.availability === "unavailable" ||
+    surface?.error;
+
+  return (
+    <section className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
+      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.86)] px-5 py-5 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.76)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+              Conversation details
+            </h2>
+            <div className="mt-1 text-[12.5px] text-[rgba(100,116,139,0.96)]">
+              Profile, routing, and live context
+            </div>
+          </div>
+
           <button
             type="button"
-            onClick={loadLeadsData}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
+            onClick={onClose}
+            aria-label="Close details"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-[rgba(15,23,42,0.08)] bg-white text-[rgba(100,116,139,0.96)] transition-all hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {error ? (
-        <div className="mb-6 border-l-2 border-rose-300 pl-4 text-sm text-rose-700">
-          {error}
-        </div>
-      ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {!hasThread ? (
+          <EmptyDrawerState />
+        ) : surface?.loading && !hasLead ? (
+          <InboxLeadSkeleton />
+        ) : (
+          <div className="space-y-4 px-5 py-5">
+            <IdentityHero
+              selectedThread={selectedThread}
+              relatedLead={relatedLead}
+              owner={owner}
+              wsState={wsState}
+            />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <LeadStatCard label="Total Leads" value={stats.total} icon={Users} />
-        <LeadStatCard label="Open Leads" value={stats.open} icon={CircleDot} tone="cyan" />
-        <LeadStatCard label="Won" value={stats.won} icon={Trophy} tone="emerald" />
-        <LeadStatCard
-          label="Pipeline Value"
-          value={formatMoneyAZN(stats.pipelineValue)}
-          icon={BadgeDollarSign}
-          tone="violet"
-        />
-      </div>
+            {showSurfaceBanner ? (
+              <SurfaceBanner
+                surface={surface}
+                unavailableMessage="Related context is temporarily unavailable."
+                refreshLabel="Refresh context"
+              />
+            ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-        <div className="border-t border-slate-200/80 px-1 py-5">
-          <div className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-                Lead Pipeline
-              </div>
-              <div className="mt-1 text-sm text-slate-500">
-                Leads captured from inbox activity and stored for follow-up.
-              </div>
-            </div>
+            <DetailSection icon={Radio} title="Routing">
+              <InfoGrid
+                items={[
+                  { label: "Source", value: sourceLabel || "--" },
+                  {
+                    label: "Status",
+                    value: prettyStatus(selectedThread, relatedLead),
+                    strong: true,
+                  },
+                  {
+                    label: "Assigned",
+                    value: owner,
+                    strong: true,
+                  },
+                ]}
+              />
+            </DetailSection>
 
-            <div className="flex flex-wrap gap-2">
-              {["all", "new", "contacted", "qualified", "proposal", "won", "lost"].map((stage) => (
-                <button
-                  key={stage}
-                  type="button"
-                  onClick={() => setStageFilter(stage)}
-                  className={`inline-flex h-8 items-center rounded-md border px-3 text-sm transition ${
-                    stageFilter === stage
-                      ? "border-line-strong bg-surface text-text"
-                      : "border-line bg-surface-muted text-text-muted hover:border-line-strong hover:bg-surface hover:text-text"
-                    }`}
-                >
-                  {stage}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <div className="hidden xl:grid xl:grid-cols-[1.25fr_0.9fr_1fr_0.8fr_0.8fr_0.7fr] xl:gap-3 xl:px-2 xl:text-[11px] xl:uppercase xl:tracking-[0.18em] xl:text-slate-400">
-              <div>Name</div>
-              <div>Source</div>
-              <div>Interest</div>
-              <div>Stage</div>
-              <div>Status</div>
-              <div className="text-right">Value</div>
-            </div>
-
-            {loading ? (
-              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center text-sm text-slate-500">
-                Loading leads...
-              </div>
-            ) : filteredLeads.length === 0 ? (
-              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
-                <div className="text-sm font-medium text-slate-700">No leads yet</div>
-                <div className="mt-2 text-sm leading-6 text-slate-500">
-                  Inbox və satış axını bağlandıqca lead-lər burada görünəcək.
-                </div>
-              </div>
-            ) : (
-              filteredLeads.map((lead) => (
-                <LeadRow
-                  key={lead.id}
-                  lead={lead}
-                  selected={selectedLead?.id === lead.id}
-                  onSelect={setSelectedLead}
+            {websiteContext.visible ? (
+              <DetailSection icon={Globe2} title="Website context">
+                <InfoGrid
+                  items={[
+                    { label: "Page", value: websiteContext.title || "--" },
+                    { label: "URL", value: websiteContext.url || "--" },
+                    { label: "Referrer", value: websiteContext.referrer || "--" },
+                  ]}
                 />
-              ))
-            )}
-          </div>
-        </div>
+              </DetailSection>
+            ) : null}
 
-        <div className="space-y-6">
-          <div className="border-t border-slate-200/80 px-1 py-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]">
-                <BriefcaseBusiness className="h-4 w-4 text-slate-600" />
-              </div>
-              <div>
-                <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
-                  Lead Detail
-                </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Seçilmiş lead üçün interaktiv CRM görünüşü.
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200/70 px-4 py-4">
-              {!sel ? (
-                <div className="px-2 py-8 text-center">
-                  <div className="text-sm font-medium text-slate-700">No lead selected</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">
-                    Sol tərəfdən bir lead seç.
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-                        {leadName(sel)}
-                      </div>
-                      <div className="mt-1 text-sm text-slate-500">{leadHandle(sel)}</div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${stageTone(
-                          sel.stage
-                        )}`}
-                      >
-                        {sel.stage || "new"}
-                      </span>
-
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${statusTone(
-                          sel.status
-                        )}`}
-                      >
-                        {sel.status || "open"}
-                      </span>
-
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${priorityTone(
-                          sel.priority
-                        )}`}
-                      >
-                        {sel.priority || "normal"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={openInboxThread}
-                      disabled={!sel?.inbox_thread_id}
-                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                      Open Inbox Thread
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => quickSetStage("contacted")}
-                      disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
-                    >
-                      <CircleDot className="h-3.5 w-3.5" />
-                      Mark Contacted
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => quickSetStage("qualified")}
-                      disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
-                    >
-                      <Target className="h-3.5 w-3.5" />
-                      Move to Qualified
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => quickSetStage("won")}
-                      disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-3.5 py-2 text-[12px] font-medium text-emerald-100 transition hover:bg-emerald-400/[0.1]"
-                    >
-                      <Trophy className="h-3.5 w-3.5" />
-                      Mark Won
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => quickSetStage("lost")}
-                      disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-full border border-rose-400/20 bg-rose-400/[0.06] px-3.5 py-2 text-[12px] font-medium text-rose-100 transition hover:bg-rose-400/[0.1]"
-                    >
-                      <Flag className="h-3.5 w-3.5" />
-                      Mark Lost
-                    </button>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <LeadMiniInfo label="Source" value={prettySource(sel)} icon={Link2} />
-                    <LeadMiniInfo label="Score" value={String(sel.score ?? 0)} icon={Target} />
-                    <LeadMiniInfo label="Interest" value={sel.interest || "—"} icon={FolderKanban} />
-                    <LeadMiniInfo
-                      label="Pipeline value"
-                      value={formatMoneyAZN(pickLeadValue(sel))}
-                      icon={BadgeDollarSign}
-                    />
-                    <LeadMiniInfo label="Company" value={sel.company || "—"} icon={BriefcaseBusiness} />
-                    <LeadMiniInfo label="Created" value={fmtDateTime(sel.created_at)} icon={CircleDot} />
-                  </div>
-
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <LeadField label="Stage">
-                      <div className="flex gap-2">
-                        <LeadSelect
-                          value={form.stage}
-                          onChange={(e) => setForm((prev) => ({ ...prev, stage: e.target.value }))}
-                        >
-                          <option value="new">new</option>
-                          <option value="contacted">contacted</option>
-                          <option value="qualified">qualified</option>
-                          <option value="proposal">proposal</option>
-                          <option value="won">won</option>
-                          <option value="lost">lost</option>
-                        </LeadSelect>
-                        <button
-                          type="button"
-                          onClick={() => saveStage(form.stage)}
-                          disabled={savingField === "stage"}
-                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
-                        >
-                          <Save className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </LeadField>
-
-                    <LeadField label="Status">
-                      <div className="flex gap-2">
-                        <LeadSelect
-                          value={form.status}
-                          onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-                        >
-                          <option value="open">open</option>
-                          <option value="archived">archived</option>
-                          <option value="spam">spam</option>
-                          <option value="closed">closed</option>
-                        </LeadSelect>
-                        <button
-                          type="button"
-                          onClick={() => saveStatus(form.status)}
-                          disabled={savingField === "status"}
-                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
-                        >
-                          <Save className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </LeadField>
-
-                    <LeadField label="Owner">
-                      <div className="flex gap-2">
-                        <LeadInput
-                          value={form.owner}
-                          onChange={(e) => setForm((prev) => ({ ...prev, owner: e.target.value }))}
-                          placeholder="Assign owner"
-                        />
-                        <button
-                          type="button"
-                          onClick={saveOwner}
-                          disabled={savingField === "owner"}
-                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
-                        >
-                          <UserCog className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </LeadField>
-
-                    <LeadField label="Priority">
-                      <LeadSelect
-                        value={form.priority}
-                        onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}
-                      >
-                        <option value="low">low</option>
-                        <option value="normal">normal</option>
-                        <option value="high">high</option>
-                        <option value="urgent">urgent</option>
-                      </LeadSelect>
-                    </LeadField>
-
-                    <LeadField label="Value (AZN)">
-                      <LeadInput
-                        type="number"
-                        value={form.valueAzn}
-                        onChange={(e) => setForm((prev) => ({ ...prev, valueAzn: e.target.value }))}
-                        placeholder="0"
-                      />
-                    </LeadField>
-
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={saveCoreFields}
-                        disabled={savingField === "core"}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.08] px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/[0.12]"
-                      >
-                        <Save className="h-4 w-4" />
-                        Save CRM Fields
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <LeadField label="Follow-up date">
-                      <LeadInput
-                        type="datetime-local"
-                        value={form.followUpAt}
-                        onChange={(e) => setForm((prev) => ({ ...prev, followUpAt: e.target.value }))}
-                      />
-                    </LeadField>
-
-                    <LeadField label="Next action">
-                      <LeadInput
-                        value={form.nextAction}
-                        onChange={(e) => setForm((prev) => ({ ...prev, nextAction: e.target.value }))}
-                        placeholder="Call, send proposal, demo..."
-                      />
-                    </LeadField>
-                  </div>
-
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={saveFollowUp}
-                      disabled={savingField === "followup"}
-                      className="inline-flex items-center gap-2 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
-                    >
-                      <CalendarDays className="h-4 w-4" />
-                      Save Follow-up
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <LeadMiniInfo label="Phone" value={sel.phone || "—"} icon={UserRound} />
-                    <LeadMiniInfo label="Email" value={sel.email || "—"} icon={Mail} />
-                    <LeadMiniInfo
-                      label="Inbox thread"
-                      value={sel.inbox_thread_id || "—"}
-                      icon={Link2}
-                    />
-                    <LeadMiniInfo
-                      label="Updated"
-                      value={fmtDateTime(sel.updated_at)}
-                      icon={RefreshCw}
-                    />
-                  </div>
-
-                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                      Score band
-                    </div>
-                    <div className="mt-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${scoreTone(
-                          score
-                        )}`}
-                      >
-                        {scoreBand(score)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
-                    <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                      <FileText className="h-3.5 w-3.5" />
-                      Add Note
-                    </div>
-                    <LeadTextArea
-                      rows={4}
-                      value={noteText}
-                      onChange={(e) => setNoteText(e.target.value)}
-                      placeholder="Write internal note..."
-                    />
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={saveNote}
-                        disabled={savingField === "note" || !noteText.trim()}
-                        className="inline-flex items-center gap-2 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Save className="h-4 w-4" />
-                        Save Note
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                      Full Notes
-                    </div>
-                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {sel.notes || "—"}
-                    </div>
-                  </div>
-
-                  {showInternalDebug && selExtra && Object.keys(selExtra).length > 0 ? (
-                    <div className="mt-4 border-t border-slate-200/70 p-3">
-                      <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        Internal Payload
-                      </div>
-                      <pre className="overflow-auto text-xs leading-6 text-slate-600">
-                        {JSON.stringify(selExtra, null, 2)}
-                      </pre>
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200/80 px-1 py-5">
-            <div className="flex items-center gap-2 text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
-              <Activity className="h-4 w-4 text-slate-500" />
-              Activity Timeline
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {!sel ? (
-                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
-                  Select a lead to see activity.
-                </div>
-              ) : eventsLoading ? (
-                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
-                  Loading activity...
-                </div>
-              ) : events.length === 0 ? (
-                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
-                  No events yet.
-                </div>
-              ) : (
-                events.map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="border-t border-slate-200/70 p-4"
+            {hasLead ? (
+              <DetailSection
+                icon={UserRound}
+                title="Related lead"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => openLeadDetail?.(relatedLead)}
+                    className="inline-flex items-center gap-2 rounded-[12px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-2 text-[12px] font-medium text-[rgba(71,85,105,0.96)] transition-all hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.94)]"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${eventTone(
-                            ev.type
-                          )}`}
-                        >
-                          {prettyEventType(ev.type)}
-                        </span>
-                        <div className="mt-3 text-sm font-medium text-slate-800">
-                          {ev.actor || "system"}
-                        </div>
-                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-400">
-                          {fmtDateTime(ev.created_at)}
-                        </div>
-                      </div>
+                    <span>Open</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </button>
+                }
+              >
+                <div className="rounded-[18px] bg-[rgba(248,250,252,0.78)] px-4 py-4">
+                  <div className="text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+                    {leadName(relatedLead) || "Lead"}
+                  </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        {fmtRelative(ev.created_at)}
-                      </div>
-                    </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {prettyStage(relatedLead) ? (
+                      <MetaBadge tone="brand">{prettyStage(relatedLead)}</MetaBadge>
+                    ) : null}
 
-                    {showInternalDebug && ev?.payload ? (
-                      <pre className="mt-3 overflow-auto rounded-2xl border border-slate-200/80 bg-white/66 p-3 text-xs leading-6 text-slate-600">
-                        {JSON.stringify(ev.payload, null, 2)}
-                      </pre>
+                    {s(relatedLead?.status) ? (
+                      <MetaBadge tone="success">
+                        {s(relatedLead.status)
+                          .replace(/[_-]+/g, " ")
+                          .replace(/\b\w/g, (char) => char.toUpperCase())}
+                      </MetaBadge>
+                    ) : null}
+
+                    {leadHandle(relatedLead) ? (
+                      <MetaBadge tone="neutral">{leadHandle(relatedLead)}</MetaBadge>
                     ) : null}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200/80 px-1 py-5">
-            <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
-              Source Mix
-            </div>
-
-            <div className="mt-5 space-y-4">
-              {sourceMix.map((item) => (
-                <div key={item.label}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="text-slate-600">{item.label}</span>
-                    <span className="text-slate-400">{item.pct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-200/70">
-                    <div
-                      className="h-2 rounded-full bg-slate-500/70"
-                      style={{ width: `${item.pct}%` }}
-                    />
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </DetailSection>
+            ) : null}
 
-          <div className="border-t border-slate-200/80 px-1 py-5">
-            <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
-              Stage Overview
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              {Object.entries(stageMix).map(([stage, count]) => (
-                <div
-                  key={stage}
-                  className="border-t border-slate-200/70 px-4 py-3"
-                >
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                    {stage}
-                  </div>
-                  <div className="mt-2 text-lg font-semibold text-slate-950">{count}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 border-t border-slate-200/70 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                Last refresh
+            <DetailSection icon={MessageSquareText} title="Latest message">
+              <div className="rounded-[18px] bg-[rgba(248,250,252,0.78)] px-4 py-4 text-[13px] leading-7 text-[rgba(71,85,105,0.96)]">
+                {preview}
               </div>
-              <div className="mt-2 text-sm text-slate-700">
-                {fmtRelative(new Date().toISOString())}
-              </div>
-            </div>
+            </DetailSection>
           </div>
-        </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }
