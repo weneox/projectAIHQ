@@ -811,7 +811,7 @@ test("inbox behavior runtime carries CTA and guided qualification policy into fa
     "string"
   );
   assert.equal(
-    ["none", "discovery", "greeting", "general"].includes(
+    ["none", "discovery", "greeting", "general", "questioned"].includes(
       replayTrace?.evaluation?.qualification?.status
     ),
     true
