@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
 
 const TOP_TABS = [
-  { label: "Primary", value: "all" },
-  { label: "General", value: "assigned" },
-  { label: "Requests", value: "handoff" },
+  { label: "All", value: "all" },
+  { label: "Assigned", value: "assigned" },
+  { label: "Handoff", value: "handoff" },
 ];
 
 function s(value, fallback = "") {
@@ -28,7 +28,7 @@ function prettyChannelLabel(value = "") {
   if (normalized === "telegram") return "Telegram";
   if (normalized === "email") return "Email";
   if (normalized === "web") return "Website";
-  if (normalized === "webchat") return "Web chat";
+  if (normalized === "webchat") return "Web Chat";
   if (normalized === "website") return "Website";
   if (normalized === "voice") return "Voice";
   if (normalized === "sms") return "SMS";
@@ -62,7 +62,7 @@ function buildChannelOptions(threads = []) {
   }
 
   return [
-    { value: "all", label: "All conversations" },
+    { value: "all", label: "All channels" },
     ...Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label)),
   ];
 }
@@ -106,36 +106,112 @@ function ChannelFilterMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute left-0 top-[calc(100%+10px)] z-30 min-w-[238px] overflow-hidden rounded-[14px] border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_20px_50px_-30px_rgba(15,23,42,0.22)]"
+      className="absolute left-0 top-[calc(100%+10px)] z-30 min-w-[240px] overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white p-1.5 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.22)]"
     >
-      <div className="py-1.5">
-        {options.map((option, index) => {
-          const active = selectedValue === option.value;
-          const count = Number(counts?.[option.value] ?? 0);
+      {options.map((option) => {
+        const active = selectedValue === option.value;
+        const count = Number(counts?.[option.value] ?? 0);
 
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onSelect?.(option.value);
-                onClose?.();
-              }}
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              onSelect?.(option.value);
+              onClose?.();
+            }}
+            className={[
+              "flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors",
+              active
+                ? "bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
+                : "text-[rgba(51,65,85,0.94)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.94)]",
+            ].join(" ")}
+          >
+            <span className="truncate text-[13px] font-medium">
+              {option.label}
+            </span>
+            <span
               className={[
-                "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-[13px] transition-colors",
-                index > 0 ? "border-t border-[rgba(15,23,42,0.05)]" : "",
+                "inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
                 active
-                  ? "text-text"
-                  : "text-text-muted hover:bg-[rgba(15,23,42,0.025)] hover:text-text",
+                  ? "bg-[rgba(37,99,235,0.10)] text-[rgba(37,99,235,0.98)]"
+                  : "bg-[rgba(248,250,252,0.96)] text-[rgba(100,116,139,0.96)]",
               ].join(" ")}
             >
-              <span className="truncate font-medium">{option.label}</span>
-              <span className="shrink-0 text-[12px] text-text-subtle">
-                {count}
-              </span>
-            </button>
-          );
-        })}
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TopTabButton({ active, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        "relative inline-flex h-10 items-center rounded-[12px] px-3 text-[12.5px] font-semibold transition-all",
+        active
+          ? "bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
+          : "text-[rgba(100,116,139,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
+      ].join(" ")}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ToolbarButton({
+  icon,
+  label,
+  active = false,
+  onClick,
+  expanded,
+}) {
+  const Icon = icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={expanded}
+      className={[
+        "inline-flex h-10 items-center gap-2 rounded-[12px] border px-3 text-[12.5px] font-medium transition-all",
+        active
+          ? "border-[rgba(37,99,235,0.14)] bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
+          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(71,85,105,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
+      ].join(" ")}
+    >
+      <Icon className="h-4 w-4" />
+      <span>{label}</span>
+      {icon === SlidersHorizontal ? (
+        <ChevronDown
+          className={[
+            "h-4 w-4 transition-transform",
+            expanded ? "rotate-180" : "",
+          ].join(" ")}
+        />
+      ) : null}
+    </button>
+  );
+}
+
+function EmptyState({ hasSearch }) {
+  return (
+    <div className="px-4 py-10">
+      <div className="rounded-[24px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.9)] px-5 py-8 text-center shadow-[0_24px_60px_-46px_rgba(15,23,42,0.16)]">
+        <div className="text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+          {hasSearch ? "No matching conversations" : "No conversations yet"}
+        </div>
+        <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
+          {hasSearch
+            ? "Try a different name, channel, or keyword."
+            : "New conversations will appear here."}
+        </div>
       </div>
     </div>
   );
@@ -204,9 +280,7 @@ export default function InboxThreadListPanel({
 
   const baseThreads = useMemo(
     () =>
-      Array.isArray(threadList?.filteredThreads)
-        ? threadList.filteredThreads
-        : [],
+      Array.isArray(threadList?.filteredThreads) ? threadList.filteredThreads : [],
     [threadList?.filteredThreads]
   );
 
@@ -239,15 +313,13 @@ export default function InboxThreadListPanel({
   }, [baseThreads]);
 
   useEffect(() => {
-    const exists = channelOptions.some(
-      (option) => option.value === channelFilter
-    );
+    const exists = channelOptions.some((option) => option.value === channelFilter);
     if (!exists) setChannelFilter("all");
   }, [channelOptions, channelFilter]);
 
   const selectedChannelLabel =
     channelOptions.find((option) => option.value === channelFilter)?.label ||
-    "All conversations";
+    "All channels";
 
   const filteredThreads = useMemo(() => {
     const byChannel =
@@ -315,76 +387,64 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-white"
+      className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]"
     >
-      <div className="shrink-0 border-b border-line-soft bg-white">
-        <div className="px-4 pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative min-w-0 flex-1" ref={filterAnchorRef}>
-              <button
-                type="button"
-                onClick={handleToggleFilterMenu}
-                className="inline-flex max-w-full items-center gap-2 text-left outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
-                aria-haspopup="menu"
-                aria-expanded={filterMenuOpen}
+      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.82)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.72)]">
+        <div className="px-4 pb-4 pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2
+                id="inbox-thread-list-title"
+                className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]"
               >
-                <h2
-                  id="inbox-thread-list-title"
-                  className="truncate text-[15px] font-semibold text-text"
-                >
-                  {selectedChannelLabel}
-                </h2>
-
-                <ChevronDown
-                  className={[
-                    "h-4 w-4 shrink-0 text-text-subtle transition-transform",
-                    filterMenuOpen ? "rotate-180" : "",
-                  ].join(" ")}
-                />
-              </button>
-
-              <ChannelFilterMenu
-                open={filterMenuOpen}
-                anchorRef={filterAnchorRef}
-                selectedValue={channelFilter}
-                options={channelOptions}
-                counts={channelCounts}
-                onSelect={setChannelFilter}
-                onClose={() => setFilterMenuOpen(false)}
-              />
+                Conversations
+              </h2>
+              <div className="mt-1 text-[12px] text-[rgba(100,116,139,0.96)]">
+                {filteredThreads.length} visible
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleOpenSearch}
-              aria-label="Search conversations"
-              className="inline-flex h-9 w-9 items-center justify-center text-text-muted outline-none ring-0 transition-colors hover:text-text focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
-            >
-              <Search className="h-[18px] w-[18px]" />
-            </button>
-          </div>
-        </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="relative" ref={filterAnchorRef}>
+                <ToolbarButton
+                  icon={SlidersHorizontal}
+                  label={selectedChannelLabel}
+                  active={channelFilter !== "all" || filterMenuOpen}
+                  onClick={handleToggleFilterMenu}
+                  expanded={filterMenuOpen}
+                />
 
-        <div className="mt-4 border-b border-line-soft px-4">
-          <div className="flex gap-4 overflow-x-auto">
+                <ChannelFilterMenu
+                  open={filterMenuOpen}
+                  anchorRef={filterAnchorRef}
+                  selectedValue={channelFilter}
+                  options={channelOptions}
+                  counts={channelCounts}
+                  onSelect={setChannelFilter}
+                  onClose={() => setFilterMenuOpen(false)}
+                />
+              </div>
+
+              <ToolbarButton
+                icon={Search}
+                label="Search"
+                active={searchOpen || Boolean(localSearch.trim())}
+                onClick={handleOpenSearch}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             {TOP_TABS.map((tab) => {
               const active = threadList?.filter === tab.value;
 
               return (
-                <button
+                <TopTabButton
                   key={tab.value}
-                  type="button"
+                  active={active}
+                  label={tab.label}
                   onClick={() => threadList?.setFilter?.(tab.value)}
-                  aria-pressed={active}
-                  className={[
-                    "relative inline-flex h-11 items-center whitespace-nowrap border-b-2 px-0 text-[13px] font-medium outline-none ring-0 transition-colors focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
-                    active
-                      ? "border-text text-text"
-                      : "border-transparent text-text-muted hover:text-text",
-                  ].join(" ")}
-                >
-                  <span>{tab.label}</span>
-                </button>
+                />
               );
             })}
           </div>
@@ -394,14 +454,14 @@ export default function InboxThreadListPanel({
           className={[
             "overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
             searchOpen
-              ? "max-h-[76px] translate-y-0 opacity-100"
+              ? "max-h-[84px] translate-y-0 opacity-100"
               : "pointer-events-none max-h-0 -translate-y-2 opacity-0",
           ].join(" ")}
           aria-hidden={!searchOpen}
         >
-          <div className="border-b border-line-soft px-4">
-            <div className="flex h-14 items-center gap-3">
-              <Search className="h-[17px] w-[17px] shrink-0 text-text-subtle" />
+          <div className="border-t border-[rgba(15,23,42,0.05)] px-4 py-3">
+            <div className="flex h-12 items-center gap-3 rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white px-3 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.16)]">
+              <Search className="h-[16px] w-[16px] shrink-0 text-[rgba(148,163,184,0.96)]" />
 
               <label className="sr-only" htmlFor="inbox-thread-search">
                 Search conversations
@@ -415,45 +475,38 @@ export default function InboxThreadListPanel({
                 placeholder="Search conversations"
                 aria-label="Search conversations"
                 autoComplete="off"
-                className="block h-full w-full border-0 bg-transparent px-0 text-[14px] text-text outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 placeholder:text-text-subtle"
+                className="block h-full w-full border-0 bg-transparent px-0 text-[14px] text-[rgba(15,23,42,0.96)] outline-none placeholder:text-[rgba(148,163,184,0.96)]"
               />
 
               <button
                 type="button"
                 onClick={handleCloseSearch}
                 aria-label="Close search"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-text-muted outline-none ring-0 transition-colors hover:text-text focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[rgba(100,116,139,0.96)] transition-colors hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]"
               >
-                <X className="h-[17px] w-[17px]" />
+                <X className="h-[16px] w-[16px]" />
               </button>
             </div>
           </div>
         </div>
 
         {threadList?.deepLinkNotice ? (
-          <div className="px-4 py-3">
-            <p className="text-[12px] leading-5 text-warning">
+          <div className="border-t border-[rgba(15,23,42,0.05)] px-4 py-3">
+            <p className="text-[12px] leading-5 text-[rgba(180,83,9,0.96)]">
               {threadList.deepLinkNotice}
             </p>
           </div>
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white">
-        <div className="px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="px-2.5 py-2.5">
           {threadList?.surface?.loading && !filteredThreads.length ? (
             <InboxThreadListSkeleton />
           ) : !filteredThreads.length ? (
-            <div className="px-3 py-8">
-              <div className="text-[14px] font-medium text-text">
-                No conversations found
-              </div>
-              <div className="mt-2 text-[13px] leading-6 text-text-muted">
-                New threads will appear here.
-              </div>
-            </div>
+            <EmptyState hasSearch={Boolean(localSearch.trim())} />
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {filteredThreads.map((thread) => (
                 <InboxThreadCard
                   key={thread.id}

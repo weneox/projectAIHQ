@@ -166,13 +166,13 @@ function buildInboxAutomationControl({
 
 function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <section className="shrink-0 border-b border-[rgba(180,83,9,0.16)] bg-[linear-gradient(180deg,rgba(254,243,199,0.96),rgba(255,237,213,0.94))]">
-      <div className="flex min-h-[74px] flex-col gap-2 px-6 py-3.5 md:flex-row md:items-center md:justify-between">
+    <section className="rounded-[24px] border border-[rgba(245,158,11,0.18)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))] px-5 py-4 shadow-[0_22px_50px_-40px_rgba(245,158,11,0.34)]">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <div className="text-[14px] font-semibold leading-5 text-[rgba(120,53,15,0.98)]">
-            Connect a launch channel first.
+          <div className="text-[14px] font-semibold text-[rgba(120,53,15,0.98)]">
+            Connect a launch channel first
           </div>
-          <div className="mt-0.5 text-[12.5px] leading-5 text-[rgba(146,64,14,0.9)]">
+          <div className="mt-1 text-[12.5px] leading-6 text-[rgba(146,64,14,0.92)]">
             Connect Website chat, Meta, Telegram, or another launch channel to
             activate the live inbox.
           </div>
@@ -190,6 +190,49 @@ function LaunchChannelPrompt({ onOpenChannels }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function NoticeStack({
+  surfaceNotice,
+  hasConnectedLaunchChannel,
+  showTruthApprovalNotice,
+  navigate,
+}) {
+  if (
+    !surfaceNotice &&
+    hasConnectedLaunchChannel &&
+    !showTruthApprovalNotice
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="shrink-0 px-5 pt-5">
+      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-3">
+        {surfaceNotice ? (
+          <InlineNotice
+            tone={surfaceNotice.tone}
+            title={surfaceNotice.title}
+            description={surfaceNotice.description}
+            compact
+          />
+        ) : null}
+
+        {!hasConnectedLaunchChannel ? (
+          <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
+        ) : null}
+
+        {showTruthApprovalNotice ? (
+          <InlineNotice
+            tone="warning"
+            title="Truth approval required"
+            description="A channel is live, but approved truth is not ready yet. Review truth before trusting autonomous replies."
+            compact
+          />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -599,77 +642,59 @@ export default function Inbox() {
   );
 
   const showTruthApprovalNotice = hasConnectedLaunchChannel && !truthReady;
-
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {surfaceNotice ? (
-        <div className="mb-4 shrink-0 bg-white px-0">
-          <InlineNotice
-            tone={surfaceNotice.tone}
-            title={surfaceNotice.title}
-            description={surfaceNotice.description}
-            compact
-          />
-        </div>
-      ) : null}
+    <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
+      <NoticeStack
+        surfaceNotice={surfaceNotice}
+        hasConnectedLaunchChannel={hasConnectedLaunchChannel}
+        showTruthApprovalNotice={showTruthApprovalNotice}
+        navigate={navigate}
+      />
 
-      {!hasConnectedLaunchChannel ? (
-        <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
-      ) : null}
+      <div className="min-h-0 flex-1 px-5 pb-5 pt-4">
+        <div className="mx-auto grid h-full min-h-0 w-full max-w-[1680px] grid-cols-[392px_minmax(0,1fr)] overflow-hidden rounded-[30px] border border-[rgba(15,23,42,0.07)] bg-[rgba(255,255,255,0.78)] shadow-[0_40px_90px_-60px_rgba(15,23,42,0.28)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.68)]">
+          <div className="min-h-0 overflow-hidden border-r border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.72)]">
+            <InboxThreadListPanel
+              threadList={threadList}
+              selectedThreadId={selectedThread?.id || ""}
+              searchQuery=""
+            />
+          </div>
 
-      {showTruthApprovalNotice ? (
-        <div className="mb-4 shrink-0 bg-white px-0">
-          <InlineNotice
-            tone="warning"
-            title="Truth approval required"
-            description="A channel is live, but approved truth is not ready yet. Review truth before trusting autonomous replies."
-            compact
-          />
-        </div>
-      ) : null}
-
-      <div className="grid min-h-0 flex-1 grid-cols-[388px_minmax(0,1fr)] overflow-hidden bg-white">
-        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-white">
-          <InboxThreadListPanel
-            threadList={threadList}
-            selectedThreadId={selectedThread?.id || ""}
-            searchQuery=""
-          />
-        </div>
-
-        <div className="min-h-0 overflow-hidden bg-white">
-          <InboxDetailPanel
-            selectedThread={selectedThread}
-            messages={messages}
-            outboundAttempts={threadAttemptSurface.attempts}
-            surface={detailSurface}
-            actionState={actionState}
-            markRead={markRead}
-            assignThread={assignThread}
-            activateHandoff={activateHandoff}
-            setThreadStatus={setThreadStatus}
-            onOpenDetails={() => {
-              if (selectedThread?.id) {
-                setDetailThreadId(selectedThread.id);
+          <div className="min-h-0 overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
+            <InboxDetailPanel
+              selectedThread={selectedThread}
+              messages={messages}
+              outboundAttempts={threadAttemptSurface.attempts}
+              surface={detailSurface}
+              actionState={actionState}
+              markRead={markRead}
+              assignThread={assignThread}
+              activateHandoff={activateHandoff}
+              setThreadStatus={setThreadStatus}
+              onOpenDetails={() => {
+                if (selectedThread?.id) {
+                  setDetailThreadId(selectedThread.id);
+                }
+              }}
+              automationControl={inboxAutomationControl}
+              onToggleAutomation={handleToggleInboxAutonomy}
+              composer={
+                <InboxComposer
+                  embedded
+                  selectedThread={selectedThread}
+                  surface={composerSurface}
+                  actionState={actionState}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSend={handleSend}
+                  onReleaseHandoff={handleRelease}
+                />
               }
-            }}
-            automationControl={inboxAutomationControl}
-            onToggleAutomation={handleToggleInboxAutonomy}
-            composer={
-              <InboxComposer
-                embedded
-                selectedThread={selectedThread}
-                surface={composerSurface}
-                actionState={actionState}
-                replyText={replyText}
-                setReplyText={setReplyText}
-                onSend={handleSend}
-                onReleaseHandoff={handleRelease}
-              />
-            }
-          />
+            />
+          </div>
         </div>
       </div>
 
@@ -679,8 +704,8 @@ export default function Inbox() {
           onClose={() => setDetailThreadId("")}
           absolute
           closeLabel="Close conversation details"
-          panelWidthClassName="max-w-[92vw] w-[360px]"
-          className="z-30"
+          panelWidthClassName="max-w-[96vw] w-[380px]"
+          className="z-40"
         >
           <InboxLeadPanel
             selectedThread={selectedThread}
