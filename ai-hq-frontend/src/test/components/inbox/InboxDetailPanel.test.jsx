@@ -82,7 +82,7 @@ function buildProps(overrides = {}) {
 }
 
 describe("InboxDetailPanel", () => {
-  it("renders actionable conversation detail semantics and delivery truth", () => {
+  it("renders actionable conversation detail semantics and message history", () => {
     const props = buildProps();
 
     render(<InboxDetailPanel {...props} />);
@@ -97,9 +97,7 @@ describe("InboxDetailPanel", () => {
       screen.getByRole("button", { name: /refresh conversation/i })
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: /open detail drawer/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^details$/i })).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: /conversation actions/i })
@@ -113,14 +111,12 @@ describe("InboxDetailPanel", () => {
 
     expect(screen.getByText(/^thread assigned\.$/i)).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /open detail drawer/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^details$/i }));
 
     expect(props.onOpenDetails).toHaveBeenCalledTimes(1);
   });
 
-  it("renders object-shaped outbound lineage truth without changing detail behavior", () => {
+  it("renders object-shaped outbound lineage input without changing detail behavior", () => {
     const props = buildProps({
       outboundAttempts: [
         {
@@ -144,14 +140,15 @@ describe("InboxDetailPanel", () => {
 
     render(<InboxDetailPanel {...props} />);
 
-    expect(
-      screen.getByRole("button", { name: /open detail drawer/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^details$/i })).toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: /conversation actions/i })
     ).toBeInTheDocument();
 
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/your appointment request is on the way/i)
+    ).toBeInTheDocument();
   });
 });

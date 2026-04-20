@@ -5,7 +5,7 @@ import InboxMessageBubble from "../../../components/inbox/InboxMessageBubble.jsx
 import { indexAttemptsByMessageCorrelation } from "../../../components/inbox/outboundAttemptTruth.js";
 
 describe("InboxMessageBubble", () => {
-  it("reveals compact replay reasoning for AI messages", () => {
+  it("reveals compact replay reasoning for AI messages when inspect is enabled", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -26,12 +26,14 @@ describe("InboxMessageBubble", () => {
             handoff_reason: "customer requested a custom package",
           },
         }}
+        enableInspect
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /inspect reasoning/i }));
+    fireEvent.click(screen.getByRole("button", { name: /inspect trace/i }));
 
-    expect(screen.getByText(/message inspect/i)).toBeInTheDocument();
+    expect(screen.getByText(/message trace/i)).toBeInTheDocument();
+    expect(screen.getByText(/booking-intake/i)).toBeInTheDocument();
     expect(screen.getByText(/invite booking/i)).toBeInTheDocument();
     expect(screen.getByText(/confirm service interest/i)).toBeInTheDocument();
     expect(
@@ -39,7 +41,7 @@ describe("InboxMessageBubble", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders authoritative outbound attempt truth on outbound bubbles", () => {
+  it("keeps outbound operator bubbles stable when authoritative attempt truth is supplied", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -64,13 +66,16 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getAllByText(/retrying/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/retry lineage is active after attempt 2 of 5/i)).toBeInTheDocument();
-    expect(screen.getByText(/provider: meta/i)).toBeInTheDocument();
-    expect(screen.getByText(/error: provider timeout/i)).toBeInTheDocument();
+    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/checking in on your booking request/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/retry lineage is active after attempt 2 of 5/i)
+    ).not.toBeInTheDocument();
   });
 
-  it("keeps waiting state explicit when object correlation exists but attempt truth has not arrived", () => {
+  it("keeps outbound bubbles readable when object correlation exists but attempt truth has not arrived", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -89,13 +94,12 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/waiting for attempt truth/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/no outbound attempt record is attached yet/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
+    expect(screen.getByText(/following up now/i)).toBeInTheDocument();
+    expect(screen.queryByText(/waiting for attempt truth/i)).not.toBeInTheDocument();
   });
 
-  it("marks correlated attempt truth stale when the attempt record predates the message", () => {
+  it("keeps outbound bubbles readable when stale attempt truth exists", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -120,13 +124,12 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/attempt truth may be stale/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/latest recorded state predates this message record/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
+    expect(screen.getByText(/checking status for you now/i)).toBeInTheDocument();
+    expect(screen.queryByText(/attempt truth may be stale/i)).not.toBeInTheDocument();
   });
 
-  it("renders outbound attempt truth when object correlations match", () => {
+  it("keeps outbound bubbles readable when object correlations match", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -159,9 +162,10 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
+    expect(screen.getByText(/structured lineage should bind/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)
-    ).toBeInTheDocument();
+      screen.queryByText(/most recent delivery attempt failed on attempt 1 of 3/i)
+    ).not.toBeInTheDocument();
   });
 });

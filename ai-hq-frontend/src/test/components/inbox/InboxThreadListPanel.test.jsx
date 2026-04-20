@@ -130,9 +130,7 @@ describe("InboxThreadListPanel", () => {
       />
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /search conversations/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
 
     const input = screen.getByRole("textbox", {
       name: /search conversations/i,
@@ -173,9 +171,7 @@ describe("InboxThreadListPanel", () => {
       />
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /all conversations/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /all channels/i }));
 
     const telegramOptionText = screen.getByText(/^Telegram$/i);
     fireEvent.click(telegramOptionText.closest("button"));

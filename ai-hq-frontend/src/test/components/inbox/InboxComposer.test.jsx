@@ -134,7 +134,7 @@ describe("InboxComposer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("shows release AI when handoff is active", () => {
+  it("shows return to AI when handoff is active", () => {
     const onReleaseHandoff = vi.fn();
 
     renderComposer({
@@ -142,7 +142,7 @@ describe("InboxComposer", () => {
       onReleaseHandoff,
     });
 
-    const button = screen.getByRole("button", { name: /release ai/i });
+    const button = screen.getByRole("button", { name: /return to ai/i });
     expect(button).toBeInTheDocument();
 
     fireEvent.click(button);
