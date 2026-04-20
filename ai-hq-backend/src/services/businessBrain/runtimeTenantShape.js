@@ -194,6 +194,85 @@ function resolveCreateLeadEnabled({
   );
 }
 
+function resolveProjectionPrimaryEmail({
+  profileJson = {},
+  contacts = [],
+  activeKnowledge = [],
+  facts = [],
+}) {
+  return (
+    s(profileJson?.primaryEmail) ||
+    pickPrimaryContact(contacts, ["email"]) ||
+    firstFact(activeKnowledge, ["contact"], [
+      "email_primary",
+      "primary_email",
+      "contact_email",
+      "email",
+    ]) ||
+    firstFact(facts, ["contact"], [
+      "email_primary",
+      "primary_email",
+      "contact_email",
+      "email",
+    ]) ||
+    ""
+  );
+}
+
+function resolveProjectionPrimaryPhone({
+  profileJson = {},
+  contacts = [],
+  activeKnowledge = [],
+  facts = [],
+}) {
+  return (
+    s(profileJson?.primaryPhone) ||
+    pickPrimaryContact(contacts, ["phone", "whatsapp"]) ||
+    firstFact(activeKnowledge, ["contact"], [
+      "phone_primary",
+      "primary_phone",
+      "contact_phone",
+      "phone",
+      "whatsapp_phone",
+      "whatsapp_number",
+    ]) ||
+    firstFact(facts, ["contact"], [
+      "phone_primary",
+      "primary_phone",
+      "contact_phone",
+      "phone",
+      "whatsapp_phone",
+      "whatsapp_number",
+    ]) ||
+    ""
+  );
+}
+
+function resolveProjectionWebsiteUrl({
+  profileJson = {},
+  identity = {},
+  activeKnowledge = [],
+  facts = [],
+}) {
+  return (
+    s(profileJson?.websiteUrl) ||
+    s(identity?.websiteUrl) ||
+    firstFact(activeKnowledge, ["website", "social_link"], [
+      "website_url",
+      "site_url",
+      "primary_website",
+      "url",
+    ]) ||
+    firstFact(facts, ["website", "social_link"], [
+      "website_url",
+      "site_url",
+      "primary_website",
+      "url",
+    ]) ||
+    ""
+  );
+}
+
 function mergeTenantRuntime({
   legacy,
   businessProfile,
@@ -209,57 +288,83 @@ function mergeTenantRuntime({
     firstFact(activeKnowledge, categories, itemKeys);
   const listCanonical = (categories = []) =>
     listFactsByCategory(activeKnowledge, categories);
+
+  const displayName =
+    s(businessProfile?.display_name) ||
+    s(businessProfile?.company_name) ||
+    s(legacy?.profile?.brand_name) ||
+    s(legacy?.company_name) ||
+    s(legacy?.tenant_key);
+
   const summaryShort =
     s(businessProfile?.summary_short) ||
     s(legacy?.profile?.brand_summary) ||
-    firstCanonical(["summary"], ["summary_company_summary_short", "company_summary_short"]) ||
+    firstCanonical(
+      ["summary"],
+      ["summary_company_summary_short", "company_summary_short"]
+    ) ||
     firstCanonical(["summary"]) ||
     firstFact(facts, ["summary"]);
+
   const summaryLong =
     s(businessProfile?.summary_long) ||
     s(legacy?.profile?.extra_context?.about) ||
-    firstCanonical(["summary"], ["summary_company_summary_long", "company_summary_long"]) ||
+    firstCanonical(
+      ["summary"],
+      ["summary_company_summary_long", "company_summary_long"]
+    ) ||
     "";
+
   const audienceSummary =
     s(businessProfile?.target_audience) ||
     s(legacy?.profile?.audience_summary) ||
     firstCanonical(["audience"]) ||
     firstFact(facts, ["audience"]);
+
   const valueProposition =
     s(businessProfile?.value_proposition) ||
     s(legacy?.profile?.value_proposition) ||
     firstCanonical(["brand", "summary"], ["value_proposition"]);
+
   const toneOfVoice =
     s(legacy?.profile?.tone_of_voice) ||
     s(businessProfile?.tone_profile) ||
     firstCanonical(["tone", "brand"]) ||
     "professional, warm, concise";
+
   const servicesText =
     uniqStrings(arr(services).map((x) => s(x.title))).join(", ") ||
     s(legacy?.profile?.services_summary);
+
   const primaryEmail =
     s(legacy?.profile?.public_email) ||
     s(businessProfile?.primary_email) ||
     pickPrimaryContact(contacts, ["email"]) ||
     firstCanonical(["contact"], ["email_primary", "primary_email"]) ||
     firstFact(facts, ["contact"]);
+
   const primaryPhone =
     s(legacy?.profile?.public_phone) ||
     s(businessProfile?.primary_phone) ||
     pickPrimaryContact(contacts, ["phone", "whatsapp"]) ||
     firstCanonical(["contact"], ["phone_primary", "primary_phone"]) ||
     firstFact(facts, ["contact"]);
-  const websiteUrl = s(legacy?.profile?.website_url) || s(businessProfile?.website_url);
+
+  const websiteUrl =
+    s(legacy?.profile?.website_url) || s(businessProfile?.website_url);
+
   const preferredCta =
     s(legacy?.profile?.preferred_cta) ||
     firstCanonical(["cta", "booking"]) ||
     firstFact(facts, ["cta", "booking"]);
+
   const defaultLanguage = normalizeLanguage(
     s(businessProfile?.main_language) ||
       s(capabilities?.primary_language) ||
       s(legacy?.default_language || "az"),
     "az"
   );
+
   const supportedLanguages = normalizeLanguageList(
     businessProfile?.supported_languages,
     capabilities?.supported_languages,
@@ -269,26 +374,33 @@ function mergeTenantRuntime({
     capabilities?.primary_language,
     defaultLanguage
   );
+
   const maxSentences =
     lower(capabilities?.reply_length) === "short"
       ? 1
       : lower(capabilities?.reply_length) === "detailed"
         ? 3
         : 2;
+
   const bannedPhrases = uniqStrings([
     ...arr(legacy?.profile?.banned_phrases),
     ...(capabilities?.should_avoid_competitor_comparisons
       ? ["Do not compare competitors aggressively."]
       : []),
-    ...(capabilities?.should_avoid_legal_claims ? ["Do not make legal claims."] : []),
+    ...(capabilities?.should_avoid_legal_claims
+      ? ["Do not make legal claims."]
+      : []),
     ...(capabilities?.should_avoid_unverified_promises
       ? ["Do not make promises you cannot verify."]
       : []),
   ]);
+
   const channelPolicy = findPreferredInboxChannelPolicy(channelPolicies);
+
   const inboxEnabled = channelPolicy
     ? resolveChannelPolicyEnabled(channelPolicy, true)
     : undefined;
+
   const autoReplyEnabled =
     typeof legacy?.ai_policy?.auto_reply_enabled === "boolean"
       ? legacy.ai_policy.auto_reply_enabled
@@ -301,12 +413,14 @@ function mergeTenantRuntime({
             channelPolicy.is_enabled
           )
         : undefined;
+
   const createLeadEnabled =
     typeof legacy?.ai_policy?.create_lead_enabled === "boolean"
       ? legacy.ai_policy.create_lead_enabled
       : typeof capabilities?.can_capture_leads === "boolean"
         ? capabilities.can_capture_leads
         : undefined;
+
   const businessSummary = compactText(
     [summaryShort, valueProposition, servicesText].filter(Boolean).join(" - "),
     1400
@@ -316,7 +430,9 @@ function mergeTenantRuntime({
     ...legacy,
     company_name: s(businessProfile?.company_name) || s(legacy?.company_name),
     legal_name: s(businessProfile?.legal_name) || s(legacy?.legal_name),
-    industry_key: s(businessProfile?.industry_key) || s(legacy?.industry_key || "generic_business"),
+    industry_key:
+      s(businessProfile?.industry_key) ||
+      s(legacy?.industry_key || "generic_business"),
     timezone: s(legacy?.timezone || "Asia/Baku"),
     default_language: defaultLanguage,
     supported_languages: supportedLanguages,
@@ -330,7 +446,8 @@ function mergeTenantRuntime({
       audience_summary: audienceSummary,
       services_summary: servicesText,
       value_proposition: valueProposition,
-      brand_summary: summaryShort || summaryLong || s(legacy?.profile?.brand_summary),
+      brand_summary:
+        summaryShort || summaryLong || s(legacy?.profile?.brand_summary),
       tone_of_voice: toneOfVoice,
       preferred_cta: preferredCta,
       banned_phrases: bannedPhrases,
@@ -355,7 +472,11 @@ function mergeTenantRuntime({
       name: displayName,
       displayName,
       tone: toneOfVoice,
-      industry: s(businessProfile?.industry_key || legacy?.industry_key || "generic_business"),
+      industry: s(
+        businessProfile?.industry_key ||
+          legacy?.industry_key ||
+          "generic_business"
+      ),
       defaultLanguage,
       languages: supportedLanguages,
     },
@@ -373,8 +494,11 @@ function mergeTenantRuntime({
       policies: listCanonical(["policy"]).length
         ? listCanonical(["policy"])
         : listFactsByCategory(facts, ["policy"]),
-      pricingPolicy: firstCanonical(["pricing_policy"]) || firstFact(facts, ["pricing_policy"]),
-      supportMode: firstCanonical(["support"]) || firstFact(facts, ["support"]),
+      pricingPolicy:
+        firstCanonical(["pricing_policy"]) ||
+        firstFact(facts, ["pricing_policy"]),
+      supportMode:
+        firstCanonical(["support"]) || firstFact(facts, ["support"]),
       bookingLinks: listCanonical(["booking"]).length
         ? listCanonical(["booking"])
         : listFactsByCategory(facts, ["booking"]),
@@ -383,7 +507,9 @@ function mergeTenantRuntime({
         : listFactsByCategory(facts, ["social_link"]),
       contactEmails: primaryEmail ? [primaryEmail] : [],
       contactPhones: primaryPhone ? [primaryPhone] : [],
-      locations: arr(locations).map((x) => s(x.address_line || x.addressLine || x.title)).filter(Boolean),
+      locations: arr(locations)
+        .map((x) => s(x.address_line || x.addressLine || x.title))
+        .filter(Boolean),
       preferredCta,
     },
     ai_policy: {
@@ -434,6 +560,7 @@ function buildTenantFromProjection({
   const contentJson = obj(projection?.content_json);
   const leadCaptureJson = obj(projection?.lead_capture_json);
   const handoffJson = obj(projection?.handoff_json);
+
   const displayName =
     s(identity.displayName) ||
     s(profileJson.displayName) ||
@@ -441,6 +568,7 @@ function buildTenantFromProjection({
     s(identity.companyName) ||
     s(identity.tenantKey) ||
     s(legacy?.tenant_key);
+
   const defaultLanguage = normalizeLanguage(
     identity.mainLanguage ||
       capabilitiesJson.primaryLanguage ||
@@ -448,12 +576,14 @@ function buildTenantFromProjection({
       "az",
     "az"
   );
+
   const supportedLanguages = normalizeLanguageList(
     identity.supportedLanguages,
     capabilitiesJson.supportedLanguages,
     profileJson.supportedLanguages,
     defaultLanguage
   );
+
   const businessSummary = compactText(
     [
       s(profileJson.summaryShort),
@@ -465,33 +595,58 @@ function buildTenantFromProjection({
       .join(" - "),
     1400
   );
+
   const preferredCta =
     firstFact(activeKnowledge, ["cta", "booking"]) ||
     firstFact(facts, ["cta", "booking"]) ||
     s(contentJson.ctaStyle);
-  const primaryEmail = s(profileJson.primaryEmail) || pickPrimaryContact(contacts, ["email"]);
-  const primaryPhone =
-    s(profileJson.primaryPhone) || pickPrimaryContact(contacts, ["phone", "whatsapp"]);
+
+  const primaryEmail = resolveProjectionPrimaryEmail({
+    profileJson,
+    contacts,
+    activeKnowledge,
+    facts,
+  });
+
+  const primaryPhone = resolveProjectionPrimaryPhone({
+    profileJson,
+    contacts,
+    activeKnowledge,
+    facts,
+  });
+
+  const websiteUrl = resolveProjectionWebsiteUrl({
+    profileJson,
+    identity,
+    activeKnowledge,
+    facts,
+  });
+
   const toneOfVoice =
     s(profileJson.toneProfile) ||
     s(contentJson.toneProfile) ||
     s(capabilitiesJson.replyStyle) ||
     "professional, warm, concise";
+
   const maxSentences =
     lower(capabilitiesJson.replyLength) === "short"
       ? 1
       : lower(capabilitiesJson.replyLength) === "detailed"
         ? 3
         : Number(commentsJson.maxReplySentences || 2);
+
   const bannedPhrases = uniqStrings([
     ...(capabilitiesJson.shouldAvoidCompetitorComparisons
       ? ["Do not compare competitors aggressively."]
       : []),
-    ...(capabilitiesJson.shouldAvoidLegalClaims ? ["Do not make legal claims."] : []),
+    ...(capabilitiesJson.shouldAvoidLegalClaims
+      ? ["Do not make legal claims."]
+      : []),
     ...(capabilitiesJson.shouldAvoidUnverifiedPromises
       ? ["Do not make promises you cannot verify."]
       : []),
   ]);
+
   const preferredChannelPolicy =
     arr(channelPolicies).find((x) => lower(x.channel) === "instagram") ||
     arr(channelPolicies).find((x) => lower(x.channel) === "comments") ||
@@ -532,18 +687,22 @@ function buildTenantFromProjection({
     tenant_key: s(identity.tenantKey || legacy?.tenant_key),
     company_name: s(profileJson.companyName || identity.companyName),
     legal_name: s(profileJson.legalName || identity.legalName),
-    industry_key: s(profileJson.industryKey || identity.industryKey || "generic_business"),
+    industry_key: s(
+      profileJson.industryKey || identity.industryKey || "generic_business"
+    ),
     timezone: s(legacy?.timezone || "Asia/Baku"),
     default_language: defaultLanguage,
     supported_languages: supportedLanguages,
     enabled_languages: supportedLanguages,
     profile: {
       brand_name: displayName,
-      website_url: s(profileJson.websiteUrl || identity.websiteUrl),
+      website_url: websiteUrl,
       public_email: primaryEmail,
       public_phone: primaryPhone,
       audience_summary: s(profileJson.targetAudience),
-      services_summary: uniqStrings(arr(services).map((x) => s(x.title))).join(", "),
+      services_summary: uniqStrings(arr(services).map((x) => s(x.title))).join(
+        ", "
+      ),
       value_proposition: s(profileJson.valueProposition),
       brand_summary: s(profileJson.summaryShort || profileJson.summaryLong),
       tone_of_voice: toneOfVoice,
@@ -561,7 +720,9 @@ function buildTenantFromProjection({
         projection_first: true,
         projection_status: s(projection?.status),
         projection_confidence: projection?.confidence || 0,
-        projection_readiness: s(projection?.readiness_label || ""),
+        projection_readiness: s(
+          projection?.readiness_label || projection?.readinessLabel || ""
+        ),
         contacts,
         locations,
       },
@@ -570,7 +731,9 @@ function buildTenantFromProjection({
       name: displayName,
       displayName,
       tone: toneOfVoice,
-      industry: s(profileJson.industryKey || identity.industryKey || "generic_business"),
+      industry: s(
+        profileJson.industryKey || identity.industryKey || "generic_business"
+      ),
       defaultLanguage,
       languages: supportedLanguages,
     },
@@ -587,8 +750,12 @@ function buildTenantFromProjection({
       policies: listFactsByCategory(activeKnowledge, ["policy"]).length
         ? listFactsByCategory(activeKnowledge, ["policy"])
         : listFactsByCategory(facts, ["policy"]),
-      pricingPolicy: firstFact(activeKnowledge, ["pricing_policy"]) || firstFact(facts, ["pricing_policy"]),
-      supportMode: firstFact(activeKnowledge, ["support"]) || firstFact(facts, ["support"]),
+      pricingPolicy:
+        firstFact(activeKnowledge, ["pricing_policy"]) ||
+        firstFact(facts, ["pricing_policy"]),
+      supportMode:
+        firstFact(activeKnowledge, ["support"]) ||
+        firstFact(facts, ["support"]),
       bookingLinks: listFactsByCategory(activeKnowledge, ["booking"]).length
         ? listFactsByCategory(activeKnowledge, ["booking"])
         : listFactsByCategory(facts, ["booking"]),
@@ -597,11 +764,17 @@ function buildTenantFromProjection({
         : listFactsByCategory(facts, ["social_link"]),
       contactEmails: primaryEmail ? [primaryEmail] : [],
       contactPhones: primaryPhone ? [primaryPhone] : [],
-      locations: arr(locations).map((x) => s(x.address_line || x.addressLine || x.title)).filter(Boolean),
+      locations: arr(locations)
+        .map((x) => s(x.address_line || x.addressLine || x.title))
+        .filter(Boolean),
       preferredCta,
       runtimeProjectionId: s(projection?.id),
-      readinessLabel: s(projection?.readiness_label || projection?.readinessLabel),
-      confidenceLabel: s(projection?.confidence_label || projection?.confidenceLabel),
+      readinessLabel: s(
+        projection?.readiness_label || projection?.readinessLabel
+      ),
+      confidenceLabel: s(
+        projection?.confidence_label || projection?.confidenceLabel
+      ),
     },
     ai_policy: {
       auto_reply_enabled: autoReplyEnabled,
@@ -624,9 +797,15 @@ function buildTenantFromProjection({
             : undefined,
     },
     comment_policy: {
-      reply_style: s(commentsJson.replyStyle || capabilitiesJson.replyStyle || ""),
+      reply_style: s(
+        commentsJson.replyStyle || capabilitiesJson.replyStyle || ""
+      ),
       cta_style: s(capabilitiesJson.ctaStyle || ""),
-      public_reply_mode: s(commentsJson.publicReplyMode || preferredChannelPolicy?.public_reply_mode || ""),
+      public_reply_mode: s(
+        commentsJson.publicReplyMode ||
+          preferredChannelPolicy?.public_reply_mode ||
+          ""
+      ),
     },
   };
 }
