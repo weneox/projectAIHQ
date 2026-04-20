@@ -854,7 +854,7 @@ export function buildTruthVersionDiffModel(currentVersion = {}, previousVersion 
   });
 }
 
-export function buildRollbackActionContract({
+function buildRollbackActionContract({
   currentVersion = {},
   targetVersion = {},
   rollbackPreview = {},
@@ -1523,6 +1523,38 @@ export function hasTruthVersionChanged(previous = null, next = null) {
   );
 }
 
+async function refreshTruthVersionRuntimeProjection(
+  db,
+  {
+    tenantId = "",
+    tenantKey = "",
+    approvedBy = "",
+    truthVersionId = "",
+    reviewSessionId = "",
+    triggerType = "review_approval",
+    runtimeProjectionMetadata = {},
+  } = {}
+) {
+  if (!s(tenantId) && !s(tenantKey)) return null;
+
+  return await refreshRuntimeProjectionRequired(db, {
+    tenantId: s(tenantId),
+    tenantKey: s(tenantKey),
+    triggerType: s(triggerType || "review_approval"),
+    requestedBy:
+      s(approvedBy) || "tenantTruthVersions.createVersion",
+    runnerKey: "tenantTruthVersions.createVersion",
+    generatedBy:
+      s(approvedBy) || "system",
+    metadata: compactObject({
+      source: "tenantTruthVersions.createVersion",
+      truthVersionId: s(truthVersionId),
+      reviewSessionId: s(reviewSessionId),
+      ...obj(runtimeProjectionMetadata),
+    }),
+  });
+}
+
 export async function getLatestTruthVersionInternal(
   db,
   { tenantId, tenantKey } = {}
@@ -1625,6 +1657,9 @@ export async function createTruthVersionInternal(db, input = {}) {
   const approvedAt =
     input.approvedAt || input.approved_at || new Date().toISOString();
   const approvedBy = s(input.approvedBy || input.approved_by);
+  const skipRuntimeRefresh =
+    input.skipRuntimeRefresh === true || input.skip_runtime_refresh === true;
+
   const snapshot = buildCanonicalTruthVersionSnapshot({
     profile: input.profile,
     capabilities: input.capabilities,
@@ -1714,7 +1749,37 @@ export async function createTruthVersionInternal(db, input = {}) {
     ]
   );
 
-  return normalizeVersionRow(r.rows?.[0]);
+  const createdVersion = normalizeVersionRow(r.rows?.[0]);
+
+  if (!createdVersion?.id || skipRuntimeRefresh) {
+    return createdVersion;
+  }
+
+  const runtimeProjection = await refreshTruthVersionRuntimeProjection(db, {
+    tenantId: tenant.tenant_id,
+    tenantKey: tenant.tenant_key,
+    approvedBy,
+    truthVersionId: createdVersion.id,
+    reviewSessionId: s(input.reviewSessionId || input.review_session_id),
+    triggerType: s(
+      input.triggerType ||
+        input.trigger_type ||
+        "review_approval"
+    ),
+    runtimeProjectionMetadata: mergeObjects(
+      obj(input.runtimeProjectionMetadata),
+      obj(input.runtime_projection_metadata),
+      {
+        sourceSummary: snapshot.sourceSummary,
+      }
+    ),
+  });
+
+  return {
+    ...createdVersion,
+    runtimeProjection: obj(runtimeProjection?.projection),
+    runtimeProjectionFreshness: obj(runtimeProjection?.freshness),
+  };
 }
 
 export async function executeTruthVersionRollbackInternal(
