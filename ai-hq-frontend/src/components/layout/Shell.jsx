@@ -641,7 +641,7 @@ export default function Shell() {
 
   return (
     <div
-      className="relative h-screen overflow-hidden bg-[#f6f8fb] text-text"
+      className="relative h-screen overflow-hidden bg-white text-text"
       style={{
         "--shell-sidebar-w": `${shellSidebarWidth}px`,
         "--shell-top-offset": `${topOffset}px`,
@@ -652,9 +652,7 @@ export default function Shell() {
         onClose={() => setWarningDismissed(true)}
       />
 
-      <div className="pointer-events-none fixed inset-0 -z-[8] bg-[linear-gradient(180deg,#f7f9fc_0%,#f5f7fa_48%,#f8fafc_100%)]" />
-      <div className="pointer-events-none fixed right-[-8%] top-[72px] -z-[7] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.09)_0%,rgba(46,96,255,0.028)_42%,rgba(46,96,255,0)_76%)] blur-3xl" />
-      <div className="pointer-events-none fixed left-[14%] top-[28%] -z-[7] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.04)_0%,rgba(15,23,42,0.012)_48%,rgba(15,23,42,0)_78%)] blur-3xl" />
+      <div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -665,7 +663,17 @@ export default function Shell() {
         topOffset={topOffset}
       />
 
-      <div className="relative z-[2] flex h-full min-h-0 flex-col pt-[var(--shell-top-offset)] transition-[padding-left,padding-top] duration-slow ease-premium md:pl-[var(--shell-sidebar-w)]">
+      <div
+        className="pointer-events-none fixed left-0 right-0 z-[58]"
+        style={{
+          top: `${topOffset + HEADER_HEIGHT}px`,
+          height: "1px",
+          background: "rgba(15,23,42,0.045)",
+          boxShadow: "0 10px 18px -16px rgba(15,23,42,0.18)",
+        }}
+      />
+
+      <div className="relative z-[2] flex h-full min-h-0 flex-col bg-white pt-[var(--shell-top-offset)] transition-[padding-left,padding-top] duration-slow ease-premium md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -673,14 +681,14 @@ export default function Shell() {
           workspaceMeta={workspaceMeta}
         />
 
-        <main className="relative min-h-0 flex-1 overflow-hidden bg-transparent">
+        <main className="relative min-h-0 flex-1 overflow-hidden bg-white">
           {shellMode === "immersive" ? (
-            <div className="h-full min-h-0 overflow-hidden bg-transparent">
+            <div className="h-full min-h-0 overflow-hidden bg-white">
               <Outlet />
             </div>
           ) : (
-            <div className="page-scroll h-full min-h-0 overflow-y-auto">
-              <div className="relative mx-auto min-h-full w-full max-w-shell-content px-5 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
+            <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white">
+              <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-5 pb-8 pt-5 md:px-6 md:pb-10 md:pt-6">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={`${location.pathname}${location.search}`}
