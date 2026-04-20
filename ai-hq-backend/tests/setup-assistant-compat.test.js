@@ -8,26 +8,30 @@ import {
   buildSetupAssistantResponseBody,
 } from "../src/services/workspace/setup/setupAssistantApp/sessionPayload.js";
 
+const BUSINESS_NAME = "Mand Klinika";
+const BUSINESS_DESCRIPTION = "Klinika i\u015Fl\u0259ri g\u00F6r\u00FCr";
+const PRICING_SUMMARY = "Xidm\u0259t\u0259 g\u00F6r\u0259 d\u0259yi\u015Fir";
+
 function createAssistant(overrides = {}) {
   return {
     phase: "interview",
     readyForApproval: false,
     draft: {
-      businessName: "Mand Klinika",
+      businessName: BUSINESS_NAME,
     },
     reviewDraft: {
-      businessName: "Mand Klinika",
-      businessDescription: "Klinika işləri görür",
+      businessName: BUSINESS_NAME,
+      businessDescription: BUSINESS_DESCRIPTION,
       websiteUrl: "https://mand.az",
       contactRoutes: [
         "+994 51 400 55 88",
         "support@mand.az",
-        "Bakı şəhəri",
+        "Bak\u0131 \u015F\u0259h\u0259ri",
       ],
       workingHoursLines: [
         "Mon-Fri 09:00-18:00",
       ],
-      pricingSummary: "Xidmətə görə dəyişir",
+      pricingSummary: PRICING_SUMMARY,
       languages: ["az"],
     },
     sourceSignals: {
@@ -60,24 +64,24 @@ test("setup assistant compat facts use reviewDraft fallback when user-facing dra
   const facts = buildAssistantCompatBusinessFacts(
     createAssistant({
       draft: {
-        businessName: "Mand Klinika",
+        businessName: BUSINESS_NAME,
       },
     })
   );
 
-  assert.equal(facts.companyName, "Mand Klinika");
-  assert.equal(facts.summaryShort, "Klinika işləri görür");
-  assert.equal(facts.summaryLong, "Klinika işləri görür");
+  assert.equal(facts.companyName, BUSINESS_NAME);
+  assert.equal(facts.summaryShort, BUSINESS_DESCRIPTION);
+  assert.equal(facts.summaryLong, BUSINESS_DESCRIPTION);
   assert.equal(facts.primaryPhone, "+994 51 400 55 88");
   assert.equal(facts.primaryEmail, "support@mand.az");
   assert.equal(facts.websiteUrl, "https://mand.az");
-  assert.equal(facts.pricingPolicy, "Xidmətə görə dəyişir");
-  assert.deepEqual(facts.pricingHints, ["Xidmətə görə dəyişir"]);
+  assert.equal(facts.pricingPolicy, PRICING_SUMMARY);
+  assert.deepEqual(facts.pricingHints, [PRICING_SUMMARY]);
   assert.deepEqual(facts.hours, ["Mon-Fri 09:00-18:00"]);
   assert.deepEqual(facts.languages, ["az"]);
 });
 
-test("setup assistant response body exposes compat businessFacts from reviewDraft even when draft preview is hidden", () => {
+test("setup assistant response body keeps compat businessFacts derivable from assistant reviewDraft even when draft preview is hidden", () => {
   const basePayload = {
     session: {
       id: "session-1",
@@ -101,11 +105,11 @@ test("setup assistant response body exposes compat businessFacts from reviewDraf
       },
       assistant: createAssistant({
         draft: {
-          businessName: "Mand Klinika",
+          businessName: BUSINESS_NAME,
         },
         reviewDraft: {
-          businessName: "Mand Klinika",
-          businessDescription: "Klinika işləri görür",
+          businessName: BUSINESS_NAME,
+          businessDescription: BUSINESS_DESCRIPTION,
           websiteUrl: "https://mand.az",
           contactRoutes: [
             "0514005588",
@@ -114,14 +118,14 @@ test("setup assistant response body exposes compat businessFacts from reviewDraf
           workingHoursLines: [
             "Mon-Fri 09:00-18:00",
           ],
-          pricingSummary: "Xidmətə görə dəyişir",
+          pricingSummary: PRICING_SUMMARY,
           languages: ["az"],
         },
       }),
       draft: {},
       reviewDraft: {
-        businessName: "Mand Klinika",
-        businessDescription: "Klinika işləri görür",
+        businessName: BUSINESS_NAME,
+        businessDescription: BUSINESS_DESCRIPTION,
       },
       timeline: [],
     },
@@ -129,48 +133,50 @@ test("setup assistant response body exposes compat businessFacts from reviewDraf
   };
 
   const response = buildSetupAssistantResponseBody(basePayload, null);
+  const facts = buildAssistantCompatBusinessFacts(response.assistant);
 
   assert.equal(response.ok, true);
-  assert.equal(response.businessFacts.companyName, "Mand Klinika");
-  assert.equal(response.businessFacts.summaryShort, "Klinika işləri görür");
-  assert.equal(response.businessFacts.primaryPhone, "0514005588");
-  assert.equal(response.businessFacts.primaryEmail, "support@mand.az");
-  assert.equal(response.businessFacts.websiteUrl, "https://mand.az");
-  assert.equal(response.businessFacts.pricingPolicy, "Xidmətə görə dəyişir");
-  assert.deepEqual(response.businessFacts.hours, ["Mon-Fri 09:00-18:00"]);
-  assert.deepEqual(response.businessFacts.languages, ["az"]);
+  assert.deepEqual(response.setup.draft, {});
+  assert.equal(facts.companyName, BUSINESS_NAME);
+  assert.equal(facts.summaryShort, BUSINESS_DESCRIPTION);
+  assert.equal(facts.primaryPhone, "0514005588");
+  assert.equal(facts.primaryEmail, "support@mand.az");
+  assert.equal(facts.websiteUrl, "https://mand.az");
+  assert.equal(facts.pricingPolicy, PRICING_SUMMARY);
+  assert.deepEqual(facts.hours, ["Mon-Fri 09:00-18:00"]);
+  assert.deepEqual(facts.languages, ["az"]);
 });
 
 test("setup assistant compat facts still fall back to sourceSignals when reviewDraft is also incomplete", () => {
   const facts = buildAssistantCompatBusinessFacts(
     createAssistant({
       draft: {
-        businessName: "Mand Klinika",
+        businessName: BUSINESS_NAME,
       },
       reviewDraft: {
-        businessName: "Mand Klinika",
+        businessName: BUSINESS_NAME,
       },
       sourceSignals: {
         primarySourceType: "website",
         primarySourceUrl: "https://mand.az",
-        companyNameCandidates: ["Mand Klinika"],
-        descriptionCandidates: ["Klinika işləri görür"],
+        companyNameCandidates: [BUSINESS_NAME],
+        descriptionCandidates: [BUSINESS_DESCRIPTION],
         contactCandidates: ["+994514005588", "support@mand.az"],
         hoursCandidates: ["Every day 09:00-18:00"],
-        pricingCandidates: ["Xidmətə görə dəyişir"],
-        serviceCandidates: ["Müayinə"],
+        pricingCandidates: [PRICING_SUMMARY],
+        serviceCandidates: ["M\u00FCayin\u0259"],
         languagesCandidates: ["az"],
       },
     })
   );
 
-  assert.equal(facts.companyName, "Mand Klinika");
-  assert.equal(facts.summaryShort, "Klinika işləri görür");
+  assert.equal(facts.companyName, BUSINESS_NAME);
+  assert.equal(facts.summaryShort, BUSINESS_DESCRIPTION);
   assert.equal(facts.primaryPhone, "+994514005588");
   assert.equal(facts.primaryEmail, "support@mand.az");
   assert.equal(facts.websiteUrl, "https://mand.az");
-  assert.equal(facts.pricingPolicy, "Xidmətə görə dəyişir");
-  assert.deepEqual(facts.services, ["Müayinə"]);
+  assert.equal(facts.pricingPolicy, PRICING_SUMMARY);
+  assert.deepEqual(facts.services, ["M\u00FCayin\u0259"]);
   assert.deepEqual(facts.hours, ["Every day 09:00-18:00"]);
   assert.deepEqual(facts.languages, ["az"]);
 });
