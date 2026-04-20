@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Plus, Send, Smile, Sparkles } from "lucide-react";
+import {
+  Bot,
+  Paperclip,
+  Send,
+  Smile,
+  Sparkles,
+  WandSparkles,
+} from "lucide-react";
+
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
-import Button from "../ui/Button.jsx";
 
 function shouldRenderSurfaceBanner(surface) {
   return Boolean(
@@ -9,6 +16,81 @@ function shouldRenderSurfaceBanner(surface) {
       surface?.saveError ||
       surface?.unavailable ||
       (!surface?.unavailable && surface?.error)
+  );
+}
+
+function ComposerAction({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  active = false,
+}) {
+  const Icon = icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={[
+        "inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-[12.5px] font-medium transition-all",
+        active
+          ? "bg-[rgba(37,99,235,0.10)] text-[rgba(37,99,235,0.98)]"
+          : "text-[rgba(71,85,105,0.92)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
+        disabled ? "cursor-not-allowed opacity-40" : "",
+      ].join(" ")}
+    >
+      <Icon className="h-4 w-4" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
+function ComposerUtilityButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+}) {
+  const Icon = icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={[
+        "inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-[rgba(100,116,139,0.96)] transition-all hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
+        disabled ? "cursor-not-allowed opacity-40" : "",
+      ].join(" ")}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+function ComposerSendButton({ disabled, sending, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={sending ? "Sending operator reply" : "Send operator reply"}
+      className={[
+        "inline-flex h-12 items-center gap-2 rounded-[15px] px-4 text-[13px] font-semibold transition-all duration-200",
+        disabled
+          ? "cursor-not-allowed bg-[rgba(37,99,235,0.16)] text-white/90"
+          : "bg-[rgba(37,99,235,0.98)] text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.72)] hover:-translate-y-[1px]",
+      ].join(" ")}
+    >
+      <Send className="h-4 w-4" />
+      <span className="hidden sm:inline">{sending ? "Sending" : "Send"}</span>
+    </button>
   );
 }
 
@@ -43,7 +125,7 @@ function ComposerBody({
     if (!textarea) return;
 
     textarea.style.height = "0px";
-    const nextHeight = Math.max(58, Math.min(textarea.scrollHeight, 132));
+    const nextHeight = Math.max(60, Math.min(textarea.scrollHeight, 168));
     textarea.style.height = `${nextHeight}px`;
   }, [replyText, hasThread]);
 
@@ -63,100 +145,121 @@ function ComposerBody({
     const textarea = textareaRef.current;
     if (textarea) {
       window.requestAnimationFrame(() => {
-        textarea.style.height = "58px";
+        textarea.style.height = "60px";
       });
     }
   }
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-[960px]">
       {showBanner ? (
-        <SurfaceBanner
-          surface={surface}
-          unavailableMessage="Operator reply controls are temporarily unavailable."
-          refreshLabel="Refresh reply controls"
-        />
+        <div className="mb-3">
+          <SurfaceBanner
+            surface={surface}
+            unavailableMessage="Operator reply controls are temporarily unavailable."
+            refreshLabel="Refresh reply controls"
+          />
+        </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            variant={replyText.trim() ? "soft" : "ghost"}
-            size="sm"
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <ComposerAction
+            icon={Sparkles}
+            label="AI Assist"
             disabled={!hasThread}
-            leftIcon={<Sparkles className="h-4 w-4" />}
-          >
-            AI Assist
-          </Button>
+            active={Boolean(replyText.trim())}
+          />
 
-          <Button
-            variant="ghost"
-            size="icon"
+          <ComposerUtilityButton
+            icon={Smile}
+            label="Open emoji picker"
             disabled={!hasThread}
-            aria-label="Open emoji picker"
-          >
-            <Smile className="h-4 w-4" />
-          </Button>
+          />
 
-          <Button
-            variant="ghost"
-            size="icon"
+          <ComposerUtilityButton
+            icon={Paperclip}
+            label="Attach file"
             disabled={!hasThread}
-            aria-label="Add note or attachment"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {handoffActive ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onReleaseHandoff}
-            disabled={releasing}
-            isLoading={releasing}
-            leftIcon={!releasing ? <Bot className="h-4 w-4" /> : undefined}
-          >
-            Release AI
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="flex items-end gap-3 rounded-[26px] bg-white/88 px-4 py-3 shadow-[0_24px_70px_-44px_rgba(15,23,42,0.28)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/76">
-        <div className="min-w-0 flex-1">
-          <textarea
-            ref={textareaRef}
-            value={replyText}
-            onChange={(event) => setReplyText(event.target.value)}
-            onKeyDown={handleKeyDown}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            disabled={!hasThread || sending || surface?.unavailable === true}
-            rows={1}
-            placeholder={
-              hasThread ? "Write a reply" : "Select a conversation to reply"
-            }
-            aria-label={
-              hasThread ? "Reply to conversation" : "Select a conversation first"
-            }
-            className="block min-h-[58px] max-h-[132px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
           />
         </div>
 
-        <button
-          type="button"
-          onClick={handleSendClick}
-          disabled={sendDisabled}
-          aria-label={sending ? "Sending operator reply" : "Send operator reply"}
-          className={[
-            "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all duration-base ease-premium",
-            sendDisabled
-              ? "cursor-not-allowed bg-[rgba(37,99,235,0.18)] text-white/90"
-              : "bg-brand text-white shadow-[0_20px_40px_-22px_rgba(var(--color-brand),0.72)] hover:translate-y-[-1px]",
-          ].join(" ")}
-        >
-          <Send className="h-4 w-4" />
-        </button>
+        {handoffActive ? (
+          <button
+            type="button"
+            onClick={onReleaseHandoff}
+            disabled={releasing}
+            className={[
+              "inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-[12.5px] font-medium transition-all",
+              releasing
+                ? "cursor-not-allowed opacity-45"
+                : "text-[rgba(15,23,42,0.88)] hover:bg-[rgba(248,250,252,0.96)]",
+            ].join(" ")}
+          >
+            <Bot className="h-4 w-4" />
+            <span>{releasing ? "Returning..." : "Return to AI"}</span>
+          </button>
+        ) : null}
+      </div>
+
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-x-8 -top-3 h-10 rounded-full bg-[rgba(37,99,235,0.08)] blur-2xl" />
+
+        <div className="relative flex items-end gap-3 rounded-[24px] border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.84)] px-4 py-3 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.22)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.74)]">
+          <button
+            type="button"
+            disabled={!hasThread}
+            aria-label="Improve reply"
+            title="Improve reply"
+            className={[
+              "mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] transition-all",
+              hasThread
+                ? "text-[rgba(37,99,235,0.96)] hover:bg-[rgba(239,246,255,0.96)]"
+                : "cursor-not-allowed text-[rgba(148,163,184,0.96)]",
+            ].join(" ")}
+          >
+            <WandSparkles className="h-4 w-4" />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <textarea
+              ref={textareaRef}
+              value={replyText}
+              onChange={(event) => setReplyText(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              disabled={!hasThread || sending || surface?.unavailable === true}
+              rows={1}
+              placeholder={
+                hasThread
+                  ? "Write a thoughtful reply…"
+                  : "Select a conversation to reply"
+              }
+              aria-label={
+                hasThread ? "Reply to conversation" : "Select a conversation first"
+              }
+              className="block min-h-[60px] max-h-[168px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-[15px] leading-8 text-[rgba(15,23,42,0.96)] outline-none placeholder:text-[rgba(148,163,184,0.96)] disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="mb-1 shrink-0">
+            <ComposerSendButton
+              disabled={sendDisabled}
+              sending={Boolean(sending)}
+              onClick={handleSendClick}
+            />
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between px-1 text-[11.5px] text-[rgba(148,163,184,0.96)]">
+          <div className="truncate">
+            {hasThread
+              ? "Enter to send • Shift + Enter for new line"
+              : "Choose a conversation to start replying"}
+          </div>
+          <div className="hidden sm:block">AI-assisted drafting ready</div>
+        </div>
       </div>
     </div>
   );
@@ -185,16 +288,8 @@ export default function InboxComposer({
   );
 
   if (embedded) {
-    return (
-      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,0.72)_20%,rgba(248,250,252,0.96)_100%)] px-5 pb-5 pt-6">
-        <div className="mx-auto w-full max-w-[920px]">{content}</div>
-      </div>
-    );
+    return content;
   }
 
-  return (
-    <section className="bg-[linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,0.72)_20%,rgba(248,250,252,0.96)_100%)] px-5 pb-5 pt-6">
-      <div className="mx-auto w-full max-w-[920px]">{content}</div>
-    </section>
-  );
+  return <div className="px-6 pb-6 pt-4">{content}</div>;
 }
