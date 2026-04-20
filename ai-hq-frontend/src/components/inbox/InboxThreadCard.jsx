@@ -44,7 +44,7 @@ function resolveChannelLabel(thread = {}) {
     s(thread.provider) ||
     s(thread.source_type);
 
-  if (!raw) return "Conversation";
+  if (!raw) return "";
 
   const normalized = raw.toLowerCase();
 
@@ -103,43 +103,27 @@ function resolveAvatarTone(seed = "") {
   return tones[score % tones.length];
 }
 
-function resolveAttentionState(thread = {}) {
-  const unreadCount = Number(thread?.unread_count || 0);
-  const handoffActive = Boolean(thread?.handoff_active);
-  const status = s(thread?.status).toLowerCase();
-
-  if (handoffActive) {
+function resolveMeta(thread = {}) {
+  if (thread?.handoff_active) {
     return {
       label: "Handoff",
-      dot: "bg-[rgba(245,158,11,0.96)]",
-      text: "text-[rgba(180,83,9,0.96)]",
-      bg: "bg-[rgba(255,247,237,0.94)]",
+      tone:
+        "bg-[rgba(255,247,237,0.96)] text-[rgba(180,83,9,0.96)]",
     };
   }
 
-  if (unreadCount > 0) {
+  const channel = resolveChannelLabel(thread);
+  if (channel) {
     return {
-      label: "New",
-      dot: "bg-[rgba(37,99,235,0.96)]",
-      text: "text-[rgba(37,99,235,0.96)]",
-      bg: "bg-[rgba(239,246,255,0.94)]",
-    };
-  }
-
-  if (status === "resolved") {
-    return {
-      label: "Resolved",
-      dot: "bg-[rgba(16,185,129,0.96)]",
-      text: "text-[rgba(5,150,105,0.96)]",
-      bg: "bg-[rgba(236,253,245,0.94)]",
+      label: channel,
+      tone:
+        "bg-[rgba(248,250,252,0.96)] text-[rgba(71,85,105,0.96)]",
     };
   }
 
   return {
-    label: resolveChannelLabel(thread),
-    dot: "bg-[rgba(148,163,184,0.96)]",
-    text: "text-[rgba(71,85,105,0.96)]",
-    bg: "bg-[rgba(248,250,252,0.96)]",
+    label: "",
+    tone: "",
   };
 }
 
@@ -154,18 +138,17 @@ export default function InboxThreadCard({
   const timeLabel = formatRelativeTime(
     thread?.last_message_at || thread?.updated_at || thread?.created_at
   );
-  const channelLabel = resolveChannelLabel(thread);
-  const attention = resolveAttentionState(thread);
+  const meta = resolveMeta(thread);
 
   return (
     <button
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "group relative flex w-full items-start gap-3 rounded-[18px] px-3.5 py-3.5 text-left transition-all duration-200",
+        "group flex w-full items-start gap-3 rounded-[16px] px-3.5 py-3 text-left transition-all duration-200",
         selected
-          ? "bg-[linear-gradient(180deg,rgba(239,246,255,0.95),rgba(234,242,255,0.92))] shadow-[0_22px_48px_-38px_rgba(37,99,235,0.32)] ring-1 ring-[rgba(37,99,235,0.12)]"
-          : "bg-transparent hover:bg-[rgba(248,250,252,0.92)]",
+          ? "bg-[rgba(239,246,255,0.90)] ring-1 ring-[rgba(37,99,235,0.10)]"
+          : "bg-transparent hover:bg-[rgba(248,250,252,0.82)]",
       ].join(" ")}
     >
       <div
@@ -184,24 +167,18 @@ export default function InboxThreadCard({
               {name}
             </div>
 
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span
-                className={[
-                  "inline-flex items-center gap-1.5 rounded-[10px] px-2 py-1 text-[10.5px] font-semibold",
-                  attention.bg,
-                  attention.text,
-                ].join(" ")}
-              >
-                <span className={["h-1.5 w-1.5 rounded-full", attention.dot].join(" ")} />
-                <span>{attention.label}</span>
-              </span>
-
-              {attention.label !== channelLabel ? (
-                <span className="text-[11px] text-[rgba(100,116,139,0.96)]">
-                  {channelLabel}
+            {meta.label ? (
+              <div className="mt-1">
+                <span
+                  className={[
+                    "inline-flex rounded-[10px] px-2 py-1 text-[10.5px] font-semibold",
+                    meta.tone,
+                  ].join(" ")}
+                >
+                  {meta.label}
                 </span>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 items-center gap-2 pl-2">
@@ -213,7 +190,7 @@ export default function InboxThreadCard({
             ) : null}
 
             {unreadCount > 0 ? (
-              <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[rgba(37,99,235,0.98)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-[0_12px_24px_-16px_rgba(37,99,235,0.72)]">
+              <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[rgba(37,99,235,0.98)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                 {unreadCount}
               </span>
             ) : null}

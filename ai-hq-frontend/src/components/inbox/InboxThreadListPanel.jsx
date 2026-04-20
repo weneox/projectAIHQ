@@ -106,7 +106,7 @@ function ChannelFilterMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute left-0 top-[calc(100%+10px)] z-30 min-w-[240px] overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white p-1.5 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.22)]"
+      className="absolute right-0 top-[calc(100%+10px)] z-30 min-w-[220px] overflow-hidden rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white p-1.5 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.20)]"
     >
       {options.map((option) => {
         const active = selectedValue === option.value;
@@ -121,7 +121,7 @@ function ChannelFilterMenu({
               onClose?.();
             }}
             className={[
-              "flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors",
+              "flex w-full items-center justify-between gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors",
               active
                 ? "bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
                 : "text-[rgba(51,65,85,0.94)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.94)]",
@@ -130,20 +130,39 @@ function ChannelFilterMenu({
             <span className="truncate text-[13px] font-medium">
               {option.label}
             </span>
-            <span
-              className={[
-                "inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                active
-                  ? "bg-[rgba(37,99,235,0.10)] text-[rgba(37,99,235,0.98)]"
-                  : "bg-[rgba(248,250,252,0.96)] text-[rgba(100,116,139,0.96)]",
-              ].join(" ")}
-            >
+            <span className="text-[11px] text-[rgba(148,163,184,0.96)]">
               {count}
             </span>
           </button>
         );
       })}
     </div>
+  );
+}
+
+function ToolbarIconButton({
+  icon: Icon,
+  label,
+  active = false,
+  onClick,
+  expanded,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-expanded={expanded}
+      title={label}
+      className={[
+        "inline-flex h-10 w-10 items-center justify-center rounded-[12px] border transition-all",
+        active
+          ? "border-[rgba(37,99,235,0.14)] bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
+          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(100,116,139,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
+      ].join(" ")}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
   );
 }
 
@@ -154,7 +173,7 @@ function TopTabButton({ active, label, onClick }) {
       onClick={onClick}
       aria-pressed={active}
       className={[
-        "relative inline-flex h-10 items-center rounded-[12px] px-3 text-[12.5px] font-semibold transition-all",
+        "inline-flex h-9 items-center rounded-[11px] px-3 text-[12.5px] font-semibold transition-all",
         active
           ? "bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
           : "text-[rgba(100,116,139,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
@@ -165,51 +184,16 @@ function TopTabButton({ active, label, onClick }) {
   );
 }
 
-function ToolbarButton({
-  icon,
-  label,
-  active = false,
-  onClick,
-  expanded,
-}) {
-  const Icon = icon;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={expanded}
-      className={[
-        "inline-flex h-10 items-center gap-2 rounded-[12px] border px-3 text-[12.5px] font-medium transition-all",
-        active
-          ? "border-[rgba(37,99,235,0.14)] bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.98)]"
-          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(71,85,105,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
-      ].join(" ")}
-    >
-      <Icon className="h-4 w-4" />
-      <span>{label}</span>
-      {icon === SlidersHorizontal ? (
-        <ChevronDown
-          className={[
-            "h-4 w-4 transition-transform",
-            expanded ? "rotate-180" : "",
-          ].join(" ")}
-        />
-      ) : null}
-    </button>
-  );
-}
-
 function EmptyState({ hasSearch }) {
   return (
-    <div className="px-4 py-10">
-      <div className="rounded-[24px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.9)] px-5 py-8 text-center shadow-[0_24px_60px_-46px_rgba(15,23,42,0.16)]">
-        <div className="text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+    <div className="px-3 py-8">
+      <div className="rounded-[20px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-4 py-7 text-center">
+        <div className="text-[14px] font-semibold text-[rgba(15,23,42,0.96)]">
           {hasSearch ? "No matching conversations" : "No conversations yet"}
         </div>
-        <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
+        <div className="mt-2 text-[12.5px] leading-6 text-[rgba(100,116,139,0.96)]">
           {hasSearch
-            ? "Try a different name, channel, or keyword."
+            ? "Try a different keyword."
             : "New conversations will appear here."}
         </div>
       </div>
@@ -317,10 +301,6 @@ export default function InboxThreadListPanel({
     if (!exists) setChannelFilter("all");
   }, [channelOptions, channelFilter]);
 
-  const selectedChannelLabel =
-    channelOptions.find((option) => option.value === channelFilter)?.label ||
-    "All channels";
-
   const filteredThreads = useMemo(() => {
     const byChannel =
       channelFilter === "all"
@@ -387,28 +367,25 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]"
+      className="flex h-full min-h-0 flex-col bg-transparent"
     >
-      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.82)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.72)]">
-        <div className="px-4 pb-4 pt-5">
-          <div className="flex items-start justify-between gap-3">
+      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.72)]">
+        <div className="px-4 pb-3 pt-5">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2
                 id="inbox-thread-list-title"
-                className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]"
+                className="truncate text-[16px] font-semibold text-[rgba(15,23,42,0.96)]"
               >
-                Conversations
+                All conversations
               </h2>
-              <div className="mt-1 text-[12px] text-[rgba(100,116,139,0.96)]">
-                {filteredThreads.length} visible
-              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <div className="relative" ref={filterAnchorRef}>
-                <ToolbarButton
+                <ToolbarIconButton
                   icon={SlidersHorizontal}
-                  label={selectedChannelLabel}
+                  label="Filter channels"
                   active={channelFilter !== "all" || filterMenuOpen}
                   onClick={handleToggleFilterMenu}
                   expanded={filterMenuOpen}
@@ -425,9 +402,9 @@ export default function InboxThreadListPanel({
                 />
               </div>
 
-              <ToolbarButton
+              <ToolbarIconButton
                 icon={Search}
-                label="Search"
+                label="Search conversations"
                 active={searchOpen || Boolean(localSearch.trim())}
                 onClick={handleOpenSearch}
               />
@@ -454,13 +431,13 @@ export default function InboxThreadListPanel({
           className={[
             "overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
             searchOpen
-              ? "max-h-[84px] translate-y-0 opacity-100"
+              ? "max-h-[80px] translate-y-0 opacity-100"
               : "pointer-events-none max-h-0 -translate-y-2 opacity-0",
           ].join(" ")}
           aria-hidden={!searchOpen}
         >
           <div className="border-t border-[rgba(15,23,42,0.05)] px-4 py-3">
-            <div className="flex h-12 items-center gap-3 rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white px-3 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.16)]">
+            <div className="flex h-11 items-center gap-3 rounded-[14px] border border-[rgba(15,23,42,0.08)] bg-white px-3">
               <Search className="h-[16px] w-[16px] shrink-0 text-[rgba(148,163,184,0.96)]" />
 
               <label className="sr-only" htmlFor="inbox-thread-search">

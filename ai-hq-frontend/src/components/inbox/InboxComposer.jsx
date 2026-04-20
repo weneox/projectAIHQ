@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bot,
-  Paperclip,
-  Send,
-  Smile,
-  Sparkles,
-  WandSparkles,
-} from "lucide-react";
+import { Bot, Paperclip, Send, Smile, Sparkles } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 
@@ -19,15 +12,7 @@ function shouldRenderSurfaceBanner(surface) {
   );
 }
 
-function ComposerAction({
-  icon,
-  label,
-  onClick,
-  disabled = false,
-  active = false,
-}) {
-  const Icon = icon;
-
+function IconButton({ icon: Icon, label, disabled = false, onClick }) {
   return (
     <button
       type="button"
@@ -36,37 +21,10 @@ function ComposerAction({
       aria-label={label}
       title={label}
       className={[
-        "inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-[12.5px] font-medium transition-all",
-        active
-          ? "bg-[rgba(37,99,235,0.10)] text-[rgba(37,99,235,0.98)]"
-          : "text-[rgba(71,85,105,0.92)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
-        disabled ? "cursor-not-allowed opacity-40" : "",
-      ].join(" ")}
-    >
-      <Icon className="h-4 w-4" />
-      <span className="hidden sm:inline">{label}</span>
-    </button>
-  );
-}
-
-function ComposerUtilityButton({
-  icon,
-  label,
-  onClick,
-  disabled = false,
-}) {
-  const Icon = icon;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={[
-        "inline-flex h-10 w-10 items-center justify-center rounded-[12px] text-[rgba(100,116,139,0.96)] transition-all hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
-        disabled ? "cursor-not-allowed opacity-40" : "",
+        "inline-flex h-9 w-9 items-center justify-center rounded-[12px] transition-all",
+        disabled
+          ? "cursor-not-allowed text-[rgba(148,163,184,0.92)]"
+          : "text-[rgba(100,116,139,0.96)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.92)]",
       ].join(" ")}
     >
       <Icon className="h-4 w-4" />
@@ -74,7 +32,7 @@ function ComposerUtilityButton({
   );
 }
 
-function ComposerSendButton({ disabled, sending, onClick }) {
+function SendButton({ disabled, sending, onClick }) {
   return (
     <button
       type="button"
@@ -82,10 +40,10 @@ function ComposerSendButton({ disabled, sending, onClick }) {
       disabled={disabled}
       aria-label={sending ? "Sending operator reply" : "Send operator reply"}
       className={[
-        "inline-flex h-12 items-center gap-2 rounded-[15px] px-4 text-[13px] font-semibold transition-all duration-200",
+        "inline-flex h-11 items-center gap-2 rounded-[14px] px-4 text-[13px] font-semibold transition-all duration-200",
         disabled
           ? "cursor-not-allowed bg-[rgba(37,99,235,0.16)] text-white/90"
-          : "bg-[rgba(37,99,235,0.98)] text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.72)] hover:-translate-y-[1px]",
+          : "bg-[rgba(37,99,235,0.98)] text-white shadow-[0_18px_40px_-22px_rgba(37,99,235,0.64)] hover:-translate-y-[1px]",
       ].join(" ")}
     >
       <Send className="h-4 w-4" />
@@ -108,6 +66,7 @@ function ComposerBody({
   const sending = actionState?.isActionPending?.("reply");
   const releasing = actionState?.isActionPending?.("release");
   const showBanner = hasThread && shouldRenderSurfaceBanner(surface);
+
   const textareaRef = useRef(null);
   const [isComposing, setIsComposing] = useState(false);
 
@@ -125,7 +84,7 @@ function ComposerBody({
     if (!textarea) return;
 
     textarea.style.height = "0px";
-    const nextHeight = Math.max(60, Math.min(textarea.scrollHeight, 168));
+    const nextHeight = Math.max(54, Math.min(textarea.scrollHeight, 148));
     textarea.style.height = `${nextHeight}px`;
   }, [replyText, hasThread]);
 
@@ -145,13 +104,13 @@ function ComposerBody({
     const textarea = textareaRef.current;
     if (textarea) {
       window.requestAnimationFrame(() => {
-        textarea.style.height = "60px";
+        textarea.style.height = "54px";
       });
     }
   }
 
   return (
-    <div className="mx-auto w-full max-w-[960px]">
+    <div className="mx-auto w-full max-w-[980px]">
       {showBanner ? (
         <div className="mb-3">
           <SurfaceBanner
@@ -163,23 +122,20 @@ function ComposerBody({
       ) : null}
 
       <div className="mb-2 flex items-center justify-between gap-3 px-1">
-        <div className="flex min-w-0 items-center gap-1">
-          <ComposerAction
+        <div className="flex items-center gap-1">
+          <IconButton
             icon={Sparkles}
-            label="AI Assist"
+            label="AI assist"
             disabled={!hasThread}
-            active={Boolean(replyText.trim())}
           />
-
-          <ComposerUtilityButton
+          <IconButton
             icon={Smile}
-            label="Open emoji picker"
+            label="Emoji"
             disabled={!hasThread}
           />
-
-          <ComposerUtilityButton
+          <IconButton
             icon={Paperclip}
-            label="Attach file"
+            label="Attach"
             disabled={!hasThread}
           />
         </div>
@@ -197,68 +153,40 @@ function ComposerBody({
             ].join(" ")}
           >
             <Bot className="h-4 w-4" />
-            <span>{releasing ? "Returning..." : "Return to AI"}</span>
+            <span>Return to AI</span>
           </button>
         ) : null}
       </div>
 
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-x-8 -top-3 h-10 rounded-full bg-[rgba(37,99,235,0.08)] blur-2xl" />
-
-        <div className="relative flex items-end gap-3 rounded-[24px] border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.84)] px-4 py-3 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.22)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.74)]">
-          <button
-            type="button"
-            disabled={!hasThread}
-            aria-label="Improve reply"
-            title="Improve reply"
-            className={[
-              "mb-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] transition-all",
+      <div className="flex items-end gap-3 rounded-[20px] border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.84)] px-3 py-3 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.18)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.76)]">
+        <div className="min-w-0 flex-1">
+          <textarea
+            ref={textareaRef}
+            value={replyText}
+            onChange={(event) => setReplyText(event.target.value)}
+            onKeyDown={handleKeyDown}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
+            disabled={!hasThread || sending || surface?.unavailable === true}
+            rows={1}
+            placeholder={
               hasThread
-                ? "text-[rgba(37,99,235,0.96)] hover:bg-[rgba(239,246,255,0.96)]"
-                : "cursor-not-allowed text-[rgba(148,163,184,0.96)]",
-            ].join(" ")}
-          >
-            <WandSparkles className="h-4 w-4" />
-          </button>
-
-          <div className="min-w-0 flex-1">
-            <textarea
-              ref={textareaRef}
-              value={replyText}
-              onChange={(event) => setReplyText(event.target.value)}
-              onKeyDown={handleKeyDown}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              disabled={!hasThread || sending || surface?.unavailable === true}
-              rows={1}
-              placeholder={
-                hasThread
-                  ? "Write a thoughtful reply…"
-                  : "Select a conversation to reply"
-              }
-              aria-label={
-                hasThread ? "Reply to conversation" : "Select a conversation first"
-              }
-              className="block min-h-[60px] max-h-[168px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-[15px] leading-8 text-[rgba(15,23,42,0.96)] outline-none placeholder:text-[rgba(148,163,184,0.96)] disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div className="mb-1 shrink-0">
-            <ComposerSendButton
-              disabled={sendDisabled}
-              sending={Boolean(sending)}
-              onClick={handleSendClick}
-            />
-          </div>
+                ? "Write a reply…"
+                : "Select a conversation to reply"
+            }
+            aria-label={
+              hasThread ? "Reply to conversation" : "Select a conversation first"
+            }
+            className="block min-h-[54px] max-h-[148px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-[15px] leading-8 text-[rgba(15,23,42,0.96)] outline-none placeholder:text-[rgba(148,163,184,0.96)] disabled:cursor-not-allowed"
+          />
         </div>
 
-        <div className="mt-2 flex items-center justify-between px-1 text-[11.5px] text-[rgba(148,163,184,0.96)]">
-          <div className="truncate">
-            {hasThread
-              ? "Enter to send • Shift + Enter for new line"
-              : "Choose a conversation to start replying"}
-          </div>
-          <div className="hidden sm:block">AI-assisted drafting ready</div>
+        <div className="shrink-0">
+          <SendButton
+            disabled={sendDisabled}
+            sending={Boolean(sending)}
+            onClick={handleSendClick}
+          />
         </div>
       </div>
     </div>
@@ -291,5 +219,5 @@ export default function InboxComposer({
     return content;
   }
 
-  return <div className="px-6 pb-6 pt-4">{content}</div>;
+  return <div className="px-6 pb-6 pt-3">{content}</div>;
 }
