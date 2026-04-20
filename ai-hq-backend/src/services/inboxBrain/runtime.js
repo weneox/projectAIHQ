@@ -104,8 +104,10 @@ function normalizePriority(value, fallback = 100) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeStringList(value = []) {
-  return uniqStrings(arr(value).map((item) => s(item)).filter(Boolean));
+function normalizeStringList(...values) {
+  return uniqStrings(
+    values.flatMap((value) => arr(value).map((item) => s(item))).filter(Boolean)
+  );
 }
 
 function normalizeLooseText(value = "") {
@@ -151,9 +153,7 @@ function normalizeLanguageList(...sources) {
   }
 
   const normalized = uniqStrings(
-    values
-      .map((item) => normalizeLanguageCode(item))
-      .filter(Boolean)
+    values.map((item) => normalizeLanguageCode(item)).filter(Boolean)
   );
 
   return normalized.length ? normalized : ["en"];
@@ -189,10 +189,246 @@ function normalizePromptList(...sources) {
   }
 
   return uniqStrings(
-    values
-      .map((item) => normalizeLooseText(item))
+    values.map((item) => normalizeLooseText(item)).filter(Boolean)
+  );
+}
+
+function normalizeContactType(value = "") {
+  const x = lower(value);
+  if (!x) return "";
+
+  if (["phone", "mobile", "tel", "call"].includes(x)) return "phone";
+  if (["whatsapp", "wa"].includes(x)) return "whatsapp";
+  if (["telegram", "tg"].includes(x)) return "telegram";
+  if (["email", "mail", "e-mail"].includes(x)) return "email";
+  if (["website", "site", "web"].includes(x)) return "website";
+  if (["instagram", "ig"].includes(x)) return "instagram";
+  if (["facebook", "fb", "messenger"].includes(x)) return "facebook";
+
+  return x;
+}
+
+function normalizeContactValue(value = "") {
+  return normalizeLooseText(value);
+}
+
+function normalizeContactEntry(item) {
+  const x = obj(item);
+
+  const rawType = pickFirstString(
+    x.type,
+    x.contact_type,
+    x.contactType,
+    x.channel,
+    x.kind
+  );
+
+  const value = normalizeContactValue(
+    pickFirstString(
+      x.value,
+      x.contact_value,
+      x.contactValue,
+      x.phone,
+      x.phone_number,
+      x.phoneNumber,
+      x.email,
+      x.website,
+      x.url,
+      x.href,
+      x.username,
+      x.handle
+    )
+  );
+
+  const type = normalizeContactType(rawType);
+
+  return {
+    id: s(x.id || x.contact_id),
+    type,
+    label: pickFirstString(x.label, x.title, x.name),
+    value,
+    primary: normalizeBoolean(
+      x.primary,
+      typeof x.is_primary === "boolean" ? x.is_primary : false
+    ),
+    public: normalizeBoolean(
+      x.public,
+      typeof x.is_public === "boolean" ? x.is_public : true
+    ),
+    meta: x,
+  };
+}
+
+function normalizeLocationEntry(item) {
+  const x = obj(item);
+  const address = pickFirstString(
+    x.address_line,
+    x.addressLine,
+    x.address,
+    x.title,
+    x.label
+  );
+
+  return {
+    id: s(x.id || x.location_id),
+    title: pickFirstString(x.title, x.label, address),
+    address,
+    city: s(x.city),
+    region: s(x.region),
+    country: s(x.country),
+    primary: normalizeBoolean(
+      x.primary,
+      typeof x.is_primary === "boolean" ? x.is_primary : false
+    ),
+    meta: x,
+  };
+}
+
+function dedupeContacts(list = []) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of arr(list)) {
+    const normalized = normalizeContactEntry(item);
+    if (!normalized.value) continue;
+
+    const key = `${normalized.type}:${lower(normalized.value)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+
+  return out;
+}
+
+function dedupeLocations(list = []) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of arr(list)) {
+    const normalized = normalizeLocationEntry(item);
+    const key = lower(
+      normalized.address || normalized.title || JSON.stringify(normalized.meta)
+    );
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+
+  return out;
+}
+
+function pickPrimaryContactValue(list = [], types = []) {
+  const normalizedTypes = normalizeStringList(types).map((item) =>
+    normalizeContactType(item)
+  );
+
+  const exactPrimary = arr(list).find(
+    (item) =>
+      normalizedTypes.includes(normalizeContactType(item?.type)) &&
+      item?.primary &&
+      s(item?.value)
+  );
+  if (exactPrimary?.value) return exactPrimary.value;
+
+  const exactPublic = arr(list).find(
+    (item) =>
+      normalizedTypes.includes(normalizeContactType(item?.type)) &&
+      item?.public !== false &&
+      s(item?.value)
+  );
+  if (exactPublic?.value) return exactPublic.value;
+
+  const anyExact = arr(list).find(
+    (item) =>
+      normalizedTypes.includes(normalizeContactType(item?.type)) && s(item?.value)
+  );
+  if (anyExact?.value) return anyExact.value;
+
+  return "";
+}
+
+function listContactValues(list = [], types = []) {
+  const normalizedTypes = normalizeStringList(types).map((item) =>
+    normalizeContactType(item)
+  );
+
+  return uniqStrings(
+    arr(list)
+      .filter((item) => normalizedTypes.includes(normalizeContactType(item?.type)))
+      .map((item) => s(item?.value))
       .filter(Boolean)
   );
+}
+
+function extractRawContacts(container = {}, rawTenant = {}, rawProfile = {}) {
+  const tenantMeta = obj(rawTenant?.meta);
+  const tenantProfile = obj(rawTenant?.profile);
+  const profile = obj(rawProfile);
+  const raw = obj(container?.raw);
+
+  const primitiveContacts = [
+    ...normalizeStringList(
+      container?.contactPhones,
+      tenantMeta?.contactPhones,
+      tenantMeta?.contact_phones
+    ).map((value) => ({ type: "phone", value })),
+    ...normalizeStringList(
+      container?.contactEmails,
+      tenantMeta?.contactEmails,
+      tenantMeta?.contact_emails
+    ).map((value) => ({ type: "email", value })),
+    ...normalizeStringList(
+      pickFirstString(
+        container?.primaryPhone,
+        profile?.public_phone,
+        tenantProfile?.public_phone
+      )
+    ).map((value) => ({ type: "phone", value, primary: true })),
+    ...normalizeStringList(
+      pickFirstString(
+        container?.primaryEmail,
+        profile?.public_email,
+        tenantProfile?.public_email
+      )
+    ).map((value) => ({ type: "email", value, primary: true })),
+    ...normalizeStringList(
+      pickFirstString(
+        container?.websiteUrl,
+        profile?.website_url,
+        tenantProfile?.website_url,
+        tenantMeta?.websiteUrl,
+        tenantMeta?.website_url
+      )
+    ).map((value) => ({ type: "website", value, primary: true })),
+  ];
+
+  return [
+    ...arr(container?.contacts),
+    ...arr(raw?.contacts),
+    ...arr(tenantMeta?.contacts),
+    ...primitiveContacts,
+  ];
+}
+
+function extractRawLocations(container = {}, rawTenant = {}) {
+  const tenantMeta = obj(rawTenant?.meta);
+  const raw = obj(container?.raw);
+
+  const primitiveLocations = normalizeStringList(tenantMeta?.locations).map(
+    (value) => ({
+      address: value,
+      primary: false,
+    })
+  );
+
+  return [
+    ...arr(container?.locations),
+    ...arr(raw?.locations),
+    ...arr(tenantMeta?.locationObjects),
+    ...primitiveLocations,
+  ];
 }
 
 function buildServiceModeDefaults(service = {}) {
@@ -227,12 +463,12 @@ function normalizeServiceEntry(item) {
     x.value_proposition
   );
 
-  const aliases = normalizeStringList([
-    ...arr(x.aliases),
-    ...arr(x.keywords),
-    ...arr(x.synonyms),
-    ...arr(x.example_requests),
-  ]);
+  const aliases = normalizeStringList(
+    x.aliases,
+    x.keywords,
+    x.synonyms,
+    x.example_requests
+  );
 
   const active = normalizeBoolean(
     x.active,
@@ -280,12 +516,12 @@ function normalizeKnowledgeEntry(item) {
     x.description
   );
 
-  const keywords = normalizeStringList([
-    ...arr(x.keywords),
-    ...arr(x.aliases),
+  const keywords = normalizeStringList(
+    x.keywords,
+    x.aliases,
     s(x.question),
-    s(x.title),
-  ]);
+    s(x.title)
+  );
 
   const active = normalizeBoolean(
     x.active,
@@ -310,14 +546,14 @@ function normalizeKnowledgeEntry(item) {
 function normalizePlaybook(item) {
   const x = obj(item);
 
-  const triggerKeywords = normalizeStringList([
-    ...arr(x.triggerKeywords),
-    ...arr(x.triggers),
-    ...arr(x.keywords),
+  const triggerKeywords = normalizeStringList(
+    x.triggerKeywords,
+    x.triggers,
+    x.keywords,
     s(x.user_example),
     s(x.intent_key),
-    s(x.service_key),
-  ]);
+    s(x.service_key)
+  );
 
   const replyTemplate = pickFirstString(
     x.ideal_reply,
@@ -397,8 +633,11 @@ function extractConversationAssets({
       pickFirstString(
         profile?.primary_cta,
         profile?.primaryCta,
+        meta?.preferredCta,
+        meta?.preferred_cta,
         meta?.primaryCta,
         meta?.primary_cta,
+        behavior?.primaryCta,
         rawBehavior?.primaryCta,
         rawBehavior?.primary_cta
       )
@@ -407,12 +646,17 @@ function extractConversationAssets({
       profile?.qualificationQuestions,
       profile?.qualification_questions,
       meta?.qualificationQuestions,
-      meta?.qualification_questions
+      meta?.qualification_questions,
+      behavior?.qualificationQuestions,
+      rawBehavior?.qualificationQuestions,
+      rawBehavior?.qualification_questions
     ),
     leadPrompts: normalizePromptList(
       behavior?.leadPrompts,
       rawBehavior?.leadPrompts,
-      rawBehavior?.lead_prompts
+      rawBehavior?.lead_prompts,
+      meta?.leadPrompts,
+      meta?.lead_prompts
     ),
     customGreeting: normalizeLooseText(
       pickFirstString(
@@ -500,6 +744,30 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     rawBehavior: {},
   });
 
+  const contacts = dedupeContacts([
+    ...extractRawContacts(
+      {
+        primaryPhone: pickFirstString(profile?.public_phone),
+        primaryEmail: pickFirstString(profile?.public_email),
+        websiteUrl: pickFirstString(profile?.website_url),
+      },
+      safeTenant,
+      profile
+    ),
+  ]);
+
+  const locations = dedupeLocations(extractRawLocations({}, safeTenant));
+  const primaryPhone = pickPrimaryContactValue(contacts, ["phone", "whatsapp"]);
+  const primaryEmail = pickPrimaryContactValue(contacts, ["email"]);
+  const websiteUrl = pickFirstString(
+    pickPrimaryContactValue(contacts, ["website"]),
+    profile?.website_url,
+    meta?.websiteUrl,
+    meta?.website_url
+  );
+  const contactPhones = listContactValues(contacts, ["phone", "whatsapp"]);
+  const contactEmails = listContactValues(contacts, ["email"]);
+
   return {
     tenantKey: resolvedTenantKey,
     displayName,
@@ -544,7 +812,9 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
       meta?.conversionGoal,
       meta?.conversion_goal
     ),
-    primaryCta: "",
+    primaryCta:
+      conversationAssets.primaryCtaRaw ||
+      pickFirstString(profile?.preferred_cta, meta?.preferredCta),
     leadQualificationMode: pickFirstString(
       profile?.lead_qualification_mode,
       meta?.leadQualificationMode,
@@ -574,6 +844,13 @@ function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     tenant: safeTenant,
     threadState: null,
     conversationAssets,
+    primaryPhone,
+    primaryEmail,
+    websiteUrl,
+    contactPhones,
+    contactEmails,
+    contacts,
+    locations,
   };
 }
 
@@ -655,6 +932,13 @@ function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
       leadPrompts: [],
       customGreeting: "",
     },
+    primaryPhone: "",
+    primaryEmail: "",
+    websiteUrl: "",
+    contactPhones: [],
+    contactEmails: [],
+    contacts: [],
+    locations: [],
   };
 }
 
@@ -758,10 +1042,17 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       fallback.industry
   );
 
+  const mergedTenant = strictAuthority
+    ? rawTenant
+    : { ...obj(fallback.tenant), ...rawTenant };
+  const mergedProfile = strictAuthority
+    ? rawProfile
+    : { ...obj(fallback.profile), ...rawProfile };
+
   const resolvedBehavior = resolveBehaviorProfile({
     industry: effectiveIndustry,
-    tenant: strictAuthority ? rawTenant : { ...obj(fallback.tenant), ...rawTenant },
-    profile: strictAuthority ? rawProfile : { ...obj(fallback.profile), ...rawProfile },
+    tenant: mergedTenant,
+    profile: mergedProfile,
     meta: obj(rawTenant?.meta),
     runtimeBehavior: rawBehavior,
     runtimeChannelBehavior: rawChannelBehavior,
@@ -770,25 +1061,60 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
   });
 
   const conversationAssets = extractConversationAssets({
-    profile: strictAuthority ? rawProfile : { ...obj(fallback.profile), ...rawProfile },
+    profile: mergedProfile,
     meta: obj(rawTenant?.meta),
     behavior: resolvedBehavior,
     rawBehavior,
   });
 
+  const contacts = dedupeContacts(
+    extractRawContacts(container, rawTenant, mergedProfile)
+  );
+  const locations = dedupeLocations(extractRawLocations(container, rawTenant));
+
+  const primaryPhone = pickFirstString(
+    container.primaryPhone,
+    pickPrimaryContactValue(contacts, ["phone", "whatsapp"]),
+    mergedProfile?.public_phone,
+    obj(rawTenant?.profile)?.public_phone,
+    strictAuthority ? "" : fallback.primaryPhone
+  );
+
+  const primaryEmail = pickFirstString(
+    container.primaryEmail,
+    pickPrimaryContactValue(contacts, ["email"]),
+    mergedProfile?.public_email,
+    obj(rawTenant?.profile)?.public_email,
+    strictAuthority ? "" : fallback.primaryEmail
+  );
+
+  const websiteUrl = pickFirstString(
+    container.websiteUrl,
+    pickPrimaryContactValue(contacts, ["website"]),
+    mergedProfile?.website_url,
+    obj(rawTenant?.profile)?.website_url,
+    obj(rawTenant?.meta)?.websiteUrl,
+    obj(rawTenant?.meta)?.website_url,
+    strictAuthority ? "" : fallback.websiteUrl
+  );
+
+  const contactPhones = normalizeStringList(
+    container.contactPhones,
+    listContactValues(contacts, ["phone", "whatsapp"]),
+    strictAuthority ? [] : fallback.contactPhones
+  );
+
+  const contactEmails = normalizeStringList(
+    container.contactEmails,
+    listContactValues(contacts, ["email"]),
+    strictAuthority ? [] : fallback.contactEmails
+  );
+
   return {
     ...fallback,
     ...container,
-    tenant: Object.keys(rawTenant).length
-      ? strictAuthority
-        ? rawTenant
-        : { ...obj(fallback.tenant), ...rawTenant }
-      : fallback.tenant,
-    profile: Object.keys(rawProfile).length
-      ? strictAuthority
-        ? rawProfile
-        : { ...obj(fallback.profile), ...rawProfile }
-      : fallback.profile,
+    tenant: Object.keys(rawTenant).length ? mergedTenant : fallback.tenant,
+    profile: Object.keys(rawProfile).length ? mergedProfile : fallback.profile,
     aiPolicy: Object.keys(rawAiPolicy).length
       ? strictAuthority
         ? rawAiPolicy
@@ -805,9 +1131,9 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     displayName: pickFirstString(
       container.displayName,
       container.companyName,
-      rawProfile.brand_name,
-      rawProfile.displayName,
-      rawTenant.company_name,
+      mergedProfile.brand_name,
+      mergedProfile.displayName,
+      mergedTenant.company_name,
       fallback.displayName
     ),
     industry: effectiveIndustry,
@@ -816,6 +1142,7 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       container.summary,
       container.summaryShort,
       container.valueProposition,
+      obj(rawTenant?.meta)?.businessSummary,
       fallback.businessSummary
     ),
     businessType: pickFirstString(
@@ -876,7 +1203,15 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
       rawBehavior.conversion_goal,
       fallback.conversionGoal
     ),
-    primaryCta: "",
+    primaryCta:
+      conversationAssets.primaryCtaRaw ||
+      pickFirstString(
+        container.primaryCta,
+        container.primary_cta,
+        rawBehavior.primaryCta,
+        rawBehavior.primary_cta,
+        strictAuthority ? "" : fallback.primaryCta
+      ),
     leadQualificationMode: pickFirstString(
       container.leadQualificationMode,
       container.lead_qualification_mode,
@@ -909,6 +1244,13 @@ function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
     behavior: resolvedBehavior,
     channelBehavior: resolvedBehavior.channelBehavior,
     conversationAssets,
+    primaryPhone,
+    primaryEmail,
+    websiteUrl,
+    contactPhones,
+    contactEmails,
+    contacts,
+    locations,
   };
 }
 
@@ -1069,6 +1411,8 @@ function getIndustryHints(industry) {
 
 export {
   normalizeIndustry,
+  normalizeContactEntry,
+  normalizeLocationEntry,
   normalizeServiceEntry,
   normalizeKnowledgeEntry,
   normalizePlaybook,

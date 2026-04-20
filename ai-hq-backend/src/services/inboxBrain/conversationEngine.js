@@ -472,6 +472,7 @@ function normalizeStage(value = "") {
       "answer",
       "closing",
       "general",
+      "contact_capture",
     ].includes(x)
   ) {
     return x;
@@ -497,6 +498,7 @@ function normalizeAskCategory(value = "") {
       "faq",
       "handoff_request",
       "general",
+      "contact",
     ].includes(x)
   ) {
     return x;
@@ -606,6 +608,112 @@ function buildConversationSnapshot({
   };
 }
 
+function normalizeContactType(value = "") {
+  const x = lower(value);
+  if (!x) return "";
+
+  if (["phone", "mobile", "tel", "call"].includes(x)) return "phone";
+  if (["whatsapp", "wa"].includes(x)) return "whatsapp";
+  if (["telegram", "tg"].includes(x)) return "telegram";
+  if (["email", "mail", "e-mail"].includes(x)) return "email";
+  if (["website", "site", "web"].includes(x)) return "website";
+  if (["instagram", "ig"].includes(x)) return "instagram";
+  if (["facebook", "fb", "messenger"].includes(x)) return "facebook";
+
+  return x;
+}
+
+function normalizePhoneComparable(value = "") {
+  return s(value).replace(/[^\d+]/g, "");
+}
+
+function inferOfferRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "teklif",
+    "offer",
+    "proposal",
+    "package",
+    "paket",
+    "xidmet nedir",
+    "xidmət nədir",
+    "ne edirsiz",
+    "nə edirsiniz",
+    "what do you offer",
+    "what is your offer",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferPricingRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "qiymet",
+    "qiymət",
+    "price",
+    "pricing",
+    "cost",
+    "budget",
+    "fee",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferPhoneRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "nomre",
+    "nömrə",
+    "telefon",
+    "elaqe",
+    "əlaqə",
+    "phone",
+    "number",
+    "call",
+    "zeng",
+    "zəng",
+    "whatsapp",
+    "vatsap",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferEmailRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "email",
+    "mail",
+    "e poct",
+    "e-poct",
+    "e-poçt",
+    "poct",
+    "poçt",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferWebsiteRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "website",
+    "web site",
+    "sayt",
+    "site",
+    "link",
+    "website link",
+    "site link",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferContactRequest(text = "") {
+  return (
+    inferPhoneRequest(text) ||
+    inferEmailRequest(text) ||
+    inferWebsiteRequest(text)
+  );
+}
+
 function buildSalesContext(profile = {}) {
   const industryHints = getIndustryHints(profile?.industry);
   const primaryCta = s(
@@ -623,6 +731,7 @@ function buildSalesContext(profile = {}) {
       description: s(item?.description),
       pricingMode: s(item?.pricingMode),
       responseMode: s(item?.responseMode),
+      contactCaptureMode: s(item?.contactCaptureMode),
     }))
     .slice(0, 8);
 
@@ -638,8 +747,44 @@ function buildSalesContext(profile = {}) {
   };
 }
 
+function buildContactGrounding(profile = {}) {
+  const normalizedContacts = arr(profile?.contacts)
+    .map((item) => ({
+      type: normalizeContactType(item?.type),
+      label: s(item?.label),
+      value: s(item?.value),
+      primary: item?.primary === true,
+      public: item?.public !== false,
+    }))
+    .filter((item) => item.value)
+    .slice(0, 20);
+
+  const normalizedLocations = arr(profile?.locations)
+    .map((item) => ({
+      title: s(item?.title),
+      address: s(item?.address),
+      city: s(item?.city),
+      region: s(item?.region),
+      country: s(item?.country),
+      primary: item?.primary === true,
+    }))
+    .filter((item) => item.title || item.address)
+    .slice(0, 6);
+
+  return {
+    primaryPhone: s(profile?.primaryPhone),
+    primaryEmail: s(profile?.primaryEmail),
+    websiteUrl: s(profile?.websiteUrl),
+    contactPhones: uniqStrings(arr(profile?.contactPhones).map((x) => s(x)).filter(Boolean)).slice(0, 6),
+    contactEmails: uniqStrings(arr(profile?.contactEmails).map((x) => s(x)).filter(Boolean)).slice(0, 6),
+    contacts: normalizedContacts,
+    locations: normalizedLocations,
+  };
+}
+
 function buildRuntimeGrounding(profile = {}) {
   const salesContext = buildSalesContext(profile);
+  const contactGrounding = buildContactGrounding(profile);
 
   return {
     displayName: s(profile?.displayName),
@@ -701,6 +846,7 @@ function buildRuntimeGrounding(profile = {}) {
       .filter(Boolean)
       .slice(0, 20),
     salesContext,
+    contactGrounding,
   };
 }
 
@@ -711,9 +857,11 @@ function buildConversationSystemPrompt() {
     "Always understand the business runtime first, then the customer need, then answer naturally in the customer's language.",
     "When the customer already stated a concrete need, do NOT answer with generic lines like 'how can I help' or 'write what you need'.",
     "Sound like a sharp human sales operator: calm, credible, concise, commercially aware.",
-    "You must use the tenant grounding: business summary, active services, sales context, lead prompts, CTA direction, and industry constraints.",
-    "Do not invent unavailable offers, fake pricing, fake packages, or unsupported integrations.",
-    "If exact pricing is not grounded, say that pricing depends on scope and move toward a focused qualification question.",
+    "You must use the tenant grounding: business summary, active services, sales context, contact grounding, lead prompts, CTA direction, and industry constraints.",
+    "If contact details are grounded in the runtime and the customer asks for contact, phone, email, WhatsApp, website, or callback route, you MUST use the grounded details directly.",
+    "Never invent phone numbers, emails, WhatsApp numbers, contact placeholders, or fake links.",
+    "If a grounded phone number exists, prefer giving that exact number instead of saying 'we have a number' or asking the user for the business number again.",
+    "If exact pricing is not grounded, say that pricing depends on scope and move toward one focused qualification question.",
     "If the customer asks for the offer, answer concretely with what the business can provide, then move to one best next question.",
     "Prioritize this order: understand need -> frame fit -> qualify one critical detail -> move toward lead capture.",
     "Ask at most one question.",
@@ -737,7 +885,7 @@ function buildConversationUserPrompt({
 
   return [
     "Tenant runtime grounding:",
-    compactJson(runtimeGrounding, 5500),
+    compactJson(runtimeGrounding, 6000),
     "",
     "Top matched knowledge:",
     compactJson(
@@ -791,11 +939,12 @@ function buildConversationUserPrompt({
     ),
     "",
     "Sales behavior instructions:",
-    `- Treat this as a lead conversation unless the message is clearly support-only.`,
-    `- If the lead asks for the offer, explain the real offer in business language, not abstract wording.`,
-    `- If the lead asks for pricing, frame pricing honestly and qualify one scope detail.`,
-    `- If the lead has already chosen a direction, do not restart discovery from zero.`,
-    `- Your next question must help conversion.`,
+    "- Treat this as a lead conversation unless the message is clearly support-only.",
+    "- If the lead asks for contact details and grounded contact details exist, return the exact grounded details directly.",
+    "- If the lead asks for the offer, explain the real offer in business language, not abstract wording.",
+    "- If the lead asks for pricing, frame pricing honestly and qualify one scope detail.",
+    "- If the lead has already chosen a direction, do not restart discovery from zero.",
+    "- Your next question must help conversion.",
     `- Customer message right now: ${JSON.stringify(latest)}`,
   ].join("\n");
 }
@@ -814,7 +963,7 @@ function buildRepairPrompt({
     compactJson(validationErrors, 2200),
     "",
     "Original tenant grounding:",
-    compactJson(runtimeGrounding, 4200),
+    compactJson(runtimeGrounding, 4500),
     "",
     "Original conversation context:",
     compactJson(
@@ -910,38 +1059,6 @@ function pickPrimaryLanguage(profile = {}, fallback = "en") {
   return normalizeLanguage(profile?.languages?.[0] || fallback);
 }
 
-function inferOfferRequest(text = "") {
-  const normalized = normalizeFreeText(text);
-
-  return [
-    "teklif",
-    "offer",
-    "proposal",
-    "package",
-    "paket",
-    "xidmet nedir",
-    "xidmət nədir",
-    "ne edirsiz",
-    "nə edirsiniz",
-    "what do you offer",
-    "what is your offer",
-  ].some((item) => normalized.includes(normalizeFreeText(item)));
-}
-
-function inferPricingRequest(text = "") {
-  const normalized = normalizeFreeText(text);
-
-  return [
-    "qiymet",
-    "qiymət",
-    "price",
-    "pricing",
-    "cost",
-    "budget",
-    "fee",
-  ].some((item) => normalized.includes(normalizeFreeText(item)));
-}
-
 function localizedEmergencyCopy(language = "en") {
   const lang = normalizeLanguage(language);
 
@@ -958,6 +1075,10 @@ function localizedEmergencyCopy(language = "en") {
         "Qiyməti düzgün çərçivələmək üçün əsas scope-u bir cümlə ilə yaza bilərsiniz?",
       generalQuestion:
         "Bir şeyi dəqiqləşdirim: sizin üçün əsas məqsəd nədir?",
+      contactIntro:
+        "Əlaqə məlumatımız budur.",
+      contactQuestion:
+        "İstəyirsiniz indi yazışaq, yoxsa sizi geri yığaq?",
     };
   }
 
@@ -974,6 +1095,9 @@ function localizedEmergencyCopy(language = "en") {
         "Fiyatı doğru çerçevelemek için ana scope'u tek cümleyle yazar mısınız?",
       generalQuestion:
         "Bir şeyi netleştireyim: sizin için ana hedef nedir?",
+      contactIntro: "İletişim bilgimiz budur.",
+      contactQuestion:
+        "İsterseniz buradan yazışalım ya da sizi geri arayalım.",
     };
   }
 
@@ -991,6 +1115,9 @@ function localizedEmergencyCopy(language = "en") {
         "Чтобы корректно сориентировать по стоимости, опишите основной scope одной фразой.",
       generalQuestion:
         "Уточню один момент: какая у вас главная цель?",
+      contactIntro: "Вот наши контактные данные.",
+      contactQuestion:
+        "Если удобно, можем продолжить здесь или созвониться.",
     };
   }
 
@@ -1007,7 +1134,66 @@ function localizedEmergencyCopy(language = "en") {
       "To frame pricing correctly, can you state the main scope in one sentence?",
     generalQuestion:
       "Let me clarify one thing: what is your main goal here?",
+    contactIntro: "Here are our contact details.",
+    contactQuestion:
+      "If you want, we can continue here or arrange a callback.",
   };
+}
+
+function buildGroundedContactReply(profile = {}, language = "en") {
+  const copy = localizedEmergencyCopy(language);
+
+  const parts = [copy.contactIntro];
+
+  if (s(profile?.primaryPhone)) {
+    parts.push(`Telefon: ${s(profile.primaryPhone)}.`);
+  } else if (arr(profile?.contactPhones).length) {
+    parts.push(`Telefon: ${s(profile.contactPhones[0])}.`);
+  }
+
+  if (s(profile?.primaryEmail)) {
+    parts.push(`E-poçt: ${s(profile.primaryEmail)}.`);
+  }
+
+  if (s(profile?.websiteUrl)) {
+    parts.push(`Sayt: ${s(profile.websiteUrl)}.`);
+  }
+
+  parts.push(copy.contactQuestion);
+
+  return sanitizeReplyText(parts.join(" "));
+}
+
+function replyContainsPhone(replyText = "", profile = {}) {
+  const replyComparable = normalizePhoneComparable(replyText);
+  if (!replyComparable) return false;
+
+  const candidates = uniqStrings([
+    s(profile?.primaryPhone),
+    ...arr(profile?.contactPhones).map((x) => s(x)),
+  ])
+    .map((item) => normalizePhoneComparable(item))
+    .filter(Boolean);
+
+  return candidates.some((item) => item && replyComparable.includes(item));
+}
+
+function replyContainsEmail(replyText = "", profile = {}) {
+  const normalizedReply = lower(replyText);
+  const candidates = uniqStrings([
+    s(profile?.primaryEmail),
+    ...arr(profile?.contactEmails).map((x) => s(x)),
+  ])
+    .map((item) => lower(item))
+    .filter(Boolean);
+
+  return candidates.some((item) => item && normalizedReply.includes(item));
+}
+
+function replyContainsWebsite(replyText = "", profile = {}) {
+  const normalizedReply = lower(replyText);
+  const site = lower(s(profile?.websiteUrl));
+  return Boolean(site) && normalizedReply.includes(site);
 }
 
 function buildRuntimeGroundedEmergencyFallback({
@@ -1079,6 +1265,46 @@ function buildRuntimeGroundedEmergencyFallback({
     };
   }
 
+  if (
+    inferContactRequest(text) &&
+    (s(profile?.primaryPhone) ||
+      s(profile?.primaryEmail) ||
+      s(profile?.websiteUrl) ||
+      arr(profile?.contactPhones).length ||
+      arr(profile?.contactEmails).length)
+  ) {
+    const replyText = buildGroundedContactReply(profile, language);
+    return {
+      intent: "contact",
+      askCategory: "contact",
+      stage: "contact_capture",
+      replyStyle: "sales",
+      customerGoal: s(text),
+      answerFirst: replyText,
+      nextQuestion: "",
+      replyText,
+      missingInformation: [],
+      groundedFactsUsed: [
+        "grounded_contact_details",
+        s(profile?.primaryPhone) ? "primary_phone" : "",
+        s(profile?.primaryEmail) ? "primary_email" : "",
+        s(profile?.websiteUrl) ? "website_url" : "",
+      ].filter(Boolean),
+      shouldAskQuestion: false,
+      shouldCreateLead: true,
+      shouldHandoff: false,
+      handoffReason: "",
+      handoffPriority: "normal",
+      confidence: 0.74,
+      leadScore: 72,
+      noReply: false,
+      fallbackReason: "grounded_contact_details",
+      language,
+      understoodIntent: "contact_request",
+      detectedService: "",
+    };
+  }
+
   const copy = localizedEmergencyCopy(language);
   const matchedActiveService = findMatchedActiveService(text, profile);
   const matchedDisabledService = findMatchedDisabledService(text, profile);
@@ -1123,7 +1349,11 @@ function buildRuntimeGroundedEmergencyFallback({
       .join(", ");
 
     const answerFirst = sanitizeReplyText(
-      [copy.ack, copy.offerLead, offerNames ? `Bu istiqamətdə əsas həllərimiz: ${offerNames}.` : ""].join(" ")
+      [
+        copy.ack,
+        copy.offerLead,
+        offerNames ? `Bu istiqamətdə əsas həllərimiz: ${offerNames}.` : "",
+      ].join(" ")
     );
     const nextQuestion = wantsPricing
       ? copy.pricingQuestion
@@ -1161,7 +1391,9 @@ function buildRuntimeGroundedEmergencyFallback({
     const answerFirst = sanitizeReplyText(
       [
         copy.ack,
-        copy.serviceLead(s(matchedActiveService?.name || matchedActiveService?.key)),
+        copy.serviceLead(
+          s(matchedActiveService?.name || matchedActiveService?.key)
+        ),
       ].join(" ")
     );
     const nextQuestion = wantsPricing
@@ -1265,7 +1497,10 @@ function normalizeConversationDecision(parsed = {}, fallbackLanguage = "en") {
   };
 }
 
-function postProcessSalesDecision(normalized = {}, { customerText = "", profile = {} } = {}) {
+function postProcessSalesDecision(
+  normalized = {},
+  { customerText = "", profile = {} } = {}
+) {
   const next = { ...normalized };
 
   if (!next.customerGoal && isSubstantiveCustomerTurn(customerText)) {
@@ -1273,16 +1508,27 @@ function postProcessSalesDecision(normalized = {}, { customerText = "", profile 
   }
 
   if (next.askCategory === "general" && isSubstantiveCustomerTurn(customerText)) {
-    next.askCategory = inferPricingRequest(customerText)
-      ? "pricing"
-      : "service_interest";
+    if (inferContactRequest(customerText)) {
+      next.askCategory = "contact";
+    } else {
+      next.askCategory = inferPricingRequest(customerText)
+        ? "pricing"
+        : "service_interest";
+    }
   }
 
   if (next.stage === "general" && isSubstantiveCustomerTurn(customerText)) {
-    next.stage = inferPricingRequest(customerText) ? "pricing" : "qualification";
+    if (inferContactRequest(customerText)) {
+      next.stage = "contact_capture";
+    } else {
+      next.stage = inferPricingRequest(customerText) ? "pricing" : "qualification";
+    }
   }
 
-  if (inferPricingRequest(customerText)) {
+  if (inferContactRequest(customerText)) {
+    next.leadScore = Math.max(next.leadScore, 68);
+    next.shouldCreateLead = true;
+  } else if (inferPricingRequest(customerText)) {
     next.leadScore = Math.max(next.leadScore, 55);
     next.shouldCreateLead = true;
   } else if (isSubstantiveCustomerTurn(customerText)) {
@@ -1364,6 +1610,30 @@ function validateConversationDecision({
     !/qiym|price|cost|budget|scope|paket|package/i.test(normalized.replyText)
   ) {
     reasons.push("pricing_request_not_handled");
+  }
+
+  if (
+    inferPhoneRequest(customerText) &&
+    (s(profile?.primaryPhone) || arr(profile?.contactPhones).length) &&
+    !replyContainsPhone(normalized.replyText, profile)
+  ) {
+    reasons.push("grounded_phone_missing_from_reply");
+  }
+
+  if (
+    inferEmailRequest(customerText) &&
+    (s(profile?.primaryEmail) || arr(profile?.contactEmails).length) &&
+    !replyContainsEmail(normalized.replyText, profile)
+  ) {
+    reasons.push("grounded_email_missing_from_reply");
+  }
+
+  if (
+    inferWebsiteRequest(customerText) &&
+    s(profile?.websiteUrl) &&
+    !replyContainsWebsite(normalized.replyText, profile)
+  ) {
+    reasons.push("grounded_website_missing_from_reply");
   }
 
   if (
@@ -1485,7 +1755,10 @@ function finalizeConversationResult({
 }) {
   const normalized = postProcessSalesDecision(
     normalizeConversationDecision(parsed, profile?.languages?.[0] || "en"),
-    { customerText: s(parsed?.customerGoal || ""), profile }
+    {
+      customerText: s(parsed?.customerGoal || ""),
+      profile,
+    }
   );
 
   const baseResult = {
@@ -1669,6 +1942,13 @@ export async function runTenantAwareConversationEngine({
         ...obj(profile.profile),
         brand_name: profile.displayName,
         tone_of_voice: profile.tone,
+        public_phone: s(profile.primaryPhone),
+        public_email: s(profile.primaryEmail),
+        website_url: s(profile.websiteUrl),
+      },
+      meta: {
+        contactPhones: arr(profile.contactPhones),
+        contactEmails: arr(profile.contactEmails),
       },
     },
     extra: {
@@ -1681,8 +1961,11 @@ export async function runTenantAwareConversationEngine({
       servicesLine: JSON.stringify(buildServiceLine(profile)),
       disabledServicesLine: JSON.stringify(buildDisabledServiceLine(profile)),
       reliability: compactJson(reliability || {}),
-      runtimeGrounding: compactJson(runtimeGrounding, 5000),
+      runtimeGrounding: compactJson(runtimeGrounding, 6000),
       historySnippet: conversation.historySnippet,
+      primaryPhone: JSON.stringify(s(profile.primaryPhone || "")),
+      primaryEmail: JSON.stringify(s(profile.primaryEmail || "")),
+      websiteUrl: JSON.stringify(s(profile.websiteUrl || "")),
     },
   });
 
@@ -1734,6 +2017,9 @@ export async function runTenantAwareConversationEngine({
         conversation.latestCustomerMessage,
       180
     ),
+    groundedPhone: s(profile.primaryPhone),
+    groundedEmail: s(profile.primaryEmail),
+    groundedWebsite: s(profile.websiteUrl),
   });
 
   try {
@@ -1967,4 +2253,8 @@ export const __test__ = {
   validateConversationDecision,
   normalizeConversationDecision,
   containsInternalStrategyLeak,
+  inferPhoneRequest,
+  inferEmailRequest,
+  inferWebsiteRequest,
+  inferContactRequest,
 };
