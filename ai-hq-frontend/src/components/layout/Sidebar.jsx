@@ -9,10 +9,10 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 188;
-const SIDEBAR_COLLAPSED_WIDTH = 56;
-const MOBILE_DRAWER_WIDTH = 264;
-const SHELL_CHROME_BG = "rgba(248,249,252,0.97)";
+const SIDEBAR_WIDTH = 190;
+const SIDEBAR_COLLAPSED_WIDTH = 58;
+const MOBILE_DRAWER_WIDTH = 268;
+const SHELL_CHROME_BG = "rgba(248,249,252,0.975)";
 const NAV_ITEMS = [...PRIMARY_SECTIONS, ...SECONDARY_SECTIONS, ...UTILITY_SECTIONS];
 
 function formatBadgeCount(count) {
@@ -22,10 +22,8 @@ function formatBadgeCount(count) {
 
 function SidebarImageIcon({
   src,
-  label,
   collapsed = false,
   isActive = false,
-  className = "",
 }) {
   return (
     <img
@@ -35,9 +33,8 @@ function SidebarImageIcon({
       draggable="false"
       className={cx(
         "select-none object-contain transition-all duration-base ease-premium",
-        collapsed ? "h-[16px] w-[16px]" : "h-[15px] w-[15px]",
-        isActive ? "opacity-100" : "opacity-[0.72] group-hover:opacity-100",
-        className
+        collapsed ? "h-[19px] w-[19px]" : "h-[18px] w-[18px]",
+        isActive ? "opacity-100" : "opacity-[0.86] group-hover:opacity-100"
       )}
     />
   );
@@ -61,12 +58,12 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
         <div
           className={cx(
             "group relative flex items-center transition-all duration-base ease-premium",
-            collapsed ? "h-10 justify-center" : "h-9 gap-3 px-4"
+            collapsed ? "h-11 justify-center" : "h-10 gap-3 px-4"
           )}
         >
           <span
             className={cx(
-              "absolute left-0 top-1/2 h-[12px] w-[2px] -translate-y-1/2 rounded-full bg-brand transition-opacity duration-base ease-premium",
+              "absolute left-0 top-1/2 h-[14px] w-[2px] -translate-y-1/2 rounded-full bg-brand transition-opacity duration-base ease-premium",
               isActive ? "opacity-100" : "opacity-0"
             )}
           />
@@ -74,7 +71,6 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           {item.iconType === "image" && item.iconSrc ? (
             <SidebarImageIcon
               src={item.iconSrc}
-              label={item.label}
               collapsed={collapsed}
               isActive={isActive}
             />
@@ -82,7 +78,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
             <Icon
               className={cx(
                 "relative z-[1] shrink-0 transition-colors duration-base ease-premium",
-                collapsed ? "h-[16px] w-[16px]" : "h-[15px] w-[15px]",
+                collapsed ? "h-[19px] w-[19px]" : "h-[18px] w-[18px]",
                 isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
               )}
               strokeWidth={1.95}
@@ -92,7 +88,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           <div
             className={cx(
               "relative z-[1] min-w-0 overflow-hidden transition-all duration-slow ease-premium",
-              collapsed ? "max-w-0 translate-x-1 opacity-0" : "max-w-[136px] opacity-100"
+              collapsed ? "max-w-0 translate-x-1 opacity-0" : "max-w-[138px] opacity-100"
             )}
           >
             <div className="flex min-w-0 items-center gap-2">
@@ -135,10 +131,10 @@ function CollapseControl({ collapsed = false, onToggle }) {
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cx(
         "inline-flex items-center text-text-subtle transition-colors duration-base ease-premium hover:text-text",
-        collapsed ? "h-7 w-7 justify-center" : "h-7 gap-2 px-1"
+        collapsed ? "h-8 w-8 justify-center" : "h-8 gap-2 px-1"
       )}
     >
-      <Icon className="h-[13px] w-[13px]" strokeWidth={1.95} />
+      <Icon className="h-[14px] w-[14px]" strokeWidth={1.95} />
       <span
         className={cx(
           "overflow-hidden text-[11px] font-medium tracking-[-0.01em] transition-all duration-slow ease-premium",
@@ -152,7 +148,7 @@ function CollapseControl({ collapsed = false, onToggle }) {
 }
 
 function SidebarBrandSpace({ collapsed = false }) {
-  return <div className={cx("shrink-0", collapsed ? "h-[74px]" : "h-[88px]")} />;
+  return <div className={cx("shrink-0", collapsed ? "h-[76px]" : "h-[92px]")} />;
 }
 
 function SidebarContent({
@@ -173,7 +169,7 @@ function SidebarContent({
             aria-label="Close navigation"
             className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
           >
-            <X className="h-[14px] w-[14px]" strokeWidth={1.95} />
+            <X className="h-[15px] w-[15px]" strokeWidth={1.95} />
           </button>
         </div>
       ) : (
@@ -181,7 +177,7 @@ function SidebarContent({
       )}
 
       <div className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {NAV_ITEMS.map((item) => (
             <SidebarItem
               key={item.id}
@@ -221,7 +217,7 @@ export default function Sidebar({
           width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
           background: SHELL_CHROME_BG,
           boxShadow:
-            "inset -1px 0 0 rgba(15,23,42,0.045), 12px 0 24px -28px rgba(15,23,42,0.14)",
+            "inset -1px 0 0 rgba(15,23,42,0.045), 12px 0 24px -28px rgba(15,23,42,0.12)",
         }}
       >
         <div className="relative h-full">
@@ -229,7 +225,7 @@ export default function Sidebar({
             className="absolute inset-0 backdrop-blur-xl"
             style={{ background: SHELL_CHROME_BG }}
           />
-          <div className="absolute right-0 top-0 h-full w-px bg-[rgba(15,23,42,0.03)]" />
+          <div className="absolute right-0 top-0 h-full w-px bg-[rgba(15,23,42,0.028)]" />
 
           <SidebarContent
             shellStats={shellStats}

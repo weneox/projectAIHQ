@@ -24,8 +24,8 @@ const GENERIC_WORKSPACE_NAMES = new Set([
   "site",
 ]);
 
-const HEADER_HEIGHT = 50;
-const SHELL_CHROME_BG = "rgba(248,249,252,0.97)";
+const HEADER_HEIGHT = 52;
+const SHELL_CHROME_BG = "rgba(248,249,252,0.975)";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -216,10 +216,10 @@ function AskAiButton() {
           })
         );
       }}
-      className="inline-flex h-7 items-center gap-2 px-1 text-[12px] font-semibold tracking-[-0.02em] text-text-muted transition-colors duration-base ease-premium hover:text-text"
+      className="inline-flex h-8 items-center gap-2 px-1 text-[12px] font-semibold tracking-[-0.02em] text-text-muted transition-colors duration-base ease-premium hover:text-text"
       aria-label="Open Ask AI"
     >
-      <Sparkles className="h-[13px] w-[13px]" strokeWidth={1.95} />
+      <Sparkles className="h-[15px] w-[15px]" strokeWidth={1.95} />
       <span>Ask AI</span>
     </button>
   );
@@ -295,10 +295,10 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[260px] rounded-[18px] border border-white/70 bg-white/96 p-2.5 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.28)] backdrop-blur-xl">
+    <div className="dropdown-panel-anim w-[262px] rounded-[18px] border border-white/80 bg-white/97 p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)] backdrop-blur-xl">
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
-          <WorkspaceGlyph className="h-8 w-8 shrink-0 opacity-[0.96]" />
+          <WorkspaceGlyph className="h-9 w-9 shrink-0 opacity-[0.96]" />
 
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
@@ -351,9 +351,9 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         type="button"
         aria-label={displayName}
         aria-expanded={open}
-        className="flex h-7 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
+        className="flex h-8 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
       >
-        <WorkspaceGlyph className="h-[15px] w-[15px] shrink-0 opacity-[0.96]" />
+        <WorkspaceGlyph className="h-[17px] w-[17px] shrink-0 opacity-[0.96]" />
 
         <div className="hidden min-w-0 text-left lg:block">
           <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
@@ -363,7 +363,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
         <ChevronDown
           className={cx(
-            "h-[12px] w-[12px] text-text-subtle transition-transform duration-base ease-premium",
+            "h-[13px] w-[13px] text-text-subtle transition-transform duration-base ease-premium",
             open && "rotate-180"
           )}
           strokeWidth={2}
@@ -383,10 +383,10 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-7 w-7 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
+      className="relative inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
       aria-label="Open notifications"
     >
-      <Bell className="h-[13px] w-[13px]" strokeWidth={1.95} />
+      <Bell className="h-[15px] w-[15px]" strokeWidth={1.95} />
       {unread > 0 ? (
         <span className="absolute right-[5px] top-[5px] h-[4px] w-[4px] rounded-full bg-brand" />
       ) : null}
@@ -402,22 +402,22 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
         style={{
           height: HEADER_HEIGHT,
           background: SHELL_CHROME_BG,
-          boxShadow: "0 10px 24px -24px rgba(15,23,42,0.18)",
+          boxShadow: "0 10px 24px -24px rgba(15,23,42,0.14)",
         }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-3.5 md:px-5">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-7 w-7 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text md:hidden"
+              className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-[14px] w-[14px]" strokeWidth={2} />
+              <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-2.5">
+          <div className="flex items-center gap-2.5 md:gap-3">
             <AskAiButton />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl

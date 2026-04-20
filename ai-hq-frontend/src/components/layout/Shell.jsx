@@ -635,7 +635,7 @@ export default function Shell() {
   const topOffset = topWarningVisible ? GLOBAL_ALERT_HEIGHT : 0;
 
   const pageTransition = {
-    duration: 0.2,
+    duration: 0.22,
     ease: [0.22, 1, 0.36, 1],
   };
 
@@ -669,7 +669,7 @@ export default function Shell() {
           top: `${topOffset + HEADER_HEIGHT}px`,
           height: "1px",
           background: "rgba(15,23,42,0.045)",
-          boxShadow: "0 10px 18px -16px rgba(15,23,42,0.18)",
+          boxShadow: "0 12px 20px -18px rgba(15,23,42,0.16)",
         }}
       />
 
@@ -688,7 +688,7 @@ export default function Shell() {
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white">
-              <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-5 pb-8 pt-5 md:px-6 md:pb-10 md:pt-6">
+              <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={`${location.pathname}${location.search}`}
