@@ -1165,6 +1165,8 @@ function buildSetupFlowState({
         arr(draft.hours).length
     );
 
+  const hasApprovedSetupBaseline = truthRuntime.truthReady === true;
+
   const launchPosture = !launchChannel.connected
     ? "connect_channel"
     : !truthRuntime.truthReady
@@ -1173,100 +1175,81 @@ function buildSetupFlowState({
         ? "runtime_repair_needed"
         : "normal_operation";
 
-  const assistantMode =
-    launchPosture === "runtime_repair_needed" ? "support" : "setup";
-
   const setupWidgetAction = {
-    label: hasDraft ? "Continue AI setup" : "Start AI setup",
+    label: hasApprovedSetupBaseline
+      ? hasDraft
+        ? "Continue setup update"
+        : "Review business setup"
+      : hasDraft
+        ? "Continue AI setup"
+        : "Start AI setup",
     path: SETUP_WIDGET_ROUTE,
   };
 
-  const launchAction =
-    launchPosture === "connect_channel"
-      ? normalizeAction(launchChannel.action, setupWidgetAction)
-      : launchPosture === "runtime_repair_needed"
-        ? normalizeAction(truthRuntime.action, setupWidgetAction)
-        : setupWidgetAction;
+  let title = "Start the business setup.";
+  let summary =
+    "Create the first structured draft from sources or a short description, then review and finalize it before anything becomes live.";
+  let detail = "No structured setup draft is visible yet.";
+  let status = "ready_to_start";
+  let statusLabel = "Start setup";
+
+  if (hasApprovedSetupBaseline && !hasDraft) {
+    title = "Approved business setup is live.";
+    summary =
+      "This tenant already has an approved setup baseline governing truth and runtime. Open setup only when the business changes.";
+    detail =
+      launchPosture === "runtime_repair_needed"
+        ? truthRuntime.detail
+        : truthRuntime.truthVersionId
+          ? `Approved truth version ${truthRuntime.truthVersionId} is active for the current tenant.`
+          : "Approved setup is already governing the current tenant.";
+    status =
+      launchPosture === "runtime_repair_needed"
+        ? "approved_repair_pending"
+        : "approved";
+    statusLabel =
+      launchPosture === "runtime_repair_needed"
+        ? "Approved baseline"
+        : "Approved";
+  } else if (hasDraft && hasApprovedSetupBaseline) {
+    title = "A business setup update is in progress.";
+    summary =
+      "The approved setup stays live until you review and finalize these draft changes.";
+    detail = `${readySections} ready sections / ${blockerCount} draft blockers remaining.`;
+    status = "draft_update_in_progress";
+    statusLabel = "Draft update";
+  } else if (hasDraft) {
+    title = "Continue the business setup draft.";
+    summary =
+      blockerCount > 0
+        ? `${blockerCount} structured blockers still need confirmation before approval.`
+        : "The draft is structurally complete and ready for review.";
+    detail = `${readySections} ready sections / ${blockerCount} blockers remaining.`;
+    status = blockerCount > 0 ? "draft_in_progress" : "ready_for_review";
+    statusLabel = blockerCount > 0 ? "Draft in progress" : "Ready for review";
+  }
+
+  let secondaryAction = { label: "Open truth", path: "/truth" };
+
+  if (launchPosture === "connect_channel") {
+    secondaryAction = { label: "Open channels", path: "/channels" };
+  } else if (!hasApprovedSetupBaseline && !hasDraft) {
+    secondaryAction = { label: "Open home", path: "/home" };
+  }
 
   return {
     needed: launchPosture === "setup_needed",
     launchPosture,
-    assistantMode,
-    title:
-      launchPosture === "connect_channel"
-        ? hasDraft
-          ? "A setup draft already exists while the launch lane still needs a connected channel."
-          : "Connect a launch channel first."
-        : launchPosture === "setup_needed"
-          ? hasDraft
-            ? "A launch channel is connected. Continue the setup draft."
-            : "A launch channel is connected. Start the first setup draft."
-          : launchPosture === "runtime_repair_needed"
-            ? truthRuntime.title
-            : hasDraft
-              ? "Continue the setup draft."
-              : "Setup is available when you need it.",
-    summary:
-      launchPosture === "connect_channel"
-        ? hasDraft
-          ? "The draft can still be reviewed, but the launch lane remains blocked until a real launch channel is connected."
-          : "Home stays provider-agnostic until a real launch channel is connected and trusted."
-        : launchPosture === "setup_needed"
-          ? truthRuntime.summary
-          : launchPosture === "runtime_repair_needed"
-            ? truthRuntime.summary
-            : hasDraft
-              ? "Draft work stays separate from approved truth and runtime activation."
-              : "The assistant can stay available for future guided edits.",
-    detail:
-      launchPosture === "connect_channel"
-        ? hasDraft
-          ? `${readySections} ready sections / ${blockerCount} draft blockers remaining.`
-          : launchChannel.detail
-        : launchPosture === "runtime_repair_needed"
-          ? truthRuntime.detail
-          : hasDraft
-            ? s(review.message)
-            : "Start from sources or a short note, then confirm only the important structured fields.",
-    status:
-      launchPosture === "connect_channel"
-        ? hasDraft
-          ? "draft_available"
-          : "waiting_for_channel"
-        : launchPosture === "setup_needed"
-          ? hasDraft
-            ? "draft_in_progress"
-            : "ready_to_start"
-          : launchPosture === "runtime_repair_needed"
-            ? "repair_required"
-            : hasDraft
-              ? "draft_available"
-              : "ready",
-    statusLabel:
-      launchPosture === "connect_channel"
-        ? hasDraft
-          ? "Draft available"
-          : "Waiting for channel"
-        : launchPosture === "setup_needed"
-          ? hasDraft
-            ? "Draft in progress"
-            : "Start setup"
-          : launchPosture === "runtime_repair_needed"
-            ? "Repair required"
-            : hasDraft
-              ? "Draft available"
-              : "Ready",
+    assistantMode: "setup",
+    title,
+    summary,
+    detail,
+    status,
+    statusLabel,
     action: setupWidgetAction,
-    launchAction,
-    secondaryAction:
-      launchPosture === "connect_channel"
-        ? { label: "Open channels", path: "/channels" }
-        : launchPosture === "setup_needed"
-          ? { label: "Open truth", path: "/truth" }
-          : launchPosture === "runtime_repair_needed"
-            ? { label: "Open inbox", path: "/inbox" }
-            : { label: "Open home", path: "/home" },
+    secondaryAction,
     hasDraft,
+    hasApprovedSetupBaseline,
     servicesCount: arr(draft.services).length,
     contactsCount: arr(draft.contacts).length,
     hoursCount: arr(draft.hours).length,
@@ -1735,34 +1718,15 @@ export function useProductHome(options = {}) {
     });
 
     const assistant = {
-      mode: setupFlow.assistantMode,
-      title:
-        setupFlow.launchPosture === "connect_channel"
-          ? "Connect channel"
-          : setupFlow.launchPosture === "runtime_repair_needed"
-            ? "Runtime repair"
-            : setupFlow.needed
-              ? "Structured setup"
-              : setupFlow.hasDraft
-                ? "Continue setup"
-                : "Setup",
+      mode: "setup",
+      title: setupFlow.title,
       statusLabel: setupFlow.statusLabel,
-      summary:
-        setupFlow.launchPosture === "connect_channel"
-          ? "Connect a launch channel first."
-          : setupFlow.launchPosture === "runtime_repair_needed"
-            ? "Repair runtime before trusting live automation."
-            : setupFlow.needed
-              ? setupFlow.blockerCount > 0
-                ? `${setupFlow.blockerCount} structured blockers still need confirmation.`
-                : "The draft is structurally complete for later review."
-              : setupFlow.hasDraft
-                ? `${setupFlow.readySections} setup sections already have draft coverage.`
-                : "Structured setup is available when needed.",
-      primaryAction: setupFlow.launchAction,
+      summary: setupFlow.summary,
+      primaryAction: setupFlow.action,
       secondaryAction: setupFlow.secondaryAction,
       launchPosture: setupFlow.launchPosture,
       setupNeeded: setupFlow.needed,
+      hasApprovedSetupBaseline: setupFlow.hasApprovedSetupBaseline,
       session: setupFlow.session,
       draft: setupFlow.draft,
       review: setupFlow.review,
@@ -1775,6 +1739,7 @@ export function useProductHome(options = {}) {
     return {
       launchChannel,
       truthRuntime,
+      inboxState,
       assistant,
       availabilityNote,
       launchPhaseLabel: launchLane.launchPhaseLabel,
