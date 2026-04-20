@@ -1,5 +1,5 @@
 // src/services/promptBundle.js
-// FINAL v4.1 — universal multi-industry + multi-tenant prompt bundle builder
+// FINAL v4.2 — universal multi-industry + multi-tenant prompt bundle builder
 //
 // ✅ tenant-aware
 // ✅ industry-aware
@@ -11,6 +11,8 @@
 // ✅ safer multi-tenant merging
 // ✅ future-proof for any business type
 // ✅ inbox.reply usecase support
+// ✅ approved contact data carried into prompt bundle
+// ✅ prevents false "contact not available" answers when truth/runtime has phone/email/site
 
 import { deepFix, fixText } from "../utils/textFix.js";
 import {
@@ -102,6 +104,69 @@ function normalizeHashtagList(input = [], fallback = "") {
 
   if (!list.length) return fallback;
   return list.join(" ");
+}
+
+function normalizeLooseValues(input = [], keys = []) {
+  const out = [];
+
+  const visit = (item) => {
+    if (item == null) return;
+
+    if (Array.isArray(item)) {
+      item.forEach(visit);
+      return;
+    }
+
+    if (typeof item === "string" || typeof item === "number") {
+      const text = s(item);
+      if (text) out.push(text);
+      return;
+    }
+
+    if (typeof item !== "object") return;
+
+    for (const key of keys) {
+      const value = item?.[key];
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        continue;
+      }
+      const text = s(value);
+      if (text) {
+        out.push(text);
+        break;
+      }
+    }
+  };
+
+  visit(input);
+  return uniqStrings(out);
+}
+
+function extractContactChannelValues(
+  input = [],
+  allowedChannels = [],
+  valueKeys = ["value", "phone", "email", "number", "url"]
+) {
+  const allowed = new Set(arr(allowedChannels).map((x) => s(x).toLowerCase()));
+  const out = [];
+
+  for (const item of arr(input)) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+
+    const channel = s(item?.channel || item?.type || item?.kind).toLowerCase();
+    if (!allowed.size || allowed.has(channel)) {
+      for (const key of valueKeys) {
+        const text = s(item?.[key]);
+        if (text) {
+          out.push(text);
+          break;
+        }
+      }
+    }
+  }
+
+  return uniqStrings(out);
 }
 
 function normalizeLang(v) {
@@ -206,6 +271,19 @@ function finalizeTenantDerivedFields(raw = {}) {
   ).filter(Boolean);
 
   const preferredPresets = uniqStrings(arr(t.preferredPresets));
+  const contactPhones = uniqStrings(arr(t.contactPhones));
+  const contactEmails = uniqStrings(arr(t.contactEmails));
+  const contactAddresses = uniqStrings(arr(t.contactAddresses));
+  const websiteUrls = uniqStrings(arr(t.websiteUrls));
+  const bookingLinks = uniqStrings(arr(t.bookingLinks));
+  const socialLinks = uniqStrings(arr(t.socialLinks));
+
+  const publicPhone =
+    pickFirstNonEmpty(t.publicPhone, t.primaryPhone, contactPhones[0]) || "";
+  const publicEmail =
+    pickFirstNonEmpty(t.publicEmail, t.primaryEmail, contactEmails[0]) || "";
+  const websiteUrl =
+    pickFirstNonEmpty(t.websiteUrl, websiteUrls[0]) || "";
 
   return {
     ...t,
@@ -216,6 +294,17 @@ function finalizeTenantDerivedFields(raw = {}) {
     audiences,
     requiredHashtags,
     preferredPresets,
+    contactPhones,
+    contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks,
+    socialLinks,
+    publicPhone,
+    primaryPhone: pickFirstNonEmpty(t.primaryPhone, publicPhone),
+    publicEmail,
+    primaryEmail: pickFirstNonEmpty(t.primaryEmail, publicEmail),
+    websiteUrl,
 
     toneText: normalizeTextList(
       tone,
@@ -275,6 +364,7 @@ function normalizeTenantRuntime(raw = {}) {
       brand.name,
       profile.displayName,
       profile.companyName,
+      profile.brand_name,
       tenant.companyName,
       tenant.brandName,
       tenant.name,
@@ -288,6 +378,7 @@ function normalizeTenantRuntime(raw = {}) {
       brand.displayName,
       brand.name,
       tenant.brandName,
+      profile.brand_name,
       companyName
     ) || companyName;
 
@@ -360,9 +451,108 @@ function normalizeTenantRuntime(raw = {}) {
     ...arr(visualStyle.preferredPresets),
   ]);
 
+  const contactPhones = uniqStrings([
+    pickFirstNonEmpty(
+      tenant.publicPhone,
+      tenant.primaryPhone,
+      tenant.phone,
+      profile.public_phone,
+      profile.publicPhone,
+      profile.primary_phone,
+      profile.primaryPhone,
+      profile.phone
+    ),
+    ...normalizeLooseValues(meta.contactPhones, ["value", "phone", "number"]),
+    ...normalizeLooseValues(profile.contactPhones, ["value", "phone", "number"]),
+    ...extractContactChannelValues(
+      tenant.contacts,
+      ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
+      ["value", "phone", "number"]
+    ),
+    ...extractContactChannelValues(
+      meta.contacts,
+      ["phone", "mobile", "telephone", "tel", "call", "whatsapp"],
+      ["value", "phone", "number"]
+    ),
+  ]);
+
+  const contactEmails = uniqStrings([
+    pickFirstNonEmpty(
+      tenant.publicEmail,
+      tenant.primaryEmail,
+      tenant.email,
+      profile.public_email,
+      profile.publicEmail,
+      profile.primary_email,
+      profile.primaryEmail,
+      profile.email
+    ),
+    ...normalizeLooseValues(meta.contactEmails, ["value", "email"]),
+    ...normalizeLooseValues(profile.contactEmails, ["value", "email"]),
+    ...extractContactChannelValues(
+      tenant.contacts,
+      ["email", "mail"],
+      ["value", "email"]
+    ),
+    ...extractContactChannelValues(
+      meta.contacts,
+      ["email", "mail"],
+      ["value", "email"]
+    ),
+  ]);
+
+  const contactAddresses = uniqStrings([
+    pickFirstNonEmpty(
+      tenant.primaryAddress,
+      tenant.address,
+      profile.primary_address,
+      profile.primaryAddress,
+      profile.address
+    ),
+    ...normalizeLooseValues(meta.locations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "value",
+    ]),
+    ...normalizeLooseValues(tenant.locations, [
+      "addressLine",
+      "address_line",
+      "title",
+      "value",
+    ]),
+    ...normalizeLooseValues(meta.contactAddresses, [
+      "value",
+      "addressLine",
+      "address_line",
+    ]),
+  ]);
+
+  const websiteUrls = uniqStrings([
+    pickFirstNonEmpty(
+      tenant.websiteUrl,
+      tenant.website,
+      profile.website_url,
+      profile.websiteUrl,
+      meta.websiteUrl
+    ),
+    ...normalizeLooseValues(meta.websiteUrls, ["value", "url", "websiteUrl", "website_url"]),
+    ...normalizeLooseValues(meta.socialLinks, ["value", "url"]),
+  ]);
+
+  const bookingLinks = uniqStrings([
+    ...normalizeLooseValues(meta.bookingLinks, ["value", "url"]),
+    ...normalizeLooseValues(tenant.bookingLinks, ["value", "url"]),
+  ]);
+
+  const socialLinks = uniqStrings([
+    ...normalizeLooseValues(meta.socialLinks, ["value", "url"]),
+    ...normalizeLooseValues(tenant.socialLinks, ["value", "url"]),
+  ]);
+
   return finalizeTenantDerivedFields({
     tenantKey,
-    tenantId: tenantKey,
+    tenantId: pickFirstNonEmpty(tenant.tenantId, tenant.id, tenantKey),
 
     companyName,
     brandName,
@@ -411,6 +601,20 @@ function normalizeTenantRuntime(raw = {}) {
     audiences,
     requiredHashtags,
     preferredPresets,
+
+    publicPhone: pickFirstNonEmpty(contactPhones[0]),
+    primaryPhone: pickFirstNonEmpty(contactPhones[0]),
+    publicEmail: pickFirstNonEmpty(contactEmails[0]),
+    primaryEmail: pickFirstNonEmpty(contactEmails[0]),
+    primaryAddress: pickFirstNonEmpty(contactAddresses[0]),
+    websiteUrl: pickFirstNonEmpty(websiteUrls[0]),
+
+    contactPhones,
+    contactEmails,
+    contactAddresses,
+    websiteUrls,
+    bookingLinks,
+    socialLinks,
 
     toneText:
       pickFirstNonEmpty(
@@ -489,6 +693,18 @@ ${s(t.requiredHashtagsText || "#Business #Brand")}
 TENANT PREFERRED VISUAL PRESETS:
 ${s(t.preferredPresetsText || "industry-appropriate premium visual direction")}
 
+TENANT PUBLIC CONTACT DATA:
+- publicPhone: ${s(t.publicPhone)}
+- publicEmail: ${s(t.publicEmail)}
+- primaryAddress: ${s(t.primaryAddress)}
+- websiteUrl: ${s(t.websiteUrl)}
+- contactPhones: ${normalizeTextList(arr(t.contactPhones), "")}
+- contactEmails: ${normalizeTextList(arr(t.contactEmails), "")}
+- contactAddresses: ${normalizeTextList(arr(t.contactAddresses), "")}
+- websiteUrls: ${normalizeTextList(arr(t.websiteUrls), "")}
+- bookingLinks: ${normalizeTextList(arr(t.bookingLinks), "")}
+- socialLinks: ${normalizeTextList(arr(t.socialLinks), "")}
+
 TENANT OUTPUT RULES:
 - Keep output aligned with this tenant’s real business identity.
 - Do not drift into another industry unless clearly relevant.
@@ -498,6 +714,9 @@ TENANT OUTPUT RULES:
 - Use outputLanguage for normal written content unless another language is explicitly requested.
 - The tenant is NOT automatically a technology company.
 - Do not force AI, robotics, futuristic technology, dashboards, software UI, or digital transformation imagery unless the tenant’s business and request clearly support it.
+- If the user asks for phone number, email, website, booking link, or address, and a value exists in TENANT PUBLIC CONTACT DATA, provide that exact value directly.
+- Never say a contact detail is unavailable if it exists in TENANT PUBLIC CONTACT DATA.
+- Public contact details stored in approved tenant runtime are allowed to be shared with users when relevant.
 `);
 }
 
