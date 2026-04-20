@@ -9,7 +9,6 @@ import {
 } from "./shared.js";
 import {
   getLocalizedGreeting,
-  getLocalizedGreetingFollowup,
   interpolateBrand,
 } from "./prompts/reply.copy.js";
 
@@ -73,8 +72,14 @@ function isGreetingIntent(result = {}) {
   const askCategory = lower(result?.askCategory || "");
   const stage = lower(result?.stage || "");
   const intent = lower(result?.intent || "");
+  const fastLaneReason = lower(result?.fastLaneReason || "");
 
-  return askCategory === "greeting" || stage === "greeting" || intent === "greeting";
+  return (
+    askCategory === "greeting" ||
+    stage === "greeting" ||
+    intent === "greeting" ||
+    fastLaneReason === "start_command"
+  );
 }
 
 function countQuestions(text = "") {
@@ -94,6 +99,8 @@ function looksLikeGreetingSentence(text = "") {
     "good afternoon",
     "good evening",
     "salam",
+    "salam necesiz",
+    "salam necəsiz",
     "merhaba",
     "selam",
     "zdravstvuyte",
@@ -122,6 +129,80 @@ function stripLeadingGreetingSentence(text = "") {
   return sanitizeReplyText(parts.join(" "));
 }
 
+function isWeakLeadSentence(text = "") {
+  const normalized = normalizeTextForCompare(text);
+
+  return [
+    "yes",
+    "beli",
+    "bəli",
+    "ok",
+    "okay",
+    "ela",
+    "əla",
+    "super",
+    "basa dusdum",
+    "başa düşdüm",
+    "anladim",
+    "anladım",
+    "understood",
+  ].includes(normalized);
+}
+
+function stripLeadingWeakLeadSentence(text = "") {
+  const parts = splitSentences(text);
+  if (parts.length <= 1) return sanitizeReplyText(text);
+
+  if (isWeakLeadSentence(parts[0])) {
+    return sanitizeReplyText(parts.slice(1).join(" "));
+  }
+
+  return sanitizeReplyText(text);
+}
+
+function containsInternalStrategyLeak(text = "") {
+  const normalized = s(text);
+  if (!normalized) return false;
+
+  return /(?:^|[\s(])(?:qiym[eə]t[_-]?range|price[_-]?range|scope[_-]?clarify[_-]?single|qualify[_-]?single|sales[_-]?stage|lead[_-]?capture|contact[_-]?capture|cta[_-]?next|reply[_-]?style|ask[_-]?category|intent[_-]?key|crm[_-]?capture|discovery[_-]?mode)(?:$|[\s):,.!?])/iu.test(
+    normalized
+  );
+}
+
+function stripInternalStrategyTokens(text = "") {
+  let out = sanitizeReplyText(text);
+  if (!out) return "";
+
+  out = out
+    .replace(
+      /\b(?:qiym[eə]t[_-]?range|price[_-]?range|scope[_-]?clarify[_-]?single|qualify[_-]?single|sales[_-]?stage|lead[_-]?capture|contact[_-]?capture|cta[_-]?next|reply[_-]?style|ask[_-]?category|intent[_-]?key|crm[_-]?capture|discovery[_-]?mode)\b/giu,
+      " "
+    )
+    .replace(/\b[a-z]+(?:_[a-z0-9]+){1,}\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return sanitizeReplyText(out);
+}
+
+function dedupeSentences(text = "") {
+  const parts = splitSentences(text);
+  if (!parts.length) return "";
+
+  const out = [];
+  const seen = new Set();
+
+  for (const part of parts) {
+    const key = normalizeTextForCompare(part);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+
+  return sanitizeReplyText(out.join(" "));
+}
+
 function buildBodyCandidate(result = {}) {
   const structured = joinReplyParts(
     s(result?.answerFirst || ""),
@@ -129,8 +210,27 @@ function buildBodyCandidate(result = {}) {
   );
 
   const raw = sanitizeReplyText(result?.replyText || "");
-  const candidate = structured || raw;
-  return stripLeadingGreetingSentence(candidate);
+  const rawHasLeak = containsInternalStrategyLeak(raw);
+  const structuredHasLeak = containsInternalStrategyLeak(structured);
+
+  let candidate = "";
+
+  if (structured && !structuredHasLeak) {
+    candidate = structured;
+  } else if (raw && !rawHasLeak) {
+    candidate = raw;
+  } else if (structured) {
+    candidate = stripInternalStrategyTokens(structured);
+  } else {
+    candidate = stripInternalStrategyTokens(raw);
+  }
+
+  candidate = stripLeadingGreetingSentence(candidate);
+  candidate = stripLeadingWeakLeadSentence(candidate);
+  candidate = stripInternalStrategyTokens(candidate);
+  candidate = dedupeSentences(candidate);
+
+  return sanitizeReplyText(candidate);
 }
 
 function escapeRegExp(value = "") {
@@ -166,60 +266,122 @@ function isGenericFollowupSentence(text = "") {
     "buyurun",
     "chem mogu pomoch",
     "como puedo ayudar",
+    "nece komek ede bilerem",
+    "necə kömək edə bilərəm",
+    "nasil yardimci olabilirim",
+    "nasıl yardımcı olabilirim",
+    "what do you need",
+    "nə lazımdır",
+    "nə lazım olduğunu yazın",
   ].includes(normalized);
 }
 
-function dropDuplicateTrailingQuestionIfAnswerPresent(text = "") {
+function dropWeakTrailingSentence(text = "") {
   const parts = splitSentences(text);
   if (parts.length < 2) return sanitizeReplyText(text);
 
   const last = parts[parts.length - 1];
-  if (!/[?؟]$/.test(last)) return sanitizeReplyText(text);
-  if (!isGenericFollowupSentence(last)) return sanitizeReplyText(text);
+  if (isGenericFollowupSentence(last) || isWeakLeadSentence(last)) {
+    return sanitizeReplyText(parts.slice(0, -1).join(" "));
+  }
 
-  return sanitizeReplyText(parts.slice(0, -1).join(" "));
+  return sanitizeReplyText(text);
 }
 
-function enforceSingleQuestion(text = "") {
+function selectSingleQuestion(text = "") {
   const parts = splitSentences(text);
   if (!parts.length) return "";
 
-  const output = [];
-  let seenQuestion = false;
+  const questionIndexes = parts
+    .map((part, index) => ({ index, isQuestion: /[?؟]$/.test(part), part }))
+    .filter((item) => item.isQuestion)
+    .map((item) => item.index);
 
-  for (const part of parts) {
+  if (questionIndexes.length <= 1) {
+    return sanitizeReplyText(parts.join(" "));
+  }
+
+  const keepQuestionIndex = questionIndexes[questionIndexes.length - 1];
+  const output = [];
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
     const isQuestion = /[?؟]$/.test(part);
+
     if (!isQuestion) {
       output.push(part);
       continue;
     }
 
-    if (seenQuestion) continue;
-    seenQuestion = true;
-    output.push(part);
+    if (i === keepQuestionIndex) {
+      output.push(part);
+    }
   }
 
   return sanitizeReplyText(output.join(" "));
 }
 
-function clipReplyByBehavior(text = "", behavior = {}, profile = {}) {
-  const maxSentences = Math.max(
-    1,
-    Math.min(
-      4,
-      Number(
-        behavior?.maxSentences ||
-          profile?.maxSentences ||
-          obj(behavior?.channelBehavior?.inbox).maxSentences ||
-          2
-      )
-    )
+function resolveMaxSentences(result = {}, behavior = {}, profile = {}) {
+  const stage = lower(result?.stage || "");
+  const askCategory = lower(result?.askCategory || "");
+
+  const configured = Number(
+    behavior?.maxSentences ||
+      profile?.maxSentences ||
+      obj(behavior?.channelBehavior?.inbox).maxSentences ||
+      0
   );
 
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.max(2, Math.min(5, configured));
+  }
+
+  if (
+    ["pricing", "recommendation", "qualification"].includes(stage) ||
+    ["pricing", "recommendation", "service_interest", "quote"].includes(askCategory)
+  ) {
+    return 3;
+  }
+
+  return 2;
+}
+
+function clipReplyByBehavior(text = "", result = {}, behavior = {}, profile = {}) {
+  const maxSentences = resolveMaxSentences(result, behavior, profile);
   const parts = splitSentences(text);
   if (!parts.length) return "";
 
-  return sanitizeReplyText(parts.slice(0, maxSentences).join(" "));
+  const questionIndexes = parts
+    .map((part, index) => ({ index, isQuestion: /[?؟]$/.test(part) }))
+    .filter((item) => item.isQuestion)
+    .map((item) => item.index);
+
+  if (parts.length <= maxSentences) {
+    return sanitizeReplyText(parts.join(" "));
+  }
+
+  const keepLastQuestion =
+    questionIndexes.length > 0 ? questionIndexes[questionIndexes.length - 1] : -1;
+
+  const output = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    if (output.length >= maxSentences) break;
+
+    if (i === keepLastQuestion) {
+      continue;
+    }
+
+    output.push(parts[i]);
+  }
+
+  if (
+    keepLastQuestion >= 0 &&
+    !output.some((part) => normalizeTextForCompare(part) === normalizeTextForCompare(parts[keepLastQuestion]))
+  ) {
+    output[output.length - 1] = parts[keepLastQuestion];
+  }
+
+  return sanitizeReplyText(output.join(" "));
 }
 
 function getSafeGreeting(language = "en", mode = "neutral", brandName = "") {
@@ -232,32 +394,27 @@ function getSafeGreeting(language = "en", mode = "neutral", brandName = "") {
   );
 }
 
-function getSafeGreetingFollowup(language = "en") {
-  return sanitizeReplyText(getLocalizedGreetingFollowup(language));
-}
-
 function resolveGreetingMode(behavior = {}, brandName = "") {
-  const explicitGreetingMode = lower(behavior?.greetingMode || "warm");
+  const explicitGreetingMode = lower(behavior?.greetingMode || "");
   const brandedIntroMode = lower(behavior?.brandedIntroMode || "auto");
 
   if (s(behavior?.customGreeting || "")) return "custom";
 
-  if (explicitGreetingMode && explicitGreetingMode !== "auto") {
-    if (explicitGreetingMode === "branded" && !brandName) return "warm";
+  if (explicitGreetingMode) {
+    if (explicitGreetingMode === "none") return "none";
+    if (explicitGreetingMode === "branded" && !brandName) return "neutral";
     return explicitGreetingMode;
   }
 
   if (brandedIntroMode === "always" && brandName) return "branded";
-  if (brandedIntroMode === "never") return "warm";
 
-  return "warm";
+  return "neutral";
 }
 
 function shouldApplyIntro({
   behavior = {},
   result = {},
   recentMessages = [],
-  greetingOnly = false,
   bodyText = "",
 }) {
   const greetingEnabled =
@@ -267,33 +424,17 @@ function shouldApplyIntro({
   const introMode = lower(behavior?.introMode || "adaptive");
   if (introMode === "none") return false;
 
-  const inboxBehavior = obj(behavior?.channelBehavior?.inbox);
-  const introOnFirstTurnOnly =
-    typeof inboxBehavior?.introOnFirstTurnOnly === "boolean"
-      ? inboxBehavior.introOnFirstTurnOnly
-      : true;
-
   const firstTurn = !hasPreviousOutbound(recentMessages);
-  const fastLaneReason = lower(result?.fastLaneReason || "");
   const greetingIntent = isGreetingIntent(result);
 
-  if (introOnFirstTurnOnly && !firstTurn) {
-    return false;
+  if (introMode === "always") {
+    return firstTurn;
   }
 
-  if (fastLaneReason === "start_command") {
-    return true;
-  }
+  if (!firstTurn) return false;
+  if (greetingIntent) return true;
 
-  if (!greetingIntent) {
-    return false;
-  }
-
-  if (greetingOnly) {
-    return true;
-  }
-
-  return firstTurn && Boolean(bodyText);
+  return false;
 }
 
 function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
@@ -320,6 +461,15 @@ function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
   }
 
   const greetingMode = resolveGreetingMode(behavior, brandName);
+  if (greetingMode === "none") {
+    return {
+      greetingText: "",
+      greetingMode: "none",
+      usedCustomGreeting: false,
+      language,
+    };
+  }
+
   const greetingText = getSafeGreeting(language, greetingMode, brandName);
 
   return {
@@ -330,9 +480,55 @@ function buildGreetingText({ behavior = {}, result = {}, profile = {} }) {
   };
 }
 
-function buildGreetingOnlyBody({ result = {}, profile = {} }) {
-  const language = resolveLanguage(result, profile);
-  return getSafeGreetingFollowup(language);
+function ensureMinimumSalesBody({
+  bodyText = "",
+  result = {},
+  profile = {},
+}) {
+  let out = sanitizeReplyText(bodyText);
+  if (!out) return "";
+
+  const stage = lower(result?.stage || "");
+  const askCategory = lower(result?.askCategory || "");
+  const leadPrompt = sanitizeReplyText(
+    pickFirstMeaningfulPrompt(
+      profile?.conversationAssets?.qualificationQuestions,
+      profile?.qualificationQuestions,
+      profile?.conversationAssets?.leadPrompts,
+      profile?.leadPrompts
+    )
+  );
+
+  if (
+    countQuestions(out) === 0 &&
+    ["pricing", "recommendation", "qualification", "service_interest", "quote"].includes(
+      stage || askCategory
+    ) &&
+    leadPrompt
+  ) {
+    out = sanitizeReplyText(`${out} ${leadPrompt}`);
+  }
+
+  return out;
+}
+
+function pickFirstMeaningfulPrompt(...sources) {
+  for (const source of sources) {
+    for (const item of arr(source)) {
+      const text = sanitizeReplyText(item);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function normalizePunctuation(text = "") {
+  return sanitizeReplyText(
+    s(text)
+      .replace(/\s+([,.!?؟:;])/g, "$1")
+      .replace(/([,.!?؟:;])([^\s])/g, "$1 $2")
+      .replace(/\s+/g, " ")
+  );
 }
 
 export function composeTenantAwareReply({
@@ -342,15 +538,25 @@ export function composeTenantAwareReply({
   recentMessages = [],
 }) {
   const behavior = obj(profile?.behavior);
-  const bodyCandidate = buildBodyCandidate(result);
-  const greetingOnly = isGreetingIntent(result) && !bodyCandidate;
+  let bodyText = buildBodyCandidate(result);
+
+  bodyText = applyForbiddenPhraseRules(bodyText, behavior);
+  bodyText = stripInternalStrategyTokens(bodyText);
+  bodyText = dropWeakTrailingSentence(bodyText);
+  bodyText = selectSingleQuestion(bodyText);
+  bodyText = ensureMinimumSalesBody({
+    bodyText,
+    result,
+    profile,
+  });
+  bodyText = clipReplyByBehavior(bodyText, result, behavior, profile);
+  bodyText = normalizePunctuation(bodyText);
 
   const applyIntro = shouldApplyIntro({
     behavior,
     result,
     recentMessages,
-    greetingOnly,
-    bodyText: bodyCandidate,
+    bodyText,
   });
 
   const greeting = applyIntro
@@ -366,38 +572,18 @@ export function composeTenantAwareReply({
         language: resolveLanguage(result, profile),
       };
 
-  let bodyText = greetingOnly
-    ? buildGreetingOnlyBody({
-        result,
-        profile,
-      })
-    : bodyCandidate;
-
-  bodyText = applyForbiddenPhraseRules(bodyText, behavior);
-
-  if (!greetingOnly) {
-    bodyText = dropDuplicateTrailingQuestionIfAnswerPresent(bodyText);
-  }
-
-  bodyText = enforceSingleQuestion(bodyText);
-  bodyText = clipReplyByBehavior(bodyText, behavior, profile);
-
-  const combined = greeting.greetingText
+  let finalReply = greeting.greetingText
     ? sanitizeReplyText(`${greeting.greetingText} ${bodyText || ""}`)
     : sanitizeReplyText(bodyText || "");
 
-  let finalReply = enforceSingleQuestion(
-    clipReplyByBehavior(combined, behavior, profile)
-  );
+  finalReply = stripInternalStrategyTokens(finalReply);
+  finalReply = dropWeakTrailingSentence(finalReply);
+  finalReply = selectSingleQuestion(finalReply);
+  finalReply = clipReplyByBehavior(finalReply, result, behavior, profile);
+  finalReply = normalizePunctuation(finalReply);
 
   if (!finalReply && greeting.greetingText) {
     finalReply = greeting.greetingText;
-  }
-
-  if (!finalReply && greetingOnly) {
-    finalReply = `${greeting.greetingText ? `${greeting.greetingText} ` : ""}${getSafeGreetingFollowup(
-      greeting.language
-    )}`.trim();
   }
 
   return {
@@ -410,7 +596,7 @@ export function composeTenantAwareReply({
     introModeUsed: s(behavior?.introMode || "adaptive"),
     behaviorSource: s(behavior?.source || ""),
     language: greeting.language,
-    greetingOnly,
+    greetingOnly: Boolean(greeting.greetingText) && !bodyText,
     originalInputText: s(text),
     questionCount: countQuestions(finalReply),
   };

@@ -11,6 +11,9 @@ import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
 import {
   buildDisabledServiceLine,
   buildServiceLine,
+  getIndustryHints,
+  pickBehaviorLeadPrompt,
+  pickLeadPrompt,
   resolveInboxRuntime,
 } from "./runtime.js";
 import {
@@ -185,7 +188,7 @@ function buildStructuredTextFormat(model = "") {
   if (modelLikelySupportsStructuredOutputs(model)) {
     return {
       type: "json_schema",
-      name: "tenant_aware_conversation_decision",
+      name: "tenant_sales_conversation_decision",
       strict: true,
       schema: buildConversationDecisionJsonSchemaObject(),
     };
@@ -318,11 +321,10 @@ async function requestStructuredDecisionOnce({
   const parsed = extractStructuredPayload(response);
   const raw = parsed ? JSON.stringify(parsed) : extractText(response);
   const refusal = extractResponseRefusal(response);
-  const shape = summarizeResponseShape(response);
 
   logConversationEngine("response_shape", {
     model,
-    ...shape,
+    ...summarizeResponseShape(response),
   });
 
   logConversationEngine("response_extract", {
@@ -451,7 +453,7 @@ function normalizeReplyStyle(value = "") {
   ) {
     return x;
   }
-  return "consultative";
+  return "sales";
 }
 
 function normalizeStage(value = "") {
@@ -474,7 +476,7 @@ function normalizeStage(value = "") {
   ) {
     return x;
   }
-  return "general";
+  return "discovery";
 }
 
 function normalizeAskCategory(value = "") {
@@ -499,7 +501,7 @@ function normalizeAskCategory(value = "") {
   ) {
     return x;
   }
-  return "general";
+  return "service_interest";
 }
 
 function coerceBoolean(value, fallback = false) {
@@ -550,6 +552,34 @@ function joinReplyParts(answerFirst = "", nextQuestion = "") {
   return sanitizeReplyText(`${first} ${second}`);
 }
 
+function countQuestions(text = "") {
+  return (s(text).match(/[?؟]/g) || []).length;
+}
+
+function containsInternalStrategyLeak(text = "") {
+  const normalized = s(text);
+
+  if (!normalized) return false;
+
+  return /(?:^|[\s(])(?:qiym[eə]t[_-]?range|price[_-]?range|scope[_-]?clarify[_-]?single|qualify[_-]?single|sales[_-]?stage|lead[_-]?capture|contact[_-]?capture|cta[_-]?next|reply[_-]?style|ask[_-]?category|intent[_-]?key|crm[_-]?capture|discovery[_-]?mode)(?:$|[\s):,.!?])/iu.test(
+    normalized
+  );
+}
+
+function looksLikeWeakAcknowledgeOnly(text = "") {
+  const normalized = normalizeTextForCompare(text);
+  if (!normalized) return true;
+
+  return [
+    "basa dusdum bununla komek ede bilerem",
+    "basa dusdum",
+    "anladim bununla yardimci olabilirim",
+    "understood i can help with that",
+    "yes",
+    "ok",
+  ].includes(normalized);
+}
+
 function buildConversationSnapshot({
   text,
   recentMessages = [],
@@ -576,7 +606,41 @@ function buildConversationSnapshot({
   };
 }
 
+function buildSalesContext(profile = {}) {
+  const industryHints = getIndustryHints(profile?.industry);
+  const primaryCta = s(
+    profile?.primaryCta ||
+      profile?.conversationAssets?.primaryCtaRaw ||
+      pickLeadPrompt(profile) ||
+      pickBehaviorLeadPrompt(profile)
+  );
+
+  const keyOffers = arr(profile?.serviceCatalog)
+    .filter((item) => item?.active && item?.visibleInAi)
+    .map((item) => ({
+      key: s(item?.key),
+      name: s(item?.name),
+      description: s(item?.description),
+      pricingMode: s(item?.pricingMode),
+      responseMode: s(item?.responseMode),
+    }))
+    .slice(0, 8);
+
+  return {
+    primaryCta,
+    qualificationPrompts: uniqStrings([
+      ...arr(profile?.qualificationQuestions),
+      ...arr(profile?.leadPrompts),
+    ]).slice(0, 6),
+    pricingHint: s(industryHints?.pricingHint || ""),
+    offerNames: keyOffers.map((item) => item.name).filter(Boolean),
+    keyOffers,
+  };
+}
+
 function buildRuntimeGrounding(profile = {}) {
+  const salesContext = buildSalesContext(profile);
+
   return {
     displayName: s(profile?.displayName),
     industry: s(profile?.industry),
@@ -636,23 +700,27 @@ function buildRuntimeGrounding(profile = {}) {
       .map((x) => s(x))
       .filter(Boolean)
       .slice(0, 20),
+    salesContext,
   };
 }
 
 function buildConversationSystemPrompt() {
   return [
-    "You are a tenant-aware business conversation engine for inbound customer messages.",
-    "Your job is to understand the business runtime, understand the customer message, answer naturally, and ask at most one smart next question only when necessary.",
-    "You are NOT a canned fallback bot.",
-    "You must not answer with generic lines like 'tell me what you need', 'how can I help', or similar when the customer already stated a concrete need.",
-    "You must sound like a sharp, attentive human operator.",
-    "Use the tenant grounding. Do not invent services the business does not offer.",
-    "If the customer message is concrete, first acknowledge what they actually need, then guide the next step.",
-    "If there is enough information, answer directly without unnecessary clarification.",
-    "If something important is missing, ask one precise next question, not multiple questions.",
-    "If the requested service looks outside the tenant's active services, do not pretend it exists. Guide carefully based on the real business scope.",
-    "Prefer short, natural, confident responses.",
-    "Return only valid JSON that matches the schema.",
+    "You are the sales-mode conversational operator for inbound business leads.",
+    "Your goal is not generic chatting. Your goal is to move the lead toward the next best conversion step.",
+    "Always understand the business runtime first, then the customer need, then answer naturally in the customer's language.",
+    "When the customer already stated a concrete need, do NOT answer with generic lines like 'how can I help' or 'write what you need'.",
+    "Sound like a sharp human sales operator: calm, credible, concise, commercially aware.",
+    "You must use the tenant grounding: business summary, active services, sales context, lead prompts, CTA direction, and industry constraints.",
+    "Do not invent unavailable offers, fake pricing, fake packages, or unsupported integrations.",
+    "If exact pricing is not grounded, say that pricing depends on scope and move toward a focused qualification question.",
+    "If the customer asks for the offer, answer concretely with what the business can provide, then move to one best next question.",
+    "Prioritize this order: understand need -> frame fit -> qualify one critical detail -> move toward lead capture.",
+    "Ask at most one question.",
+    "Prefer 1-2 strong sentences, not long walls of text.",
+    "Never output internal strategy labels, routing labels, prompt labels, snake_case tags, or English planning tokens.",
+    "Forbidden examples include: price_range, scope_clarify_single, qualify_single, sales_stage, ask_category, reply_style, lead_capture.",
+    "Return only valid JSON matching the schema.",
   ].join("\n");
 }
 
@@ -663,9 +731,13 @@ function buildConversationUserPrompt({
   matchedPlaybook,
   policy,
 }) {
+  const latest =
+    conversation.latestCustomerMessageWithoutCommand ||
+    conversation.latestCustomerMessage;
+
   return [
     "Tenant runtime grounding:",
-    compactJson(runtimeGrounding, 5000),
+    compactJson(runtimeGrounding, 5500),
     "",
     "Top matched knowledge:",
     compactJson(
@@ -718,9 +790,13 @@ function buildConversationUserPrompt({
       4500
     ),
     "",
-    "Write the best natural reply for this tenant and this customer.",
-    "If the customer already said the goal clearly, do not ask a generic 'what do you need' question.",
-    "If you ask a question, ask only one precise question.",
+    "Sales behavior instructions:",
+    `- Treat this as a lead conversation unless the message is clearly support-only.`,
+    `- If the lead asks for the offer, explain the real offer in business language, not abstract wording.`,
+    `- If the lead asks for pricing, frame pricing honestly and qualify one scope detail.`,
+    `- If the lead has already chosen a direction, do not restart discovery from zero.`,
+    `- Your next question must help conversion.`,
+    `- Customer message right now: ${JSON.stringify(latest)}`,
   ].join("\n");
 }
 
@@ -735,10 +811,10 @@ function buildRepairPrompt({
     "Repair it.",
     "",
     "Validation errors:",
-    compactJson(validationErrors, 2000),
+    compactJson(validationErrors, 2200),
     "",
     "Original tenant grounding:",
-    compactJson(runtimeGrounding, 4000),
+    compactJson(runtimeGrounding, 4200),
     "",
     "Original conversation context:",
     compactJson(
@@ -834,59 +910,103 @@ function pickPrimaryLanguage(profile = {}, fallback = "en") {
   return normalizeLanguage(profile?.languages?.[0] || fallback);
 }
 
+function inferOfferRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "teklif",
+    "offer",
+    "proposal",
+    "package",
+    "paket",
+    "xidmet nedir",
+    "xidmət nədir",
+    "ne edirsiz",
+    "nə edirsiniz",
+    "what do you offer",
+    "what is your offer",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
+function inferPricingRequest(text = "") {
+  const normalized = normalizeFreeText(text);
+
+  return [
+    "qiymet",
+    "qiymət",
+    "price",
+    "pricing",
+    "cost",
+    "budget",
+    "fee",
+  ].some((item) => normalized.includes(normalizeFreeText(item)));
+}
+
 function localizedEmergencyCopy(language = "en") {
   const lang = normalizeLanguage(language);
 
   if (lang === "az") {
     return {
       ack: "Başa düşdüm.",
-      serviceLead: (serviceName) => `${serviceName} ilə bağlı yazırsınız.`,
-      generalLead: "Bununla kömək edə bilərəm.",
+      serviceLead: (serviceName) => `${serviceName} istiqamətində kömək istəyirsiniz.`,
+      generalLead: "Bunun üçün həll qura bilərik.",
+      offerLead: "Təklifimizi qısa və konkret deyim.",
       unsupportedLead: "Bu istək hazır aktiv xidmətlər içində görünmür.",
       serviceQuestion:
-        "Sizi düzgün yönləndirmək üçün bu mövzuda əsas məqsədinizi bir cümlə ilə yazın.",
+        "Bir şeyi dəqiqləşdirim: sizin üçün bu işdə əsas nəticə nə olmalıdır?",
+      pricingQuestion:
+        "Qiyməti düzgün çərçivələmək üçün əsas scope-u bir cümlə ilə yaza bilərsiniz?",
       generalQuestion:
-        "Sizi düzgün yönləndirmək üçün əsas ehtiyacınızı bir cümlə ilə yazın.",
+        "Bir şeyi dəqiqləşdirim: sizin üçün əsas məqsəd nədir?",
     };
   }
 
   if (lang === "tr") {
     return {
       ack: "Anladım.",
-      serviceLead: (serviceName) => `${serviceName} ile ilgili yazıyorsunuz.`,
-      generalLead: "Bununla yardımcı olabilirim.",
+      serviceLead: (serviceName) => `${serviceName} tarafında destek istiyorsunuz.`,
+      generalLead: "Bunun için bir çözüm kurabiliriz.",
+      offerLead: "Teklifimizi kısa ve net söyleyeyim.",
       unsupportedLead: "Bu talep şu anda aktif hizmetler içinde net görünmüyor.",
       serviceQuestion:
-        "Sizi doğru yönlendirmem için bu konudaki ana ihtiyacınızı tek cümleyle yazın.",
+        "Bir şeyi netleştireyim: bu işte sizin için ana sonuç ne olmalı?",
+      pricingQuestion:
+        "Fiyatı doğru çerçevelemek için ana scope'u tek cümleyle yazar mısınız?",
       generalQuestion:
-        "Sizi doğru yönlendirmem için ana ihtiyacınızı tek cümleyle yazın.",
+        "Bir şeyi netleştireyim: sizin için ana hedef nedir?",
     };
   }
 
   if (lang === "ru") {
     return {
       ack: "Понял.",
-      serviceLead: (serviceName) => `Вы пишете по теме ${serviceName}.`,
-      generalLead: "Я могу помочь с этим.",
+      serviceLead: (serviceName) => `Вам нужна помощь по направлению ${serviceName}.`,
+      generalLead: "Для этого можем предложить решение.",
+      offerLead: "Коротко и по делу скажу, что входит в предложение.",
       unsupportedLead:
         "Этот запрос сейчас не выглядит как активная услуга бизнеса.",
       serviceQuestion:
-        "Чтобы точнее сориентировать, напишите одной фразой вашу основную цель по этому вопросу.",
+        "Уточню один момент: какой главный результат вам нужен от этого проекта?",
+      pricingQuestion:
+        "Чтобы корректно сориентировать по стоимости, опишите основной scope одной фразой.",
       generalQuestion:
-        "Чтобы точнее сориентировать, напишите одной фразой вашу основную потребность.",
+        "Уточню один момент: какая у вас главная цель?",
     };
   }
 
   return {
     ack: "Understood.",
-    serviceLead: (serviceName) => `You are asking about ${serviceName}.`,
-    generalLead: "I can help with that.",
+    serviceLead: (serviceName) => `You need help around ${serviceName}.`,
+    generalLead: "We can structure a solution for this.",
+    offerLead: "Let me state the offer briefly and clearly.",
     unsupportedLead:
       "This request does not clearly match the active services right now.",
     serviceQuestion:
-      "To guide this properly, write your main goal for this in one sentence.",
+      "Let me clarify one thing: what is the main outcome you want from this?",
+    pricingQuestion:
+      "To frame pricing correctly, can you state the main scope in one sentence?",
     generalQuestion:
-      "To guide this properly, write your main need in one sentence.",
+      "Let me clarify one thing: what is your main goal here?",
   };
 }
 
@@ -897,6 +1017,7 @@ function buildRuntimeGroundedEmergencyFallback({
   matchedPlaybook = null,
 }) {
   const language = pickPrimaryLanguage(profile, "en");
+  const salesContext = buildSalesContext(profile);
 
   if (matchedPlaybook) {
     const replyText = sanitizeReplyText(
@@ -906,23 +1027,20 @@ function buildRuntimeGroundedEmergencyFallback({
       intent: "playbook",
       askCategory: "general",
       stage: "answer",
-      replyStyle: "consultative",
+      replyStyle: "sales",
       customerGoal: s(text),
       answerFirst: replyText,
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: [
-        "matched_playbook",
-        "runtime_grounded_emergency_fallback",
-      ],
+      groundedFactsUsed: ["matched_playbook", "sales_playbook"],
       shouldAskQuestion: false,
       shouldCreateLead: Boolean(matchedPlaybook.createLead),
       shouldHandoff: Boolean(matchedPlaybook.handoff),
       handoffReason: s(matchedPlaybook.handoffReason || ""),
       handoffPriority: s(matchedPlaybook.handoffPriority || "normal"),
-      confidence: 0.62,
-      leadScore: matchedPlaybook.createLead ? 60 : 24,
+      confidence: 0.7,
+      leadScore: matchedPlaybook.createLead ? 68 : 30,
       noReply: false,
       fallbackReason: "matched_playbook",
       language,
@@ -939,22 +1057,19 @@ function buildRuntimeGroundedEmergencyFallback({
       intent: "knowledge_answer",
       askCategory: "faq",
       stage: "answer",
-      replyStyle: "consultative",
+      replyStyle: "professional",
       customerGoal: s(text),
       answerFirst: replyText,
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: [
-        "matched_knowledge",
-        "runtime_grounded_emergency_fallback",
-      ],
+      groundedFactsUsed: ["matched_knowledge"],
       shouldAskQuestion: false,
       shouldCreateLead: false,
       shouldHandoff: false,
       handoffReason: "",
       handoffPriority: "normal",
-      confidence: 0.58,
+      confidence: 0.6,
       leadScore: 18,
       noReply: false,
       fallbackReason: "matched_knowledge",
@@ -967,6 +1082,8 @@ function buildRuntimeGroundedEmergencyFallback({
   const copy = localizedEmergencyCopy(language);
   const matchedActiveService = findMatchedActiveService(text, profile);
   const matchedDisabledService = findMatchedDisabledService(text, profile);
+  const wantsOffer = inferOfferRequest(text);
+  const wantsPricing = inferPricingRequest(text);
 
   if (matchedDisabledService) {
     const replyText = sanitizeReplyText(buildUnsupportedServiceReply(profile));
@@ -974,23 +1091,20 @@ function buildRuntimeGroundedEmergencyFallback({
       intent: "unsupported_service",
       askCategory: "general",
       stage: "general",
-      replyStyle: "consultative",
+      replyStyle: "professional",
       customerGoal: s(text),
       answerFirst: replyText,
       nextQuestion: "",
       replyText,
       missingInformation: [],
-      groundedFactsUsed: [
-        "disabled_service_match",
-        "runtime_grounded_emergency_fallback",
-      ],
+      groundedFactsUsed: ["disabled_service_match"],
       shouldAskQuestion: false,
       shouldCreateLead: false,
       shouldHandoff: false,
       handoffReason: "",
       handoffPriority: "normal",
-      confidence: 0.44,
-      leadScore: 10,
+      confidence: 0.45,
+      leadScore: 8,
       noReply: false,
       fallbackReason: "disabled_service_match",
       language,
@@ -1001,128 +1115,114 @@ function buildRuntimeGroundedEmergencyFallback({
     };
   }
 
-  if (matchedActiveService) {
-    const replyText = sanitizeReplyText(
-      [
-        copy.ack,
-        copy.serviceLead(
-          s(matchedActiveService?.name || matchedActiveService?.key)
-        ),
-        copy.serviceQuestion,
-      ].join(" ")
+  if (wantsOffer && salesContext.keyOffers.length) {
+    const offerNames = salesContext.keyOffers
+      .map((item) => item.name)
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(", ");
+
+    const answerFirst = sanitizeReplyText(
+      [copy.ack, copy.offerLead, offerNames ? `Bu istiqamətdə əsas həllərimiz: ${offerNames}.` : ""].join(" ")
     );
+    const nextQuestion = wantsPricing
+      ? copy.pricingQuestion
+      : matchedActiveService
+        ? copy.serviceQuestion
+        : copy.generalQuestion;
 
     return {
-      intent: "service_interest",
-      askCategory: "service_interest",
-      stage: "discovery",
-      replyStyle: "consultative",
+      intent: wantsPricing ? "pricing" : "recommendation",
+      askCategory: wantsPricing ? "pricing" : "recommendation",
+      stage: wantsPricing ? "pricing" : "recommendation",
+      replyStyle: "sales",
       customerGoal: s(text),
-      answerFirst: sanitizeReplyText(
-        [
-          copy.ack,
-          copy.serviceLead(
-            s(matchedActiveService?.name || matchedActiveService?.key)
-          ),
-        ].join(" ")
-      ),
-      nextQuestion: copy.serviceQuestion,
-      replyText,
-      missingInformation: ["service_scope"],
-      groundedFactsUsed: [
-        "active_service_match",
-        "runtime_grounded_emergency_fallback",
-      ],
+      answerFirst,
+      nextQuestion,
+      replyText: sanitizeReplyText(`${answerFirst} ${nextQuestion}`),
+      missingInformation: [wantsPricing ? "scope" : "main_goal"],
+      groundedFactsUsed: ["sales_context_offer_names"],
       shouldAskQuestion: true,
-      shouldCreateLead: false,
+      shouldCreateLead: true,
       shouldHandoff: false,
       handoffReason: "",
       handoffPriority: "normal",
-      confidence: 0.48,
-      leadScore: 28,
+      confidence: 0.58,
+      leadScore: 58,
       noReply: false,
-      fallbackReason: "active_service_match",
+      fallbackReason: "sales_offer_fallback",
       language,
-      understoodIntent: "service_interest",
-      detectedService: s(
-        matchedActiveService?.name || matchedActiveService?.key
-      ),
+      understoodIntent: wantsPricing ? "pricing" : "offer_request",
+      detectedService: s(matchedActiveService?.name || matchedActiveService?.key),
     };
   }
 
-  const replyText = sanitizeReplyText(
-    [copy.ack, copy.generalLead, copy.generalQuestion].join(" ")
-  );
+  if (matchedActiveService) {
+    const answerFirst = sanitizeReplyText(
+      [
+        copy.ack,
+        copy.serviceLead(s(matchedActiveService?.name || matchedActiveService?.key)),
+      ].join(" ")
+    );
+    const nextQuestion = wantsPricing
+      ? copy.pricingQuestion
+      : copy.serviceQuestion;
+
+    return {
+      intent: wantsPricing ? "pricing" : "service_interest",
+      askCategory: wantsPricing ? "pricing" : "service_interest",
+      stage: wantsPricing ? "pricing" : "qualification",
+      replyStyle: "sales",
+      customerGoal: s(text),
+      answerFirst,
+      nextQuestion,
+      replyText: sanitizeReplyText(`${answerFirst} ${nextQuestion}`),
+      missingInformation: [wantsPricing ? "scope" : "main_goal"],
+      groundedFactsUsed: ["active_service_match"],
+      shouldAskQuestion: true,
+      shouldCreateLead: true,
+      shouldHandoff: false,
+      handoffReason: "",
+      handoffPriority: "normal",
+      confidence: 0.54,
+      leadScore: 54,
+      noReply: false,
+      fallbackReason: "active_service_match",
+      language,
+      understoodIntent: wantsPricing ? "pricing" : "service_interest",
+      detectedService: s(matchedActiveService?.name || matchedActiveService?.key),
+    };
+  }
+
+  const answerFirst = sanitizeReplyText([copy.ack, copy.generalLead].join(" "));
+  const nextQuestion = wantsPricing
+    ? copy.pricingQuestion
+    : copy.generalQuestion;
 
   return {
-    intent: "general",
-    askCategory: "general",
+    intent: wantsPricing ? "pricing" : "general",
+    askCategory: wantsPricing ? "pricing" : "general",
     stage: "discovery",
-    replyStyle: "consultative",
+    replyStyle: "sales",
     customerGoal: s(text),
-    answerFirst: sanitizeReplyText([copy.ack, copy.generalLead].join(" ")),
-    nextQuestion: copy.generalQuestion,
-    replyText,
-    missingInformation: ["customer_goal"],
+    answerFirst,
+    nextQuestion,
+    replyText: sanitizeReplyText(`${answerFirst} ${nextQuestion}`),
+    missingInformation: [wantsPricing ? "scope" : "customer_goal"],
     groundedFactsUsed: ["runtime_grounded_emergency_fallback"],
     shouldAskQuestion: true,
-    shouldCreateLead: false,
+    shouldCreateLead: true,
     shouldHandoff: false,
     handoffReason: "",
     handoffPriority: "normal",
-    confidence: 0.36,
-    leadScore: 16,
+    confidence: 0.42,
+    leadScore: 42,
     noReply: false,
     fallbackReason: "runtime_grounded_emergency_fallback",
     language,
-    understoodIntent: "general",
+    understoodIntent: wantsPricing ? "pricing" : "general",
     detectedService: "",
   };
-}
-
-const GENERIC_REPLY_PATTERNS = [
-  "how can i help",
-  "how may i help",
-  "tell me what you need",
-  "tell me what you need help with",
-  "what do you need",
-  "write what you need",
-  "describe what you need",
-  "nə lazım olduğunu yazın",
-  "nə ilə bağlı kömək lazım olduğunu",
-  "nece komek ede bilerem",
-  "ne lazım oldugunu yazin",
-  "hangi konuda yardıma ihtiyacınız",
-  "chem mogu pomoch",
-];
-
-function looksLikeGenericClarifier(replyText = "") {
-  const normalized = normalizeTextForCompare(replyText);
-  if (!normalized) return true;
-
-  return GENERIC_REPLY_PATTERNS.some((pattern) =>
-    normalized.includes(normalizeTextForCompare(pattern))
-  );
-}
-
-function looksLikeGreetingOnly(parsed = {}) {
-  const intent = lower(parsed?.understoodIntent || parsed?.intent || "");
-  const askCategory = lower(parsed?.askCategory || "");
-  const stage = lower(parsed?.stage || "");
-  const customerGoal = s(parsed?.customerGoal || "");
-  const replyText = sanitizeReplyText(
-    s(parsed?.replyText || "") ||
-      joinReplyParts(parsed?.answerFirst, parsed?.nextQuestion)
-  );
-
-  if (customerGoal) return false;
-  if (!replyText) return true;
-
-  return (
-    intent === "greeting" ||
-    askCategory === "greeting" ||
-    stage === "greeting"
-  );
 }
 
 function normalizeConversationDecision(parsed = {}, fallbackLanguage = "en") {
@@ -1152,17 +1252,53 @@ function normalizeConversationDecision(parsed = {}, fallbackLanguage = "en") {
     handoffPriority: normalizePriority(parsed?.handoffPriority || "normal"),
     confidence: Math.max(
       0,
-      Math.min(1, coerceNumber(parsed?.confidence, 0.45))
+      Math.min(1, coerceNumber(parsed?.confidence, 0.55))
     ),
     leadScore: Math.max(
       0,
-      Math.min(100, Math.round(coerceNumber(parsed?.leadScore, 20)))
+      Math.min(100, Math.round(coerceNumber(parsed?.leadScore, 35)))
     ),
-    askCategory: normalizeAskCategory(parsed?.askCategory || "general"),
-    stage: normalizeStage(parsed?.stage || "general"),
-    replyStyle: normalizeReplyStyle(parsed?.replyStyle || "consultative"),
+    askCategory: normalizeAskCategory(parsed?.askCategory || "service_interest"),
+    stage: normalizeStage(parsed?.stage || "discovery"),
+    replyStyle: normalizeReplyStyle(parsed?.replyStyle || "sales"),
     noReply: coerceBoolean(parsed?.noReply, false),
   };
+}
+
+function postProcessSalesDecision(normalized = {}, { customerText = "", profile = {} } = {}) {
+  const next = { ...normalized };
+
+  if (!next.customerGoal && isSubstantiveCustomerTurn(customerText)) {
+    next.customerGoal = sanitizeSentence(customerText);
+  }
+
+  if (next.askCategory === "general" && isSubstantiveCustomerTurn(customerText)) {
+    next.askCategory = inferPricingRequest(customerText)
+      ? "pricing"
+      : "service_interest";
+  }
+
+  if (next.stage === "general" && isSubstantiveCustomerTurn(customerText)) {
+    next.stage = inferPricingRequest(customerText) ? "pricing" : "qualification";
+  }
+
+  if (inferPricingRequest(customerText)) {
+    next.leadScore = Math.max(next.leadScore, 55);
+    next.shouldCreateLead = true;
+  } else if (isSubstantiveCustomerTurn(customerText)) {
+    next.leadScore = Math.max(next.leadScore, 45);
+  }
+
+  if (findMatchedActiveService(customerText, profile)) {
+    next.shouldCreateLead = true;
+    next.leadScore = Math.max(next.leadScore, 52);
+  }
+
+  if (!next.replyText) {
+    next.replyText = joinReplyParts(next.answerFirst, next.nextQuestion);
+  }
+
+  return next;
 }
 
 function validateConversationDecision({
@@ -1170,15 +1306,13 @@ function validateConversationDecision({
   customerText = "",
   profile = {},
 }) {
-  const normalized = normalizeConversationDecision(
-    parsed,
-    profile?.languages?.[0] || "en"
+  const normalized = postProcessSalesDecision(
+    normalizeConversationDecision(parsed, profile?.languages?.[0] || "en"),
+    { customerText, profile }
   );
-  const reasons = [];
 
+  const reasons = [];
   const substantive = isSubstantiveCustomerTurn(customerText);
-  const genericClarifier = looksLikeGenericClarifier(normalized.replyText);
-  const greetingOnly = looksLikeGreetingOnly(normalized);
   const matchedActiveService = findMatchedActiveService(customerText, profile);
   const matchedDisabledService = findMatchedDisabledService(customerText, profile);
 
@@ -1186,21 +1320,50 @@ function validateConversationDecision({
     reasons.push("reply_text_empty");
   }
 
-  if (substantive && greetingOnly) {
-    reasons.push("substantive_turn_cannot_return_greeting_only");
+  if (containsInternalStrategyLeak(normalized.replyText)) {
+    reasons.push("internal_strategy_leak");
   }
 
-  if (substantive && genericClarifier && !normalized.customerGoal) {
-    reasons.push("generic_clarifier_on_substantive_turn");
+  if (containsInternalStrategyLeak(normalized.answerFirst)) {
+    reasons.push("internal_strategy_leak_answer_first");
+  }
+
+  if (containsInternalStrategyLeak(normalized.nextQuestion)) {
+    reasons.push("internal_strategy_leak_next_question");
+  }
+
+  if (substantive && looksLikeWeakAcknowledgeOnly(normalized.replyText)) {
+    reasons.push("weak_acknowledgement_only");
+  }
+
+  if (substantive && countQuestions(normalized.replyText) > 1) {
+    reasons.push("too_many_questions");
   }
 
   if (
     substantive &&
     matchedActiveService &&
     !normalized.detectedService &&
-    genericClarifier
+    !normalized.customerGoal
   ) {
-    reasons.push("matched_service_not_acknowledged");
+    reasons.push("matched_service_not_grounded");
+  }
+
+  if (
+    substantive &&
+    inferOfferRequest(customerText) &&
+    countWordLikeTokens(normalized.replyText) < 8
+  ) {
+    reasons.push("offer_request_answer_too_thin");
+  }
+
+  if (
+    substantive &&
+    inferPricingRequest(customerText) &&
+    !normalized.shouldAskQuestion &&
+    !/qiym|price|cost|budget|scope|paket|package/i.test(normalized.replyText)
+  ) {
+    reasons.push("pricing_request_not_handled");
   }
 
   if (
@@ -1223,8 +1386,8 @@ function validateConversationDecision({
     reasons.push("question_expected_but_missing");
   }
 
-  if (countWordLikeTokens(normalized.replyText) < 3 && substantive) {
-    reasons.push("reply_too_short_for_substantive_turn");
+  if (countWordLikeTokens(normalized.replyText) < 4 && substantive) {
+    reasons.push("reply_too_short_for_sales_turn");
   }
 
   return {
@@ -1247,16 +1410,20 @@ function buildTraceFromDecision({
     policy,
     promptBundle,
     channel: channel || "inbox",
-    usecase: "inbox.conversation",
+    usecase: "inbox.sales_conversation",
     decisions: {
       cta: {
-        selected: "",
-        reason: "none",
+        selected: s(
+          resolvedRuntime?.primaryCta ||
+            resolvedRuntime?.conversationAssets?.primaryCtaRaw ||
+            ""
+        ),
+        reason: result.shouldAskQuestion ? "qualification_first" : "direct_progression",
       },
       qualification: {
-        mode: s(result.askCategory || "general"),
+        mode: s(result.askCategory || "service_interest"),
         questionCount: result.shouldAskQuestion ? 1 : 0,
-        reason: result.shouldAskQuestion ? "conversation_engine" : "",
+        reason: result.shouldAskQuestion ? "sales_progression" : "",
       },
       handoff: {
         reason: s(result.handoffReason || ""),
@@ -1273,9 +1440,9 @@ function buildTraceFromDecision({
         ? "handoff"
         : Boolean(result.noReply)
           ? "none"
-          : "reply_with_cta",
+          : "lead_progression",
       qualification: {
-        status: s(result.stage || "general"),
+        status: s(result.stage || "qualification"),
         questionCount: result.shouldAskQuestion ? 1 : 0,
       },
       handoff: {
@@ -1293,10 +1460,10 @@ function buildTraceFromDecision({
       reasonCode:
         s(result.handoffReason || "") ||
         (Boolean(result.shouldHandoff)
-          ? "conversation_engine_handoff"
+          ? "sales_conversation_handoff"
           : Boolean(result.noReply)
-            ? "conversation_engine_no_reply"
-            : "conversation_engine_reply"),
+            ? "sales_conversation_no_reply"
+            : "sales_conversation_reply"),
       detail: s(result.stage || ""),
     },
   });
@@ -1316,9 +1483,9 @@ function finalizeConversationResult({
   semanticFailureReason = "",
   fallbackReason = "",
 }) {
-  const normalized = normalizeConversationDecision(
-    parsed,
-    profile?.languages?.[0] || "en"
+  const normalized = postProcessSalesDecision(
+    normalizeConversationDecision(parsed, profile?.languages?.[0] || "en"),
+    { customerText: s(parsed?.customerGoal || ""), profile }
   );
 
   const baseResult = {
@@ -1423,8 +1590,7 @@ export async function runTenantAwareConversationEngine({
   runtime = null,
 }) {
   const openai = ensureOpenAI();
-  const configuredModel =
-    s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
+  const configuredModel = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
   const configuredMaxTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 2200);
   const maxOutputTokens = Math.max(
     1200,
@@ -1472,7 +1638,7 @@ export async function runTenantAwareConversationEngine({
     threadState: resolvedRuntime.threadState || threadState || null,
   });
 
-  const promptBundle = buildPromptBundle("inbox.conversation", {
+  const promptBundle = buildPromptBundle("inbox.sales_conversation", {
     tenant: {
       ...obj(tenant),
       tenantKey: resolvedTenantKey,
@@ -1588,8 +1754,8 @@ export async function runTenantAwareConversationEngine({
 
     raw = firstPass.raw;
     refusal = firstPass.refusal;
-    parsed = firstPass.parsed || parseStructuredOutput(raw, modelUsed);
     modelUsed = firstPass.modelUsed || configuredModel;
+    parsed = firstPass.parsed || parseStructuredOutput(raw, modelUsed);
 
     const firstValidation = validateConversationDecision({
       parsed,
@@ -1704,15 +1870,13 @@ export async function runTenantAwareConversationEngine({
       }
 
       replyMode = "conversation_engine_repaired";
+      parsed = repairValidation.normalized;
+    } else {
+      parsed = firstValidation.normalized;
     }
 
-    const normalized = normalizeConversationDecision(
-      parsed,
-      profile?.languages?.[0] || "en"
-    );
-
     const result = finalizeConversationResult({
-      parsed: normalized,
+      parsed,
       profile,
       matchedKnowledge,
       matchedPlaybook,
@@ -1787,9 +1951,7 @@ export async function runTenantAwareConversationEngine({
       policy,
       raw: "",
       replyMode: "conversation_engine_emergency_fallback",
-      semanticFailureReason: s(
-        error?.message || "conversation_engine_failed"
-      ),
+      semanticFailureReason: s(error?.message || "conversation_engine_failed"),
       fallbackReason:
         fallback.fallbackReason || "runtime_grounded_emergency_fallback",
     });
@@ -1802,7 +1964,7 @@ export const __test__ = {
   buildRuntimeGrounding,
   findMatchedActiveService,
   findMatchedDisabledService,
-  looksLikeGenericClarifier,
   validateConversationDecision,
   normalizeConversationDecision,
+  containsInternalStrategyLeak,
 };

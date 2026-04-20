@@ -43,37 +43,129 @@ function hasAny(text = "", list = []) {
   });
 }
 
+function isSalesAskCategory(value = "") {
+  const x = lower(value);
+  return [
+    "service_interest",
+    "recommendation",
+    "pricing",
+    "quote",
+    "comparison",
+    "timeline",
+  ].includes(x);
+}
+
+function isSalesStage(value = "") {
+  const x = lower(value);
+  return [
+    "discovery",
+    "qualification",
+    "recommendation",
+    "pricing",
+    "timeline",
+    "objection",
+    "closing",
+  ].includes(x);
+}
+
+function isSalesFlow(control = {}) {
+  return isSalesAskCategory(control?.askCategory) || isSalesStage(control?.stage);
+}
+
+function looksLikeSupportFlow(control = {}) {
+  const askCategory = lower(control?.askCategory || "");
+  const stage = lower(control?.stage || "");
+  const intent = lower(control?.intent || "");
+
+  return (
+    askCategory === "support" ||
+    stage === "support" ||
+    intent === "support" ||
+    intent === "unsupported_service"
+  );
+}
+
+function detectExplicitHumanRequest(text = "", policy = {}) {
+  const normalized = normalizeFreeText(text);
+  if (!normalized) return false;
+
+  const policyKeywords = Array.isArray(policy?.humanKeywords)
+    ? policy.humanKeywords
+    : [];
+
+  const strongDefaultKeywords = [
+    "operator",
+    "human",
+    "real person",
+    "agent",
+    "manager",
+    "call me",
+    "phone me",
+    "ring me",
+    "speak to someone",
+    "support agent",
+    "live agent",
+    "customer representative",
+
+    "operatorla",
+    "operator ile",
+    "insanla",
+    "menecer",
+    "menecerle",
+    "zeng edin",
+    "zəng edin",
+    "mene zeng",
+    "mənə zəng",
+    "real insan",
+    "canli destek",
+    "canlı dəstək",
+
+    "operatör",
+    "insanla konuşmak",
+    "biriyle konuşmak",
+    "beni arayın",
+
+    "оператор",
+    "человек",
+    "сотрудник",
+    "менеджер",
+    "перезвоните",
+  ];
+
+  return hasAny(normalized, [...policyKeywords, ...strongDefaultKeywords]);
+}
+
 function buildHumanRouteReply(language = "en") {
   const lang = normalizeLanguage(language);
 
   if (lang === "az") {
-    return "Başa düşdüm. Mövzunu operatora yönləndirirəm.";
+    return "Başa düşdüm. Sizi operatora yönləndirirəm.";
   }
 
   if (lang === "tr") {
-    return "Anladım. Konuyu operatöre yönlendiriyorum.";
+    return "Anladım. Sizi operatöre yönlendiriyorum.";
   }
 
   if (lang === "ru") {
-    return "Понял. Передаю это оператору.";
+    return "Понял. Передаю вас оператору.";
   }
 
-  return "Understood. I’m routing this to an operator.";
+  return "Understood. I’m routing you to an operator.";
 }
 
 function buildAiEscalationReply(language = "en") {
   const lang = normalizeLanguage(language);
 
   if (lang === "az") {
-    return "Başa düşdüm. Bunun üçün operatorun daxil olması daha düzgündür, yönləndirirəm.";
+    return "Başa düşdüm. Bu mövzuda operatorun qoşulması daha düzgündür, yönləndirirəm.";
   }
 
   if (lang === "tr") {
-    return "Anladım. Bunun için bir operatörün devreye girmesi daha doğru, yönlendiriyorum.";
+    return "Anladım. Bu konuda operatörün devreye girmesi daha doğru, yönlendiriyorum.";
   }
 
   if (lang === "ru") {
-    return "Понял. Для этого правильнее подключить оператора, передаю дальше.";
+    return "Понял. По этой теме правильнее подключить оператора, передаю дальше.";
   }
 
   return "Understood. This is better handled by an operator, so I’m routing it now.";
@@ -113,9 +205,17 @@ function shouldCreateLead({
   if (reliability?.leadAlreadyCreated) return false;
 
   const leadScore = Number(control?.leadScore || 0);
+  const salesFlow = isSalesFlow(control);
+  const supportFlow = looksLikeSupportFlow(control);
+
   if (control?.createLeadSuggested) return true;
-  if (explicitHumanRequest && leadScore >= 35) return true;
-  if (leadScore >= 65) return true;
+  if (supportFlow) return false;
+  if (salesFlow && leadScore >= 40) return true;
+  if (salesFlow && ["pricing", "quote", "recommendation"].includes(lower(control?.askCategory || ""))) {
+    return true;
+  }
+  if (explicitHumanRequest && leadScore >= 30) return true;
+  if (leadScore >= 70) return true;
 
   return false;
 }
@@ -128,9 +228,30 @@ function shouldStartHandoff({
 }) {
   if (!policy?.handoffEnabled) return false;
   if (handoffState?.active) return false;
+
+  const salesFlow = isSalesFlow(control);
+  const supportFlow = looksLikeSupportFlow(control);
+  const suggested = control?.handoffSuggested === true;
+  const handoffReason = lower(control?.handoffReason || "");
+  const manualReviewLike =
+    !handoffReason ||
+    handoffReason === "manual_review" ||
+    handoffReason === "review" ||
+    handoffReason === "manual";
+
   if (explicitHumanRequest) return true;
-  if (control?.handoffSuggested) return true;
-  return false;
+
+  if (supportFlow && suggested) return true;
+
+  if (salesFlow) {
+    if (!suggested) return false;
+    if (manualReviewLike) return false;
+    return ["urgent", "legal", "sensitive", "human_requested", "operator_required"].includes(
+      handoffReason
+    );
+  }
+
+  return suggested;
 }
 
 function resolveHandoffReason({
@@ -219,7 +340,9 @@ export function buildConversationControlDecision({
 
   const handoffState = getThreadHandoffState(thread, effectiveThreadState);
   const language = normalizeLanguage(reply?.language || "en");
-  const explicitHumanRequest = hasAny(text, policy?.humanKeywords || []);
+  const explicitHumanRequest = detectExplicitHumanRequest(text, policy);
+  const salesFlow = isSalesFlow(control);
+  const supportFlow = looksLikeSupportFlow(control);
 
   const shouldOpenHandoff = shouldStartHandoff({
     policy,
@@ -294,6 +417,8 @@ export function buildConversationControlDecision({
       operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
       leadAlreadyCreated: Boolean(reliability.leadAlreadyCreated),
       handoffActive: Boolean(handoffState.active),
+      salesFlow,
+      supportFlow,
     },
     runtime,
   });
@@ -399,6 +524,8 @@ export function buildConversationControlDecision({
     control: {
       ...control,
       explicitHumanRequest,
+      salesFlow,
+      supportFlow,
       shouldCreateLead: shouldLead,
       shouldStartHandoff: shouldOpenHandoff,
       handoffReason: resolveHandoffReason({
@@ -419,6 +546,8 @@ export function buildConversationControlDecision({
     diagnostics: {
       ...diagnostics,
       explicitHumanRequest,
+      salesFlow,
+      supportFlow,
       operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
       latestOutboundAgeMs: reliability.latestOutboundAgeMs,
       operatorOutboundAgeMs: reliability.operatorOutboundAgeMs,
@@ -442,4 +571,7 @@ export const __test__ = {
   shouldStartHandoff,
   resolveHandoffReason,
   resolveHandoffPriority,
+  detectExplicitHumanRequest,
+  isSalesFlow,
+  looksLikeSupportFlow,
 };
