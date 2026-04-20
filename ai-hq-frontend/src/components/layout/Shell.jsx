@@ -446,15 +446,17 @@ export default function Shell() {
       className="relative min-h-screen overflow-hidden bg-white text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[6] bg-white" />
+      <div className="pointer-events-none fixed inset-0 -z-[8] bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_52%,#ffffff_100%)]" />
+      <div className="pointer-events-none fixed right-[-6%] top-[56px] -z-[7] h-[340px] w-[340px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.1)_0%,rgba(46,96,255,0.034)_42%,rgba(46,96,255,0)_74%)] blur-3xl" />
+      <div className="pointer-events-none fixed left-[18%] top-[34%] -z-[7] h-[280px] w-[280px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.045)_0%,rgba(15,23,42,0.014)_48%,rgba(15,23,42,0)_76%)] blur-3xl" />
 
       <div
-        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-[rgb(244,245,247)] shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)] transition-[width] duration-slow ease-premium md:block"
+        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-[linear-gradient(180deg,rgba(244,246,248,0.96),rgba(238,241,245,0.92))] shadow-[inset_-1px_0_0_rgba(15,23,42,0.055)] backdrop-blur-xl transition-[width] duration-slow ease-premium md:block"
         style={{ width: "var(--shell-sidebar-w)" }}
       />
 
       <div
-        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-[rgb(244,245,247)] shadow-[inset_0_-1px_0_rgba(15,23,42,0.06)]"
+        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-[linear-gradient(180deg,rgba(244,246,248,0.94),rgba(241,244,247,0.88))] shadow-[inset_0_-1px_0_rgba(15,23,42,0.055)] backdrop-blur-xl"
         style={{ height: `${SHELL_TOPBAR_HEIGHT}px` }}
       />
 
@@ -476,7 +478,7 @@ export default function Shell() {
 
         <main
           className={cx(
-            "relative bg-white",
+            "relative bg-transparent",
             shellMode === "immersive"
               ? "overflow-hidden"
               : "page-scroll overflow-y-auto"
@@ -486,12 +488,12 @@ export default function Shell() {
           {shellMode === "immersive" ? (
             <div
               style={{ height: contentMinHeight }}
-              className="min-h-0 overflow-hidden bg-white"
+              className="min-h-0 overflow-hidden bg-transparent"
             >
               <Outlet />
             </div>
           ) : (
-            <div className="relative mx-auto w-full max-w-shell-content bg-white px-5 py-6 md:px-7 md:py-7">
+            <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-6 md:py-6">
               <SharedStatsNotice message={shellStats?.message} />
 
               <AnimatePresence mode="wait" initial={false}>
