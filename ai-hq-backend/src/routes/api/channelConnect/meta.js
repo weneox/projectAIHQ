@@ -1114,12 +1114,23 @@ async function getMetaPageInstagramContextForPageToken(pageId, pageAccessToken) 
   return fetchJson(url.toString());
 }
 
-async function getMetaPageAccessContextForUserToken(pageId, userAccessToken) {
-  const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
-  url.searchParams.set("fields", "id,name,access_token");
-  url.searchParams.set("access_token", s(userAccessToken));
+export async function getMetaPageAccessContextForUserToken(pageId, userAccessToken) {
+  const safePageId = s(pageId);
+  if (!safePageId) return {};
 
-  return fetchJson(url.toString());
+  const pages = await getPagesForUserToken(userAccessToken);
+  const matched =
+    arr(pages).find((page) => s(page?.id) === safePageId) || null;
+
+  if (!matched) {
+    return {};
+  }
+
+  return {
+    id: s(matched?.id),
+    name: s(matched?.name),
+    access_token: s(matched?.access_token),
+  };
 }
 
 function firstInstagramNodeFromCollection(value) {
