@@ -152,6 +152,26 @@ describe("InboxDetailPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("calls onToggleAutomation with next state when auto-reply switch is clicked", () => {
+    const props = buildProps({
+      automationControl: {
+        enabled: false,
+        disabled: false,
+        loading: false,
+        saving: false,
+      },
+    });
+
+    render(<InboxDetailPanel {...props} />);
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: /enable inbox automatic replies/i })
+    );
+
+    expect(props.onToggleAutomation).toHaveBeenCalledWith(true);
+    expect(props.onToggleAutomation).toHaveBeenCalledTimes(1);
+  });
+
   it("restores avatar image when a different thread is opened after an avatar error", () => {
     const initialProps = buildProps({
       selectedThread: {
