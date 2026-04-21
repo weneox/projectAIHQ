@@ -70,11 +70,43 @@ function safeEqHex(a, b) {
   }
 }
 
+function buildVerificationDebugFields({
+  req,
+  signature256 = "",
+  expected = "",
+  secret = "",
+  rawBody = null,
+  reason = "",
+} = {}) {
+  const safeSecret = s(secret);
+  return {
+    hasSignature256: Boolean(s(signature256)),
+    hasRawBody: Buffer.isBuffer(rawBody),
+    rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+    contentType: s(req?.headers?.["content-type"]),
+    signature256Prefix: s(signature256).slice(0, 20),
+    expectedPrefix: s(expected).slice(0, 20),
+    secretLength: safeSecret.length,
+    secretFingerprint: safeSecret
+      ? crypto.createHash("sha256").update(safeSecret).digest("hex").slice(0, 12)
+      : "",
+    reason: s(reason),
+  };
+}
+
 export function verifyMetaWebhookSignature(req) {
   const secret = s(META_APP_SECRET);
   if (!secret) {
     recordWebhookVerificationFailure("misconfigured");
     logger.error("meta.webhook.verify.misconfigured", null, {});
+    logger.warn(
+      "meta.webhook.verify.debug",
+      buildVerificationDebugFields({
+        req,
+        secret,
+        reason: "misconfigured",
+      })
+    );
     return {
       ok: false,
       status: 500,
@@ -82,12 +114,20 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
-  const signature = s(req.headers?.["x-hub-signature-256"]);
+  const signature = s(req.headers?.["x-hub-signature-256"]).toLowerCase();
   if (!signature) {
     recordWebhookVerificationFailure("missing_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
       reason: "missing_meta_signature",
     });
+    logger.warn(
+      "meta.webhook.verify.debug",
+      buildVerificationDebugFields({
+        req,
+        secret,
+        reason: "missing_meta_signature",
+      })
+    );
     return {
       ok: false,
       status: 403,
@@ -101,19 +141,39 @@ export function verifyMetaWebhookSignature(req) {
     logger.warn("meta.webhook.verify.rejected", {
       reason: "missing_raw_body",
     });
+    logger.warn(
+      "meta.webhook.verify.debug",
+      buildVerificationDebugFields({
+        req,
+        signature256: signature,
+        secret,
+        reason: "missing_raw_body",
+      })
+    );
     return {
       ok: false,
       status: 500,
       error: "missing_raw_body",
     };
   }
-  const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`;
+  const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`.toLowerCase();
 
   if (!safeEqHex(signature, expected)) {
     recordWebhookVerificationFailure("invalid_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
       reason: "invalid_meta_signature",
     });
+    logger.warn(
+      "meta.webhook.verify.debug",
+      buildVerificationDebugFields({
+        req,
+        signature256: signature,
+        expected,
+        secret,
+        rawBody,
+        reason: "invalid_meta_signature",
+      })
+    );
     return {
       ok: false,
       status: 403,
@@ -121,6 +181,17 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
+  logger.info(
+    "meta.webhook.verify.accepted",
+    buildVerificationDebugFields({
+      req,
+      signature256: signature,
+      expected,
+      secret,
+      rawBody,
+      reason: "accepted",
+    })
+  );
   return { ok: true };
 }
 
