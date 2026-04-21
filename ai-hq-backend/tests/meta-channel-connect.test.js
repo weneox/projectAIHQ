@@ -28,6 +28,55 @@ const {
 const { signState } = utilsModule;
 const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule;
 
+const originalFetch = globalThis.fetch;
+
+function createJsonResponse(payload = {}, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "content-type": "application/json",
+    },
+  });
+}
+
+function resolveRequestUrl(input) {
+  if (typeof input === "string") return input;
+  if (input && typeof input === "object" && "url" in input) {
+    return String(input.url || "");
+  }
+  return "";
+}
+
+function isMetaSubscribedAppsUrl(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    return (
+      parsed.hostname === "graph.facebook.com" &&
+      /\/subscribed_apps$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+test.before(() => {
+  globalThis.fetch = async (input, init = {}) => {
+    const url = resolveRequestUrl(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (isMetaSubscribedAppsUrl(url)) {
+      assert.equal(method, "POST");
+      return createJsonResponse({ success: true }, 200);
+    }
+
+    throw new Error(`Unexpected network call in meta-channel-connect test: ${url}`);
+  };
+});
+
+test.after(() => {
+  globalThis.fetch = originalFetch;
+});
+
 function buildAuth() {
   return {
     userId: "user-1",
@@ -1451,6 +1500,7 @@ test("connected status stays truthful while expired user tokens trigger reconnec
     health: {
       connection_state: "connected",
       auth_status: "authorized",
+      webhook_subscription_ok: true,
       user_token_expires_at: "2026-04-05T04:00:00.000Z",
     },
     last_sync_at: "2026-04-05T03:00:00.000Z",
