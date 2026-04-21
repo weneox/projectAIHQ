@@ -79,6 +79,14 @@ const META_PAGE_DISCOVERY_FIELDS_USER_TOKEN = [
   "page_backed_instagram_accounts{id,username}",
 ].join(",");
 
+const META_PAGE_LIST_FIELDS_USER_TOKEN = [
+  "id",
+  "name",
+  "access_token",
+  "tasks",
+  "instagram_business_account{id,username}",
+].join(",");
+
 function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
@@ -863,7 +871,7 @@ export async function debugMetaUserToken(userAccessToken) {
 export async function getPagesForUserToken(userAccessToken) {
   const pages = [];
   let nextUrl = new URL(`${metaGraphBase()}/me/accounts`);
-  nextUrl.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  nextUrl.searchParams.set("fields", META_PAGE_LIST_FIELDS_USER_TOKEN);
   nextUrl.searchParams.set("access_token", s(userAccessToken));
 
   while (nextUrl) {
@@ -881,7 +889,7 @@ export async function getPagesForUserToken(userAccessToken) {
 export async function getAssignedPagesForUserToken(userAccessToken) {
   const pages = [];
   let nextUrl = new URL(`${metaGraphBase()}/me/assigned_pages`);
-  nextUrl.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  nextUrl.searchParams.set("fields", META_PAGE_LIST_FIELDS_USER_TOKEN);
   nextUrl.searchParams.set("access_token", s(userAccessToken));
 
   while (nextUrl) {
