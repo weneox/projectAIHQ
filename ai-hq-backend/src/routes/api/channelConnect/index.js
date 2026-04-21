@@ -8,6 +8,7 @@ import {
   serverErr,
   buildRedirectUrl,
   s,
+  verifyState,
 } from "./utils.js";
 import {
   buildMetaOAuthUrl,
@@ -99,6 +100,17 @@ export function channelConnectRoutes({ db }) {
       if (result?.redirectUrl) return res.redirect(result.redirectUrl);
       return ok(res, result?.payload || {});
     } catch (err) {
+      const stateRaw = s(req.query?.state || "");
+      console.error("META_CALLBACK_ROUTE_ERROR_V1", {
+        hasCode: Boolean(s(req.query?.code || "")),
+        hasErrorQuery: Boolean(
+          req.query?.error || req.query?.error_code || req.query?.error_message
+        ),
+        tenantKeyFromState: s(verifyState(stateRaw)?.tenantKey),
+        error: s(err?.message || "Meta callback failed"),
+        reasonCode: s(err?.reasonCode || ""),
+        status: Number(err?.status || 500),
+      });
       const redirectUrl = buildRedirectUrl({
         section: "channels",
         meta_error: s(err?.message || "Meta callback failed"),

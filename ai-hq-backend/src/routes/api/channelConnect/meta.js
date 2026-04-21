@@ -2959,13 +2959,30 @@ export async function handleMetaCallback({
       META_CONNECT_DIAGNOSTIC_SECRET_KEY,
     ]);
   } catch (error) {
+    console.error("META_CALLBACK_PRECLEANUP_FAILED_V1", {
+      tenantKey: tenant?.tenant_key,
+      error: s(error?.message || error),
+    });
     actorLog.warn("meta.connect.precleanup.failed", {
       tenantKey: tenant.tenant_key,
       error: s(error?.message || error),
     });
   }
 
-  const tokenJson = await exchangeCodeForUserTokenFn(code);
+  let tokenJson = null;
+  try {
+    tokenJson = await exchangeCodeForUserTokenFn(code);
+  } catch (error) {
+    console.error("META_CALLBACK_TOKEN_EXCHANGE_FAILED_V1", {
+      tenantKey: tenant?.tenant_key,
+      error: s(error?.message || error),
+    });
+    actorLog.error("meta.connect.token_exchange.failed", {
+      tenantKey: tenant.tenant_key,
+      error: s(error?.message || error),
+    });
+    throw error;
+  }
   const userAccessToken = s(tokenJson?.access_token);
   console.error("META_CALLBACK_TOKEN_EXCHANGED_V3", {
     tenantKey: tenant?.tenant_key,
