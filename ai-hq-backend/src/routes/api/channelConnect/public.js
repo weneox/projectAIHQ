@@ -4,6 +4,7 @@ import express from "express";
 import { cfg } from "../../../config.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { isDbReady } from "../../../utils/http.js";
+import { resolveTelegramUserAvatar } from "../../../utils/telegram.js";
 import { createInboxIngestHandler } from "../inbox/internal.js";
 import { validateIngestRequest } from "../inbox/internal/request.js";
 import {
@@ -125,6 +126,59 @@ function buildTelegramCustomerName(from = {}) {
   const full = [firstName, lastName].filter(Boolean).join(" ");
   if (full) return full;
   return s(from?.username || from?.id || "Telegram User");
+}
+
+function buildTelegramAvatarPatch(avatarResult = null) {
+  if (!avatarResult || typeof avatarResult !== "object") return null;
+
+  if (avatarResult.ok && avatarResult.hasAvatar) {
+    return {
+      avatarAvailable: true,
+      avatarUserId: s(avatarResult.userId) || null,
+      avatarFileId: s(avatarResult.fileId) || null,
+      avatarFileUniqueId: s(avatarResult.fileUniqueId) || null,
+      avatarFilePath: s(avatarResult.filePath) || null,
+      avatarFetchedAt: new Date().toISOString(),
+    };
+  }
+
+  if (avatarResult.ok && avatarResult.hasAvatar === false) {
+    return {
+      avatarAvailable: false,
+      avatarUserId: s(avatarResult.userId) || null,
+      avatarFileId: null,
+      avatarFileUniqueId: null,
+      avatarFilePath: null,
+      avatarFetchedAt: new Date().toISOString(),
+    };
+  }
+
+  return null;
+}
+
+function attachTelegramAvatarToInput(input = {}, avatarResult = null) {
+  const patch = buildTelegramAvatarPatch(avatarResult);
+  if (!patch) return input;
+
+  const next = {
+    ...input,
+    customerContext: {
+      ...obj(input?.customerContext),
+      telegram: {
+        ...obj(obj(input?.customerContext).telegram),
+        ...patch,
+      },
+    },
+    meta: {
+      ...obj(input?.meta),
+      telegram: {
+        ...obj(obj(input?.meta).telegram),
+        ...patch,
+      },
+    },
+  };
+
+  return next;
 }
 
 function normalizeTelegramWebhookUpdate(update = {}, tenantKey = "") {
@@ -490,7 +544,7 @@ export function createTelegramWebhookHandler({
         channelId: s(channel?.id),
       });
 
-      const normalized = normalizeTelegramWebhookUpdate(
+      let normalized = normalizeTelegramWebhookUpdate(
         req.body,
         tenant.tenant_key
       );
@@ -521,6 +575,29 @@ export function createTelegramWebhookHandler({
           reasonCode: normalized.reasonCode,
         });
       }
+
+      let avatarResult = null;
+      try {
+        avatarResult = await resolveTelegramUserAvatar({
+          botToken,
+          userId: normalized?.input?.externalUserId,
+        });
+      } catch {}
+
+      normalized = {
+        ...normalized,
+        input: attachTelegramAvatarToInput(normalized.input, avatarResult),
+      };
+
+      logWebhookEvent("info", "telegram.webhook.avatar_resolved", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        externalUserId: s(normalized?.input?.externalUserId),
+        avatarLookupOk: avatarResult?.ok === true,
+        avatarAvailable: avatarResult?.hasAvatar === true,
+        avatarReasonCode: s(avatarResult?.reasonCode),
+      });
 
       const validation = validateIngestRequest(normalized.input);
       if (!validation.ok) {

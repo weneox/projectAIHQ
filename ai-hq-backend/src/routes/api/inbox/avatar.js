@@ -6,7 +6,7 @@ import {
   getTelegramFile,
   resolveTelegramUserAvatar,
 } from "../../../utils/telegram.js";
-import { getTelegramSecrets } from "../channelConnect/repository.js";
+import { getTelegramSecrets, getTenantByKey } from "../channelConnect/repository.js";
 import { TELEGRAM_BOT_TOKEN_SECRET_KEY } from "../channelConnect/telegram.js";
 import { getThreadById } from "./repository.js";
 import { resolveThreadAvatarState, s } from "./shared.js";
@@ -54,6 +54,17 @@ async function persistTelegramAvatarMeta(db, thread = {}, patch = {}) {
   );
 
   return nextMeta;
+}
+
+async function resolveTelegramTenantIdForThread(db, thread = {}) {
+  const directTenantId = s(thread?.tenant_id);
+  if (directTenantId) return directTenantId;
+
+  const tenantKey = s(thread?.tenant_key);
+  if (!tenantKey) return "";
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  return s(tenant?.id);
 }
 
 async function resolveTelegramAvatarForThread({
@@ -222,7 +233,7 @@ export function inboxAvatarRoutes({ db }) {
       return res.status(404).end();
     }
 
-    const tenantId = s(thread?.tenant_id);
+    const tenantId = await resolveTelegramTenantIdForThread(db, thread);
     if (!tenantId) {
       return res.status(404).end();
     }
