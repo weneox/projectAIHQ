@@ -514,13 +514,15 @@ async function readMetaStatus(
   });
 }
 
-test("dm-first launch scopes drop business-management assumptions", () => {
+test("dm-first launch scopes match the current live Meta permission contract", () => {
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
+    "pages_read_engagement",
+    "business_management",
     "instagram_basic",
     "instagram_manage_messages",
   ]);
-  assert.equal(META_DM_LAUNCH_SCOPES.includes("business_management"), false);
+  assert.equal(META_DM_LAUNCH_SCOPES.includes("instagram_manage_comments"), false);
 });
 
 test("oauth connect url requests only the live DM-first Meta scopes", async () => {
