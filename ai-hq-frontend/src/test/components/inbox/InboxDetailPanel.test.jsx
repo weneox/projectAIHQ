@@ -191,6 +191,26 @@ describe("InboxDetailPanel", () => {
     expect(props.onToggleAutomation).not.toHaveBeenCalled();
   });
 
+  it("calls onToggleAutomation with false when auto-reply is currently enabled", () => {
+    const props = buildProps({
+      automationControl: {
+        enabled: true,
+        disabled: false,
+        loading: false,
+        saving: false,
+      },
+    });
+
+    render(<InboxDetailPanel {...props} />);
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: /disable inbox automatic replies/i })
+    );
+
+    expect(props.onToggleAutomation).toHaveBeenCalledWith(false);
+    expect(props.onToggleAutomation).toHaveBeenCalledTimes(1);
+  });
+
   it("restores avatar image when a different thread is opened after an avatar error", () => {
     const initialProps = buildProps({
       selectedThread: {
