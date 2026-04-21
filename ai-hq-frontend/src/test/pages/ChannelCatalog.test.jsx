@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +23,12 @@ const connectTelegramChannel = vi.fn();
 const disconnectTelegramChannel = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
 const saveWebsiteWidgetConfig = vi.fn();
+const getWebsiteDomainVerificationStatus = vi.fn();
+const createWebsiteDomainVerificationChallenge = vi.fn();
+const checkWebsiteDomainVerification = vi.fn();
+const createWebsiteWidgetInstallHandoff = vi.fn();
+const createWebsiteWidgetGtmInstallHandoff = vi.fn();
+const createWebsiteWidgetWordpressInstallHandoff = vi.fn();
 const getSettingsTrustView = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 
@@ -43,6 +56,18 @@ vi.mock("../../api/channelConnect.js", () => ({
   disconnectTelegramChannel: (...args) => disconnectTelegramChannel(...args),
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
   saveWebsiteWidgetConfig: (...args) => saveWebsiteWidgetConfig(...args),
+  getWebsiteDomainVerificationStatus: (...args) =>
+    getWebsiteDomainVerificationStatus(...args),
+  createWebsiteDomainVerificationChallenge: (...args) =>
+    createWebsiteDomainVerificationChallenge(...args),
+  checkWebsiteDomainVerification: (...args) =>
+    checkWebsiteDomainVerification(...args),
+  createWebsiteWidgetInstallHandoff: (...args) =>
+    createWebsiteWidgetInstallHandoff(...args),
+  createWebsiteWidgetGtmInstallHandoff: (...args) =>
+    createWebsiteWidgetGtmInstallHandoff(...args),
+  createWebsiteWidgetWordpressInstallHandoff: (...args) =>
+    createWebsiteWidgetWordpressInstallHandoff(...args),
 }));
 
 vi.mock("../../api/trust.js", () => ({
@@ -70,6 +95,14 @@ function createQueryClient() {
       },
     },
   });
+}
+
+async function findChannelCard(titleText) {
+  const title = await screen.findByText(titleText);
+  const card = title.closest("article");
+
+  expect(card).not.toBeNull();
+  return card;
 }
 
 function renderCatalog({ queryClient = null, initialEntries = ["/channels"] } = {}) {
@@ -264,16 +297,46 @@ describe("ChannelCatalog", () => {
   it("renders the real launch-channel mix after readiness loads", async () => {
     renderCatalog();
 
-    expect(await screen.findByRole("button", { name: "Open Instagram" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Telegram" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Website chat" })).toBeInTheDocument();
-    expect(screen.getAllByText(/launch ready/i).length).toBeGreaterThan(0);
+    const instagramCard = await findChannelCard("DM automation");
+    const telegramCard = await findChannelCard("Bot conversations");
+    const websiteCard = await findChannelCard("Widget + trusted origin");
+
+    expect(within(instagramCard).getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
+
+    expect(
+      within(instagramCard).getByRole("button", { name: /details/i })
+    ).toBeInTheDocument();
+    expect(
+      within(instagramCard).getByRole("button", { name: /open inbox/i })
+    ).toBeInTheDocument();
+    expect(within(instagramCard).getByText(/^connected$/i)).toBeInTheDocument();
+
+    expect(within(telegramCard).getAllByText(/^telegram$/i).length).toBeGreaterThan(0);
+    expect(
+      within(telegramCard).getByRole("button", { name: /details/i })
+    ).toBeInTheDocument();
+    expect(
+      within(telegramCard).getByRole("button", { name: /open inbox/i })
+    ).toBeInTheDocument();
+    expect(within(telegramCard).getByText(/^connected$/i)).toBeInTheDocument();
+
+    expect(within(websiteCard).getByText(/^website chat$/i)).toBeInTheDocument();
+    expect(
+      within(websiteCard).getByRole("button", { name: /details/i })
+    ).toBeInTheDocument();
+    expect(
+      within(websiteCard).getByRole("button", { name: /open inbox/i })
+    ).toBeInTheDocument();
+    expect(within(websiteCard).getByText(/^connected$/i)).toBeInTheDocument();
   });
 
   it("opens the Instagram drawer with live tenant status", async () => {
     renderCatalog();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open Instagram" }));
+    const instagramCard = await findChannelCard("DM automation");
+    fireEvent.click(
+      within(instagramCard).getByRole("button", { name: /details/i })
+    );
 
     expect(
       await screen.findByText("Instagram is connected for this tenant.")
@@ -317,8 +380,8 @@ describe("ChannelCatalog", () => {
 
     renderCatalog();
 
-    expect(await screen.findByRole("button", { name: "Open Instagram" })).toBeInTheDocument();
-    expect(screen.getAllByText(/launch ready/i).length).toBeGreaterThan(0);
+    await findChannelCard("DM automation");
+    expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
 
     emitLaunchSliceRefresh({
       tenantKey: "acme",
@@ -330,7 +393,9 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryAllByText(/approval required/i).length).toBeGreaterThan(0);
+      expect(
+        screen.queryAllByText(/truth still needs approval/i).length
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -355,8 +420,8 @@ describe("ChannelCatalog", () => {
 
     const view = renderCatalog();
 
-    expect(await screen.findByRole("button", { name: "Open Instagram" })).toBeInTheDocument();
-    expect(screen.getAllByText(/launch ready/i).length).toBeGreaterThan(0);
+    await findChannelCard("DM automation");
+    expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
 
     workspaceScope = {
       tenantKey: "globex",
@@ -374,7 +439,7 @@ describe("ChannelCatalog", () => {
       expect(getMetaChannelStatus).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryAllByText(/launch ready/i)).toHaveLength(0);
+    expect(screen.queryAllByText(/^connected$/i)).toHaveLength(0);
 
     resolveMeta(
       createMetaStatus({
@@ -454,7 +519,7 @@ describe("ChannelCatalog", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryAllByText(/connect required/i).length).toBeGreaterThan(0);
+      expect(screen.queryAllByText(/^needs attention$/i).length).toBeGreaterThan(0);
     });
   });
 });

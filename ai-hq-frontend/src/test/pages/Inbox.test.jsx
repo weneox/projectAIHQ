@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useInboxData = vi.fn();
@@ -325,26 +325,6 @@ describe("Inbox", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/connect a launch channel first/i)
-    ).toBeInTheDocument();
-
-    expect(
-      screen.getByText(
-        /connect website chat, meta, telegram, or another launch channel to activate the live inbox/i
-      )
-    ).toBeInTheDocument();
-
-    const openChannelsButton = screen.getByRole("button", {
-      name: /open channels/i,
-    });
-
-    expect(openChannelsButton).toBeInTheDocument();
-
-    fireEvent.click(openChannelsButton);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/channels");
-
-    expect(
       screen.getByRole("heading", { name: /all conversations/i })
     ).toBeInTheDocument();
 
@@ -373,7 +353,7 @@ describe("Inbox", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText(/connect a launch channel first/i)
+        screen.queryByText(/connect a channel to activate the inbox/i)
       ).not.toBeInTheDocument();
     });
 
@@ -400,7 +380,7 @@ describe("Inbox", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText(/connect a launch channel first/i)
+        screen.queryByText(/connect a channel to activate the inbox/i)
       ).not.toBeInTheDocument();
     });
 

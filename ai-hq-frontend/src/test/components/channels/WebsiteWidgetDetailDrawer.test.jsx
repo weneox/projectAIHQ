@@ -66,6 +66,7 @@ function renderDrawer({
 } = {}) {
   const client = createQueryClient();
 
+  getWebsiteWidgetStatus.mockReset();
   getWebsiteWidgetStatus.mockResolvedValue(payload);
 
   return render(
@@ -365,12 +366,24 @@ describe("WebsiteWidgetDetailDrawer", () => {
       payload: createReadyPayload(),
     });
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: /developer package/i })
-    );
+    await screen.findByText(/ready to install/i);
+
+    const developerPackageButton = await screen.findByRole("button", {
+      name: /developer package/i,
+    });
+
+    await waitFor(() => {
+      expect(developerPackageButton).toBeEnabled();
+    });
+
+    fireEvent.click(developerPackageButton);
 
     await waitFor(() => {
       expect(createWebsiteWidgetInstallHandoff).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createWebsiteWidgetInstallHandoff.mock.calls[0]?.[0]).toEqual({
+      domain: "acme.test",
     });
 
     expect(
@@ -387,6 +400,8 @@ describe("WebsiteWidgetDetailDrawer", () => {
       payload: createReadyPayload(),
     });
 
+    await screen.findByText(/ready to install/i);
+
     const titleInput = await screen.findByDisplayValue("Website chat");
     fireEvent.change(titleInput, {
       target: { value: "Acme support" },
@@ -398,7 +413,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
       expect(saveWebsiteWidgetConfig).toHaveBeenCalledTimes(1);
     });
 
-    expect(saveWebsiteWidgetConfig).toHaveBeenCalledWith(
+    expect(saveWebsiteWidgetConfig.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         title: "Acme support",
         enabled: true,
