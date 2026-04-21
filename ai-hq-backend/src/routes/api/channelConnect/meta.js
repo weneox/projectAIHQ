@@ -2689,6 +2689,13 @@ export async function handleMetaCallback({
     stage: "callback",
   });
 
+  console.error("META_CALLBACK_ENTER_V3", {
+    hasCode: Boolean(code),
+    hasErrorQuery: Boolean(error || errorCode || errorMessage),
+    errorCode: cleanNullable(errorCode),
+    tenantKeyFromState: s(verifyState(stateRaw)?.tenantKey),
+  });
+
   callbackLog.info("meta.connect.callback_entered", {
     hasCode: Boolean(code),
     hasErrorQuery: Boolean(error || errorCode || errorMessage),
@@ -2771,6 +2778,14 @@ export async function handleMetaCallback({
 
   const tokenJson = await exchangeCodeForUserTokenFn(code);
   const userAccessToken = s(tokenJson?.access_token);
+  console.error("META_CALLBACK_TOKEN_EXCHANGED_V3", {
+    tenantKey: tenant?.tenant_key,
+    hasUserAccessToken: Boolean(userAccessToken),
+    tokenType: cleanNullable(tokenJson?.token_type),
+    expiresIn: Number.isFinite(Number(tokenJson?.expires_in))
+      ? Number(tokenJson?.expires_in)
+      : null,
+  });
   actorLog.info("meta.connect.token_exchanged", {
     tenantKey: tenant.tenant_key,
     hasUserAccessToken: Boolean(userAccessToken),
@@ -2796,25 +2811,58 @@ export async function handleMetaCallback({
   }
 
   const permissionCheckedAt = new Date().toISOString();
-  const [
-    metaUserProfile,
-    permissionsResult,
-    debugTokenResult,
-    pageDiscoveryResult,
-  ] = await Promise.all([
-    getMetaUserProfileFn(userAccessToken),
-    getMetaPermissionsForUserTokenFn(userAccessToken)
-      .then((payload) => ({ payload }))
-      .catch((error) => ({ error })),
-    debugMetaUserTokenFn(userAccessToken)
-      .then((payload) => ({ payload }))
-      .catch((error) => ({ error })),
-    discoverMetaPagesForUserToken({
-      userAccessToken,
-      getPagesForUserTokenFn,
-      getAssignedPagesForUserTokenFn,
-    }),
-  ]);
+  console.error("META_CALLBACK_BEFORE_DISCOVERY_V3", {
+    tenantKey: tenant?.tenant_key,
+  });
+
+  let metaUserProfile;
+  let permissionsResult;
+  let debugTokenResult;
+  let pageDiscoveryResult;
+
+  try {
+    [
+      metaUserProfile,
+      permissionsResult,
+      debugTokenResult,
+      pageDiscoveryResult,
+    ] = await Promise.all([
+      getMetaUserProfileFn(userAccessToken),
+      getMetaPermissionsForUserTokenFn(userAccessToken)
+        .then((payload) => ({ payload }))
+        .catch((error) => ({ error })),
+      debugMetaUserTokenFn(userAccessToken)
+        .then((payload) => ({ payload }))
+        .catch((error) => ({ error })),
+      discoverMetaPagesForUserToken({
+        userAccessToken,
+        getPagesForUserTokenFn,
+        getAssignedPagesForUserTokenFn,
+      }),
+    ]);
+  } catch (error) {
+    console.error("META_CALLBACK_PROMISE_ALL_FAILED_V3", {
+      tenantKey: tenant?.tenant_key,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    throw error;
+  }
+
+  console.error("META_CALLBACK_AFTER_DISCOVERY_V3", {
+    tenantKey: tenant?.tenant_key,
+    metaUserId: s(metaUserProfile?.id),
+    pageCount: Array.isArray(pageDiscoveryResult?.pages)
+      ? pageDiscoveryResult.pages.length
+      : -1,
+    sourceCount: Array.isArray(pageDiscoveryResult?.sourceResults)
+      ? pageDiscoveryResult.sourceResults.length
+      : -1,
+    permissionsPayload: Boolean(permissionsResult?.payload),
+    permissionsError: cleanNullable(permissionsResult?.error?.message),
+    debugPayload: Boolean(debugTokenResult?.payload),
+    debugError: cleanNullable(debugTokenResult?.error?.message),
+  });
   const permissionSummary = buildMetaPermissionSummary({
     requestedScopes: META_DM_LAUNCH_SCOPES,
     permissionsPayload: permissionsResult?.payload,
@@ -3026,6 +3074,12 @@ export async function handleMetaCallback({
   }
 
   const selected = candidates[0];
+  console.error("META_CALLBACK_BEFORE_CONNECT_V3", {
+    tenantKey: tenant?.tenant_key,
+    candidateCount: Array.isArray(candidates) ? candidates.length : -1,
+    selectedPageId: s(selected?.pageId),
+    selectedIgUserId: s(selected?.igUserId),
+  });
   let connectResult = null;
   try {
     connectResult = await connectInstagramChannel({
