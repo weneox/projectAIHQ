@@ -2953,10 +2953,17 @@ export async function handleMetaCallback({
     actor,
   });
 
-  await deleteMetaSecretKeys(db, tenant.id, [
-    META_CONNECT_SELECTION_SECRET_KEY,
-    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
-  ]);
+  try {
+    await deleteMetaSecretKeys(db, tenant.id, [
+      META_CONNECT_SELECTION_SECRET_KEY,
+      META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+    ]);
+  } catch (error) {
+    actorLog.warn("meta.connect.precleanup.failed", {
+      tenantKey: tenant.tenant_key,
+      error: s(error?.message || error),
+    });
+  }
 
   const tokenJson = await exchangeCodeForUserTokenFn(code);
   const userAccessToken = s(tokenJson?.access_token);
