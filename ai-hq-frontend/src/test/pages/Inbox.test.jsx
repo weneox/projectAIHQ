@@ -186,6 +186,21 @@ function buildTrustView({
   };
 }
 
+function buildConnectedMetaStatus() {
+  return {
+    connected: true,
+    state: "connected",
+    runtime: {
+      deliveryReady: true,
+    },
+    readiness: {
+      status: "ready",
+      message: "Instagram DM automation is ready.",
+      blockers: [],
+    },
+  };
+}
+
 describe("Inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -340,9 +355,9 @@ describe("Inbox", () => {
   });
 
   it("shows truth approval notice when a launch channel is connected but truth is not ready", async () => {
-    getMetaChannelStatus.mockResolvedValue({ connected: true });
-    getTelegramChannelStatus.mockResolvedValue({ connected: false });
-    getWebsiteWidgetStatus.mockResolvedValue({ connected: false });
+    getMetaChannelStatus.mockResolvedValue(buildConnectedMetaStatus());
+    getTelegramChannelStatus.mockResolvedValue({ state: "disconnected" });
+    getWebsiteWidgetStatus.mockResolvedValue({ state: "not_connected" });
     getSettingsTrustView.mockResolvedValue(
       buildTrustView({
         status: "blocked",
@@ -352,24 +367,24 @@ describe("Inbox", () => {
     render(<Inbox />);
 
     await waitFor(() => {
-      expect(
-        screen.queryByText(/connect a channel to activate the inbox/i)
-      ).not.toBeInTheDocument();
+      expect(getSettingsTrustView).toHaveBeenCalled();
     });
 
-    expect(screen.getByText(/truth approval required/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/truth approval required/i)
+    ).toBeInTheDocument();
 
     expect(
-      screen.getByText(
+      await screen.findByText(
         /a channel is live, but approved truth is not ready yet\. review truth before trusting autonomous replies\./i
       )
     ).toBeInTheDocument();
   });
 
   it("does not show the truth approval notice when a launch channel is connected and truth is ready", async () => {
-    getMetaChannelStatus.mockResolvedValue({ connected: true });
-    getTelegramChannelStatus.mockResolvedValue({ connected: false });
-    getWebsiteWidgetStatus.mockResolvedValue({ connected: false });
+    getMetaChannelStatus.mockResolvedValue(buildConnectedMetaStatus());
+    getTelegramChannelStatus.mockResolvedValue({ state: "disconnected" });
+    getWebsiteWidgetStatus.mockResolvedValue({ state: "not_connected" });
     getSettingsTrustView.mockResolvedValue(
       buildTrustView({
         status: "ready",
@@ -379,9 +394,7 @@ describe("Inbox", () => {
     render(<Inbox />);
 
     await waitFor(() => {
-      expect(
-        screen.queryByText(/connect a channel to activate the inbox/i)
-      ).not.toBeInTheDocument();
+      expect(getSettingsTrustView).toHaveBeenCalled();
     });
 
     await waitFor(() => {
