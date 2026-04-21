@@ -39,6 +39,7 @@ function resolveConversationTitle(thread) {
     s(thread?.customer_name) ||
     s(thread?.external_username) ||
     s(thread?.external_user_id) ||
+    s(thread?.external_thread_id) ||
     "Conversation"
   );
 }
@@ -336,11 +337,18 @@ function ConversationIdentity({ thread }) {
   const [failedAvatarIdentity, setFailedAvatarIdentity] = useState("");
   const avatarFailed = failedAvatarIdentity === avatarIdentity;
 
+  useEffect(() => {
+    if (failedAvatarIdentity && failedAvatarIdentity !== avatarIdentity) {
+      setFailedAvatarIdentity("");
+    }
+  }, [avatarIdentity, failedAvatarIdentity]);
+
   return (
     <div className="flex min-w-0 items-center gap-4">
       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[16px] font-semibold text-[rgba(37,99,235,0.96)] ring-1 ring-[rgba(37,99,235,0.10)]">
         {avatarUrl && !avatarFailed ? (
           <img
+            key={avatarIdentity}
             src={avatarUrl}
             alt={title}
             loading="eager"
@@ -451,7 +459,7 @@ function EmptyConversationState() {
           Select a conversation
         </div>
         <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
-          Choose a thread from the left to review the conversation and send a reply.
+          Choose a conversation from the left to review the messages and send a reply.
         </div>
       </div>
     </div>
