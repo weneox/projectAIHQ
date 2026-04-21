@@ -1199,6 +1199,8 @@ async function subscribeMetaPageToApp({
   const safePageAccessToken = s(pageAccessToken);
   const subscribedAt = new Date().toISOString();
   const source = "page_subscribed_apps";
+  const subscribedFields = ["messages"];
+  const subscribedFieldsValue = subscribedFields.join(",");
 
   if (!safePageId || !safePageAccessToken) {
     throw buildMetaConnectFailureError(
@@ -1209,6 +1211,8 @@ async function subscribeMetaPageToApp({
         details: {
           pageId: safePageId || null,
           source,
+          subscribedFields,
+          subscribedFieldsValue,
         },
       }
     );
@@ -1218,6 +1222,8 @@ async function subscribeMetaPageToApp({
   log.info("meta.connect.webhook_subscription.start", {
     pageId: safePageId,
     source,
+    subscribedFields,
+    subscribedFieldsValue,
   });
 
   try {
@@ -1229,6 +1235,7 @@ async function subscribeMetaPageToApp({
       },
       body: new URLSearchParams({
         access_token: safePageAccessToken,
+        subscribed_fields: subscribedFieldsValue,
       }),
     });
 
@@ -1243,6 +1250,8 @@ async function subscribeMetaPageToApp({
       source,
       pageId: safePageId,
       subscribedAt,
+      subscribedFields,
+      subscribedFieldsValue,
       reasonCode: ok ? "" : "meta_page_subscription_failed",
       response: {
         success:
@@ -1275,6 +1284,8 @@ async function subscribeMetaPageToApp({
       source,
       pageId: safePageId,
       subscribedAt,
+      subscribedFields,
+      subscribedFieldsValue,
       reasonCode: "meta_page_subscription_failed",
       error: s(error?.message || error),
     };
