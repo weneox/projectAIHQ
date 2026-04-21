@@ -151,4 +151,33 @@ describe("InboxDetailPanel", () => {
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
   });
+
+  it("restores avatar image when a different thread is opened after an avatar error", () => {
+    const initialProps = buildProps({
+      selectedThread: {
+        id: "thread-1",
+        customer_name: "Alex Morgan",
+        avatar_url: "https://example.test/alex.png",
+      },
+    });
+
+    const { rerender } = render(<InboxDetailPanel {...initialProps} />);
+
+    const initialAvatar = screen.getByAltText(/alex morgan/i);
+    fireEvent.error(initialAvatar);
+
+    expect(screen.queryByAltText(/alex morgan/i)).not.toBeInTheDocument();
+
+    const nextProps = buildProps({
+      selectedThread: {
+        id: "thread-2",
+        customer_name: "Jamie Reed",
+        avatar_url: "https://example.test/jamie.png",
+      },
+    });
+
+    rerender(<InboxDetailPanel {...nextProps} />);
+
+    expect(screen.getByAltText(/jamie reed/i)).toBeInTheDocument();
+  });
 });

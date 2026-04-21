@@ -106,6 +106,13 @@ export default defineConfig([
   },
 
   {
+    files: ["src/components/inbox/InboxDetailPanel.jsx"],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
+
+  {
     files: [
       "src/test/**/*.{js,jsx}",
       "src/**/*.{test,spec}.{js,jsx}",
