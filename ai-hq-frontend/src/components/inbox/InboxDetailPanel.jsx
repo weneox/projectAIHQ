@@ -332,11 +332,9 @@ function ConversationIdentity({ thread }) {
   const metaItems = formatConversationMeta(thread);
   const avatar = initialsFromName(title);
   const avatarUrl = resolveThreadAvatarUrl(thread);
-  const [avatarFailed, setAvatarFailed] = useState(false);
-
-  useEffect(() => {
-    setAvatarFailed(false);
-  }, [thread?.id, avatarUrl]);
+  const avatarIdentity = `${s(thread?.id)}::${avatarUrl}`;
+  const [failedAvatarIdentity, setFailedAvatarIdentity] = useState("");
+  const avatarFailed = failedAvatarIdentity === avatarIdentity;
 
   return (
     <div className="flex min-w-0 items-center gap-4">
@@ -348,7 +346,7 @@ function ConversationIdentity({ thread }) {
             loading="eager"
             decoding="async"
             className="h-full w-full object-cover"
-            onError={() => setAvatarFailed(true)}
+            onError={() => setFailedAvatarIdentity(avatarIdentity)}
           />
         ) : (
           avatar
