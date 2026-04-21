@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock3 } from "lucide-react";
 
 function s(v, d = "") {
@@ -145,9 +145,11 @@ export default function InboxThreadCard({
   );
   const meta = resolveMeta(thread);
   const avatarUrl = resolveAvatarUrl(thread);
-  const avatarIdentity = `${s(thread?.id)}::${avatarUrl}`;
-  const [failedAvatarIdentity, setFailedAvatarIdentity] = useState("");
-  const avatarFailed = failedAvatarIdentity === avatarIdentity;
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [thread?.id, avatarUrl]);
 
   return (
     <button
@@ -173,7 +175,7 @@ export default function InboxThreadCard({
             loading="lazy"
             decoding="async"
             className="h-full w-full object-cover"
-            onError={() => setFailedAvatarIdentity(avatarIdentity)}
+            onError={() => setAvatarFailed(true)}
           />
         ) : (
           initialsFromName(name)

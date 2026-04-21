@@ -56,41 +56,6 @@ function boolOr(v, fallback) {
   return typeof v === "boolean" ? v : fallback;
 }
 
-function buildThreadAvatarUrl(row = {}, avatarState = null) {
-  const threadId = s(row?.id);
-  const channel = fixText(row?.channel || "").toLowerCase();
-
-  if (!threadId || channel !== "telegram") return "";
-
-  const avatar = avatarState || resolveThreadAvatarState(row);
-  const hasNegativeCache =
-    avatar?.avatarAvailable === false &&
-    !s(avatar?.avatarFilePath) &&
-    !s(avatar?.avatarFileId);
-
-  if (hasNegativeCache) return "";
-
-  const hasResolvedAvatar = Boolean(
-    s(avatar?.avatarFilePath) || s(avatar?.avatarFileId)
-  );
-  const hasLookupIdentity = Boolean(s(row?.external_user_id));
-
-  if (!hasResolvedAvatar && !hasLookupIdentity) return "";
-
-  const versionSource =
-    s(avatar?.avatarFetchedAt) ||
-    s(avatar?.avatarFileUniqueId) ||
-    s(avatar?.avatarFileId) ||
-    s(row?.updated_at) ||
-    s(row?.created_at) ||
-    s(row?.external_user_id) ||
-    "1";
-
-  return `/api/inbox/threads/${encodeURIComponent(
-    threadId
-  )}/avatar?v=${encodeURIComponent(versionSource)}`;
-}
-
 export function resolveThreadAvatarState(row = {}) {
   const meta = asObject(row?.meta);
   const telegram = asObject(meta?.telegram);
@@ -126,6 +91,46 @@ export function resolveThreadAvatarState(row = {}) {
     avatarFetchedAt,
     avatarUserId,
   };
+}
+
+function buildThreadAvatarUrl(row = {}, avatarState = null) {
+  const threadId = s(row?.id);
+  const channel = fixText(row?.channel || "").toLowerCase();
+
+  if (!threadId || channel !== "telegram") return "";
+
+  const avatar = avatarState || resolveThreadAvatarState(row);
+  const hasNegativeCache =
+    avatar?.avatarAvailable === false &&
+    !s(avatar?.avatarFilePath) &&
+    !s(avatar?.avatarFileId);
+
+  if (hasNegativeCache) return "";
+
+  const lookupUserId =
+    s(avatar?.avatarUserId) ||
+    s(row?.external_user_id) ||
+    s(row?.external_thread_id);
+
+  const hasResolvedAvatar = Boolean(
+    s(avatar?.avatarFilePath) || s(avatar?.avatarFileId)
+  );
+  const hasLookupIdentity = Boolean(lookupUserId);
+
+  if (!hasResolvedAvatar && !hasLookupIdentity) return "";
+
+  const versionSource =
+    s(avatar?.avatarFetchedAt) ||
+    s(avatar?.avatarFileUniqueId) ||
+    s(avatar?.avatarFileId) ||
+    s(row?.updated_at) ||
+    s(row?.created_at) ||
+    lookupUserId ||
+    "1";
+
+  return `/api/inbox/threads/${encodeURIComponent(
+    threadId
+  )}/avatar?v=${encodeURIComponent(versionSource)}`;
 }
 
 export function sortMessagesChronologically(list = []) {

@@ -75,7 +75,9 @@ async function resolveTelegramAvatarForThread({
 } = {}) {
   const currentAvatarState = avatarState || resolveThreadAvatarState(thread);
   const externalUserId = s(
-    currentAvatarState?.avatarUserId || thread?.external_user_id
+    currentAvatarState?.avatarUserId ||
+      thread?.external_user_id ||
+      thread?.external_thread_id
   );
 
   if (s(currentAvatarState?.avatarFilePath)) {
