@@ -29,6 +29,7 @@ const { signState } = utilsModule;
 const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule;
 
 const originalFetch = globalThis.fetch;
+const subscribedAppsRequests = [];
 
 function createJsonResponse(payload = {}, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -47,28 +48,45 @@ function resolveRequestUrl(input) {
   return "";
 }
 
-function isMetaSubscribedAppsUrl(url) {
+function getMetaSubscribedAppsRequest(input, init = {}) {
+  const url = resolveRequestUrl(input);
   try {
     const parsed = new URL(String(url || ""));
-    return (
-      parsed.hostname === "graph.facebook.com" &&
-      /\/subscribed_apps$/i.test(parsed.pathname)
-    );
+    if (!/\/subscribed_apps$/i.test(parsed.pathname)) return null;
+
+    const body =
+      init?.body instanceof URLSearchParams
+        ? new URLSearchParams(init.body.toString())
+        : new URLSearchParams(String(init?.body || ""));
+
+    return {
+      url: parsed.toString(),
+      hostname: parsed.hostname,
+      pathname: parsed.pathname,
+      method: String(init?.method || "GET").toUpperCase(),
+      accessToken: body.get("access_token") || "",
+      subscribedFields: body.get("subscribed_fields") || "",
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
+test.beforeEach(() => {
+  subscribedAppsRequests.length = 0;
+});
+
 test.before(() => {
   globalThis.fetch = async (input, init = {}) => {
-    const url = resolveRequestUrl(input);
-    const method = String(init?.method || "GET").toUpperCase();
+    const subscriptionRequest = getMetaSubscribedAppsRequest(input, init);
 
-    if (isMetaSubscribedAppsUrl(url)) {
-      assert.equal(method, "POST");
+    if (subscriptionRequest) {
+      assert.equal(subscriptionRequest.method, "POST");
+      subscribedAppsRequests.push(subscriptionRequest);
       return createJsonResponse({ success: true }, 200);
     }
 
+    const url = resolveRequestUrl(input);
     throw new Error(`Unexpected network call in meta-channel-connect test: ${url}`);
   };
 });
@@ -995,7 +1013,7 @@ test("callback fails closed when Meta omits a required granted permission", asyn
   ]);
 });
 
-test("single-account callback still connects when /me/accounts already includes Instagram linkage", async () => {
+test("single-account callback subscribes the Instagram professional account and still connects when /me/accounts already includes Instagram linkage", async () => {
   const db = new FakeChannelConnectDb();
 
   const callbackResult = await invokeSingleAccountCallback(db);
@@ -1007,6 +1025,26 @@ test("single-account callback still connects when /me/accounts already includes 
   assert.equal(callbackResult.payload?.igUserId, "ig-1");
   assert.equal(callbackResult.payload?.sourceId, "source-1");
   assert.equal(db.channel?.status, "connected");
+  assert.equal(subscribedAppsRequests.length, 1);
+  assert.equal(subscribedAppsRequests[0]?.hostname, "graph.instagram.com");
+  assert.equal(
+    subscribedAppsRequests[0]?.pathname,
+    "/v24.0/ig-1/subscribed_apps"
+  );
+  assert.equal(subscribedAppsRequests[0]?.accessToken, "user-token-single");
+  assert.equal(subscribedAppsRequests[0]?.subscribedFields, "messages");
+  assert.equal(db.channel?.config?.webhook_subscription_ok, true);
+  assert.equal(db.channel?.health?.webhook_subscription_ok, true);
+  assert.equal(db.channel?.config?.webhook_subscription_page_id, "page-1");
+  assert.equal(db.channel?.health?.webhook_subscription_page_id, "page-1");
+  assert.equal(
+    db.channel?.config?.webhook_subscription_source,
+    "instagram_subscribed_apps"
+  );
+  assert.equal(
+    db.channel?.health?.webhook_subscription_source,
+    "instagram_subscribed_apps"
+  );
 
   const connectedAudits = db.auditEntries.filter(
     (entry) => entry.action === "settings.channel.meta.connected"

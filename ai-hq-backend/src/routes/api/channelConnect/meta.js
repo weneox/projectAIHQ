@@ -1190,26 +1190,29 @@ export async function getMetaPageAccessContextForUserToken(pageId, userAccessTok
   };
 }
 
-async function subscribeMetaPageToApp({
+async function subscribeMetaInstagramAccountToApp({
   pageId = "",
-  pageAccessToken = "",
+  igUserId = "",
+  userAccessToken = "",
   log = createSafeLogger(),
 } = {}) {
   const safePageId = s(pageId);
-  const safePageAccessToken = s(pageAccessToken);
+  const safeIgUserId = s(igUserId);
+  const safeUserAccessToken = s(userAccessToken);
   const subscribedAt = new Date().toISOString();
-  const source = "page_subscribed_apps";
+  const source = "instagram_subscribed_apps";
   const subscribedFields = ["messages"];
   const subscribedFieldsValue = subscribedFields.join(",");
 
-  if (!safePageId || !safePageAccessToken) {
+  if (!safeIgUserId || !safeUserAccessToken) {
     throw buildMetaConnectFailureError(
       "meta_page_subscription_input_missing",
-      "Meta page webhook subscription could not start because the page identity or page access token is missing.",
+      "Meta Instagram webhook subscription could not start because the Instagram professional account id or user access token is missing.",
       {
         status: 409,
         details: {
           pageId: safePageId || null,
+          igUserId: safeIgUserId || null,
           source,
           subscribedFields,
           subscribedFieldsValue,
@@ -1218,9 +1221,12 @@ async function subscribeMetaPageToApp({
     );
   }
 
-  const url = `${metaGraphBase()}/${encodeURIComponent(safePageId)}/subscribed_apps`;
+  const url = `https://graph.instagram.com/v24.0/${encodeURIComponent(
+    safeIgUserId
+  )}/subscribed_apps`;
   log.info("meta.connect.webhook_subscription.start", {
     pageId: safePageId,
+    igUserId: safeIgUserId,
     source,
     subscribedFields,
     subscribedFieldsValue,
@@ -1234,7 +1240,7 @@ async function subscribeMetaPageToApp({
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
       },
       body: new URLSearchParams({
-        access_token: safePageAccessToken,
+        access_token: safeUserAccessToken,
         subscribed_fields: subscribedFieldsValue,
       }),
     });
@@ -1249,6 +1255,7 @@ async function subscribeMetaPageToApp({
       ok,
       source,
       pageId: safePageId,
+      igUserId: safeIgUserId,
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
@@ -1283,6 +1290,7 @@ async function subscribeMetaPageToApp({
       ok: false,
       source,
       pageId: safePageId,
+      igUserId: safeIgUserId,
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
@@ -1984,9 +1992,10 @@ async function connectInstagramChannel({
     secretKey: "page_access_token",
     saved: Boolean(savedPageToken),
   });
-  const webhookSubscription = await subscribeMetaPageToApp({
+  const webhookSubscription = await subscribeMetaInstagramAccountToApp({
     pageId: resolvedSelected.pageId,
-    pageAccessToken: resolvedSelected.pageAccessToken,
+    igUserId: resolvedSelected.igUserId,
+    userAccessToken,
     log,
   });
   await deleteMetaSecretKeys(db, tenant.id, [
