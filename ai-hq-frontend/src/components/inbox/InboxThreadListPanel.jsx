@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  Inbox,
+  ChevronDown,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
@@ -201,10 +207,34 @@ function EmptyState({ hasSearch }) {
   );
 }
 
+function DisconnectedRailState() {
+  return (
+    <div className="flex h-full min-h-0 items-center justify-center px-6 py-10">
+      <div className="max-w-[260px] text-center">
+        <div className="mb-5 flex justify-center">
+          <Inbox
+            className="h-12 w-12 text-[rgba(148,163,184,0.42)]"
+            strokeWidth={1.7}
+          />
+        </div>
+
+        <div className="text-[15px] font-semibold text-[rgba(15,23,42,0.92)]">
+          No live conversations yet
+        </div>
+
+        <div className="mt-2 text-[12.5px] leading-6 text-[rgba(100,116,139,0.96)]">
+          Conversations will appear here after a launch channel is connected and messages start coming in.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InboxThreadListPanel({
   threadList,
   selectedThreadId = "",
   searchQuery = "",
+  launchChannelConnected = true,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [channelFilter, setChannelFilter] = useState("all");
@@ -362,6 +392,28 @@ export default function InboxThreadListPanel({
   function handleCloseSearch() {
     setLocalSearch("");
     setSearchOpen(false);
+  }
+
+  if (!launchChannelConnected) {
+    return (
+      <section
+        aria-labelledby="inbox-thread-list-title"
+        className="flex h-full min-h-0 flex-col bg-transparent"
+      >
+        <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.72)] px-4 py-5">
+          <h2
+            id="inbox-thread-list-title"
+            className="truncate text-[16px] font-semibold text-[rgba(15,23,42,0.96)]"
+          >
+            All conversations
+          </h2>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <DisconnectedRailState />
+        </div>
+      </section>
+    );
   }
 
   return (

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
 
 import {
   getMetaChannelStatus,
@@ -30,7 +29,6 @@ import {
   buildWebsiteLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
-import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
   SlidingDetailOverlay,
@@ -162,35 +160,6 @@ function buildInboxAutomationControl({
     changedBy: resolved.changedBy,
     policyReason: resolved.policyReason,
   };
-}
-
-function LaunchChannelPrompt({ onOpenChannels }) {
-  return (
-    <section className="rounded-[18px] border border-[rgba(245,158,11,0.18)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))] px-5 py-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0">
-          <div className="text-[14px] font-semibold text-[rgba(120,53,15,0.98)]">
-            Connect a launch channel first
-          </div>
-          <div className="mt-1 text-[12.5px] leading-6 text-[rgba(146,64,14,0.92)]">
-            Connect Website chat, Meta, Telegram, or another launch channel to
-            activate the live inbox.
-          </div>
-        </div>
-
-        <div className="shrink-0">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onOpenChannels}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-          >
-            Open channels
-          </Button>
-        </div>
-      </div>
-    </section>
-  );
 }
 
 export default function Inbox() {
@@ -603,7 +572,7 @@ export default function Inbox() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
-      <div className="shrink-0 px-4 pt-4">
+      <div className="shrink-0 px-4 pt-0">
         <div className="flex flex-col gap-3">
           {surfaceNotice ? (
             <InlineNotice
@@ -612,10 +581,6 @@ export default function Inbox() {
               description={surfaceNotice.description}
               compact
             />
-          ) : null}
-
-          {!hasConnectedLaunchChannel ? (
-            <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
           ) : null}
 
           {showTruthApprovalNotice ? (
@@ -629,13 +594,14 @@ export default function Inbox() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 pt-3">
+      <div className="min-h-0 flex-1 pt-0">
         <div className="grid h-full min-h-0 grid-cols-[420px_minmax(0,1fr)] bg-transparent">
           <div className="min-h-0 overflow-hidden border-r border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.64)]">
             <InboxThreadListPanel
               threadList={threadList}
               selectedThreadId={selectedThread?.id || ""}
               searchQuery=""
+              launchChannelConnected={hasConnectedLaunchChannel}
             />
           </div>
 
@@ -657,6 +623,8 @@ export default function Inbox() {
               }}
               automationControl={inboxAutomationControl}
               onToggleAutomation={handleToggleInboxAutonomy}
+              launchChannelConnected={hasConnectedLaunchChannel}
+              onOpenChannels={() => navigate("/channels")}
               composer={
                 <InboxComposer
                   embedded

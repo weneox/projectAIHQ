@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowRight,
   CheckCheck,
   MoreHorizontal,
+  PlugZap,
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
@@ -354,6 +356,89 @@ function ConversationIdentity({ thread }) {
   );
 }
 
+function ConnectChannelEmptyState({ onOpenChannels }) {
+  return (
+    <div className="flex h-full min-h-[420px] items-center justify-center px-8 py-10">
+      <div className="flex max-w-[560px] flex-col items-center text-center">
+        <div className="relative mb-7">
+          <div className="absolute inset-0 blur-3xl bg-[rgba(148,163,184,0.08)]" />
+          <PlugZap
+            className="relative h-24 w-24 text-[rgba(100,116,139,0.52)]"
+            strokeWidth={1.55}
+          />
+        </div>
+
+        <div className="text-[28px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
+          Connect a channel to activate the inbox
+        </div>
+
+        <div className="mt-3 max-w-[440px] text-[15px] leading-8 text-[rgba(100,116,139,0.96)]">
+          Your live inbox will appear here once Website chat, Meta, Telegram,
+          or another launch channel is connected.
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenChannels}
+          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[14px] bg-[rgba(37,99,235,0.98)] px-5 text-[14px] font-semibold text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.62)] transition-all hover:-translate-y-[1px]"
+        >
+          <span>Open channels</span>
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyComposerDock() {
+  return (
+    <div className="w-full px-6 pb-6">
+      <div className="mx-auto w-full max-w-[960px] rounded-[26px] border border-[rgba(15,23,42,0.08)] bg-white/92 px-5 py-4 shadow-[0_28px_70px_-46px_rgba(15,23,42,0.24)] backdrop-blur">
+        <div className="flex items-end gap-4">
+          <textarea
+            disabled
+            rows={1}
+            placeholder="Write a reply"
+            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[rgba(15,23,42,0.94)] placeholder:text-[rgba(148,163,184,0.96)] outline-none disabled:cursor-not-allowed"
+          />
+          <button
+            type="button"
+            disabled
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(148,163,184,0.22)] px-5 text-[13px] font-medium text-[rgba(100,116,139,0.96)]"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FloatingComposerSlot({ children }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.70)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-14">
+        <div className="pointer-events-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyConversationState() {
+  return (
+    <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
+      <div className="w-full max-w-[520px] rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
+        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+          Select a conversation
+        </div>
+        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
+          Choose a thread from the left to review the conversation and send a reply.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConversationHeader({
   thread,
   unreadCount,
@@ -368,12 +453,25 @@ function ConversationHeader({
   automationControl,
   onToggleAutomation,
   disabledMap,
+  launchChannelConnected,
 }) {
   const hasThread = Boolean(thread?.id);
 
+  if (!launchChannelConnected) {
+    return (
+      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-6 py-5 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
+        <div>
+          <div className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+            Inbox
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
-      <div className="flex items-center justify-between gap-5 px-6 py-5">
+    <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-6 py-5 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
+      <div className="flex items-center justify-between gap-5">
         <div className="min-w-0 flex-1">
           {hasThread ? (
             <ConversationIdentity thread={thread} />
@@ -442,55 +540,6 @@ function ConversationHeader({
   );
 }
 
-function EmptyComposerDock() {
-  return (
-    <div className="w-full px-6 pb-6">
-      <div className="mx-auto w-full max-w-[960px] rounded-[26px] border border-[rgba(15,23,42,0.08)] bg-white/92 px-5 py-4 shadow-[0_28px_70px_-46px_rgba(15,23,42,0.24)] backdrop-blur">
-        <div className="flex items-end gap-4">
-          <textarea
-            disabled
-            rows={1}
-            placeholder="Write a reply"
-            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[rgba(15,23,42,0.94)] placeholder:text-[rgba(148,163,184,0.96)] outline-none disabled:cursor-not-allowed"
-          />
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(148,163,184,0.22)] px-5 text-[13px] font-medium text-[rgba(100,116,139,0.96)]"
-          >
-            Send
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FloatingComposerSlot({ children }) {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.70)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-14">
-        <div className="pointer-events-auto">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyConversationState() {
-  return (
-    <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
-      <div className="w-full max-w-[520px] rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
-        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
-          Select a conversation
-        </div>
-        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
-          Choose a thread from the left to review the conversation and send a reply.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -505,6 +554,8 @@ export default function InboxDetailPanel({
   automationControl,
   onToggleAutomation,
   composer = null,
+  launchChannelConnected = true,
+  onOpenChannels = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
@@ -611,6 +662,7 @@ export default function InboxDetailPanel({
         automationControl={automationControl}
         onToggleAutomation={onToggleAutomation}
         disabledMap={disabledMap}
+        launchChannelConnected={launchChannelConnected}
         menu={
           <DetailActionMenu
             open={menuOpen}
@@ -637,62 +689,68 @@ export default function InboxDetailPanel({
       />
 
       <div className="relative min-h-0 flex-1">
-        <div
-          ref={scrollViewportRef}
-          className="h-full overflow-y-auto pb-[194px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {surface?.loading && !hasThread ? (
-            <InboxDetailSkeleton />
-          ) : !hasThread ? (
-            <EmptyConversationState />
-          ) : (
-            <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-6 py-6">
-              {showSurfaceBanner ? (
-                <div className="mx-auto mb-4 w-full max-w-[920px]">
-                  <SurfaceBanner
-                    surface={surface}
-                    unavailableMessage="Conversation detail is temporarily unavailable."
-                    refreshLabel="Refresh conversation"
-                  />
-                </div>
-              ) : null}
-
-              {!messages.length ? (
-                <div className="flex min-h-[320px] items-center justify-center">
-                  <div className="w-full max-w-[520px] rounded-[26px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.92)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
-                    <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
-                      No messages yet
-                    </div>
-                    <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
-                      This conversation has no message history yet.
-                    </div>
-                  </div>
-                </div>
+        {!launchChannelConnected ? (
+          <ConnectChannelEmptyState onOpenChannels={onOpenChannels} />
+        ) : (
+          <>
+            <div
+              ref={scrollViewportRef}
+              className="h-full overflow-y-auto pb-[194px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {surface?.loading && !hasThread ? (
+                <InboxDetailSkeleton />
+              ) : !hasThread ? (
+                <EmptyConversationState />
               ) : (
-                <div className="mx-auto mt-auto w-full max-w-[920px] space-y-4">
-                  {messages.map((message) => (
-                    <InboxMessageBubble
-                      key={message.id}
-                      m={message}
-                      attemptsByCorrelation={attemptsByCorrelation}
-                      enableInspect={false}
-                    />
-                  ))}
+                <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-6 py-6">
+                  {showSurfaceBanner ? (
+                    <div className="mx-auto mb-4 w-full max-w-[920px]">
+                      <SurfaceBanner
+                        surface={surface}
+                        unavailableMessage="Conversation detail is temporarily unavailable."
+                        refreshLabel="Refresh conversation"
+                      />
+                    </div>
+                  ) : null}
+
+                  {!messages.length ? (
+                    <div className="flex min-h-[320px] items-center justify-center">
+                      <div className="w-full max-w-[520px] rounded-[26px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.92)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
+                        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+                          No messages yet
+                        </div>
+                        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
+                          This conversation has no message history yet.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mx-auto mt-auto w-full max-w-[920px] space-y-4">
+                      {messages.map((message) => (
+                        <InboxMessageBubble
+                          key={message.id}
+                          m={message}
+                          attemptsByCorrelation={attemptsByCorrelation}
+                          enableInspect={false}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        <FloatingComposerSlot>
-          {hasThread && composer ? (
-            <div className="w-full px-6 pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
-              {composer}
-            </div>
-          ) : (
-            <EmptyComposerDock />
-          )}
-        </FloatingComposerSlot>
+            <FloatingComposerSlot>
+              {hasThread && composer ? (
+                <div className="w-full px-6 pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
+                  {composer}
+                </div>
+              ) : (
+                <EmptyComposerDock />
+              )}
+            </FloatingComposerSlot>
+          </>
+        )}
       </div>
     </section>
   );
