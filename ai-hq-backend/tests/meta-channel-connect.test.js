@@ -585,6 +585,7 @@ test("dm-first launch scopes match the current live Meta permission contract", (
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
     "pages_read_engagement",
+    "pages_manage_metadata",
     "business_management",
     "instagram_basic",
     "instagram_manage_messages",
