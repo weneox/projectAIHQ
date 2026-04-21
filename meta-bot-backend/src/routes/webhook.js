@@ -82,8 +82,7 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
-  const signature =
-    s(req.headers?.["x-hub-signature-256"]) || s(req.headers?.["x-hub-signature"]);
+  const signature = s(req.headers?.["x-hub-signature-256"]);
   if (!signature) {
     recordWebhookVerificationFailure("missing_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
@@ -96,9 +95,18 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
-  const rawBody = Buffer.isBuffer(req.rawBody)
-    ? req.rawBody
-    : Buffer.from(JSON.stringify(req.body || {}), "utf8");
+  const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : null;
+  if (!rawBody) {
+    recordWebhookVerificationFailure("missing_raw_body");
+    logger.warn("meta.webhook.verify.rejected", {
+      reason: "missing_raw_body",
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: "missing_raw_body",
+    };
+  }
   const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`;
 
   if (!safeEqHex(signature, expected)) {
