@@ -1108,6 +1108,10 @@ async function discoverMetaPagesForUserToken({
 }
 
 async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
+  console.log("META_CONNECT_USER_TOKEN_ENRICH_V2", {
+    pageId: s(pageId),
+    fields: META_PAGE_DISCOVERY_FIELDS_USER_TOKEN,
+  });
   const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
   url.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS_USER_TOKEN);
   url.searchParams.set("access_token", s(userAccessToken));
