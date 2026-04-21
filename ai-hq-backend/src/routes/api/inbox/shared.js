@@ -56,6 +56,78 @@ function boolOr(v, fallback) {
   return typeof v === "boolean" ? v : fallback;
 }
 
+function buildThreadAvatarUrl(row = {}, avatarState = null) {
+  const threadId = s(row?.id);
+  const channel = fixText(row?.channel || "").toLowerCase();
+
+  if (!threadId || channel !== "telegram") return "";
+
+  const avatar = avatarState || resolveThreadAvatarState(row);
+  const hasNegativeCache =
+    avatar?.avatarAvailable === false &&
+    !s(avatar?.avatarFilePath) &&
+    !s(avatar?.avatarFileId);
+
+  if (hasNegativeCache) return "";
+
+  const hasResolvedAvatar = Boolean(
+    s(avatar?.avatarFilePath) || s(avatar?.avatarFileId)
+  );
+  const hasLookupIdentity = Boolean(s(row?.external_user_id));
+
+  if (!hasResolvedAvatar && !hasLookupIdentity) return "";
+
+  const versionSource =
+    s(avatar?.avatarFetchedAt) ||
+    s(avatar?.avatarFileUniqueId) ||
+    s(avatar?.avatarFileId) ||
+    s(row?.updated_at) ||
+    s(row?.created_at) ||
+    s(row?.external_user_id) ||
+    "1";
+
+  return `/api/inbox/threads/${encodeURIComponent(
+    threadId
+  )}/avatar?v=${encodeURIComponent(versionSource)}`;
+}
+
+export function resolveThreadAvatarState(row = {}) {
+  const meta = asObject(row?.meta);
+  const telegram = asObject(meta?.telegram);
+  const customerTelegram = asObject(asObject(meta?.customerContext)?.telegram);
+
+  const avatarFileId =
+    fixText(telegram?.avatarFileId || customerTelegram?.avatarFileId || "") || "";
+  const avatarFileUniqueId =
+    fixText(
+      telegram?.avatarFileUniqueId || customerTelegram?.avatarFileUniqueId || ""
+    ) || "";
+  const avatarFilePath =
+    fixText(telegram?.avatarFilePath || customerTelegram?.avatarFilePath || "") || "";
+  const avatarFetchedAt =
+    fixText(telegram?.avatarFetchedAt || customerTelegram?.avatarFetchedAt || "") || "";
+  const avatarUserId =
+    fixText(telegram?.avatarUserId || customerTelegram?.avatarUserId || "") || "";
+
+  let avatarAvailable = null;
+  if (typeof telegram?.avatarAvailable === "boolean") {
+    avatarAvailable = telegram.avatarAvailable;
+  } else if (typeof customerTelegram?.avatarAvailable === "boolean") {
+    avatarAvailable = customerTelegram.avatarAvailable;
+  } else if (avatarFilePath || avatarFileId) {
+    avatarAvailable = true;
+  }
+
+  return {
+    avatarAvailable,
+    avatarFileId,
+    avatarFileUniqueId,
+    avatarFilePath,
+    avatarFetchedAt,
+    avatarUserId,
+  };
+}
+
 export function sortMessagesChronologically(list = []) {
   return [...(Array.isArray(list) ? list : [])].sort(
     (a, b) => toMs(a?.sent_at || a?.created_at) - toMs(b?.sent_at || b?.created_at)
@@ -71,6 +143,11 @@ export function normalizeThread(row) {
   const labels = Array.isArray(row.labels)
     ? row.labels.map((x) => fixText(String(x ?? ""))).filter(Boolean)
     : [];
+
+  const avatarState = resolveThreadAvatarState({
+    ...row,
+    meta,
+  });
 
   return {
     ...row,
@@ -103,6 +180,10 @@ export function normalizeThread(row) {
     last_outbound_at: row.last_outbound_at || null,
     created_at: row.created_at || null,
     updated_at: row.updated_at || null,
+
+    avatar_available: avatarState.avatarAvailable,
+    avatar_updated_at: avatarState.avatarFetchedAt || null,
+    avatar_url: buildThreadAvatarUrl(row, avatarState),
   };
 }
 

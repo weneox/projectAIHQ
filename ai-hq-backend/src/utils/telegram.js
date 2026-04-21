@@ -15,6 +15,10 @@ function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
 function trimSlash(v) {
   return s(v).replace(/\/+$/, "");
 }
@@ -29,6 +33,12 @@ function clampTimeoutMs(value, fallback = 15_000) {
   return Math.max(1_000, parsed);
 }
 
+function clampInt(value, { fallback = 1, min = 1, max = 100 } = {}) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
 function buildTelegramApiUrl({ apiBaseUrl = "", botToken = "", method = "" } = {}) {
   const baseUrl = trimSlash(apiBaseUrl || TELEGRAM_DEFAULT_API_BASE);
   const token = s(botToken);
@@ -36,6 +46,19 @@ function buildTelegramApiUrl({ apiBaseUrl = "", botToken = "", method = "" } = {
 
   if (!baseUrl || !token || !methodName) return "";
   return `${baseUrl}/bot${token}/${methodName}`;
+}
+
+export function buildTelegramFileUrl({
+  apiBaseUrl = cfg.telegram.apiBaseUrl,
+  botToken = "",
+  filePath = "",
+} = {}) {
+  const baseUrl = trimSlash(apiBaseUrl || TELEGRAM_DEFAULT_API_BASE);
+  const token = s(botToken);
+  const safeFilePath = s(filePath).replace(/^\/+/, "");
+
+  if (!baseUrl || !token || !safeFilePath) return "";
+  return `${baseUrl}/file/bot${token}/${safeFilePath}`;
 }
 
 function sanitizeAllowedUpdates(value) {
@@ -57,6 +80,38 @@ async function readJsonSafe(res) {
   } catch {
     return { raw: text };
   }
+}
+
+function normalizeTelegramScalar(value) {
+  const text = s(value);
+  if (!text) return "";
+
+  const numeric = Number(text);
+  if (Number.isFinite(numeric) && String(numeric) === text) {
+    return numeric;
+  }
+
+  return text;
+}
+
+function pickBestTelegramPhotoSize(photoSizes = []) {
+  const list = arr(photoSizes).filter(
+    (item) => item && typeof item === "object" && !Array.isArray(item)
+  );
+
+  if (!list.length) return null;
+
+  return [...list].sort((left, right) => {
+    const leftFileSize = Number(left?.file_size || 0);
+    const rightFileSize = Number(right?.file_size || 0);
+    if (rightFileSize !== leftFileSize) return rightFileSize - leftFileSize;
+
+    const leftArea = Number(left?.width || 0) * Number(left?.height || 0);
+    const rightArea = Number(right?.width || 0) * Number(right?.height || 0);
+    if (rightArea !== leftArea) return rightArea - leftArea;
+
+    return Number(right?.file_id?.length || 0) - Number(left?.file_id?.length || 0);
+  })[0];
 }
 
 export function maskTelegramToken(token = "") {
@@ -277,6 +332,311 @@ export async function getTelegramWebhookInfo({
     body: {},
     timeoutMs,
   });
+}
+
+export async function getTelegramUserProfilePhotos({
+  botToken = "",
+  userId = "",
+  offset = 0,
+  limit = 1,
+  timeoutMs = cfg.telegram.statusTimeoutMs,
+} = {}) {
+  const resolvedUserId = normalizeTelegramScalar(userId);
+
+  if (resolvedUserId === "") {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram user id missing",
+      reasonCode: "telegram_user_id_missing",
+      json: null,
+      result: null,
+      method: "getUserProfilePhotos",
+    };
+  }
+
+  return callTelegramBotApi({
+    botToken,
+    method: "getUserProfilePhotos",
+    body: {
+      user_id: resolvedUserId,
+      offset: clampInt(offset, { fallback: 0, min: 0, max: 100_000 }),
+      limit: clampInt(limit, { fallback: 1, min: 1, max: 100 }),
+    },
+    timeoutMs,
+  });
+}
+
+export async function getTelegramFile({
+  botToken = "",
+  fileId = "",
+  timeoutMs = cfg.telegram.statusTimeoutMs,
+} = {}) {
+  const resolvedFileId = s(fileId);
+
+  if (!resolvedFileId) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram file id missing",
+      reasonCode: "telegram_file_id_missing",
+      json: null,
+      result: null,
+      method: "getFile",
+    };
+  }
+
+  return callTelegramBotApi({
+    botToken,
+    method: "getFile",
+    body: {
+      file_id: resolvedFileId,
+    },
+    timeoutMs,
+  });
+}
+
+export async function resolveTelegramUserAvatar({
+  botToken = "",
+  userId = "",
+  timeoutMs = cfg.telegram.statusTimeoutMs,
+} = {}) {
+  const resolvedUserId = s(userId);
+
+  if (!resolvedUserId) {
+    return {
+      ok: false,
+      hasAvatar: false,
+      status: 0,
+      error: "telegram user id missing",
+      reasonCode: "telegram_user_id_missing",
+      userId: "",
+      fileId: "",
+      fileUniqueId: "",
+      filePath: "",
+      url: "",
+      photoCount: 0,
+    };
+  }
+
+  const photosResult = await getTelegramUserProfilePhotos({
+    botToken,
+    userId: resolvedUserId,
+    offset: 0,
+    limit: 1,
+    timeoutMs,
+  });
+
+  if (!photosResult.ok) {
+    return {
+      ok: false,
+      hasAvatar: false,
+      status: Number(photosResult.status || 0),
+      error: s(photosResult.error || "telegram profile photo lookup failed"),
+      reasonCode: s(photosResult.reasonCode || "telegram_request_failed"),
+      userId: resolvedUserId,
+      fileId: "",
+      fileUniqueId: "",
+      filePath: "",
+      url: "",
+      photoCount: 0,
+      step: "getUserProfilePhotos",
+    };
+  }
+
+  const totalCount = Number(photosResult?.result?.total_count || 0);
+  const photoGroups = arr(photosResult?.result?.photos);
+  const primaryGroup = arr(photoGroups[0]);
+  const bestPhoto = pickBestTelegramPhotoSize(primaryGroup);
+
+  if (!bestPhoto?.file_id) {
+    return {
+      ok: true,
+      hasAvatar: false,
+      status: Number(photosResult.status || 200),
+      error: "",
+      reasonCode: "telegram_profile_photo_missing",
+      userId: resolvedUserId,
+      fileId: "",
+      fileUniqueId: "",
+      filePath: "",
+      url: "",
+      photoCount: totalCount,
+      step: "getUserProfilePhotos",
+    };
+  }
+
+  const fileResult = await getTelegramFile({
+    botToken,
+    fileId: bestPhoto.file_id,
+    timeoutMs,
+  });
+
+  if (!fileResult.ok) {
+    return {
+      ok: false,
+      hasAvatar: false,
+      status: Number(fileResult.status || 0),
+      error: s(fileResult.error || "telegram file lookup failed"),
+      reasonCode: s(fileResult.reasonCode || "telegram_request_failed"),
+      userId: resolvedUserId,
+      fileId: s(bestPhoto.file_id),
+      fileUniqueId: s(bestPhoto.file_unique_id),
+      filePath: "",
+      url: "",
+      photoCount: totalCount,
+      step: "getFile",
+    };
+  }
+
+  const filePath = s(fileResult?.result?.file_path);
+  const url = buildTelegramFileUrl({
+    botToken,
+    filePath,
+  });
+
+  if (!filePath || !url) {
+    return {
+      ok: false,
+      hasAvatar: false,
+      status: Number(fileResult.status || 0),
+      error: "telegram avatar file path missing",
+      reasonCode: "telegram_resource_not_found",
+      userId: resolvedUserId,
+      fileId: s(bestPhoto.file_id),
+      fileUniqueId: s(bestPhoto.file_unique_id),
+      filePath: "",
+      url: "",
+      photoCount: totalCount,
+      step: "getFile",
+    };
+  }
+
+  return {
+    ok: true,
+    hasAvatar: true,
+    status: Number(fileResult.status || 200),
+    error: "",
+    reasonCode: "",
+    userId: resolvedUserId,
+    fileId: s(bestPhoto.file_id),
+    fileUniqueId: s(bestPhoto.file_unique_id),
+    filePath,
+    url,
+    photoCount: totalCount,
+    step: "resolved",
+  };
+}
+
+export async function downloadTelegramFileBuffer({
+  botToken = "",
+  filePath = "",
+  timeoutMs = cfg.telegram.statusTimeoutMs,
+  apiBaseUrl = cfg.telegram.apiBaseUrl,
+} = {}) {
+  const requestUrl = buildTelegramFileUrl({
+    apiBaseUrl,
+    botToken,
+    filePath,
+  });
+
+  if (!s(botToken)) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram bot token missing",
+      reasonCode: "telegram_bot_token_missing",
+      buffer: null,
+      contentType: "",
+      contentLength: 0,
+      filePath: "",
+      url: "",
+    };
+  }
+
+  if (!requestUrl) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram file path missing",
+      reasonCode: "telegram_resource_not_found",
+      buffer: null,
+      contentType: "",
+      contentLength: 0,
+      filePath: s(filePath),
+      url: "",
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    clampTimeoutMs(timeoutMs, 15_000)
+  );
+
+  try {
+    const res = await fetch(requestUrl, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+      },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: Number(res.status || 0),
+        error: `Telegram ${Number(res.status || 0) || "file download failed"}`,
+        reasonCode: getTelegramResponseReasonCode({
+          status: res.status,
+          error: `Telegram ${res.status}`,
+        }),
+        buffer: null,
+        contentType: "",
+        contentLength: 0,
+        filePath: s(filePath),
+        url: requestUrl,
+      };
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    return {
+      ok: true,
+      status: Number(res.status || 200),
+      error: "",
+      reasonCode: "",
+      buffer,
+      contentType: s(res.headers.get("content-type")),
+      contentLength: Number(buffer.length || 0),
+      etag: s(res.headers.get("etag")),
+      lastModified: s(res.headers.get("last-modified")),
+      filePath: s(filePath),
+      url: requestUrl,
+    };
+  } catch (error) {
+    const message = isAbortError(error)
+      ? "telegram file download timeout"
+      : s(error?.message || error || "telegram file download failed");
+
+    return {
+      ok: false,
+      status: 0,
+      error: message,
+      reasonCode: isAbortError(error)
+        ? "telegram_request_timeout"
+        : "telegram_request_failed",
+      buffer: null,
+      contentType: "",
+      contentLength: 0,
+      filePath: s(filePath),
+      url: requestUrl,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function setTelegramWebhook({

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Clock3 } from "lucide-react";
 
 function s(v, d = "") {
@@ -63,6 +64,10 @@ function resolveChannelLabel(thread = {}) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function resolveAvatarUrl(thread = {}) {
+  return s(thread?.avatar_url || thread?.avatarUrl || "");
 }
 
 function formatRelativeTime(value = "") {
@@ -139,6 +144,12 @@ export default function InboxThreadCard({
     thread?.last_message_at || thread?.updated_at || thread?.created_at
   );
   const meta = resolveMeta(thread);
+  const avatarUrl = resolveAvatarUrl(thread);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [thread?.id, avatarUrl]);
 
   return (
     <button
@@ -153,11 +164,22 @@ export default function InboxThreadCard({
     >
       <div
         className={[
-          "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ring-1",
+          "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12px] font-semibold ring-1",
           resolveAvatarTone(name),
         ].join(" ")}
       >
-        {initialsFromName(name)}
+        {avatarUrl && !avatarFailed ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+            onError={() => setAvatarFailed(true)}
+          />
+        ) : (
+          initialsFromName(name)
+        )}
       </div>
 
       <div className="min-w-0 flex-1">

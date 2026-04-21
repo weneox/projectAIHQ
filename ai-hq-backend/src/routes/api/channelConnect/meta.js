@@ -70,6 +70,15 @@ const META_PAGE_DISCOVERY_FIELDS = [
   "page_backed_instagram_accounts{id,username}",
 ].join(",");
 
+const META_PAGE_DISCOVERY_FIELDS_USER_TOKEN = [
+  "id",
+  "name",
+  "instagram_business_account{id,username}",
+  "connected_instagram_account{id,username}",
+  "instagram_accounts{id,username}",
+  "page_backed_instagram_accounts{id,username}",
+].join(",");
+
 function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
@@ -1100,7 +1109,7 @@ async function discoverMetaPagesForUserToken({
 
 async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
   const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
-  url.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  url.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS_USER_TOKEN);
   url.searchParams.set("access_token", s(userAccessToken));
 
   return fetchJson(url.toString());

@@ -43,6 +43,10 @@ function resolveConversationTitle(thread) {
   );
 }
 
+function resolveThreadAvatarUrl(thread) {
+  return s(thread?.avatar_url || thread?.avatarUrl || "");
+}
+
 function resolveChannelLabel(thread) {
   const raw =
     s(thread?.channel_label) ||
@@ -327,11 +331,28 @@ function ConversationIdentity({ thread }) {
   const title = resolveConversationTitle(thread);
   const metaItems = formatConversationMeta(thread);
   const avatar = initialsFromName(title);
+  const avatarUrl = resolveThreadAvatarUrl(thread);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [thread?.id, avatarUrl]);
 
   return (
     <div className="flex min-w-0 items-center gap-4">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[16px] font-semibold text-[rgba(37,99,235,0.96)] ring-1 ring-[rgba(37,99,235,0.10)]">
-        {avatar}
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[16px] font-semibold text-[rgba(37,99,235,0.96)] ring-1 ring-[rgba(37,99,235,0.10)]">
+        {avatarUrl && !avatarFailed ? (
+          <img
+            src={avatarUrl}
+            alt={title}
+            loading="eager"
+            decoding="async"
+            className="h-full w-full object-cover"
+            onError={() => setAvatarFailed(true)}
+          />
+        ) : (
+          avatar
+        )}
       </div>
 
       <div className="min-w-0">
