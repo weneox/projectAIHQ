@@ -166,7 +166,7 @@ function buildInboxAutomationControl({
 
 function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <section className="rounded-[20px] border border-[rgba(245,158,11,0.18)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))] px-5 py-4">
+    <section className="rounded-[18px] border border-[rgba(245,158,11,0.18)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))] px-5 py-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="text-[14px] font-semibold text-[rgba(120,53,15,0.98)]">
@@ -629,9 +629,9 @@ export default function Inbox() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 px-4 pb-4 pt-3">
-        <div className="grid h-full min-h-0 grid-cols-[392px_minmax(0,1fr)] overflow-hidden rounded-[24px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.50)]">
-          <div className="min-h-0 overflow-hidden border-r border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.62)]">
+      <div className="min-h-0 flex-1 pt-3">
+        <div className="grid h-full min-h-0 grid-cols-[420px_minmax(0,1fr)] bg-transparent">
+          <div className="min-h-0 overflow-hidden border-r border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.64)]">
             <InboxThreadListPanel
               threadList={threadList}
               selectedThreadId={selectedThread?.id || ""}
@@ -639,7 +639,7 @@ export default function Inbox() {
             />
           </div>
 
-          <div className="min-h-0 overflow-hidden bg-[rgba(255,255,255,0.28)]">
+          <div className="min-h-0 overflow-hidden bg-transparent">
             <InboxDetailPanel
               selectedThread={selectedThread}
               messages={messages}
