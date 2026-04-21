@@ -2,12 +2,16 @@ import { createElement } from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   Info,
   LockKeyhole,
 } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 import Card from "./Card.jsx";
+import Button from "./Button.jsx";
+import Badge from "./Badge.jsx";
 
 const NOTICE_TONES = {
   info: {
@@ -102,6 +106,19 @@ function bannerToneClass(tone = "info") {
   }
 
   return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft text-brand";
+}
+
+function launchBadgeVariant(tone = "neutral") {
+  if (
+    tone === "success" ||
+    tone === "warning" ||
+    tone === "danger" ||
+    tone === "info"
+  ) {
+    return "soft";
+  }
+
+  return "subtle";
 }
 
 export function PageCanvas({ className, children }) {
@@ -268,6 +285,201 @@ export function MetricGrid({
         : "md:grid-cols-2 xl:grid-cols-4";
 
   return <div className={cx("grid gap-4", columnsClass, className)}>{children}</div>;
+}
+
+export function LaunchStatusBadge({
+  tone = "neutral",
+  children,
+  dot = true,
+  className,
+}) {
+  return (
+    <Badge
+      tone={tone}
+      variant={launchBadgeVariant(tone)}
+      size="md"
+      dot={dot}
+      className={cx(
+        "!min-h-[24px] !rounded-[10px] !px-2.5 !text-[11px] !font-semibold !tracking-[-0.01em]",
+        className
+      )}
+    >
+      {children}
+    </Badge>
+  );
+}
+
+export function LaunchTextAction({
+  children = "Details",
+  className,
+  icon = true,
+  ...props
+}) {
+  return (
+    <button
+      type="button"
+      className={cx(
+        "inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[rgba(100,116,139,0.96)] transition-colors",
+        "hover:text-[rgba(15,23,42,0.94)]",
+        className
+      )}
+      {...props}
+    >
+      <span>{children}</span>
+      {icon ? <ArrowUpRight className="h-4 w-4 shrink-0" strokeWidth={2.05} /> : null}
+    </button>
+  );
+}
+
+export function LaunchPrimaryAction({
+  children,
+  className,
+  quiet = false,
+  showArrow = true,
+  size = "md",
+  ...props
+}) {
+  return (
+    <Button
+      variant={quiet ? "secondary" : "primary"}
+      size={size}
+      rightIcon={
+        showArrow ? <ArrowRight className="h-4 w-4" strokeWidth={2.15} /> : undefined
+      }
+      className={cx(
+        "!h-11 !rounded-[14px] !px-4 !text-[13px] !font-semibold",
+        quiet &&
+          "!border-[rgba(15,23,42,0.08)] !bg-white !text-[rgba(15,23,42,0.88)] hover:!bg-[rgba(248,250,252,0.96)]",
+        !quiet &&
+          "!shadow-[0_18px_40px_-24px_rgba(46,96,255,0.48)] hover:!shadow-[0_22px_46px_-24px_rgba(46,96,255,0.52)]",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </Button>
+  );
+}
+
+export function LaunchCard({
+  className,
+  children,
+  selected = false,
+  compact = false,
+}) {
+  return (
+    <div
+      className={cx(
+        "relative overflow-hidden rounded-[24px] border bg-[rgba(255,255,255,0.88)] transition-all duration-200",
+        "shadow-[0_24px_60px_-46px_rgba(15,23,42,0.14)]",
+        compact ? "px-4 py-4" : "px-5 py-5",
+        selected
+          ? "border-[rgba(37,99,235,0.12)] shadow-[0_28px_70px_-48px_rgba(37,99,235,0.18)]"
+          : "border-[rgba(15,23,42,0.06)] hover:border-[rgba(15,23,42,0.10)] hover:shadow-[0_28px_70px_-48px_rgba(15,23,42,0.16)]",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function LaunchCardHeader({
+  icon,
+  title,
+  eyebrow,
+  status,
+  className,
+}) {
+  return (
+    <div className={cx("flex items-start justify-between gap-4", className)}>
+      <div className="flex min-w-0 items-start gap-3.5">
+        {icon ? <div className="mt-0.5 shrink-0">{icon}</div> : null}
+
+        <div className="min-w-0">
+          {title ? (
+            <div className="truncate text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+              {title}
+            </div>
+          ) : null}
+
+          {eyebrow ? (
+            <div className="mt-1 truncate text-[12.5px] text-[rgba(100,116,139,0.96)]">
+              {eyebrow}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {status ? <div className="shrink-0">{status}</div> : null}
+    </div>
+  );
+}
+
+export function LaunchCardBody({
+  title,
+  description,
+  children,
+  className,
+}) {
+  return (
+    <div className={cx("mt-5", className)}>
+      {title ? (
+        <div className="text-[13px] font-medium text-[rgba(15,23,42,0.94)]">
+          {title}
+        </div>
+      ) : null}
+
+      {description ? (
+        <div
+          className={cx(
+            "text-[13px] leading-7 text-[rgba(100,116,139,0.96)]",
+            title ? "mt-2" : ""
+          )}
+        >
+          {description}
+        </div>
+      ) : null}
+
+      {children}
+    </div>
+  );
+}
+
+export function LaunchCardMeta({
+  children,
+  className,
+}) {
+  if (!children) return null;
+
+  return (
+    <div
+      className={cx(
+        "mt-4 border-t border-[rgba(15,23,42,0.05)] pt-4 text-[12px] text-[rgba(100,116,139,0.96)]",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function LaunchCardFooter({
+  leading,
+  trailing,
+  className,
+}) {
+  return (
+    <div
+      className={cx(
+        "mt-5 flex items-center justify-between gap-3 border-t border-[rgba(15,23,42,0.05)] pt-4",
+        className
+      )}
+    >
+      <div className="min-w-0">{leading}</div>
+      <div className="shrink-0">{trailing}</div>
+    </div>
+  );
 }
 
 export function StatusBanner({

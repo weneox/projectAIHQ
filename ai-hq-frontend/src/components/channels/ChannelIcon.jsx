@@ -3,30 +3,30 @@ import { cx } from "../../lib/cx.js";
 const SIZE_MAP = {
   sm: {
     wrap: "h-8 w-8",
-    icon: "h-8 w-8",
+    icon: "h-7 w-7",
     component: "h-5 w-5",
     stackWrap: "h-8 w-8",
-    stackPrimary: "h-4.5 w-4.5",
-    stackSecondary: "h-3.5 w-3.5",
-    stackTertiary: "h-3 w-3",
-  },
-  md: {
-    wrap: "h-9 w-9",
-    icon: "h-9 w-9",
-    component: "h-5.5 w-5.5",
-    stackWrap: "h-9 w-9",
     stackPrimary: "h-5 w-5",
     stackSecondary: "h-4 w-4",
-    stackTertiary: "h-3 w-3",
+    stackTertiary: "h-3.5 w-3.5",
   },
-  lg: {
+  md: {
     wrap: "h-10 w-10",
-    icon: "h-10 w-10",
+    icon: "h-8 w-8",
     component: "h-6 w-6",
     stackWrap: "h-10 w-10",
-    stackPrimary: "h-5.5 w-5.5",
+    stackPrimary: "h-6 w-6",
     stackSecondary: "h-4.5 w-4.5",
-    stackTertiary: "h-3.5 w-3.5",
+    stackTertiary: "h-4 w-4",
+  },
+  lg: {
+    wrap: "h-12 w-12",
+    icon: "h-10 w-10",
+    component: "h-7 w-7",
+    stackWrap: "h-12 w-12",
+    stackPrimary: "h-7 w-7",
+    stackSecondary: "h-5 w-5",
+    stackTertiary: "h-4.5 w-4.5",
   },
 };
 
@@ -37,7 +37,7 @@ function cleanClassName(className = "") {
 function RenderIcon({ item, className }) {
   if (item.iconComponent) {
     const Icon = item.iconComponent;
-    return <Icon className={cleanClassName(className)} />;
+    return <Icon className={cleanClassName(className)} strokeWidth={1.9} />;
   }
 
   return (
@@ -70,18 +70,18 @@ function StackedChannelIcon({ channel, view }) {
       )}
       aria-hidden="true"
     >
-      <span className="relative z-[1] inline-flex h-[70%] w-[70%] items-center justify-center rounded-[10px] border border-[#e6ebf2] bg-white shadow-[0_8px_16px_-12px_rgba(15,23,42,0.14)]">
+      <span className="relative z-[2] inline-flex items-center justify-center text-[rgba(15,23,42,0.92)]">
         <RenderIcon item={primary} className={view.stackPrimary} />
       </span>
 
       {secondary ? (
-        <span className="absolute bottom-0 right-0 z-[2] inline-flex h-[42%] w-[42%] items-center justify-center rounded-[8px] border border-[#e8edf3] bg-white shadow-[0_6px_12px_-10px_rgba(15,23,42,0.12)]">
+        <span className="absolute bottom-0 right-0 z-[3] inline-flex translate-x-[6%] translate-y-[6%] items-center justify-center text-[rgba(15,23,42,0.82)]">
           <RenderIcon item={secondary} className={view.stackSecondary} />
         </span>
       ) : null}
 
       {tertiary ? (
-        <span className="absolute left-0 top-0 z-[2] inline-flex h-[34%] w-[34%] items-center justify-center rounded-[7px] border border-[#e8edf3] bg-white shadow-[0_5px_10px_-9px_rgba(15,23,42,0.10)]">
+        <span className="absolute left-0 top-0 z-[1] inline-flex -translate-x-[4%] -translate-y-[4%] items-center justify-center text-[rgba(15,23,42,0.70)]">
           <RenderIcon item={tertiary} className={view.stackTertiary} />
         </span>
       ) : null}
@@ -106,15 +106,16 @@ export default function ChannelIcon({
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center justify-center",
+        "relative inline-flex shrink-0 items-center justify-center text-[rgba(15,23,42,0.92)]",
         view.wrap
       )}
       aria-hidden="true"
     >
       {SingleIcon ? (
-        <span className="inline-flex items-center justify-center text-text">
-          <SingleIcon className={cleanClassName(cx(view.component, className))} />
-        </span>
+        <SingleIcon
+          className={cleanClassName(cx(view.component, className))}
+          strokeWidth={1.9}
+        />
       ) : (
         <img
           src={channel.icon}
