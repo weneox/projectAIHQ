@@ -33,12 +33,13 @@ import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 
 export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "pages_show_list",
+  "pages_read_engagement",
+  "business_management",
   "instagram_basic",
   "instagram_manage_messages",
 ]);
 
 export const META_DM_EXCLUDED_SCOPES = Object.freeze([
-  "business_management",
   "instagram_manage_comments",
   "instagram_content_publish",
 ]);
