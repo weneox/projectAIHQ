@@ -208,6 +208,18 @@ function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
     leadContext: {},
     conversationContext,
     tenantContext,
+    meta: {
+      source: "meta",
+      provider: "meta",
+      platform: channel,
+      channel,
+      recipientId: s(ev?.recipientId || ""),
+      pageId: s(ev?.pageId || ""),
+      igUserId: s(ev?.igUserId || ""),
+      externalAccountId: s(ev?.externalAccountId || ""),
+      externalThreadId,
+      externalMessageId,
+    },
     metaAccount: {
       recipientId: s(ev?.recipientId || ""),
       pageId: s(ev?.pageId || ""),

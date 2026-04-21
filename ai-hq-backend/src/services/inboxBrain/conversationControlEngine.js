@@ -276,6 +276,43 @@ function resolveHandoffPriority({
   return "normal";
 }
 
+function resolveMetaBusinessContext({ thread, message, runtime } = {}) {
+  const threadMeta = obj(thread?.meta);
+  const messageMeta = obj(message?.meta);
+  const runtimeMeta = obj(runtime?.channels?.meta);
+
+  return {
+    pageId: s(
+      messageMeta.pageId ||
+        messageMeta.page_id ||
+        threadMeta.pageId ||
+        threadMeta.page_id ||
+        runtimeMeta.pageId ||
+        runtimeMeta.page_id
+    ),
+    igUserId: s(
+      messageMeta.igUserId ||
+        messageMeta.ig_user_id ||
+        messageMeta.instagramBusinessAccountId ||
+        messageMeta.instagram_business_account_id ||
+        threadMeta.igUserId ||
+        threadMeta.ig_user_id ||
+        threadMeta.instagramBusinessAccountId ||
+        threadMeta.instagram_business_account_id ||
+        runtimeMeta.igUserId ||
+        runtimeMeta.ig_user_id ||
+        runtimeMeta.instagramBusinessAccountId ||
+        runtimeMeta.instagram_business_account_id
+    ),
+    externalAccountId: s(
+      messageMeta.externalAccountId ||
+        messageMeta.external_account_id ||
+        threadMeta.externalAccountId ||
+        threadMeta.external_account_id
+    ),
+  };
+}
+
 function buildControlMeta({
   tenantKey,
   thread,
@@ -286,6 +323,12 @@ function buildControlMeta({
   diagnostics,
   runtime,
 }) {
+  const metaBusinessContext = resolveMetaBusinessContext({
+    thread,
+    message,
+    runtime,
+  });
+
   return buildMeta({
     tenantKey,
     thread,
@@ -305,6 +348,9 @@ function buildControlMeta({
       replyUsedRecovery: Boolean(reply?.usedRecovery),
       diagnostics: obj(diagnostics),
       runtimeAuthority: obj(runtime?.authority),
+      pageId: metaBusinessContext.pageId,
+      igUserId: metaBusinessContext.igUserId,
+      externalAccountId: metaBusinessContext.externalAccountId,
     },
   });
 }

@@ -1,4 +1,9 @@
-import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
+import {
+  AIHQ_BASE_URL,
+  AIHQ_INTERNAL_SERVICE,
+  AIHQ_INTERNAL_TOKEN,
+  AIHQ_TIMEOUT_MS,
+} from "../config.js";
 import {
   validateProviderAccessResponse,
 } from "@aihq/shared-contracts/operations";
@@ -55,6 +60,10 @@ function buildHeaders() {
     ...(s(AIHQ_INTERNAL_TOKEN)
       ? { "x-internal-token": s(AIHQ_INTERNAL_TOKEN) }
       : {}),
+    ...(s(AIHQ_INTERNAL_SERVICE)
+      ? { "x-internal-service": s(AIHQ_INTERNAL_SERVICE) }
+      : {}),
+    "x-internal-audience": "aihq-backend.providers.meta-channel-access",
   };
 }
 

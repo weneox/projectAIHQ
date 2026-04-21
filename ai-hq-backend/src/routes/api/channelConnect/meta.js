@@ -569,6 +569,24 @@ function readMetaChannelSnapshot(channel = {}) {
     manualReconnectRequired: health.manual_reconnect_required === true,
     connectionState: s(health.connection_state),
     authStatus: s(health.auth_status),
+    webhookSubscriptionOk:
+      health.webhook_subscription_ok === true ||
+      config.webhook_subscription_ok === true,
+    webhookSubscriptionAt: s(
+      health.webhook_subscription_at || config.webhook_subscription_at
+    ),
+    webhookSubscriptionPageId: s(
+      health.webhook_subscription_page_id ||
+        config.webhook_subscription_page_id
+    ),
+    webhookSubscriptionSource: s(
+      health.webhook_subscription_source ||
+        config.webhook_subscription_source
+    ),
+    webhookSubscriptionReason: s(
+      health.webhook_subscription_reason ||
+        config.webhook_subscription_reason
+    ),
   };
 }
 
@@ -578,6 +596,7 @@ function buildConnectedChannelConfig({
   grantedScopes = [],
   permissionSummary = {},
   metaUserProfile = {},
+  webhookSubscription = null,
   connectedAt = new Date().toISOString(),
 } = {}) {
   return {
@@ -608,6 +627,14 @@ function buildConnectedChannelConfig({
     last_connected_username: cleanNullable(selected?.igUsername),
     last_known_page_id: cleanNullable(selected?.pageId),
     last_known_ig_user_id: cleanNullable(selected?.igUserId),
+    webhook_subscription_ok: webhookSubscription?.ok === true,
+    webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
+    webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
+    webhook_subscription_source: cleanNullable(webhookSubscription?.source),
+    webhook_subscription_reason:
+      webhookSubscription?.ok === true
+        ? null
+        : cleanNullable(webhookSubscription?.reasonCode),
     manual_reconnect_mode: "oauth",
     last_connected_at: connectedAt,
   };
@@ -616,6 +643,7 @@ function buildConnectedChannelConfig({
 function buildConnectedChannelHealth({
   tokenJson = {},
   metaUserProfile = {},
+  webhookSubscription = null,
   connectedAt = new Date().toISOString(),
 } = {}) {
   const userTokenExpiresAt = buildUserTokenExpiresAt(tokenJson);
@@ -635,6 +663,14 @@ function buildConnectedChannelHealth({
     meta_user_id: cleanNullable(metaUserProfile?.id),
     oauth_env_ready: hasMetaOauthEnv(),
     gateway_ready: hasMetaGatewayEnv(),
+    webhook_subscription_ok: webhookSubscription?.ok === true,
+    webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
+    webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
+    webhook_subscription_source: cleanNullable(webhookSubscription?.source),
+    webhook_subscription_reason:
+      webhookSubscription?.ok === true
+        ? null
+        : cleanNullable(webhookSubscription?.reasonCode),
   };
 }
 
@@ -1152,6 +1188,106 @@ export async function getMetaPageAccessContextForUserToken(pageId, userAccessTok
     name: s(matched?.name),
     access_token: s(matched?.access_token),
   };
+}
+
+async function subscribeMetaPageToApp({
+  pageId = "",
+  pageAccessToken = "",
+  log = createSafeLogger(),
+} = {}) {
+  const safePageId = s(pageId);
+  const safePageAccessToken = s(pageAccessToken);
+  const subscribedAt = new Date().toISOString();
+  const source = "page_subscribed_apps";
+
+  if (!safePageId || !safePageAccessToken) {
+    throw buildMetaConnectFailureError(
+      "meta_page_subscription_input_missing",
+      "Meta page webhook subscription could not start because the page identity or page access token is missing.",
+      {
+        status: 409,
+        details: {
+          pageId: safePageId || null,
+          source,
+        },
+      }
+    );
+  }
+
+  const url = `${metaGraphBase()}/${encodeURIComponent(safePageId)}/subscribed_apps`;
+  log.info("meta.connect.webhook_subscription.start", {
+    pageId: safePageId,
+    source,
+  });
+
+  try {
+    const response = await fetchJson(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+      },
+      body: new URLSearchParams({
+        access_token: safePageAccessToken,
+      }),
+    });
+
+    const ok =
+      response === true ||
+      response?.success === true ||
+      response?.success === 1 ||
+      response?.result === true ||
+      response?.subscribed === true;
+    const result = {
+      ok,
+      source,
+      pageId: safePageId,
+      subscribedAt,
+      reasonCode: ok ? "" : "meta_page_subscription_failed",
+      response: {
+        success:
+          response === true
+            ? true
+            : response?.success === true || response?.success === 1,
+        result: response?.result === true,
+        subscribed: response?.subscribed === true,
+        id: cleanNullable(response?.id),
+      },
+    };
+
+    if (!ok) {
+      log.error("meta.connect.webhook_subscription.failed", null, result);
+      throw buildMetaConnectFailureError(
+        result.reasonCode,
+        "Meta page webhook subscription failed.",
+        {
+          status: 409,
+          details: result,
+        }
+      );
+    }
+
+    log.info("meta.connect.webhook_subscription.success", result);
+    return result;
+  } catch (error) {
+    const result = {
+      ok: false,
+      source,
+      pageId: safePageId,
+      subscribedAt,
+      reasonCode: "meta_page_subscription_failed",
+      error: s(error?.message || error),
+    };
+    log.error("meta.connect.webhook_subscription.failed", error, result);
+    throw buildMetaConnectFailureError(
+      result.reasonCode,
+      "Meta page webhook subscription failed.",
+      {
+        status: Number(error?.status || 409),
+        details: result,
+      }
+    );
+  }
 }
 
 function firstInstagramNodeFromCollection(value) {
@@ -1837,6 +1973,11 @@ async function connectInstagramChannel({
     secretKey: "page_access_token",
     saved: Boolean(savedPageToken),
   });
+  const webhookSubscription = await subscribeMetaPageToApp({
+    pageId: resolvedSelected.pageId,
+    pageAccessToken: resolvedSelected.pageAccessToken,
+    log,
+  });
   await deleteMetaSecretKeys(db, tenant.id, [
     "access_token",
     "meta_page_access_token",
@@ -1858,12 +1999,14 @@ async function connectInstagramChannel({
       grantedScopes,
       permissionSummary,
       metaUserProfile,
+      webhookSubscription,
       connectedAt,
     }),
     secrets_ref: "meta",
     health: buildConnectedChannelHealth({
       tokenJson,
       metaUserProfile,
+      webhookSubscription,
       connectedAt,
     }),
     last_sync_at: connectedAt,
@@ -2097,6 +2240,7 @@ function buildMetaStatusBlockers({
   reasonCode = "",
   channel = null,
   hasToken = false,
+  hasSubscription = false,
   oauthEnvReady = false,
   gatewayReady = false,
   capability = {},
@@ -2222,6 +2366,24 @@ function buildMetaStatusBlockers({
         },
       })
     );
+  }
+
+  if (
+    (reasonCode === "meta_page_subscription_missing" ||
+      reasonCode === "meta_page_subscription_failed") &&
+    !hasSubscription
+  ) {
+    blockers.push({
+      title: "Meta page webhook subscription is not active.",
+      subtitle:
+        "Instagram DM automation stays fail-closed until the connected Facebook Page is subscribed to this app webhook.",
+      reasonCode,
+      target: {
+        section: "channels",
+        channelType: "instagram",
+        provider: "meta",
+      },
+    });
   }
 
   if (state === "deauthorized") {
@@ -2364,6 +2526,7 @@ function buildMetaStatusPayload({
   const hasIds = Boolean(
     s(channel?.external_page_id) || s(channel?.external_user_id)
   );
+  const hasSubscription = snapshot.webhookSubscriptionOk === true;
   const explicitDeauthorized =
     Boolean(snapshot.deauthorizedAt) ||
     snapshot.connectionState === "deauthorized" ||
@@ -2402,6 +2565,11 @@ function buildMetaStatusPayload({
       state = "blocked";
       reasonCode = "meta_oauth_env_missing";
     }
+  } else if (connectedByRow && !hasSubscription) {
+    state = oauthEnvReady ? "reconnect_required" : "blocked";
+    reasonCode = oauthEnvReady
+      ? s(snapshot.webhookSubscriptionReason || "meta_page_subscription_missing")
+      : "meta_oauth_env_missing";
   } else if (connectedByRow) {
     state = "connected";
     reasonCode = "";
@@ -2435,14 +2603,19 @@ function buildMetaStatusPayload({
       : "meta_oauth_env_missing";
   }
 
-  const webhookReady = state === "connected" && hasIds;
+  const webhookReady = state === "connected" && hasIds && hasSubscription;
   const deliveryReady =
-    state === "connected" && hasIds && hasToken && gatewayReady;
+    state === "connected" &&
+    hasIds &&
+    hasToken &&
+    hasSubscription &&
+    gatewayReady;
   const blockers = buildMetaStatusBlockers({
     state,
     reasonCode,
     channel,
     hasToken,
+    hasSubscription,
     oauthEnvReady,
     gatewayReady,
     capability,
@@ -2505,6 +2678,7 @@ function buildMetaStatusPayload({
       gatewayReady,
       hasPageAccessToken: hasToken,
       hasOperationalIds: hasIds,
+      hasWebhookSubscription: hasSubscription,
       reasonCode:
         state !== "connected"
           ? reasonCode
