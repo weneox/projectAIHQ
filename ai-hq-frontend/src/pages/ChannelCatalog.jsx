@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowRight,
-  ChevronRight,
-  Globe2,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 import {
   getMetaChannelStatus,
@@ -22,13 +16,11 @@ import {
   findChannelById,
 } from "../components/channels/channelCatalogModel.js";
 import Button from "../components/ui/Button.jsx";
-import Badge from "../components/ui/Badge.jsx";
 import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
   SlidingDetailOverlay,
-  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { compactSentence, s } from "../lib/appUi.js";
 import {
@@ -52,35 +44,19 @@ const EMPTY_READINESS_STATE = {
 
 const CONNECTOR_COPY = {
   website: {
-    label: "Website",
+    eyebrow: "Website",
     title: "Widget + trusted origin",
     summary: "Public website conversations.",
-    tone:
-      "border-[rgba(15,23,42,0.10)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]",
-    accent: "bg-slate-900",
-    glow: "from-slate-100/80 via-white to-white",
-    Icon: Globe2,
   },
   instagram: {
-    label: "Instagram",
+    eyebrow: "Instagram",
     title: "DM automation",
     summary: "Business account conversations.",
-    tone:
-      "border-[rgba(236,72,153,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,251,0.98))]",
-    accent:
-      "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]",
-    glow: "from-pink-100/70 via-white to-white",
-    Icon: Sparkles,
   },
   telegram: {
-    label: "Telegram",
+    eyebrow: "Telegram",
     title: "Bot conversations",
     summary: "Private chat intake.",
-    tone:
-      "border-[rgba(14,165,233,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.98))]",
-    accent: "bg-sky-500",
-    glow: "from-sky-100/70 via-white to-white",
-    Icon: Zap,
   },
 };
 
@@ -98,53 +74,47 @@ function buildRuntimeMeta(channel, readinessState) {
 }
 
 function normalizeStatus(runtime = null) {
-  const raw = s(runtime?.statusLabel);
-  const lower = raw.toLowerCase();
+  const raw = s(runtime?.statusLabel).toLowerCase();
 
   if (runtime?.connected === true) {
     return {
-      label: raw || "Ready",
-      tone: "success",
+      label: "Connected",
+      textClass: "text-[rgba(22,163,74,0.96)]",
+      dotClass: "bg-[rgba(22,163,74,0.96)]",
       connected: true,
       blocked: false,
     };
   }
 
-  if (!raw || lower === "unknown") {
-    return {
-      label: "Connect",
-      tone: "warning",
-      connected: false,
-      blocked: false,
-    };
-  }
-
   if (
-    lower.includes("blocked") ||
-    lower.includes("reconnect") ||
-    lower.includes("repair") ||
-    lower.includes("required")
+    raw.includes("blocked") ||
+    raw.includes("reconnect") ||
+    raw.includes("repair") ||
+    raw.includes("required")
   ) {
     return {
-      label: raw,
-      tone: "danger",
+      label: "Needs attention",
+      textClass: "text-[rgba(180,83,9,0.96)]",
+      dotClass: "bg-[rgba(245,158,11,0.96)]",
       connected: false,
       blocked: true,
     };
   }
 
-  if (lower.includes("connecting") || lower.includes("pending")) {
+  if (raw.includes("connecting") || raw.includes("pending")) {
     return {
-      label: raw,
-      tone: "warning",
+      label: "Connecting",
+      textClass: "text-[rgba(180,83,9,0.96)]",
+      dotClass: "bg-[rgba(245,158,11,0.96)]",
       connected: false,
       blocked: false,
     };
   }
 
   return {
-    label: raw,
-    tone: "neutral",
+    label: "Available",
+    textClass: "text-[rgba(100,116,139,0.96)]",
+    dotClass: "bg-[rgba(148,163,184,0.96)]",
     connected: false,
     blocked: false,
   };
@@ -152,27 +122,6 @@ function normalizeStatus(runtime = null) {
 
 function resolveTruthReady(truth = null) {
   return s(truth?.status).toLowerCase() === "ready";
-}
-
-function resolveTopAction({ hasConnectedLaunchChannel, truth }) {
-  if (hasConnectedLaunchChannel && resolveTruthReady(truth)) {
-    return {
-      label: "Open inbox",
-      target: "inbox",
-    };
-  }
-
-  if (hasConnectedLaunchChannel && !resolveTruthReady(truth)) {
-    return {
-      label: "Open truth",
-      target: "truth",
-    };
-  }
-
-  return {
-    label: "Choose channel",
-    target: "none",
-  };
 }
 
 function resolveChannelPrimaryAction(channel, runtime) {
@@ -199,83 +148,71 @@ function resolveChannelPrimaryAction(channel, runtime) {
 }
 
 function CompactHeader({
-  title,
-  subtitle,
-  truth = null,
-  topAction,
-  onPrimaryAction,
+  truthReady,
+  connectedCount,
+  availableCount,
+  hasConnectedLaunchChannel,
+  onOpenTruth,
+  onOpenInbox,
 }) {
-  const truthReady = resolveTruthReady(truth);
-
   return (
-    <section className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between">
-      <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2">
-          <Badge tone={truthReady ? "success" : "warning"}>
-            {truthReady ? "Launch ready" : "Approval required"}
-          </Badge>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-            Channels
-          </span>
+    <section className="border-b border-[rgba(15,23,42,0.06)] pb-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(100,116,139,0.96)]">
+              Channels
+            </span>
+
+            {!truthReady ? (
+              <span className="text-[11px] font-medium text-[rgba(180,83,9,0.96)]">
+                · Truth pending approval
+              </span>
+            ) : null}
+          </div>
+
+          <h1 className="text-[22px] font-semibold tracking-[-0.035em] text-[rgba(15,23,42,0.96)] md:text-[24px]">
+            Launch channels
+          </h1>
+
+          <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
+            {availableCount} available · {connectedCount} connected
+          </div>
         </div>
 
-        <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-text md:text-[32px]">
-          {title}
-        </h1>
-
-        <p className="mt-1 text-[14px] leading-6 text-text-muted">{subtitle}</p>
-      </div>
-
-      {topAction?.target !== "none" ? (
         <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
             size="sm"
-            onClick={onPrimaryAction}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
+            variant="secondary"
+            onClick={onOpenTruth}
+            className="!h-10 !rounded-[12px] !px-3.5"
           >
-            {topAction.label}
+            Open truth
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            onClick={onOpenInbox}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+            disabled={!hasConnectedLaunchChannel}
+            className="!h-10 !rounded-[12px] !px-3.5"
+          >
+            Open inbox
           </Button>
         </div>
-      ) : null}
-    </section>
-  );
-}
-
-function StageStrip({ connectedCount = 0, truth = null }) {
-  const truthReady = resolveTruthReady(truth);
-
-  return (
-    <section className="grid gap-3 md:grid-cols-3">
-      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          Channels
-        </div>
-        <div className="mt-1 text-[15px] font-semibold text-text">3 live surfaces</div>
-      </div>
-
-      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          Live now
-        </div>
-        <div className="mt-1 text-[15px] font-semibold text-text">
-          {connectedCount > 0 ? `${connectedCount} connected` : "Nothing connected"}
-        </div>
-      </div>
-
-      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          Truth
-        </div>
-        <div className="mt-1 text-[15px] font-semibold text-text">
-          {truthReady ? "Approved" : "Needs approval"}
-        </div>
       </div>
     </section>
   );
 }
 
-function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
+function ConnectorCard({
+  channel,
+  runtime,
+  onInspect,
+  onRunPrimaryAction,
+}) {
   const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
   const status = normalizeStatus(runtime);
   const action = resolveChannelPrimaryAction(channel, runtime);
@@ -283,56 +220,71 @@ function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
     runtime?.summary || copy.summary,
     copy.summary
   );
-  const AccentIcon = copy.Icon;
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-[24px] border p-4 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.22)] ${copy.tone}`}
+      className={[
+        "group relative overflow-hidden rounded-[18px]",
+        "border border-[rgba(15,23,42,0.05)]",
+        "bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]",
+        "px-5 py-4",
+        "shadow-[0_20px_50px_-34px_rgba(15,23,42,0.14)]",
+        "transition-all duration-200",
+        "hover:-translate-y-[1px] hover:border-[rgba(15,23,42,0.08)] hover:shadow-[0_28px_64px_-36px_rgba(15,23,42,0.18)]",
+      ].join(" ")}
     >
-      <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b ${copy.glow}`}
-      />
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-16 bg-[linear-gradient(180deg,rgba(255,255,255,0.68),rgba(255,255,255,0))]" />
 
       <div className="relative z-[1] flex h-full flex-col">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-[16px] border border-white/70 bg-white shadow-[0_10px_18px_-14px_rgba(15,23,42,0.35)]">
-              <ChannelIcon channel={channel} size="md" />
-              <span
-                className={`absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-white shadow-sm ${copy.accent}`}
-              >
-                <AccentIcon className="h-3 w-3" />
-              </span>
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="relative mt-0.5 shrink-0">
+              <div className="absolute inset-0 rounded-full bg-[rgba(37,99,235,0.08)] blur-xl" />
+              <div className="relative">
+                <ChannelIcon channel={channel} size="lg" />
+              </div>
             </div>
 
             <div className="min-w-0">
-              <div className="truncate text-[18px] font-semibold tracking-[-0.02em] text-text">
+              <div className="truncate text-[15px] font-semibold tracking-[-0.015em] text-[rgba(15,23,42,0.96)]">
                 {channel.name}
               </div>
-              <div className="mt-0.5 text-[12px] font-medium text-text-subtle">
-                {copy.label}
+
+              <div className="mt-0.5 truncate text-[12px] text-[rgba(100,116,139,0.96)]">
+                {copy.eyebrow}
               </div>
             </div>
           </div>
 
-          <Badge tone={status.tone}>{status.label}</Badge>
+          <div
+            className={[
+              "inline-flex items-center gap-1.5 text-[11px] font-medium",
+              status.textClass,
+            ].join(" ")}
+          >
+            <span className={["h-1.5 w-1.5 rounded-full", status.dotClass].join(" ")} />
+            <span>{status.label}</span>
+          </div>
         </div>
 
         <div className="mt-5">
-          <div className="text-[15px] font-semibold text-text">{copy.title}</div>
-          <div className="mt-2 text-[13px] leading-6 text-text-muted">
+          <div className="text-[13.5px] font-semibold text-[rgba(15,23,42,0.94)]">
+            {copy.title}
+          </div>
+
+          <div className="mt-1.5 text-[12.5px] leading-6 text-[rgba(100,116,139,0.96)]">
             {statusSummary}
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between gap-3">
+        <div className="mt-5 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => onInspect?.(channel.id)}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-subtle transition hover:text-text"
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[rgba(100,116,139,0.96)] transition-colors hover:text-[rgba(15,23,42,0.94)]"
           >
-            Details
-            <ChevronRight className="h-3.5 w-3.5" />
+            <span>Details</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
           </button>
 
           <Button
@@ -340,6 +292,7 @@ function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
             size="sm"
             onClick={() => onRunPrimaryAction?.(channel, action)}
             rightIcon={<ArrowRight className="h-4 w-4" />}
+            className="!h-10 !rounded-[12px] !px-4 !text-[12.5px] !font-semibold"
           >
             {action.label}
           </Button>
@@ -511,10 +464,7 @@ export default function ChannelCatalog() {
   ]);
 
   const hasConnectedLaunchChannel = connectedCount > 0;
-  const topAction = resolveTopAction({
-    hasConnectedLaunchChannel,
-    truth: effectiveReadinessState.truth,
-  });
+  const truthReady = resolveTruthReady(effectiveReadinessState.truth);
 
   function updateSelectedChannel(channelId = "") {
     const nextParams = new URLSearchParams(searchParams);
@@ -526,17 +476,6 @@ export default function ChannelCatalog() {
     }
 
     setSearchParams(nextParams);
-  }
-
-  function handleTopAction() {
-    if (topAction.target === "inbox") {
-      navigate("/inbox");
-      return;
-    }
-
-    if (topAction.target === "truth") {
-      navigate("/truth");
-    }
   }
 
   function handlePrimaryAction(channel, action) {
@@ -578,7 +517,7 @@ export default function ChannelCatalog() {
 
   if (!workspace.ready && effectiveReadinessState.loading) {
     return (
-      <PageCanvas className="max-w-[1280px] py-2">
+      <PageCanvas className="max-w-[1220px] py-2">
         <LoadingSurface title="Loading channels" />
       </PageCanvas>
     );
@@ -586,7 +525,7 @@ export default function ChannelCatalog() {
 
   return (
     <>
-      <PageCanvas className="max-w-[1280px] space-y-5 py-2">
+      <PageCanvas className="max-w-[1220px] space-y-4 py-2">
         {s(effectiveReadinessState.error) ? (
           <InlineNotice
             tone="danger"
@@ -596,84 +535,35 @@ export default function ChannelCatalog() {
           />
         ) : null}
 
-        <CompactHeader
-          title="Choose a launch channel"
-          subtitle="Connect one surface. Go live fast."
-          truth={effectiveReadinessState.truth}
-          topAction={topAction}
-          onPrimaryAction={handleTopAction}
-        />
-
-        <StageStrip
-          connectedCount={connectedCount}
-          truth={effectiveReadinessState.truth}
-        />
-
-        {hasConnectedLaunchChannel &&
-        !resolveTruthReady(effectiveReadinessState.truth) ? (
+        {hasConnectedLaunchChannel && !truthReady ? (
           <InlineNotice
             tone="warning"
-            title="Channel is live. Truth still needs approval."
-            description="Open truth before trusting autonomous replies."
+            title="A channel is connected, but truth still needs approval."
+            description="Review truth before relying on autonomous replies."
             compact
           />
         ) : null}
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Live surfaces
-            </div>
-            <div className="text-[12px] text-text-subtle">
-              {launchChannels.length} available
-            </div>
-          </div>
+        <CompactHeader
+          truthReady={truthReady}
+          connectedCount={connectedCount}
+          availableCount={launchChannels.length}
+          hasConnectedLaunchChannel={hasConnectedLaunchChannel}
+          onOpenTruth={() => navigate("/truth")}
+          onOpenInbox={() => navigate("/inbox")}
+        />
 
-          <div className="grid gap-4 xl:grid-cols-3">
-            {launchChannels.map((channel) => (
-              <LaunchCard
-                key={channel.id}
-                channel={channel}
-                runtime={buildRuntimeMeta(channel, effectiveReadinessState)}
-                onInspect={updateSelectedChannel}
-                onRunPrimaryAction={handlePrimaryAction}
-              />
-            ))}
-          </div>
-        </section>
-
-        <Surface padded="md" className="rounded-[22px]" tone="muted">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-                Fast path
-              </div>
-              <div className="mt-1 text-[14px] font-semibold text-text">
-                Connect → approve truth → open inbox
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => navigate("/truth")}
-              >
-                Open truth
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => navigate("/inbox")}
-                rightIcon={<ArrowRight className="h-4 w-4" />}
-                disabled={!hasConnectedLaunchChannel}
-              >
-                Open inbox
-              </Button>
-            </div>
-          </div>
-        </Surface>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {launchChannels.map((channel) => (
+            <ConnectorCard
+              key={channel.id}
+              channel={channel}
+              runtime={buildRuntimeMeta(channel, effectiveReadinessState)}
+              onInspect={updateSelectedChannel}
+              onRunPrimaryAction={handlePrimaryAction}
+            />
+          ))}
+        </div>
       </PageCanvas>
 
       {drawerChannel ? (
