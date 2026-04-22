@@ -219,17 +219,54 @@ function buildWebsiteInstallBaseBlockers(status = {}) {
   return blockers;
 }
 
-function buildWebsiteInstallHandoffReadiness(
+function buildWebsitePackageContract(packageType = "developer", contract = {}) {
+  return {
+    packageType: s(packageType, "developer").toLowerCase(),
+    ready: contract.ready === true,
+    productionReady: contract.productionReady === true,
+    testingOnly: contract.testingOnly === true,
+    targetDomain: s(contract.targetDomain),
+    verificationState: s(contract.verificationState, "unverified"),
+    verificationRequiredForProduction:
+      contract.verificationRequiredForProduction !== false,
+    blockingReasonCode: s(contract.blockingReasonCode),
+    blockingMessage: s(contract.blockingMessage),
+    message: s(contract.message),
+  };
+}
+
+function buildWebsiteLaunchReadiness(
   req,
   status = {},
   domainVerification = null
 ) {
   const installSurface = buildWebsiteWidgetInstallSurface(req, status);
-  const blockers = buildWebsiteInstallBaseBlockers(status);
+  const verification = obj(domainVerification);
+  const config = normalizeWidgetConfig(status.widgetConfig, {
+    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+  });
   const targetDomain = resolveWebsiteInstallTargetDomain(domainVerification);
+  const baseBlockers = buildWebsiteInstallBaseBlockers(status);
+  const productionBlocked = isProductionInstallBlocked(domainVerification);
+  const unverifiedHandoffsAllowed =
+    shouldAllowUnverifiedWebsiteWidgetHandoffs();
+  const installSurfaceReady =
+    Boolean(s(installSurface.scriptUrl)) &&
+    Boolean(s(installSurface.apiBase)) &&
+    Boolean(s(installSurface.embedSnippet));
+  const channelConfigured = Boolean(s(status.widgetChannelId));
+  const widgetEnabled = config.enabled === true;
+  const launchEnabled = resolveWidgetEnabled(status);
+  const publicWidgetIdPresent = Boolean(config.publicWidgetId);
+  const allowedOriginsPresent = config.allowedOrigins.length > 0;
+  const allowedDomainsPresent = config.allowedDomains.length > 0;
+  const originRulesPresent =
+    allowedOriginsPresent ||
+    allowedDomainsPresent ||
+    Boolean(s(status.websiteUrl));
 
   if (!targetDomain) {
-    blockers.push({
+    baseBlockers.push({
       reasonCode: "website_install_target_domain_missing",
       title: "No handoff target domain is available yet.",
       subtitle:
@@ -237,12 +274,8 @@ function buildWebsiteInstallHandoffReadiness(
     });
   }
 
-  if (
-    !s(installSurface.scriptUrl) ||
-    !s(installSurface.apiBase) ||
-    !s(installSurface.embedSnippet)
-  ) {
-    blockers.push({
+  if (!installSurfaceReady) {
+    baseBlockers.push({
       reasonCode: "website_widget_install_surface_unavailable",
       title: "Website chat install assets are not addressable yet.",
       subtitle:
@@ -250,105 +283,170 @@ function buildWebsiteInstallHandoffReadiness(
     });
   }
 
-  const productionBlocked = isProductionInstallBlocked(domainVerification);
-  const unverifiedHandoffsAllowed =
-    shouldAllowUnverifiedWebsiteWidgetHandoffs();
-  const baseReady = blockers.length === 0;
+  const blockers = [...baseBlockers];
 
-  if (!baseReady) {
-    return {
-      ready: false,
-      productionReady: productionBlocked !== true,
-      testingOnly: false,
-      unverifiedHandoffsAllowed,
-      targetDomain,
-      blockReasonCode: s(blockers[0]?.reasonCode, "website_widget_not_ready"),
-      message: s(
-        blockers[0]?.subtitle,
-        "Website Chat is not ready for an install handoff yet."
+  if (widgetEnabled === true && productionBlocked === true) {
+    blockers.push({
+      reasonCode: s(
+        verification.reasonCode,
+        "website_domain_verification_required"
       ),
-    };
+      title:
+        "Website chat production install is blocked until domain ownership is verified.",
+      subtitle: s(
+        verification.message,
+        "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly."
+      ),
+    });
   }
 
-  if (productionBlocked !== true) {
-    return {
-      ready: true,
-      productionReady: true,
-      testingOnly: false,
-      unverifiedHandoffsAllowed,
-      targetDomain,
-      blockReasonCode: "",
-      message:
-        "Website Chat is ready for developer, GTM, and WordPress install handoffs.",
-    };
+  const configurationReady =
+    launchEnabled && publicWidgetIdPresent && originRulesPresent;
+  const baseReady = baseBlockers.length === 0;
+  const productionLaunchAllowed = baseReady && productionBlocked !== true;
+  const testingOnly =
+    baseReady && productionBlocked === true && unverifiedHandoffsAllowed === true;
+
+  let statusCode = "blocked";
+  if (productionLaunchAllowed) statusCode = "production_ready";
+  else if (testingOnly) statusCode = "testing_only";
+  else if (!channelConfigured && !widgetEnabled && !publicWidgetIdPresent) {
+    statusCode = "not_configured";
   }
 
-  if (unverifiedHandoffsAllowed) {
-    return {
-      ready: true,
-      productionReady: false,
-      testingOnly: true,
-      unverifiedHandoffsAllowed,
-      targetDomain,
-      blockReasonCode: "",
-      message:
-        "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
-    };
-  }
+  const primaryBlocker = obj(baseBlockers[0] || blockers[0]);
+  const verificationBlocker = obj(blockers[blockers.length - 1]);
+  const blockingReasonCode =
+    baseReady && productionBlocked
+      ? s(verification.reasonCode, "website_domain_verification_required")
+      : s(primaryBlocker.reasonCode || verificationBlocker.reasonCode);
+  const blockingMessage =
+    baseReady && productionBlocked
+      ? s(
+        verification.message,
+        "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+      )
+      : s(primaryBlocker.subtitle || verificationBlocker.subtitle);
+  const message = productionLaunchAllowed
+    ? "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership."
+    : testingOnly
+      ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+      : widgetEnabled !== true
+        ? "Website chat is disabled until you intentionally enable and configure it."
+        : launchEnabled !== true
+          ? "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
+          : configurationReady !== true
+            ? "Website chat is enabled, but installation hardening is still incomplete."
+            : s(
+                primaryBlocker.subtitle || verification.message,
+                "Website Chat is not ready for public launch yet."
+              );
+  const sharedPackageContract = {
+    ready: baseReady && (productionBlocked !== true || unverifiedHandoffsAllowed),
+    productionReady: productionLaunchAllowed,
+    testingOnly,
+    targetDomain,
+    verificationState: s(verification.state, "unverified"),
+    verificationRequiredForProduction: true,
+    blockingReasonCode,
+    blockingMessage,
+    message:
+      productionLaunchAllowed
+        ? "Website Chat is ready for developer, GTM, and WordPress install handoffs."
+        : testingOnly
+          ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+          : s(
+              primaryBlocker.subtitle || verification.message,
+              "Website Chat is not ready for an install handoff yet."
+            ),
+  };
 
   return {
-    ready: false,
-    productionReady: false,
-    testingOnly: false,
-    unverifiedHandoffsAllowed,
+    status: statusCode,
+    channelConfigured,
+    configurationReady,
+    widgetEnabled,
+    launchEnabled,
+    publicWidgetId: s(config.publicWidgetId),
+    publicWidgetIdPresent,
+    allowedOriginsPresent,
+    allowedOriginCount: config.allowedOrigins.length,
+    allowedDomainsPresent,
+    allowedDomainCount: config.allowedDomains.length,
+    originRulesPresent,
     targetDomain,
-    blockReasonCode: s(
-      obj(domainVerification).reasonCode,
-      "website_domain_verification_required"
+    domainVerificationRequired:
+      verification.requiredForProductionInstall !== false,
+    domainVerificationState: s(verification.state, "unverified"),
+    domainVerified: verification.verified === true,
+    productionBlocked,
+    productionLaunchAllowed,
+    productionReady: productionLaunchAllowed,
+    testingOnly,
+    testReady: productionLaunchAllowed || testingOnly,
+    unverifiedHandoffsAllowed,
+    installSurfaceReady,
+    installSurface: {
+      widgetBaseUrl: s(installSurface.widgetBaseUrl),
+      apiBase: s(installSurface.apiBase),
+      scriptUrl: s(installSurface.scriptUrl),
+      iframePath: s(installSurface.iframePath),
+      embedSnippetReady: installSurfaceReady,
+    },
+    reasonCode: blockingReasonCode,
+    message,
+    blockerReasonCodes: uniq(
+      blockers.map((item) => s(item?.reasonCode)).filter(Boolean)
     ),
-    message: s(
-      obj(domainVerification).message,
-      "Verify DNS TXT ownership before preparing a Website Chat install handoff."
-    ),
+    blockers,
+    handoffs: {
+      developer: buildWebsitePackageContract("developer", sharedPackageContract),
+      gtm: buildWebsitePackageContract("gtm", sharedPackageContract),
+      wordpress: buildWebsitePackageContract("wordpress", sharedPackageContract),
+    },
   };
 }
 
-function buildWebsiteInstallSurface(req, status = {}, domainVerification = null) {
+function buildWebsiteInstallSurface(
+  req,
+  status = {},
+  domainVerification = null,
+  launchReadiness = null
+) {
   const install = buildWebsiteWidgetInstallSurface(req, status);
-  const productionBlocked = isProductionInstallBlocked(domainVerification);
-  const handoff = buildWebsiteInstallHandoffReadiness(
-    req,
-    status,
-    domainVerification
+  const launch = obj(
+    launchReadiness || buildWebsiteLaunchReadiness(req, status, domainVerification)
   );
-  const verification = obj(domainVerification);
+  const developerHandoff = obj(obj(launch.handoffs).developer);
+  const gtmHandoff = obj(obj(launch.handoffs).gtm);
+  const wordpressHandoff = obj(obj(launch.handoffs).wordpress);
 
   return {
     ...install,
-    productionInstallReady: productionBlocked !== true,
-    productionBlocked,
-    blockReasonCode: productionBlocked
-      ? s(obj(domainVerification).reasonCode, "website_domain_verification_required")
-      : "",
-    blockMessage: productionBlocked
-      ? s(
-          obj(domainVerification).message,
-          "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
-        )
-      : "",
-    embedSnippet: productionBlocked ? "" : s(install.embedSnippet),
-    unverifiedHandoffsAllowed: handoff.unverifiedHandoffsAllowed === true,
-    handoffReady: handoff.ready === true,
-    developerHandoffReady: handoff.ready === true,
-    gtmHandoffReady: handoff.ready === true,
-    wordpressHandoffReady: handoff.ready === true,
-    handoffTestingOnly: handoff.testingOnly === true,
-    handoffProductionReady: handoff.productionReady === true,
-    handoffTargetDomain: handoff.targetDomain,
-    handoffVerificationState: s(verification.state, "unverified"),
-    handoffBlockReasonCode: s(handoff.blockReasonCode),
-    handoffMessage: s(handoff.message),
+    productionInstallReady: launch.productionLaunchAllowed === true,
+    productionBlocked: launch.productionBlocked === true,
+    blockReasonCode: s(launch.reasonCode),
+    blockMessage: s(
+      launch.productionBlocked
+        ? developerHandoff.blockingMessage || launch.message
+        : ""
+    ),
+    embedSnippet:
+      launch.productionLaunchAllowed === true ? s(install.embedSnippet) : "",
+    unverifiedHandoffsAllowed: launch.unverifiedHandoffsAllowed === true,
+    handoffReady: developerHandoff.ready === true,
+    developerHandoffReady: developerHandoff.ready === true,
+    gtmHandoffReady: gtmHandoff.ready === true,
+    wordpressHandoffReady: wordpressHandoff.ready === true,
+    handoffTestingOnly: developerHandoff.testingOnly === true,
+    handoffProductionReady: developerHandoff.productionReady === true,
+    handoffTargetDomain: s(launch.targetDomain),
+    handoffVerificationState: s(launch.domainVerificationState, "unverified"),
+    handoffBlockReasonCode: s(developerHandoff.blockingReasonCode),
+    handoffMessage: s(developerHandoff.message || launch.message),
     verificationRequiredForProduction: true,
+    handoffs: launch.handoffs,
+    launchReadiness: launch,
   };
 }
 
@@ -476,6 +574,8 @@ function buildWebsiteWordpressInstallConfig({
     verificationState: s(safeReadiness.verificationState),
     verificationRequiredForProduction:
       safeReadiness.verificationRequiredForProduction === true,
+    blockingReasonCode: s(safeReadiness.blockingReasonCode),
+    blockingMessage: s(safeReadiness.blockingMessage),
     warning: s(safeReadiness.warning),
     message: s(safeReadiness.message),
     readiness: safeReadiness,
@@ -522,6 +622,14 @@ function buildWebsiteInstallHandoffText({
     lines.push(`Message: ${s(safeReadiness.message)}`);
   }
 
+  if (s(safeReadiness.blockingReasonCode)) {
+    lines.push(`Blocking reason: ${s(safeReadiness.blockingReasonCode)}`);
+  }
+
+  if (s(safeReadiness.blockingMessage)) {
+    lines.push(`Blocking message: ${s(safeReadiness.blockingMessage)}`);
+  }
+
   if (s(safeReadiness.warning)) {
     lines.push(`Warning: ${s(safeReadiness.warning)}`);
   }
@@ -560,47 +668,50 @@ function buildWebsiteInstallHandoffPayload(
     "owner",
     domainVerification
   );
+  const launchReadiness = obj(statusPayload.launchReadiness);
   const rawInstallSurface = buildWebsiteWidgetInstallSurface(req, status);
   const widget = obj(statusPayload.widget);
-  const install = obj(statusPayload.install);
   const verification = obj(statusPayload.domainVerification);
-  const blockers = arr(obj(statusPayload.readiness).blockers);
+  const handoffContract = obj(
+    obj(launchReadiness.handoffs)[safePackageType] ||
+      obj(launchReadiness.handoffs).developer
+  );
   const targetDomain = s(
-    install.handoffTargetDomain || verification.domain || verification.candidateDomain
+    handoffContract.targetDomain ||
+      launchReadiness.targetDomain ||
+      verification.domain ||
+      verification.candidateDomain
   );
   const verifiedDomain =
     s(verification.state).toLowerCase() === "verified" ? s(verification.domain) : "";
-  const handoffReady =
-    safePackageType === "gtm"
-      ? install.gtmHandoffReady === true
-      : safePackageType === "wordpress"
-        ? install.wordpressHandoffReady === true
-        : install.developerHandoffReady === true;
+  const handoffReady = handoffContract.ready === true;
 
   if (
     handoffReady !== true ||
-    !s(rawInstallSurface.embedSnippet) ||
     !s(rawInstallSurface.scriptUrl) ||
     !s(rawInstallSurface.apiBase) ||
     !targetDomain
   ) {
     const reasonCode = s(
-      install.handoffBlockReasonCode ||
-        install.blockReasonCode ||
-        blockers[0]?.reasonCode ||
+      handoffContract.blockingReasonCode ||
+        launchReadiness.reasonCode ||
         verification.reasonCode,
       "website_widget_not_ready"
     );
     const message = s(
-      install.handoffMessage ||
-        install.blockMessage ||
-        blockers[0]?.subtitle ||
-        verification.message ||
-        obj(statusPayload.readiness).message,
+      handoffContract.message ||
+        handoffContract.blockingMessage ||
+        launchReadiness.message ||
+        verification.message,
       "Website Chat is not ready for a developer install handoff yet."
     );
-
-    throw createHttpError(message, 409, reasonCode);
+    const error = createHttpError(message, 409, reasonCode);
+    error.payload = {
+      ...handoffContract,
+      ready: false,
+      targetDomain,
+    };
+    throw error;
   }
 
   const packageTitle =
@@ -609,17 +720,19 @@ function buildWebsiteInstallHandoffPayload(
       : safePackageType === "wordpress"
         ? "Website Chat WordPress install package"
       : "Website Chat developer install handoff";
-  const testingOnly = install.handoffTestingOnly === true;
-  const productionReady = install.productionInstallReady === true;
+  const testingOnly = handoffContract.testingOnly === true;
+  const productionReady = handoffContract.productionReady === true;
   const warning = testingOnly
     ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
     : "";
   const readiness = {
-    status: testingOnly ? "testing_only" : s(obj(statusPayload.readiness).status, "ready"),
+    status: productionReady
+      ? "ready"
+      : testingOnly
+        ? "testing_only"
+        : "blocked",
     message: s(
-      testingOnly
-        ? install.handoffMessage
-        : obj(statusPayload.readiness).message,
+      handoffContract.message || launchReadiness.message,
       testingOnly
         ? "This package is for local/dev/test only while DNS TXT verification remains pending for production launch."
         : "Website Chat is ready for production install."
@@ -628,14 +741,17 @@ function buildWebsiteInstallHandoffPayload(
     productionReady,
     testingOnly,
     verificationState: s(
-      verification.state,
+      handoffContract.verificationState || verification.state,
       productionReady ? "verified" : "unverified"
     ),
     verifiedAt: verification.verifiedAt || null,
     targetDomain,
     verifiedDomain,
     verificationRequiredForProduction: true,
-    unverifiedHandoffsAllowed: install.unverifiedHandoffsAllowed === true,
+    unverifiedHandoffsAllowed:
+      launchReadiness.unverifiedHandoffsAllowed === true,
+    blockingReasonCode: s(handoffContract.blockingReasonCode),
+    blockingMessage: s(handoffContract.blockingMessage),
     warning,
   };
   const instructions =
@@ -705,7 +821,10 @@ function buildWebsiteInstallHandoffPayload(
     testingOnly,
     verificationState: readiness.verificationState,
     verificationRequiredForProduction: true,
-    unverifiedHandoffsAllowed: install.unverifiedHandoffsAllowed === true,
+    blockingReasonCode: s(handoffContract.blockingReasonCode),
+    blockingMessage: s(handoffContract.blockingMessage),
+    unverifiedHandoffsAllowed:
+      launchReadiness.unverifiedHandoffsAllowed === true,
     warning,
     message: readiness.message,
     gtmCustomHtmlSnippet:
@@ -715,6 +834,7 @@ function buildWebsiteInstallHandoffPayload(
     snippetLabel,
     instructions,
     readiness,
+    launchReadiness,
     packageText:
       safePackageType === "wordpress"
         ? packageSnippet
@@ -733,27 +853,8 @@ function buildWebsiteInstallHandoffPayload(
   };
 }
 
-function buildBlockers(status = {}, domainVerification = null) {
-  const config = normalizeWidgetConfig(status.widgetConfig, {
-    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
-  });
-  const blockers = buildWebsiteInstallBaseBlockers(status);
-
-  if (config.enabled === true && isProductionInstallBlocked(domainVerification)) {
-    blockers.push({
-      reasonCode: s(
-        obj(domainVerification).reasonCode,
-        "website_domain_verification_required"
-      ),
-      title: "Website chat production install is blocked until domain ownership is verified.",
-      subtitle: s(
-        obj(domainVerification).message,
-        "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly."
-      ),
-    });
-  }
-
-  return blockers;
+function buildBlockers(launchReadiness = null) {
+  return arr(obj(launchReadiness).blockers);
 }
 
 function buildWebsiteWidgetStatusPayload(
@@ -772,20 +873,32 @@ function buildWebsiteWidgetStatusPayload(
   const config = normalizeWidgetConfig(status.widgetConfig, {
     defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
   });
-  const blockers = buildBlockers(status, verificationSurface);
+  const launchReadiness = buildWebsiteLaunchReadiness(
+    req,
+    status,
+    verificationSurface
+  );
+  const blockers = buildBlockers(launchReadiness);
   const saveAllowed = canManageSettings(viewerRole);
-  const launchEnabled = resolveWidgetEnabled(status);
-  const launchReady =
-    launchEnabled &&
-    Boolean(config.publicWidgetId) &&
-    (config.allowedOrigins.length > 0 ||
-      config.allowedDomains.length > 0 ||
-      Boolean(s(status.websiteUrl)));
-  const ready = launchReady && !isProductionInstallBlocked(verificationSurface);
-  const install = buildWebsiteInstallSurface(req, status, verificationSurface);
+  const ready = launchReadiness.productionLaunchAllowed === true;
+  const install = buildWebsiteInstallSurface(
+    req,
+    status,
+    verificationSurface,
+    launchReadiness
+  );
 
   return {
-    state: ready ? "connected" : config.enabled ? "blocked" : "not_connected",
+    tenantId: s(status.id),
+    tenantKey: s(status.tenantKey || status.tenant_key),
+    state:
+      ready
+        ? "connected"
+        : launchReadiness.status === "not_configured"
+          ? "not_connected"
+          : config.enabled
+            ? "blocked"
+            : "not_connected",
     viewerRole,
     permissions: {
       saveAllowed,
@@ -808,27 +921,144 @@ function buildWebsiteWidgetStatusPayload(
       updatedAt: status.widgetUpdatedAt || null,
     },
     install,
+    handoffs: launchReadiness.handoffs,
     domainVerification: verificationSurface,
+    launchReadiness,
     readiness: {
       status: ready
         ? "ready"
-        : config.enabled
+        : launchReadiness.status === "not_configured"
+          ? "attention"
+          : config.enabled
           ? "blocked"
           : "attention",
-      message: ready
-        ? "Website chat is configured with a publishable install ID and trusted origin controls."
-        : config.enabled && isProductionInstallBlocked(verificationSurface)
-          ? s(
-              verificationSurface.message,
-              "Website chat is blocked for public install until domain ownership is verified."
-            )
-        : config.enabled
-          ? launchReady
-            ? "Website chat is enabled, but installation hardening is still incomplete."
-            : "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
-          : "Website chat is disabled until you intentionally enable and configure it.",
+      reasonCode: s(launchReadiness.reasonCode),
+      message: s(launchReadiness.message),
       blockers,
     },
+  };
+}
+
+async function loadWebsiteWidgetStatusPayload({
+  db,
+  req,
+  tenantKey = "",
+  viewerRole = "member",
+  requestedDomain = "",
+} = {}) {
+  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+  if (!status?.id) {
+    return null;
+  }
+
+  const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+    requestedDomain,
+  });
+
+  return buildWebsiteWidgetStatusPayload(
+    req,
+    status,
+    viewerRole,
+    domainVerification
+  );
+}
+
+function buildWebsiteLaneUnavailableHealthPayload({
+  tenantKey = "",
+  targetDomain = "",
+  reasonCode = "tenant_not_found",
+  message = "Tenant not found for Website lane verification.",
+} = {}) {
+  const sharedContract = {
+    ready: false,
+    productionReady: false,
+    testingOnly: false,
+    targetDomain,
+    verificationState: "unverified",
+    verificationRequiredForProduction: true,
+    blockingReasonCode: reasonCode,
+    blockingMessage: message,
+    message,
+  };
+
+  return {
+    tenantKey: s(tenantKey),
+    tenantId: "",
+    tenantFound: false,
+    status: "not_configured",
+    channelConfigured: false,
+    configurationReady: false,
+    widgetEnabled: false,
+    launchEnabled: false,
+    publicWidgetId: "",
+    publicWidgetIdPresent: false,
+    allowedOriginsPresent: false,
+    allowedOriginCount: 0,
+    allowedDomainsPresent: false,
+    allowedDomainCount: 0,
+    originRulesPresent: false,
+    targetDomain: s(targetDomain),
+    domainVerificationRequired: true,
+    domainVerificationState: "unverified",
+    domainVerified: false,
+    productionBlocked: true,
+    productionLaunchAllowed: false,
+    productionReady: false,
+    testingOnly: false,
+    testReady: false,
+    unverifiedHandoffsAllowed: false,
+    installSurfaceReady: false,
+    installSurface: {
+      widgetBaseUrl: "",
+      apiBase: "",
+      scriptUrl: "",
+      iframePath: "/widget/website-chat",
+      embedSnippetReady: false,
+    },
+    reasonCode: s(reasonCode),
+    message: s(message),
+    blockerReasonCodes: [s(reasonCode)].filter(Boolean),
+    blockers: [],
+    handoffs: {
+      developer: buildWebsitePackageContract("developer", sharedContract),
+      gtm: buildWebsitePackageContract("gtm", sharedContract),
+      wordpress: buildWebsitePackageContract("wordpress", sharedContract),
+    },
+  };
+}
+
+export async function getWebsiteLaneHealthStatus({ db, req }) {
+  const tenantKey = s(req?.query?.tenantKey || req?.query?.tenant_key);
+  const requestedDomain = s(req?.query?.domain || req?.query?.targetDomain);
+
+  if (!tenantKey) {
+    throw createHttpError(
+      "Missing website lane tenantKey query parameter",
+      400,
+      "website_lane_tenant_key_missing"
+    );
+  }
+
+  const payload = await loadWebsiteWidgetStatusPayload({
+    db,
+    req,
+    tenantKey,
+    viewerRole: "owner",
+    requestedDomain,
+  });
+
+  if (!payload) {
+    return buildWebsiteLaneUnavailableHealthPayload({
+      tenantKey,
+      targetDomain: requestedDomain,
+    });
+  }
+
+  return {
+    tenantKey: s(payload.tenantKey || tenantKey),
+    tenantId: s(payload.tenantId),
+    tenantFound: true,
+    ...obj(payload.launchReadiness),
   };
 }
 
@@ -838,22 +1068,19 @@ export async function getWebsiteWidgetStatus({ db, req }) {
     throw createHttpError("Missing tenant context", 401);
   }
 
-  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
-  if (!status?.id) {
-    throw createHttpError("Tenant not found", 404);
-  }
-
-  const viewerRole = getNormalizedAuthRole(req);
-  const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+  const payload = await loadWebsiteWidgetStatusPayload({
+    db,
+    req,
+    tenantKey,
+    viewerRole: getNormalizedAuthRole(req),
     requestedDomain: req?.query?.domain || "",
   });
 
-  return buildWebsiteWidgetStatusPayload(
-    req,
-    status,
-    viewerRole,
-    domainVerification
-  );
+  if (!payload) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  return payload;
 }
 
 export async function getWebsiteDomainVerificationStatus({ db, req }) {

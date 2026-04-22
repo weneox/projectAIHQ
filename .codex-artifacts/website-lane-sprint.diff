@@ -1,0 +1,3698 @@
+diff --git a/ai-hq-backend/src/routes/api/channelConnect/website.js b/ai-hq-backend/src/routes/api/channelConnect/website.js
+index 43b8a23..73ef28f 100644
+--- a/ai-hq-backend/src/routes/api/channelConnect/website.js
++++ b/ai-hq-backend/src/routes/api/channelConnect/website.js
+@@ -219,17 +219,54 @@ function buildWebsiteInstallBaseBlockers(status = {}) {
+   return blockers;
+ }
+ 
+-function buildWebsiteInstallHandoffReadiness(
++function buildWebsitePackageContract(packageType = "developer", contract = {}) {
++  return {
++    packageType: s(packageType, "developer").toLowerCase(),
++    ready: contract.ready === true,
++    productionReady: contract.productionReady === true,
++    testingOnly: contract.testingOnly === true,
++    targetDomain: s(contract.targetDomain),
++    verificationState: s(contract.verificationState, "unverified"),
++    verificationRequiredForProduction:
++      contract.verificationRequiredForProduction !== false,
++    blockingReasonCode: s(contract.blockingReasonCode),
++    blockingMessage: s(contract.blockingMessage),
++    message: s(contract.message),
++  };
++}
++
++function buildWebsiteLaunchReadiness(
+   req,
+   status = {},
+   domainVerification = null
+ ) {
+   const installSurface = buildWebsiteWidgetInstallSurface(req, status);
+-  const blockers = buildWebsiteInstallBaseBlockers(status);
++  const verification = obj(domainVerification);
++  const config = normalizeWidgetConfig(status.widgetConfig, {
++    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
++  });
+   const targetDomain = resolveWebsiteInstallTargetDomain(domainVerification);
++  const baseBlockers = buildWebsiteInstallBaseBlockers(status);
++  const productionBlocked = isProductionInstallBlocked(domainVerification);
++  const unverifiedHandoffsAllowed =
++    shouldAllowUnverifiedWebsiteWidgetHandoffs();
++  const installSurfaceReady =
++    Boolean(s(installSurface.scriptUrl)) &&
++    Boolean(s(installSurface.apiBase)) &&
++    Boolean(s(installSurface.embedSnippet));
++  const channelConfigured = Boolean(s(status.widgetChannelId));
++  const widgetEnabled = config.enabled === true;
++  const launchEnabled = resolveWidgetEnabled(status);
++  const publicWidgetIdPresent = Boolean(config.publicWidgetId);
++  const allowedOriginsPresent = config.allowedOrigins.length > 0;
++  const allowedDomainsPresent = config.allowedDomains.length > 0;
++  const originRulesPresent =
++    allowedOriginsPresent ||
++    allowedDomainsPresent ||
++    Boolean(s(status.websiteUrl));
+ 
+   if (!targetDomain) {
+-    blockers.push({
++    baseBlockers.push({
+       reasonCode: "website_install_target_domain_missing",
+       title: "No handoff target domain is available yet.",
+       subtitle:
+@@ -237,12 +274,8 @@ function buildWebsiteInstallHandoffReadiness(
+     });
+   }
+ 
+-  if (
+-    !s(installSurface.scriptUrl) ||
+-    !s(installSurface.apiBase) ||
+-    !s(installSurface.embedSnippet)
+-  ) {
+-    blockers.push({
++  if (!installSurfaceReady) {
++    baseBlockers.push({
+       reasonCode: "website_widget_install_surface_unavailable",
+       title: "Website chat install assets are not addressable yet.",
+       subtitle:
+@@ -250,105 +283,170 @@ function buildWebsiteInstallHandoffReadiness(
+     });
+   }
+ 
+-  const productionBlocked = isProductionInstallBlocked(domainVerification);
+-  const unverifiedHandoffsAllowed =
+-    shouldAllowUnverifiedWebsiteWidgetHandoffs();
+-  const baseReady = blockers.length === 0;
++  const blockers = [...baseBlockers];
+ 
+-  if (!baseReady) {
+-    return {
+-      ready: false,
+-      productionReady: productionBlocked !== true,
+-      testingOnly: false,
+-      unverifiedHandoffsAllowed,
+-      targetDomain,
+-      blockReasonCode: s(blockers[0]?.reasonCode, "website_widget_not_ready"),
+-      message: s(
+-        blockers[0]?.subtitle,
+-        "Website Chat is not ready for an install handoff yet."
++  if (widgetEnabled === true && productionBlocked === true) {
++    blockers.push({
++      reasonCode: s(
++        verification.reasonCode,
++        "website_domain_verification_required"
+       ),
+-    };
++      title:
++        "Website chat production install is blocked until domain ownership is verified.",
++      subtitle: s(
++        verification.message,
++        "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly."
++      ),
++    });
+   }
+ 
+-  if (productionBlocked !== true) {
+-    return {
+-      ready: true,
+-      productionReady: true,
+-      testingOnly: false,
+-      unverifiedHandoffsAllowed,
+-      targetDomain,
+-      blockReasonCode: "",
+-      message:
+-        "Website Chat is ready for developer, GTM, and WordPress install handoffs.",
+-    };
++  const configurationReady =
++    launchEnabled && publicWidgetIdPresent && originRulesPresent;
++  const baseReady = baseBlockers.length === 0;
++  const productionLaunchAllowed = baseReady && productionBlocked !== true;
++  const testingOnly =
++    baseReady && productionBlocked === true && unverifiedHandoffsAllowed === true;
++
++  let statusCode = "blocked";
++  if (productionLaunchAllowed) statusCode = "production_ready";
++  else if (testingOnly) statusCode = "testing_only";
++  else if (!channelConfigured && !widgetEnabled && !publicWidgetIdPresent) {
++    statusCode = "not_configured";
+   }
+ 
+-  if (unverifiedHandoffsAllowed) {
+-    return {
+-      ready: true,
+-      productionReady: false,
+-      testingOnly: true,
+-      unverifiedHandoffsAllowed,
+-      targetDomain,
+-      blockReasonCode: "",
+-      message:
+-        "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+-    };
+-  }
++  const primaryBlocker = obj(baseBlockers[0] || blockers[0]);
++  const verificationBlocker = obj(blockers[blockers.length - 1]);
++  const blockingReasonCode =
++    baseReady && productionBlocked
++      ? s(verification.reasonCode, "website_domain_verification_required")
++      : s(primaryBlocker.reasonCode || verificationBlocker.reasonCode);
++  const blockingMessage =
++    baseReady && productionBlocked
++      ? s(
++        verification.message,
++        "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
++      )
++      : s(primaryBlocker.subtitle || verificationBlocker.subtitle);
++  const message = productionLaunchAllowed
++    ? "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership."
++    : testingOnly
++      ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
++      : widgetEnabled !== true
++        ? "Website chat is disabled until you intentionally enable and configure it."
++        : launchEnabled !== true
++          ? "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
++          : configurationReady !== true
++            ? "Website chat is enabled, but installation hardening is still incomplete."
++            : s(
++                primaryBlocker.subtitle || verification.message,
++                "Website Chat is not ready for public launch yet."
++              );
++  const sharedPackageContract = {
++    ready: baseReady && (productionBlocked !== true || unverifiedHandoffsAllowed),
++    productionReady: productionLaunchAllowed,
++    testingOnly,
++    targetDomain,
++    verificationState: s(verification.state, "unverified"),
++    verificationRequiredForProduction: true,
++    blockingReasonCode,
++    blockingMessage,
++    message:
++      productionLaunchAllowed
++        ? "Website Chat is ready for developer, GTM, and WordPress install handoffs."
++        : testingOnly
++          ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
++          : s(
++              primaryBlocker.subtitle || verification.message,
++              "Website Chat is not ready for an install handoff yet."
++            ),
++  };
+ 
+   return {
+-    ready: false,
+-    productionReady: false,
+-    testingOnly: false,
+-    unverifiedHandoffsAllowed,
++    status: statusCode,
++    channelConfigured,
++    configurationReady,
++    widgetEnabled,
++    launchEnabled,
++    publicWidgetId: s(config.publicWidgetId),
++    publicWidgetIdPresent,
++    allowedOriginsPresent,
++    allowedOriginCount: config.allowedOrigins.length,
++    allowedDomainsPresent,
++    allowedDomainCount: config.allowedDomains.length,
++    originRulesPresent,
+     targetDomain,
+-    blockReasonCode: s(
+-      obj(domainVerification).reasonCode,
+-      "website_domain_verification_required"
+-    ),
+-    message: s(
+-      obj(domainVerification).message,
+-      "Verify DNS TXT ownership before preparing a Website Chat install handoff."
++    domainVerificationRequired:
++      verification.requiredForProductionInstall !== false,
++    domainVerificationState: s(verification.state, "unverified"),
++    domainVerified: verification.verified === true,
++    productionBlocked,
++    productionLaunchAllowed,
++    productionReady: productionLaunchAllowed,
++    testingOnly,
++    testReady: productionLaunchAllowed || testingOnly,
++    unverifiedHandoffsAllowed,
++    installSurfaceReady,
++    installSurface: {
++      widgetBaseUrl: s(installSurface.widgetBaseUrl),
++      apiBase: s(installSurface.apiBase),
++      scriptUrl: s(installSurface.scriptUrl),
++      iframePath: s(installSurface.iframePath),
++      embedSnippetReady: installSurfaceReady,
++    },
++    reasonCode: blockingReasonCode,
++    message,
++    blockerReasonCodes: uniq(
++      blockers.map((item) => s(item?.reasonCode)).filter(Boolean)
+     ),
++    blockers,
++    handoffs: {
++      developer: buildWebsitePackageContract("developer", sharedPackageContract),
++      gtm: buildWebsitePackageContract("gtm", sharedPackageContract),
++      wordpress: buildWebsitePackageContract("wordpress", sharedPackageContract),
++    },
+   };
+ }
+ 
+-function buildWebsiteInstallSurface(req, status = {}, domainVerification = null) {
++function buildWebsiteInstallSurface(
++  req,
++  status = {},
++  domainVerification = null,
++  launchReadiness = null
++) {
+   const install = buildWebsiteWidgetInstallSurface(req, status);
+-  const productionBlocked = isProductionInstallBlocked(domainVerification);
+-  const handoff = buildWebsiteInstallHandoffReadiness(
+-    req,
+-    status,
+-    domainVerification
++  const launch = obj(
++    launchReadiness || buildWebsiteLaunchReadiness(req, status, domainVerification)
+   );
+-  const verification = obj(domainVerification);
++  const developerHandoff = obj(obj(launch.handoffs).developer);
++  const gtmHandoff = obj(obj(launch.handoffs).gtm);
++  const wordpressHandoff = obj(obj(launch.handoffs).wordpress);
+ 
+   return {
+     ...install,
+-    productionInstallReady: productionBlocked !== true,
+-    productionBlocked,
+-    blockReasonCode: productionBlocked
+-      ? s(obj(domainVerification).reasonCode, "website_domain_verification_required")
+-      : "",
+-    blockMessage: productionBlocked
+-      ? s(
+-          obj(domainVerification).message,
+-          "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+-        )
+-      : "",
+-    embedSnippet: productionBlocked ? "" : s(install.embedSnippet),
+-    unverifiedHandoffsAllowed: handoff.unverifiedHandoffsAllowed === true,
+-    handoffReady: handoff.ready === true,
+-    developerHandoffReady: handoff.ready === true,
+-    gtmHandoffReady: handoff.ready === true,
+-    wordpressHandoffReady: handoff.ready === true,
+-    handoffTestingOnly: handoff.testingOnly === true,
+-    handoffProductionReady: handoff.productionReady === true,
+-    handoffTargetDomain: handoff.targetDomain,
+-    handoffVerificationState: s(verification.state, "unverified"),
+-    handoffBlockReasonCode: s(handoff.blockReasonCode),
+-    handoffMessage: s(handoff.message),
++    productionInstallReady: launch.productionLaunchAllowed === true,
++    productionBlocked: launch.productionBlocked === true,
++    blockReasonCode: s(launch.reasonCode),
++    blockMessage: s(
++      launch.productionBlocked
++        ? developerHandoff.blockingMessage || launch.message
++        : ""
++    ),
++    embedSnippet:
++      launch.productionLaunchAllowed === true ? s(install.embedSnippet) : "",
++    unverifiedHandoffsAllowed: launch.unverifiedHandoffsAllowed === true,
++    handoffReady: developerHandoff.ready === true,
++    developerHandoffReady: developerHandoff.ready === true,
++    gtmHandoffReady: gtmHandoff.ready === true,
++    wordpressHandoffReady: wordpressHandoff.ready === true,
++    handoffTestingOnly: developerHandoff.testingOnly === true,
++    handoffProductionReady: developerHandoff.productionReady === true,
++    handoffTargetDomain: s(launch.targetDomain),
++    handoffVerificationState: s(launch.domainVerificationState, "unverified"),
++    handoffBlockReasonCode: s(developerHandoff.blockingReasonCode),
++    handoffMessage: s(developerHandoff.message || launch.message),
+     verificationRequiredForProduction: true,
++    handoffs: launch.handoffs,
++    launchReadiness: launch,
+   };
+ }
+ 
+@@ -476,6 +574,8 @@ function buildWebsiteWordpressInstallConfig({
+     verificationState: s(safeReadiness.verificationState),
+     verificationRequiredForProduction:
+       safeReadiness.verificationRequiredForProduction === true,
++    blockingReasonCode: s(safeReadiness.blockingReasonCode),
++    blockingMessage: s(safeReadiness.blockingMessage),
+     warning: s(safeReadiness.warning),
+     message: s(safeReadiness.message),
+     readiness: safeReadiness,
+@@ -522,6 +622,14 @@ function buildWebsiteInstallHandoffText({
+     lines.push(`Message: ${s(safeReadiness.message)}`);
+   }
+ 
++  if (s(safeReadiness.blockingReasonCode)) {
++    lines.push(`Blocking reason: ${s(safeReadiness.blockingReasonCode)}`);
++  }
++
++  if (s(safeReadiness.blockingMessage)) {
++    lines.push(`Blocking message: ${s(safeReadiness.blockingMessage)}`);
++  }
++
+   if (s(safeReadiness.warning)) {
+     lines.push(`Warning: ${s(safeReadiness.warning)}`);
+   }
+@@ -560,47 +668,50 @@ function buildWebsiteInstallHandoffPayload(
+     "owner",
+     domainVerification
+   );
++  const launchReadiness = obj(statusPayload.launchReadiness);
+   const rawInstallSurface = buildWebsiteWidgetInstallSurface(req, status);
+   const widget = obj(statusPayload.widget);
+-  const install = obj(statusPayload.install);
+   const verification = obj(statusPayload.domainVerification);
+-  const blockers = arr(obj(statusPayload.readiness).blockers);
++  const handoffContract = obj(
++    obj(launchReadiness.handoffs)[safePackageType] ||
++      obj(launchReadiness.handoffs).developer
++  );
+   const targetDomain = s(
+-    install.handoffTargetDomain || verification.domain || verification.candidateDomain
++    handoffContract.targetDomain ||
++      launchReadiness.targetDomain ||
++      verification.domain ||
++      verification.candidateDomain
+   );
+   const verifiedDomain =
+     s(verification.state).toLowerCase() === "verified" ? s(verification.domain) : "";
+-  const handoffReady =
+-    safePackageType === "gtm"
+-      ? install.gtmHandoffReady === true
+-      : safePackageType === "wordpress"
+-        ? install.wordpressHandoffReady === true
+-        : install.developerHandoffReady === true;
++  const handoffReady = handoffContract.ready === true;
+ 
+   if (
+     handoffReady !== true ||
+-    !s(rawInstallSurface.embedSnippet) ||
+     !s(rawInstallSurface.scriptUrl) ||
+     !s(rawInstallSurface.apiBase) ||
+     !targetDomain
+   ) {
+     const reasonCode = s(
+-      install.handoffBlockReasonCode ||
+-        install.blockReasonCode ||
+-        blockers[0]?.reasonCode ||
++      handoffContract.blockingReasonCode ||
++        launchReadiness.reasonCode ||
+         verification.reasonCode,
+       "website_widget_not_ready"
+     );
+     const message = s(
+-      install.handoffMessage ||
+-        install.blockMessage ||
+-        blockers[0]?.subtitle ||
+-        verification.message ||
+-        obj(statusPayload.readiness).message,
++      handoffContract.message ||
++        handoffContract.blockingMessage ||
++        launchReadiness.message ||
++        verification.message,
+       "Website Chat is not ready for a developer install handoff yet."
+     );
+-
+-    throw createHttpError(message, 409, reasonCode);
++    const error = createHttpError(message, 409, reasonCode);
++    error.payload = {
++      ...handoffContract,
++      ready: false,
++      targetDomain,
++    };
++    throw error;
+   }
+ 
+   const packageTitle =
+@@ -609,17 +720,19 @@ function buildWebsiteInstallHandoffPayload(
+       : safePackageType === "wordpress"
+         ? "Website Chat WordPress install package"
+       : "Website Chat developer install handoff";
+-  const testingOnly = install.handoffTestingOnly === true;
+-  const productionReady = install.productionInstallReady === true;
++  const testingOnly = handoffContract.testingOnly === true;
++  const productionReady = handoffContract.productionReady === true;
+   const warning = testingOnly
+     ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+     : "";
+   const readiness = {
+-    status: testingOnly ? "testing_only" : s(obj(statusPayload.readiness).status, "ready"),
++    status: productionReady
++      ? "ready"
++      : testingOnly
++        ? "testing_only"
++        : "blocked",
+     message: s(
+-      testingOnly
+-        ? install.handoffMessage
+-        : obj(statusPayload.readiness).message,
++      handoffContract.message || launchReadiness.message,
+       testingOnly
+         ? "This package is for local/dev/test only while DNS TXT verification remains pending for production launch."
+         : "Website Chat is ready for production install."
+@@ -628,14 +741,17 @@ function buildWebsiteInstallHandoffPayload(
+     productionReady,
+     testingOnly,
+     verificationState: s(
+-      verification.state,
++      handoffContract.verificationState || verification.state,
+       productionReady ? "verified" : "unverified"
+     ),
+     verifiedAt: verification.verifiedAt || null,
+     targetDomain,
+     verifiedDomain,
+     verificationRequiredForProduction: true,
+-    unverifiedHandoffsAllowed: install.unverifiedHandoffsAllowed === true,
++    unverifiedHandoffsAllowed:
++      launchReadiness.unverifiedHandoffsAllowed === true,
++    blockingReasonCode: s(handoffContract.blockingReasonCode),
++    blockingMessage: s(handoffContract.blockingMessage),
+     warning,
+   };
+   const instructions =
+@@ -705,7 +821,10 @@ function buildWebsiteInstallHandoffPayload(
+     testingOnly,
+     verificationState: readiness.verificationState,
+     verificationRequiredForProduction: true,
+-    unverifiedHandoffsAllowed: install.unverifiedHandoffsAllowed === true,
++    blockingReasonCode: s(handoffContract.blockingReasonCode),
++    blockingMessage: s(handoffContract.blockingMessage),
++    unverifiedHandoffsAllowed:
++      launchReadiness.unverifiedHandoffsAllowed === true,
+     warning,
+     message: readiness.message,
+     gtmCustomHtmlSnippet:
+@@ -715,6 +834,7 @@ function buildWebsiteInstallHandoffPayload(
+     snippetLabel,
+     instructions,
+     readiness,
++    launchReadiness,
+     packageText:
+       safePackageType === "wordpress"
+         ? packageSnippet
+@@ -733,27 +853,8 @@ function buildWebsiteInstallHandoffPayload(
+   };
+ }
+ 
+-function buildBlockers(status = {}, domainVerification = null) {
+-  const config = normalizeWidgetConfig(status.widgetConfig, {
+-    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+-  });
+-  const blockers = buildWebsiteInstallBaseBlockers(status);
+-
+-  if (config.enabled === true && isProductionInstallBlocked(domainVerification)) {
+-    blockers.push({
+-      reasonCode: s(
+-        obj(domainVerification).reasonCode,
+-        "website_domain_verification_required"
+-      ),
+-      title: "Website chat production install is blocked until domain ownership is verified.",
+-      subtitle: s(
+-        obj(domainVerification).message,
+-        "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly."
+-      ),
+-    });
+-  }
+-
+-  return blockers;
++function buildBlockers(launchReadiness = null) {
++  return arr(obj(launchReadiness).blockers);
+ }
+ 
+ function buildWebsiteWidgetStatusPayload(
+@@ -772,20 +873,32 @@ function buildWebsiteWidgetStatusPayload(
+   const config = normalizeWidgetConfig(status.widgetConfig, {
+     defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+   });
+-  const blockers = buildBlockers(status, verificationSurface);
++  const launchReadiness = buildWebsiteLaunchReadiness(
++    req,
++    status,
++    verificationSurface
++  );
++  const blockers = buildBlockers(launchReadiness);
+   const saveAllowed = canManageSettings(viewerRole);
+-  const launchEnabled = resolveWidgetEnabled(status);
+-  const launchReady =
+-    launchEnabled &&
+-    Boolean(config.publicWidgetId) &&
+-    (config.allowedOrigins.length > 0 ||
+-      config.allowedDomains.length > 0 ||
+-      Boolean(s(status.websiteUrl)));
+-  const ready = launchReady && !isProductionInstallBlocked(verificationSurface);
+-  const install = buildWebsiteInstallSurface(req, status, verificationSurface);
++  const ready = launchReadiness.productionLaunchAllowed === true;
++  const install = buildWebsiteInstallSurface(
++    req,
++    status,
++    verificationSurface,
++    launchReadiness
++  );
+ 
+   return {
+-    state: ready ? "connected" : config.enabled ? "blocked" : "not_connected",
++    tenantId: s(status.id),
++    tenantKey: s(status.tenantKey || status.tenant_key),
++    state:
++      ready
++        ? "connected"
++        : launchReadiness.status === "not_configured"
++          ? "not_connected"
++          : config.enabled
++            ? "blocked"
++            : "not_connected",
+     viewerRole,
+     permissions: {
+       saveAllowed,
+@@ -808,44 +921,38 @@ function buildWebsiteWidgetStatusPayload(
+       updatedAt: status.widgetUpdatedAt || null,
+     },
+     install,
++    handoffs: launchReadiness.handoffs,
+     domainVerification: verificationSurface,
++    launchReadiness,
+     readiness: {
+       status: ready
+         ? "ready"
+-        : config.enabled
++        : launchReadiness.status === "not_configured"
++          ? "attention"
++          : config.enabled
+           ? "blocked"
+           : "attention",
+-      message: ready
+-        ? "Website chat is configured with a publishable install ID and trusted origin controls."
+-        : config.enabled && isProductionInstallBlocked(verificationSurface)
+-          ? s(
+-              verificationSurface.message,
+-              "Website chat is blocked for public install until domain ownership is verified."
+-            )
+-        : config.enabled
+-          ? launchReady
+-            ? "Website chat is enabled, but installation hardening is still incomplete."
+-            : "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
+-          : "Website chat is disabled until you intentionally enable and configure it.",
++      reasonCode: s(launchReadiness.reasonCode),
++      message: s(launchReadiness.message),
+       blockers,
+     },
+   };
+ }
+ 
+-export async function getWebsiteWidgetStatus({ db, req }) {
+-  const tenantKey = getReqTenantKey(req);
+-  if (!tenantKey) {
+-    throw createHttpError("Missing tenant context", 401);
+-  }
+-
++async function loadWebsiteWidgetStatusPayload({
++  db,
++  req,
++  tenantKey = "",
++  viewerRole = "member",
++  requestedDomain = "",
++} = {}) {
+   const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+   if (!status?.id) {
+-    throw createHttpError("Tenant not found", 404);
++    return null;
+   }
+ 
+-  const viewerRole = getNormalizedAuthRole(req);
+   const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+-    requestedDomain: req?.query?.domain || "",
++    requestedDomain,
+   });
+ 
+   return buildWebsiteWidgetStatusPayload(
+@@ -856,6 +963,126 @@ export async function getWebsiteWidgetStatus({ db, req }) {
+   );
+ }
+ 
++function buildWebsiteLaneUnavailableHealthPayload({
++  tenantKey = "",
++  targetDomain = "",
++  reasonCode = "tenant_not_found",
++  message = "Tenant not found for Website lane verification.",
++} = {}) {
++  const sharedContract = {
++    ready: false,
++    productionReady: false,
++    testingOnly: false,
++    targetDomain,
++    verificationState: "unverified",
++    verificationRequiredForProduction: true,
++    blockingReasonCode: reasonCode,
++    blockingMessage: message,
++    message,
++  };
++
++  return {
++    tenantKey: s(tenantKey),
++    tenantId: "",
++    tenantFound: false,
++    status: "not_configured",
++    channelConfigured: false,
++    configurationReady: false,
++    widgetEnabled: false,
++    launchEnabled: false,
++    publicWidgetId: "",
++    publicWidgetIdPresent: false,
++    allowedOriginsPresent: false,
++    allowedOriginCount: 0,
++    allowedDomainsPresent: false,
++    allowedDomainCount: 0,
++    originRulesPresent: false,
++    targetDomain: s(targetDomain),
++    domainVerificationRequired: true,
++    domainVerificationState: "unverified",
++    domainVerified: false,
++    productionBlocked: true,
++    productionLaunchAllowed: false,
++    productionReady: false,
++    testingOnly: false,
++    testReady: false,
++    unverifiedHandoffsAllowed: false,
++    installSurfaceReady: false,
++    installSurface: {
++      widgetBaseUrl: "",
++      apiBase: "",
++      scriptUrl: "",
++      iframePath: "/widget/website-chat",
++      embedSnippetReady: false,
++    },
++    reasonCode: s(reasonCode),
++    message: s(message),
++    blockerReasonCodes: [s(reasonCode)].filter(Boolean),
++    blockers: [],
++    handoffs: {
++      developer: buildWebsitePackageContract("developer", sharedContract),
++      gtm: buildWebsitePackageContract("gtm", sharedContract),
++      wordpress: buildWebsitePackageContract("wordpress", sharedContract),
++    },
++  };
++}
++
++export async function getWebsiteLaneHealthStatus({ db, req }) {
++  const tenantKey = s(req?.query?.tenantKey || req?.query?.tenant_key);
++  const requestedDomain = s(req?.query?.domain || req?.query?.targetDomain);
++
++  if (!tenantKey) {
++    throw createHttpError(
++      "Missing website lane tenantKey query parameter",
++      400,
++      "website_lane_tenant_key_missing"
++    );
++  }
++
++  const payload = await loadWebsiteWidgetStatusPayload({
++    db,
++    req,
++    tenantKey,
++    viewerRole: "owner",
++    requestedDomain,
++  });
++
++  if (!payload) {
++    return buildWebsiteLaneUnavailableHealthPayload({
++      tenantKey,
++      targetDomain: requestedDomain,
++    });
++  }
++
++  return {
++    tenantKey: s(payload.tenantKey || tenantKey),
++    tenantId: s(payload.tenantId),
++    tenantFound: true,
++    ...obj(payload.launchReadiness),
++  };
++}
++
++export async function getWebsiteWidgetStatus({ db, req }) {
++  const tenantKey = getReqTenantKey(req);
++  if (!tenantKey) {
++    throw createHttpError("Missing tenant context", 401);
++  }
++
++  const payload = await loadWebsiteWidgetStatusPayload({
++    db,
++    req,
++    tenantKey,
++    viewerRole: getNormalizedAuthRole(req),
++    requestedDomain: req?.query?.domain || "",
++  });
++
++  if (!payload) {
++    throw createHttpError("Tenant not found", 404);
++  }
++
++  return payload;
++}
++
+ export async function getWebsiteDomainVerificationStatus({ db, req }) {
+   const tenantKey = getReqTenantKey(req);
+   if (!tenantKey) {
+diff --git a/ai-hq-backend/src/routes/api/health/handlers.js b/ai-hq-backend/src/routes/api/health/handlers.js
+index 16132ff..4cfe06d 100644
+--- a/ai-hq-backend/src/routes/api/health/handlers.js
++++ b/ai-hq-backend/src/routes/api/health/handlers.js
+@@ -1,5 +1,6 @@
+ import { okJson } from "../../../utils/http.js";
+ import { buildApiHealthResponse } from "./builders.js";
++import { getWebsiteLaneHealthStatus } from "../channelConnect/website.js";
+ 
+ export function createHealthHandlers({ db }) {
+   async function getApiRoot(req, res) {
+@@ -12,5 +13,15 @@ export function createHealthHandlers({ db }) {
+     );
+   }
+ 
+-  return { getApiRoot };
++  async function getWebsiteLane(req, res) {
++    return okJson(
++      res,
++      await getWebsiteLaneHealthStatus({
++        db,
++        req,
++      })
++    );
++  }
++
++  return { getApiRoot, getWebsiteLane };
+ }
+diff --git a/ai-hq-backend/src/routes/api/health/index.js b/ai-hq-backend/src/routes/api/health/index.js
+index b4132a5..ba46d99 100644
+--- a/ai-hq-backend/src/routes/api/health/index.js
++++ b/ai-hq-backend/src/routes/api/health/index.js
+@@ -4,14 +4,21 @@ import { createHealthHandlers } from "./handlers.js";
+ 
+ export function healthRoutes({ db }) {
+   const r = express.Router();
+-  const { getApiRoot } = createHealthHandlers({ db });
++  const { getApiRoot, getWebsiteLane } = createHealthHandlers({ db });
+   const requireSidecarHealth = createInternalTokenGuard({
+     allowedServices: ["meta-bot-backend", "twilio-voice-backend"],
+     allowedAudiences: ["aihq-backend.health"],
+   });
++  const requireWebsiteLaneHealth = createInternalTokenGuard({
++    allowedAudiences: [
++      "aihq-backend.health",
++      "aihq-backend.health.website-lane",
++    ],
++  });
+ 
+   r.get("/", getApiRoot);
+   r.get("/health", requireSidecarHealth, getApiRoot);
++  r.get("/health/website-lane", requireWebsiteLaneHealth, getWebsiteLane);
+ 
+   return r;
+ }
+diff --git a/ai-hq-backend/src/routes/api/websiteWidget/handlers.js b/ai-hq-backend/src/routes/api/websiteWidget/handlers.js
+index 320df47..5381957 100644
+--- a/ai-hq-backend/src/routes/api/websiteWidget/handlers.js
++++ b/ai-hq-backend/src/routes/api/websiteWidget/handlers.js
+@@ -17,6 +17,7 @@ import {
+ import { buildInboxActions } from "../../../services/inboxBrain.js";
+ import { emitRealtimeEvent } from "../../../realtime/events.js";
+ import { isDbReady, okJson } from "../../../utils/http.js";
++import { createLogger } from "../../../utils/logger.js";
+ import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
+ import { fixText } from "../../../utils/textFix.js";
+ import { applyHandoffActions, persistLeadActions } from "../inbox/mutations.js";
+@@ -58,6 +59,10 @@ const WEBSITE_THREAD_CHANNEL = "website";
+ const WEBSITE_RUNTIME_CHANNEL = "webchat";
+ const WEBSITE_PROVIDER = "website_widget";
+ const WEBSITE_TRANSCRIPT_LIMIT = 200;
++const fallbackLogger = createLogger({
++  service: "ai-hq-backend",
++  component: "website-widget-public-routes",
++});
+ const WEBSITE_THREAD_SELECT = `
+   id,
+   tenant_id,
+@@ -104,6 +109,92 @@ function nowIso() {
+   return new Date().toISOString();
+ }
+ 
++function compactLogFields(fields = {}) {
++  const out = {};
++
++  for (const [key, raw] of Object.entries(obj(fields))) {
++    if (raw === undefined || raw === null) continue;
++
++    if (typeof raw === "string") {
++      const value = s(raw);
++      if (value) out[key] = value;
++      continue;
++    }
++
++    out[key] = raw;
++  }
++
++  return out;
++}
++
++function getWebsiteWidgetLogger(req, route = "") {
++  const base = req?.log || fallbackLogger;
++
++  return (
++    base.child?.({
++      component: "website-widget-public-routes",
++      route: s(route),
++      tenantKey: s(req?.auth?.tenantKey || req?.user?.tenantKey || ""),
++      tenantId: s(req?.auth?.tenantId || req?.user?.tenantId || ""),
++    }) || fallbackLogger
++  );
++}
++
++function buildWebsiteWidgetLogFields({
++  req = null,
++  tenant = null,
++  widgetId = "",
++  publicWidgetId = "",
++  domain = "",
++  origin = "",
++  pageUrl = "",
++  threadId = "",
++  sessionId = "",
++  visitorLeadId = "",
++  reasonCode = "",
++} = {}) {
++  return compactLogFields({
++    tenantKey: s(tenant?.tenantKey || tenant?.tenant_key || req?.auth?.tenantKey),
++    tenantId: s(tenant?.id || tenant?.tenantId || req?.auth?.tenantId),
++    widgetId: s(widgetId),
++    publicWidgetId: s(publicWidgetId || widgetId),
++    domain: s(domain),
++    origin: s(origin),
++    pageUrl: s(pageUrl),
++    threadId: s(threadId),
++    sessionId: s(sessionId),
++    visitorLeadId: s(visitorLeadId),
++    requestId: s(req?.requestId),
++    correlationId: s(req?.correlationId),
++    reasonCode: s(reasonCode),
++  });
++}
++
++function logWebsiteWidgetEvent({
++  req = null,
++  route = "",
++  event = "",
++  level = "info",
++  error = null,
++  ...fields
++} = {}) {
++  const logger = getWebsiteWidgetLogger(req, route);
++  const data = buildWebsiteWidgetLogFields({
++    req,
++    ...fields,
++  });
++
++  if (level === "error") {
++    return logger.error(event, error, data);
++  }
++
++  if (level === "warn") {
++    return logger.warn(event, data, error);
++  }
++
++  return logger.info(event, data);
++}
++
+ function applyNoStore(res) {
+   try {
+     res?.setHeader?.("Cache-Control", "no-store");
+@@ -722,6 +813,20 @@ function buildConversationMode({
+   return "awaiting_reply";
+ }
+ 
++function findLeadId(leadResults = []) {
++  for (const item of arr(leadResults)) {
++    const leadId = s(
++      item?.leadId ||
++        item?.lead?.id ||
++        item?.lead?.lead_id ||
++        item?.lead_id
++    );
++    if (leadId) return leadId;
++  }
++
++  return "";
++}
++
+ function buildSnapshotDeliveryMode({
+   thread = {},
+   automation = {},
+@@ -904,6 +1009,7 @@ function websiteWidgetRateLimit(policyName, maxRequests, windowMs = 60_000) {
+ }
+ 
+ async function processWebsiteWidgetMessage({
++  req,
+   db,
+   wsHub,
+   tenant,
+@@ -987,6 +1093,21 @@ async function processWebsiteWidgetMessage({
+         threadId: thread.id,
+       });
+ 
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.message",
++        event: "website.widget.message.accepted",
++        tenant,
++        widgetId: s(session?.widgetId),
++        publicWidgetId: s(session?.widgetId),
++        domain: s(page?.host),
++        origin: s(page?.origin),
++        pageUrl: s(page?.url),
++        threadId: s(thread?.id),
++        sessionId: s(session?.sessionId),
++        reasonCode: "duplicate_message",
++      });
++
+       return {
+         ok: true,
+         duplicate: true,
+@@ -1377,6 +1498,22 @@ async function processWebsiteWidgetMessage({
+       tenantKey: tenant.tenantKey,
+       threadId: finalThread.id,
+     });
++    const visitorLeadId = findLeadId(leadResults);
++
++    logWebsiteWidgetEvent({
++      req,
++      route: "website_widget.message",
++      event: "website.widget.message.accepted",
++      tenant,
++      widgetId: s(session?.widgetId),
++      publicWidgetId: s(session?.widgetId),
++      domain: s(page?.host),
++      origin: s(page?.origin),
++      pageUrl: s(page?.url),
++      threadId: s(finalThread?.id),
++      sessionId: s(session?.sessionId),
++      visitorLeadId,
++    });
+ 
+     return {
+       ok: true,
+@@ -1397,6 +1534,23 @@ async function processWebsiteWidgetMessage({
+     };
+   } catch (error) {
+     if (client) await rollbackAndRelease(client);
++    logWebsiteWidgetEvent({
++      req,
++      route: "website_widget.message",
++      event: "website.widget.message.failed",
++      level: "error",
++      error,
++      tenant,
++      widgetId: s(session?.widgetId),
++      publicWidgetId: s(session?.widgetId),
++      domain: s(page?.host),
++      origin: s(page?.origin),
++      pageUrl: s(page?.url),
++      threadId: s(session?.threadId),
++      sessionId: s(session?.sessionId),
++      reasonCode: s(error?.reasonCode || error?.code || "website_widget_message_failed"),
++    });
++    error.websiteWidgetLogged = true;
+     throw error;
+   }
+ }
+@@ -1412,9 +1566,27 @@ export function createWebsiteWidgetHandlers({
+   async function issueWidgetInstallToken(req, res) {
+     applyNoStore(res);
+     const widgetId = resolveRequestedWidgetId(req);
++    const installContext = buildInstallContext(req);
++    const requestedOrigin =
++      installContext.requestOrigin ||
++      installContext.requestRefererOrigin ||
++      installContext.page.origin;
++    const requestedDomain =
++      normalizeUrl(requestedOrigin)?.hostname || installContext.page.host;
+ 
+     try {
+       if (!isDbReady(db)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.install_token",
++          event: "website.widget.launch.blocked",
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: requestedDomain,
++          origin: requestedOrigin,
++          pageUrl: installContext.page.url,
++          reasonCode: "db_disabled",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("db disabled", "", {
+@@ -1424,6 +1596,15 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       if (!widgetId) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.install_token",
++          event: "website.widget.launch.blocked",
++          domain: requestedDomain,
++          origin: requestedOrigin,
++          pageUrl: installContext.page.url,
++          reasonCode: "widget_id_required",
++        });
+         return okJson(res, buildPublicErrorResponse("widgetId required"));
+       }
+ 
+@@ -1431,15 +1612,37 @@ export function createWebsiteWidgetHandlers({
+         publicWidgetId: widgetId,
+       });
+       if (!tenant?.id) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.install_token",
++          event: "website.widget.launch.blocked",
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: requestedDomain,
++          origin: requestedOrigin,
++          pageUrl: installContext.page.url,
++          reasonCode: "website_widget_not_found",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("website_widget_not_found")
+         );
+       }
+ 
+-      const installContext = buildInstallContext(req);
+       const validation = validateWidgetInstallContext(tenant, installContext);
+       if (!validation.ok) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.install_token",
++          event: "website.widget.launch.blocked",
++          tenant,
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: requestedDomain,
++          origin: requestedOrigin,
++          pageUrl: installContext.page.url,
++          reasonCode: validation.reasonCode,
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(validation.reasonCode, validation.detail)
+@@ -1458,6 +1661,18 @@ export function createWebsiteWidgetHandlers({
+         installHost
+       );
+       if (!installVerification.ok) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.install_token",
++          event: "website.widget.launch.blocked",
++          tenant,
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: s(installVerification.domain || installHost),
++          origin: installOrigin,
++          pageUrl: installContext.page.url,
++          reasonCode: installVerification.reasonCode,
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(
+@@ -1482,6 +1697,18 @@ export function createWebsiteWidgetHandlers({
+         matchedValue: validation.matchedValue,
+       });
+ 
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.install_token",
++        event: "website.widget.install_token.issued",
++        tenant,
++        widgetId,
++        publicWidgetId: widgetId,
++        domain: s(installVerification.domain || installHost),
++        origin: installOrigin,
++        pageUrl: installContext.page.url,
++      });
++
+       return okJson(res, {
+         ok: true,
+         widgetId,
+@@ -1489,6 +1716,19 @@ export function createWebsiteWidgetHandlers({
+         expiresAt: new Date(bootstrap.payload.expiresAt).toISOString(),
+       });
+     } catch (error) {
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.install_token",
++        event: "website.widget.launch.blocked",
++        level: "error",
++        error,
++        widgetId,
++        publicWidgetId: widgetId,
++        domain: requestedDomain,
++        origin: requestedOrigin,
++        pageUrl: installContext.page.url,
++        reasonCode: s(error?.reasonCode || error?.code || "website_widget_install_token_failed"),
++      });
+       return okJson(res, buildPublicErrorResponse("Error"));
+     }
+   }
+@@ -1502,6 +1742,14 @@ export function createWebsiteWidgetHandlers({
+ 
+     try {
+       if (!isDbReady(db)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          widgetId,
++          publicWidgetId: widgetId,
++          reasonCode: "db_disabled",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("db disabled", "", {
+@@ -1511,6 +1759,12 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       if (!widgetId) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          reasonCode: "widget_id_required",
++        });
+         return okJson(res, buildPublicErrorResponse("widgetId required"));
+       }
+ 
+@@ -1535,6 +1789,20 @@ export function createWebsiteWidgetHandlers({
+             service: "website_widget.bootstrap",
+           });
+ 
++          logWebsiteWidgetEvent({
++            req,
++            route: "website_widget.bootstrap",
++            event: "website.widget.bootstrap.succeeded",
++            tenant: recoverableSessionState.tenant,
++            widgetId,
++            publicWidgetId: widgetId,
++            domain: s(snapshot.session?.installHost),
++            origin: s(snapshot.session?.installOrigin),
++            pageUrl: s(snapshot.session?.pageUrl),
++            threadId: s(snapshot.thread?.id),
++            sessionId: s(snapshot.session?.sessionId),
++          });
++
+           return okJson(res, {
+             ok: true,
+             session: snapshot.session,
+@@ -1547,6 +1815,16 @@ export function createWebsiteWidgetHandlers({
+           });
+         }
+ 
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          widgetId,
++          publicWidgetId: widgetId,
++          reasonCode: providedSessionToken
++            ? recoverableSessionState.error
++            : "bootstrap_token_required",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(
+@@ -1569,6 +1847,20 @@ export function createWebsiteWidgetHandlers({
+             service: "website_widget.bootstrap",
+           });
+ 
++          logWebsiteWidgetEvent({
++            req,
++            route: "website_widget.bootstrap",
++            event: "website.widget.bootstrap.succeeded",
++            tenant: recoverableSessionState.tenant,
++            widgetId,
++            publicWidgetId: widgetId,
++            domain: s(snapshot.session?.installHost),
++            origin: s(snapshot.session?.installOrigin),
++            pageUrl: s(snapshot.session?.pageUrl),
++            threadId: s(snapshot.thread?.id),
++            sessionId: s(snapshot.session?.sessionId),
++          });
++
+           return okJson(res, {
+             ok: true,
+             session: snapshot.session,
+@@ -1581,6 +1873,14 @@ export function createWebsiteWidgetHandlers({
+           });
+         }
+ 
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          widgetId,
++          publicWidgetId: widgetId,
++          reasonCode: verifiedBootstrap.error,
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(verifiedBootstrap.error)
+@@ -1588,6 +1888,17 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       if (lower(verifiedBootstrap.payload?.widgetId) !== lower(widgetId)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: s(verifiedBootstrap.payload?.installHost),
++          origin: s(verifiedBootstrap.payload?.installOrigin),
++          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
++          reasonCode: "website_widget_install_mismatch",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("website_widget_install_mismatch")
+@@ -1598,6 +1909,17 @@ export function createWebsiteWidgetHandlers({
+         publicWidgetId: widgetId,
+       });
+       if (!tenant?.id) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: s(verifiedBootstrap.payload?.installHost),
++          origin: s(verifiedBootstrap.payload?.installOrigin),
++          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
++          reasonCode: "tenant_not_found",
++        });
+         return okJson(res, buildPublicErrorResponse("tenant not found"));
+       }
+ 
+@@ -1605,6 +1927,18 @@ export function createWebsiteWidgetHandlers({
+         defaultEnabled: true,
+       });
+       if (!resolveWidgetEnabled(tenant)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          tenant,
++          widgetId,
++          publicWidgetId: widgetId,
++          domain: s(verifiedBootstrap.payload?.installHost),
++          origin: s(verifiedBootstrap.payload?.installOrigin),
++          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
++          reasonCode: "website_widget_disabled",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("website_widget_disabled")
+@@ -1612,6 +1946,18 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       if (lower(currentConfig.publicWidgetId) !== lower(widgetId)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          tenant,
++          widgetId,
++          publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
++          domain: s(verifiedBootstrap.payload?.installHost),
++          origin: s(verifiedBootstrap.payload?.installOrigin),
++          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
++          reasonCode: "website_widget_install_mismatch",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("website_widget_install_mismatch")
+@@ -1625,6 +1971,20 @@ export function createWebsiteWidgetHandlers({
+           normalizeUrl(verifiedBootstrap.payload?.installOrigin)?.hostname
+       );
+       if (!installVerification.ok) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.bootstrap",
++          event: "website.widget.bootstrap.failed",
++          tenant,
++          widgetId,
++          publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
++          domain: s(
++            installVerification.domain || verifiedBootstrap.payload?.installHost
++          ),
++          origin: s(verifiedBootstrap.payload?.installOrigin),
++          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
++          reasonCode: installVerification.reasonCode,
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(
+@@ -1650,6 +2010,20 @@ export function createWebsiteWidgetHandlers({
+         service: "website_widget.bootstrap",
+       });
+ 
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.bootstrap",
++        event: "website.widget.bootstrap.succeeded",
++        tenant,
++        widgetId,
++        publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
++        domain: s(session.payload?.installHost),
++        origin: s(session.payload?.installOrigin),
++        pageUrl: s(session.payload?.pageUrl),
++        threadId: s(snapshot.thread?.id),
++        sessionId: s(snapshot.session?.sessionId),
++      });
++
+       return okJson(res, {
+         ok: true,
+         session: snapshot.session,
+@@ -1661,6 +2035,16 @@ export function createWebsiteWidgetHandlers({
+         delivery: snapshot.delivery,
+       });
+     } catch (error) {
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.bootstrap",
++        event: "website.widget.bootstrap.failed",
++        level: "error",
++        error,
++        widgetId,
++        publicWidgetId: widgetId,
++        reasonCode: s(error?.reasonCode || error?.code || "website_widget_bootstrap_failed"),
++      });
+       return okJson(res, buildPublicErrorResponse("Error"));
+     }
+   }
+@@ -1676,6 +2060,12 @@ export function createWebsiteWidgetHandlers({
+ 
+     try {
+       if (!isDbReady(db)) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.message",
++          event: "website.widget.message.failed",
++          reasonCode: "db_disabled",
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse("db disabled", "", {
+@@ -1685,6 +2075,12 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       if (!text) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.message",
++          event: "website.widget.message.failed",
++          reasonCode: "message_required",
++        });
+         return okJson(res, buildPublicErrorResponse("message required"));
+       }
+ 
+@@ -1693,6 +2089,14 @@ export function createWebsiteWidgetHandlers({
+         s(body.sessionToken)
+       );
+       if (!sessionState.ok) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.message",
++          event: "website.widget.message.failed",
++          widgetId: s(obj(verifyWebsiteWidgetSessionToken(s(body.sessionToken)).payload).widgetId),
++          publicWidgetId: s(obj(verifyWebsiteWidgetSessionToken(s(body.sessionToken)).payload).widgetId),
++          reasonCode: s(sessionState.error),
++        });
+         return okJson(
+           res,
+           buildPublicErrorResponse(
+@@ -1703,6 +2107,7 @@ export function createWebsiteWidgetHandlers({
+       }
+ 
+       const response = await processWebsiteWidgetMessage({
++        req,
+         db,
+         wsHub,
+         tenant: sessionState.tenant,
+@@ -1720,6 +2125,16 @@ export function createWebsiteWidgetHandlers({
+ 
+       return okJson(res, response);
+     } catch (error) {
++      if (error?.websiteWidgetLogged !== true) {
++        logWebsiteWidgetEvent({
++          req,
++          route: "website_widget.message",
++          event: "website.widget.message.failed",
++          level: "error",
++          error,
++          reasonCode: s(error?.reasonCode || error?.code || "website_widget_message_failed"),
++        });
++      }
+       return okJson(res, buildPublicErrorResponse("Error"));
+     }
+   }
+@@ -1769,6 +2184,20 @@ export function createWebsiteWidgetHandlers({
+           ? await loadWebsiteTranscript(db, activeThread.id, tenant.tenantKey)
+           : [];
+ 
++      logWebsiteWidgetEvent({
++        req,
++        route: "website_widget.transcript",
++        event: "website.widget.transcript.loaded",
++        tenant,
++        widgetId: s(session.payload?.widgetId),
++        publicWidgetId: s(session.payload?.widgetId),
++        domain: s(session.payload?.installHost),
++        origin: s(session.payload?.installOrigin),
++        pageUrl: s(session.payload?.pageUrl),
++        threadId: s(activeThread?.id),
++        sessionId: s(session.payload?.sessionId),
++      });
++
+       return okJson(res, {
+         ok: true,
+         session: refreshed.payload,
+diff --git a/ai-hq-backend/tests/website-domain-verification.test.js b/ai-hq-backend/tests/website-domain-verification.test.js
+index dddcafa..fde51e1 100644
+--- a/ai-hq-backend/tests/website-domain-verification.test.js
++++ b/ai-hq-backend/tests/website-domain-verification.test.js
+@@ -7,6 +7,7 @@ import {
+   createWebsiteWidgetGtmInstallHandoff,
+   createWebsiteWidgetInstallHandoff,
+   createWebsiteWidgetWordpressInstallHandoff,
++  getWebsiteLaneHealthStatus,
+   getWebsiteWidgetStatus,
+ } from "../src/routes/api/channelConnect/website.js";
+ import { __test__ as websiteDomainVerificationTest } from "../src/services/websiteDomainVerification.js";
+@@ -284,6 +285,51 @@ async function verifyWebsiteDomain(db, domain = "acme.example") {
+   return challenge;
+ }
+ 
++function assertWebsiteHandoffContract(
++  contract,
++  {
++    packageType,
++    ready,
++    productionReady,
++    testingOnly,
++    verificationState,
++    targetDomain = "acme.example",
++    blockingReasonCode,
++  } = {}
++) {
++  const value = contract || {};
++
++  for (const key of [
++    "packageType",
++    "ready",
++    "productionReady",
++    "testingOnly",
++    "targetDomain",
++    "verificationState",
++    "verificationRequiredForProduction",
++    "blockingReasonCode",
++    "blockingMessage",
++  ]) {
++    assert.equal(Object.hasOwn(value, key), true, `handoff contract missing ${key}`);
++  }
++
++  if (packageType !== undefined) assert.equal(value.packageType, packageType);
++  if (ready !== undefined) assert.equal(value.ready, ready);
++  if (productionReady !== undefined) {
++    assert.equal(value.productionReady, productionReady);
++  }
++  if (testingOnly !== undefined) assert.equal(value.testingOnly, testingOnly);
++  if (verificationState !== undefined) {
++    assert.equal(value.verificationState, verificationState);
++  }
++  if (targetDomain !== undefined) assert.equal(value.targetDomain, targetDomain);
++  if (blockingReasonCode !== undefined) {
++    assert.equal(value.blockingReasonCode, blockingReasonCode);
++  }
++
++  assert.equal(value.verificationRequiredForProduction, true);
++}
++
+ test("website domain verification normalizes public website domains safely", () => {
+   const normalized = websiteDomainVerificationTest.normalizeWebsiteVerificationDomain(
+     "https://WWW.Acme.Example/pricing"
+@@ -436,6 +482,41 @@ test("website widget status blocks production install until domain ownership is
+       assert.equal(payload.install?.wordpressHandoffReady, false);
+       assert.equal(payload.install?.handoffTargetDomain, "acme.example");
+       assert.equal(payload.readiness?.status, "blocked");
++      assert.equal(payload.launchReadiness?.status, "blocked");
++      assert.equal(payload.launchReadiness?.channelConfigured, true);
++      assert.equal(payload.launchReadiness?.configurationReady, true);
++      assert.equal(payload.launchReadiness?.widgetEnabled, true);
++      assert.equal(payload.launchReadiness?.publicWidgetIdPresent, true);
++      assert.equal(payload.launchReadiness?.allowedOriginsPresent, true);
++      assert.equal(payload.launchReadiness?.allowedDomainsPresent, true);
++      assert.equal(payload.launchReadiness?.domainVerificationRequired, true);
++      assert.equal(payload.launchReadiness?.domainVerificationState, "unverified");
++      assert.equal(payload.launchReadiness?.domainVerified, false);
++      assert.equal(payload.launchReadiness?.productionLaunchAllowed, false);
++      assert.equal(payload.launchReadiness?.productionReady, false);
++      assert.equal(payload.launchReadiness?.testingOnly, false);
++      assert.equal(payload.launchReadiness?.testReady, false);
++      assertWebsiteHandoffContract(payload.handoffs?.developer, {
++        packageType: "developer",
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++        verificationState: "unverified",
++      });
++      assertWebsiteHandoffContract(payload.handoffs?.gtm, {
++        packageType: "gtm",
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++        verificationState: "unverified",
++      });
++      assertWebsiteHandoffContract(payload.handoffs?.wordpress, {
++        packageType: "wordpress",
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++        verificationState: "unverified",
++      });
+     }
+   );
+ });
+@@ -463,6 +544,14 @@ test("website widget install handoff returns a developer package only when produ
+       assert.equal(payload.testingOnly, false);
+       assert.equal(payload.verificationState, "verified");
+       assert.equal(payload.widgetId, "ww_acme_widget");
++      assertWebsiteHandoffContract(payload, {
++        packageType: "developer",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
+       assert.match(
+         String(payload.embedSnippet || ""),
+         /data-widget-id="ww_acme_widget"/
+@@ -501,6 +590,14 @@ test("website widget install handoff refuses to generate while production instal
+         (error) => {
+           assert.equal(error?.status, 409);
+           assert.equal(error?.reasonCode, "website_domain_verification_missing");
++          assertWebsiteHandoffContract(error?.payload, {
++            packageType: "developer",
++            ready: false,
++            productionReady: false,
++            testingOnly: false,
++            verificationState: "unverified",
++            blockingReasonCode: "website_domain_verification_missing",
++          });
+           return true;
+         }
+       );
+@@ -530,6 +627,14 @@ test("website widget GTM handoff returns a GTM package only when production inst
+       assert.equal(payload.verifiedDomain, "acme.example");
+       assert.equal(payload.productionReady, true);
+       assert.equal(payload.testingOnly, false);
++      assertWebsiteHandoffContract(payload, {
++        packageType: "gtm",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
+       assert.match(
+         String(payload.gtmCustomHtmlSnippet || ""),
+         /Website Chat GTM Custom HTML tag/
+@@ -594,6 +699,14 @@ test("website widget WordPress handoff returns a WordPress package only when pro
+       assert.equal(payload.verifiedDomain, "acme.example");
+       assert.equal(payload.productionReady, true);
+       assert.equal(payload.testingOnly, false);
++      assertWebsiteHandoffContract(payload, {
++        packageType: "wordpress",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
+       assert.match(String(payload.packageText || ""), /"packageType": "wordpress"/);
+       assert.equal(
+         payload.wordpressConfig?.wordpressPlugin?.slug,
+@@ -659,6 +772,11 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs
+       assert.equal(statusPayload.install?.developerHandoffReady, true);
+       assert.equal(statusPayload.install?.gtmHandoffReady, true);
+       assert.equal(statusPayload.install?.wordpressHandoffReady, true);
++      assert.equal(statusPayload.launchReadiness?.status, "testing_only");
++      assert.equal(statusPayload.launchReadiness?.productionLaunchAllowed, false);
++      assert.equal(statusPayload.launchReadiness?.productionReady, false);
++      assert.equal(statusPayload.launchReadiness?.testingOnly, true);
++      assert.equal(statusPayload.launchReadiness?.testReady, true);
+       assert.match(
+         String(statusPayload.install?.handoffMessage || ""),
+         /local\/dev\/test only/i
+@@ -683,6 +801,14 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs
+       assert.equal(developerPayload.verificationState, "unverified");
+       assert.equal(developerPayload.verifiedDomain, "");
+       assert.equal(developerPayload.targetDomain, "acme.example");
++      assertWebsiteHandoffContract(developerPayload, {
++        packageType: "developer",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+       assert.match(
+         String(developerPayload.packageText || ""),
+         /Target domain: acme\.example/
+@@ -693,12 +819,28 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs
+       assert.equal(gtmPayload.productionReady, false);
+       assert.equal(gtmPayload.testingOnly, true);
+       assert.equal(gtmPayload.verificationState, "unverified");
++      assertWebsiteHandoffContract(gtmPayload, {
++        packageType: "gtm",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+ 
+       assert.equal(wordpressPayload.ready, true);
+       assert.equal(wordpressPayload.packageType, "wordpress");
+       assert.equal(wordpressPayload.productionReady, false);
+       assert.equal(wordpressPayload.testingOnly, true);
+       assert.equal(wordpressPayload.verificationState, "unverified");
++      assertWebsiteHandoffContract(wordpressPayload, {
++        packageType: "wordpress",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+       assert.equal(wordpressPayload.verifiedDomain, "");
+       assert.equal(wordpressPayload.targetDomain, "acme.example");
+       assert.equal(wordpressPayload.wordpressConfig?.targetDomain, "acme.example");
+@@ -756,16 +898,164 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs
+       assert.equal(developerPayload.testingOnly, true);
+       assert.equal(developerPayload.productionReady, false);
+       assert.equal(developerPayload.verificationState, "unverified");
++      assertWebsiteHandoffContract(developerPayload, {
++        packageType: "developer",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+ 
+       assert.equal(gtmPayload.testingOnly, true);
+       assert.equal(gtmPayload.productionReady, false);
+       assert.equal(gtmPayload.verificationState, "unverified");
++      assertWebsiteHandoffContract(gtmPayload, {
++        packageType: "gtm",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+ 
+       assert.equal(wordpressPayload.testingOnly, true);
+       assert.equal(wordpressPayload.productionReady, false);
+       assert.equal(wordpressPayload.verificationState, "unverified");
++      assertWebsiteHandoffContract(wordpressPayload, {
++        packageType: "wordpress",
++        ready: true,
++        productionReady: false,
++        testingOnly: true,
++        verificationState: "unverified",
++        blockingReasonCode: "website_domain_verification_missing",
++      });
+       assert.equal(wordpressPayload.wordpressConfig?.testingOnly, true);
+       assert.equal(wordpressPayload.wordpressConfig?.productionReady, false);
+     }
+   );
+ });
++
++test("website widget status reports a production-ready launch spine after domain verification passes", async () => {
++  await withWebsiteHandoffEnv(
++    {
++      nodeEnv: "production",
++      allowUnverifiedHandoffs: "0",
++    },
++    async () => {
++      const db = new FakeWebsiteDomainVerificationDb();
++      await verifyWebsiteDomain(db);
++
++      const payload = await getWebsiteWidgetStatus({
++        db,
++        req: buildAuthedReq({
++          role: "owner",
++        }),
++      });
++
++      assert.equal(payload.state, "connected");
++      assert.equal(payload.launchReadiness?.status, "production_ready");
++      assert.equal(payload.launchReadiness?.channelConfigured, true);
++      assert.equal(payload.launchReadiness?.configurationReady, true);
++      assert.equal(payload.launchReadiness?.widgetEnabled, true);
++      assert.equal(payload.launchReadiness?.publicWidgetIdPresent, true);
++      assert.equal(payload.launchReadiness?.originRulesPresent, true);
++      assert.equal(payload.launchReadiness?.domainVerificationState, "verified");
++      assert.equal(payload.launchReadiness?.domainVerified, true);
++      assert.equal(payload.launchReadiness?.productionLaunchAllowed, true);
++      assert.equal(payload.launchReadiness?.productionReady, true);
++      assert.equal(payload.launchReadiness?.testingOnly, false);
++      assert.equal(payload.launchReadiness?.testReady, true);
++      assert.equal(payload.launchReadiness?.installSurfaceReady, true);
++      assertWebsiteHandoffContract(payload.handoffs?.developer, {
++        packageType: "developer",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
++      assertWebsiteHandoffContract(payload.handoffs?.gtm, {
++        packageType: "gtm",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
++      assertWebsiteHandoffContract(payload.handoffs?.wordpress, {
++        packageType: "wordpress",
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++        verificationState: "verified",
++        blockingReasonCode: "",
++      });
++    }
++  );
++});
++
++test("website lane health returns the unified readiness payload for smoke scripts", async () => {
++  await withWebsiteHandoffEnv(
++    {
++      nodeEnv: "production",
++      allowUnverifiedHandoffs: "0",
++    },
++    async () => {
++      const db = new FakeWebsiteDomainVerificationDb();
++
++      const blocked = await getWebsiteLaneHealthStatus({
++        db,
++        req: {
++          query: {
++            tenantKey: "acme",
++          },
++          headers: {
++            host: "app.example.test",
++            "x-forwarded-proto": "https",
++          },
++          get(name) {
++            return this.headers[String(name || "").toLowerCase()];
++          },
++        },
++      });
++
++      assert.equal(blocked.tenantFound, true);
++      assert.equal(blocked.status, "blocked");
++      assert.equal(blocked.channelConfigured, true);
++      assert.equal(blocked.configurationReady, true);
++      assert.equal(blocked.productionLaunchAllowed, false);
++      assert.equal(blocked.reasonCode, "website_domain_verification_missing");
++      assert.equal(blocked.handoffs?.developer?.ready, false);
++
++      await verifyWebsiteDomain(db);
++
++      const ready = await getWebsiteLaneHealthStatus({
++        db,
++        req: {
++          query: {
++            tenantKey: "acme",
++            domain: "acme.example",
++          },
++          headers: {
++            host: "app.example.test",
++            "x-forwarded-proto": "https",
++          },
++          get(name) {
++            return this.headers[String(name || "").toLowerCase()];
++          },
++        },
++      });
++
++      assert.equal(ready.tenantFound, true);
++      assert.equal(ready.status, "production_ready");
++      assert.equal(ready.targetDomain, "acme.example");
++      assert.equal(ready.domainVerificationState, "verified");
++      assert.equal(ready.productionLaunchAllowed, true);
++      assert.equal(ready.productionReady, true);
++      assert.equal(ready.handoffs?.developer?.productionReady, true);
++      assert.equal(ready.handoffs?.gtm?.productionReady, true);
++      assert.equal(ready.handoffs?.wordpress?.productionReady, true);
++    }
++  );
++});
+diff --git a/ai-hq-backend/tests/website-widget.test.js b/ai-hq-backend/tests/website-widget.test.js
+index d9a2e50..5911069 100644
+--- a/ai-hq-backend/tests/website-widget.test.js
++++ b/ai-hq-backend/tests/website-widget.test.js
+@@ -29,6 +29,53 @@ function createMockRes() {
+   };
+ }
+ 
++function createCaptureLogger(entries = [], context = {}) {
++  return {
++    child(next = {}) {
++      return createCaptureLogger(entries, {
++        ...context,
++        ...next,
++      });
++    },
++    info(event, data) {
++      entries.push({
++        level: "info",
++        event,
++        data: {
++          ...context,
++          ...(data || {}),
++        },
++      });
++    },
++    warn(event, data, error) {
++      entries.push({
++        level: "warn",
++        event,
++        data: {
++          ...context,
++          ...(data || {}),
++        },
++        error,
++      });
++    },
++    error(event, error, data) {
++      entries.push({
++        level: "error",
++        event,
++        data: {
++          ...context,
++          ...(data || {}),
++        },
++        error,
++      });
++    },
++  };
++}
++
++function findLoggedEvent(entries = [], event = "") {
++  return entries.find((item) => item.event === event) || null;
++}
++
+ const tenantRow = {
+   id: "11111111-1111-4111-8111-111111111111",
+   tenant_key: "acme",
+@@ -86,6 +133,7 @@ function maybeVerifiedDomainVerificationQuery(sql = "", values = []) {
+ }
+ 
+ test("website widget install token only issues for allowed origins", async () => {
++  const logEntries = [];
+   const db = {
+     async query(text, values = []) {
+       const sql = String(text?.text || text || "").toLowerCase();
+@@ -115,6 +163,9 @@ test("website widget install token only issues for allowed origins", async () =>
+       origin: "https://www.acme.example",
+       referer: "https://www.acme.example/pricing",
+     },
++    log: createCaptureLogger(logEntries),
++    requestId: "req-install-1",
++    correlationId: "corr-install-1",
+   };
+   const res = createMockRes();
+ 
+@@ -128,9 +179,27 @@ test("website widget install token only issues for allowed origins", async () =>
+   assert.equal(verified.ok, true);
+   assert.equal(verified.payload?.widgetId, "ww_acme_widget");
+   assert.equal(verified.payload?.installOrigin, "https://www.acme.example");
++  assert.deepEqual(findLoggedEvent(logEntries, "website.widget.install_token.issued"), {
++    level: "info",
++    event: "website.widget.install_token.issued",
++    data: {
++      component: "website-widget-public-routes",
++      route: "website_widget.install_token",
++      tenantKey: "acme",
++      tenantId: tenantRow.id,
++      widgetId: "ww_acme_widget",
++      publicWidgetId: "ww_acme_widget",
++      domain: "acme.example",
++      origin: "https://www.acme.example",
++      pageUrl: "https://www.acme.example/pricing",
++      requestId: "req-install-1",
++      correlationId: "corr-install-1",
++    },
++  });
+ });
+ 
+ test("website widget install token fails closed for rejected origins", async () => {
++  const logEntries = [];
+   const db = {
+     async query(text, values = []) {
+       const sql = String(text?.text || text || "").toLowerCase();
+@@ -159,6 +228,7 @@ test("website widget install token fails closed for rejected origins", async ()
+       origin: "https://evil.example",
+       referer: "https://evil.example/spoof",
+     },
++    log: createCaptureLogger(logEntries),
+   };
+   const res = createMockRes();
+ 
+@@ -167,6 +237,22 @@ test("website widget install token fails closed for rejected origins", async ()
+   assert.equal(res.statusCode, 200);
+   assert.equal(res.body?.ok, false);
+   assert.equal(res.body?.error, "website_origin_mismatch");
++  assert.deepEqual(findLoggedEvent(logEntries, "website.widget.launch.blocked"), {
++    level: "info",
++    event: "website.widget.launch.blocked",
++    data: {
++      component: "website-widget-public-routes",
++      route: "website_widget.install_token",
++      tenantKey: "acme",
++      tenantId: tenantRow.id,
++      widgetId: "ww_acme_widget",
++      publicWidgetId: "ww_acme_widget",
++      domain: "evil.example",
++      origin: "https://evil.example",
++      pageUrl: "https://evil.example/spoof",
++      reasonCode: "website_origin_mismatch",
++    },
++  });
+ });
+ 
+ test("website widget install token respects tenant config disable state", async () => {
+@@ -260,6 +346,7 @@ test("website widget install token blocks public launch until domain ownership i
+ });
+ 
+ test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {
++  const logEntries = [];
+   const db = {
+     async query(text, values = []) {
+       const sql = String(text?.text || text || "").toLowerCase();
+@@ -301,6 +388,9 @@ test("website widget bootstrap returns a real session and honest blocked automat
+       widgetId: "ww_acme_widget",
+       bootstrapToken: bootstrap.token,
+     },
++    log: createCaptureLogger(logEntries),
++    requestId: "req-bootstrap-1",
++    correlationId: "corr-bootstrap-1",
+   };
+   const res = createMockRes();
+ 
+@@ -311,9 +401,24 @@ test("website widget bootstrap returns a real session and honest blocked automat
+   assert.equal(res.body?.automation?.mode, "blocked_until_repair");
+   assert.match(String(res.body?.sessionToken || ""), /\./);
+   assert.equal(res.body?.thread, null);
++  const event = findLoggedEvent(logEntries, "website.widget.bootstrap.succeeded");
++  assert.ok(event);
++  assert.equal(event.level, "info");
++  assert.equal(event.data.route, "website_widget.bootstrap");
++  assert.equal(event.data.tenantKey, "acme");
++  assert.equal(event.data.tenantId, tenantRow.id);
++  assert.equal(event.data.widgetId, "ww_acme_widget");
++  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
++  assert.equal(event.data.domain, "www.acme.example");
++  assert.equal(event.data.origin, "https://www.acme.example");
++  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
++  assert.equal(event.data.requestId, "req-bootstrap-1");
++  assert.equal(event.data.correlationId, "corr-bootstrap-1");
++  assert.ok(event.data.sessionId);
+ });
+ 
+ test("website widget bootstrap blocks public launch when domain ownership is not verified", async () => {
++  const logEntries = [];
+   const db = {
+     async query(text) {
+       const sql = String(text?.text || text || "").toLowerCase();
+@@ -346,6 +451,7 @@ test("website widget bootstrap blocks public launch when domain ownership is not
+       widgetId: "ww_acme_widget",
+       bootstrapToken: bootstrap.token,
+     },
++    log: createCaptureLogger(logEntries),
+   };
+   const res = createMockRes();
+ 
+@@ -354,9 +460,19 @@ test("website widget bootstrap blocks public launch when domain ownership is not
+   assert.equal(res.statusCode, 200);
+   assert.equal(res.body?.ok, false);
+   assert.equal(res.body?.error, "website_domain_verification_required");
++  const event = findLoggedEvent(logEntries, "website.widget.bootstrap.failed");
++  assert.ok(event);
++  assert.equal(event.data.route, "website_widget.bootstrap");
++  assert.equal(event.data.widgetId, "ww_acme_widget");
++  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
++  assert.equal(event.data.domain, "www.acme.example");
++  assert.equal(event.data.origin, "https://www.acme.example");
++  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
++  assert.equal(event.data.reasonCode, "website_domain_verification_missing");
+ });
+ 
+ test("website widget message persists the website thread and activates handoff when strict runtime is unavailable", async () => {
++  const logEntries = [];
+   const thread = {
+     id: "22222222-2222-4222-8222-222222222222",
+     tenant_id: tenantRow.id,
+@@ -519,6 +635,9 @@ test("website widget message persists the website thread and activates handoff w
+       text: "Can someone help me today?",
+       messageId: "msg-1",
+     },
++    log: createCaptureLogger(logEntries),
++    requestId: "req-message-1",
++    correlationId: "corr-message-1",
+   };
+   const res = createMockRes();
+ 
+@@ -531,9 +650,24 @@ test("website widget message persists the website thread and activates handoff w
+   assert.equal(res.body?.delivery?.mode, "operator_only");
+   assert.equal(res.body?.messages?.[0]?.text, inboundMessage.text);
+   assert.equal(transactionCalls.includes("commit"), true);
++  const event = findLoggedEvent(logEntries, "website.widget.message.accepted");
++  assert.ok(event);
++  assert.equal(event.data.route, "website_widget.message");
++  assert.equal(event.data.tenantKey, "acme");
++  assert.equal(event.data.tenantId, tenantRow.id);
++  assert.equal(event.data.widgetId, "ww_acme_widget");
++  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
++  assert.equal(event.data.domain, "www.acme.example");
++  assert.equal(event.data.origin, "https://www.acme.example");
++  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
++  assert.equal(event.data.threadId, thread.id);
++  assert.equal(event.data.sessionId, "session-1");
++  assert.equal(event.data.requestId, "req-message-1");
++  assert.equal(event.data.correlationId, "corr-message-1");
+ });
+ 
+ test("website widget transcript only exposes delivered outbound replies", async () => {
++  const logEntries = [];
+   const thread = {
+     id: "44444444-4444-4444-8444-444444444444",
+     tenant_id: tenantRow.id,
+@@ -649,6 +783,7 @@ test("website widget transcript only exposes delivered outbound replies", async
+     body: {
+       sessionToken: session.token,
+     },
++    log: createCaptureLogger(logEntries),
+   };
+   const res = createMockRes();
+ 
+@@ -660,6 +795,49 @@ test("website widget transcript only exposes delivered outbound replies", async
+     res.body?.messages?.map((item) => item.id),
+     ["msg-in-1", "msg-out-sent"]
+   );
++  const event = findLoggedEvent(logEntries, "website.widget.transcript.loaded");
++  assert.ok(event);
++  assert.equal(event.data.route, "website_widget.transcript");
++  assert.equal(event.data.tenantKey, "acme");
++  assert.equal(event.data.tenantId, tenantRow.id);
++  assert.equal(event.data.widgetId, "ww_acme_widget");
++  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
++  assert.equal(event.data.domain, "www.acme.example");
++  assert.equal(event.data.origin, "https://www.acme.example");
++  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
++  assert.equal(event.data.threadId, thread.id);
++  assert.equal(event.data.sessionId, "session-2");
++});
++
++test("website widget message logs a structured failure when the public session token is invalid", async () => {
++  const logEntries = [];
++  const { postWebsiteWidgetMessage } = createWebsiteWidgetHandlers({
++    db: {
++      async query() {
++        throw new Error("unexpected db query");
++      },
++    },
++    wsHub: null,
++  });
++
++  const req = {
++    body: {
++      sessionToken: "not-a-valid-session",
++      text: "Hello?",
++    },
++    log: createCaptureLogger(logEntries),
++  };
++  const res = createMockRes();
++
++  await postWebsiteWidgetMessage(req, res);
++
++  assert.equal(res.statusCode, 200);
++  assert.equal(res.body?.ok, false);
++  assert.equal(res.body?.error, "website_widget_session_invalid");
++  const event = findLoggedEvent(logEntries, "website.widget.message.failed");
++  assert.ok(event);
++  assert.equal(event.data.route, "website_widget.message");
++  assert.equal(event.data.reasonCode, "website_widget_session_invalid");
+ });
+ 
+ test("persistOutboundMessage auto-delivers website replies without queueing worker execution", async () => {
+diff --git a/ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx b/ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx
+index 35aca0a..8a0e44c 100644
+--- a/ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx
++++ b/ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx
+@@ -53,6 +53,15 @@ function parseList(value = "") {
+     .filter(Boolean);
+ }
+ 
++function firstText(...values) {
++  for (const value of values) {
++    const next = s(value);
++    if (next) return next;
++  }
++
++  return "";
++}
++
+ function buildFormState(payload = {}) {
+   const widget = obj(payload.widget);
+ 
+@@ -145,10 +154,23 @@ function TinyMetric({ label, value, tone = "neutral" }) {
+ function buildPosture({
+   widget = {},
+   install = {},
++  launchReadiness = {},
++  handoffs = {},
+   verificationSurface = {},
+   readiness = {},
+ }) {
+-  const verificationState = s(verificationSurface.state).toLowerCase();
++  const developerHandoff = obj(handoffs.developer);
++  const productionReady =
++    launchReadiness.productionLaunchAllowed === true ||
++    install.productionInstallReady === true;
++  const productionBlocked =
++    launchReadiness.productionBlocked === true ||
++    install.productionBlocked === true;
++  const testingOnly =
++    launchReadiness.testingOnly === true || developerHandoff.testingOnly === true;
++  const verificationState = s(
++    verificationSurface.state || launchReadiness.domainVerificationState
++  ).toLowerCase();
+ 
+   if (widget.enabled !== true) {
+     return {
+@@ -170,11 +192,13 @@ function buildPosture({
+     };
+   }
+ 
+-  if (install.productionBlocked === true) {
++  if (productionBlocked) {
+     return {
+       tone: verificationState === "failed" ? "danger" : "warning",
+       title: "Public install is blocked.",
+-      summary: s(
++      summary: firstText(
++        developerHandoff.blockingMessage,
++        launchReadiness.message,
+         verificationSurface.message,
+         "Verify DNS TXT ownership first."
+       ),
+@@ -183,7 +207,7 @@ function buildPosture({
+     };
+   }
+ 
+-  if (s(readiness.status).toLowerCase() === "ready") {
++  if (productionReady || s(readiness.status).toLowerCase() === "ready") {
+     return {
+       tone: "success",
+       title: "Ready to install.",
+@@ -193,10 +217,28 @@ function buildPosture({
+     };
+   }
+ 
++  if (testingOnly) {
++    return {
++      tone: "warning",
++      title: "Testing handoffs only.",
++      summary: firstText(
++        developerHandoff.message,
++        launchReadiness.message,
++        "Install packages are available for local/dev/test only."
++      ),
++      next: "Next: verify domain",
++      icon: ShieldAlert,
++    };
++  }
++
+   return {
+     tone: "warning",
+     title: "Setup still needs a pass.",
+-    summary: s(readiness.message, "Finish the remaining website setup."),
++    summary: firstText(
++      launchReadiness.message,
++      readiness.message,
++      "Finish the remaining website setup."
++    ),
+     next: "Next: review setup",
+     icon: ShieldAlert,
+   };
+@@ -353,11 +395,17 @@ export default function WebsiteWidgetDetailDrawer({
+   const widget = obj(payload.widget);
+   const install = obj(payload.install);
+   const readiness = obj(payload.readiness);
++  const launchReadiness = obj(payload.launchReadiness);
++  const launchHandoffs = obj(launchReadiness.handoffs);
++  const launchDeveloperHandoff = obj(launchHandoffs.developer);
++  const launchGtmHandoff = obj(launchHandoffs.gtm);
++  const launchWordpressHandoff = obj(launchHandoffs.wordpress);
+   const serverVerification = obj(payload.domainVerification);
+   const verificationSurface = Object.keys(obj(verificationOverride)).length
+     ? obj(verificationOverride)
+     : serverVerification;
+   const handoffSurface = obj(handoffPackage);
++  const handoffSurfaceLaunchReadiness = obj(handoffSurface.launchReadiness);
+   const verificationChallenge = obj(verificationSurface.challenge);
+   const verificationCandidateDomains = arr(
+     verificationSurface.candidateDomains
+@@ -365,7 +413,10 @@ export default function WebsiteWidgetDetailDrawer({
+   const verificationReadiness = obj(verificationSurface.readiness);
+   const handoffReadiness = obj(handoffSurface.readiness);
+   const permissions = obj(payload.permissions);
+-  const blockers = arr(readiness.blockers);
++  const blockers =
++    arr(launchReadiness.blockers).length > 0
++      ? arr(launchReadiness.blockers)
++      : arr(readiness.blockers);
+   const saveAllowed = permissions.saveAllowed !== false;
+   const form = draftForm || buildFormState(payload);
+ 
+@@ -386,40 +437,61 @@ export default function WebsiteWidgetDetailDrawer({
+       verificationSurface.candidateDomain
+   );
+ 
++  const productionInstallReady =
++    launchReadiness.productionLaunchAllowed === true ||
++    install.productionInstallReady === true;
+   const productionInstallBlocked =
++    launchReadiness.productionBlocked === true ||
+     install.productionBlocked === true ||
+     (verificationReadiness.enforcementActive === true &&
+       verificationReadiness.productionInstallReady !== true);
+ 
+-  const installBlockMessage = s(
+-    install.blockMessage ||
+-      (productionInstallBlocked ? verificationSurface.message : "")
++  const installBlockMessage = firstText(
++    launchDeveloperHandoff.blockingMessage,
++    install.blockMessage,
++    productionInstallBlocked ? launchReadiness.message : "",
++    productionInstallBlocked ? verificationSurface.message : ""
+   );
+ 
+   const developerHandoffReady =
+-    saveAllowed && install.developerHandoffReady === true;
+-  const gtmHandoffReady = saveAllowed && install.gtmHandoffReady === true;
++    saveAllowed &&
++    (launchDeveloperHandoff.ready === true ||
++      install.developerHandoffReady === true);
++  const gtmHandoffReady =
++    saveAllowed &&
++    (launchGtmHandoff.ready === true || install.gtmHandoffReady === true);
+   const wordpressHandoffReady =
+-    saveAllowed && install.wordpressHandoffReady === true;
++    saveAllowed &&
++    (launchWordpressHandoff.ready === true ||
++      install.wordpressHandoffReady === true);
+   const anyHandoffReady =
+     developerHandoffReady || gtmHandoffReady || wordpressHandoffReady;
+ 
+-  const installHandoffMessage = s(
+-    install.handoffMessage ||
+-      (productionInstallBlocked
+-        ? verificationSurface.message
+-        : "Install package is unavailable right now.")
++  const installHandoffMessage = firstText(
++    launchDeveloperHandoff.message,
++    install.handoffMessage,
++    productionInstallBlocked ? launchReadiness.message : "",
++    productionInstallBlocked ? verificationSurface.message : "",
++    "Install package is unavailable right now."
+   );
+ 
+   const handoffTestingOnly =
+-    handoffSurface.testingOnly === true || handoffReadiness.testingOnly === true;
+-
+-  const handoffWarning = s(
+-    handoffReadiness.warning ||
+-      handoffSurface.warning ||
+-      (handoffTestingOnly
+-        ? "Testing only. Public launch still needs verified DNS TXT."
+-        : "")
++    handoffSurface.testingOnly === true ||
++    handoffReadiness.testingOnly === true ||
++    handoffSurfaceLaunchReadiness.testingOnly === true;
++  const handoffProductionReady =
++    handoffSurface.productionReady === true ||
++    handoffReadiness.productionReady === true ||
++    handoffSurfaceLaunchReadiness.productionReady === true;
++
++  const handoffWarning = firstText(
++    handoffReadiness.warning,
++    handoffSurface.warning,
++    handoffReadiness.blockingMessage,
++    handoffSurface.blockingMessage,
++    handoffTestingOnly
++      ? "Testing only. Public launch still needs verified DNS TXT."
++      : ""
+   );
+ 
+   const handoffError = s(
+@@ -439,15 +511,17 @@ export default function WebsiteWidgetDetailDrawer({
+     wordpressHandoffMutation.isPending;
+ 
+   const headerStatus =
+-    readiness.status === "ready"
++    productionInstallReady
+       ? "connected"
+-      : widget.enabled === true
++      : widget.enabled === true || launchReadiness.testingOnly === true
+         ? "blocked"
+         : "not_connected";
+ 
+   const posture = buildPosture({
+     widget,
+     install,
++    launchReadiness,
++    handoffs: launchHandoffs,
+     verificationSurface,
+     readiness,
+   });
+@@ -696,16 +770,19 @@ export default function WebsiteWidgetDetailDrawer({
+                 <TinyMetric
+                   label="Install"
+                   value={
+-                    productionInstallBlocked
++                    productionInstallReady
++                      ? "Ready"
++                      : launchReadiness.testingOnly === true
++                        ? "Testing only"
++                        : productionInstallBlocked
+                       ? "Blocked"
+-                      : install.productionInstallReady === true
+-                        ? "Ready"
+-                        : "Pending"
++                      : "Pending"
+                   }
+                   tone={
+-                    install.productionInstallReady === true
++                    productionInstallReady
+                       ? "success"
+-                      : productionInstallBlocked
++                      : launchReadiness.testingOnly === true ||
++                          productionInstallBlocked
+                         ? "warning"
+                         : "neutral"
+                   }
+@@ -880,7 +957,8 @@ export default function WebsiteWidgetDetailDrawer({
+ 
+               {anyHandoffReady &&
+               productionInstallBlocked &&
+-              install.unverifiedHandoffsAllowed === true ? (
++              (launchReadiness.unverifiedHandoffsAllowed === true ||
++                install.unverifiedHandoffsAllowed === true) ? (
+                 <InlineNotice
+                   tone="warning"
+                   description={installHandoffMessage}
+@@ -1007,13 +1085,7 @@ export default function WebsiteWidgetDetailDrawer({
+                     />
+                     <DataRow
+                       label="Production ready"
+-                      value={
+-                        handoffTestingOnly ||
+-                        handoffSurface.productionReady !== true ||
+-                        handoffReadiness.productionReady !== true
+-                          ? "No"
+-                          : "Yes"
+-                      }
++                      value={handoffTestingOnly || !handoffProductionReady ? "No" : "Yes"}
+                     />
+                   </Surface>
+ 
+@@ -1225,4 +1297,4 @@ export default function WebsiteWidgetDetailDrawer({
+       </div>
+     </aside>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/ai-hq-frontend/src/lib/readinessViewModel.js b/ai-hq-frontend/src/lib/readinessViewModel.js
+index 393e9d6..0d8d2fb 100644
+--- a/ai-hq-frontend/src/lib/readinessViewModel.js
++++ b/ai-hq-frontend/src/lib/readinessViewModel.js
+@@ -372,15 +372,47 @@ export function buildTelegramLaunchChannelState(payload = {}) {
+ 
+ export function buildWebsiteLaunchChannelState(payload = {}) {
+   const source = obj(payload);
++  const launchReadiness = obj(source.launchReadiness);
+   const widget = obj(source.widget);
++  const connected =
++    source.connected === true ||
++    launchReadiness.channelConfigured === true ||
++    widget.enabled === true ||
++    lower(source.state) === "connected";
++  const deliveryReady =
++    launchReadiness.productionLaunchAllowed === true ||
++    launchReadiness.productionReady === true ||
++    lower(source.readiness?.status) === "ready";
++  const message = firstText(
++    launchReadiness.message,
++    source.readiness?.message,
++    connected
++      ? "Website chat is configured, but public launch is still blocked."
++      : "Website chat is not connected yet."
++  );
+ 
+   return buildLaunchChannelState(
+     {
+       ...source,
+-      connected:
+-        source.connected === true ||
+-        widget.enabled === true ||
+-        lower(source.state) === "connected",
++      connected,
++      state: deliveryReady
++        ? "connected"
++        : connected
++          ? "blocked"
++          : s(source.state),
++      runtime: {
++        ...obj(source.runtime),
++        deliveryReady,
++      },
++      readiness: {
++        ...obj(source.readiness),
++        status: deliveryReady
++          ? "ready"
++          : connected
++            ? "blocked"
++            : s(obj(source.readiness).status),
++        message,
++      },
+     },
+     {
+       id: "website",
+diff --git a/ai-hq-frontend/src/test/components/channels/WebsiteWidgetDetailDrawer.test.jsx b/ai-hq-frontend/src/test/components/channels/WebsiteWidgetDetailDrawer.test.jsx
+index 7d1716e..91e59db 100644
+--- a/ai-hq-frontend/src/test/components/channels/WebsiteWidgetDetailDrawer.test.jsx
++++ b/ai-hq-frontend/src/test/components/channels/WebsiteWidgetDetailDrawer.test.jsx
+@@ -77,6 +77,45 @@ function renderDrawer({
+ }
+ 
+ function createBlockedPayload(overrides = {}) {
++  const handoffs = {
++    developer: {
++      packageType: "developer",
++      ready: false,
++      productionReady: false,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "pending",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "website_domain_verification_required",
++      blockingMessage: "Verify DNS TXT ownership before public install.",
++      message: "Verify DNS TXT ownership before install packages unlock.",
++    },
++    gtm: {
++      packageType: "gtm",
++      ready: false,
++      productionReady: false,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "pending",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "website_domain_verification_required",
++      blockingMessage: "Verify DNS TXT ownership before public install.",
++      message: "Verify DNS TXT ownership before install packages unlock.",
++    },
++    wordpress: {
++      packageType: "wordpress",
++      ready: false,
++      productionReady: false,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "pending",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "website_domain_verification_required",
++      blockingMessage: "Verify DNS TXT ownership before public install.",
++      message: "Verify DNS TXT ownership before install packages unlock.",
++    },
++  };
++
+   return {
+     state: "blocked",
+     viewerRole: "owner",
+@@ -150,11 +189,88 @@ function createBlockedPayload(overrides = {}) {
+         },
+       ],
+     },
++    handoffs,
++    launchReadiness: {
++      status: "blocked",
++      channelConfigured: true,
++      configurationReady: true,
++      widgetEnabled: true,
++      launchEnabled: true,
++      publicWidgetId: "ww_acme_widget",
++      publicWidgetIdPresent: true,
++      allowedOriginsPresent: true,
++      allowedOriginCount: 1,
++      allowedDomainsPresent: true,
++      allowedDomainCount: 1,
++      originRulesPresent: true,
++      targetDomain: "acme.test",
++      domainVerificationRequired: true,
++      domainVerificationState: "pending",
++      domainVerified: false,
++      productionBlocked: true,
++      productionLaunchAllowed: false,
++      productionReady: false,
++      testingOnly: false,
++      testReady: false,
++      unverifiedHandoffsAllowed: false,
++      installSurfaceReady: true,
++      reasonCode: "website_domain_verification_required",
++      message: "Website chat is blocked for public install until domain ownership is verified.",
++      blockerReasonCodes: ["website_domain_verification_required"],
++      blockers: [
++        {
++          reasonCode: "website_domain_verification_required",
++          title: "Website chat production install is blocked until domain ownership is verified.",
++          subtitle:
++            "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly.",
++        },
++      ],
++      handoffs,
++    },
+     ...overrides,
+   };
+ }
+ 
+ function createReadyPayload(overrides = {}) {
++  const handoffs = {
++    developer: {
++      packageType: "developer",
++      ready: true,
++      productionReady: true,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "verified",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "",
++      blockingMessage: "",
++      message: "Website Chat is ready for install packages.",
++    },
++    gtm: {
++      packageType: "gtm",
++      ready: true,
++      productionReady: true,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "verified",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "",
++      blockingMessage: "",
++      message: "Website Chat is ready for install packages.",
++    },
++    wordpress: {
++      packageType: "wordpress",
++      ready: true,
++      productionReady: true,
++      testingOnly: false,
++      targetDomain: "acme.test",
++      verificationState: "verified",
++      verificationRequiredForProduction: true,
++      blockingReasonCode: "",
++      blockingMessage: "",
++      message: "Website Chat is ready for install packages.",
++    },
++  };
++
+   return {
+     state: "connected",
+     viewerRole: "owner",
+@@ -221,6 +337,38 @@ function createReadyPayload(overrides = {}) {
+       message: "Website chat is configured with a publishable install ID and trusted origin controls.",
+       blockers: [],
+     },
++    handoffs,
++    launchReadiness: {
++      status: "production_ready",
++      channelConfigured: true,
++      configurationReady: true,
++      widgetEnabled: true,
++      launchEnabled: true,
++      publicWidgetId: "ww_acme_widget",
++      publicWidgetIdPresent: true,
++      allowedOriginsPresent: true,
++      allowedOriginCount: 1,
++      allowedDomainsPresent: true,
++      allowedDomainCount: 1,
++      originRulesPresent: true,
++      targetDomain: "acme.test",
++      domainVerificationRequired: true,
++      domainVerificationState: "verified",
++      domainVerified: true,
++      productionBlocked: false,
++      productionLaunchAllowed: true,
++      productionReady: true,
++      testingOnly: false,
++      testReady: true,
++      unverifiedHandoffsAllowed: false,
++      installSurfaceReady: true,
++      reasonCode: "",
++      message:
++        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
++      blockerReasonCodes: [],
++      blockers: [],
++      handoffs,
++    },
+     ...overrides,
+   };
+ }
+@@ -315,8 +463,8 @@ describe("WebsiteWidgetDetailDrawer", () => {
+     ).toBeInTheDocument();
+ 
+     expect(
+-      screen.getByText(/verify dns txt ownership before public install/i)
+-    ).toBeInTheDocument();
++      screen.getAllByText(/verify dns txt ownership before public install/i).length
++    ).toBeGreaterThan(0);
+ 
+     expect(
+       screen.getByRole("button", { name: /copy snippet/i })
+diff --git a/ai-hq-frontend/src/test/lib/readinessViewModel.test.jsx b/ai-hq-frontend/src/test/lib/readinessViewModel.test.jsx
+index 86c0233..6bb9cdb 100644
+--- a/ai-hq-frontend/src/test/lib/readinessViewModel.test.jsx
++++ b/ai-hq-frontend/src/test/lib/readinessViewModel.test.jsx
+@@ -44,6 +44,15 @@ describe("createReadinessViewModel", () => {
+   it("treats enabled website chat as a connected channel even when delivery hardening is still blocked", () => {
+     const channel = buildWebsiteLaunchChannelState({
+       state: "blocked",
++      launchReadiness: {
++        status: "blocked",
++        channelConfigured: true,
++        productionLaunchAllowed: false,
++        productionReady: false,
++        widgetEnabled: true,
++        message:
++          "Website chat is enabled, but installation hardening is still incomplete.",
++      },
+       widget: {
+         enabled: true,
+       },
+@@ -62,6 +71,16 @@ describe("createReadinessViewModel", () => {
+   it("treats website chat as a real launch path when it is the only ready channel", () => {
+     const website = buildWebsiteLaunchChannelState({
+       state: "connected",
++      launchReadiness: {
++        status: "production_ready",
++        channelConfigured: true,
++        productionLaunchAllowed: true,
++        productionReady: true,
++        widgetEnabled: true,
++        publicWidgetId: "widget_public_123",
++        message:
++          "Website chat is configured with a publishable install ID and trusted origin controls.",
++      },
+       widget: {
+         enabled: true,
+         publicWidgetId: "widget_public_123",
+@@ -118,6 +137,16 @@ describe("createReadinessViewModel", () => {
+   it("stays fail-closed when website chat is connected but approved truth is missing", () => {
+     const website = buildWebsiteLaunchChannelState({
+       state: "connected",
++      launchReadiness: {
++        status: "production_ready",
++        channelConfigured: true,
++        productionLaunchAllowed: true,
++        productionReady: true,
++        widgetEnabled: true,
++        publicWidgetId: "widget_public_123",
++        message:
++          "Website chat is configured with a publishable install ID and trusted origin controls.",
++      },
+       widget: {
+         enabled: true,
+         publicWidgetId: "widget_public_123",
+@@ -169,4 +198,34 @@ describe("createReadinessViewModel", () => {
+     expect(readiness.title).toMatch(/truth/i);
+     expect(readiness.action.path).toBe("/home?assistant=setup");
+   });
++
++  it("keeps website chat in an attention posture when only testing handoffs are available", () => {
++    const channel = buildWebsiteLaunchChannelState({
++      state: "blocked",
++      launchReadiness: {
++        status: "testing_only",
++        channelConfigured: true,
++        productionLaunchAllowed: false,
++        productionReady: false,
++        testingOnly: true,
++        widgetEnabled: true,
++        message:
++          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
++      },
++      widget: {
++        enabled: true,
++        publicWidgetId: "widget_public_123",
++      },
++      readiness: {
++        status: "blocked",
++        message:
++          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
++      },
++    });
++
++    expect(channel.connected).toBe(true);
++    expect(channel.deliveryReady).toBe(false);
++    expect(channel.status).toBe("attention");
++    expect(channel.summary).toMatch(/local\/dev\/test only/i);
++  });
+ });
+diff --git a/ai-hq-frontend/src/test/view-models/useProductHome.test.jsx b/ai-hq-frontend/src/test/view-models/useProductHome.test.jsx
+index 86e594c..ca3c23b 100644
+--- a/ai-hq-frontend/src/test/view-models/useProductHome.test.jsx
++++ b/ai-hq-frontend/src/test/view-models/useProductHome.test.jsx
+@@ -122,6 +122,49 @@ function createTelegramStatus(overrides = {}) {
+   };
+ }
+ 
++function createWebsiteStatus(overrides = {}) {
++  return {
++    state: "connected",
++    launchReadiness: {
++      status: "production_ready",
++      channelConfigured: true,
++      configurationReady: true,
++      widgetEnabled: true,
++      launchEnabled: true,
++      publicWidgetId: "ww_acme",
++      publicWidgetIdPresent: true,
++      allowedOriginsPresent: true,
++      allowedDomainsPresent: true,
++      originRulesPresent: true,
++      targetDomain: "acme.test",
++      domainVerificationRequired: true,
++      domainVerificationState: "verified",
++      domainVerified: true,
++      productionBlocked: false,
++      productionLaunchAllowed: true,
++      productionReady: true,
++      testingOnly: false,
++      testReady: true,
++      installSurfaceReady: true,
++      reasonCode: "",
++      message:
++        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
++    },
++    readiness: {
++      status: "ready",
++      message:
++        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
++    },
++    widget: {
++      enabled: true,
++      title: "Website chat",
++      websiteUrl: "https://acme.test",
++      publicWidgetId: "ww_acme",
++    },
++    ...overrides,
++  };
++}
++
+ describe("useProductHome", () => {
+   beforeEach(() => {
+     vi.clearAllMocks();
+@@ -310,19 +353,15 @@ describe("useProductHome", () => {
+ 
+   it("treats website chat as a real launch channel when it is the only ready option", async () => {
+     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+-    getWebsiteWidgetStatus.mockResolvedValue({
+-      state: "connected",
+-      readiness: {
+-        status: "ready",
+-        message: "Website chat is configured with trusted origins and a live widget ID.",
+-      },
+-      widget: {
+-        enabled: true,
+-        title: "Website chat",
+-        websiteUrl: "https://acme.test",
+-        publicWidgetId: "ww_acme",
+-      },
+-    });
++    getWebsiteWidgetStatus.mockResolvedValue(
++      createWebsiteStatus({
++        readiness: {
++          status: "ready",
++          message:
++            "Website chat is configured with trusted origins and a live widget ID.",
++        },
++      })
++    );
+ 
+     const { result } = renderHook(() => useProductHome(), {
+       wrapper: createWrapper(),
+@@ -337,6 +376,57 @@ describe("useProductHome", () => {
+     expect(result.current.launchChannel.action.path).toBe("/channels?channel=website");
+   });
+ 
++  it("keeps website chat out of the live launch channel when only testing handoffs are available", async () => {
++    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
++    getWebsiteWidgetStatus.mockResolvedValue(
++      createWebsiteStatus({
++        state: "blocked",
++        launchReadiness: {
++          status: "testing_only",
++          channelConfigured: true,
++          configurationReady: true,
++          widgetEnabled: true,
++          launchEnabled: true,
++          publicWidgetId: "ww_acme",
++          publicWidgetIdPresent: true,
++          allowedOriginsPresent: true,
++          allowedDomainsPresent: true,
++          originRulesPresent: true,
++          targetDomain: "acme.test",
++          domainVerificationRequired: true,
++          domainVerificationState: "pending",
++          domainVerified: false,
++          productionBlocked: true,
++          productionLaunchAllowed: false,
++          productionReady: false,
++          testingOnly: true,
++          testReady: true,
++          installSurfaceReady: true,
++          reasonCode: "website_domain_verification_required",
++          message:
++            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
++        },
++        readiness: {
++          status: "blocked",
++          message:
++            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
++        },
++      })
++    );
++
++    const { result } = renderHook(() => useProductHome(), {
++      wrapper: createWrapper(),
++    });
++
++    await waitFor(() => {
++      expect(result.current.loading).toBe(false);
++    });
++
++    expect(result.current.launchChannel.connected).toBe(false);
++    expect(result.current.assistant.launchPosture).toBe("connect_channel");
++    expect(result.current.primaryAction.path).toBe("/channels");
++  });
++
+   it("does not reuse another workspace's cached launch posture", async () => {
+     const queryClient = createQueryClient();
+     const wrapper = createWrapper(queryClient);
+@@ -488,17 +578,14 @@ describe("useProductHome", () => {
+     );
+ 
+     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+-    getWebsiteWidgetStatus.mockResolvedValue({
+-      state: "connected",
+-      readiness: {
+-        status: "ready",
+-        message: "Website chat is configured with trusted origins and a live widget ID.",
+-      },
+-      widget: {
+-        enabled: true,
+-        publicWidgetId: "ww_partial",
+-      },
+-    });
++    getWebsiteWidgetStatus.mockResolvedValue(
++      createWebsiteStatus({
++        widget: {
++          enabled: true,
++          publicWidgetId: "ww_partial",
++        },
++      })
++    );
+ 
+     getCurrentSetupAssistantSession.mockResolvedValue({
+       session: {
+@@ -548,17 +635,14 @@ describe("useProductHome", () => {
+ 
+   it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {
+     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+-    getWebsiteWidgetStatus.mockResolvedValue({
+-      state: "connected",
+-      readiness: {
+-        status: "ready",
+-        message: "Website chat is configured with trusted origins and a live widget ID.",
+-      },
+-      widget: {
+-        enabled: true,
+-        publicWidgetId: "ww_live",
+-      },
+-    });
++    getWebsiteWidgetStatus.mockResolvedValue(
++      createWebsiteStatus({
++        widget: {
++          enabled: true,
++          publicWidgetId: "ww_live",
++        },
++      })
++    );
+     getCurrentSetupAssistantSession.mockResolvedValue({
+       session: {
+         id: "session-rescan",
+diff --git a/ai-hq-frontend/src/view-models/useProductHome.js b/ai-hq-frontend/src/view-models/useProductHome.js
+index 785f85a..89fdc81 100644
+--- a/ai-hq-frontend/src/view-models/useProductHome.js
++++ b/ai-hq-frontend/src/view-models/useProductHome.js
+@@ -502,14 +502,24 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+   }
+ 
+   const state = lower(websitePayload?.state);
++  const launchReadiness = obj(websitePayload?.launchReadiness);
+   const readiness = obj(websitePayload?.readiness);
+   const widget = obj(websitePayload?.widget);
+-  const blockers = arr(readiness.blockers);
+-  const enabled = widget.enabled === true;
+-  const connected = state === "connected" && readiness.status === "ready";
++  const blockers =
++    arr(launchReadiness.blockers).length > 0
++      ? arr(launchReadiness.blockers)
++      : arr(readiness.blockers);
++  const enabled =
++    launchReadiness.widgetEnabled === true || widget.enabled === true;
++  const testingOnly = launchReadiness.testingOnly === true;
++  const connected =
++    launchReadiness.productionLaunchAllowed === true ||
++    launchReadiness.productionReady === true ||
++    (state === "connected" && readiness.status === "ready");
+   const deliveryReady = connected;
+   const detail =
+     firstReadableValue(
++      launchReadiness.message,
+       readiness.message,
+       widget.websiteUrl ? `Reference website: ${widget.websiteUrl}` : "",
+       blockers[0]?.subtitle
+@@ -526,9 +536,11 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+       displayName: s(widget.title || "Website chat"),
+       handle: s(widget.websiteUrl),
+       websiteUrl: s(widget.websiteUrl),
+-      publicWidgetId: s(widget.publicWidgetId),
++      publicWidgetId: s(
++        launchReadiness.publicWidgetId || widget.publicWidgetId
++      ),
+     },
+-    reasonCode: lower(blockers[0]?.reasonCode),
++    reasonCode: lower(launchReadiness.reasonCode || blockers[0]?.reasonCode),
+   };
+ 
+   if (connected) {
+@@ -540,6 +552,7 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+       statusLabel: "Connected",
+       title: "Website chat is configured.",
+       summary:
++        launchReadiness.message ||
+         readiness.message ||
+         "Website chat can be used as the current launch channel.",
+       detail,
+@@ -548,17 +561,22 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+     });
+   }
+ 
+-  if (enabled) {
++  if (enabled || testingOnly || launchReadiness.channelConfigured === true) {
+     return createCanonicalLaunchChannel({
+       ...base,
+       connected: false,
+       available: true,
+       status: "repair_required",
+       statusLabel: "Configuration required",
+-      title: "Website chat still needs configuration.",
++      title: testingOnly
++        ? "Website chat is limited to testing handoffs."
++        : "Website chat still needs configuration.",
+       summary:
++        launchReadiness.message ||
+         readiness.message ||
+-        "Website chat is enabled, but install hardening is still incomplete.",
++        (testingOnly
++          ? "Website chat can be tested, but production launch is still blocked."
++          : "Website chat is enabled, but install hardening is still incomplete."),
+       detail,
+       action: buildLaunchAction("website", "open"),
+       deliveryReady: false,
+@@ -573,6 +591,7 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+     statusLabel: "Enable required",
+     title: "Enable website chat before using it as the launch channel.",
+     summary:
++      launchReadiness.message ||
+       readiness.message ||
+       "Website chat is supported, but it is not configured yet.",
+     detail,
+@@ -1762,4 +1781,4 @@ export function useProductHome(options = {}) {
+   };
+ }
+ 
+-export default useProductHome;
+\ No newline at end of file
++export default useProductHome;
+diff --git a/scripts/postdeploy-verify.mjs b/scripts/postdeploy-verify.mjs
+index 8029834..1776463 100644
+--- a/scripts/postdeploy-verify.mjs
++++ b/scripts/postdeploy-verify.mjs
+@@ -1,3 +1,9 @@
++import {
++  buildWebsiteLaneHeaders,
++  buildWebsiteLaneHealthUrl,
++  classifyWebsiteLaneHealth,
++} from "./website-lane-verifier.mjs";
++
+ function s(value, fallback = "") {
+   return String(value ?? fallback).trim();
+ }
+@@ -410,6 +416,96 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
+   ];
+ }
+ 
++async function verifyWebsiteLane({
++  baseUrl,
++  internalToken,
++  tenantKey,
++  domain,
++  timeoutMs,
++}) {
++  if (!s(tenantKey)) {
++    return [
++      {
++        name: "website_lane_launch",
++        skipped: true,
++        reason: "WEBSITE_LANE_TENANT_KEY missing",
++      },
++    ];
++  }
++
++  const url = buildWebsiteLaneHealthUrl(baseUrl, {
++    tenantKey,
++    domain,
++  });
++  const response = await fetchJson(
++    url,
++    buildWebsiteLaneHeaders({ internalToken }),
++    timeoutMs
++  );
++
++  if (!response.ok) {
++    return [
++      buildResult(
++        "website_lane_launch",
++        false,
++        {
++          url,
++          tenantKey: s(tenantKey),
++          reasonCode: s(
++            response.json?.reasonCode ||
++              response.json?.reason ||
++              response.json?.error ||
++              response.error ||
++              "website_lane_health_unavailable"
++          ),
++          message: s(
++            response.json?.message ||
++              response.json?.reason ||
++              response.error ||
++              "Website lane health endpoint is unavailable."
++          ),
++        },
++        response.status
++      ),
++    ];
++  }
++
++  const lane = classifyWebsiteLaneHealth(response.json || {});
++
++  return [
++    buildResult(
++      "website_lane_launch",
++      lane.tenantFound &&
++        lane.channelConfigured &&
++        lane.configurationReady &&
++        lane.productionReady,
++      {
++        url,
++        tenantKey: lane.tenantKey || s(tenantKey),
++        tenantId: lane.tenantId,
++        status: lane.status,
++        channelConfigured: lane.channelConfigured,
++        configurationReady: lane.configurationReady,
++        widgetEnabled: lane.widgetEnabled,
++        publicWidgetIdPresent: lane.publicWidgetIdPresent,
++        publicWidgetId: lane.publicWidgetId,
++        targetDomain: lane.targetDomain,
++        domainVerificationState: lane.domainVerificationState,
++        productionReady: lane.productionReady,
++        testingOnly: lane.testingOnly,
++        installSurfaceReady: lane.installSurfaceReady,
++        developerHandoffReady: lane.handoffs.developer.ready,
++        gtmHandoffReady: lane.handoffs.gtm.ready,
++        wordpressHandoffReady: lane.handoffs.wordpress.ready,
++        reasonCode: lane.reasonCode,
++        message: lane.message,
++        blockerReasonCodes: lane.blockerReasonCodes,
++      },
++      response.status
++    ),
++  ];
++}
++
+ function renderSummary(results = []) {
+   let failed = 0;
+ 
+@@ -444,6 +540,8 @@ async function main() {
+   const internalToken = s(process.env.AIHQ_INTERNAL_TOKEN);
+   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
+   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
++  const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
++  const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
+   const strictSidecars = bool(process.env.POSTDEPLOY_STRICT_SIDECARS, false);
+   const failOnDegraded = bool(
+     process.env.POSTDEPLOY_FAIL_ON_DEGRADED,
+@@ -457,6 +555,7 @@ async function main() {
+       timeoutMs,
+       strictSidecars,
+       failOnDegraded,
++      websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
+     })
+   );
+ 
+@@ -477,6 +576,15 @@ async function main() {
+       failOnDegraded,
+     }))
+   );
++  results.push(
++    ...(await verifyWebsiteLane({
++      baseUrl: aihqBaseUrl,
++      internalToken,
++      tenantKey: websiteLaneTenantKey,
++      domain: websiteLaneDomain,
++      timeoutMs,
++    }))
++  );
+ 
+   const metaResults = await verifySidecar(
+     "meta_bot",
+@@ -513,4 +621,4 @@ async function main() {
+ main().catch((error) => {
+   printLine("FAIL", "postdeploy_verifier", s(error?.message || error));
+   process.exit(1);
+-});
+\ No newline at end of file
++});
+diff --git a/scripts/prod-spine-smoke.mjs b/scripts/prod-spine-smoke.mjs
+index ba68841..91552b0 100644
+--- a/scripts/prod-spine-smoke.mjs
++++ b/scripts/prod-spine-smoke.mjs
+@@ -1,3 +1,9 @@
++import {
++  buildWebsiteLaneHeaders,
++  buildWebsiteLaneHealthUrl,
++  classifyWebsiteLaneHealth,
++} from "./website-lane-verifier.mjs";
++
+ function s(value, fallback = "") {
+   return String(value ?? fallback).trim();
+ }
+@@ -438,10 +444,103 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
+   ];
+ }
+ 
++async function verifyWebsiteLane({
++  baseUrl,
++  internalToken,
++  tenantKey,
++  domain,
++  timeoutMs,
++}) {
++  if (!s(tenantKey)) {
++    return [
++      {
++        name: "website_lane_prod_spine",
++        skipped: true,
++        reason: "WEBSITE_LANE_TENANT_KEY missing",
++      },
++    ];
++  }
++
++  const url = buildWebsiteLaneHealthUrl(baseUrl, {
++    tenantKey,
++    domain,
++  });
++  const response = await fetchJson(
++    url,
++    buildWebsiteLaneHeaders({ internalToken }),
++    timeoutMs
++  );
++
++  if (!response.ok) {
++    return [
++      buildResult(
++        "website_lane_prod_spine",
++        false,
++        {
++          url,
++          tenantKey: s(tenantKey),
++          reasonCode: s(
++            response.json?.reasonCode ||
++              response.json?.reason ||
++              response.json?.error ||
++              response.error ||
++              "website_lane_health_unavailable"
++          ),
++          message: s(
++            response.json?.message ||
++              response.json?.reason ||
++              response.error ||
++              "Website lane health endpoint is unavailable."
++          ),
++        },
++        response.status
++      ),
++    ];
++  }
++
++  const lane = classifyWebsiteLaneHealth(response.json || {});
++
++  return [
++    buildResult(
++      "website_lane_prod_spine",
++      lane.tenantFound &&
++        lane.channelConfigured &&
++        lane.configurationReady &&
++        lane.productionReady,
++      {
++        url,
++        tenantKey: lane.tenantKey || s(tenantKey),
++        tenantId: lane.tenantId,
++        status: lane.status,
++        channelConfigured: lane.channelConfigured,
++        configurationReady: lane.configurationReady,
++        widgetEnabled: lane.widgetEnabled,
++        publicWidgetIdPresent: lane.publicWidgetIdPresent,
++        publicWidgetId: lane.publicWidgetId,
++        targetDomain: lane.targetDomain,
++        domainVerificationState: lane.domainVerificationState,
++        productionReady: lane.productionReady,
++        testingOnly: lane.testingOnly,
++        installSurfaceReady: lane.installSurfaceReady,
++        developerHandoffReady: lane.handoffs.developer.ready,
++        gtmHandoffReady: lane.handoffs.gtm.ready,
++        wordpressHandoffReady: lane.handoffs.wordpress.ready,
++        reasonCode: lane.reasonCode,
++        message: lane.message,
++        blockerReasonCodes: lane.blockerReasonCodes,
++      },
++      response.status
++    ),
++  ];
++}
++
+ async function runAttempt({
+   aihqBaseUrl,
++  internalToken,
+   metaBaseUrl,
+   twilioBaseUrl,
++  websiteLaneTenantKey,
++  websiteLaneDomain,
+   timeoutMs,
+   strictSidecars,
+   failOnDegraded,
+@@ -455,6 +554,15 @@ async function runAttempt({
+       failOnDegraded,
+     }))
+   );
++  results.push(
++    ...(await verifyWebsiteLane({
++      baseUrl: aihqBaseUrl,
++      internalToken,
++      tenantKey: websiteLaneTenantKey,
++      domain: websiteLaneDomain,
++      timeoutMs,
++    }))
++  );
+ 
+   const metaResults = await verifySidecar(
+     "meta_bot",
+@@ -488,6 +596,8 @@ async function main() {
+   const internalToken = s(process.env.AIHQ_INTERNAL_TOKEN);
+   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
+   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
++  const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
++  const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
+   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
+   const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, true);
+ 
+@@ -500,6 +610,7 @@ async function main() {
+       timeoutMs,
+       strictSidecars,
+       failOnDegraded,
++      websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
+     })
+   );
+ 
+@@ -523,8 +634,11 @@ async function main() {
+ 
+     lastResults = await runAttempt({
+       aihqBaseUrl,
++      internalToken,
+       metaBaseUrl,
+       twilioBaseUrl,
++      websiteLaneTenantKey,
++      websiteLaneDomain,
+       timeoutMs,
+       strictSidecars,
+       failOnDegraded,
+@@ -556,4 +670,4 @@ async function main() {
+ main().catch((error) => {
+   printLine("FAIL", "prod_spine_smoke", s(error?.message || error));
+   process.exit(1);
+-});
+\ No newline at end of file
++});
+diff --git "a/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\scripts\\website-lane-verifier.mjs" "b/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\scripts\\website-lane-verifier.mjs"
+new file mode 100644
+index 0000000..5d55bc2
+--- /dev/null
++++ "b/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\scripts\\website-lane-verifier.mjs"
+@@ -0,0 +1,120 @@
++function s(value, fallback = "") {
++  return String(value ?? fallback).trim();
++}
++
++function n(value, fallback = 0) {
++  const next = Number(value);
++  return Number.isFinite(next) ? next : fallback;
++}
++
++function uniqStrings(values = []) {
++  return [...new Set((Array.isArray(values) ? values : []).map((item) => s(item).toLowerCase()).filter(Boolean))];
++}
++
++function normalizeBaseUrl(value = "") {
++  return s(value).replace(/\/+$/, "");
++}
++
++function obj(value) {
++  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
++}
++
++function collectBlockerReasonCodes(source = {}) {
++  const explicit = uniqStrings(source.blockerReasonCodes);
++  if (explicit.length) return explicit;
++
++  return uniqStrings(
++    (Array.isArray(source.blockers) ? source.blockers : []).map((item) =>
++      typeof item === "string" ? item : item?.reasonCode || item?.reason_code
++    )
++  );
++}
++
++export function buildWebsiteLaneHealthUrl(
++  baseUrl = "",
++  { tenantKey = "", domain = "" } = {}
++) {
++  const root = normalizeBaseUrl(baseUrl);
++  if (!root) return "";
++
++  const search = new URLSearchParams();
++  if (s(tenantKey)) search.set("tenantKey", s(tenantKey));
++  if (s(domain)) search.set("domain", s(domain));
++
++  const query = search.toString();
++  return `${root}/health/website-lane${query ? `?${query}` : ""}`;
++}
++
++export function buildWebsiteLaneHeaders({
++  internalToken = "",
++  audience = "aihq-backend.health.website-lane",
++} = {}) {
++  const headers = {};
++
++  if (s(internalToken)) {
++    headers["x-internal-token"] = s(internalToken);
++  }
++
++  if (s(audience)) {
++    headers["x-internal-audience"] = s(audience);
++  }
++
++  return headers;
++}
++
++export function classifyWebsiteLaneHealth(json = {}) {
++  const source = obj(json?.websiteLane || json?.lane || json);
++  const handoffs = obj(source.handoffs);
++  const productionLaunchAllowed =
++    source.productionLaunchAllowed === true || source.productionReady === true;
++  const blockerReasonCodes = collectBlockerReasonCodes(source);
++
++  return {
++    tenantKey: s(source.tenantKey),
++    tenantId: s(source.tenantId),
++    tenantFound: source.tenantFound === true,
++    status: s(source.status),
++    channelConfigured: source.channelConfigured === true,
++    configurationReady: source.configurationReady === true,
++    widgetEnabled: source.widgetEnabled === true,
++    launchEnabled: source.launchEnabled === true,
++    publicWidgetId: s(source.publicWidgetId),
++    publicWidgetIdPresent:
++      source.publicWidgetIdPresent === true || Boolean(s(source.publicWidgetId)),
++    allowedOriginsPresent: source.allowedOriginsPresent === true,
++    allowedOriginCount: n(source.allowedOriginCount),
++    allowedDomainsPresent: source.allowedDomainsPresent === true,
++    allowedDomainCount: n(source.allowedDomainCount),
++    originRulesPresent: source.originRulesPresent === true,
++    targetDomain: s(source.targetDomain),
++    domainVerificationRequired: source.domainVerificationRequired !== false,
++    domainVerificationState: s(source.domainVerificationState, "unverified"),
++    domainVerified: source.domainVerified === true,
++    productionBlocked: source.productionBlocked === true,
++    productionLaunchAllowed,
++    productionReady: productionLaunchAllowed,
++    testingOnly: source.testingOnly === true,
++    testReady: source.testReady === true || productionLaunchAllowed,
++    installSurfaceReady: source.installSurfaceReady === true,
++    reasonCode: s(source.reasonCode || blockerReasonCodes[0]),
++    message: s(source.message),
++    blockerReasonCodes,
++    handoffs: {
++      developer: {
++        ready: obj(handoffs.developer).ready === true,
++        productionReady: obj(handoffs.developer).productionReady === true,
++        testingOnly: obj(handoffs.developer).testingOnly === true,
++      },
++      gtm: {
++        ready: obj(handoffs.gtm).ready === true,
++        productionReady: obj(handoffs.gtm).productionReady === true,
++        testingOnly: obj(handoffs.gtm).testingOnly === true,
++      },
++      wordpress: {
++        ready: obj(handoffs.wordpress).ready === true,
++        productionReady: obj(handoffs.wordpress).productionReady === true,
++        testingOnly: obj(handoffs.wordpress).testingOnly === true,
++      },
++    },
++  };
++}
+diff --git "a/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\ai-hq-backend\\tests\\website-lane-verifier.test.js" "b/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\ai-hq-backend\\tests\\website-lane-verifier.test.js"
+new file mode 100644
+index 0000000..0939e1c
+--- /dev/null
++++ "b/C:\\Users\\bagir\\OneDrive\\Desktop\\projectAIHQ\\ai-hq-backend\\tests\\website-lane-verifier.test.js"
+@@ -0,0 +1,165 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++
++import {
++  buildWebsiteLaneHeaders,
++  buildWebsiteLaneHealthUrl,
++  classifyWebsiteLaneHealth,
++} from "../../scripts/website-lane-verifier.mjs";
++
++test("website lane verifier builds a scoped health URL and internal headers", () => {
++  const url = buildWebsiteLaneHealthUrl("https://api.example.test/", {
++    tenantKey: "acme",
++    domain: "acme.example",
++  });
++  const headers = buildWebsiteLaneHeaders({
++    internalToken: "token-1",
++  });
++
++  assert.equal(
++    url,
++    "https://api.example.test/health/website-lane?tenantKey=acme&domain=acme.example"
++  );
++  assert.deepEqual(headers, {
++    "x-internal-token": "token-1",
++    "x-internal-audience": "aihq-backend.health.website-lane",
++  });
++});
++
++test("website lane verifier classifies a production-ready website lane", () => {
++  const lane = classifyWebsiteLaneHealth({
++    tenantKey: "acme",
++    tenantId: "tenant-1",
++    tenantFound: true,
++    status: "production_ready",
++    channelConfigured: true,
++    configurationReady: true,
++    widgetEnabled: true,
++    launchEnabled: true,
++    publicWidgetId: "ww_acme_widget",
++    publicWidgetIdPresent: true,
++    allowedOriginsPresent: true,
++    allowedOriginCount: 1,
++    allowedDomainsPresent: true,
++    allowedDomainCount: 1,
++    originRulesPresent: true,
++    targetDomain: "acme.example",
++    domainVerificationRequired: true,
++    domainVerificationState: "verified",
++    domainVerified: true,
++    productionBlocked: false,
++    productionLaunchAllowed: true,
++    productionReady: true,
++    testingOnly: false,
++    testReady: true,
++    installSurfaceReady: true,
++    reasonCode: "",
++    message:
++      "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
++    blockerReasonCodes: [],
++    handoffs: {
++      developer: {
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++      },
++      gtm: {
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++      },
++      wordpress: {
++        ready: true,
++        productionReady: true,
++        testingOnly: false,
++      },
++    },
++  });
++
++  assert.equal(lane.tenantFound, true);
++  assert.equal(lane.status, "production_ready");
++  assert.equal(lane.productionReady, true);
++  assert.equal(lane.testingOnly, false);
++  assert.equal(lane.installSurfaceReady, true);
++  assert.equal(lane.handoffs.developer.ready, true);
++  assert.equal(lane.handoffs.gtm.productionReady, true);
++  assert.equal(lane.handoffs.wordpress.testingOnly, false);
++});
++
++test("website lane verifier classifies blocked and unavailable website lanes fail-closed", () => {
++  const blocked = classifyWebsiteLaneHealth({
++    tenantKey: "acme",
++    tenantId: "tenant-1",
++    tenantFound: true,
++    status: "blocked",
++    channelConfigured: true,
++    configurationReady: true,
++    widgetEnabled: true,
++    publicWidgetId: "ww_acme_widget",
++    publicWidgetIdPresent: true,
++    targetDomain: "acme.example",
++    domainVerificationState: "unverified",
++    productionBlocked: true,
++    productionLaunchAllowed: false,
++    productionReady: false,
++    testingOnly: false,
++    testReady: false,
++    installSurfaceReady: true,
++    reasonCode: "website_domain_verification_missing",
++    blockers: [
++      {
++        reasonCode: "website_domain_verification_missing",
++      },
++    ],
++    handoffs: {
++      developer: {
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++      },
++      gtm: {
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++      },
++      wordpress: {
++        ready: false,
++        productionReady: false,
++        testingOnly: false,
++      },
++    },
++  });
++
++  const unavailable = classifyWebsiteLaneHealth({
++    websiteLane: {
++      tenantKey: "missing",
++      tenantFound: false,
++      status: "not_configured",
++      reasonCode: "tenant_not_found",
++      message: "Tenant not found for Website lane verification.",
++      handoffs: {
++        developer: {
++          ready: false,
++        },
++        gtm: {
++          ready: false,
++        },
++        wordpress: {
++          ready: false,
++        },
++      },
++    },
++  });
++
++  assert.equal(blocked.productionReady, false);
++  assert.equal(blocked.productionBlocked, true);
++  assert.deepEqual(blocked.blockerReasonCodes, [
++    "website_domain_verification_missing",
++  ]);
++  assert.equal(blocked.handoffs.developer.ready, false);
++
++  assert.equal(unavailable.tenantFound, false);
++  assert.equal(unavailable.status, "not_configured");
++  assert.equal(unavailable.reasonCode, "tenant_not_found");
++  assert.equal(unavailable.handoffs.wordpress.ready, false);
++});

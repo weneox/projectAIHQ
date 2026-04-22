@@ -77,6 +77,45 @@ function renderDrawer({
 }
 
 function createBlockedPayload(overrides = {}) {
+  const handoffs = {
+    developer: {
+      packageType: "developer",
+      ready: false,
+      productionReady: false,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "pending",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "website_domain_verification_required",
+      blockingMessage: "Verify DNS TXT ownership before public install.",
+      message: "Verify DNS TXT ownership before install packages unlock.",
+    },
+    gtm: {
+      packageType: "gtm",
+      ready: false,
+      productionReady: false,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "pending",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "website_domain_verification_required",
+      blockingMessage: "Verify DNS TXT ownership before public install.",
+      message: "Verify DNS TXT ownership before install packages unlock.",
+    },
+    wordpress: {
+      packageType: "wordpress",
+      ready: false,
+      productionReady: false,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "pending",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "website_domain_verification_required",
+      blockingMessage: "Verify DNS TXT ownership before public install.",
+      message: "Verify DNS TXT ownership before install packages unlock.",
+    },
+  };
+
   return {
     state: "blocked",
     viewerRole: "owner",
@@ -150,11 +189,88 @@ function createBlockedPayload(overrides = {}) {
         },
       ],
     },
+    handoffs,
+    launchReadiness: {
+      status: "blocked",
+      channelConfigured: true,
+      configurationReady: true,
+      widgetEnabled: true,
+      launchEnabled: true,
+      publicWidgetId: "ww_acme_widget",
+      publicWidgetIdPresent: true,
+      allowedOriginsPresent: true,
+      allowedOriginCount: 1,
+      allowedDomainsPresent: true,
+      allowedDomainCount: 1,
+      originRulesPresent: true,
+      targetDomain: "acme.test",
+      domainVerificationRequired: true,
+      domainVerificationState: "pending",
+      domainVerified: false,
+      productionBlocked: true,
+      productionLaunchAllowed: false,
+      productionReady: false,
+      testingOnly: false,
+      testReady: false,
+      unverifiedHandoffsAllowed: false,
+      installSurfaceReady: true,
+      reasonCode: "website_domain_verification_required",
+      message: "Website chat is blocked for public install until domain ownership is verified.",
+      blockerReasonCodes: ["website_domain_verification_required"],
+      blockers: [
+        {
+          reasonCode: "website_domain_verification_required",
+          title: "Website chat production install is blocked until domain ownership is verified.",
+          subtitle:
+            "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly.",
+        },
+      ],
+      handoffs,
+    },
     ...overrides,
   };
 }
 
 function createReadyPayload(overrides = {}) {
+  const handoffs = {
+    developer: {
+      packageType: "developer",
+      ready: true,
+      productionReady: true,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "verified",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "",
+      blockingMessage: "",
+      message: "Website Chat is ready for install packages.",
+    },
+    gtm: {
+      packageType: "gtm",
+      ready: true,
+      productionReady: true,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "verified",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "",
+      blockingMessage: "",
+      message: "Website Chat is ready for install packages.",
+    },
+    wordpress: {
+      packageType: "wordpress",
+      ready: true,
+      productionReady: true,
+      testingOnly: false,
+      targetDomain: "acme.test",
+      verificationState: "verified",
+      verificationRequiredForProduction: true,
+      blockingReasonCode: "",
+      blockingMessage: "",
+      message: "Website Chat is ready for install packages.",
+    },
+  };
+
   return {
     state: "connected",
     viewerRole: "owner",
@@ -220,6 +336,38 @@ function createReadyPayload(overrides = {}) {
       status: "ready",
       message: "Website chat is configured with a publishable install ID and trusted origin controls.",
       blockers: [],
+    },
+    handoffs,
+    launchReadiness: {
+      status: "production_ready",
+      channelConfigured: true,
+      configurationReady: true,
+      widgetEnabled: true,
+      launchEnabled: true,
+      publicWidgetId: "ww_acme_widget",
+      publicWidgetIdPresent: true,
+      allowedOriginsPresent: true,
+      allowedOriginCount: 1,
+      allowedDomainsPresent: true,
+      allowedDomainCount: 1,
+      originRulesPresent: true,
+      targetDomain: "acme.test",
+      domainVerificationRequired: true,
+      domainVerificationState: "verified",
+      domainVerified: true,
+      productionBlocked: false,
+      productionLaunchAllowed: true,
+      productionReady: true,
+      testingOnly: false,
+      testReady: true,
+      unverifiedHandoffsAllowed: false,
+      installSurfaceReady: true,
+      reasonCode: "",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+      blockerReasonCodes: [],
+      blockers: [],
+      handoffs,
     },
     ...overrides,
   };
@@ -315,8 +463,8 @@ describe("WebsiteWidgetDetailDrawer", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/verify dns txt ownership before public install/i)
-    ).toBeInTheDocument();
+      screen.getAllByText(/verify dns txt ownership before public install/i).length
+    ).toBeGreaterThan(0);
 
     expect(
       screen.getByRole("button", { name: /copy snippet/i })

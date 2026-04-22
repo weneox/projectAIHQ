@@ -372,15 +372,47 @@ export function buildTelegramLaunchChannelState(payload = {}) {
 
 export function buildWebsiteLaunchChannelState(payload = {}) {
   const source = obj(payload);
+  const launchReadiness = obj(source.launchReadiness);
   const widget = obj(source.widget);
+  const connected =
+    source.connected === true ||
+    launchReadiness.channelConfigured === true ||
+    widget.enabled === true ||
+    lower(source.state) === "connected";
+  const deliveryReady =
+    launchReadiness.productionLaunchAllowed === true ||
+    launchReadiness.productionReady === true ||
+    lower(source.readiness?.status) === "ready";
+  const message = firstText(
+    launchReadiness.message,
+    source.readiness?.message,
+    connected
+      ? "Website chat is configured, but public launch is still blocked."
+      : "Website chat is not connected yet."
+  );
 
   return buildLaunchChannelState(
     {
       ...source,
-      connected:
-        source.connected === true ||
-        widget.enabled === true ||
-        lower(source.state) === "connected",
+      connected,
+      state: deliveryReady
+        ? "connected"
+        : connected
+          ? "blocked"
+          : s(source.state),
+      runtime: {
+        ...obj(source.runtime),
+        deliveryReady,
+      },
+      readiness: {
+        ...obj(source.readiness),
+        status: deliveryReady
+          ? "ready"
+          : connected
+            ? "blocked"
+            : s(obj(source.readiness).status),
+        message,
+      },
     },
     {
       id: "website",

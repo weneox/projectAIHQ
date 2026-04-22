@@ -29,6 +29,53 @@ function createMockRes() {
   };
 }
 
+function createCaptureLogger(entries = [], context = {}) {
+  return {
+    child(next = {}) {
+      return createCaptureLogger(entries, {
+        ...context,
+        ...next,
+      });
+    },
+    info(event, data) {
+      entries.push({
+        level: "info",
+        event,
+        data: {
+          ...context,
+          ...(data || {}),
+        },
+      });
+    },
+    warn(event, data, error) {
+      entries.push({
+        level: "warn",
+        event,
+        data: {
+          ...context,
+          ...(data || {}),
+        },
+        error,
+      });
+    },
+    error(event, error, data) {
+      entries.push({
+        level: "error",
+        event,
+        data: {
+          ...context,
+          ...(data || {}),
+        },
+        error,
+      });
+    },
+  };
+}
+
+function findLoggedEvent(entries = [], event = "") {
+  return entries.find((item) => item.event === event) || null;
+}
+
 const tenantRow = {
   id: "11111111-1111-4111-8111-111111111111",
   tenant_key: "acme",
@@ -86,6 +133,7 @@ function maybeVerifiedDomainVerificationQuery(sql = "", values = []) {
 }
 
 test("website widget install token only issues for allowed origins", async () => {
+  const logEntries = [];
   const db = {
     async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
@@ -115,6 +163,9 @@ test("website widget install token only issues for allowed origins", async () =>
       origin: "https://www.acme.example",
       referer: "https://www.acme.example/pricing",
     },
+    log: createCaptureLogger(logEntries),
+    requestId: "req-install-1",
+    correlationId: "corr-install-1",
   };
   const res = createMockRes();
 
@@ -128,9 +179,27 @@ test("website widget install token only issues for allowed origins", async () =>
   assert.equal(verified.ok, true);
   assert.equal(verified.payload?.widgetId, "ww_acme_widget");
   assert.equal(verified.payload?.installOrigin, "https://www.acme.example");
+  assert.deepEqual(findLoggedEvent(logEntries, "website.widget.install_token.issued"), {
+    level: "info",
+    event: "website.widget.install_token.issued",
+    data: {
+      component: "website-widget-public-routes",
+      route: "website_widget.install_token",
+      tenantKey: "acme",
+      tenantId: tenantRow.id,
+      widgetId: "ww_acme_widget",
+      publicWidgetId: "ww_acme_widget",
+      domain: "acme.example",
+      origin: "https://www.acme.example",
+      pageUrl: "https://www.acme.example/pricing",
+      requestId: "req-install-1",
+      correlationId: "corr-install-1",
+    },
+  });
 });
 
 test("website widget install token fails closed for rejected origins", async () => {
+  const logEntries = [];
   const db = {
     async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
@@ -159,6 +228,7 @@ test("website widget install token fails closed for rejected origins", async () 
       origin: "https://evil.example",
       referer: "https://evil.example/spoof",
     },
+    log: createCaptureLogger(logEntries),
   };
   const res = createMockRes();
 
@@ -167,6 +237,22 @@ test("website widget install token fails closed for rejected origins", async () 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_origin_mismatch");
+  assert.deepEqual(findLoggedEvent(logEntries, "website.widget.launch.blocked"), {
+    level: "info",
+    event: "website.widget.launch.blocked",
+    data: {
+      component: "website-widget-public-routes",
+      route: "website_widget.install_token",
+      tenantKey: "acme",
+      tenantId: tenantRow.id,
+      widgetId: "ww_acme_widget",
+      publicWidgetId: "ww_acme_widget",
+      domain: "evil.example",
+      origin: "https://evil.example",
+      pageUrl: "https://evil.example/spoof",
+      reasonCode: "website_origin_mismatch",
+    },
+  });
 });
 
 test("website widget install token respects tenant config disable state", async () => {
@@ -260,6 +346,7 @@ test("website widget install token blocks public launch until domain ownership i
 });
 
 test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {
+  const logEntries = [];
   const db = {
     async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
@@ -301,6 +388,9 @@ test("website widget bootstrap returns a real session and honest blocked automat
       widgetId: "ww_acme_widget",
       bootstrapToken: bootstrap.token,
     },
+    log: createCaptureLogger(logEntries),
+    requestId: "req-bootstrap-1",
+    correlationId: "corr-bootstrap-1",
   };
   const res = createMockRes();
 
@@ -311,9 +401,24 @@ test("website widget bootstrap returns a real session and honest blocked automat
   assert.equal(res.body?.automation?.mode, "blocked_until_repair");
   assert.match(String(res.body?.sessionToken || ""), /\./);
   assert.equal(res.body?.thread, null);
+  const event = findLoggedEvent(logEntries, "website.widget.bootstrap.succeeded");
+  assert.ok(event);
+  assert.equal(event.level, "info");
+  assert.equal(event.data.route, "website_widget.bootstrap");
+  assert.equal(event.data.tenantKey, "acme");
+  assert.equal(event.data.tenantId, tenantRow.id);
+  assert.equal(event.data.widgetId, "ww_acme_widget");
+  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
+  assert.equal(event.data.domain, "www.acme.example");
+  assert.equal(event.data.origin, "https://www.acme.example");
+  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
+  assert.equal(event.data.requestId, "req-bootstrap-1");
+  assert.equal(event.data.correlationId, "corr-bootstrap-1");
+  assert.ok(event.data.sessionId);
 });
 
 test("website widget bootstrap blocks public launch when domain ownership is not verified", async () => {
+  const logEntries = [];
   const db = {
     async query(text) {
       const sql = String(text?.text || text || "").toLowerCase();
@@ -346,6 +451,7 @@ test("website widget bootstrap blocks public launch when domain ownership is not
       widgetId: "ww_acme_widget",
       bootstrapToken: bootstrap.token,
     },
+    log: createCaptureLogger(logEntries),
   };
   const res = createMockRes();
 
@@ -354,9 +460,19 @@ test("website widget bootstrap blocks public launch when domain ownership is not
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_domain_verification_required");
+  const event = findLoggedEvent(logEntries, "website.widget.bootstrap.failed");
+  assert.ok(event);
+  assert.equal(event.data.route, "website_widget.bootstrap");
+  assert.equal(event.data.widgetId, "ww_acme_widget");
+  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
+  assert.equal(event.data.domain, "www.acme.example");
+  assert.equal(event.data.origin, "https://www.acme.example");
+  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
+  assert.equal(event.data.reasonCode, "website_domain_verification_missing");
 });
 
 test("website widget message persists the website thread and activates handoff when strict runtime is unavailable", async () => {
+  const logEntries = [];
   const thread = {
     id: "22222222-2222-4222-8222-222222222222",
     tenant_id: tenantRow.id,
@@ -519,6 +635,9 @@ test("website widget message persists the website thread and activates handoff w
       text: "Can someone help me today?",
       messageId: "msg-1",
     },
+    log: createCaptureLogger(logEntries),
+    requestId: "req-message-1",
+    correlationId: "corr-message-1",
   };
   const res = createMockRes();
 
@@ -531,9 +650,24 @@ test("website widget message persists the website thread and activates handoff w
   assert.equal(res.body?.delivery?.mode, "operator_only");
   assert.equal(res.body?.messages?.[0]?.text, inboundMessage.text);
   assert.equal(transactionCalls.includes("commit"), true);
+  const event = findLoggedEvent(logEntries, "website.widget.message.accepted");
+  assert.ok(event);
+  assert.equal(event.data.route, "website_widget.message");
+  assert.equal(event.data.tenantKey, "acme");
+  assert.equal(event.data.tenantId, tenantRow.id);
+  assert.equal(event.data.widgetId, "ww_acme_widget");
+  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
+  assert.equal(event.data.domain, "www.acme.example");
+  assert.equal(event.data.origin, "https://www.acme.example");
+  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
+  assert.equal(event.data.threadId, thread.id);
+  assert.equal(event.data.sessionId, "session-1");
+  assert.equal(event.data.requestId, "req-message-1");
+  assert.equal(event.data.correlationId, "corr-message-1");
 });
 
 test("website widget transcript only exposes delivered outbound replies", async () => {
+  const logEntries = [];
   const thread = {
     id: "44444444-4444-4444-8444-444444444444",
     tenant_id: tenantRow.id,
@@ -649,6 +783,7 @@ test("website widget transcript only exposes delivered outbound replies", async 
     body: {
       sessionToken: session.token,
     },
+    log: createCaptureLogger(logEntries),
   };
   const res = createMockRes();
 
@@ -660,6 +795,49 @@ test("website widget transcript only exposes delivered outbound replies", async 
     res.body?.messages?.map((item) => item.id),
     ["msg-in-1", "msg-out-sent"]
   );
+  const event = findLoggedEvent(logEntries, "website.widget.transcript.loaded");
+  assert.ok(event);
+  assert.equal(event.data.route, "website_widget.transcript");
+  assert.equal(event.data.tenantKey, "acme");
+  assert.equal(event.data.tenantId, tenantRow.id);
+  assert.equal(event.data.widgetId, "ww_acme_widget");
+  assert.equal(event.data.publicWidgetId, "ww_acme_widget");
+  assert.equal(event.data.domain, "www.acme.example");
+  assert.equal(event.data.origin, "https://www.acme.example");
+  assert.equal(event.data.pageUrl, "https://www.acme.example/pricing");
+  assert.equal(event.data.threadId, thread.id);
+  assert.equal(event.data.sessionId, "session-2");
+});
+
+test("website widget message logs a structured failure when the public session token is invalid", async () => {
+  const logEntries = [];
+  const { postWebsiteWidgetMessage } = createWebsiteWidgetHandlers({
+    db: {
+      async query() {
+        throw new Error("unexpected db query");
+      },
+    },
+    wsHub: null,
+  });
+
+  const req = {
+    body: {
+      sessionToken: "not-a-valid-session",
+      text: "Hello?",
+    },
+    log: createCaptureLogger(logEntries),
+  };
+  const res = createMockRes();
+
+  await postWebsiteWidgetMessage(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "website_widget_session_invalid");
+  const event = findLoggedEvent(logEntries, "website.widget.message.failed");
+  assert.ok(event);
+  assert.equal(event.data.route, "website_widget.message");
+  assert.equal(event.data.reasonCode, "website_widget_session_invalid");
 });
 
 test("persistOutboundMessage auto-delivers website replies without queueing worker execution", async () => {

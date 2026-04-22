@@ -53,6 +53,15 @@ function parseList(value = "") {
     .filter(Boolean);
 }
 
+function firstText(...values) {
+  for (const value of values) {
+    const next = s(value);
+    if (next) return next;
+  }
+
+  return "";
+}
+
 function buildFormState(payload = {}) {
   const widget = obj(payload.widget);
 
@@ -145,10 +154,23 @@ function TinyMetric({ label, value, tone = "neutral" }) {
 function buildPosture({
   widget = {},
   install = {},
+  launchReadiness = {},
+  handoffs = {},
   verificationSurface = {},
   readiness = {},
 }) {
-  const verificationState = s(verificationSurface.state).toLowerCase();
+  const developerHandoff = obj(handoffs.developer);
+  const productionReady =
+    launchReadiness.productionLaunchAllowed === true ||
+    install.productionInstallReady === true;
+  const productionBlocked =
+    launchReadiness.productionBlocked === true ||
+    install.productionBlocked === true;
+  const testingOnly =
+    launchReadiness.testingOnly === true || developerHandoff.testingOnly === true;
+  const verificationState = s(
+    verificationSurface.state || launchReadiness.domainVerificationState
+  ).toLowerCase();
 
   if (widget.enabled !== true) {
     return {
@@ -170,11 +192,13 @@ function buildPosture({
     };
   }
 
-  if (install.productionBlocked === true) {
+  if (productionBlocked) {
     return {
       tone: verificationState === "failed" ? "danger" : "warning",
       title: "Public install is blocked.",
-      summary: s(
+      summary: firstText(
+        developerHandoff.blockingMessage,
+        launchReadiness.message,
         verificationSurface.message,
         "Verify DNS TXT ownership first."
       ),
@@ -183,7 +207,7 @@ function buildPosture({
     };
   }
 
-  if (s(readiness.status).toLowerCase() === "ready") {
+  if (productionReady || s(readiness.status).toLowerCase() === "ready") {
     return {
       tone: "success",
       title: "Ready to install.",
@@ -193,10 +217,28 @@ function buildPosture({
     };
   }
 
+  if (testingOnly) {
+    return {
+      tone: "warning",
+      title: "Testing handoffs only.",
+      summary: firstText(
+        developerHandoff.message,
+        launchReadiness.message,
+        "Install packages are available for local/dev/test only."
+      ),
+      next: "Next: verify domain",
+      icon: ShieldAlert,
+    };
+  }
+
   return {
     tone: "warning",
     title: "Setup still needs a pass.",
-    summary: s(readiness.message, "Finish the remaining website setup."),
+    summary: firstText(
+      launchReadiness.message,
+      readiness.message,
+      "Finish the remaining website setup."
+    ),
     next: "Next: review setup",
     icon: ShieldAlert,
   };
@@ -353,11 +395,17 @@ export default function WebsiteWidgetDetailDrawer({
   const widget = obj(payload.widget);
   const install = obj(payload.install);
   const readiness = obj(payload.readiness);
+  const launchReadiness = obj(payload.launchReadiness);
+  const launchHandoffs = obj(launchReadiness.handoffs);
+  const launchDeveloperHandoff = obj(launchHandoffs.developer);
+  const launchGtmHandoff = obj(launchHandoffs.gtm);
+  const launchWordpressHandoff = obj(launchHandoffs.wordpress);
   const serverVerification = obj(payload.domainVerification);
   const verificationSurface = Object.keys(obj(verificationOverride)).length
     ? obj(verificationOverride)
     : serverVerification;
   const handoffSurface = obj(handoffPackage);
+  const handoffSurfaceLaunchReadiness = obj(handoffSurface.launchReadiness);
   const verificationChallenge = obj(verificationSurface.challenge);
   const verificationCandidateDomains = arr(
     verificationSurface.candidateDomains
@@ -365,7 +413,10 @@ export default function WebsiteWidgetDetailDrawer({
   const verificationReadiness = obj(verificationSurface.readiness);
   const handoffReadiness = obj(handoffSurface.readiness);
   const permissions = obj(payload.permissions);
-  const blockers = arr(readiness.blockers);
+  const blockers =
+    arr(launchReadiness.blockers).length > 0
+      ? arr(launchReadiness.blockers)
+      : arr(readiness.blockers);
   const saveAllowed = permissions.saveAllowed !== false;
   const form = draftForm || buildFormState(payload);
 
@@ -386,40 +437,61 @@ export default function WebsiteWidgetDetailDrawer({
       verificationSurface.candidateDomain
   );
 
+  const productionInstallReady =
+    launchReadiness.productionLaunchAllowed === true ||
+    install.productionInstallReady === true;
   const productionInstallBlocked =
+    launchReadiness.productionBlocked === true ||
     install.productionBlocked === true ||
     (verificationReadiness.enforcementActive === true &&
       verificationReadiness.productionInstallReady !== true);
 
-  const installBlockMessage = s(
-    install.blockMessage ||
-      (productionInstallBlocked ? verificationSurface.message : "")
+  const installBlockMessage = firstText(
+    launchDeveloperHandoff.blockingMessage,
+    install.blockMessage,
+    productionInstallBlocked ? launchReadiness.message : "",
+    productionInstallBlocked ? verificationSurface.message : ""
   );
 
   const developerHandoffReady =
-    saveAllowed && install.developerHandoffReady === true;
-  const gtmHandoffReady = saveAllowed && install.gtmHandoffReady === true;
+    saveAllowed &&
+    (launchDeveloperHandoff.ready === true ||
+      install.developerHandoffReady === true);
+  const gtmHandoffReady =
+    saveAllowed &&
+    (launchGtmHandoff.ready === true || install.gtmHandoffReady === true);
   const wordpressHandoffReady =
-    saveAllowed && install.wordpressHandoffReady === true;
+    saveAllowed &&
+    (launchWordpressHandoff.ready === true ||
+      install.wordpressHandoffReady === true);
   const anyHandoffReady =
     developerHandoffReady || gtmHandoffReady || wordpressHandoffReady;
 
-  const installHandoffMessage = s(
-    install.handoffMessage ||
-      (productionInstallBlocked
-        ? verificationSurface.message
-        : "Install package is unavailable right now.")
+  const installHandoffMessage = firstText(
+    launchDeveloperHandoff.message,
+    install.handoffMessage,
+    productionInstallBlocked ? launchReadiness.message : "",
+    productionInstallBlocked ? verificationSurface.message : "",
+    "Install package is unavailable right now."
   );
 
   const handoffTestingOnly =
-    handoffSurface.testingOnly === true || handoffReadiness.testingOnly === true;
+    handoffSurface.testingOnly === true ||
+    handoffReadiness.testingOnly === true ||
+    handoffSurfaceLaunchReadiness.testingOnly === true;
+  const handoffProductionReady =
+    handoffSurface.productionReady === true ||
+    handoffReadiness.productionReady === true ||
+    handoffSurfaceLaunchReadiness.productionReady === true;
 
-  const handoffWarning = s(
-    handoffReadiness.warning ||
-      handoffSurface.warning ||
-      (handoffTestingOnly
-        ? "Testing only. Public launch still needs verified DNS TXT."
-        : "")
+  const handoffWarning = firstText(
+    handoffReadiness.warning,
+    handoffSurface.warning,
+    handoffReadiness.blockingMessage,
+    handoffSurface.blockingMessage,
+    handoffTestingOnly
+      ? "Testing only. Public launch still needs verified DNS TXT."
+      : ""
   );
 
   const handoffError = s(
@@ -439,15 +511,17 @@ export default function WebsiteWidgetDetailDrawer({
     wordpressHandoffMutation.isPending;
 
   const headerStatus =
-    readiness.status === "ready"
+    productionInstallReady
       ? "connected"
-      : widget.enabled === true
+      : widget.enabled === true || launchReadiness.testingOnly === true
         ? "blocked"
         : "not_connected";
 
   const posture = buildPosture({
     widget,
     install,
+    launchReadiness,
+    handoffs: launchHandoffs,
     verificationSurface,
     readiness,
   });
@@ -696,16 +770,19 @@ export default function WebsiteWidgetDetailDrawer({
                 <TinyMetric
                   label="Install"
                   value={
-                    productionInstallBlocked
+                    productionInstallReady
+                      ? "Ready"
+                      : launchReadiness.testingOnly === true
+                        ? "Testing only"
+                        : productionInstallBlocked
                       ? "Blocked"
-                      : install.productionInstallReady === true
-                        ? "Ready"
-                        : "Pending"
+                      : "Pending"
                   }
                   tone={
-                    install.productionInstallReady === true
+                    productionInstallReady
                       ? "success"
-                      : productionInstallBlocked
+                      : launchReadiness.testingOnly === true ||
+                          productionInstallBlocked
                         ? "warning"
                         : "neutral"
                   }
@@ -880,7 +957,8 @@ export default function WebsiteWidgetDetailDrawer({
 
               {anyHandoffReady &&
               productionInstallBlocked &&
-              install.unverifiedHandoffsAllowed === true ? (
+              (launchReadiness.unverifiedHandoffsAllowed === true ||
+                install.unverifiedHandoffsAllowed === true) ? (
                 <InlineNotice
                   tone="warning"
                   description={installHandoffMessage}
@@ -1007,13 +1085,7 @@ export default function WebsiteWidgetDetailDrawer({
                     />
                     <DataRow
                       label="Production ready"
-                      value={
-                        handoffTestingOnly ||
-                        handoffSurface.productionReady !== true ||
-                        handoffReadiness.productionReady !== true
-                          ? "No"
-                          : "Yes"
-                      }
+                      value={handoffTestingOnly || !handoffProductionReady ? "No" : "Yes"}
                     />
                   </Surface>
 

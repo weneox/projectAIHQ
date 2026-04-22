@@ -17,6 +17,7 @@ import {
 import { buildInboxActions } from "../../../services/inboxBrain.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 import { isDbReady, okJson } from "../../../utils/http.js";
+import { createLogger } from "../../../utils/logger.js";
 import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
 import { applyHandoffActions, persistLeadActions } from "../inbox/mutations.js";
@@ -58,6 +59,10 @@ const WEBSITE_THREAD_CHANNEL = "website";
 const WEBSITE_RUNTIME_CHANNEL = "webchat";
 const WEBSITE_PROVIDER = "website_widget";
 const WEBSITE_TRANSCRIPT_LIMIT = 200;
+const fallbackLogger = createLogger({
+  service: "ai-hq-backend",
+  component: "website-widget-public-routes",
+});
 const WEBSITE_THREAD_SELECT = `
   id,
   tenant_id,
@@ -102,6 +107,92 @@ function uniq(values = []) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function compactLogFields(fields = {}) {
+  const out = {};
+
+  for (const [key, raw] of Object.entries(obj(fields))) {
+    if (raw === undefined || raw === null) continue;
+
+    if (typeof raw === "string") {
+      const value = s(raw);
+      if (value) out[key] = value;
+      continue;
+    }
+
+    out[key] = raw;
+  }
+
+  return out;
+}
+
+function getWebsiteWidgetLogger(req, route = "") {
+  const base = req?.log || fallbackLogger;
+
+  return (
+    base.child?.({
+      component: "website-widget-public-routes",
+      route: s(route),
+      tenantKey: s(req?.auth?.tenantKey || req?.user?.tenantKey || ""),
+      tenantId: s(req?.auth?.tenantId || req?.user?.tenantId || ""),
+    }) || fallbackLogger
+  );
+}
+
+function buildWebsiteWidgetLogFields({
+  req = null,
+  tenant = null,
+  widgetId = "",
+  publicWidgetId = "",
+  domain = "",
+  origin = "",
+  pageUrl = "",
+  threadId = "",
+  sessionId = "",
+  visitorLeadId = "",
+  reasonCode = "",
+} = {}) {
+  return compactLogFields({
+    tenantKey: s(tenant?.tenantKey || tenant?.tenant_key || req?.auth?.tenantKey),
+    tenantId: s(tenant?.id || tenant?.tenantId || req?.auth?.tenantId),
+    widgetId: s(widgetId),
+    publicWidgetId: s(publicWidgetId || widgetId),
+    domain: s(domain),
+    origin: s(origin),
+    pageUrl: s(pageUrl),
+    threadId: s(threadId),
+    sessionId: s(sessionId),
+    visitorLeadId: s(visitorLeadId),
+    requestId: s(req?.requestId),
+    correlationId: s(req?.correlationId),
+    reasonCode: s(reasonCode),
+  });
+}
+
+function logWebsiteWidgetEvent({
+  req = null,
+  route = "",
+  event = "",
+  level = "info",
+  error = null,
+  ...fields
+} = {}) {
+  const logger = getWebsiteWidgetLogger(req, route);
+  const data = buildWebsiteWidgetLogFields({
+    req,
+    ...fields,
+  });
+
+  if (level === "error") {
+    return logger.error(event, error, data);
+  }
+
+  if (level === "warn") {
+    return logger.warn(event, data, error);
+  }
+
+  return logger.info(event, data);
 }
 
 function applyNoStore(res) {
@@ -722,6 +813,20 @@ function buildConversationMode({
   return "awaiting_reply";
 }
 
+function findLeadId(leadResults = []) {
+  for (const item of arr(leadResults)) {
+    const leadId = s(
+      item?.leadId ||
+        item?.lead?.id ||
+        item?.lead?.lead_id ||
+        item?.lead_id
+    );
+    if (leadId) return leadId;
+  }
+
+  return "";
+}
+
 function buildSnapshotDeliveryMode({
   thread = {},
   automation = {},
@@ -904,6 +1009,7 @@ function websiteWidgetRateLimit(policyName, maxRequests, windowMs = 60_000) {
 }
 
 async function processWebsiteWidgetMessage({
+  req,
   db,
   wsHub,
   tenant,
@@ -985,6 +1091,21 @@ async function processWebsiteWidgetMessage({
         tenantId: tenant.id,
         tenantKey: tenant.tenantKey,
         threadId: thread.id,
+      });
+
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.message",
+        event: "website.widget.message.accepted",
+        tenant,
+        widgetId: s(session?.widgetId),
+        publicWidgetId: s(session?.widgetId),
+        domain: s(page?.host),
+        origin: s(page?.origin),
+        pageUrl: s(page?.url),
+        threadId: s(thread?.id),
+        sessionId: s(session?.sessionId),
+        reasonCode: "duplicate_message",
       });
 
       return {
@@ -1377,6 +1498,22 @@ async function processWebsiteWidgetMessage({
       tenantKey: tenant.tenantKey,
       threadId: finalThread.id,
     });
+    const visitorLeadId = findLeadId(leadResults);
+
+    logWebsiteWidgetEvent({
+      req,
+      route: "website_widget.message",
+      event: "website.widget.message.accepted",
+      tenant,
+      widgetId: s(session?.widgetId),
+      publicWidgetId: s(session?.widgetId),
+      domain: s(page?.host),
+      origin: s(page?.origin),
+      pageUrl: s(page?.url),
+      threadId: s(finalThread?.id),
+      sessionId: s(session?.sessionId),
+      visitorLeadId,
+    });
 
     return {
       ok: true,
@@ -1397,6 +1534,23 @@ async function processWebsiteWidgetMessage({
     };
   } catch (error) {
     if (client) await rollbackAndRelease(client);
+    logWebsiteWidgetEvent({
+      req,
+      route: "website_widget.message",
+      event: "website.widget.message.failed",
+      level: "error",
+      error,
+      tenant,
+      widgetId: s(session?.widgetId),
+      publicWidgetId: s(session?.widgetId),
+      domain: s(page?.host),
+      origin: s(page?.origin),
+      pageUrl: s(page?.url),
+      threadId: s(session?.threadId),
+      sessionId: s(session?.sessionId),
+      reasonCode: s(error?.reasonCode || error?.code || "website_widget_message_failed"),
+    });
+    error.websiteWidgetLogged = true;
     throw error;
   }
 }
@@ -1412,9 +1566,27 @@ export function createWebsiteWidgetHandlers({
   async function issueWidgetInstallToken(req, res) {
     applyNoStore(res);
     const widgetId = resolveRequestedWidgetId(req);
+    const installContext = buildInstallContext(req);
+    const requestedOrigin =
+      installContext.requestOrigin ||
+      installContext.requestRefererOrigin ||
+      installContext.page.origin;
+    const requestedDomain =
+      normalizeUrl(requestedOrigin)?.hostname || installContext.page.host;
 
     try {
       if (!isDbReady(db)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.install_token",
+          event: "website.widget.launch.blocked",
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: requestedDomain,
+          origin: requestedOrigin,
+          pageUrl: installContext.page.url,
+          reasonCode: "db_disabled",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("db disabled", "", {
@@ -1424,6 +1596,15 @@ export function createWebsiteWidgetHandlers({
       }
 
       if (!widgetId) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.install_token",
+          event: "website.widget.launch.blocked",
+          domain: requestedDomain,
+          origin: requestedOrigin,
+          pageUrl: installContext.page.url,
+          reasonCode: "widget_id_required",
+        });
         return okJson(res, buildPublicErrorResponse("widgetId required"));
       }
 
@@ -1431,15 +1612,37 @@ export function createWebsiteWidgetHandlers({
         publicWidgetId: widgetId,
       });
       if (!tenant?.id) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.install_token",
+          event: "website.widget.launch.blocked",
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: requestedDomain,
+          origin: requestedOrigin,
+          pageUrl: installContext.page.url,
+          reasonCode: "website_widget_not_found",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("website_widget_not_found")
         );
       }
 
-      const installContext = buildInstallContext(req);
       const validation = validateWidgetInstallContext(tenant, installContext);
       if (!validation.ok) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.install_token",
+          event: "website.widget.launch.blocked",
+          tenant,
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: requestedDomain,
+          origin: requestedOrigin,
+          pageUrl: installContext.page.url,
+          reasonCode: validation.reasonCode,
+        });
         return okJson(
           res,
           buildPublicErrorResponse(validation.reasonCode, validation.detail)
@@ -1458,6 +1661,18 @@ export function createWebsiteWidgetHandlers({
         installHost
       );
       if (!installVerification.ok) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.install_token",
+          event: "website.widget.launch.blocked",
+          tenant,
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: s(installVerification.domain || installHost),
+          origin: installOrigin,
+          pageUrl: installContext.page.url,
+          reasonCode: installVerification.reasonCode,
+        });
         return okJson(
           res,
           buildPublicErrorResponse(
@@ -1482,6 +1697,18 @@ export function createWebsiteWidgetHandlers({
         matchedValue: validation.matchedValue,
       });
 
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.install_token",
+        event: "website.widget.install_token.issued",
+        tenant,
+        widgetId,
+        publicWidgetId: widgetId,
+        domain: s(installVerification.domain || installHost),
+        origin: installOrigin,
+        pageUrl: installContext.page.url,
+      });
+
       return okJson(res, {
         ok: true,
         widgetId,
@@ -1489,6 +1716,19 @@ export function createWebsiteWidgetHandlers({
         expiresAt: new Date(bootstrap.payload.expiresAt).toISOString(),
       });
     } catch (error) {
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.install_token",
+        event: "website.widget.launch.blocked",
+        level: "error",
+        error,
+        widgetId,
+        publicWidgetId: widgetId,
+        domain: requestedDomain,
+        origin: requestedOrigin,
+        pageUrl: installContext.page.url,
+        reasonCode: s(error?.reasonCode || error?.code || "website_widget_install_token_failed"),
+      });
       return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
@@ -1502,6 +1742,14 @@ export function createWebsiteWidgetHandlers({
 
     try {
       if (!isDbReady(db)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          widgetId,
+          publicWidgetId: widgetId,
+          reasonCode: "db_disabled",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("db disabled", "", {
@@ -1511,6 +1759,12 @@ export function createWebsiteWidgetHandlers({
       }
 
       if (!widgetId) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          reasonCode: "widget_id_required",
+        });
         return okJson(res, buildPublicErrorResponse("widgetId required"));
       }
 
@@ -1535,6 +1789,20 @@ export function createWebsiteWidgetHandlers({
             service: "website_widget.bootstrap",
           });
 
+          logWebsiteWidgetEvent({
+            req,
+            route: "website_widget.bootstrap",
+            event: "website.widget.bootstrap.succeeded",
+            tenant: recoverableSessionState.tenant,
+            widgetId,
+            publicWidgetId: widgetId,
+            domain: s(snapshot.session?.installHost),
+            origin: s(snapshot.session?.installOrigin),
+            pageUrl: s(snapshot.session?.pageUrl),
+            threadId: s(snapshot.thread?.id),
+            sessionId: s(snapshot.session?.sessionId),
+          });
+
           return okJson(res, {
             ok: true,
             session: snapshot.session,
@@ -1547,6 +1815,16 @@ export function createWebsiteWidgetHandlers({
           });
         }
 
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          widgetId,
+          publicWidgetId: widgetId,
+          reasonCode: providedSessionToken
+            ? recoverableSessionState.error
+            : "bootstrap_token_required",
+        });
         return okJson(
           res,
           buildPublicErrorResponse(
@@ -1569,6 +1847,20 @@ export function createWebsiteWidgetHandlers({
             service: "website_widget.bootstrap",
           });
 
+          logWebsiteWidgetEvent({
+            req,
+            route: "website_widget.bootstrap",
+            event: "website.widget.bootstrap.succeeded",
+            tenant: recoverableSessionState.tenant,
+            widgetId,
+            publicWidgetId: widgetId,
+            domain: s(snapshot.session?.installHost),
+            origin: s(snapshot.session?.installOrigin),
+            pageUrl: s(snapshot.session?.pageUrl),
+            threadId: s(snapshot.thread?.id),
+            sessionId: s(snapshot.session?.sessionId),
+          });
+
           return okJson(res, {
             ok: true,
             session: snapshot.session,
@@ -1581,6 +1873,14 @@ export function createWebsiteWidgetHandlers({
           });
         }
 
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          widgetId,
+          publicWidgetId: widgetId,
+          reasonCode: verifiedBootstrap.error,
+        });
         return okJson(
           res,
           buildPublicErrorResponse(verifiedBootstrap.error)
@@ -1588,6 +1888,17 @@ export function createWebsiteWidgetHandlers({
       }
 
       if (lower(verifiedBootstrap.payload?.widgetId) !== lower(widgetId)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: s(verifiedBootstrap.payload?.installHost),
+          origin: s(verifiedBootstrap.payload?.installOrigin),
+          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
+          reasonCode: "website_widget_install_mismatch",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("website_widget_install_mismatch")
@@ -1598,6 +1909,17 @@ export function createWebsiteWidgetHandlers({
         publicWidgetId: widgetId,
       });
       if (!tenant?.id) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: s(verifiedBootstrap.payload?.installHost),
+          origin: s(verifiedBootstrap.payload?.installOrigin),
+          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
+          reasonCode: "tenant_not_found",
+        });
         return okJson(res, buildPublicErrorResponse("tenant not found"));
       }
 
@@ -1605,6 +1927,18 @@ export function createWebsiteWidgetHandlers({
         defaultEnabled: true,
       });
       if (!resolveWidgetEnabled(tenant)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          tenant,
+          widgetId,
+          publicWidgetId: widgetId,
+          domain: s(verifiedBootstrap.payload?.installHost),
+          origin: s(verifiedBootstrap.payload?.installOrigin),
+          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
+          reasonCode: "website_widget_disabled",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("website_widget_disabled")
@@ -1612,6 +1946,18 @@ export function createWebsiteWidgetHandlers({
       }
 
       if (lower(currentConfig.publicWidgetId) !== lower(widgetId)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          tenant,
+          widgetId,
+          publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
+          domain: s(verifiedBootstrap.payload?.installHost),
+          origin: s(verifiedBootstrap.payload?.installOrigin),
+          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
+          reasonCode: "website_widget_install_mismatch",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("website_widget_install_mismatch")
@@ -1625,6 +1971,20 @@ export function createWebsiteWidgetHandlers({
           normalizeUrl(verifiedBootstrap.payload?.installOrigin)?.hostname
       );
       if (!installVerification.ok) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.bootstrap",
+          event: "website.widget.bootstrap.failed",
+          tenant,
+          widgetId,
+          publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
+          domain: s(
+            installVerification.domain || verifiedBootstrap.payload?.installHost
+          ),
+          origin: s(verifiedBootstrap.payload?.installOrigin),
+          pageUrl: s(verifiedBootstrap.payload?.pageUrl),
+          reasonCode: installVerification.reasonCode,
+        });
         return okJson(
           res,
           buildPublicErrorResponse(
@@ -1650,6 +2010,20 @@ export function createWebsiteWidgetHandlers({
         service: "website_widget.bootstrap",
       });
 
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.bootstrap",
+        event: "website.widget.bootstrap.succeeded",
+        tenant,
+        widgetId,
+        publicWidgetId: s(currentConfig.publicWidgetId || widgetId),
+        domain: s(session.payload?.installHost),
+        origin: s(session.payload?.installOrigin),
+        pageUrl: s(session.payload?.pageUrl),
+        threadId: s(snapshot.thread?.id),
+        sessionId: s(snapshot.session?.sessionId),
+      });
+
       return okJson(res, {
         ok: true,
         session: snapshot.session,
@@ -1661,6 +2035,16 @@ export function createWebsiteWidgetHandlers({
         delivery: snapshot.delivery,
       });
     } catch (error) {
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.bootstrap",
+        event: "website.widget.bootstrap.failed",
+        level: "error",
+        error,
+        widgetId,
+        publicWidgetId: widgetId,
+        reasonCode: s(error?.reasonCode || error?.code || "website_widget_bootstrap_failed"),
+      });
       return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
@@ -1676,6 +2060,12 @@ export function createWebsiteWidgetHandlers({
 
     try {
       if (!isDbReady(db)) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.message",
+          event: "website.widget.message.failed",
+          reasonCode: "db_disabled",
+        });
         return okJson(
           res,
           buildPublicErrorResponse("db disabled", "", {
@@ -1685,6 +2075,12 @@ export function createWebsiteWidgetHandlers({
       }
 
       if (!text) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.message",
+          event: "website.widget.message.failed",
+          reasonCode: "message_required",
+        });
         return okJson(res, buildPublicErrorResponse("message required"));
       }
 
@@ -1693,6 +2089,14 @@ export function createWebsiteWidgetHandlers({
         s(body.sessionToken)
       );
       if (!sessionState.ok) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.message",
+          event: "website.widget.message.failed",
+          widgetId: s(obj(verifyWebsiteWidgetSessionToken(s(body.sessionToken)).payload).widgetId),
+          publicWidgetId: s(obj(verifyWebsiteWidgetSessionToken(s(body.sessionToken)).payload).widgetId),
+          reasonCode: s(sessionState.error),
+        });
         return okJson(
           res,
           buildPublicErrorResponse(
@@ -1703,6 +2107,7 @@ export function createWebsiteWidgetHandlers({
       }
 
       const response = await processWebsiteWidgetMessage({
+        req,
         db,
         wsHub,
         tenant: sessionState.tenant,
@@ -1720,6 +2125,16 @@ export function createWebsiteWidgetHandlers({
 
       return okJson(res, response);
     } catch (error) {
+      if (error?.websiteWidgetLogged !== true) {
+        logWebsiteWidgetEvent({
+          req,
+          route: "website_widget.message",
+          event: "website.widget.message.failed",
+          level: "error",
+          error,
+          reasonCode: s(error?.reasonCode || error?.code || "website_widget_message_failed"),
+        });
+      }
       return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
@@ -1768,6 +2183,20 @@ export function createWebsiteWidgetHandlers({
         activeThread?.id
           ? await loadWebsiteTranscript(db, activeThread.id, tenant.tenantKey)
           : [];
+
+      logWebsiteWidgetEvent({
+        req,
+        route: "website_widget.transcript",
+        event: "website.widget.transcript.loaded",
+        tenant,
+        widgetId: s(session.payload?.widgetId),
+        publicWidgetId: s(session.payload?.widgetId),
+        domain: s(session.payload?.installHost),
+        origin: s(session.payload?.installOrigin),
+        pageUrl: s(session.payload?.pageUrl),
+        threadId: s(activeThread?.id),
+        sessionId: s(session.payload?.sessionId),
+      });
 
       return okJson(res, {
         ok: true,

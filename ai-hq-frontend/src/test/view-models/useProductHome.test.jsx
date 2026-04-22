@@ -122,6 +122,49 @@ function createTelegramStatus(overrides = {}) {
   };
 }
 
+function createWebsiteStatus(overrides = {}) {
+  return {
+    state: "connected",
+    launchReadiness: {
+      status: "production_ready",
+      channelConfigured: true,
+      configurationReady: true,
+      widgetEnabled: true,
+      launchEnabled: true,
+      publicWidgetId: "ww_acme",
+      publicWidgetIdPresent: true,
+      allowedOriginsPresent: true,
+      allowedDomainsPresent: true,
+      originRulesPresent: true,
+      targetDomain: "acme.test",
+      domainVerificationRequired: true,
+      domainVerificationState: "verified",
+      domainVerified: true,
+      productionBlocked: false,
+      productionLaunchAllowed: true,
+      productionReady: true,
+      testingOnly: false,
+      testReady: true,
+      installSurfaceReady: true,
+      reasonCode: "",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+    },
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+    },
+    widget: {
+      enabled: true,
+      title: "Website chat",
+      websiteUrl: "https://acme.test",
+      publicWidgetId: "ww_acme",
+    },
+    ...overrides,
+  };
+}
+
 describe("useProductHome", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -310,19 +353,15 @@ describe("useProductHome", () => {
 
   it("treats website chat as a real launch channel when it is the only ready option", async () => {
     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue({
-      state: "connected",
-      readiness: {
-        status: "ready",
-        message: "Website chat is configured with trusted origins and a live widget ID.",
-      },
-      widget: {
-        enabled: true,
-        title: "Website chat",
-        websiteUrl: "https://acme.test",
-        publicWidgetId: "ww_acme",
-      },
-    });
+    getWebsiteWidgetStatus.mockResolvedValue(
+      createWebsiteStatus({
+        readiness: {
+          status: "ready",
+          message:
+            "Website chat is configured with trusted origins and a live widget ID.",
+        },
+      })
+    );
 
     const { result } = renderHook(() => useProductHome(), {
       wrapper: createWrapper(),
@@ -335,6 +374,57 @@ describe("useProductHome", () => {
     expect(result.current.launchChannel.provider).toBe("website");
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.launchChannel.action.path).toBe("/channels?channel=website");
+  });
+
+  it("keeps website chat out of the live launch channel when only testing handoffs are available", async () => {
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockResolvedValue(
+      createWebsiteStatus({
+        state: "blocked",
+        launchReadiness: {
+          status: "testing_only",
+          channelConfigured: true,
+          configurationReady: true,
+          widgetEnabled: true,
+          launchEnabled: true,
+          publicWidgetId: "ww_acme",
+          publicWidgetIdPresent: true,
+          allowedOriginsPresent: true,
+          allowedDomainsPresent: true,
+          originRulesPresent: true,
+          targetDomain: "acme.test",
+          domainVerificationRequired: true,
+          domainVerificationState: "pending",
+          domainVerified: false,
+          productionBlocked: true,
+          productionLaunchAllowed: false,
+          productionReady: false,
+          testingOnly: true,
+          testReady: true,
+          installSurfaceReady: true,
+          reasonCode: "website_domain_verification_required",
+          message:
+            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+        },
+        readiness: {
+          status: "blocked",
+          message:
+            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+        },
+      })
+    );
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.launchChannel.connected).toBe(false);
+    expect(result.current.assistant.launchPosture).toBe("connect_channel");
+    expect(result.current.primaryAction.path).toBe("/channels");
   });
 
   it("does not reuse another workspace's cached launch posture", async () => {
@@ -488,17 +578,14 @@ describe("useProductHome", () => {
     );
 
     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue({
-      state: "connected",
-      readiness: {
-        status: "ready",
-        message: "Website chat is configured with trusted origins and a live widget ID.",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "ww_partial",
-      },
-    });
+    getWebsiteWidgetStatus.mockResolvedValue(
+      createWebsiteStatus({
+        widget: {
+          enabled: true,
+          publicWidgetId: "ww_partial",
+        },
+      })
+    );
 
     getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
@@ -548,17 +635,14 @@ describe("useProductHome", () => {
 
   it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {
     getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue({
-      state: "connected",
-      readiness: {
-        status: "ready",
-        message: "Website chat is configured with trusted origins and a live widget ID.",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "ww_live",
-      },
-    });
+    getWebsiteWidgetStatus.mockResolvedValue(
+      createWebsiteStatus({
+        widget: {
+          enabled: true,
+          publicWidgetId: "ww_live",
+        },
+      })
+    );
     getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
         id: "session-rescan",

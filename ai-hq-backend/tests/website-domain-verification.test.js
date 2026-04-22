@@ -7,6 +7,7 @@ import {
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
   createWebsiteWidgetWordpressInstallHandoff,
+  getWebsiteLaneHealthStatus,
   getWebsiteWidgetStatus,
 } from "../src/routes/api/channelConnect/website.js";
 import { __test__ as websiteDomainVerificationTest } from "../src/services/websiteDomainVerification.js";
@@ -284,6 +285,51 @@ async function verifyWebsiteDomain(db, domain = "acme.example") {
   return challenge;
 }
 
+function assertWebsiteHandoffContract(
+  contract,
+  {
+    packageType,
+    ready,
+    productionReady,
+    testingOnly,
+    verificationState,
+    targetDomain = "acme.example",
+    blockingReasonCode,
+  } = {}
+) {
+  const value = contract || {};
+
+  for (const key of [
+    "packageType",
+    "ready",
+    "productionReady",
+    "testingOnly",
+    "targetDomain",
+    "verificationState",
+    "verificationRequiredForProduction",
+    "blockingReasonCode",
+    "blockingMessage",
+  ]) {
+    assert.equal(Object.hasOwn(value, key), true, `handoff contract missing ${key}`);
+  }
+
+  if (packageType !== undefined) assert.equal(value.packageType, packageType);
+  if (ready !== undefined) assert.equal(value.ready, ready);
+  if (productionReady !== undefined) {
+    assert.equal(value.productionReady, productionReady);
+  }
+  if (testingOnly !== undefined) assert.equal(value.testingOnly, testingOnly);
+  if (verificationState !== undefined) {
+    assert.equal(value.verificationState, verificationState);
+  }
+  if (targetDomain !== undefined) assert.equal(value.targetDomain, targetDomain);
+  if (blockingReasonCode !== undefined) {
+    assert.equal(value.blockingReasonCode, blockingReasonCode);
+  }
+
+  assert.equal(value.verificationRequiredForProduction, true);
+}
+
 test("website domain verification normalizes public website domains safely", () => {
   const normalized = websiteDomainVerificationTest.normalizeWebsiteVerificationDomain(
     "https://WWW.Acme.Example/pricing"
@@ -436,6 +482,41 @@ test("website widget status blocks production install until domain ownership is 
       assert.equal(payload.install?.wordpressHandoffReady, false);
       assert.equal(payload.install?.handoffTargetDomain, "acme.example");
       assert.equal(payload.readiness?.status, "blocked");
+      assert.equal(payload.launchReadiness?.status, "blocked");
+      assert.equal(payload.launchReadiness?.channelConfigured, true);
+      assert.equal(payload.launchReadiness?.configurationReady, true);
+      assert.equal(payload.launchReadiness?.widgetEnabled, true);
+      assert.equal(payload.launchReadiness?.publicWidgetIdPresent, true);
+      assert.equal(payload.launchReadiness?.allowedOriginsPresent, true);
+      assert.equal(payload.launchReadiness?.allowedDomainsPresent, true);
+      assert.equal(payload.launchReadiness?.domainVerificationRequired, true);
+      assert.equal(payload.launchReadiness?.domainVerificationState, "unverified");
+      assert.equal(payload.launchReadiness?.domainVerified, false);
+      assert.equal(payload.launchReadiness?.productionLaunchAllowed, false);
+      assert.equal(payload.launchReadiness?.productionReady, false);
+      assert.equal(payload.launchReadiness?.testingOnly, false);
+      assert.equal(payload.launchReadiness?.testReady, false);
+      assertWebsiteHandoffContract(payload.handoffs?.developer, {
+        packageType: "developer",
+        ready: false,
+        productionReady: false,
+        testingOnly: false,
+        verificationState: "unverified",
+      });
+      assertWebsiteHandoffContract(payload.handoffs?.gtm, {
+        packageType: "gtm",
+        ready: false,
+        productionReady: false,
+        testingOnly: false,
+        verificationState: "unverified",
+      });
+      assertWebsiteHandoffContract(payload.handoffs?.wordpress, {
+        packageType: "wordpress",
+        ready: false,
+        productionReady: false,
+        testingOnly: false,
+        verificationState: "unverified",
+      });
     }
   );
 });
@@ -463,6 +544,14 @@ test("website widget install handoff returns a developer package only when produ
       assert.equal(payload.testingOnly, false);
       assert.equal(payload.verificationState, "verified");
       assert.equal(payload.widgetId, "ww_acme_widget");
+      assertWebsiteHandoffContract(payload, {
+        packageType: "developer",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
       assert.match(
         String(payload.embedSnippet || ""),
         /data-widget-id="ww_acme_widget"/
@@ -501,6 +590,14 @@ test("website widget install handoff refuses to generate while production instal
         (error) => {
           assert.equal(error?.status, 409);
           assert.equal(error?.reasonCode, "website_domain_verification_missing");
+          assertWebsiteHandoffContract(error?.payload, {
+            packageType: "developer",
+            ready: false,
+            productionReady: false,
+            testingOnly: false,
+            verificationState: "unverified",
+            blockingReasonCode: "website_domain_verification_missing",
+          });
           return true;
         }
       );
@@ -530,6 +627,14 @@ test("website widget GTM handoff returns a GTM package only when production inst
       assert.equal(payload.verifiedDomain, "acme.example");
       assert.equal(payload.productionReady, true);
       assert.equal(payload.testingOnly, false);
+      assertWebsiteHandoffContract(payload, {
+        packageType: "gtm",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
       assert.match(
         String(payload.gtmCustomHtmlSnippet || ""),
         /Website Chat GTM Custom HTML tag/
@@ -594,6 +699,14 @@ test("website widget WordPress handoff returns a WordPress package only when pro
       assert.equal(payload.verifiedDomain, "acme.example");
       assert.equal(payload.productionReady, true);
       assert.equal(payload.testingOnly, false);
+      assertWebsiteHandoffContract(payload, {
+        packageType: "wordpress",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
       assert.match(String(payload.packageText || ""), /"packageType": "wordpress"/);
       assert.equal(
         payload.wordpressConfig?.wordpressPlugin?.slug,
@@ -659,6 +772,11 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs 
       assert.equal(statusPayload.install?.developerHandoffReady, true);
       assert.equal(statusPayload.install?.gtmHandoffReady, true);
       assert.equal(statusPayload.install?.wordpressHandoffReady, true);
+      assert.equal(statusPayload.launchReadiness?.status, "testing_only");
+      assert.equal(statusPayload.launchReadiness?.productionLaunchAllowed, false);
+      assert.equal(statusPayload.launchReadiness?.productionReady, false);
+      assert.equal(statusPayload.launchReadiness?.testingOnly, true);
+      assert.equal(statusPayload.launchReadiness?.testReady, true);
       assert.match(
         String(statusPayload.install?.handoffMessage || ""),
         /local\/dev\/test only/i
@@ -683,6 +801,14 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs 
       assert.equal(developerPayload.verificationState, "unverified");
       assert.equal(developerPayload.verifiedDomain, "");
       assert.equal(developerPayload.targetDomain, "acme.example");
+      assertWebsiteHandoffContract(developerPayload, {
+        packageType: "developer",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
       assert.match(
         String(developerPayload.packageText || ""),
         /Target domain: acme\.example/
@@ -693,12 +819,28 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs 
       assert.equal(gtmPayload.productionReady, false);
       assert.equal(gtmPayload.testingOnly, true);
       assert.equal(gtmPayload.verificationState, "unverified");
+      assertWebsiteHandoffContract(gtmPayload, {
+        packageType: "gtm",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
 
       assert.equal(wordpressPayload.ready, true);
       assert.equal(wordpressPayload.packageType, "wordpress");
       assert.equal(wordpressPayload.productionReady, false);
       assert.equal(wordpressPayload.testingOnly, true);
       assert.equal(wordpressPayload.verificationState, "unverified");
+      assertWebsiteHandoffContract(wordpressPayload, {
+        packageType: "wordpress",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
       assert.equal(wordpressPayload.verifiedDomain, "");
       assert.equal(wordpressPayload.targetDomain, "acme.example");
       assert.equal(wordpressPayload.wordpressConfig?.targetDomain, "acme.example");
@@ -756,16 +898,164 @@ test("website widget allows testing-only developer, GTM, and WordPress handoffs 
       assert.equal(developerPayload.testingOnly, true);
       assert.equal(developerPayload.productionReady, false);
       assert.equal(developerPayload.verificationState, "unverified");
+      assertWebsiteHandoffContract(developerPayload, {
+        packageType: "developer",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
 
       assert.equal(gtmPayload.testingOnly, true);
       assert.equal(gtmPayload.productionReady, false);
       assert.equal(gtmPayload.verificationState, "unverified");
+      assertWebsiteHandoffContract(gtmPayload, {
+        packageType: "gtm",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
 
       assert.equal(wordpressPayload.testingOnly, true);
       assert.equal(wordpressPayload.productionReady, false);
       assert.equal(wordpressPayload.verificationState, "unverified");
+      assertWebsiteHandoffContract(wordpressPayload, {
+        packageType: "wordpress",
+        ready: true,
+        productionReady: false,
+        testingOnly: true,
+        verificationState: "unverified",
+        blockingReasonCode: "website_domain_verification_missing",
+      });
       assert.equal(wordpressPayload.wordpressConfig?.testingOnly, true);
       assert.equal(wordpressPayload.wordpressConfig?.productionReady, false);
+    }
+  );
+});
+
+test("website widget status reports a production-ready launch spine after domain verification passes", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+      await verifyWebsiteDomain(db);
+
+      const payload = await getWebsiteWidgetStatus({
+        db,
+        req: buildAuthedReq({
+          role: "owner",
+        }),
+      });
+
+      assert.equal(payload.state, "connected");
+      assert.equal(payload.launchReadiness?.status, "production_ready");
+      assert.equal(payload.launchReadiness?.channelConfigured, true);
+      assert.equal(payload.launchReadiness?.configurationReady, true);
+      assert.equal(payload.launchReadiness?.widgetEnabled, true);
+      assert.equal(payload.launchReadiness?.publicWidgetIdPresent, true);
+      assert.equal(payload.launchReadiness?.originRulesPresent, true);
+      assert.equal(payload.launchReadiness?.domainVerificationState, "verified");
+      assert.equal(payload.launchReadiness?.domainVerified, true);
+      assert.equal(payload.launchReadiness?.productionLaunchAllowed, true);
+      assert.equal(payload.launchReadiness?.productionReady, true);
+      assert.equal(payload.launchReadiness?.testingOnly, false);
+      assert.equal(payload.launchReadiness?.testReady, true);
+      assert.equal(payload.launchReadiness?.installSurfaceReady, true);
+      assertWebsiteHandoffContract(payload.handoffs?.developer, {
+        packageType: "developer",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
+      assertWebsiteHandoffContract(payload.handoffs?.gtm, {
+        packageType: "gtm",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
+      assertWebsiteHandoffContract(payload.handoffs?.wordpress, {
+        packageType: "wordpress",
+        ready: true,
+        productionReady: true,
+        testingOnly: false,
+        verificationState: "verified",
+        blockingReasonCode: "",
+      });
+    }
+  );
+});
+
+test("website lane health returns the unified readiness payload for smoke scripts", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+
+      const blocked = await getWebsiteLaneHealthStatus({
+        db,
+        req: {
+          query: {
+            tenantKey: "acme",
+          },
+          headers: {
+            host: "app.example.test",
+            "x-forwarded-proto": "https",
+          },
+          get(name) {
+            return this.headers[String(name || "").toLowerCase()];
+          },
+        },
+      });
+
+      assert.equal(blocked.tenantFound, true);
+      assert.equal(blocked.status, "blocked");
+      assert.equal(blocked.channelConfigured, true);
+      assert.equal(blocked.configurationReady, true);
+      assert.equal(blocked.productionLaunchAllowed, false);
+      assert.equal(blocked.reasonCode, "website_domain_verification_missing");
+      assert.equal(blocked.handoffs?.developer?.ready, false);
+
+      await verifyWebsiteDomain(db);
+
+      const ready = await getWebsiteLaneHealthStatus({
+        db,
+        req: {
+          query: {
+            tenantKey: "acme",
+            domain: "acme.example",
+          },
+          headers: {
+            host: "app.example.test",
+            "x-forwarded-proto": "https",
+          },
+          get(name) {
+            return this.headers[String(name || "").toLowerCase()];
+          },
+        },
+      });
+
+      assert.equal(ready.tenantFound, true);
+      assert.equal(ready.status, "production_ready");
+      assert.equal(ready.targetDomain, "acme.example");
+      assert.equal(ready.domainVerificationState, "verified");
+      assert.equal(ready.productionLaunchAllowed, true);
+      assert.equal(ready.productionReady, true);
+      assert.equal(ready.handoffs?.developer?.productionReady, true);
+      assert.equal(ready.handoffs?.gtm?.productionReady, true);
+      assert.equal(ready.handoffs?.wordpress?.productionReady, true);
     }
   );
 });

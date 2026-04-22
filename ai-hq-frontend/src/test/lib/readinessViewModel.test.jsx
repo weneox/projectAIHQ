@@ -44,6 +44,15 @@ describe("createReadinessViewModel", () => {
   it("treats enabled website chat as a connected channel even when delivery hardening is still blocked", () => {
     const channel = buildWebsiteLaunchChannelState({
       state: "blocked",
+      launchReadiness: {
+        status: "blocked",
+        channelConfigured: true,
+        productionLaunchAllowed: false,
+        productionReady: false,
+        widgetEnabled: true,
+        message:
+          "Website chat is enabled, but installation hardening is still incomplete.",
+      },
       widget: {
         enabled: true,
       },
@@ -62,6 +71,16 @@ describe("createReadinessViewModel", () => {
   it("treats website chat as a real launch path when it is the only ready channel", () => {
     const website = buildWebsiteLaunchChannelState({
       state: "connected",
+      launchReadiness: {
+        status: "production_ready",
+        channelConfigured: true,
+        productionLaunchAllowed: true,
+        productionReady: true,
+        widgetEnabled: true,
+        publicWidgetId: "widget_public_123",
+        message:
+          "Website chat is configured with a publishable install ID and trusted origin controls.",
+      },
       widget: {
         enabled: true,
         publicWidgetId: "widget_public_123",
@@ -118,6 +137,16 @@ describe("createReadinessViewModel", () => {
   it("stays fail-closed when website chat is connected but approved truth is missing", () => {
     const website = buildWebsiteLaunchChannelState({
       state: "connected",
+      launchReadiness: {
+        status: "production_ready",
+        channelConfigured: true,
+        productionLaunchAllowed: true,
+        productionReady: true,
+        widgetEnabled: true,
+        publicWidgetId: "widget_public_123",
+        message:
+          "Website chat is configured with a publishable install ID and trusted origin controls.",
+      },
       widget: {
         enabled: true,
         publicWidgetId: "widget_public_123",
@@ -168,5 +197,35 @@ describe("createReadinessViewModel", () => {
     expect(readiness.status).toBe("blocked");
     expect(readiness.title).toMatch(/truth/i);
     expect(readiness.action.path).toBe("/home?assistant=setup");
+  });
+
+  it("keeps website chat in an attention posture when only testing handoffs are available", () => {
+    const channel = buildWebsiteLaunchChannelState({
+      state: "blocked",
+      launchReadiness: {
+        status: "testing_only",
+        channelConfigured: true,
+        productionLaunchAllowed: false,
+        productionReady: false,
+        testingOnly: true,
+        widgetEnabled: true,
+        message:
+          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+      },
+      widget: {
+        enabled: true,
+        publicWidgetId: "widget_public_123",
+      },
+      readiness: {
+        status: "blocked",
+        message:
+          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+      },
+    });
+
+    expect(channel.connected).toBe(true);
+    expect(channel.deliveryReady).toBe(false);
+    expect(channel.status).toBe("attention");
+    expect(channel.summary).toMatch(/local\/dev\/test only/i);
   });
 });

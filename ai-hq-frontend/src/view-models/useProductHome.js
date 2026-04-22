@@ -502,14 +502,24 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
   }
 
   const state = lower(websitePayload?.state);
+  const launchReadiness = obj(websitePayload?.launchReadiness);
   const readiness = obj(websitePayload?.readiness);
   const widget = obj(websitePayload?.widget);
-  const blockers = arr(readiness.blockers);
-  const enabled = widget.enabled === true;
-  const connected = state === "connected" && readiness.status === "ready";
+  const blockers =
+    arr(launchReadiness.blockers).length > 0
+      ? arr(launchReadiness.blockers)
+      : arr(readiness.blockers);
+  const enabled =
+    launchReadiness.widgetEnabled === true || widget.enabled === true;
+  const testingOnly = launchReadiness.testingOnly === true;
+  const connected =
+    launchReadiness.productionLaunchAllowed === true ||
+    launchReadiness.productionReady === true ||
+    (state === "connected" && readiness.status === "ready");
   const deliveryReady = connected;
   const detail =
     firstReadableValue(
+      launchReadiness.message,
       readiness.message,
       widget.websiteUrl ? `Reference website: ${widget.websiteUrl}` : "",
       blockers[0]?.subtitle
@@ -526,9 +536,11 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
       displayName: s(widget.title || "Website chat"),
       handle: s(widget.websiteUrl),
       websiteUrl: s(widget.websiteUrl),
-      publicWidgetId: s(widget.publicWidgetId),
+      publicWidgetId: s(
+        launchReadiness.publicWidgetId || widget.publicWidgetId
+      ),
     },
-    reasonCode: lower(blockers[0]?.reasonCode),
+    reasonCode: lower(launchReadiness.reasonCode || blockers[0]?.reasonCode),
   };
 
   if (connected) {
@@ -540,6 +552,7 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
       statusLabel: "Connected",
       title: "Website chat is configured.",
       summary:
+        launchReadiness.message ||
         readiness.message ||
         "Website chat can be used as the current launch channel.",
       detail,
@@ -548,17 +561,22 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
     });
   }
 
-  if (enabled) {
+  if (enabled || testingOnly || launchReadiness.channelConfigured === true) {
     return createCanonicalLaunchChannel({
       ...base,
       connected: false,
       available: true,
       status: "repair_required",
       statusLabel: "Configuration required",
-      title: "Website chat still needs configuration.",
+      title: testingOnly
+        ? "Website chat is limited to testing handoffs."
+        : "Website chat still needs configuration.",
       summary:
+        launchReadiness.message ||
         readiness.message ||
-        "Website chat is enabled, but install hardening is still incomplete.",
+        (testingOnly
+          ? "Website chat can be tested, but production launch is still blocked."
+          : "Website chat is enabled, but install hardening is still incomplete."),
       detail,
       action: buildLaunchAction("website", "open"),
       deliveryReady: false,
@@ -573,6 +591,7 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
     statusLabel: "Enable required",
     title: "Enable website chat before using it as the launch channel.",
     summary:
+      launchReadiness.message ||
       readiness.message ||
       "Website chat is supported, but it is not configured yet.",
     detail,

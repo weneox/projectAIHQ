@@ -1,3 +1,9 @@
+import {
+  buildWebsiteLaneHeaders,
+  buildWebsiteLaneHealthUrl,
+  classifyWebsiteLaneHealth,
+} from "./website-lane-verifier.mjs";
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -438,10 +444,103 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
   ];
 }
 
+async function verifyWebsiteLane({
+  baseUrl,
+  internalToken,
+  tenantKey,
+  domain,
+  timeoutMs,
+}) {
+  if (!s(tenantKey)) {
+    return [
+      {
+        name: "website_lane_prod_spine",
+        skipped: true,
+        reason: "WEBSITE_LANE_TENANT_KEY missing",
+      },
+    ];
+  }
+
+  const url = buildWebsiteLaneHealthUrl(baseUrl, {
+    tenantKey,
+    domain,
+  });
+  const response = await fetchJson(
+    url,
+    buildWebsiteLaneHeaders({ internalToken }),
+    timeoutMs
+  );
+
+  if (!response.ok) {
+    return [
+      buildResult(
+        "website_lane_prod_spine",
+        false,
+        {
+          url,
+          tenantKey: s(tenantKey),
+          reasonCode: s(
+            response.json?.reasonCode ||
+              response.json?.reason ||
+              response.json?.error ||
+              response.error ||
+              "website_lane_health_unavailable"
+          ),
+          message: s(
+            response.json?.message ||
+              response.json?.reason ||
+              response.error ||
+              "Website lane health endpoint is unavailable."
+          ),
+        },
+        response.status
+      ),
+    ];
+  }
+
+  const lane = classifyWebsiteLaneHealth(response.json || {});
+
+  return [
+    buildResult(
+      "website_lane_prod_spine",
+      lane.tenantFound &&
+        lane.channelConfigured &&
+        lane.configurationReady &&
+        lane.productionReady,
+      {
+        url,
+        tenantKey: lane.tenantKey || s(tenantKey),
+        tenantId: lane.tenantId,
+        status: lane.status,
+        channelConfigured: lane.channelConfigured,
+        configurationReady: lane.configurationReady,
+        widgetEnabled: lane.widgetEnabled,
+        publicWidgetIdPresent: lane.publicWidgetIdPresent,
+        publicWidgetId: lane.publicWidgetId,
+        targetDomain: lane.targetDomain,
+        domainVerificationState: lane.domainVerificationState,
+        productionReady: lane.productionReady,
+        testingOnly: lane.testingOnly,
+        installSurfaceReady: lane.installSurfaceReady,
+        developerHandoffReady: lane.handoffs.developer.ready,
+        gtmHandoffReady: lane.handoffs.gtm.ready,
+        wordpressHandoffReady: lane.handoffs.wordpress.ready,
+        reasonCode: lane.reasonCode,
+        message: lane.message,
+        blockerReasonCodes: lane.blockerReasonCodes,
+      },
+      response.status
+    ),
+  ];
+}
+
 async function runAttempt({
   aihqBaseUrl,
+  internalToken,
   metaBaseUrl,
   twilioBaseUrl,
+  websiteLaneTenantKey,
+  websiteLaneDomain,
   timeoutMs,
   strictSidecars,
   failOnDegraded,
@@ -453,6 +552,15 @@ async function runAttempt({
       baseUrl: aihqBaseUrl,
       timeoutMs,
       failOnDegraded,
+    }))
+  );
+  results.push(
+    ...(await verifyWebsiteLane({
+      baseUrl: aihqBaseUrl,
+      internalToken,
+      tenantKey: websiteLaneTenantKey,
+      domain: websiteLaneDomain,
+      timeoutMs,
     }))
   );
 
@@ -488,6 +596,8 @@ async function main() {
   const internalToken = s(process.env.AIHQ_INTERNAL_TOKEN);
   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
+  const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
+  const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
   const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, true);
 
@@ -500,6 +610,7 @@ async function main() {
       timeoutMs,
       strictSidecars,
       failOnDegraded,
+      websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
     })
   );
 
@@ -523,8 +634,11 @@ async function main() {
 
     lastResults = await runAttempt({
       aihqBaseUrl,
+      internalToken,
       metaBaseUrl,
       twilioBaseUrl,
+      websiteLaneTenantKey,
+      websiteLaneDomain,
       timeoutMs,
       strictSidecars,
       failOnDegraded,
