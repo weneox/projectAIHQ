@@ -594,13 +594,12 @@ test("dm-first launch scopes match the current live Meta permission contract", (
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
     "pages_read_engagement",
-    "pages_messaging",
     "business_management",
     "instagram_basic",
     "instagram_manage_messages",
   ]);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_manage_metadata"), false);
-  assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_messaging"), true);
+  assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_messaging"), false);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("instagram_manage_comments"), false);
 });
 
@@ -625,7 +624,7 @@ test("oauth connect url requests only the live DM-first Meta scopes", async () =
   );
   assert.equal(
     parsed.searchParams.get("scope")?.includes("pages_messaging") || false,
-    true
+    false
   );
 });
 

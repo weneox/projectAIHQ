@@ -34,7 +34,6 @@ import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "pages_show_list",
   "pages_read_engagement",
-  "pages_messaging",
   "business_management",
   "instagram_basic",
   "instagram_manage_messages",
