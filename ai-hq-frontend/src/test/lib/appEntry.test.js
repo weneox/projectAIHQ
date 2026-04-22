@@ -7,6 +7,9 @@ import {
   INTERNAL_ONLY_APP_ROUTES,
   isForcedWorkspaceEntryEnabled,
   isInternalOnlyPath,
+  SETUP_BUSINESS_TRUTH_ROUTE,
+  SETUP_CONVERSATION_POLICY_ROUTE,
+  SETUP_REVIEW_AND_LAUNCH_ROUTE,
   SETUP_WIDGET_ROUTE,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
@@ -186,7 +189,13 @@ describe("resolveAuthenticatedLanding", () => {
   it("normalizes legacy setup routes into the home widget entry", () => {
     expect(__test__.normalizeLegacyAppRoute("/setup")).toBe(SETUP_WIDGET_ROUTE);
     expect(__test__.normalizeLegacyAppRoute("/setup/business")).toBe(
-      SETUP_WIDGET_ROUTE
+      SETUP_BUSINESS_TRUTH_ROUTE
+    );
+    expect(__test__.normalizeLegacyAppRoute("/setup/behavior")).toBe(
+      SETUP_CONVERSATION_POLICY_ROUTE
+    );
+    expect(__test__.normalizeLegacyAppRoute("/setup/review")).toBe(
+      SETUP_REVIEW_AND_LAUNCH_ROUTE
     );
   });
 });
