@@ -213,6 +213,81 @@ function useRouterContext() {
   return value;
 }
 
+function createMockRouter(initialEntries = ["/"], initialIndex) {
+  const normalizedEntries = (Array.isArray(initialEntries) && initialEntries.length
+    ? initialEntries
+    : ["/"]
+  ).map((entry) => normalizeEntry(entry));
+
+  let currentIndex =
+    typeof initialIndex === "number"
+      ? Math.min(Math.max(initialIndex, 0), normalizedEntries.length - 1)
+      : normalizedEntries.length - 1;
+
+  let entries = normalizedEntries.slice();
+  const listeners = new Set();
+
+  function notify() {
+    listeners.forEach((listener) => listener());
+  }
+
+  function getLocation() {
+    return entries[currentIndex] || normalizeEntry("/");
+  }
+
+  function navigate(to, options = {}) {
+    if (typeof to === "number") {
+      const nextIndex = Math.min(
+        Math.max(currentIndex + to, 0),
+        entries.length - 1
+      );
+      if (nextIndex !== currentIndex) {
+        currentIndex = nextIndex;
+        notify();
+      }
+      return Promise.resolve();
+    }
+
+    const nextLocation = resolveToLocation(getLocation(), to, options.state);
+    if (!nextLocation) return Promise.resolve();
+
+    if (options.replace) {
+      entries[currentIndex] = nextLocation;
+    } else {
+      entries = entries.slice(0, currentIndex + 1).concat(nextLocation);
+      currentIndex = entries.length - 1;
+    }
+
+    notify();
+    return Promise.resolve();
+  }
+
+  return {
+    get state() {
+      return {
+        location: getLocation(),
+        historyAction: "POP",
+        navigation: { state: "idle" },
+        matches: [],
+        initialized: true,
+      };
+    },
+    routes: [],
+    navigate,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    dispose() {
+      listeners.clear();
+    },
+    revalidate() {},
+    initialize() {
+      return this;
+    },
+  };
+}
+
 export function MemoryRouter({
   initialEntries = ["/"],
   initialIndex,
@@ -312,6 +387,45 @@ export function BrowserRouter({ children }) {
   return <MemoryRouter initialEntries={[currentEntry]}>{children}</MemoryRouter>;
 }
 
+export function HashRouter({ children }) {
+  return <BrowserRouter>{children}</BrowserRouter>;
+}
+
+export function RouterProvider({ router, fallbackElement = null }) {
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    if (!router?.subscribe) return undefined;
+    return router.subscribe(() => {
+      forceRender((value) => value + 1);
+    });
+  }, [router]);
+
+  const location = router?.state?.location || normalizeEntry("/");
+  const navigate = useCallback(
+    (to, options = {}) => router?.navigate?.(to, options),
+    [router]
+  );
+
+  const value = useMemo(
+    () => ({
+      location,
+      navigate,
+    }),
+    [location, navigate]
+  );
+
+  if (!router) return fallbackElement;
+
+  return (
+    <RouterContext.Provider value={value}>
+      <ParamsContext.Provider value={{}}>
+        {fallbackElement}
+      </ParamsContext.Provider>
+    </RouterContext.Provider>
+  );
+}
+
 export function Routes({ children }) {
   const { location } = useRouterContext();
   const resolved = useMemo(
@@ -341,6 +455,10 @@ export function Navigate({ to, replace = false, state = null }) {
 }
 
 export function Outlet() {
+  return null;
+}
+
+export function useOutlet() {
   return null;
 }
 
@@ -412,6 +530,26 @@ export function NavLink({
   );
 }
 
+export function Form({ children, onSubmit, ...rest }) {
+  return (
+    <form
+      {...rest}
+      onSubmit={(event) => {
+        onSubmit?.(event);
+        if (!event.defaultPrevented) {
+          event.preventDefault();
+        }
+      }}
+    >
+      {children}
+    </form>
+  );
+}
+
+export function ScrollRestoration() {
+  return null;
+}
+
 export function useNavigate() {
   return useRouterContext().navigate;
 }
@@ -478,6 +616,50 @@ export function useMatch(pattern) {
   return matchPath(pattern, location.pathname);
 }
 
+export function useResolvedPath(to = "") {
+  const location = useLocation();
+  return resolveToLocation(location, to, location.state);
+}
+
+export function useHref(to = "") {
+  const resolved = useResolvedPath(to);
+  return locationToHref(resolved);
+}
+
+export function useNavigationType() {
+  return "POP";
+}
+
+export function useNavigation() {
+  return {
+    state: "idle",
+    location: null,
+    formData: null,
+    formMethod: undefined,
+    formAction: undefined,
+    formEncType: undefined,
+  };
+}
+
+export function useRouteError() {
+  return null;
+}
+
+export function useLoaderData() {
+  return undefined;
+}
+
+export function useActionData() {
+  return undefined;
+}
+
+export function useRevalidator() {
+  return {
+    revalidate() {},
+    state: "idle",
+  };
+}
+
 export function matchPath(pattern, pathname) {
   if (typeof pattern === "string") {
     const matched = matchRoutePath(pathname, pattern);
@@ -510,20 +692,42 @@ export function generatePath(path = "/", params = {}) {
   );
 }
 
-export function useResolvedPath(to = "") {
-  const location = useLocation();
-  return resolveToLocation(location, to, location.state);
-}
-
-export function useHref(to = "") {
-  const resolved = useResolvedPath(to);
-  return locationToHref(resolved);
-}
-
 export function createPath(location = {}) {
   return locationToHref(normalizeEntry(location));
 }
 
-export function useNavigationType() {
-  return "POP";
+export function createMemoryRouter(routes = [], options = {}) {
+  const router = createMockRouter(
+    options.initialEntries || ["/"],
+    options.initialIndex
+  );
+  router.routes = routes;
+  return router;
+}
+
+export function createBrowserRouter(routes = [], options = {}) {
+  return createMemoryRouter(routes, options);
+}
+
+export function createRoutesFromElements(children) {
+  return React.Children.toArray(children);
+}
+
+export function redirect(location, init = 302) {
+  return { type: "redirect", location, init };
+}
+
+export function replace(location, init = 302) {
+  return { type: "replace", location, init };
+}
+
+export function defer(value) {
+  return value;
+}
+
+export function Await({ children, resolve }) {
+  if (typeof children === "function") {
+    return children(resolve);
+  }
+  return children ?? null;
 }
