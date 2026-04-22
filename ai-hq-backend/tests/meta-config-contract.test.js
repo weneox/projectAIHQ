@@ -67,7 +67,67 @@ test(
 );
 
 test(
-  "ai-hq config validation fails when explicit and fallback connect secrets differ",
+  "ai-hq Meta connect startup contract stays disabled when config is completely absent",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      delete process.env.META_APP_ID;
+      delete process.env.META_REDIRECT_URI;
+      delete process.env.META_CONNECT_APP_SECRET;
+      delete process.env.META_APP_SECRET;
+
+      const { getMetaConnectStartupConfig } = await loadConfigFresh("disabled");
+      const startupConfig = getMetaConnectStartupConfig();
+      const { getConfigIssues } = await loadValidateFresh("disabled");
+      const issues = getConfigIssues();
+      const metaIssue = issues.find((item) => item.key === "meta.oauth");
+
+      assert.equal(startupConfig.ok, true);
+      assert.equal(startupConfig.configOutcome, "disabled");
+      assert.equal(startupConfig.hasAppId, false);
+      assert.equal(startupConfig.hasRedirectUri, false);
+      assert.equal(startupConfig.hasSecretSourceResolved, false);
+      assert.equal(metaIssue, undefined);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "ai-hq Meta connect startup contract fails when config is only partially present",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      process.env.META_APP_ID = "meta-app-id";
+      delete process.env.META_REDIRECT_URI;
+      delete process.env.META_CONNECT_APP_SECRET;
+      delete process.env.META_APP_SECRET;
+
+      const { getMetaConnectStartupConfig } = await loadConfigFresh("partial");
+      const startupConfig = getMetaConnectStartupConfig();
+      const { getConfigIssues } = await loadValidateFresh("partial");
+      const issues = getConfigIssues();
+      const metaIssue = issues.find((item) => item.key === "meta.oauth");
+
+      assert.equal(startupConfig.ok, false);
+      assert.equal(startupConfig.configOutcome, "invalid");
+      assert.equal(startupConfig.reason, "missing_connect_secret");
+      assert.ok(metaIssue);
+      assert.equal(metaIssue.level, "error");
+      assert.match(String(metaIssue.message || ""), /must all be set together/i);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "ai-hq config validation still fails when explicit and fallback connect secrets differ",
   { concurrency: false },
   async () => {
     const envSnapshot = { ...process.env };
@@ -79,10 +139,16 @@ test(
       process.env.META_CONNECT_APP_SECRET = "connect-secret-a";
       process.env.META_APP_SECRET = "connect-secret-b";
 
+      const { getMetaConnectStartupConfig } = await loadConfigFresh("mismatch");
+      const startupConfig = getMetaConnectStartupConfig();
+
       const { getConfigIssues } = await loadValidateFresh("mismatch");
       const issues = getConfigIssues();
       const metaIssue = issues.find((item) => item.key === "meta.oauth");
 
+      assert.equal(startupConfig.ok, false);
+      assert.equal(startupConfig.configOutcome, "invalid");
+      assert.equal(startupConfig.reason, "secret_env_mismatch");
       assert.ok(metaIssue);
       assert.equal(metaIssue.level, "error");
       assert.equal(metaIssue.category, "provider-oauth");
@@ -90,6 +156,38 @@ test(
       assert.ok(metaIssue.envKeys.includes("META_CONNECT_APP_SECRET"));
       assert.ok(metaIssue.envKeys.includes("META_APP_SECRET"));
       assert.match(String(metaIssue.message || ""), /differ/i);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "ai-hq Meta connect startup contract passes when full config is valid",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      process.env.META_APP_ID = "meta-app-id";
+      process.env.META_REDIRECT_URI =
+        "https://app.example.test/api/channels/meta/callback";
+      process.env.META_CONNECT_APP_SECRET = "connect-secret";
+      process.env.META_APP_SECRET = "connect-secret";
+
+      const { getMetaConnectStartupConfig } = await loadConfigFresh("valid");
+      const startupConfig = getMetaConnectStartupConfig();
+      const { getConfigIssues } = await loadValidateFresh("valid");
+      const issues = getConfigIssues();
+      const metaIssue = issues.find((item) => item.key === "meta.oauth");
+
+      assert.equal(startupConfig.ok, true);
+      assert.equal(startupConfig.configOutcome, "ok");
+      assert.equal(startupConfig.hasAppId, true);
+      assert.equal(startupConfig.hasRedirectUri, true);
+      assert.equal(startupConfig.hasSecretSourceResolved, true);
+      assert.equal(startupConfig.secretSource, "META_CONNECT_APP_SECRET");
+      assert.equal(metaIssue, undefined);
     } finally {
       restoreEnv(envSnapshot);
     }

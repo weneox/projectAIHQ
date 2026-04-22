@@ -107,6 +107,87 @@ export function getMetaConnectOauthConfig(env = process.env) {
   };
 }
 
+function buildMetaConnectInvalidReason(metaConnectOauth = {}) {
+  const secretConfig = metaConnectOauth?.secretConfig || {};
+  if (secretConfig.mismatch) return "secret_env_mismatch";
+  if (!secretConfig.resolvedSecret) return "missing_connect_secret";
+  if (!metaConnectOauth?.hasAppId) return "missing_meta_app_id";
+  if (!metaConnectOauth?.hasRedirectUri) return "missing_meta_redirect_uri";
+  return "incomplete_connect_oauth_config";
+}
+
+export function getMetaConnectStartupConfig(env = process.env) {
+  const metaConnectOauth = getMetaConnectOauthConfig(env);
+  const secretConfig = metaConnectOauth.secretConfig || {};
+  const hasSecretSourceResolved = Boolean(secretConfig.resolvedSource);
+
+  if (secretConfig.mismatch) {
+    return {
+      ok: false,
+      configOutcome: "invalid",
+      reason: buildMetaConnectInvalidReason(metaConnectOauth),
+      hasAppId: metaConnectOauth.hasAppId === true,
+      hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+      secretSource: secretConfig.resolvedSource || "",
+      hasSecretSourceResolved,
+      secretFingerprint: secretConfig.resolvedFingerprint || "",
+      explicitEnvPresent: secretConfig.explicitPresent === true,
+      fallbackEnvPresent: secretConfig.fallbackPresent === true,
+      explicitFingerprint: secretConfig.explicitFingerprint || "",
+      fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+    };
+  }
+
+  if (!metaConnectOauth.hasOauthPartial) {
+    return {
+      ok: true,
+      configOutcome: "disabled",
+      reason: "",
+      hasAppId: false,
+      hasRedirectUri: false,
+      secretSource: "",
+      hasSecretSourceResolved: false,
+      secretFingerprint: "",
+      explicitEnvPresent: secretConfig.explicitPresent === true,
+      fallbackEnvPresent: secretConfig.fallbackPresent === true,
+      explicitFingerprint: secretConfig.explicitFingerprint || "",
+      fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+    };
+  }
+
+  if (!metaConnectOauth.hasOauthFull) {
+    return {
+      ok: false,
+      configOutcome: "invalid",
+      reason: buildMetaConnectInvalidReason(metaConnectOauth),
+      hasAppId: metaConnectOauth.hasAppId === true,
+      hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+      secretSource: secretConfig.resolvedSource || "",
+      hasSecretSourceResolved,
+      secretFingerprint: secretConfig.resolvedFingerprint || "",
+      explicitEnvPresent: secretConfig.explicitPresent === true,
+      fallbackEnvPresent: secretConfig.fallbackPresent === true,
+      explicitFingerprint: secretConfig.explicitFingerprint || "",
+      fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+    };
+  }
+
+  return {
+    ok: true,
+    configOutcome: "ok",
+    reason: "",
+    hasAppId: metaConnectOauth.hasAppId === true,
+    hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+    secretSource: secretConfig.resolvedSource || "",
+    hasSecretSourceResolved,
+    secretFingerprint: secretConfig.resolvedFingerprint || "",
+    explicitEnvPresent: secretConfig.explicitPresent === true,
+    fallbackEnvPresent: secretConfig.fallbackPresent === true,
+    explicitFingerprint: secretConfig.explicitFingerprint || "",
+    fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+  };
+}
+
 export function readMetaConnectAppSecret(env = process.env) {
   return getMetaConnectSecretConfig(env).resolvedSecret;
 }

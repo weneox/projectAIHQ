@@ -1,4 +1,4 @@
-import { cfg, getMetaConnectOauthConfig } from "../config.js";
+import { cfg, getMetaConnectStartupConfig } from "../config.js";
 import {
   createValidationIssue,
   formatValidationFailure,
@@ -398,37 +398,27 @@ export function getConfigIssues() {
     );
   }
 
-  const metaConnectOauth = getMetaConnectOauthConfig();
-  const hasMetaOauthPartial = metaConnectOauth.hasOauthPartial;
-  const hasMetaOauthFull = metaConnectOauth.hasOauthFull;
+  const metaConnectConfig = getMetaConnectStartupConfig();
 
-  if (metaConnectOauth?.secretConfig?.mismatch) {
+  if (metaConnectConfig.configOutcome === "invalid") {
+    const mismatch = metaConnectConfig.reason === "secret_env_mismatch";
     pushIssue(
       issues,
       "error",
       "meta.oauth",
-      "META_CONNECT_APP_SECRET and META_APP_SECRET are both set but differ. ai-hq-backend must resolve a single connect/reconnect secret.",
+      mismatch
+        ? "META_CONNECT_APP_SECRET and META_APP_SECRET are both set but differ. ai-hq-backend must resolve a single connect/reconnect secret."
+        : "META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI must all be set together.",
       {
         category: "provider-oauth",
-        envKeys: ["META_CONNECT_APP_SECRET", "META_APP_SECRET"],
-      }
-    );
-  }
-
-  if (hasMetaOauthPartial && !hasMetaOauthFull) {
-    pushIssue(
-      issues,
-      "error",
-      "meta.oauth",
-      "META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI must all be set together.",
-      {
-        category: "provider-oauth",
-        envKeys: [
-          "META_APP_ID",
-          "META_CONNECT_APP_SECRET",
-          "META_APP_SECRET",
-          "META_REDIRECT_URI",
-        ],
+        envKeys: mismatch
+          ? ["META_CONNECT_APP_SECRET", "META_APP_SECRET"]
+          : [
+              "META_APP_ID",
+              "META_CONNECT_APP_SECRET",
+              "META_APP_SECRET",
+              "META_REDIRECT_URI",
+            ],
       }
     );
   }

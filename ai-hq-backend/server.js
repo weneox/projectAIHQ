@@ -6,7 +6,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 
-import { cfg, getMetaConnectOauthConfig } from "./src/config.js";
+import { cfg, getMetaConnectStartupConfig } from "./src/config.js";
 import { assertConfigValid, isDbRequiredAppEnv } from "./src/config/validate.js";
 import { printFeatureReport } from "./src/config/featureReport.js";
 import {
@@ -82,31 +82,34 @@ function isWebsiteWidgetInstallCorsPath(req) {
   );
 }
 
-function buildMetaConnectInvalidReason(metaConnectOauth = {}) {
-  const secretConfig = metaConnectOauth?.secretConfig || {};
-  if (secretConfig.mismatch) return "secret_env_mismatch";
-  if (!secretConfig.resolvedSecret) return "missing_connect_secret";
-  if (!metaConnectOauth?.hasAppId) return "missing_meta_app_id";
-  if (!metaConnectOauth?.hasRedirectUri) return "missing_meta_redirect_uri";
-  return "incomplete_connect_oauth_config";
-}
-
 function validateAndLogMetaConnectConfig(logger) {
-  const metaConnectOauth = getMetaConnectOauthConfig();
-  const secretConfig = metaConnectOauth.secretConfig || {};
+  const metaConnectConfig = getMetaConnectStartupConfig();
 
-  if (secretConfig.mismatch || !metaConnectOauth.hasOauthFull) {
-    const reason = buildMetaConnectInvalidReason(metaConnectOauth);
+  if (metaConnectConfig.configOutcome === "disabled") {
+    logger.info("meta.config.disabled", {
+      service: "ai-hq-backend",
+      secretRole: "connect_oauth",
+      hasAppId: metaConnectConfig.hasAppId === true,
+      hasRedirectUri: metaConnectConfig.hasRedirectUri === true,
+      hasSecretSourceResolved: metaConnectConfig.hasSecretSourceResolved === true,
+      secretSource: metaConnectConfig.secretSource || "",
+      configOutcome: "disabled",
+    });
+    return;
+  }
+
+  if (metaConnectConfig.configOutcome === "invalid") {
+    const reason = metaConnectConfig.reason || "incomplete_connect_oauth_config";
     logger.error("meta.config.invalid", null, {
       service: "ai-hq-backend",
       secretRole: "connect_oauth",
       reason,
-      explicitEnvPresent: secretConfig.explicitPresent === true,
-      fallbackEnvPresent: secretConfig.fallbackPresent === true,
-      explicitFingerprint: secretConfig.explicitFingerprint || "",
-      fallbackFingerprint: secretConfig.fallbackFingerprint || "",
-      hasAppId: metaConnectOauth.hasAppId === true,
-      hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+      explicitEnvPresent: metaConnectConfig.explicitEnvPresent === true,
+      fallbackEnvPresent: metaConnectConfig.fallbackEnvPresent === true,
+      explicitFingerprint: metaConnectConfig.explicitFingerprint || "",
+      fallbackFingerprint: metaConnectConfig.fallbackFingerprint || "",
+      hasAppId: metaConnectConfig.hasAppId === true,
+      hasRedirectUri: metaConnectConfig.hasRedirectUri === true,
       configOutcome: "invalid",
     });
 
@@ -120,10 +123,10 @@ function validateAndLogMetaConnectConfig(logger) {
   logger.info("meta.config.loaded", {
     service: "ai-hq-backend",
     secretRole: "connect_oauth",
-    secretSource: secretConfig.resolvedSource || "",
-    secretFingerprint: secretConfig.resolvedFingerprint || "",
-    hasAppId: metaConnectOauth.hasAppId === true,
-    hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+    secretSource: metaConnectConfig.secretSource || "",
+    secretFingerprint: metaConnectConfig.secretFingerprint || "",
+    hasAppId: metaConnectConfig.hasAppId === true,
+    hasRedirectUri: metaConnectConfig.hasRedirectUri === true,
     configOutcome: "ok",
   });
 }
