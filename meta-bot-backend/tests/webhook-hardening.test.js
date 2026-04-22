@@ -5,6 +5,8 @@ import express from "express";
 
 process.env.META_APP_SECRET = "meta-secret";
 process.env.AIHQ_INTERNAL_TOKEN = "internal-meta-token";
+process.env.AIHQ_BASE_URL =
+  process.env.AIHQ_BASE_URL || "https://aihq.example.test";
 
 const { signMetaBody } = await import("../src/config.js");
 const { registerWebhookRoutes } = await import("../src/routes/webhook.js");
@@ -168,7 +170,7 @@ test("invalid Meta webhook signature is rejected", async () => {
     body,
     rawBody,
     headers: {
-      "x-hub-signature-256": "sha256=bad",
+      "x-hub-signature-256": `sha256=${"0".repeat(64)}`,
     },
   });
   assert.equal(invalid.res.statusCode, 403);
@@ -176,6 +178,28 @@ test("invalid Meta webhook signature is rejected", async () => {
 
   const metrics = getRuntimeMetricsSnapshot();
   assert.equal(metrics["meta_webhook_verification_failures_total:invalid_meta_signature"], 1);
+});
+
+test("malformed Meta webhook signature is rejected", async () => {
+  const app = express();
+  registerWebhookRoutes(app);
+  reliabilityTest.metrics.clear();
+
+  const body = { object: "page", entry: [] };
+  const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+
+  const malformed = await invokeHandler(app, "post", "/webhook", {
+    body,
+    rawBody,
+    headers: {
+      "x-hub-signature-256": "sha256=bad",
+    },
+  });
+  assert.equal(malformed.res.statusCode, 403);
+  assert.equal(malformed.res.body?.error, "malformed_meta_signature");
+
+  const metrics = getRuntimeMetricsSnapshot();
+  assert.equal(metrics["meta_webhook_verification_failures_total:malformed_meta_signature"], 1);
 });
 
 test("signature verification uses raw body bytes instead of parsed body reserialization", async () => {
