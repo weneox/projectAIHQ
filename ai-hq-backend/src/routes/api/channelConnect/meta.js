@@ -60,7 +60,7 @@ export const META_USER_TOKEN_EXPIRING_SOON_MS = 10 * 60 * 1000;
 export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
 
-const META_DM_WEBHOOK_SUBSCRIPTION_SOURCE = "instagram_subscribed_apps";
+const META_DM_WEBHOOK_SUBSCRIPTION_SOURCE = "page_subscribed_apps";
 const META_DM_WEBHOOK_SUBSCRIPTION_FIELDS = Object.freeze(["messages"]);
 const META_DM_WEBHOOK_SUBSCRIPTION_INPUT_MISSING_REASON =
   "meta_instagram_subscription_input_missing";
@@ -1206,21 +1206,21 @@ export async function getMetaPageAccessContextForUserToken(pageId, userAccessTok
 async function subscribeMetaInstagramAccountToApp({
   pageId = "",
   igUserId = "",
-  userAccessToken = "",
+  pageAccessToken = "",
   log = createSafeLogger(),
 } = {}) {
   const safePageId = s(pageId);
   const safeIgUserId = s(igUserId);
-  const safeUserAccessToken = s(userAccessToken);
+  const safePageAccessToken = s(pageAccessToken);
   const subscribedAt = new Date().toISOString();
   const source = META_DM_WEBHOOK_SUBSCRIPTION_SOURCE;
   const subscribedFields = [...META_DM_WEBHOOK_SUBSCRIPTION_FIELDS];
   const subscribedFieldsValue = subscribedFields.join(",");
 
-  if (!safeIgUserId || !safeUserAccessToken) {
+  if (!safePageId || !safePageAccessToken) {
     throw buildMetaConnectFailureError(
       META_DM_WEBHOOK_SUBSCRIPTION_INPUT_MISSING_REASON,
-      "Meta Instagram webhook subscription could not start because the Instagram professional account id or user access token is missing.",
+      "Meta Instagram webhook subscription could not start because the Facebook Page id or page access token is missing.",
       {
         status: 409,
         details: {
@@ -1229,13 +1229,16 @@ async function subscribeMetaInstagramAccountToApp({
           source,
           subscribedFields,
           subscribedFieldsValue,
+          tokenKind: "page_access_token",
+          graphHost: "graph.facebook.com",
+          graphVersion: s(cfg.meta.apiVersion, "v23.0"),
         },
       }
     );
   }
 
-  const url = `https://graph.instagram.com/v24.0/${encodeURIComponent(
-    safeIgUserId
+  const url = `${metaGraphBase()}/${encodeURIComponent(
+    safePageId
   )}/subscribed_apps`;
   log.info("meta.connect.webhook_subscription.start", {
     pageId: safePageId,
@@ -1243,27 +1246,32 @@ async function subscribeMetaInstagramAccountToApp({
     source,
     subscribedFields,
     subscribedFieldsValue,
+    tokenKind: "page_access_token",
+    graphHost: "graph.facebook.com",
+    graphVersion: s(cfg.meta.apiVersion, "v23.0"),
   });
 
   try {
-    const response = await fetchJson(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
       },
       body: new URLSearchParams({
-        access_token: safeUserAccessToken,
+        access_token: safePageAccessToken,
         subscribed_fields: subscribedFieldsValue,
       }),
     });
 
+    const response = await readMetaVerificationPayload(res);
     const ok =
-      response === true ||
-      response?.success === true ||
-      response?.success === 1 ||
-      response?.result === true ||
-      response?.subscribed === true;
+      res.ok &&
+      (response === true ||
+        response?.success === true ||
+        response?.success === 1 ||
+        response?.result === true ||
+        response?.subscribed === true);
     const result = {
       ok,
       source,
@@ -1272,16 +1280,12 @@ async function subscribeMetaInstagramAccountToApp({
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
+      tokenKind: "page_access_token",
+      graphHost: "graph.facebook.com",
+      graphVersion: s(cfg.meta.apiVersion, "v23.0"),
+      status: Number(res.status || 0),
       reasonCode: ok ? "" : META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
-      response: {
-        success:
-          response === true
-            ? true
-            : response?.success === true || response?.success === 1,
-        result: response?.result === true,
-        subscribed: response?.subscribed === true,
-        id: cleanNullable(response?.id),
-      },
+      response,
     };
 
     if (!ok) {
@@ -1290,7 +1294,7 @@ async function subscribeMetaInstagramAccountToApp({
         result.reasonCode,
         "Meta Instagram webhook subscription failed.",
         {
-          status: 409,
+          status: Number(res.status || 409),
           details: result,
         }
       );
@@ -1299,6 +1303,10 @@ async function subscribeMetaInstagramAccountToApp({
     log.info("meta.connect.webhook_subscription.success", result);
     return result;
   } catch (error) {
+    if (error?.reasonCode === META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON) {
+      throw error;
+    }
+
     const result = {
       ok: false,
       source,
@@ -1307,15 +1315,19 @@ async function subscribeMetaInstagramAccountToApp({
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
+      tokenKind: "page_access_token",
+      graphHost: "graph.facebook.com",
+      graphVersion: s(cfg.meta.apiVersion, "v23.0"),
       reasonCode: META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
       error: s(error?.message || error),
+      status: Number(error?.status || 409),
     };
     log.error("meta.connect.webhook_subscription.failed", error, result);
     throw buildMetaConnectFailureError(
       result.reasonCode,
       "Meta Instagram webhook subscription failed.",
       {
-        status: Number(error?.status || 409),
+        status: result.status,
         details: result,
       }
     );
@@ -2008,7 +2020,7 @@ async function connectInstagramChannel({
   const webhookSubscription = await subscribeMetaInstagramAccountToApp({
     pageId: resolvedSelected.pageId,
     igUserId: resolvedSelected.igUserId,
-    userAccessToken,
+    pageAccessToken: resolvedSelected.pageAccessToken,
     log,
   });
   await deleteMetaSecretKeys(db, tenant.id, [

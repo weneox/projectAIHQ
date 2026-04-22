@@ -1035,12 +1035,12 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.equal(callbackResult.payload?.sourceId, "source-1");
   assert.equal(db.channel?.status, "connected");
   assert.equal(subscribedAppsRequests.length, 1);
-  assert.equal(subscribedAppsRequests[0]?.hostname, "graph.instagram.com");
-  assert.equal(
-    subscribedAppsRequests[0]?.pathname,
-    "/v24.0/ig-1/subscribed_apps"
+  assert.equal(subscribedAppsRequests[0]?.hostname, "graph.facebook.com");
+  assert.match(
+    subscribedAppsRequests[0]?.pathname || "",
+    /\/page-1\/subscribed_apps$/
   );
-  assert.equal(subscribedAppsRequests[0]?.accessToken, "user-token-single");
+  assert.equal(subscribedAppsRequests[0]?.accessToken, "page-token-1");
   assert.equal(subscribedAppsRequests[0]?.subscribedFields, "messages");
   assert.equal(db.channel?.config?.webhook_subscription_ok, true);
   assert.equal(db.channel?.health?.webhook_subscription_ok, true);
@@ -1052,11 +1052,11 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.deepEqual(db.channel?.health?.webhook_subscription_fields, ["messages"]);
   assert.equal(
     db.channel?.config?.webhook_subscription_source,
-    "instagram_subscribed_apps"
+    "page_subscribed_apps"
   );
   assert.equal(
     db.channel?.health?.webhook_subscription_source,
-    "instagram_subscribed_apps"
+    "page_subscribed_apps"
   );
 
   const logEvents = logEntries.map((entry) => entry.event);
@@ -1074,18 +1074,34 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.ok(webhookSuccessIndex < channelUpsertedIndex);
   assert.equal(
     logEntries[webhookStartIndex]?.payload?.source,
-    "instagram_subscribed_apps"
+    "page_subscribed_apps"
   );
   assert.deepEqual(logEntries[webhookStartIndex]?.payload?.subscribedFields, [
     "messages",
   ]);
   assert.equal(
+    logEntries[webhookStartIndex]?.payload?.tokenKind,
+    "page_access_token"
+  );
+  assert.equal(
+    logEntries[webhookStartIndex]?.payload?.graphHost,
+    "graph.facebook.com"
+  );
+  assert.equal(
     logEntries[webhookSuccessIndex]?.payload?.source,
-    "instagram_subscribed_apps"
+    "page_subscribed_apps"
   );
   assert.deepEqual(logEntries[webhookSuccessIndex]?.payload?.subscribedFields, [
     "messages",
   ]);
+  assert.equal(
+    logEntries[webhookSuccessIndex]?.payload?.tokenKind,
+    "page_access_token"
+  );
+  assert.equal(
+    logEntries[webhookSuccessIndex]?.payload?.graphHost,
+    "graph.facebook.com"
+  );
   assert.equal(logEntries[channelUpsertedIndex]?.payload?.pageId, "page-1");
   assert.equal(logEntries[channelUpsertedIndex]?.payload?.igUserId, "ig-1");
 
