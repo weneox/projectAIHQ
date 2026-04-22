@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "crypto";
 import express from "express";
 
 process.env.META_APP_SECRET = "meta-secret";
@@ -114,7 +115,29 @@ test("valid Meta webhook signature is accepted", async () => {
   assert.equal(res.statusCode, 200);
 });
 
-test("missing or invalid Meta webhook signatures are rejected", async () => {
+test("legacy Meta signature header is accepted when x-hub-signature-256 is absent", async () => {
+  const app = express();
+  registerWebhookRoutes(app);
+
+  const body = { object: "page", entry: [] };
+  const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+  const signature = `sha1=${crypto
+    .createHmac("sha1", process.env.META_APP_SECRET)
+    .update(rawBody)
+    .digest("hex")}`;
+
+  const { res } = await invokeHandler(app, "post", "/webhook", {
+    body,
+    rawBody,
+    headers: {
+      "x-hub-signature": signature,
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+});
+
+test("missing Meta webhook signature is rejected", async () => {
   const app = express();
   registerWebhookRoutes(app);
   reliabilityTest.metrics.clear();
@@ -129,6 +152,18 @@ test("missing or invalid Meta webhook signatures are rejected", async () => {
   assert.equal(missing.res.statusCode, 403);
   assert.equal(missing.res.body?.error, "missing_meta_signature");
 
+  const metrics = getRuntimeMetricsSnapshot();
+  assert.equal(metrics["meta_webhook_verification_failures_total:missing_meta_signature"], 1);
+});
+
+test("invalid Meta webhook signature is rejected", async () => {
+  const app = express();
+  registerWebhookRoutes(app);
+  reliabilityTest.metrics.clear();
+
+  const body = { object: "page", entry: [] };
+  const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+
   const invalid = await invokeHandler(app, "post", "/webhook", {
     body,
     rawBody,
@@ -140,8 +175,35 @@ test("missing or invalid Meta webhook signatures are rejected", async () => {
   assert.equal(invalid.res.body?.error, "invalid_meta_signature");
 
   const metrics = getRuntimeMetricsSnapshot();
-  assert.equal(metrics["meta_webhook_verification_failures_total:missing_meta_signature"], 1);
   assert.equal(metrics["meta_webhook_verification_failures_total:invalid_meta_signature"], 1);
+});
+
+test("signature verification uses raw body bytes instead of parsed body reserialization", async () => {
+  const app = express();
+  registerWebhookRoutes(app);
+
+  const rawJson = '{"object":"page","entry":[],"z":"last","a":"first"}';
+  const rawBody = Buffer.from(rawJson, "utf8");
+  const body = {
+    a: "first",
+    entry: [],
+    object: "page",
+    z: "last",
+  };
+  const signature = signMetaBody(rawBody);
+  const reparsedSignature = signMetaBody(Buffer.from(JSON.stringify(body), "utf8"));
+
+  assert.notEqual(reparsedSignature, signature);
+
+  const { res } = await invokeHandler(app, "post", "/webhook", {
+    body,
+    rawBody,
+    headers: {
+      "x-hub-signature-256": signature,
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
 });
 
 test("malformed internal outbound payload is rejected", async () => {

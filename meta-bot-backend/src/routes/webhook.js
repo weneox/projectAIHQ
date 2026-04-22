@@ -33,6 +33,16 @@ const logger = createStructuredLogger({
   service: "meta-bot-backend",
   component: "webhook",
 });
+const META_SIGNATURE_HEADER_CANDIDATES = Object.freeze([
+  {
+    name: "x-hub-signature-256",
+    algorithm: "sha256",
+  },
+  {
+    name: "x-hub-signature",
+    algorithm: "sha1",
+  },
+]);
 
 function summarizeExec(exec) {
   const results = Array.isArray(exec?.results) ? exec.results : [];
@@ -70,41 +80,215 @@ function safeEqHex(a, b) {
   }
 }
 
+function fingerprintSecret(secret = "") {
+  const safeSecret = s(secret);
+  return safeSecret
+    ? crypto.createHash("sha256").update(safeSecret).digest("hex").slice(0, 12)
+    : "";
+}
+
+function readHeader(req, name = "") {
+  const safeName = s(name).toLowerCase();
+  if (!safeName) return "";
+
+  const direct = req?.headers?.[safeName];
+  if (Array.isArray(direct)) {
+    return s(direct[0]);
+  }
+  if (direct != null) {
+    return s(direct);
+  }
+  if (typeof req?.get === "function") {
+    return s(req.get(safeName));
+  }
+  return "";
+}
+
+function pickMetaSignatureHeader(req) {
+  for (const candidate of META_SIGNATURE_HEADER_CANDIDATES) {
+    const value = readHeader(req, candidate.name);
+    if (value) {
+      return {
+        headerName: candidate.name,
+        headerValue: value,
+        expectedAlgorithm: candidate.algorithm,
+      };
+    }
+  }
+
+  return {
+    headerName: "",
+    headerValue: "",
+    expectedAlgorithm: "",
+  };
+}
+
+function parseMetaSignatureHeader(signature = "", expectedAlgorithm = "") {
+  const normalized = s(signature).toLowerCase();
+  if (!normalized) {
+    return {
+      ok: false,
+      reason: "missing_meta_signature",
+      algorithm: "",
+      normalized: "",
+    };
+  }
+
+  const match = /^([a-z0-9_-]+)=([0-9a-f]+)$/i.exec(normalized);
+  if (!match) {
+    return {
+      ok: false,
+      reason: "malformed_meta_signature",
+      algorithm: "",
+      normalized,
+    };
+  }
+
+  const algorithm = s(match[1]).toLowerCase();
+  const digest = s(match[2]).toLowerCase();
+  if (expectedAlgorithm && algorithm !== expectedAlgorithm) {
+    return {
+      ok: false,
+      reason: "malformed_meta_signature",
+      algorithm,
+      normalized: `${algorithm}=${digest}`,
+    };
+  }
+
+  const expectedDigestLength =
+    algorithm === "sha256" ? 64 : algorithm === "sha1" ? 40 : 0;
+  if (!expectedDigestLength) {
+    return {
+      ok: false,
+      reason: "unsupported_meta_signature_algorithm",
+      algorithm,
+      normalized: `${algorithm}=${digest}`,
+    };
+  }
+
+  if (digest.length !== expectedDigestLength) {
+    return {
+      ok: false,
+      reason: "malformed_meta_signature",
+      algorithm,
+      normalized: `${algorithm}=${digest}`,
+    };
+  }
+
+  return {
+    ok: true,
+    reason: "",
+    algorithm,
+    normalized: `${algorithm}=${digest}`,
+  };
+}
+
+function computeMetaSignature(rawBody, secret, algorithm = "sha256") {
+  const safeSecret = s(secret);
+  if (!safeSecret || !Buffer.isBuffer(rawBody)) return "";
+  if (!["sha256", "sha1"].includes(s(algorithm).toLowerCase())) return "";
+
+  return `${algorithm}=${crypto
+    .createHmac(algorithm, safeSecret)
+    .update(rawBody)
+    .digest("hex")}`.toLowerCase();
+}
+
+function readRawBodyBuffer(req) {
+  if (Buffer.isBuffer(req?.rawBody)) {
+    return {
+      rawBody: req.rawBody,
+      source: "req.rawBody",
+    };
+  }
+  if (req?.rawBody instanceof Uint8Array) {
+    return {
+      rawBody: Buffer.from(req.rawBody),
+      source: "req.rawBody_uint8array",
+    };
+  }
+  if (Buffer.isBuffer(req?.body)) {
+    return {
+      rawBody: req.body,
+      source: "req.body_buffer",
+    };
+  }
+  if (req?.body instanceof Uint8Array) {
+    return {
+      rawBody: Buffer.from(req.body),
+      source: "req.body_uint8array",
+    };
+  }
+
+  return {
+    rawBody: null,
+    source: "",
+  };
+}
+
+function computeParsedBodyMatch(rawBody, parsedBody) {
+  if (!Buffer.isBuffer(rawBody)) return null;
+  if (parsedBody === undefined) return null;
+
+  let parsedBodyBuffer = null;
+  if (Buffer.isBuffer(parsedBody)) {
+    parsedBodyBuffer = parsedBody;
+  } else if (parsedBody instanceof Uint8Array) {
+    parsedBodyBuffer = Buffer.from(parsedBody);
+  } else {
+    try {
+      parsedBodyBuffer = Buffer.from(JSON.stringify(parsedBody), "utf8");
+    } catch {
+      parsedBodyBuffer = null;
+    }
+  }
+
+  return Buffer.isBuffer(parsedBodyBuffer) ? rawBody.equals(parsedBodyBuffer) : null;
+}
+
 function buildVerificationDebugFields({
   req,
-  signature256 = "",
-  expected = "",
+  signatureHeaderName = "",
+  receivedSignature = "",
+  computedSignature = "",
+  signatureAlgorithm = "",
   secret = "",
   rawBody = null,
+  rawBodySource = "",
   reason = "",
 } = {}) {
   const safeSecret = s(secret);
+  const safeReason = s(reason);
   return {
-    hasSignature256: Boolean(s(signature256)),
-    hasRawBody: Buffer.isBuffer(rawBody),
-    rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+    hasMetaAppSecret: Boolean(safeSecret),
+    metaAppSecretFingerprint: fingerprintSecret(safeSecret),
+    receivedSignatureHeaderName: s(signatureHeaderName),
+    receivedSignaturePresent: Boolean(s(receivedSignature)),
+    receivedSignatureAlgorithm: s(signatureAlgorithm),
+    rawBodyPresent: Buffer.isBuffer(rawBody),
+    rawBodyByteLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+    verificationBodySource: s(rawBodySource),
+    parsedBodyPresent: req?.body !== undefined,
+    parsedBodyMatchesRawBody: computeParsedBodyMatch(rawBody, req?.body),
     contentType: s(req?.headers?.["content-type"]),
-    signature256Prefix: s(signature256).slice(0, 20),
-    expectedPrefix: s(expected).slice(0, 20),
-    secretLength: safeSecret.length,
-    secretFingerprint: safeSecret
-      ? crypto.createHash("sha256").update(safeSecret).digest("hex").slice(0, 12)
-      : "",
-    reason: s(reason),
+    receivedSignaturePrefix: s(receivedSignature).slice(0, 20),
+    computedSignaturePrefix: s(computedSignature).slice(0, 20),
+    verificationOutcome: safeReason === "accepted" ? "accepted" : "rejected",
+    rejectReason: safeReason === "accepted" ? "" : safeReason,
   };
 }
 
 export function verifyMetaWebhookSignature(req) {
   const secret = s(META_APP_SECRET);
   if (!secret) {
-    recordWebhookVerificationFailure("misconfigured");
-    logger.error("meta.webhook.verify.misconfigured", null, {});
-    logger.warn(
-      "meta.webhook.verify.debug",
+    recordWebhookVerificationFailure("missing_meta_app_secret");
+    logger.error(
+      "meta.webhook.verify.rejected",
+      null,
       buildVerificationDebugFields({
         req,
         secret,
-        reason: "misconfigured",
+        reason: "missing_meta_app_secret",
       })
     );
     return {
@@ -114,20 +298,21 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
-  const signature = s(req.headers?.["x-hub-signature-256"]).toLowerCase();
-  if (!signature) {
+  const { headerName, headerValue, expectedAlgorithm } =
+    pickMetaSignatureHeader(req);
+  const { rawBody, source: rawBodySource } = readRawBodyBuffer(req);
+  if (!headerValue) {
     recordWebhookVerificationFailure("missing_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
-      reason: "missing_meta_signature",
-    });
-    logger.warn(
-      "meta.webhook.verify.debug",
-      buildVerificationDebugFields({
+      ...buildVerificationDebugFields({
         req,
+        signatureHeaderName: headerName,
         secret,
+        rawBody,
+        rawBodySource,
         reason: "missing_meta_signature",
-      })
-    );
+      }),
+    });
     return {
       ok: false,
       status: 403,
@@ -135,45 +320,68 @@ export function verifyMetaWebhookSignature(req) {
     };
   }
 
-  const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : null;
+  const parsedSignature = parseMetaSignatureHeader(headerValue, expectedAlgorithm);
+  if (!parsedSignature.ok) {
+    recordWebhookVerificationFailure(parsedSignature.reason);
+    logger.warn("meta.webhook.verify.rejected", {
+      ...buildVerificationDebugFields({
+        req,
+        signatureHeaderName: headerName,
+        receivedSignature: headerValue,
+        signatureAlgorithm: parsedSignature.algorithm || expectedAlgorithm,
+        secret,
+        rawBody,
+        rawBodySource,
+        reason: parsedSignature.reason,
+      }),
+    });
+    return {
+      ok: false,
+      status: 403,
+      error: parsedSignature.reason,
+    };
+  }
+
   if (!rawBody) {
     recordWebhookVerificationFailure("missing_raw_body");
     logger.warn("meta.webhook.verify.rejected", {
-      reason: "missing_raw_body",
-    });
-    logger.warn(
-      "meta.webhook.verify.debug",
-      buildVerificationDebugFields({
+      ...buildVerificationDebugFields({
         req,
-        signature256: signature,
+        signatureHeaderName: headerName,
+        receivedSignature: parsedSignature.normalized,
+        signatureAlgorithm: parsedSignature.algorithm,
         secret,
+        rawBodySource,
         reason: "missing_raw_body",
-      })
-    );
+      }),
+    });
     return {
       ok: false,
       status: 500,
       error: "missing_raw_body",
     };
   }
-  const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`.toLowerCase();
+  const expected = computeMetaSignature(
+    rawBody,
+    secret,
+    parsedSignature.algorithm
+  );
 
-  if (!safeEqHex(signature, expected)) {
+  if (!safeEqHex(parsedSignature.normalized, expected)) {
     recordWebhookVerificationFailure("invalid_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
-      reason: "invalid_meta_signature",
-    });
-    logger.warn(
-      "meta.webhook.verify.debug",
-      buildVerificationDebugFields({
+      ...buildVerificationDebugFields({
         req,
-        signature256: signature,
-        expected,
+        signatureHeaderName: headerName,
+        receivedSignature: parsedSignature.normalized,
+        computedSignature: expected,
+        signatureAlgorithm: parsedSignature.algorithm,
         secret,
         rawBody,
+        rawBodySource,
         reason: "invalid_meta_signature",
-      })
-    );
+      }),
+    });
     return {
       ok: false,
       status: 403,
@@ -185,10 +393,13 @@ export function verifyMetaWebhookSignature(req) {
     "meta.webhook.verify.accepted",
     buildVerificationDebugFields({
       req,
-      signature256: signature,
-      expected,
+      signatureHeaderName: headerName,
+      receivedSignature: parsedSignature.normalized,
+      computedSignature: expected,
+      signatureAlgorithm: parsedSignature.algorithm,
       secret,
       rawBody,
+      rawBodySource,
       reason: "accepted",
     })
   );
