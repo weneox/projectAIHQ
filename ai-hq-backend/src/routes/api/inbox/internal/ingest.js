@@ -1,5 +1,6 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
+import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { applyHandoffActions, persistLeadActions } from "../mutations.js";
 import {
@@ -483,6 +484,16 @@ export function createInboxIngestHandler({
       });
 
       if (!runtimeState.ok) {
+        emitRuntimeProjectionBlockedConsumer({
+          consumer: "inbox",
+          tenantKey: s(input.tenantKey),
+          authority: obj(runtimeState?.response?.details?.authority),
+          requestId: s(req?.requestId),
+          correlationId: s(req?.correlationId),
+          externalThreadId: s(input.externalThreadId),
+          externalMessageId: s(input.externalMessageId),
+        });
+
         logInfo("inbox runtime unavailable", {
           tenantKey: input.tenantKey,
           channel: input.channel,

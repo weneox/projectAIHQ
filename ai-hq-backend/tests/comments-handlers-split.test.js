@@ -22,6 +22,29 @@ function createMockRes() {
   };
 }
 
+function createCaptureLogger(entries = [], context = {}) {
+  return {
+    child(extra = {}) {
+      return createCaptureLogger(entries, { ...context, ...extra });
+    },
+    info(event, data = {}) {
+      entries.push({ level: "info", event, ...context, ...data });
+    },
+    warn(event, data = {}) {
+      entries.push({ level: "warn", event, ...context, ...data });
+    },
+    error(event, error = null, data = {}) {
+      entries.push({
+        level: "error",
+        event,
+        ...context,
+        ...data,
+        error: error?.message || String(error || ""),
+      });
+    },
+  };
+}
+
 function createDecisionEventDb() {
   const decisionEvents = [];
   return {
@@ -422,6 +445,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
 
 test("replyCommentHandler blocks execution when policy requires repair", async () => {
   const db = createDecisionEventDb();
+  const entries = [];
   const handler = replyCommentHandler({
     db,
     wsHub: { name: "hub" },
@@ -451,7 +475,9 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
         health: {
           status: "stale",
           primaryReasonCode: "projection_stale",
+          repairActions: [{ action: "refresh_projection" }],
         },
+        freshnessReasons: ["projection_hash_mismatch"],
       },
       tenant: {
         id: "tenant-1",
@@ -484,6 +510,12 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
       approved: true,
       executeNow: true,
     },
+    requestId: "req-comments-1",
+    correlationId: "corr-comments-1",
+    log: createCaptureLogger(entries, {
+      requestId: "req-comments-1",
+      correlationId: "corr-comments-1",
+    }),
   };
   const res = createMockRes();
 
@@ -500,4 +532,17 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
     "approved_runtime_projection"
   );
   assert.equal(db.decisionEvents[1].event_type, "blocked_action_outcome");
+  assert.equal(
+    entries.some(
+      (entry) =>
+        entry.event === "runtime.projection.blocked.consumer" &&
+        entry.consumer === "comments" &&
+        entry.reasonCode === "projection_stale" &&
+        entry.runtimeProjectionId === "projection-1" &&
+        entry.freshnessReasonCodes?.includes("projection_hash_mismatch") &&
+        entry.repairActions?.includes("refresh_projection") &&
+        entry.externalCommentId === "external-3"
+    ),
+    true
+  );
 });

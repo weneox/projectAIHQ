@@ -1,0 +1,1490 @@
+diff --git a/ai-hq-backend/src/services/runtimeProjectionObservability.js b/ai-hq-backend/src/services/runtimeProjectionObservability.js
+new file mode 100644
+index 0000000..5bdb6f4
+--- /dev/null
++++ b/ai-hq-backend/src/services/runtimeProjectionObservability.js
+@@ -0,0 +1,487 @@
++function s(v, d = "") {
++  return String(v ?? d).trim();
++}
++
++function arr(v) {
++  return Array.isArray(v) ? v : [];
++}
++
++function obj(v) {
++  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
++}
++
++function uniqStrings(values = []) {
++  return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
++}
++
++function normalizeRepairActions(values = []) {
++  return uniqStrings(
++    arr(values).map((item) => s(item?.action || item?.id || item))
++  );
++}
++
++function normalizeHealthSnapshot(health = {}) {
++  const value = obj(health);
++  return {
++    status: s(value.status),
++    primaryReasonCode: s(value.primaryReasonCode || value.reasonCode),
++    reasonCodes: uniqStrings(value.reasonCodes),
++    autonomousOperation: s(value.autonomousOperation),
++    repairActions: normalizeRepairActions(value.repairActions),
++  };
++}
++
++function arraysEqual(left = [], right = []) {
++  const safeLeft = arr(left);
++  const safeRight = arr(right);
++  if (safeLeft.length !== safeRight.length) return false;
++  return safeLeft.every((item, index) => item === safeRight[index]);
++}
++
++function hasMeaningfulHealthChange(previous = null, next = null) {
++  const safePrevious = normalizeHealthSnapshot(previous);
++  const safeNext = normalizeHealthSnapshot(next);
++  return (
++    safePrevious.status !== safeNext.status ||
++    safePrevious.primaryReasonCode !== safeNext.primaryReasonCode ||
++    !arraysEqual(safePrevious.reasonCodes, safeNext.reasonCodes) ||
++    safePrevious.autonomousOperation !== safeNext.autonomousOperation ||
++    !arraysEqual(safePrevious.repairActions, safeNext.repairActions)
++  );
++}
++
++function pickProjectionRuntimeKey({
++  tenantId = "",
++  tenantKey = "",
++  runtimeProjectionId = "",
++} = {}) {
++  const parts = [
++    s(tenantId) ? `tenant:${s(tenantId)}` : "",
++    s(tenantKey) ? `key:${s(tenantKey)}` : "",
++    s(runtimeProjectionId) ? `projection:${s(runtimeProjectionId)}` : "",
++  ].filter(Boolean);
++
++  return parts.join("|") || "runtime_projection_observability:global";
++}
++
++function buildCauseFields({
++  freshness = null,
++  runtimeProjection = null,
++  activeReviewSession = null,
++  repairActions = [],
++} = {}) {
++  const fresh = obj(freshness);
++  const reasons = uniqStrings(fresh.reasons);
++  const runtimeProjectionId = s(
++    obj(runtimeProjection).id || fresh.runtimeProjectionId
++  );
++  const currentTruthVersionId = s(fresh.currentPublishedTruthVersionId);
++  const expectedTruthVersionId = s(fresh.expectedPublishedTruthVersionId);
++
++  return {
++    freshnessReasonCodes: reasons,
++    truthVersionChanged: Boolean(
++      reasons.includes("published_truth_version_mismatch") ||
++        (currentTruthVersionId &&
++          expectedTruthVersionId &&
++          currentTruthVersionId !== expectedTruthVersionId)
++    ),
++    projectionHashMismatch: reasons.includes("projection_hash_mismatch"),
++    projectionMissing: Boolean(
++      reasons.includes("missing_runtime_projection") || !runtimeProjectionId
++    ),
++    reviewConflictPresent: Boolean(
++      s(obj(activeReviewSession).id) ||
++        normalizeRepairActions(repairActions).includes("review_conflicts")
++    ),
++  };
++}
++
++function logEvent(logger, level = "info", event = "", payload = {}, error = null) {
++  const safeEvent = s(event);
++  const safePayload = obj(payload);
++
++  if (!safeEvent) return;
++
++  try {
++    if (logger && typeof logger[level] === "function") {
++      if (level === "error") {
++        logger.error(safeEvent, error, safePayload);
++        return;
++      }
++
++      logger[level](safeEvent, safePayload);
++      return;
++    }
++  } catch {}
++
++  const writer =
++    typeof console?.[level] === "function"
++      ? console[level].bind(console)
++      : console.log.bind(console);
++
++  if (level === "error" && error) {
++    writer(safeEvent, {
++      ...safePayload,
++      errorClass: s(error?.name || error?.constructor?.name || "Error"),
++      errorMessage: s(error?.message || error),
++      errorCode: s(error?.code || error?.reasonCode),
++    });
++    return;
++  }
++
++  writer(safeEvent, safePayload);
++}
++
++const runtimeProjectionHealthState = new Map();
++
++function buildHealthTransitionPayload({
++  previousHealth = null,
++  nextHealth = null,
++  freshness = null,
++  runtimeProjection = null,
++  tenantId = "",
++  tenantKey = "",
++  latestTruthVersionId = "",
++  activeReviewSessionId = "",
++  activeReviewSession = null,
++  triggerSource = "",
++  repairTrigger = "",
++  requestedBy = "",
++  durationMs = null,
++} = {}) {
++  const previous = normalizeHealthSnapshot(previousHealth);
++  const next = normalizeHealthSnapshot(nextHealth);
++  const cause = buildCauseFields({
++    freshness,
++    runtimeProjection,
++    activeReviewSession,
++    repairActions: next.repairActions,
++  });
++
++  return {
++    tenantKey: s(tenantKey),
++    tenantId: s(tenantId),
++    latestTruthVersionId: s(
++      latestTruthVersionId || obj(freshness).expectedPublishedTruthVersionId
++    ),
++    runtimeProjectionId: s(
++      obj(runtimeProjection).id || obj(freshness).runtimeProjectionId
++    ),
++    previousStatus: previous.status,
++    nextStatus: next.status,
++    previousPrimaryReasonCode: previous.primaryReasonCode,
++    nextPrimaryReasonCode: next.primaryReasonCode,
++    previousReasonCodes: previous.reasonCodes,
++    nextReasonCodes: next.reasonCodes,
++    autonomousOperation: next.autonomousOperation,
++    runtimeProjectionStatus: s(
++      obj(runtimeProjection).status || obj(freshness).runtimeStatus
++    ),
++    freshnessReasonCodes: cause.freshnessReasonCodes,
++    repairActions: next.repairActions,
++    activeReviewSessionId: s(
++      activeReviewSessionId || obj(activeReviewSession).id
++    ),
++    triggerSource: s(triggerSource),
++    repairTrigger: s(repairTrigger),
++    requestedBy: s(requestedBy),
++    durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : null,
++    didStatusChange: previous.status !== next.status,
++    didReasonChange:
++      previous.primaryReasonCode !== next.primaryReasonCode ||
++      !arraysEqual(previous.reasonCodes, next.reasonCodes),
++    truthVersionChanged: cause.truthVersionChanged,
++    projectionHashMismatch: cause.projectionHashMismatch,
++    projectionMissing: cause.projectionMissing,
++    reviewConflictPresent: cause.reviewConflictPresent,
++  };
++}
++
++export function emitRuntimeProjectionHealthTransition({
++  logger = null,
++  health = null,
++  freshness = null,
++  runtimeProjection = null,
++  tenantId = "",
++  tenantKey = "",
++  latestTruthVersionId = "",
++  activeReviewSessionId = "",
++  activeReviewSession = null,
++  triggerSource = "",
++  repairTrigger = "",
++  requestedBy = "",
++  durationMs = null,
++} = {}) {
++  const next = normalizeHealthSnapshot(health);
++  const runtimeProjectionId = s(
++    obj(runtimeProjection).id || obj(freshness).runtimeProjectionId
++  );
++  const cacheKey = pickProjectionRuntimeKey({
++    tenantId,
++    tenantKey,
++    runtimeProjectionId,
++  });
++  const previous = runtimeProjectionHealthState.get(cacheKey) || null;
++
++  if (previous && !hasMeaningfulHealthChange(previous, next)) {
++    return {
++      emitted: false,
++      previous,
++      next,
++      payload: null,
++    };
++  }
++
++  const payload = buildHealthTransitionPayload({
++    previousHealth: previous,
++    nextHealth: next,
++    freshness,
++    runtimeProjection,
++    tenantId,
++    tenantKey,
++    latestTruthVersionId,
++    activeReviewSessionId,
++    activeReviewSession,
++    triggerSource,
++    repairTrigger,
++    requestedBy,
++    durationMs,
++  });
++
++  logEvent(
++    logger,
++    ["missing", "stale", "blocked", "invalid"].includes(next.status)
++      ? "warn"
++      : "info",
++    "runtime.projection.health.transition",
++    payload
++  );
++
++  runtimeProjectionHealthState.set(cacheKey, next);
++
++  return {
++    emitted: true,
++    previous,
++    next,
++    payload,
++  };
++}
++
++function buildRepairPayload({
++  previousHealth = null,
++  nextHealth = null,
++  freshness = null,
++  runtimeProjection = null,
++  tenantId = "",
++  tenantKey = "",
++  latestTruthVersionId = "",
++  activeReviewSessionId = "",
++  activeReviewSession = null,
++  triggerSource = "",
++  repairTrigger = "",
++  requestedBy = "",
++  durationMs = null,
++  extra = {},
++} = {}) {
++  const previous = normalizeHealthSnapshot(previousHealth);
++  const next = normalizeHealthSnapshot(nextHealth || previous);
++  const cause = buildCauseFields({
++    freshness,
++    runtimeProjection,
++    activeReviewSession,
++    repairActions: next.repairActions.length
++      ? next.repairActions
++      : previous.repairActions,
++  });
++  const safeExtra = obj(extra);
++
++  return {
++    tenantKey: s(tenantKey),
++    tenantId: s(tenantId),
++    latestTruthVersionId: s(
++      latestTruthVersionId || obj(freshness).expectedPublishedTruthVersionId
++    ),
++    runtimeProjectionId: s(
++      obj(runtimeProjection).id || obj(freshness).runtimeProjectionId
++    ),
++    previousStatus: previous.status,
++    nextStatus: next.status,
++    previousPrimaryReasonCode: previous.primaryReasonCode,
++    nextPrimaryReasonCode: next.primaryReasonCode,
++    previousReasonCodes: previous.reasonCodes,
++    nextReasonCodes: next.reasonCodes,
++    autonomousOperation: next.autonomousOperation || previous.autonomousOperation,
++    runtimeProjectionStatus: s(
++      obj(runtimeProjection).status || obj(freshness).runtimeStatus
++    ),
++    freshnessReasonCodes: cause.freshnessReasonCodes,
++    repairActions: next.repairActions.length
++      ? next.repairActions
++      : previous.repairActions,
++    activeReviewSessionId: s(
++      activeReviewSessionId || obj(activeReviewSession).id
++    ),
++    triggerSource: s(triggerSource),
++    repairTrigger: s(repairTrigger),
++    requestedBy: s(requestedBy),
++    durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : null,
++    didStatusChange: previous.status !== next.status,
++    didReasonChange:
++      previous.primaryReasonCode !== next.primaryReasonCode ||
++      !arraysEqual(previous.reasonCodes, next.reasonCodes),
++    truthVersionChanged: cause.truthVersionChanged,
++    projectionHashMismatch: cause.projectionHashMismatch,
++    projectionMissing: cause.projectionMissing,
++    reviewConflictPresent: cause.reviewConflictPresent,
++    ...safeExtra,
++  };
++}
++
++export function emitRuntimeProjectionRepairStarted(options = {}) {
++  const payload = buildRepairPayload(options);
++  logEvent(
++    options.logger,
++    "warn",
++    "runtime.projection.repair.started",
++    payload
++  );
++  return payload;
++}
++
++export function emitRuntimeProjectionRepairSucceeded(options = {}) {
++  const payload = buildRepairPayload({
++    ...options,
++    extra: {
++      restoredHealthy:
++        normalizeHealthSnapshot(options.nextHealth).status === "healthy",
++      didProjectionChange:
++        s(options.previousRuntimeProjectionId) !==
++          s(
++            obj(options.runtimeProjection).id || obj(options.freshness).runtimeProjectionId
++          ) ||
++        s(options.previousProjectionHash) !==
++          s(
++            obj(options.runtimeProjection).projection_hash ||
++              obj(options.freshness).currentProjectionHash
++          ),
++      ...obj(options.extra),
++    },
++  });
++
++  logEvent(
++    options.logger,
++    "info",
++    "runtime.projection.repair.succeeded",
++    payload
++  );
++  return payload;
++}
++
++export function emitRuntimeProjectionRepairFailed(options = {}) {
++  const safeError = options.error;
++  const payload = buildRepairPayload({
++    ...options,
++    extra: {
++      reasonCode: s(
++        options.reasonCode ||
++          obj(options.freshness).reasons?.[0] ||
++          safeError?.reasonCode ||
++          safeError?.reason ||
++          safeError?.code
++      ).toLowerCase(),
++      errorClass: s(safeError?.name || safeError?.constructor?.name || "Error"),
++      errorMessage: s(safeError?.message || safeError),
++      errorCode: s(safeError?.code || safeError?.reasonCode),
++      ...obj(options.extra),
++    },
++  });
++
++  logEvent(
++    options.logger,
++    "error",
++    "runtime.projection.repair.failed",
++    payload,
++    safeError
++  );
++  return payload;
++}
++
++export function emitRuntimeProjectionRepairSkipped(options = {}) {
++  const payload = buildRepairPayload({
++    ...options,
++    extra: {
++      reasonCode: s(
++        options.reasonCode ||
++          obj(options.freshness).reasons?.[0] ||
++          "repair_skipped"
++      ).toLowerCase(),
++      ...obj(options.extra),
++    },
++  });
++
++  logEvent(
++    options.logger,
++    "warn",
++    "runtime.projection.repair.skipped",
++    payload
++  );
++  return payload;
++}
++
++export function emitRuntimeProjectionBlockedConsumer({
++  logger = null,
++  consumer = "",
++  tenantId = "",
++  tenantKey = "",
++  authority = null,
++  latestTruthVersionId = "",
++  requestId = "",
++  correlationId = "",
++  externalThreadId = "",
++  externalMessageId = "",
++  externalCommentId = "",
++} = {}) {
++  const runtimeAuthority = obj(authority);
++  const health = obj(runtimeAuthority.health);
++  const payload = {
++    tenantKey: s(tenantKey || runtimeAuthority.tenantKey),
++    tenantId: s(tenantId || runtimeAuthority.tenantId),
++    consumer: s(consumer),
++    reasonCode: s(
++      runtimeAuthority.reasonCode ||
++        runtimeAuthority.reason ||
++        health.primaryReasonCode ||
++        "runtime_authority_unavailable"
++    ),
++    runtimeProjectionId: s(runtimeAuthority.runtimeProjectionId),
++    latestTruthVersionId: s(latestTruthVersionId),
++    activeReviewSessionId: s(health.activeReviewSessionId),
++    freshnessReasonCodes: uniqStrings(
++      runtimeAuthority.freshnessReasons || health.freshnessReasonCodes
++    ),
++    repairActions: normalizeRepairActions(health.repairActions),
++    requestId: s(requestId),
++    correlationId: s(correlationId),
++    externalThreadId: s(externalThreadId),
++    externalMessageId: s(externalMessageId),
++    externalCommentId: s(externalCommentId),
++  };
++
++  logEvent(
++    logger,
++    "warn",
++    "runtime.projection.blocked.consumer",
++    payload
++  );
++
++  return payload;
++}
++
++function resetRuntimeProjectionHealthState() {
++  runtimeProjectionHealthState.clear();
++}
++
++export const __test__ = {
++  resetRuntimeProjectionHealthState,
++};
+diff --git a/ai-hq-backend/src/db/helpers/tenantRuntimeProjection/health.js b/ai-hq-backend/src/db/helpers/tenantRuntimeProjection/health.js
+index f5dc1a2..43c0ec2 100644
+--- a/ai-hq-backend/src/db/helpers/tenantRuntimeProjection/health.js
++++ b/ai-hq-backend/src/db/helpers/tenantRuntimeProjection/health.js
+@@ -1,4 +1,5 @@
+ import { arr, num, obj, s } from "./shared.js";
++import { emitRuntimeProjectionHealthTransition } from "../../../services/runtimeProjectionObservability.js";
+ 
+ const ALL_AFFECTED_SURFACES = [
+   "inbox",
+@@ -313,20 +314,17 @@ function buildReasonHistory({
+ }
+ 
+ function logRuntimeProjectionHealth(model, context = {}) {
+-  try {
+-    console.warn("[ai-hq] runtime projection health", {
+-      status: s(model?.status),
+-      primaryReasonCode: s(model?.primaryReasonCode),
+-      reasonCodes: arr(model?.reasonCodes),
+-      autonomousOperation: s(model?.autonomousOperation),
+-      truthProvided: Boolean(context?.truthProvided),
+-      latestTruthVersionId: s(context?.latestTruthVersionId),
+-      activeReviewSessionId: s(context?.activeReviewSessionId),
+-      runtimeProjectionId: s(context?.runtimeProjectionId),
+-      runtimeProjectionStatus: s(context?.runtimeProjectionStatus),
+-      repairActions: arr(model?.repairActions).map((item) => s(item?.action)),
+-    });
+-  } catch {}
++  emitRuntimeProjectionHealthTransition({
++    health: model,
++    freshness: context?.freshness || null,
++    runtimeProjection: context?.runtimeProjection || null,
++    tenantId: s(context?.tenantId),
++    tenantKey: s(context?.tenantKey),
++    latestTruthVersionId: s(context?.latestTruthVersionId),
++    activeReviewSessionId: s(context?.activeReviewSessionId),
++    activeReviewSession: context?.activeReviewSession || null,
++    triggerSource: s(context?.triggerSource || "tenantRuntimeProjection.health"),
++  });
+ }
+ 
+ export function buildRuntimeProjectionHealthModel({
+@@ -513,11 +511,16 @@ export function buildRuntimeProjectionHealthModel({
+   };
+ 
+   logRuntimeProjectionHealth(model, {
+-    truthProvided,
++    freshness: fresh,
++    runtimeProjection: projection,
++    tenantId: s(fresh.tenantId || projection.tenant_id),
++    tenantKey: s(fresh.tenantKey || projection.tenant_key),
+     latestTruthVersionId: s(truth.id),
+     activeReviewSessionId: s(obj(activeReviewSession).id),
+-    runtimeProjectionId: s(projection.id),
+-    runtimeProjectionStatus: s(projection.status),
++    activeReviewSession,
++    triggerSource: truthProvided
++      ? "tenantRuntimeProjection.health.with_truth"
++      : "tenantRuntimeProjection.health",
+   });
+ 
+   return model;
+@@ -531,4 +534,4 @@ export const __test__ = {
+   mapFreshnessReasons,
+   normalizeReasonCode,
+   normalizeReasonCodesForSameTruth,
+-};
+\ No newline at end of file
++};
+diff --git a/ai-hq-backend/src/routes/api/channelConnect/telegram.js b/ai-hq-backend/src/routes/api/channelConnect/telegram.js
+index b37cd65..ad4a371 100644
+--- a/ai-hq-backend/src/routes/api/channelConnect/telegram.js
++++ b/ai-hq-backend/src/routes/api/channelConnect/telegram.js
+@@ -6,6 +6,14 @@ import {
+ } from "../../../services/operationalReadiness.js";
+ import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+ import { getInboxPolicy } from "../../../services/inboxPolicy.js";
++import {
++  emitRuntimeProjectionBlockedConsumer,
++  emitRuntimeProjectionHealthTransition,
++  emitRuntimeProjectionRepairFailed,
++  emitRuntimeProjectionRepairSkipped,
++  emitRuntimeProjectionRepairStarted,
++  emitRuntimeProjectionRepairSucceeded,
++} from "../../../services/runtimeProjectionObservability.js";
+ import { refreshTenantRuntimeProjectionStrict } from "../../../db/helpers/tenantRuntimeProjection.js";
+ import { cfg } from "../../../config.js";
+ import {
+@@ -354,6 +362,58 @@ function normalizeTelegramReasonCodes(values = []) {
+   ];
+ }
+ 
++function buildTelegramFailureFreshness(failure = {}, tenantKey = "") {
++  const authority = obj(failure?.authority);
++  return {
++    stale: failure?.reasonCode !== "approved_truth_unavailable",
++    reasons: normalizeTelegramReasonCodes(failure?.freshnessReasonCodes),
++    tenantId: s(authority?.tenantId),
++    tenantKey: s(authority?.tenantKey || tenantKey),
++    runtimeProjectionId: s(authority?.runtimeProjectionId),
++    runtimeStatus: s(authority?.runtimeProjectionStatus),
++  };
++}
++
++function buildTelegramFailureHealth(failure = {}) {
++  const authority = obj(failure?.authority);
++  const health = obj(authority?.health);
++  if (s(health?.status)) return health;
++
++  const primaryReasonCode =
++    s(failure?.healthPrimaryReasonCode) ||
++    s(failure?.healthReasonCodes?.[0]) ||
++    s(failure?.reasonCode || "runtime_authority_unavailable");
++  const reasonCodes = normalizeTelegramReasonCodes([
++    primaryReasonCode,
++    ...(Array.isArray(failure?.healthReasonCodes) ? failure.healthReasonCodes : []),
++  ]);
++  const status =
++    primaryReasonCode === "approved_truth_unavailable" ? "blocked" : "stale";
++
++  return {
++    status,
++    primaryReasonCode,
++    reasonCodes,
++    autonomousOperation: status === "healthy" ? "continue" : "stop",
++    repairActions:
++      status === "blocked"
++        ? [{ action: "verify_truth_publish" }]
++        : [{ action: "refresh_projection" }],
++  };
++}
++
++function buildTelegramHealthyHealth(authority = null) {
++  const health = obj(obj(authority).health);
++  if (s(health.status)) return health;
++  return {
++    status: "healthy",
++    primaryReasonCode: "",
++    reasonCodes: [],
++    autonomousOperation: "continue",
++    repairActions: [],
++  };
++}
++
+ function extractTelegramRuntimeAuthorityPayload(error = {}) {
+   const authority = obj(error?.runtimeAuthority || error?.authority);
+   const health = obj(authority?.health);
+@@ -471,6 +531,7 @@ async function getTelegramRuntimeSurface({
+   getRuntime = getTenantBrainRuntime,
+   refreshRuntimeProjection = refreshTenantRuntimeProjectionStrict,
+   getInboxPolicyFn = getInboxPolicy,
++  logger = null,
+ } = {}) {
+   if (!db?.query || !tenantKey) {
+     return {
+@@ -497,23 +558,44 @@ async function getTelegramRuntimeSurface({
+     });
+   } catch (error) {
+     const failure = extractTelegramRuntimeAuthorityPayload(error);
++    const failureFreshness = buildTelegramFailureFreshness(failure, tenantKey);
++    const failureHealth = buildTelegramFailureHealth(failure);
++
++    emitRuntimeProjectionHealthTransition({
++      logger,
++      health: failureHealth,
++      freshness: failureFreshness,
++      runtimeProjection: {
++        id: s(failure?.authority?.runtimeProjectionId),
++        status: s(failure?.authority?.runtimeProjectionStatus),
++      },
++      tenantId: s(failure?.authority?.tenantId),
++      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
++      triggerSource: "channelConnect.telegram",
++      repairTrigger: s(repairTrigger || "telegram_status"),
++      requestedBy: s(requestedBy || "system"),
++    });
+ 
+     if (
+       allowRepair &&
+       shouldAttemptTelegramRuntimeRepair(failure, error) &&
+       typeof refreshRuntimeProjection === "function"
+     ) {
+-      try {
+-        console.warn("[ai-hq] telegram runtime repair attempting", {
+-          tenantKey: s(tenantKey),
+-          repairTrigger: s(repairTrigger),
+-          requestedBy: s(requestedBy || "system"),
+-          wrapperReasonCode: s(failure.wrapperReasonCode),
+-          reasonCode: s(failure.reasonCode),
+-          healthReasonCodes: failure.healthReasonCodes || [],
+-          freshnessReasonCodes: failure.freshnessReasonCodes || [],
+-        });
+-      } catch {}
++      const startedAt = Date.now();
++      emitRuntimeProjectionRepairStarted({
++        logger,
++        previousHealth: failureHealth,
++        freshness: failureFreshness,
++        runtimeProjection: {
++          id: s(failure?.authority?.runtimeProjectionId),
++          status: s(failure?.authority?.runtimeProjectionStatus),
++        },
++        tenantId: s(failure?.authority?.tenantId),
++        tenantKey: s(failure?.authority?.tenantKey || tenantKey),
++        triggerSource: "channelConnect.telegram",
++        repairTrigger: s(repairTrigger || "telegram_status"),
++        requestedBy: s(requestedBy || "system"),
++      });
+ 
+       try {
+         await refreshRuntimeProjection(
+@@ -540,33 +622,92 @@ async function getTelegramRuntimeSurface({
+           tenantKey,
+           authorityMode: "strict",
+         });
+-
+-        try {
+-          console.warn("[ai-hq] telegram runtime repair completed", {
+-            tenantKey: s(tenantKey),
+-            repairTrigger: s(repairTrigger),
+-          });
+-        } catch {}
+-
+-        return buildTelegramRuntimeSurfaceFromRuntime({
++        const runtimeSurface = buildTelegramRuntimeSurfaceFromRuntime({
+           runtime,
+           tenantKey,
+           getInboxPolicyFn,
+         });
++        const recoveredAuthority = runtimeSurface?.authority || runtime?.authority;
++        const recoveredFreshness = {
++          stale: false,
++          reasons: [],
++          tenantId: s(recoveredAuthority?.tenantId),
++          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
++          runtimeProjectionId: s(recoveredAuthority?.runtimeProjectionId),
++          runtimeStatus: s(recoveredAuthority?.runtimeProjectionStatus),
++        };
++        const recoveredHealth = buildTelegramHealthyHealth(recoveredAuthority);
++
++        emitRuntimeProjectionHealthTransition({
++          logger,
++          health: recoveredHealth,
++          freshness: recoveredFreshness,
++          runtimeProjection: {
++            id: s(recoveredAuthority?.runtimeProjectionId),
++            status: s(recoveredAuthority?.runtimeProjectionStatus || "ready"),
++          },
++          tenantId: s(recoveredAuthority?.tenantId),
++          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
++          triggerSource: "channelConnect.telegram",
++          repairTrigger: s(repairTrigger || "telegram_status"),
++          requestedBy: s(requestedBy || "system"),
++          durationMs: Date.now() - startedAt,
++        });
++
++        emitRuntimeProjectionRepairSucceeded({
++          logger,
++          previousHealth: failureHealth,
++          nextHealth: recoveredHealth,
++          freshness: recoveredFreshness,
++          runtimeProjection: {
++            id: s(recoveredAuthority?.runtimeProjectionId),
++            status: s(recoveredAuthority?.runtimeProjectionStatus || "ready"),
++            projection_hash: s(recoveredAuthority?.projectionHash),
++          },
++          previousRuntimeProjectionId: s(failure?.authority?.runtimeProjectionId),
++          previousProjectionHash: s(failure?.authority?.projectionHash),
++          tenantId: s(recoveredAuthority?.tenantId),
++          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
++          triggerSource: "channelConnect.telegram",
++          repairTrigger: s(repairTrigger || "telegram_status"),
++          requestedBy: s(requestedBy || "system"),
++          durationMs: Date.now() - startedAt,
++        });
++
++        return runtimeSurface;
+       } catch (repairError) {
+         const repairFailure = extractTelegramRuntimeAuthorityPayload(repairError);
++        const repairFailureFreshness = buildTelegramFailureFreshness(
++          repairFailure,
++          tenantKey
++        );
+ 
+-        try {
+-          console.warn("[ai-hq] telegram runtime repair failed", {
+-            tenantKey: s(tenantKey),
+-            repairTrigger: s(repairTrigger),
+-            wrapperReasonCode: s(repairFailure.wrapperReasonCode),
+-            reasonCode: s(repairFailure.reasonCode),
+-            healthReasonCodes: repairFailure.healthReasonCodes || [],
+-            freshnessReasonCodes: repairFailure.freshnessReasonCodes || [],
+-            error: s(repairFailure.error),
+-          });
+-        } catch {}
++        emitRuntimeProjectionRepairFailed({
++          logger,
++          previousHealth: failureHealth,
++          nextHealth: buildTelegramFailureHealth(repairFailure),
++          freshness: repairFailureFreshness,
++          runtimeProjection: {
++            id: s(repairFailure?.authority?.runtimeProjectionId),
++            status: s(repairFailure?.authority?.runtimeProjectionStatus),
++          },
++          tenantId: s(repairFailure?.authority?.tenantId),
++          tenantKey: s(repairFailure?.authority?.tenantKey || tenantKey),
++          triggerSource: "channelConnect.telegram",
++          repairTrigger: s(repairTrigger || "telegram_status"),
++          requestedBy: s(requestedBy || "system"),
++          durationMs: Date.now() - startedAt,
++          reasonCode: s(repairFailure.reasonCode),
++          error: repairError,
++        });
++
++        emitRuntimeProjectionBlockedConsumer({
++          logger,
++          consumer: s(repairTrigger || "telegram_status"),
++          tenantId: s(repairFailure?.authority?.tenantId),
++          tenantKey: s(repairFailure?.authority?.tenantKey || tenantKey),
++          authority: repairFailure.authority,
++        });
+ 
+         return {
+           ready: false,
+@@ -580,6 +721,35 @@ async function getTelegramRuntimeSurface({
+       }
+     }
+ 
++    emitRuntimeProjectionRepairSkipped({
++      logger,
++      previousHealth: failureHealth,
++      freshness: failureFreshness,
++      runtimeProjection: {
++        id: s(failure?.authority?.runtimeProjectionId),
++        status: s(failure?.authority?.runtimeProjectionStatus),
++      },
++      tenantId: s(failure?.authority?.tenantId),
++      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
++      triggerSource: "channelConnect.telegram",
++      repairTrigger: s(repairTrigger || "telegram_status"),
++      requestedBy: s(requestedBy || "system"),
++      reasonCode:
++        !allowRepair
++          ? "repair_disabled"
++          : typeof refreshRuntimeProjection !== "function"
++            ? "repair_unavailable"
++            : s(failure.reasonCode || "repair_skipped"),
++    });
++
++    emitRuntimeProjectionBlockedConsumer({
++      logger,
++      consumer: s(repairTrigger || "telegram_status"),
++      tenantId: s(failure?.authority?.tenantId),
++      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
++      authority: failure.authority,
++    });
++
+     return {
+       ready: false,
+       authorityAvailable: false,
+@@ -1483,4 +1653,4 @@ export const __test__ = {
+   shouldAttemptTelegramRuntimeRepair,
+   isTelegramWebhookDeliveryFailing,
+   normalizeTelegramReasonCodes,
+-};
+\ No newline at end of file
++};
+diff --git a/ai-hq-backend/src/routes/api/comments/handlers/mutations.js b/ai-hq-backend/src/routes/api/comments/handlers/mutations.js
+index 9c7aa5e..e1092fc 100644
+--- a/ai-hq-backend/src/routes/api/comments/handlers/mutations.js
++++ b/ai-hq-backend/src/routes/api/comments/handlers/mutations.js
+@@ -10,6 +10,7 @@ import {
+   enqueueMetaCommentReplyExecution,
+   mapDurableExecutionToCommentDeliveryStatus,
+ } from "../../../../services/durableExecutionService.js";
++import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
+ import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
+ import { getCommentById, updateCommentState } from "../repository.js";
+ import {
+@@ -199,6 +200,24 @@ export function replyCommentHandler({
+         });
+ 
+         if (executionPolicy.blocked || executionPolicy.blockedUntilRepair) {
++          emitRuntimeProjectionBlockedConsumer({
++            logger: req?.log,
++            consumer: "comments",
++            tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
++            tenantKey: s(existing?.tenant_key || tenantKey),
++            authority:
++              runtimeState?.runtimePack?.authority ||
++              runtimeState?.runtime?.runtimeAuthority ||
++              runtimeState?.runtime?.authority,
++            latestTruthVersionId: s(
++              runtimeState?.runtimePack?.raw?.projection?.metadata_json
++                ?.publishedTruthVersionId
++            ),
++            requestId: s(req?.requestId),
++            correlationId: s(req?.correlationId),
++            externalCommentId: s(existing?.external_comment_id),
++          });
++
+           const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
+             tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+             tenantKey: s(existing?.tenant_key || tenantKey),
+diff --git a/ai-hq-backend/src/routes/api/inbox/internal/ingest.js b/ai-hq-backend/src/routes/api/inbox/internal/ingest.js
+index 5ab5b10..c94a5b4 100644
+--- a/ai-hq-backend/src/routes/api/inbox/internal/ingest.js
++++ b/ai-hq-backend/src/routes/api/inbox/internal/ingest.js
+@@ -1,5 +1,6 @@
+ import { okJson, isDbReady } from "../../../../utils/http.js";
+ import { buildInboxActions } from "../../../../services/inboxBrain.js";
++import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
+ import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
+ import { applyHandoffActions, persistLeadActions } from "../mutations.js";
+ import {
+@@ -483,6 +484,16 @@ export function createInboxIngestHandler({
+       });
+ 
+       if (!runtimeState.ok) {
++        emitRuntimeProjectionBlockedConsumer({
++          consumer: "inbox",
++          tenantKey: s(input.tenantKey),
++          authority: obj(runtimeState?.response?.details?.authority),
++          requestId: s(req?.requestId),
++          correlationId: s(req?.correlationId),
++          externalThreadId: s(input.externalThreadId),
++          externalMessageId: s(input.externalMessageId),
++        });
++
+         logInfo("inbox runtime unavailable", {
+           tenantKey: input.tenantKey,
+           channel: input.channel,
+@@ -657,4 +668,4 @@ export const __test__ = {
+   summarizeBrainDecision,
+   mapBrainOutcomeToDecisionEventType,
+   buildDecisionEventFromBrain,
+-};
+\ No newline at end of file
++};
+diff --git a/ai-hq-backend/src/routes/api/settings/trust.js b/ai-hq-backend/src/routes/api/settings/trust.js
+index 78f3832..f5e705d 100644
+--- a/ai-hq-backend/src/routes/api/settings/trust.js
++++ b/ai-hq-backend/src/routes/api/settings/trust.js
+@@ -21,6 +21,12 @@ import {
+   buildOperationalRepairGuidance,
+   buildReadinessSurface,
+ } from "../../../services/operationalReadiness.js";
++import {
++  emitRuntimeProjectionRepairFailed,
++  emitRuntimeProjectionRepairSkipped,
++  emitRuntimeProjectionRepairStarted,
++  emitRuntimeProjectionRepairSucceeded,
++} from "../../../services/runtimeProjectionObservability.js";
+ import {
+   POLICY_CONTROL_MODES,
+   buildExecutionPolicySurfaceSummary,
+@@ -2238,8 +2244,27 @@ export function settingsTrustRoutes({ db }) {
+       repairLogger?.info("runtime_projection.repair.requested", {
+         latestTruthVersionId: s(latestTruthVersion?.id),
+       });
++      const repairStartedAt = Date.now();
++      emitRuntimeProjectionRepairStarted({
++        logger: repairLogger,
++        tenantId: tenant.tenant_id,
++        tenantKey: tenant.tenant_key,
++        latestTruthVersionId: s(latestTruthVersion?.id),
++        triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
++        repairTrigger: "manual_repair",
++        requestedBy: getActor(req),
++      });
+ 
+       if (!s(latestTruthVersion?.id)) {
++        emitRuntimeProjectionRepairSkipped({
++          logger: repairLogger,
++          tenantId: tenant.tenant_id,
++          tenantKey: tenant.tenant_key,
++          triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
++          repairTrigger: "manual_repair",
++          requestedBy: getActor(req),
++          reasonCode: "approved_truth_unavailable",
++        });
+         await auditSafe(
+           db,
+           req,
+@@ -2311,6 +2336,25 @@ export function settingsTrustRoutes({ db }) {
+           db
+         );
+       } catch (error) {
++        emitRuntimeProjectionRepairFailed({
++          logger: repairLogger,
++          freshness: obj(error?.freshness),
++          runtimeProjection: {
++            id: s(error?.runtimeProjectionId),
++            status: s(obj(error?.freshness).runtimeStatus),
++          },
++          tenantId: tenant.tenant_id,
++          tenantKey: tenant.tenant_key,
++          latestTruthVersionId: s(latestTruthVersion?.id),
++          triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
++          repairTrigger: "manual_repair",
++          requestedBy: getActor(req),
++          durationMs: Date.now() - repairStartedAt,
++          reasonCode:
++            s(error?.freshness?.reasons?.[0]) ||
++            s(error?.code || "runtime_projection_repair_failed").toLowerCase(),
++          error,
++        });
+         await auditSafe(
+           db,
+           req,
+@@ -2417,6 +2461,20 @@ export function settingsTrustRoutes({ db }) {
+         },
+       });
+ 
++      emitRuntimeProjectionRepairSucceeded({
++        logger: repairLogger,
++        nextHealth: obj(refreshed?.health || refreshed?.freshness?.health),
++        freshness: obj(refreshed?.freshness),
++        runtimeProjection: obj(refreshed?.projection),
++        tenantId: tenant.tenant_id,
++        tenantKey: tenant.tenant_key,
++        latestTruthVersionId: s(latestTruthVersion?.id),
++        triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
++        repairTrigger: "manual_repair",
++        requestedBy: getActor(req),
++        durationMs: Date.now() - repairStartedAt,
++      });
++
+       await safeAppendDecisionEvent(db, {
+         tenantId: tenant.tenant_id,
+         tenantKey: tenant.tenant_key,
+diff --git a/ai-hq-backend/tests/comments-handlers-split.test.js b/ai-hq-backend/tests/comments-handlers-split.test.js
+index 0986637..2303085 100644
+--- a/ai-hq-backend/tests/comments-handlers-split.test.js
++++ b/ai-hq-backend/tests/comments-handlers-split.test.js
+@@ -22,6 +22,29 @@ function createMockRes() {
+   };
+ }
+ 
++function createCaptureLogger(entries = [], context = {}) {
++  return {
++    child(extra = {}) {
++      return createCaptureLogger(entries, { ...context, ...extra });
++    },
++    info(event, data = {}) {
++      entries.push({ level: "info", event, ...context, ...data });
++    },
++    warn(event, data = {}) {
++      entries.push({ level: "warn", event, ...context, ...data });
++    },
++    error(event, error = null, data = {}) {
++      entries.push({
++        level: "error",
++        event,
++        ...context,
++        ...data,
++        error: error?.message || String(error || ""),
++      });
++    },
++  };
++}
++
+ function createDecisionEventDb() {
+   const decisionEvents = [];
+   return {
+@@ -422,6 +445,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
+ 
+ test("replyCommentHandler blocks execution when policy requires repair", async () => {
+   const db = createDecisionEventDb();
++  const entries = [];
+   const handler = replyCommentHandler({
+     db,
+     wsHub: { name: "hub" },
+@@ -451,7 +475,9 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
+         health: {
+           status: "stale",
+           primaryReasonCode: "projection_stale",
++          repairActions: [{ action: "refresh_projection" }],
+         },
++        freshnessReasons: ["projection_hash_mismatch"],
+       },
+       tenant: {
+         id: "tenant-1",
+@@ -484,6 +510,12 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
+       approved: true,
+       executeNow: true,
+     },
++    requestId: "req-comments-1",
++    correlationId: "corr-comments-1",
++    log: createCaptureLogger(entries, {
++      requestId: "req-comments-1",
++      correlationId: "corr-comments-1",
++    }),
+   };
+   const res = createMockRes();
+ 
+@@ -500,4 +532,17 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
+     "approved_runtime_projection"
+   );
+   assert.equal(db.decisionEvents[1].event_type, "blocked_action_outcome");
++  assert.equal(
++    entries.some(
++      (entry) =>
++        entry.event === "runtime.projection.blocked.consumer" &&
++        entry.consumer === "comments" &&
++        entry.reasonCode === "projection_stale" &&
++        entry.runtimeProjectionId === "projection-1" &&
++        entry.freshnessReasonCodes?.includes("projection_hash_mismatch") &&
++        entry.repairActions?.includes("refresh_projection") &&
++        entry.externalCommentId === "external-3"
++    ),
++    true
++  );
+ });
+diff --git a/ai-hq-backend/tests/runtime-projection-health.test.js b/ai-hq-backend/tests/runtime-projection-health.test.js
+index 4b7faca..286d916 100644
+--- a/ai-hq-backend/tests/runtime-projection-health.test.js
++++ b/ai-hq-backend/tests/runtime-projection-health.test.js
+@@ -4,8 +4,54 @@ import assert from "node:assert/strict";
+ import {
+   __test__ as healthTest,
+ } from "../src/db/helpers/tenantRuntimeProjection/health.js";
++import {
++  __test__ as runtimeProjectionObservabilityTest,
++} from "../src/services/runtimeProjectionObservability.js";
+ import { getApprovedRuntimeAuthorityFailure } from "../../shared-contracts/runtime.js";
+ 
++const originalConsoleInfo = console.info;
++const originalConsoleWarn = console.warn;
++const originalConsoleError = console.error;
++
++function captureConsoleEvents(work) {
++  const entries = [];
++  const capture =
++    (level) =>
++    (...args) => {
++      const [event, payload] = args;
++      entries.push({
++        level,
++        event: String(event || ""),
++        payload:
++          payload && typeof payload === "object" && !Array.isArray(payload)
++            ? payload
++            : {},
++      });
++    };
++
++  console.info = capture("info");
++  console.warn = capture("warn");
++  console.error = capture("error");
++
++  return Promise.resolve()
++    .then(() => work(entries))
++    .finally(() => {
++      console.info = originalConsoleInfo;
++      console.warn = originalConsoleWarn;
++      console.error = originalConsoleError;
++    });
++}
++
++test.beforeEach(() => {
++  runtimeProjectionObservabilityTest.resetRuntimeProjectionHealthState();
++});
++
++test.after(() => {
++  console.info = originalConsoleInfo;
++  console.warn = originalConsoleWarn;
++  console.error = originalConsoleError;
++});
++
+ test("runtime projection health classifies missing projections consistently", () => {
+   const health = healthTest.buildRuntimeProjectionHealthModel({
+     runtimeProjection: null,
+@@ -116,6 +162,112 @@ test("runtime projection health tracks dependency failures as degraded when auth
+   assert.ok(health.affectedSurfaces.includes("voice"));
+ });
+ 
++test("runtime projection health emits searchable healthy to stale transition logs", async () => {
++  await captureConsoleEvents(async (entries) => {
++    healthTest.buildRuntimeProjectionHealthModel({
++      runtimeProjection: {
++        id: "projection-1",
++        tenant_id: "tenant-1",
++        tenant_key: "acme",
++        status: "ready",
++      },
++      freshness: {
++        stale: false,
++        reasons: [],
++        tenantId: "tenant-1",
++        tenantKey: "acme",
++      },
++      latestTruthVersion: {
++        id: "truth-v1",
++      },
++    });
++
++    healthTest.buildRuntimeProjectionHealthModel({
++      runtimeProjection: {
++        id: "projection-1",
++        tenant_id: "tenant-1",
++        tenant_key: "acme",
++        status: "stale",
++      },
++      freshness: {
++        stale: true,
++        reasons: ["projection_hash_mismatch", "published_truth_version_mismatch"],
++        tenantId: "tenant-1",
++        tenantKey: "acme",
++        runtimeProjectionId: "projection-1",
++        runtimeStatus: "stale",
++        currentPublishedTruthVersionId: "truth-v1",
++        expectedPublishedTruthVersionId: "truth-v2",
++      },
++      latestTruthVersion: {
++        id: "truth-v2",
++      },
++    });
++
++    const transitions = entries.filter(
++      (entry) => entry.event === "runtime.projection.health.transition"
++    );
++
++    assert.equal(transitions.length, 2);
++    assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
++    assert.equal(transitions[1]?.payload?.previousStatus, "healthy");
++    assert.equal(transitions[1]?.payload?.nextStatus, "stale");
++    assert.equal(
++      transitions[1]?.payload?.previousPrimaryReasonCode,
++      ""
++    );
++    assert.equal(
++      transitions[1]?.payload?.nextPrimaryReasonCode,
++      "projection_stale"
++    );
++    assert.deepEqual(transitions[1]?.payload?.freshnessReasonCodes, [
++      "projection_hash_mismatch",
++      "published_truth_version_mismatch",
++    ]);
++    assert.equal(transitions[1]?.payload?.projectionHashMismatch, true);
++    assert.equal(transitions[1]?.payload?.truthVersionChanged, true);
++    assert.equal(transitions[1]?.payload?.tenantKey, "acme");
++    assert.equal(transitions[1]?.payload?.tenantId, "tenant-1");
++    assert.equal(transitions[1]?.payload?.latestTruthVersionId, "truth-v2");
++    assert.equal(transitions[1]?.payload?.runtimeProjectionId, "projection-1");
++    assert.equal(transitions[1]?.payload?.didStatusChange, true);
++    assert.equal(transitions[1]?.payload?.didReasonChange, true);
++  });
++});
++
++test("runtime projection health suppresses repeated identical transition spam", async () => {
++  await captureConsoleEvents(async (entries) => {
++    const input = {
++      runtimeProjection: {
++        id: "projection-2",
++        tenant_id: "tenant-2",
++        tenant_key: "beta",
++        status: "ready",
++      },
++      freshness: {
++        stale: false,
++        reasons: [],
++        tenantId: "tenant-2",
++        tenantKey: "beta",
++      },
++      latestTruthVersion: {
++        id: "truth-v1",
++      },
++    };
++
++    healthTest.buildRuntimeProjectionHealthModel(input);
++    healthTest.buildRuntimeProjectionHealthModel(input);
++    healthTest.buildRuntimeProjectionHealthModel(input);
++
++    const transitions = entries.filter(
++      (entry) => entry.event === "runtime.projection.health.transition"
++    );
++
++    assert.equal(transitions.length, 1);
++    assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
++  });
++});
++
+ test("shared runtime authority checker treats last known good as diagnostic only", () => {
+   const blocked = getApprovedRuntimeAuthorityFailure({
+     authority: {
+diff --git a/ai-hq-backend/tests/telegram-channel-connect.test.js b/ai-hq-backend/tests/telegram-channel-connect.test.js
+index c35fa4e..290bba2 100644
+--- a/ai-hq-backend/tests/telegram-channel-connect.test.js
++++ b/ai-hq-backend/tests/telegram-channel-connect.test.js
+@@ -15,6 +15,9 @@ const publicModule = await import("../src/routes/api/channelConnect/public.js");
+ const tenantSecretsModule = await import("../src/db/helpers/tenantSecrets.js");
+ const deliveryModule = await import("../src/services/channelDelivery.js");
+ const durableModule = await import("../src/services/durableExecutionService.js");
++const runtimeProjectionObservabilityModule = await import(
++  "../src/services/runtimeProjectionObservability.js"
++);
+ 
+ const { cfg } = configModule;
+ const {
+@@ -34,6 +37,8 @@ const {
+ const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule;
+ const { deliverChannelOutbound } = deliveryModule;
+ const { buildChannelOutboundExecutionInput } = durableModule;
++const { __test__: runtimeProjectionObservabilityTest } =
++  runtimeProjectionObservabilityModule;
+ 
+ cfg.security.tenantSecretMasterKey =
+   cfg.security.tenantSecretMasterKey || process.env.TENANT_SECRET_MASTER_KEY;
+@@ -44,6 +49,10 @@ cfg.telegram.connectTimeoutMs = 5_000;
+ cfg.telegram.statusTimeoutMs = 5_000;
+ cfg.telegram.sendTimeoutMs = 5_000;
+ 
++test.beforeEach(() => {
++  runtimeProjectionObservabilityTest.resetRuntimeProjectionHealthState();
++});
++
+ function normalizeSql(sql = "") {
+   return String(sql || "").trim().toLowerCase().replace(/\s+/g, " ");
+ }
+@@ -117,6 +126,29 @@ function createTelegramFetchMock(handlers = {}) {
+   };
+ }
+ 
++function createCaptureLogger(entries = [], context = {}) {
++  return {
++    child(extra = {}) {
++      return createCaptureLogger(entries, { ...context, ...extra });
++    },
++    info(event, data = {}) {
++      entries.push({ level: "info", event, ...context, ...data });
++    },
++    warn(event, data = {}) {
++      entries.push({ level: "warn", event, ...context, ...data });
++    },
++    error(event, error = null, data = {}) {
++      entries.push({
++        level: "error",
++        event,
++        ...context,
++        ...data,
++        error: error?.message || String(error || ""),
++      });
++    },
++  };
++}
++
+ function createMockRes() {
+   return {
+     statusCode: 200,
+@@ -679,6 +711,7 @@ test("telegram status stays fail-closed when the stored webhook no longer matche
+ test("telegram runtime surface repairs a missing projection when approved truth is available", async () => {
+   let runtimeCalls = 0;
+   let refreshInput = null;
++  const entries = [];
+ 
+   const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
+     db: { query() {} },
+@@ -726,6 +759,7 @@ test("telegram runtime surface repairs a missing projection when approved truth
+     getInboxPolicyFn: () => ({
+       channelAllowed: true,
+     }),
++    logger: createCaptureLogger(entries),
+   });
+ 
+   assert.equal(runtime.authorityAvailable, true);
+@@ -734,9 +768,23 @@ test("telegram runtime surface repairs a missing projection when approved truth
+   assert.equal(refreshInput?.tenantKey, "acme");
+   assert.equal(refreshInput?.triggerType, "channel_connect_telegram");
+   assert.equal(refreshInput?.metadata?.repairTrigger, "telegram_connect");
++  const runtimeEvents = entries.map((entry) => entry.event);
++  assert.deepEqual(runtimeEvents, [
++    "runtime.projection.health.transition",
++    "runtime.projection.repair.started",
++    "runtime.projection.health.transition",
++    "runtime.projection.repair.succeeded",
++  ]);
++  assert.equal(entries[0]?.nextStatus, "stale");
++  assert.equal(entries[1]?.repairTrigger, "telegram_connect");
++  assert.equal(entries[2]?.previousStatus, "stale");
++  assert.equal(entries[2]?.nextStatus, "healthy");
++  assert.equal(entries[3]?.restoredHealthy, true);
++  assert.equal(entries[3]?.didStatusChange, true);
+ });
+ 
+ test("telegram runtime surface preserves approved-truth blocker truth when governed repair cannot run", async () => {
++  const entries = [];
+   const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
+     db: { query() {} },
+     tenantKey: "acme",
+@@ -756,11 +804,106 @@ test("telegram runtime surface preserves approved-truth blocker truth when gover
+     refreshRuntimeProjection: async () => {
+       throw new Error("not expected");
+     },
++    logger: createCaptureLogger(entries),
+   });
+ 
+   assert.equal(runtime.authorityAvailable, false);
+   assert.equal(runtime.deliveryReady, false);
+   assert.equal(runtime.reasonCode, "approved_truth_unavailable");
++  assert.equal(
++    entries.some(
++      (entry) =>
++        entry.event === "runtime.projection.repair.skipped" &&
++        entry.reasonCode === "approved_truth_unavailable"
++    ),
++    true
++  );
++  assert.equal(
++    entries.some(
++      (entry) =>
++        entry.event === "runtime.projection.blocked.consumer" &&
++        entry.consumer === "telegram_connect" &&
++        entry.reasonCode === "approved_truth_unavailable"
++    ),
++    true
++  );
++});
++
++test("telegram runtime surface emits repair failure when governed repair does not recover the projection", async () => {
++  const entries = [];
++
++  const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
++    db: { query() {} },
++    tenantKey: "acme",
++    allowRepair: true,
++    repairTrigger: "telegram_status",
++    requestedBy: "owner@acme.test",
++    getRuntime: async () => {
++      const error = new Error(
++        "Approved runtime authority is unavailable because no fresh runtime projection exists."
++      );
++      error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
++      error.runtimeAuthority = {
++        reasonCode: "runtime_projection_missing",
++        reason: "runtime_projection_missing",
++        available: false,
++        tenantId: "tenant-1",
++        tenantKey: "acme",
++        runtimeProjectionId: "projection-1",
++        runtimeProjectionStatus: "stale",
++      };
++      throw error;
++    },
++    refreshRuntimeProjection: async () => {
++      const error = new Error("refresh failed");
++      error.code = "TENANT_RUNTIME_PROJECTION_STALE";
++      error.runtimeAuthority = {
++        reasonCode: "runtime_projection_stale",
++        reason: "runtime_projection_stale",
++        available: false,
++        tenantId: "tenant-1",
++        tenantKey: "acme",
++        runtimeProjectionId: "projection-1",
++        runtimeProjectionStatus: "stale",
++        freshnessReasons: ["projection_hash_mismatch"],
++      };
++      error.freshness = {
++        stale: true,
++        reasons: ["projection_hash_mismatch"],
++        tenantId: "tenant-1",
++        tenantKey: "acme",
++        runtimeProjectionId: "projection-1",
++        runtimeStatus: "stale",
++      };
++      throw error;
++    },
++    logger: createCaptureLogger(entries),
++  });
++
++  assert.equal(runtime.ready, false);
++  assert.equal(runtime.reasonCode, "projection_hash_mismatch");
++  assert.equal(
++    entries.some((entry) => entry.event === "runtime.projection.repair.started"),
++    true
++  );
++  assert.equal(
++    entries.some(
++      (entry) =>
++        entry.event === "runtime.projection.repair.failed" &&
++        entry.reasonCode === "projection_hash_mismatch" &&
++        entry.errorClass === "Error"
++    ),
++    true
++  );
++  assert.equal(
++    entries.some(
++      (entry) =>
++        entry.event === "runtime.projection.blocked.consumer" &&
++        entry.consumer === "telegram_status" &&
++        entry.runtimeProjectionId === "projection-1"
++    ),
++    true
++  );
+ });
+ 
+ test("telegram disconnect removes tenant secrets, deletes the webhook, and preserves bot identity truthfully", async () => {

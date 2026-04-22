@@ -10,6 +10,7 @@ import {
   enqueueMetaCommentReplyExecution,
   mapDurableExecutionToCommentDeliveryStatus,
 } from "../../../../services/durableExecutionService.js";
+import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { getCommentById, updateCommentState } from "../repository.js";
 import {
@@ -199,6 +200,24 @@ export function replyCommentHandler({
         });
 
         if (executionPolicy.blocked || executionPolicy.blockedUntilRepair) {
+          emitRuntimeProjectionBlockedConsumer({
+            logger: req?.log,
+            consumer: "comments",
+            tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+            tenantKey: s(existing?.tenant_key || tenantKey),
+            authority:
+              runtimeState?.runtimePack?.authority ||
+              runtimeState?.runtime?.runtimeAuthority ||
+              runtimeState?.runtime?.authority,
+            latestTruthVersionId: s(
+              runtimeState?.runtimePack?.raw?.projection?.metadata_json
+                ?.publishedTruthVersionId
+            ),
+            requestId: s(req?.requestId),
+            correlationId: s(req?.correlationId),
+            externalCommentId: s(existing?.external_comment_id),
+          });
+
           const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
             tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
             tenantKey: s(existing?.tenant_key || tenantKey),

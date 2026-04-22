@@ -6,6 +6,14 @@ import {
 } from "../../../services/operationalReadiness.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { getInboxPolicy } from "../../../services/inboxPolicy.js";
+import {
+  emitRuntimeProjectionBlockedConsumer,
+  emitRuntimeProjectionHealthTransition,
+  emitRuntimeProjectionRepairFailed,
+  emitRuntimeProjectionRepairSkipped,
+  emitRuntimeProjectionRepairStarted,
+  emitRuntimeProjectionRepairSucceeded,
+} from "../../../services/runtimeProjectionObservability.js";
 import { refreshTenantRuntimeProjectionStrict } from "../../../db/helpers/tenantRuntimeProjection.js";
 import { cfg } from "../../../config.js";
 import {
@@ -354,6 +362,58 @@ function normalizeTelegramReasonCodes(values = []) {
   ];
 }
 
+function buildTelegramFailureFreshness(failure = {}, tenantKey = "") {
+  const authority = obj(failure?.authority);
+  return {
+    stale: failure?.reasonCode !== "approved_truth_unavailable",
+    reasons: normalizeTelegramReasonCodes(failure?.freshnessReasonCodes),
+    tenantId: s(authority?.tenantId),
+    tenantKey: s(authority?.tenantKey || tenantKey),
+    runtimeProjectionId: s(authority?.runtimeProjectionId),
+    runtimeStatus: s(authority?.runtimeProjectionStatus),
+  };
+}
+
+function buildTelegramFailureHealth(failure = {}) {
+  const authority = obj(failure?.authority);
+  const health = obj(authority?.health);
+  if (s(health?.status)) return health;
+
+  const primaryReasonCode =
+    s(failure?.healthPrimaryReasonCode) ||
+    s(failure?.healthReasonCodes?.[0]) ||
+    s(failure?.reasonCode || "runtime_authority_unavailable");
+  const reasonCodes = normalizeTelegramReasonCodes([
+    primaryReasonCode,
+    ...(Array.isArray(failure?.healthReasonCodes) ? failure.healthReasonCodes : []),
+  ]);
+  const status =
+    primaryReasonCode === "approved_truth_unavailable" ? "blocked" : "stale";
+
+  return {
+    status,
+    primaryReasonCode,
+    reasonCodes,
+    autonomousOperation: status === "healthy" ? "continue" : "stop",
+    repairActions:
+      status === "blocked"
+        ? [{ action: "verify_truth_publish" }]
+        : [{ action: "refresh_projection" }],
+  };
+}
+
+function buildTelegramHealthyHealth(authority = null) {
+  const health = obj(obj(authority).health);
+  if (s(health.status)) return health;
+  return {
+    status: "healthy",
+    primaryReasonCode: "",
+    reasonCodes: [],
+    autonomousOperation: "continue",
+    repairActions: [],
+  };
+}
+
 function extractTelegramRuntimeAuthorityPayload(error = {}) {
   const authority = obj(error?.runtimeAuthority || error?.authority);
   const health = obj(authority?.health);
@@ -471,6 +531,7 @@ async function getTelegramRuntimeSurface({
   getRuntime = getTenantBrainRuntime,
   refreshRuntimeProjection = refreshTenantRuntimeProjectionStrict,
   getInboxPolicyFn = getInboxPolicy,
+  logger = null,
 } = {}) {
   if (!db?.query || !tenantKey) {
     return {
@@ -497,23 +558,44 @@ async function getTelegramRuntimeSurface({
     });
   } catch (error) {
     const failure = extractTelegramRuntimeAuthorityPayload(error);
+    const failureFreshness = buildTelegramFailureFreshness(failure, tenantKey);
+    const failureHealth = buildTelegramFailureHealth(failure);
+
+    emitRuntimeProjectionHealthTransition({
+      logger,
+      health: failureHealth,
+      freshness: failureFreshness,
+      runtimeProjection: {
+        id: s(failure?.authority?.runtimeProjectionId),
+        status: s(failure?.authority?.runtimeProjectionStatus),
+      },
+      tenantId: s(failure?.authority?.tenantId),
+      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
+      triggerSource: "channelConnect.telegram",
+      repairTrigger: s(repairTrigger || "telegram_status"),
+      requestedBy: s(requestedBy || "system"),
+    });
 
     if (
       allowRepair &&
       shouldAttemptTelegramRuntimeRepair(failure, error) &&
       typeof refreshRuntimeProjection === "function"
     ) {
-      try {
-        console.warn("[ai-hq] telegram runtime repair attempting", {
-          tenantKey: s(tenantKey),
-          repairTrigger: s(repairTrigger),
-          requestedBy: s(requestedBy || "system"),
-          wrapperReasonCode: s(failure.wrapperReasonCode),
-          reasonCode: s(failure.reasonCode),
-          healthReasonCodes: failure.healthReasonCodes || [],
-          freshnessReasonCodes: failure.freshnessReasonCodes || [],
-        });
-      } catch {}
+      const startedAt = Date.now();
+      emitRuntimeProjectionRepairStarted({
+        logger,
+        previousHealth: failureHealth,
+        freshness: failureFreshness,
+        runtimeProjection: {
+          id: s(failure?.authority?.runtimeProjectionId),
+          status: s(failure?.authority?.runtimeProjectionStatus),
+        },
+        tenantId: s(failure?.authority?.tenantId),
+        tenantKey: s(failure?.authority?.tenantKey || tenantKey),
+        triggerSource: "channelConnect.telegram",
+        repairTrigger: s(repairTrigger || "telegram_status"),
+        requestedBy: s(requestedBy || "system"),
+      });
 
       try {
         await refreshRuntimeProjection(
@@ -540,33 +622,92 @@ async function getTelegramRuntimeSurface({
           tenantKey,
           authorityMode: "strict",
         });
-
-        try {
-          console.warn("[ai-hq] telegram runtime repair completed", {
-            tenantKey: s(tenantKey),
-            repairTrigger: s(repairTrigger),
-          });
-        } catch {}
-
-        return buildTelegramRuntimeSurfaceFromRuntime({
+        const runtimeSurface = buildTelegramRuntimeSurfaceFromRuntime({
           runtime,
           tenantKey,
           getInboxPolicyFn,
         });
+        const recoveredAuthority = runtimeSurface?.authority || runtime?.authority;
+        const recoveredFreshness = {
+          stale: false,
+          reasons: [],
+          tenantId: s(recoveredAuthority?.tenantId),
+          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
+          runtimeProjectionId: s(recoveredAuthority?.runtimeProjectionId),
+          runtimeStatus: s(recoveredAuthority?.runtimeProjectionStatus),
+        };
+        const recoveredHealth = buildTelegramHealthyHealth(recoveredAuthority);
+
+        emitRuntimeProjectionHealthTransition({
+          logger,
+          health: recoveredHealth,
+          freshness: recoveredFreshness,
+          runtimeProjection: {
+            id: s(recoveredAuthority?.runtimeProjectionId),
+            status: s(recoveredAuthority?.runtimeProjectionStatus || "ready"),
+          },
+          tenantId: s(recoveredAuthority?.tenantId),
+          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
+          triggerSource: "channelConnect.telegram",
+          repairTrigger: s(repairTrigger || "telegram_status"),
+          requestedBy: s(requestedBy || "system"),
+          durationMs: Date.now() - startedAt,
+        });
+
+        emitRuntimeProjectionRepairSucceeded({
+          logger,
+          previousHealth: failureHealth,
+          nextHealth: recoveredHealth,
+          freshness: recoveredFreshness,
+          runtimeProjection: {
+            id: s(recoveredAuthority?.runtimeProjectionId),
+            status: s(recoveredAuthority?.runtimeProjectionStatus || "ready"),
+            projection_hash: s(recoveredAuthority?.projectionHash),
+          },
+          previousRuntimeProjectionId: s(failure?.authority?.runtimeProjectionId),
+          previousProjectionHash: s(failure?.authority?.projectionHash),
+          tenantId: s(recoveredAuthority?.tenantId),
+          tenantKey: s(recoveredAuthority?.tenantKey || tenantKey),
+          triggerSource: "channelConnect.telegram",
+          repairTrigger: s(repairTrigger || "telegram_status"),
+          requestedBy: s(requestedBy || "system"),
+          durationMs: Date.now() - startedAt,
+        });
+
+        return runtimeSurface;
       } catch (repairError) {
         const repairFailure = extractTelegramRuntimeAuthorityPayload(repairError);
+        const repairFailureFreshness = buildTelegramFailureFreshness(
+          repairFailure,
+          tenantKey
+        );
 
-        try {
-          console.warn("[ai-hq] telegram runtime repair failed", {
-            tenantKey: s(tenantKey),
-            repairTrigger: s(repairTrigger),
-            wrapperReasonCode: s(repairFailure.wrapperReasonCode),
-            reasonCode: s(repairFailure.reasonCode),
-            healthReasonCodes: repairFailure.healthReasonCodes || [],
-            freshnessReasonCodes: repairFailure.freshnessReasonCodes || [],
-            error: s(repairFailure.error),
-          });
-        } catch {}
+        emitRuntimeProjectionRepairFailed({
+          logger,
+          previousHealth: failureHealth,
+          nextHealth: buildTelegramFailureHealth(repairFailure),
+          freshness: repairFailureFreshness,
+          runtimeProjection: {
+            id: s(repairFailure?.authority?.runtimeProjectionId),
+            status: s(repairFailure?.authority?.runtimeProjectionStatus),
+          },
+          tenantId: s(repairFailure?.authority?.tenantId),
+          tenantKey: s(repairFailure?.authority?.tenantKey || tenantKey),
+          triggerSource: "channelConnect.telegram",
+          repairTrigger: s(repairTrigger || "telegram_status"),
+          requestedBy: s(requestedBy || "system"),
+          durationMs: Date.now() - startedAt,
+          reasonCode: s(repairFailure.reasonCode),
+          error: repairError,
+        });
+
+        emitRuntimeProjectionBlockedConsumer({
+          logger,
+          consumer: s(repairTrigger || "telegram_status"),
+          tenantId: s(repairFailure?.authority?.tenantId),
+          tenantKey: s(repairFailure?.authority?.tenantKey || tenantKey),
+          authority: repairFailure.authority,
+        });
 
         return {
           ready: false,
@@ -579,6 +720,35 @@ async function getTelegramRuntimeSurface({
         };
       }
     }
+
+    emitRuntimeProjectionRepairSkipped({
+      logger,
+      previousHealth: failureHealth,
+      freshness: failureFreshness,
+      runtimeProjection: {
+        id: s(failure?.authority?.runtimeProjectionId),
+        status: s(failure?.authority?.runtimeProjectionStatus),
+      },
+      tenantId: s(failure?.authority?.tenantId),
+      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
+      triggerSource: "channelConnect.telegram",
+      repairTrigger: s(repairTrigger || "telegram_status"),
+      requestedBy: s(requestedBy || "system"),
+      reasonCode:
+        !allowRepair
+          ? "repair_disabled"
+          : typeof refreshRuntimeProjection !== "function"
+            ? "repair_unavailable"
+            : s(failure.reasonCode || "repair_skipped"),
+    });
+
+    emitRuntimeProjectionBlockedConsumer({
+      logger,
+      consumer: s(repairTrigger || "telegram_status"),
+      tenantId: s(failure?.authority?.tenantId),
+      tenantKey: s(failure?.authority?.tenantKey || tenantKey),
+      authority: failure.authority,
+    });
 
     return {
       ready: false,

@@ -22,6 +22,12 @@ import {
   buildReadinessSurface,
 } from "../../../services/operationalReadiness.js";
 import {
+  emitRuntimeProjectionRepairFailed,
+  emitRuntimeProjectionRepairSkipped,
+  emitRuntimeProjectionRepairStarted,
+  emitRuntimeProjectionRepairSucceeded,
+} from "../../../services/runtimeProjectionObservability.js";
+import {
   POLICY_CONTROL_MODES,
   buildExecutionPolicySurfaceSummary,
 } from "../../../services/executionPolicy.js";
@@ -2238,8 +2244,27 @@ export function settingsTrustRoutes({ db }) {
       repairLogger?.info("runtime_projection.repair.requested", {
         latestTruthVersionId: s(latestTruthVersion?.id),
       });
+      const repairStartedAt = Date.now();
+      emitRuntimeProjectionRepairStarted({
+        logger: repairLogger,
+        tenantId: tenant.tenant_id,
+        tenantKey: tenant.tenant_key,
+        latestTruthVersionId: s(latestTruthVersion?.id),
+        triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
+        repairTrigger: "manual_repair",
+        requestedBy: getActor(req),
+      });
 
       if (!s(latestTruthVersion?.id)) {
+        emitRuntimeProjectionRepairSkipped({
+          logger: repairLogger,
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+          triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
+          repairTrigger: "manual_repair",
+          requestedBy: getActor(req),
+          reasonCode: "approved_truth_unavailable",
+        });
         await auditSafe(
           db,
           req,
@@ -2311,6 +2336,25 @@ export function settingsTrustRoutes({ db }) {
           db
         );
       } catch (error) {
+        emitRuntimeProjectionRepairFailed({
+          logger: repairLogger,
+          freshness: obj(error?.freshness),
+          runtimeProjection: {
+            id: s(error?.runtimeProjectionId),
+            status: s(obj(error?.freshness).runtimeStatus),
+          },
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+          latestTruthVersionId: s(latestTruthVersion?.id),
+          triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
+          repairTrigger: "manual_repair",
+          requestedBy: getActor(req),
+          durationMs: Date.now() - repairStartedAt,
+          reasonCode:
+            s(error?.freshness?.reasons?.[0]) ||
+            s(error?.code || "runtime_projection_repair_failed").toLowerCase(),
+          error,
+        });
         await auditSafe(
           db,
           req,
@@ -2415,6 +2459,20 @@ export function settingsTrustRoutes({ db }) {
           viewerRole,
           repairRunId: s(refreshed?.runId),
         },
+      });
+
+      emitRuntimeProjectionRepairSucceeded({
+        logger: repairLogger,
+        nextHealth: obj(refreshed?.health || refreshed?.freshness?.health),
+        freshness: obj(refreshed?.freshness),
+        runtimeProjection: obj(refreshed?.projection),
+        tenantId: tenant.tenant_id,
+        tenantKey: tenant.tenant_key,
+        latestTruthVersionId: s(latestTruthVersion?.id),
+        triggerSource: "settingsTrustRoutes.runtimeProjectionRepair",
+        repairTrigger: "manual_repair",
+        requestedBy: getActor(req),
+        durationMs: Date.now() - repairStartedAt,
       });
 
       await safeAppendDecisionEvent(db, {

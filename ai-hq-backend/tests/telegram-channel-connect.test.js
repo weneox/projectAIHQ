@@ -15,6 +15,9 @@ const publicModule = await import("../src/routes/api/channelConnect/public.js");
 const tenantSecretsModule = await import("../src/db/helpers/tenantSecrets.js");
 const deliveryModule = await import("../src/services/channelDelivery.js");
 const durableModule = await import("../src/services/durableExecutionService.js");
+const runtimeProjectionObservabilityModule = await import(
+  "../src/services/runtimeProjectionObservability.js"
+);
 
 const { cfg } = configModule;
 const {
@@ -34,6 +37,8 @@ const {
 const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule;
 const { deliverChannelOutbound } = deliveryModule;
 const { buildChannelOutboundExecutionInput } = durableModule;
+const { __test__: runtimeProjectionObservabilityTest } =
+  runtimeProjectionObservabilityModule;
 
 cfg.security.tenantSecretMasterKey =
   cfg.security.tenantSecretMasterKey || process.env.TENANT_SECRET_MASTER_KEY;
@@ -43,6 +48,10 @@ cfg.telegram.webhookBaseUrl = process.env.TELEGRAM_WEBHOOK_BASE_URL;
 cfg.telegram.connectTimeoutMs = 5_000;
 cfg.telegram.statusTimeoutMs = 5_000;
 cfg.telegram.sendTimeoutMs = 5_000;
+
+test.beforeEach(() => {
+  runtimeProjectionObservabilityTest.resetRuntimeProjectionHealthState();
+});
 
 function normalizeSql(sql = "") {
   return String(sql || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -113,6 +122,29 @@ function createTelegramFetchMock(handlers = {}) {
       }
 
       return createResponse(next?.status || 200, next?.json || {});
+    },
+  };
+}
+
+function createCaptureLogger(entries = [], context = {}) {
+  return {
+    child(extra = {}) {
+      return createCaptureLogger(entries, { ...context, ...extra });
+    },
+    info(event, data = {}) {
+      entries.push({ level: "info", event, ...context, ...data });
+    },
+    warn(event, data = {}) {
+      entries.push({ level: "warn", event, ...context, ...data });
+    },
+    error(event, error = null, data = {}) {
+      entries.push({
+        level: "error",
+        event,
+        ...context,
+        ...data,
+        error: error?.message || String(error || ""),
+      });
     },
   };
 }
@@ -679,6 +711,7 @@ test("telegram status stays fail-closed when the stored webhook no longer matche
 test("telegram runtime surface repairs a missing projection when approved truth is available", async () => {
   let runtimeCalls = 0;
   let refreshInput = null;
+  const entries = [];
 
   const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
     db: { query() {} },
@@ -726,6 +759,7 @@ test("telegram runtime surface repairs a missing projection when approved truth 
     getInboxPolicyFn: () => ({
       channelAllowed: true,
     }),
+    logger: createCaptureLogger(entries),
   });
 
   assert.equal(runtime.authorityAvailable, true);
@@ -734,9 +768,23 @@ test("telegram runtime surface repairs a missing projection when approved truth 
   assert.equal(refreshInput?.tenantKey, "acme");
   assert.equal(refreshInput?.triggerType, "channel_connect_telegram");
   assert.equal(refreshInput?.metadata?.repairTrigger, "telegram_connect");
+  const runtimeEvents = entries.map((entry) => entry.event);
+  assert.deepEqual(runtimeEvents, [
+    "runtime.projection.health.transition",
+    "runtime.projection.repair.started",
+    "runtime.projection.health.transition",
+    "runtime.projection.repair.succeeded",
+  ]);
+  assert.equal(entries[0]?.nextStatus, "stale");
+  assert.equal(entries[1]?.repairTrigger, "telegram_connect");
+  assert.equal(entries[2]?.previousStatus, "stale");
+  assert.equal(entries[2]?.nextStatus, "healthy");
+  assert.equal(entries[3]?.restoredHealthy, true);
+  assert.equal(entries[3]?.didStatusChange, true);
 });
 
 test("telegram runtime surface preserves approved-truth blocker truth when governed repair cannot run", async () => {
+  const entries = [];
   const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
     db: { query() {} },
     tenantKey: "acme",
@@ -756,11 +804,106 @@ test("telegram runtime surface preserves approved-truth blocker truth when gover
     refreshRuntimeProjection: async () => {
       throw new Error("not expected");
     },
+    logger: createCaptureLogger(entries),
   });
 
   assert.equal(runtime.authorityAvailable, false);
   assert.equal(runtime.deliveryReady, false);
   assert.equal(runtime.reasonCode, "approved_truth_unavailable");
+  assert.equal(
+    entries.some(
+      (entry) =>
+        entry.event === "runtime.projection.repair.skipped" &&
+        entry.reasonCode === "approved_truth_unavailable"
+    ),
+    true
+  );
+  assert.equal(
+    entries.some(
+      (entry) =>
+        entry.event === "runtime.projection.blocked.consumer" &&
+        entry.consumer === "telegram_connect" &&
+        entry.reasonCode === "approved_truth_unavailable"
+    ),
+    true
+  );
+});
+
+test("telegram runtime surface emits repair failure when governed repair does not recover the projection", async () => {
+  const entries = [];
+
+  const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
+    db: { query() {} },
+    tenantKey: "acme",
+    allowRepair: true,
+    repairTrigger: "telegram_status",
+    requestedBy: "owner@acme.test",
+    getRuntime: async () => {
+      const error = new Error(
+        "Approved runtime authority is unavailable because no fresh runtime projection exists."
+      );
+      error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+      error.runtimeAuthority = {
+        reasonCode: "runtime_projection_missing",
+        reason: "runtime_projection_missing",
+        available: false,
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        runtimeProjectionStatus: "stale",
+      };
+      throw error;
+    },
+    refreshRuntimeProjection: async () => {
+      const error = new Error("refresh failed");
+      error.code = "TENANT_RUNTIME_PROJECTION_STALE";
+      error.runtimeAuthority = {
+        reasonCode: "runtime_projection_stale",
+        reason: "runtime_projection_stale",
+        available: false,
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        runtimeProjectionStatus: "stale",
+        freshnessReasons: ["projection_hash_mismatch"],
+      };
+      error.freshness = {
+        stale: true,
+        reasons: ["projection_hash_mismatch"],
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        runtimeStatus: "stale",
+      };
+      throw error;
+    },
+    logger: createCaptureLogger(entries),
+  });
+
+  assert.equal(runtime.ready, false);
+  assert.equal(runtime.reasonCode, "projection_hash_mismatch");
+  assert.equal(
+    entries.some((entry) => entry.event === "runtime.projection.repair.started"),
+    true
+  );
+  assert.equal(
+    entries.some(
+      (entry) =>
+        entry.event === "runtime.projection.repair.failed" &&
+        entry.reasonCode === "projection_hash_mismatch" &&
+        entry.errorClass === "Error"
+    ),
+    true
+  );
+  assert.equal(
+    entries.some(
+      (entry) =>
+        entry.event === "runtime.projection.blocked.consumer" &&
+        entry.consumer === "telegram_status" &&
+        entry.runtimeProjectionId === "projection-1"
+    ),
+    true
+  );
 });
 
 test("telegram disconnect removes tenant secrets, deletes the webhook, and preserves bot identity truthfully", async () => {

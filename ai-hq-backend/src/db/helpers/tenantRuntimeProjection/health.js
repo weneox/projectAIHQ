@@ -1,4 +1,5 @@
 import { arr, num, obj, s } from "./shared.js";
+import { emitRuntimeProjectionHealthTransition } from "../../../services/runtimeProjectionObservability.js";
 
 const ALL_AFFECTED_SURFACES = [
   "inbox",
@@ -313,20 +314,17 @@ function buildReasonHistory({
 }
 
 function logRuntimeProjectionHealth(model, context = {}) {
-  try {
-    console.warn("[ai-hq] runtime projection health", {
-      status: s(model?.status),
-      primaryReasonCode: s(model?.primaryReasonCode),
-      reasonCodes: arr(model?.reasonCodes),
-      autonomousOperation: s(model?.autonomousOperation),
-      truthProvided: Boolean(context?.truthProvided),
-      latestTruthVersionId: s(context?.latestTruthVersionId),
-      activeReviewSessionId: s(context?.activeReviewSessionId),
-      runtimeProjectionId: s(context?.runtimeProjectionId),
-      runtimeProjectionStatus: s(context?.runtimeProjectionStatus),
-      repairActions: arr(model?.repairActions).map((item) => s(item?.action)),
-    });
-  } catch {}
+  emitRuntimeProjectionHealthTransition({
+    health: model,
+    freshness: context?.freshness || null,
+    runtimeProjection: context?.runtimeProjection || null,
+    tenantId: s(context?.tenantId),
+    tenantKey: s(context?.tenantKey),
+    latestTruthVersionId: s(context?.latestTruthVersionId),
+    activeReviewSessionId: s(context?.activeReviewSessionId),
+    activeReviewSession: context?.activeReviewSession || null,
+    triggerSource: s(context?.triggerSource || "tenantRuntimeProjection.health"),
+  });
 }
 
 export function buildRuntimeProjectionHealthModel({
@@ -513,11 +511,16 @@ export function buildRuntimeProjectionHealthModel({
   };
 
   logRuntimeProjectionHealth(model, {
-    truthProvided,
+    freshness: fresh,
+    runtimeProjection: projection,
+    tenantId: s(fresh.tenantId || projection.tenant_id),
+    tenantKey: s(fresh.tenantKey || projection.tenant_key),
     latestTruthVersionId: s(truth.id),
     activeReviewSessionId: s(obj(activeReviewSession).id),
-    runtimeProjectionId: s(projection.id),
-    runtimeProjectionStatus: s(projection.status),
+    activeReviewSession,
+    triggerSource: truthProvided
+      ? "tenantRuntimeProjection.health.with_truth"
+      : "tenantRuntimeProjection.health",
   });
 
   return model;

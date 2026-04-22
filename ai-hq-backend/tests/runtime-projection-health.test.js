@@ -4,7 +4,53 @@ import assert from "node:assert/strict";
 import {
   __test__ as healthTest,
 } from "../src/db/helpers/tenantRuntimeProjection/health.js";
+import {
+  __test__ as runtimeProjectionObservabilityTest,
+} from "../src/services/runtimeProjectionObservability.js";
 import { getApprovedRuntimeAuthorityFailure } from "../../shared-contracts/runtime.js";
+
+const originalConsoleInfo = console.info;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
+
+function captureConsoleEvents(work) {
+  const entries = [];
+  const capture =
+    (level) =>
+    (...args) => {
+      const [event, payload] = args;
+      entries.push({
+        level,
+        event: String(event || ""),
+        payload:
+          payload && typeof payload === "object" && !Array.isArray(payload)
+            ? payload
+            : {},
+      });
+    };
+
+  console.info = capture("info");
+  console.warn = capture("warn");
+  console.error = capture("error");
+
+  return Promise.resolve()
+    .then(() => work(entries))
+    .finally(() => {
+      console.info = originalConsoleInfo;
+      console.warn = originalConsoleWarn;
+      console.error = originalConsoleError;
+    });
+}
+
+test.beforeEach(() => {
+  runtimeProjectionObservabilityTest.resetRuntimeProjectionHealthState();
+});
+
+test.after(() => {
+  console.info = originalConsoleInfo;
+  console.warn = originalConsoleWarn;
+  console.error = originalConsoleError;
+});
 
 test("runtime projection health classifies missing projections consistently", () => {
   const health = healthTest.buildRuntimeProjectionHealthModel({
@@ -114,6 +160,112 @@ test("runtime projection health tracks dependency failures as degraded when auth
   assert.equal(health.primaryReasonCode, "source_dependency_failed");
   assert.equal(health.autonomousOperation, "degrade");
   assert.ok(health.affectedSurfaces.includes("voice"));
+});
+
+test("runtime projection health emits searchable healthy to stale transition logs", async () => {
+  await captureConsoleEvents(async (entries) => {
+    healthTest.buildRuntimeProjectionHealthModel({
+      runtimeProjection: {
+        id: "projection-1",
+        tenant_id: "tenant-1",
+        tenant_key: "acme",
+        status: "ready",
+      },
+      freshness: {
+        stale: false,
+        reasons: [],
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+      },
+      latestTruthVersion: {
+        id: "truth-v1",
+      },
+    });
+
+    healthTest.buildRuntimeProjectionHealthModel({
+      runtimeProjection: {
+        id: "projection-1",
+        tenant_id: "tenant-1",
+        tenant_key: "acme",
+        status: "stale",
+      },
+      freshness: {
+        stale: true,
+        reasons: ["projection_hash_mismatch", "published_truth_version_mismatch"],
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        runtimeStatus: "stale",
+        currentPublishedTruthVersionId: "truth-v1",
+        expectedPublishedTruthVersionId: "truth-v2",
+      },
+      latestTruthVersion: {
+        id: "truth-v2",
+      },
+    });
+
+    const transitions = entries.filter(
+      (entry) => entry.event === "runtime.projection.health.transition"
+    );
+
+    assert.equal(transitions.length, 2);
+    assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
+    assert.equal(transitions[1]?.payload?.previousStatus, "healthy");
+    assert.equal(transitions[1]?.payload?.nextStatus, "stale");
+    assert.equal(
+      transitions[1]?.payload?.previousPrimaryReasonCode,
+      ""
+    );
+    assert.equal(
+      transitions[1]?.payload?.nextPrimaryReasonCode,
+      "projection_stale"
+    );
+    assert.deepEqual(transitions[1]?.payload?.freshnessReasonCodes, [
+      "projection_hash_mismatch",
+      "published_truth_version_mismatch",
+    ]);
+    assert.equal(transitions[1]?.payload?.projectionHashMismatch, true);
+    assert.equal(transitions[1]?.payload?.truthVersionChanged, true);
+    assert.equal(transitions[1]?.payload?.tenantKey, "acme");
+    assert.equal(transitions[1]?.payload?.tenantId, "tenant-1");
+    assert.equal(transitions[1]?.payload?.latestTruthVersionId, "truth-v2");
+    assert.equal(transitions[1]?.payload?.runtimeProjectionId, "projection-1");
+    assert.equal(transitions[1]?.payload?.didStatusChange, true);
+    assert.equal(transitions[1]?.payload?.didReasonChange, true);
+  });
+});
+
+test("runtime projection health suppresses repeated identical transition spam", async () => {
+  await captureConsoleEvents(async (entries) => {
+    const input = {
+      runtimeProjection: {
+        id: "projection-2",
+        tenant_id: "tenant-2",
+        tenant_key: "beta",
+        status: "ready",
+      },
+      freshness: {
+        stale: false,
+        reasons: [],
+        tenantId: "tenant-2",
+        tenantKey: "beta",
+      },
+      latestTruthVersion: {
+        id: "truth-v1",
+      },
+    };
+
+    healthTest.buildRuntimeProjectionHealthModel(input);
+    healthTest.buildRuntimeProjectionHealthModel(input);
+    healthTest.buildRuntimeProjectionHealthModel(input);
+
+    const transitions = entries.filter(
+      (entry) => entry.event === "runtime.projection.health.transition"
+    );
+
+    assert.equal(transitions.length, 1);
+    assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
+  });
 });
 
 test("shared runtime authority checker treats last known good as diagnostic only", () => {
