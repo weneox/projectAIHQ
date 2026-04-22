@@ -58,22 +58,34 @@ function normalizeAssistantPayload(value = {}) {
     completion: obj(source.completion),
     servicesCatalog: obj(source.servicesCatalog),
     sourceInsights: arr(source.sourceInsights),
+
     phase: s(source.phase),
     message: s(source.message || source.assistantMessage),
     assistantMessage: s(source.assistantMessage || source.message),
+
     draft: obj(source.draft),
+    reviewDraft: obj(source.reviewDraft),
+    draftPreviewHidden: source.draftPreviewHidden === true,
+    draftVisibilityMode: s(source.draftVisibilityMode),
+
     confidence: obj(source.confidence),
     recommendation: obj(source.recommendation),
     readyForApproval: source.readyForApproval === true,
+    finalizeAvailable: source.finalizeAvailable === true,
+
     sourceSignals: obj(source.sourceSignals),
     interviewPlan: obj(source.interviewPlan),
+    aiBehavior: obj(source.aiBehavior),
+
     reviewSessionId: s(source.reviewSessionId),
     draftVersion: toNumber(source.draftVersion, 0),
     rejectedInputs: arr(source.rejectedInputs),
+
     provider: s(source.provider),
     model: s(source.model),
     usedFallback: source.usedFallback === true,
     error: s(source.error),
+
     timeline: arr(source.timeline).map(normalizeTimelineEntry),
   };
 }
@@ -108,8 +120,22 @@ function normalizeSetupDraftPayload(value = {}) {
     pricingPosture: obj(source.pricingPosture),
     handoffRules: obj(source.handoffRules),
     sourceMetadata: obj(source.sourceMetadata),
+
+    assistantBehaviorDraft: obj(
+      source.assistantBehaviorDraft ||
+        source.assistantBehavior ||
+        source.assistant_behavior_draft ||
+        source.assistant_behavior
+    ),
+
     assistantState: obj(source.assistantState),
     progress: obj(source.progress),
+
+    languages: arr(source.languages),
+    tone: s(source.tone),
+    greetingStyle: s(source.greetingStyle),
+    afterHoursBehavior: s(source.afterHoursBehavior),
+
     version: toNumber(source.version, 0),
     updatedAt: source.updatedAt || null,
   };
@@ -159,11 +185,14 @@ function normalizeSetupAssistantResponse(payload = {}) {
     message: s(root.message),
     error: s(root.error),
     reason: s(root.reason),
+
     session: normalizeSessionPayload(root.session),
     setup,
+
     assistant: normalizeAssistantPayload(
       Object.keys(obj(root.assistant)).length ? root.assistant : setup.assistant
     ),
+
     timeline: arr(root.timeline).map(normalizeTimelineEntry),
     turn: obj(root.turn),
     question: obj(root.question),
@@ -174,6 +203,7 @@ function normalizeSetupAssistantResponse(payload = {}) {
     reasoningSummary: s(root.reasoningSummary),
     unknowns: arr(root.unknowns),
     assistantHints: arr(root.assistantHints),
+
     review: normalizeSetupReviewPayload(
       Object.keys(obj(root.review)).length ? root.review : setup.review
     ),

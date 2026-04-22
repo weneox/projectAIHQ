@@ -9,10 +9,15 @@ import {
   buildRecognizedSourceCandidate,
   inferContactType,
   normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeClosingBehaviorMode as importedNormalizeClosingBehaviorMode,
   normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeEmpathyLevelMode as importedNormalizeEmpathyLevelMode,
+  normalizeGreetingBehaviorMode as importedNormalizeGreetingBehaviorMode,
   normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
   normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizeMessageLengthMode as importedNormalizeMessageLengthMode,
   normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
+  normalizeToneBehaviorMode as importedNormalizeToneBehaviorMode,
 } from "./shared.js";
 
 const normalizePricingBehaviorMode =
@@ -38,6 +43,31 @@ const normalizeContactBehaviorMode =
 const normalizeHandoffBehaviorMode =
   typeof importedNormalizeHandoffBehaviorMode === "function"
     ? importedNormalizeHandoffBehaviorMode
+    : () => "";
+
+const normalizeGreetingBehaviorMode =
+  typeof importedNormalizeGreetingBehaviorMode === "function"
+    ? importedNormalizeGreetingBehaviorMode
+    : () => "";
+
+const normalizeClosingBehaviorMode =
+  typeof importedNormalizeClosingBehaviorMode === "function"
+    ? importedNormalizeClosingBehaviorMode
+    : () => "";
+
+const normalizeToneBehaviorMode =
+  typeof importedNormalizeToneBehaviorMode === "function"
+    ? importedNormalizeToneBehaviorMode
+    : () => "";
+
+const normalizeMessageLengthMode =
+  typeof importedNormalizeMessageLengthMode === "function"
+    ? importedNormalizeMessageLengthMode
+    : () => "";
+
+const normalizeEmpathyLevelMode =
+  typeof importedNormalizeEmpathyLevelMode === "function"
+    ? importedNormalizeEmpathyLevelMode
     : () => "";
 
 const GREETING_WORDS = new Set([
@@ -487,6 +517,53 @@ function contactBehaviorUrlLooksValid(value = "") {
   return /contact|wa\.me|whatsapp|telegram|instagram|facebook|mailto:/.test(url);
 }
 
+function hasMeaningfulGreetingBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isMetaChat(text)) return false;
+
+  const mode = normalizeGreetingBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(greet|greeting|salam|hello|hi|opening|açılış|ilk mesaj)/i.test(text) ||
+      text.length >= 8
+  );
+}
+
+function hasMeaningfulClosingBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isMetaChat(text)) return false;
+
+  const mode = normalizeClosingBehaviorMode(text);
+  if (mode) return true;
+
+  return Boolean(
+    /(closing|close|sağollaş|sagollas|ending|sonluq|növbəti addım|next step)/i.test(
+      text
+    ) || text.length >= 8
+  );
+}
+
+function hasMeaningfulToneBehaviorText(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  if (isMetaChat(text)) return false;
+
+  const toneMode = normalizeToneBehaviorMode(text);
+  const lengthMode = normalizeMessageLengthMode(text);
+  const empathyLevel = normalizeEmpathyLevelMode(text);
+
+  if (toneMode || lengthMode || empathyLevel) return true;
+
+  return Boolean(
+    /(tone|rəftar|davranış|behavior|style|professional|warm|premium|human|direct|concise|empat)/i.test(
+      text
+    )
+  );
+}
+
 function hasMeaningfulPricingBehaviorText(value = "") {
   const text = s(value);
   if (!text) return false;
@@ -651,6 +728,48 @@ function validateHandoffAnswer(answer = "") {
   };
 }
 
+function validateGreetingBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulGreetingBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_greeting_behavior"
+      : "rejected_greeting_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a greeting behavior preference.",
+  };
+}
+
+function validateClosingBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulClosingBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_closing_behavior"
+      : "rejected_closing_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a closing behavior preference.",
+  };
+}
+
+function validateToneBehaviorAnswer(answer = "") {
+  const accepted = hasMeaningfulToneBehaviorText(answer);
+
+  return {
+    accepted,
+    reasonCode: accepted
+      ? "accepted_tone_behavior"
+      : "rejected_tone_behavior",
+    reason: accepted
+      ? ""
+      : "The message does not look like a tone or manner preference.",
+  };
+}
+
 function validatePricingBehaviorAnswer(answer = "") {
   const accepted = hasMeaningfulPricingBehaviorText(answer);
 
@@ -750,6 +869,15 @@ export function validateStepAnswer(step = "", answer = "", currentDraft = {}) {
   if (normalizedStep === "pricing") return validatePricingAnswer(answer);
   if (normalizedStep === "handoff") return validateHandoffAnswer(answer);
 
+  if (normalizedStep === "greeting_behavior") {
+    return validateGreetingBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "closing_behavior") {
+    return validateClosingBehaviorAnswer(answer);
+  }
+  if (normalizedStep === "tone_behavior") {
+    return validateToneBehaviorAnswer(answer);
+  }
   if (normalizedStep === "pricing_behavior") {
     return validatePricingBehaviorAnswer(answer);
   }
@@ -827,6 +955,59 @@ function extractDraftFieldValue(step = "", draft = {}) {
     );
   }
 
+  if (normalizedStep === "greeting_behavior") {
+    const policy = obj(behaviorDraft.greetingPolicy);
+    const overrides = obj(behaviorDraft.tenantOverrides);
+    const platformDefaults = obj(behaviorDraft.platformDefaults);
+
+    return [
+      s(policy.mode || platformDefaults.greetingMode),
+      s(policy.openingLine),
+      s(policy.followupLeadIn),
+      policy.mentionBusinessName === false ? "no business name" : "",
+      overrides.greetingOverrideActive === true ? "override active" : "",
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "closing_behavior") {
+    const policy = obj(behaviorDraft.closingPolicy);
+    const overrides = obj(behaviorDraft.tenantOverrides);
+    const platformDefaults = obj(behaviorDraft.platformDefaults);
+
+    return [
+      s(policy.mode || platformDefaults.closingMode),
+      s(policy.closingLine),
+      policy.includeNextStepPrompt === false ? "no next step prompt" : "",
+      policy.includeHumanOfferWhenRelevant === false ? "no human offer" : "",
+      overrides.closingOverrideActive === true ? "override active" : "",
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (normalizedStep === "tone_behavior") {
+    const policy = obj(behaviorDraft.tonePolicy);
+    const overrides = obj(behaviorDraft.tenantOverrides);
+    const platformDefaults = obj(behaviorDraft.platformDefaults);
+
+    return [
+      s(policy.mode || platformDefaults.toneMode),
+      s(policy.messageLength || platformDefaults.messageLength),
+      s(policy.empathyLevel || platformDefaults.empathyLevel),
+      policy.shouldSoundPremium === true ? "premium" : "",
+      policy.shouldSoundLocalFriendly === true ? "local friendly" : "",
+      policy.shouldStayConcise === true ? "concise" : "",
+      overrides.toneOverrideActive === true ? "override active" : "",
+      s(policy.note),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   if (normalizedStep === "pricing_behavior") {
     const policy = obj(behaviorDraft.pricingPolicy);
     return [
@@ -901,7 +1082,13 @@ export function buildApprovalBlockers(draft = {}) {
     "handoff",
   ];
 
-  const behaviorSteps = [
+  const alwaysRequiredBehaviorSteps = [
+    "greeting_behavior",
+    "closing_behavior",
+    "tone_behavior",
+  ];
+
+  const contextualBehaviorSteps = [
     "pricing_behavior",
     "location_behavior",
     "booking_behavior",
@@ -909,7 +1096,11 @@ export function buildApprovalBlockers(draft = {}) {
     "handoff_behavior",
   ].filter((step) => isBehaviorStepRelevant(step, draft));
 
-  const steps = [...businessSteps, ...behaviorSteps];
+  const steps = [
+    ...businessSteps,
+    ...alwaysRequiredBehaviorSteps,
+    ...contextualBehaviorSteps,
+  ];
 
   return steps
     .map((step) => {
@@ -943,6 +1134,9 @@ export const __test__ = {
   hasMeaningfulHandoffText,
   hasMeaningfulDescriptionText,
   hasMeaningfulCompanyText,
+  hasMeaningfulGreetingBehaviorText,
+  hasMeaningfulClosingBehaviorText,
+  hasMeaningfulToneBehaviorText,
   hasMeaningfulPricingBehaviorText,
   hasMeaningfulLocationBehaviorText,
   hasMeaningfulBookingBehaviorText,
