@@ -1203,6 +1203,41 @@ export async function getMetaPageAccessContextForUserToken(pageId, userAccessTok
   };
 }
 
+function normalizeMetaResponseErrorValue(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  return value;
+}
+
+function buildMetaResponseErrorFields(details = {}) {
+  const safeDetails = obj(details);
+  const response = obj(safeDetails?.response);
+  const error = obj(response?.error);
+  const hasResponse = Object.keys(response).length > 0;
+
+  return {
+    response: hasResponse ? response : null,
+    responseErrorMessage: cleanNullable(
+      s(safeDetails?.responseErrorMessage || error?.message)
+    ),
+    responseErrorType: cleanNullable(
+      s(safeDetails?.responseErrorType || error?.type)
+    ),
+    responseErrorCode: normalizeMetaResponseErrorValue(
+      safeDetails?.responseErrorCode ?? error?.code
+    ),
+    responseErrorSubcode: normalizeMetaResponseErrorValue(
+      safeDetails?.responseErrorSubcode ?? error?.error_subcode
+    ),
+    responseFbTraceId: cleanNullable(
+      s(safeDetails?.responseFbTraceId || error?.fbtrace_id)
+    ),
+  };
+}
+
 async function subscribeMetaInstagramAccountToApp({
   pageId = "",
   igUserId = "",
@@ -1265,6 +1300,7 @@ async function subscribeMetaInstagramAccountToApp({
     });
 
     const response = await readMetaVerificationPayload(res);
+    const responseErrorFields = buildMetaResponseErrorFields({ response });
     const ok =
       res.ok &&
       (response === true ||
@@ -1285,7 +1321,7 @@ async function subscribeMetaInstagramAccountToApp({
       graphVersion: s(cfg.meta.apiVersion, "v23.0"),
       status: Number(res.status || 0),
       reasonCode: ok ? "" : META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
-      response,
+      ...responseErrorFields,
     };
 
     if (!ok) {
@@ -1303,7 +1339,11 @@ async function subscribeMetaInstagramAccountToApp({
     log.info("meta.connect.webhook_subscription.success", result);
     return result;
   } catch (error) {
+    const responseErrorFields = buildMetaResponseErrorFields(error?.details);
     if (error?.reasonCode === META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON) {
+      if (error?.details && typeof error.details === "object") {
+        Object.assign(error.details, responseErrorFields);
+      }
       throw error;
     }
 
@@ -1319,6 +1359,7 @@ async function subscribeMetaInstagramAccountToApp({
       graphHost: "graph.facebook.com",
       graphVersion: s(cfg.meta.apiVersion, "v23.0"),
       reasonCode: META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
+      ...responseErrorFields,
       error: s(error?.message || error),
       status: Number(error?.status || 409),
     };
@@ -1863,9 +1904,13 @@ async function recordMetaConnectFailure({
   const igUserId = cleanNullable(
     s(safeFailureDetails?.igUserId || selected?.igUserId || "")
   );
-  const responseErrorMessage = cleanNullable(
-    s(safeFailureDetails?.response?.error?.message)
-  );
+  const {
+    responseErrorMessage,
+    responseErrorType,
+    responseErrorCode,
+    responseErrorSubcode,
+    responseFbTraceId,
+  } = buildMetaResponseErrorFields(safeFailureDetails);
 
   await savePendingMetaConnectDiagnostic(
     db,
@@ -1897,6 +1942,10 @@ async function recordMetaConnectFailure({
       pageId,
       igUserId,
       responseErrorMessage,
+      responseErrorType,
+      responseErrorCode,
+      responseErrorSubcode,
+      responseFbTraceId,
       pageDiscovery: connectDiagnostic.pageDiscovery,
       candidateCount: connectDiagnostic.candidateCount,
     }
@@ -1916,6 +1965,10 @@ async function recordMetaConnectFailure({
     pageId,
     igUserId,
     responseErrorMessage,
+    responseErrorType,
+    responseErrorCode,
+    responseErrorSubcode,
+    responseFbTraceId,
     pageDiscovery: connectDiagnostic.pageDiscovery,
     candidateCount: connectDiagnostic.candidateCount,
   });
@@ -1927,6 +1980,10 @@ async function recordMetaConnectFailure({
       pageId,
       igUserId,
       responseErrorMessage,
+      responseErrorType,
+      responseErrorCode,
+      responseErrorSubcode,
+      responseFbTraceId,
     },
   });
 }

@@ -170,6 +170,11 @@ function createFakeReqLogger(sharedEntries = [], context = {}) {
     });
   }
 
+  function payloadFromArgs(args = []) {
+    if (!args.length) return {};
+    return args[args.length - 1] ?? {};
+  }
+
   return {
     entries: sharedEntries,
     child(nextContext = {}) {
@@ -178,17 +183,17 @@ function createFakeReqLogger(sharedEntries = [], context = {}) {
         ...nextContext,
       });
     },
-    debug(event, payload) {
-      push("debug", event, payload);
+    debug(event, ...args) {
+      push("debug", event, payloadFromArgs(args));
     },
-    info(event, payload) {
-      push("info", event, payload);
+    info(event, ...args) {
+      push("info", event, payloadFromArgs(args));
     },
-    warn(event, payload) {
-      push("warn", event, payload);
+    warn(event, ...args) {
+      push("warn", event, payloadFromArgs(args));
     },
-    error(event, payload) {
-      push("error", event, payload);
+    error(event, ...args) {
+      push("error", event, payloadFromArgs(args));
     },
   };
 }
@@ -1142,23 +1147,51 @@ test("subscription failure audit preserves scopes, ids, and the full Meta error 
   const logEntries = [];
   const reqLog = createFakeReqLogger(logEntries);
   const metaErrorMessage =
-    "(#200) To subscribe to the messages field, one of the pages_messaging permissions is required";
+    "(#200) To subscribe to the messages field, one of the permissions is missing";
+  const metaErrorType = "OAuthException";
+  const metaErrorCode = 200;
+  const metaErrorSubcode = 1234567;
+  const metaFbTraceId = "TRACE123";
 
   subscribedAppsResponseStatus = 403;
   subscribedAppsResponsePayload = {
     error: {
       message: metaErrorMessage,
-      type: "OAuthException",
-      code: 200,
+      type: metaErrorType,
+      code: metaErrorCode,
+      error_subcode: metaErrorSubcode,
+      fbtrace_id: metaFbTraceId,
     },
   };
 
+  let connectError = null;
   await assert.rejects(
     () => invokeSingleAccountCallback(db, { reqLog }),
     (error) => {
+      connectError = error;
       assert.equal(error?.reasonCode, "meta_instagram_subscription_failed");
       return true;
     }
+  );
+
+  const webhookFailedLogEntry = logEntries.find(
+    (entry) => entry.event === "meta.connect.webhook_subscription.failed"
+  );
+  assert.ok(webhookFailedLogEntry);
+  assert.equal(
+    webhookFailedLogEntry?.payload?.responseErrorMessage,
+    metaErrorMessage
+  );
+  assert.equal(webhookFailedLogEntry?.payload?.responseErrorType, metaErrorType);
+  assert.equal(webhookFailedLogEntry?.payload?.responseErrorCode, metaErrorCode);
+  assert.equal(
+    webhookFailedLogEntry?.payload?.responseErrorSubcode,
+    metaErrorSubcode
+  );
+  assert.equal(webhookFailedLogEntry?.payload?.responseFbTraceId, metaFbTraceId);
+  assert.equal(
+    webhookFailedLogEntry?.payload?.response?.error?.message,
+    metaErrorMessage
   );
 
   const auditEntry = db.auditEntries.find(
@@ -1170,6 +1203,10 @@ test("subscription failure audit preserves scopes, ids, and the full Meta error 
   assert.equal(auditEntry?.meta?.pageId, "page-1");
   assert.equal(auditEntry?.meta?.igUserId, "ig-1");
   assert.equal(auditEntry?.meta?.responseErrorMessage, metaErrorMessage);
+  assert.equal(auditEntry?.meta?.responseErrorType, metaErrorType);
+  assert.equal(auditEntry?.meta?.responseErrorCode, metaErrorCode);
+  assert.equal(auditEntry?.meta?.responseErrorSubcode, metaErrorSubcode);
+  assert.equal(auditEntry?.meta?.responseFbTraceId, metaFbTraceId);
 
   const failedLogEntry = logEntries.find(
     (entry) => entry.event === "meta.connect.failed"
@@ -1186,6 +1223,19 @@ test("subscription failure audit preserves scopes, ids, and the full Meta error 
     failedLogEntry?.payload?.responseErrorMessage,
     metaErrorMessage
   );
+  assert.equal(failedLogEntry?.payload?.responseErrorType, metaErrorType);
+  assert.equal(failedLogEntry?.payload?.responseErrorCode, metaErrorCode);
+  assert.equal(
+    failedLogEntry?.payload?.responseErrorSubcode,
+    metaErrorSubcode
+  );
+  assert.equal(failedLogEntry?.payload?.responseFbTraceId, metaFbTraceId);
+
+  assert.equal(connectError?.details?.responseErrorMessage, metaErrorMessage);
+  assert.equal(connectError?.details?.responseErrorType, metaErrorType);
+  assert.equal(connectError?.details?.responseErrorCode, metaErrorCode);
+  assert.equal(connectError?.details?.responseErrorSubcode, metaErrorSubcode);
+  assert.equal(connectError?.details?.responseFbTraceId, metaFbTraceId);
 });
 
 test("reconnect cleanly rebinds a stale deauthorized channel to the newly selected page and instagram account", async () => {
