@@ -333,8 +333,8 @@ describe("Truth viewer smoke", () => {
     fireEvent.click(screen.getByRole("button", { name: /version history/i }));
 
     expect(
-      await screen.findByRole("heading", {
-        name: /version details and rollback preview/i,
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
       })
     ).toBeInTheDocument();
     expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
@@ -437,8 +437,8 @@ describe("Truth viewer smoke", () => {
     renderPage("/truth?versionId=v3&focus=history");
 
     expect(
-      await screen.findByRole("heading", {
-        name: /version details and rollback preview/i,
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
       })
     ).toBeInTheDocument();
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
@@ -454,8 +454,8 @@ describe("Truth viewer smoke", () => {
     fireEvent.click(screen.getByRole("button", { name: /version history/i }));
 
     expect(
-      await screen.findByRole("heading", {
-        name: /version details and rollback preview/i,
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
       })
     ).toBeInTheDocument();
 
