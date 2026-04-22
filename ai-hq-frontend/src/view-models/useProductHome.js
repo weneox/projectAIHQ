@@ -1170,11 +1170,56 @@ function buildSecondaryAction({ launchChannel, truthRuntime, assistant }) {
   return { label: "Open channels", path: "/channels" };
 }
 
+function deriveAssistantLaunchState({
+  launchChannel,
+  truthRuntime,
+  assistant,
+  launchReady,
+}) {
+  const truthReady = truthRuntime.truthReady === true;
+  const runtimeReady = truthRuntime.ready === true;
+  const setupNeeded =
+    !(assistant.readyForApproval === true) && !(truthReady === true);
+
+  if (launchReady) {
+    return {
+      launchPosture: "normal_operation",
+      setupNeeded: false,
+    };
+  }
+
+  if (setupNeeded) {
+    return {
+      launchPosture: "setup_needed",
+      setupNeeded: true,
+    };
+  }
+
+  if (!runtimeReady) {
+    return {
+      launchPosture: "runtime_repair_needed",
+      setupNeeded: false,
+    };
+  }
+
+  if (!(launchChannel.connected === true) || !(launchChannel.deliveryReady === true)) {
+    return {
+      launchPosture: "connect_channel",
+      setupNeeded: false,
+    };
+  }
+
+  return {
+    launchPosture: "",
+    setupNeeded: false,
+  };
+}
+
 export default function useProductHome() {
   const queryClient = useQueryClient();
-  const refreshToken = useLaunchSliceRefreshToken();
   const { tenantKey, loading: tenantLoading, ready: tenantReady } =
     useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(tenantKey, tenantReady);
 
   const queryKey = useMemo(
     () => buildWorkspaceScopedQueryKey(["product-home"], tenantKey),
@@ -1252,6 +1297,12 @@ export default function useProductHome() {
       truthRuntime,
       assistant,
     });
+    const assistantLaunchState = deriveAssistantLaunchState({
+      launchChannel,
+      truthRuntime,
+      assistant,
+      launchReady,
+    });
 
     return {
       loading: false,
@@ -1261,7 +1312,10 @@ export default function useProductHome() {
       launchReady,
       launchChannel,
       truthRuntime,
-      assistant,
+      assistant: {
+        ...assistant,
+        ...assistantLaunchState,
+      },
       inboxState,
 
       primaryAction,
