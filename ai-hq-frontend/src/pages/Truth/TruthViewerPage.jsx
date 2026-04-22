@@ -7,6 +7,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   Sparkles,
   User2,
   Wrench,
@@ -29,19 +30,29 @@ import {
 } from "../../components/ui/AppShellPrimitives.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
 import useWorkspaceTenantKey from "../../hooks/useWorkspaceTenantKey.js";
-import { compactSentence, s, toneFromReadiness } from "../../lib/appUi.js";
+import { compactSentence, toneFromReadiness } from "../../lib/appUi.js";
 import {
   emitLaunchSliceRefresh,
   useLaunchSliceRefreshToken,
 } from "../../lib/launchSliceRefresh.js";
 import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
 
-function arr(v, d = []) {
-  return Array.isArray(v) ? v : d;
+function text(value, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
-function obj(v, d = {}) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+function lower(value, fallback = "") {
+  return text(value, fallback).toLowerCase();
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
 }
 
 function initialState(tenantKey = "") {
@@ -72,7 +83,7 @@ function normalizeTruthToken(value = "") {
 }
 
 function formatWhen(value = "") {
-  const raw = s(value);
+  const raw = text(value);
   if (!raw) return "Not available";
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
@@ -138,15 +149,15 @@ function findRequestedHistoryItem({ history, requestedVersionId, approval }) {
 }
 
 function findField(fields = [], key = "") {
-  return arr(fields).find((field) => s(field.key) === s(key)) || null;
+  return arr(fields).find((field) => text(field.key) === text(key)) || null;
 }
 
 function fieldValue(fields = [], key = "") {
-  return s(findField(fields, key)?.value);
+  return text(findField(fields, key)?.value);
 }
 
 function fieldProvenance(fields = [], key = "") {
-  return s(findField(fields, key)?.provenance);
+  return text(findField(fields, key)?.provenance);
 }
 
 function hasTrustOperationalData(trust = null) {
@@ -161,7 +172,7 @@ function buildSnapshotOperationalState(data = {}) {
   const approval = obj(data.approval);
   const readiness = obj(data.readiness);
   const ready =
-    s(readiness.status).toLowerCase() === "ready" && Boolean(s(approval.version));
+    lower(readiness.status) === "ready" && Boolean(text(approval.version));
 
   if (!ready) {
     return {
@@ -188,7 +199,7 @@ function buildSnapshotOperationalState(data = {}) {
     statusLabel: "Healthy",
     title: "Approved truth is available.",
     summary: "Approved truth is present, and no blocker is visible from this page.",
-    detail: s(approval.version)
+    detail: text(approval.version)
       ? `Truth version ${approval.version} is currently approved.`
       : "Approved truth is available.",
     action: {
@@ -205,19 +216,17 @@ function resolveRuntimeLabel(
 ) {
   if (approvedTruthUnavailable) return "Unavailable";
   if (!hasTrustOperationalData(trust)) {
-    return s(snapshot?.readiness?.status).toLowerCase() === "ready"
-      ? "Ready"
-      : "Unknown";
+    return lower(snapshot?.readiness?.status) === "ready" ? "Ready" : "Unknown";
   }
   const operationalState = buildTruthOperationalState(trust);
-  return s(operationalState.statusLabel, "Unknown");
+  return text(operationalState.statusLabel, "Unknown");
 }
 
 function resolveSourceSummaryLine(sourceSummary = {}) {
   const source = obj(sourceSummary);
   const latestImport = obj(source.latestImport);
 
-  const sourceType = s(
+  const sourceType = text(
     latestImport.sourceLabel ||
       latestImport.sourceType ||
       source.primaryLabel ||
@@ -225,7 +234,7 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
       source.primarySourceType
   );
 
-  const sourceUrl = s(
+  const sourceUrl = text(
     latestImport.sourceUrl ||
       source.primaryUrl ||
       source.primarySourceUrl ||
@@ -235,9 +244,9 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
   return [sourceType, sourceUrl].filter(Boolean).join(" · ");
 }
 
-function InfoHint({ text = "", align = "right" }) {
-  const message = s(text);
-  if (!message) return null;
+function InfoHint({ text: message = "", align = "right" }) {
+  const safe = text(message);
+  if (!safe) return null;
 
   return (
     <span className="group relative inline-flex shrink-0">
@@ -255,28 +264,17 @@ function InfoHint({ text = "", align = "right" }) {
               : "right-0",
         ].join(" ")}
       >
-        {message}
+        {safe}
       </span>
     </span>
   );
 }
 
-function EmptyInline({ text }) {
+function EmptyInline({ text: value }) {
   return (
     <div className="rounded-[18px] border border-line bg-surface-muted px-4 py-3 text-[14px] leading-6 text-text-muted">
-      {text}
+      {value}
     </div>
-  );
-}
-
-function SectionStrip({ label, children, last = false }) {
-  return (
-    <section className={last ? "" : "border-b border-line-soft pb-6"}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-        {label}
-      </div>
-      <div className="mt-3">{children}</div>
-    </section>
   );
 }
 
@@ -288,14 +286,16 @@ function MainRow({
   multiline = false,
   last = false,
 }) {
-  if (!s(value)) return null;
+  if (!text(value)) return null;
 
   return (
     <div
       className={[
         "grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 py-3.5",
         !last && "border-b border-line-soft",
-      ].join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div className="pt-[2px] text-text-subtle">
         <Icon className="h-[18px] w-[18px]" strokeWidth={2.05} />
@@ -308,9 +308,7 @@ function MainRow({
         <div
           className={[
             "mt-1.5 text-[14px] text-text",
-            multiline
-              ? "whitespace-pre-wrap break-words leading-6"
-              : "leading-6",
+            multiline ? "whitespace-pre-wrap break-words leading-6" : "leading-6",
           ].join(" ")}
         >
           {value}
@@ -324,12 +322,29 @@ function MainRow({
   );
 }
 
+function TabButton({ active = false, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex h-9 items-center rounded-full px-3.5 text-[12px] font-medium tracking-[-0.01em] transition-colors",
+        active
+          ? "bg-slate-950 text-white"
+          : "border border-line bg-white text-text-muted hover:border-line-strong hover:text-text",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
 function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
       <span>
         <span className="text-text-muted">Version:</span>{" "}
-        {s(approval?.version, "Pending")}
+        {text(approval?.version, "Pending")}
       </span>
       <span className="text-slate-300">•</span>
       <span>
@@ -338,12 +353,12 @@ function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }
       <span className="text-slate-300">•</span>
       <span>
         <span className="text-text-muted">Approved:</span>{" "}
-        {s(approval?.approvedAt) ? formatWhen(approval.approvedAt) : "Not available"}
+        {text(approval?.approvedAt) ? formatWhen(approval.approvedAt) : "Not available"}
       </span>
       <span className="text-slate-300">•</span>
       <span>
         <span className="text-text-muted">Source:</span>{" "}
-        {s(sourceLine, "Not available")}
+        {text(sourceLine, "Not available")}
       </span>
       <span className="text-slate-300">•</span>
       <span>
@@ -358,8 +373,8 @@ function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }
   );
 }
 
-function buildSections(fields = []) {
-  const business = [
+function groupBusinessRows(fields = []) {
+  const identity = [
     {
       key: "companyName",
       label: "Business name",
@@ -388,7 +403,7 @@ function buildSections(fields = []) {
       value: fieldValue(fields, "mainLanguage"),
       hint: fieldProvenance(fields, "mainLanguage"),
     },
-  ].filter((item) => s(item.value));
+  ].filter((item) => text(item.value));
 
   const contact = [
     {
@@ -413,7 +428,7 @@ function buildSections(fields = []) {
       hint: fieldProvenance(fields, "primaryAddress"),
       multiline: true,
     },
-  ].filter((item) => s(item.value));
+  ].filter((item) => text(item.value));
 
   const presence = [
     {
@@ -432,7 +447,7 @@ function buildSections(fields = []) {
       hint: fieldProvenance(fields, "socialLinks"),
       multiline: true,
     },
-  ].filter((item) => s(item.value));
+  ].filter((item) => text(item.value));
 
   const offering = [
     {
@@ -455,13 +470,285 @@ function buildSections(fields = []) {
       key: "pricingHints",
       label: "Pricing",
       icon: Sparkles,
-      value: fieldValue(fields, "pricingHints"),
-      hint: fieldProvenance(fields, "pricingHints"),
+      value:
+        fieldValue(fields, "pricingHints") ||
+        fieldValue(fields, "pricingPolicy") ||
+        fieldValue(fields, "pricingSummary"),
+      hint:
+        fieldProvenance(fields, "pricingHints") ||
+        fieldProvenance(fields, "pricingPolicy") ||
+        fieldProvenance(fields, "pricingSummary"),
       multiline: true,
     },
-  ].filter((item) => s(item.value));
+    {
+      key: "hours",
+      label: "Hours",
+      icon: Sparkles,
+      value: fieldValue(fields, "hours"),
+      hint: fieldProvenance(fields, "hours"),
+      multiline: true,
+    },
+    {
+      key: "faqQuestions",
+      label: "FAQ",
+      icon: Sparkles,
+      value: fieldValue(fields, "faqQuestions"),
+      hint: fieldProvenance(fields, "faqQuestions"),
+      multiline: true,
+    },
+  ].filter((item) => text(item.value));
 
-  return { business, contact, presence, offering };
+  return { identity, contact, presence, offering };
+}
+
+function groupBehaviorRows(fields = []) {
+  const core = [
+    {
+      key: "greetingBehaviorSummary",
+      label: "Greeting",
+      icon: Sparkles,
+      value:
+        fieldValue(fields, "greetingBehaviorSummary") ||
+        fieldValue(fields, "greetingStyle"),
+      hint:
+        fieldProvenance(fields, "greetingBehaviorSummary") ||
+        fieldProvenance(fields, "greetingStyle"),
+      multiline: true,
+    },
+    {
+      key: "closingBehaviorSummary",
+      label: "Closing",
+      icon: Sparkles,
+      value: fieldValue(fields, "closingBehaviorSummary"),
+      hint: fieldProvenance(fields, "closingBehaviorSummary"),
+      multiline: true,
+    },
+    {
+      key: "toneBehaviorSummary",
+      label: "Tone",
+      icon: ShieldCheck,
+      value:
+        fieldValue(fields, "toneBehaviorSummary") || fieldValue(fields, "tone"),
+      hint:
+        fieldProvenance(fields, "toneBehaviorSummary") ||
+        fieldProvenance(fields, "tone"),
+      multiline: true,
+    },
+    {
+      key: "afterHoursBehavior",
+      label: "After-hours",
+      icon: ShieldCheck,
+      value: fieldValue(fields, "afterHoursBehavior"),
+      hint: fieldProvenance(fields, "afterHoursBehavior"),
+      multiline: true,
+    },
+  ].filter((item) => text(item.value));
+
+  const routing = [
+    {
+      key: "pricingBehaviorSummary",
+      label: "Pricing response",
+      icon: Sparkles,
+      value: fieldValue(fields, "pricingBehaviorSummary"),
+      hint: fieldProvenance(fields, "pricingBehaviorSummary"),
+      multiline: true,
+    },
+    {
+      key: "locationBehaviorSummary",
+      label: "Location response",
+      icon: Sparkles,
+      value: fieldValue(fields, "locationBehaviorSummary"),
+      hint: fieldProvenance(fields, "locationBehaviorSummary"),
+      multiline: true,
+    },
+    {
+      key: "bookingBehaviorSummary",
+      label: "Booking routing",
+      icon: Sparkles,
+      value: fieldValue(fields, "bookingBehaviorSummary"),
+      hint: fieldProvenance(fields, "bookingBehaviorSummary"),
+      multiline: true,
+    },
+    {
+      key: "contactBehaviorSummary",
+      label: "Contact preference",
+      icon: Sparkles,
+      value: fieldValue(fields, "contactBehaviorSummary"),
+      hint: fieldProvenance(fields, "contactBehaviorSummary"),
+      multiline: true,
+    },
+    {
+      key: "handoffBehaviorSummary",
+      label: "Handoff behavior",
+      icon: Wrench,
+      value: fieldValue(fields, "handoffBehaviorSummary"),
+      hint: fieldProvenance(fields, "handoffBehaviorSummary"),
+      multiline: true,
+    },
+  ].filter((item) => text(item.value));
+
+  return { core, routing };
+}
+
+function buildSourceRows(data = {}) {
+  const fields = arr(data.fields);
+  const sourceSummary = obj(data.sourceSummary);
+  const latestImport = obj(sourceSummary.latestImport);
+
+  const primaryRows = [
+    {
+      label: "Latest source type",
+      value: text(
+        latestImport.sourceLabel ||
+          latestImport.sourceType ||
+          sourceSummary.primaryLabel ||
+          sourceSummary.primarySourceType
+      ),
+    },
+    {
+      label: "Latest source url",
+      value: text(
+        latestImport.sourceUrl ||
+          sourceSummary.primaryUrl ||
+          sourceSummary.primarySourceUrl
+      ),
+    },
+    {
+      label: "Has provenance",
+      value: data.hasProvenance ? "Yes" : "No",
+    },
+  ].filter((item) => text(item.value));
+
+  const provenanceRows = fields
+    .filter((field) => text(field?.provenance))
+    .map((field) => ({
+      key: text(field.key || field.label),
+      label: text(field.label || field.key),
+      value: text(field.value),
+      provenance: text(field.provenance),
+    }));
+
+  return {
+    primaryRows,
+    provenanceRows,
+  };
+}
+
+function SectionCard({ title, subtitle = "", children }) {
+  return (
+    <div className="rounded-[18px] border border-line-soft bg-white px-4 py-4">
+      <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {title}
+      </div>
+      {subtitle ? (
+        <div className="mt-1 text-[13px] leading-6 text-text-muted">{subtitle}</div>
+      ) : null}
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function RowsBlock({ rows = [] }) {
+  if (!arr(rows).length) {
+    return <EmptyInline text="No approved fields are visible in this section yet." />;
+  }
+
+  return (
+    <div>
+      {rows.map((item, index) => (
+        <MainRow
+          key={item.key}
+          icon={item.icon}
+          label={item.label}
+          value={item.value}
+          hint={item.hint}
+          multiline={item.multiline}
+          last={index === rows.length - 1}
+        />
+      ))}
+    </div>
+  );
+}
+
+function VersionsList({ history = [], onOpenVersion }) {
+  if (!arr(history).length) {
+    return <EmptyInline text="No approved truth versions are available yet." />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {arr(history).map((item) => (
+        <button
+          key={text(item.id || item.version || item.versionId)}
+          type="button"
+          onClick={() => onOpenVersion(item)}
+          className="w-full rounded-[18px] border border-line-soft bg-white px-4 py-4 text-left transition-colors hover:border-line-strong hover:bg-surface-muted"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+                {text(item.versionLabel || item.version || item.id || "Truth version")}
+              </div>
+              <div className="mt-1 text-[13px] leading-6 text-text-muted">
+                {text(item.diffSummary || item.sourceSummary || "Open compare view")}
+              </div>
+            </div>
+
+            <div className="shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenVersion(item);
+                }}
+              >
+                Compare
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-subtle">
+            <span>Version: {text(item.version, "Unknown")}</span>
+            <span className="text-slate-300">•</span>
+            <span>Status: {text(item.profileStatus, "Unknown")}</span>
+            <span className="text-slate-300">•</span>
+            <span>Approved: {text(item.approvedAt) ? formatWhen(item.approvedAt) : "Unknown"}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ProvenanceList({ rows = [] }) {
+  if (!arr(rows).length) {
+    return <EmptyInline text="No field-level provenance was returned by the backend." />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <div
+          key={`${row.key}-${row.label}`}
+          className="rounded-[16px] border border-line-soft bg-white px-4 py-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[13px] font-medium text-text">{row.label}</div>
+            {row.value ? (
+              <Badge tone="neutral" variant="subtle">
+                {row.value}
+              </Badge>
+            ) : null}
+          </div>
+          <div className="mt-2 text-[13px] leading-6 text-text-muted">
+            {row.provenance}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function TruthViewerPage() {
@@ -475,6 +762,7 @@ export default function TruthViewerPage() {
   );
 
   const [state, setState] = useState(initialState);
+  const [activeTab, setActiveTab] = useState("business");
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
     loading: false,
@@ -505,11 +793,6 @@ export default function TruthViewerPage() {
   const requestedVersionId = useMemo(
     () => resolveRequestedVersionId(searchParams, location),
     [searchParams, location]
-  );
-
-  const sections = useMemo(
-    () => buildSections(viewState.data.fields),
-    [viewState.data.fields]
   );
 
   const runtimeLabel = useMemo(
@@ -548,6 +831,21 @@ export default function TruthViewerPage() {
         : hasTrustOperationalData(viewState.data.trust)
           ? buildTruthOperationalState(viewState.data.trust)
           : buildSnapshotOperationalState(viewState.data),
+    [viewState.data]
+  );
+
+  const businessGroups = useMemo(
+    () => groupBusinessRows(viewState.data.fields),
+    [viewState.data.fields]
+  );
+
+  const behaviorGroups = useMemo(
+    () => groupBehaviorRows(viewState.data.fields),
+    [viewState.data.fields]
+  );
+
+  const sourceGroups = useMemo(
+    () => buildSourceRows(viewState.data),
     [viewState.data]
   );
 
@@ -872,17 +1170,20 @@ export default function TruthViewerPage() {
   const reviewSummary = obj(viewState.data.reviewWorkbench?.summary);
 
   const pageHint =
-    s(viewState.data.notices?.[0]) ||
-    s(viewState.error) ||
+    text(viewState.data.notices?.[0]) ||
+    text(viewState.error) ||
     (viewState.data.approvedTruthUnavailable
       ? "Approved truth is unavailable. No non-approved fallback data is being shown."
-      : "This surface shows only approved truth. Extra operational detail is intentionally hidden from the main view.");
+      : "This surface shows only approved truth. Draft and review context stay separated from the main approved view.");
 
-  const hasAnyData =
-    arr(sections.business).length > 0 ||
-    arr(sections.contact).length > 0 ||
-    arr(sections.presence).length > 0 ||
-    arr(sections.offering).length > 0;
+  const hasBusinessData =
+    arr(businessGroups.identity).length > 0 ||
+    arr(businessGroups.contact).length > 0 ||
+    arr(businessGroups.presence).length > 0 ||
+    arr(businessGroups.offering).length > 0;
+
+  const hasBehaviorData =
+    arr(behaviorGroups.core).length > 0 || arr(behaviorGroups.routing).length > 0;
 
   const emptyStateText = viewState.data.approvedTruthUnavailable
     ? "Approved truth is unavailable. No non-approved fallback data is being shown."
@@ -890,7 +1191,7 @@ export default function TruthViewerPage() {
 
   return (
     <PageCanvas className="space-y-3">
-      {s(viewState.error) ? (
+      {text(viewState.error) ? (
         <InlineNotice
           tone="danger"
           title="Truth viewer unavailable"
@@ -900,10 +1201,10 @@ export default function TruthViewerPage() {
       ) : null}
 
       {!viewState.data.approvedTruthUnavailable &&
-      s(operationalState.status).toLowerCase() !== "ready" ? (
+      lower(operationalState.status) !== "ready" ? (
         <InlineNotice
           tone={toneFromReadiness(operationalState)}
-          title={s(operationalState.title, "Truth posture")}
+          title={text(operationalState.title, "Truth posture")}
           description={compactSentence(
             operationalState.summary,
             "Truth still needs review."
@@ -918,7 +1219,7 @@ export default function TruthViewerPage() {
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge tone={toneFromReadiness(operationalState)}>
-                  {s(operationalState.statusLabel, "Truth")}
+                  {text(operationalState.statusLabel, "Truth")}
                 </Badge>
                 <div className="inline-flex items-center gap-2">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
@@ -929,7 +1230,7 @@ export default function TruthViewerPage() {
               </div>
 
               <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
-                Approved business truth.
+                Business truth
               </h1>
 
               <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
@@ -973,94 +1274,140 @@ export default function TruthViewerPage() {
             </div>
           </div>
 
-          {!hasAnyData ? (
-            <EmptyInline text={emptyStateText} />
-          ) : (
-            <div className="space-y-6">
-              {arr(sections.business).length ? (
-                <SectionStrip label="Business">
-                  <div>
-                    {sections.business.map((item, index) => (
-                      <MainRow
-                        key={item.key}
-                        icon={item.icon}
-                        label={item.label}
-                        value={item.value}
-                        hint={item.hint}
-                        multiline={item.multiline}
-                        last={index === sections.business.length - 1}
-                      />
-                    ))}
-                  </div>
-                </SectionStrip>
-              ) : null}
+          <div className="flex flex-wrap gap-2">
+            <TabButton
+              active={activeTab === "business"}
+              onClick={() => setActiveTab("business")}
+            >
+              Business
+            </TabButton>
+            <TabButton
+              active={activeTab === "behavior"}
+              onClick={() => setActiveTab("behavior")}
+            >
+              Behavior
+            </TabButton>
+            <TabButton
+              active={activeTab === "sources"}
+              onClick={() => setActiveTab("sources")}
+            >
+              Sources
+            </TabButton>
+            <TabButton
+              active={activeTab === "versions"}
+              onClick={() => setActiveTab("versions")}
+            >
+              Versions
+            </TabButton>
+          </div>
 
-              {arr(sections.contact).length ? (
-                <SectionStrip label="Contact">
-                  <div>
-                    {sections.contact.map((item, index) => (
-                      <MainRow
-                        key={item.key}
-                        icon={item.icon}
-                        label={item.label}
-                        value={item.value}
-                        hint={item.hint}
-                        multiline={item.multiline}
-                        last={index === sections.contact.length - 1}
-                      />
-                    ))}
-                  </div>
-                </SectionStrip>
-              ) : null}
+          {activeTab === "business" ? (
+            !hasBusinessData ? (
+              <EmptyInline text={emptyStateText} />
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SectionCard
+                  title="Identity"
+                  subtitle="The core business facts the AI can safely rely on."
+                >
+                  <RowsBlock rows={businessGroups.identity} />
+                </SectionCard>
 
-              {arr(sections.presence).length ? (
-                <SectionStrip label="Presence">
-                  <div>
-                    {sections.presence.map((item, index) => (
-                      <MainRow
-                        key={item.key}
-                        icon={item.icon}
-                        label={item.label}
-                        value={item.value}
-                        hint={item.hint}
-                        multiline={item.multiline}
-                        last={index === sections.presence.length - 1}
-                      />
-                    ))}
-                  </div>
-                </SectionStrip>
-              ) : null}
+                <SectionCard
+                  title="Contact"
+                  subtitle="Primary customer-facing contact and location details."
+                >
+                  <RowsBlock rows={businessGroups.contact} />
+                </SectionCard>
 
-              {arr(sections.offering).length ? (
-                <SectionStrip label="Offering" last>
-                  <div>
-                    {sections.offering.map((item, index) => (
-                      <MainRow
-                        key={item.key}
-                        icon={item.icon}
-                        label={item.label}
-                        value={item.value}
-                        hint={item.hint}
-                        multiline={item.multiline}
-                        last={index === sections.offering.length - 1}
-                      />
+                <SectionCard
+                  title="Presence"
+                  subtitle="Approved website and public presence details."
+                >
+                  <RowsBlock rows={businessGroups.presence} />
+                </SectionCard>
+
+                <SectionCard
+                  title="Offering"
+                  subtitle="What the business offers, pricing hints, and operating facts."
+                >
+                  <RowsBlock rows={businessGroups.offering} />
+                </SectionCard>
+              </div>
+            )
+          ) : null}
+
+          {activeTab === "behavior" ? (
+            !hasBehaviorData ? (
+              <EmptyInline text="No approved assistant-behavior fields are visible yet." />
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SectionCard
+                  title="Core behavior"
+                  subtitle="How the assistant should sound and frame the conversation."
+                >
+                  <RowsBlock rows={behaviorGroups.core} />
+                </SectionCard>
+
+                <SectionCard
+                  title="Response behavior"
+                  subtitle="How the assistant should handle pricing, location, booking, contact, and handoff."
+                >
+                  <RowsBlock rows={behaviorGroups.routing} />
+                </SectionCard>
+              </div>
+            )
+          ) : null}
+
+          {activeTab === "sources" ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <SectionCard
+                title="Source summary"
+                subtitle="Where the approved truth currently points for its primary source context."
+              >
+                {arr(sourceGroups.primaryRows).length ? (
+                  <div className="space-y-3">
+                    {sourceGroups.primaryRows.map((row) => (
+                      <div
+                        key={row.label}
+                        className="rounded-[16px] border border-line-soft bg-white px-4 py-3"
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                          {row.label}
+                        </div>
+                        <div className="mt-1 text-[14px] leading-6 text-text">
+                          {row.value}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </SectionStrip>
-              ) : null}
+                ) : (
+                  <EmptyInline text="No source summary is visible yet." />
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title="Field provenance"
+                subtitle="Approved field-level provenance returned by the backend."
+              >
+                <ProvenanceList rows={sourceGroups.provenanceRows} />
+              </SectionCard>
             </div>
-          )}
+          ) : null}
+
+          {activeTab === "versions" ? (
+            <SectionCard
+              title="Approved versions"
+              subtitle="Open compare view to inspect diffs, behavior changes, and rollback preview."
+            >
+              <VersionsList
+                history={viewState.data.history}
+                onOpenVersion={handleOpenVersion}
+              />
+            </SectionCard>
+          ) : null}
         </div>
       </Surface>
-
-      {compareOpen ? (
-        <>
-          <div data-testid="truth-version-compare-open" className="sr-only">
-            truth version compare open
-          </div>
-          <div className="sr-only">Version detail</div>
-        </>
-      ) : null}
 
       <TruthVersionComparePanel
         open={compareOpen}
