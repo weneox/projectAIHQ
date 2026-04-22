@@ -3,7 +3,10 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowUp,
+  CheckCircle2,
+  Circle,
   LoaderCircle,
+  LockKeyhole,
   Sparkles,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -13,32 +16,44 @@ const TYPING_BUBBLE_DELAY_MS = 320;
 
 const LOCALIZED_QUESTION_COPY = {
   company: {
-    body: "O zaman başlayaq. Şirkətinizin adı nədir?",
-    placeholder: "Şirkət adını yazın",
+    body: "Başlayaq. Biznesinizin adını yazın. Sayt varsa onu da əlavə edə bilərsiniz.",
+    placeholder: "Biznes adını yazın",
   },
   description: {
-    body: "Qısa olaraq nə iş gördüyünüzü yazın.",
+    body: "Bu biznes nə edir? Qısa, amma dəqiq yazın.",
     placeholder: "Biznesinizi qısa təsvir edin",
   },
   services: {
-    body: "Əsas xidmətlərinizi yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
+    body: "Əsas xidmətləri yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
     placeholder: "Əsas xidmətləri yazın",
   },
   contacts: {
-    body: "Müştəri sizinlə necə əlaqə saxlamalıdır? Telefon, email, WhatsApp və ya link yazın.",
-    placeholder: "Əlaqə məlumatlarını yazın",
+    body: "Müştəri əsasən sizinlə necə əlaqə saxlamalıdır? Telefon, WhatsApp, email və ya link yazın.",
+    placeholder: "Əlaqə yollarını yazın",
   },
   hours: {
-    body: "İş saatlarınızı yazın. Məsələn: B.e–C. 09:00–18:00 və ya 24/7.",
+    body: "İş saatlarını yazın. Məsələn: həftə içi 09:00–18:00, şənbə 10:00–15:00.",
     placeholder: "İş saatlarını yazın",
   },
   pricing: {
-    body: "AI qiymətlərlə bağlı nə deyə bilər? Dəqiq qiymət desin, başlanğıc qiymət desin, yoxsa quote tələb olunsun?",
-    placeholder: "Qiymət siyasətini yazın",
+    body: "Qiymətlə bağlı əsas həqiqəti yazın. Dəqiq qiymət, başlanğıc qiymət, yoxsa əvvəlcə consultation/quote?",
+    placeholder: "Qiymət məntiqini yazın",
   },
   handoff: {
-    body: "Hansı hallarda AI mütləq operatora və ya insana yönləndirməlidir?",
-    placeholder: "Handoff qaydalarını yazın",
+    body: "Hansı hallarda AI mütləq insana yönləndirməlidir?",
+    placeholder: "Handoff halları",
+  },
+  greeting_behavior: {
+    body: "AI ilk salamı necə versin? İstəsən nümunə cümlə də yaza bilərsən.",
+    placeholder: "Məsələn: qısa və professional salam",
+  },
+  closing_behavior: {
+    body: "Söhbəti necə bağlasın? Növbəti addım təklifi olsun, yoxsa daha qısa bitsin?",
+    placeholder: "Məsələn: isti bağlama + növbəti addım",
+  },
+  tone_behavior: {
+    body: "Ümumilikdə necə danışsın: professional, isti, premium, yoxsa daha düz və qısa?",
+    placeholder: "Məsələn: professional və arxayın, qısa cavablar",
   },
   pricing_behavior: {
     body: "Qiymət soruşulanda AI necə cavab versin?",
@@ -50,7 +65,7 @@ const LOCALIZED_QUESTION_COPY = {
   },
   booking_behavior: {
     body: "Booking üçün AI əsasən hara yönləndirsin?",
-    placeholder: "Məsələn: WhatsApp / website booking page",
+    placeholder: "Məsələn: WhatsApp / booking page",
   },
   contact_behavior: {
     body: "Əlaqə istəyəndə hansı kanal önə çıxsın?",
@@ -58,33 +73,9 @@ const LOCALIZED_QUESTION_COPY = {
   },
   handoff_behavior: {
     body: "İnsana keçid lazım olanda AI necə davransın?",
-    placeholder: "Məsələn: əvvəlcə səbəb soruş",
+    placeholder: "Məsələn: əvvəlcə qısa səbəb soruş",
   },
 };
-
-const SUPPRESSED_INTERNAL_ERRORS = new Set([
-  "openai_setup_assistant_timeout",
-  "openai_setup_assistant_empty_output",
-  "openai_setup_assistant_failed",
-  "openai_setup_assistant_unavailable",
-  "openai_setup_assistant_forced_fallback",
-  "openai_setup_reasoner_timeout",
-  "openai_setup_reasoner_empty_output",
-  "openai_setup_polisher_timeout",
-  "openai_setup_polisher_empty_output",
-]);
-
-const INTERNAL_REVIEW_PATTERNS = [
-  /^openai_setup_/i,
-  /^setup_assistant_/i,
-  /^reasoner_/i,
-  /^polisher_/i,
-  /_timeout$/i,
-  /_empty_output$/i,
-  /_failed$/i,
-  /_unavailable$/i,
-  /_fallback$/i,
-];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -104,7 +95,7 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function uniqueStrings(items = [], max = 16) {
+function uniqueStrings(items = [], max = 24) {
   return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
     0,
     max
@@ -127,15 +118,32 @@ function listPreview(items = [], max = 6) {
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
+function bubbleMotion() {
+  return {
+    hidden: { opacity: 0, y: 10, scale: 0.992 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
+    },
+  };
+}
+
 function normalizeQuestion(value = {}) {
   const source = obj(value);
+  const key = lower(source.key || source.step);
 
   return {
-    key: s(source.key).toLowerCase(),
-    step: s(source.step || source.key).toLowerCase(),
+    key,
+    step: lower(source.step || source.key),
     title: s(source.title),
     prompt: s(source.prompt),
-    placeholder: s(source.placeholder) || "",
+    placeholder: s(source.placeholder),
+    phase: lower(source.phase),
+    phaseLabel: s(source.phaseLabel),
+    group: lower(source.group),
+    groupLabel: s(source.groupLabel),
   };
 }
 
@@ -143,12 +151,12 @@ function normalizeTimelineEntry(value = {}) {
   const source = obj(value);
 
   return {
-    id: s(source.id) || `timeline-${Date.now()}`,
-    role: s(source.role).toLowerCase() === "user" ? "user" : "assistant",
+    id: s(source.id) || `timeline-${Math.random().toString(36).slice(2, 10)}`,
+    role: lower(source.role) === "user" ? "user" : "assistant",
     body: s(source.text || source.body || source.message),
     meta: s(source.meta),
-    questionKey: s(source.questionKey || source.question_key).toLowerCase(),
-    phase: s(source.phase).toLowerCase(),
+    questionKey: lower(source.questionKey || source.question_key),
+    phase: lower(source.phase),
     provider: s(source.provider),
     model: s(source.model),
     usedFallback: source.usedFallback === true,
@@ -157,49 +165,34 @@ function normalizeTimelineEntry(value = {}) {
   };
 }
 
-function normalizeQuestionCopy(question = null) {
-  const safeQuestion = obj(question);
-  const key = lower(safeQuestion.key || safeQuestion.step);
+function formatHoursItem(item = {}) {
+  const row = obj(item);
+  const day = s(row.day);
+  const openTime = s(row.openTime || row.open || row.from);
+  const closeTime = s(row.closeTime || row.close || row.to);
+  const notes = s(row.notes);
 
-  if (!key) {
-    return {
-      body: "",
-      placeholder: "",
-    };
+  if (row.allDay === true) {
+    return [day, "24/7"].filter(Boolean).join(" ");
   }
 
-  const local = obj(LOCALIZED_QUESTION_COPY[key]);
+  if (row.appointmentOnly === true) {
+    return [day, "appointment only"].filter(Boolean).join(" ");
+  }
 
-  return {
-    body: s(safeQuestion.prompt || local.body),
-    placeholder: s(safeQuestion.placeholder || local.placeholder),
-  };
-}
+  if (row.closed === true) {
+    return [day, "closed"].filter(Boolean).join(" ");
+  }
 
-function normalizeComparableMessage(value = "") {
-  return s(value).replace(/\s+/g, " ").trim().toLowerCase();
-}
+  if (openTime && closeTime) {
+    return [day, `${openTime}–${closeTime}`].filter(Boolean).join(" ");
+  }
 
-function responseTimelineFromPayload(payload = {}) {
-  return arr(
-    obj(payload?.setup?.assistant).timeline ||
-      payload?.setup?.timeline ||
-      obj(payload?.assistant).timeline ||
-      payload?.timeline
-  )
-    .map(normalizeTimelineEntry)
-    .filter((item) => item.body);
-}
+  if (notes) {
+    return [day, notes].filter(Boolean).join(" ");
+  }
 
-function timelineHasUserMessage(timeline = [], text = "") {
-  const target = normalizeComparableMessage(text);
-  if (!target) return false;
-
-  return arr(timeline).some(
-    (item) =>
-      item?.role === "user" &&
-      normalizeComparableMessage(item?.body) === target
-  );
+  return "";
 }
 
 function mapServiceItems(items = []) {
@@ -225,34 +218,42 @@ function mapContactItems(items = []) {
   );
 }
 
-function formatHoursItem(item = {}) {
-  const row = obj(item);
-  const day = s(row.day);
-  const openTime = s(row.openTime || row.open || row.from);
-  const closeTime = s(row.closeTime || row.close || row.to);
-  const notes = s(row.notes);
-
-  if (row.allDay === true) {
-    return [day, "24/7"].filter(Boolean).join(" ");
-  }
-
-  if (row.closed === true) {
-    return [day, "closed"].filter(Boolean).join(" ");
-  }
-
-  if (openTime && closeTime) {
-    return [day, `${openTime}–${closeTime}`].filter(Boolean).join(" ");
-  }
-
-  if (notes) {
-    return [day, notes].filter(Boolean).join(" ");
-  }
-
-  return "";
-}
-
 function mapHoursItems(items = []) {
   return uniqueStrings(arr(items).map((item) => formatHoursItem(item)), 24);
+}
+
+function normalizeQuestionCopy(question = null) {
+  const safeQuestion = obj(question);
+  const key = lower(safeQuestion.key || safeQuestion.step);
+  const local = obj(LOCALIZED_QUESTION_COPY[key]);
+
+  return {
+    body: s(safeQuestion.prompt || local.body),
+    placeholder: s(safeQuestion.placeholder || local.placeholder),
+  };
+}
+
+function normalizeComparableMessage(value = "") {
+  return s(value).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function timelineHasUserMessage(timeline = [], text = "") {
+  const target = normalizeComparableMessage(text);
+  if (!target) return false;
+
+  return arr(timeline).some(
+    (item) =>
+      item?.role === "user" &&
+      normalizeComparableMessage(item?.body) === target
+  );
+}
+
+function phaseLabelFromKey(value = "") {
+  const key = lower(value);
+  if (key === "business_truth") return "Business truth";
+  if (key === "conversation_policy") return "Conversation policy";
+  if (key === "review_and_launch") return "Review & launch";
+  return "Setup";
 }
 
 function buildCanonicalAssistantState(reviewPayload = null, assistantState = {}) {
@@ -290,6 +291,9 @@ function buildCanonicalAssistantState(reviewPayload = null, assistantState = {})
     interviewPlan: obj(source.interviewPlan),
     draft: obj(source.draft),
     rejectedInputs: arr(source.rejectedInputs),
+    sections: arr(source.sections),
+    draftPreviewHidden: source.draftPreviewHidden === true,
+    draftVisibilityMode: s(source.draftVisibilityMode),
     timeline,
   };
 }
@@ -304,7 +308,7 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
   const pricingPosture = obj(setupDraft.pricingPosture);
   const handoffRules = obj(setupDraft.handoffRules);
   const sourceMetadata = obj(setupDraft.sourceMetadata);
-
+  const assistantBehaviorDraft = obj(setupDraft.assistantBehaviorDraft);
   const previewDraft = obj(canonicalAssistant.draft);
 
   const coreServices =
@@ -341,21 +345,40 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
       contactRoutes,
       humanHandoff: s(previewDraft.humanHandoff || handoffRules.summary),
       hours,
+      greetingBehaviorSummary: s(
+        previewDraft.greetingBehaviorSummary ||
+          obj(assistantBehaviorDraft.greetingPolicy).openingLine
+      ),
+      closingBehaviorSummary: s(
+        previewDraft.closingBehaviorSummary ||
+          obj(assistantBehaviorDraft.closingPolicy).closingLine
+      ),
+      toneBehaviorSummary: s(
+        previewDraft.toneBehaviorSummary ||
+          obj(assistantBehaviorDraft.tonePolicy).mode
+      ),
+      pricingBehaviorSummary: s(
+        previewDraft.pricingBehaviorSummary ||
+          obj(assistantBehaviorDraft.pricingPolicy).mode
+      ),
+      locationBehaviorSummary: s(
+        previewDraft.locationBehaviorSummary ||
+          obj(assistantBehaviorDraft.locationPolicy).mode
+      ),
+      bookingBehaviorSummary: s(
+        previewDraft.bookingBehaviorSummary ||
+          obj(assistantBehaviorDraft.bookingPolicy).mode
+      ),
+      contactBehaviorSummary: s(
+        previewDraft.contactBehaviorSummary ||
+          obj(assistantBehaviorDraft.contactPolicy).mode
+      ),
+      handoffBehaviorSummary: s(
+        previewDraft.handoffBehaviorSummary ||
+          obj(assistantBehaviorDraft.handoffPolicy).mode
+      ),
     },
   };
-}
-
-function isDraftReadyMessage(text = "") {
-  const value = lower(text);
-  if (!value) return false;
-
-  return (
-    value.includes("draft hazırdır") ||
-    value.includes("draft hazirdir") ||
-    value.includes("draft ready") ||
-    value.includes("ready for approval") ||
-    value.includes("approval")
-  );
 }
 
 function hasAnyDraftContent(draft = {}) {
@@ -369,116 +392,125 @@ function hasAnyDraftContent(draft = {}) {
       arr(safeDraft.contactRoutes).length > 0 ||
       arr(safeDraft.hours).length > 0 ||
       s(safeDraft.pricingPosture) ||
-      s(safeDraft.humanHandoff)
+      s(safeDraft.humanHandoff) ||
+      s(safeDraft.greetingBehaviorSummary) ||
+      s(safeDraft.closingBehaviorSummary) ||
+      s(safeDraft.toneBehaviorSummary) ||
+      s(safeDraft.pricingBehaviorSummary) ||
+      s(safeDraft.locationBehaviorSummary) ||
+      s(safeDraft.bookingBehaviorSummary) ||
+      s(safeDraft.contactBehaviorSummary) ||
+      s(safeDraft.handoffBehaviorSummary)
   );
 }
 
-function shouldShowSmartDraft(model = {}) {
-  const draft = obj(model.draft);
-  const hasDraft = hasAnyDraftContent(draft);
-  const backendReady = model.readyForApproval === true;
-  const messageReady = isDraftReadyMessage(model.message);
-
+function shouldShowDraft(model = {}) {
+  const hasDraft = hasAnyDraftContent(obj(model.draft));
   if (!hasDraft) return false;
-  return backendReady || messageReady;
+
+  if (model.readyForApproval === true) return true;
+  if (model.draftPreviewHidden === true) return false;
+
+  return lower(model.draftVisibilityMode) !== "hidden_until_review";
 }
 
-function shouldSuppressVisibleError(error = "") {
-  const safeError = lower(error);
-  if (!safeError) return false;
-  return SUPPRESSED_INTERNAL_ERRORS.has(safeError);
+function toneForSectionStatus(status = "") {
+  const safe = lower(status);
+  if (safe === "ready") return "success";
+  if (safe === "needs_review") return "warning";
+  if (safe === "missing") return "danger";
+  if (safe === "not_applicable") return "neutral";
+  return "neutral";
 }
 
-function shouldSuppressReviewNote(note = "") {
-  const safe = lower(note);
-  if (!safe) return true;
-  if (SUPPRESSED_INTERNAL_ERRORS.has(safe)) return true;
-  return INTERNAL_REVIEW_PATTERNS.some((pattern) => pattern.test(safe));
+function toneClass(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "info") return "text-brand";
+  return "text-text-subtle";
 }
 
-function resolveVisibleErrorMessage({
-  localError = "",
-  externalError = "",
-  assistantError = "",
-} = {}) {
-  const first = s(localError);
-  if (first) return first;
+function sectionGroups(sections = []) {
+  const groups = {
+    business_truth: [],
+    conversation_policy: [],
+    review_and_launch: [],
+  };
 
-  const second = s(externalError);
-  if (second && !shouldSuppressVisibleError(second)) return second;
+  for (const rawSection of arr(sections)) {
+    const section = obj(rawSection);
+    const key = lower(section.phase || "business_truth");
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(section);
+  }
 
-  const third = s(assistantError);
-  if (third && !shouldSuppressVisibleError(third)) return third;
-
-  return "";
+  return groups;
 }
 
-function normalizeIssueText(text = "") {
-  return compactText(
-    s(text)
-      .replace(/^high risk:\s*/i, "")
-      .replace(/^needs review:\s*/i, "")
-      .trim(),
-    180
+function phaseProgress(sections = []) {
+  const safe = arr(sections).filter(
+    (item) => lower(item.status) !== "not_applicable"
   );
+
+  return {
+    total: safe.length,
+    ready: safe.filter((item) => lower(item.status) === "ready").length,
+    missing: safe.filter((item) => lower(item.status) === "missing").length,
+    needsReview: safe.filter((item) => lower(item.status) === "needs_review")
+      .length,
+  };
 }
 
-function buildDraftReviewFlags(model = {}) {
-  const flags = [];
+function reviewFlagsFromModel(model = {}) {
+  const out = [];
 
   for (const item of arr(model.rejectedInputs)) {
-    const reason = s(item?.reason || item?.input);
-    if (!reason || shouldSuppressReviewNote(reason)) continue;
-    flags.push({
+    const reason = compactText(s(item?.reason || item?.input), 180);
+    if (!reason) continue;
+    out.push({
       level: "high",
       title: "High risk",
-      body: normalizeIssueText(reason),
+      body: reason,
     });
   }
 
   for (const item of arr(obj(model.confidence).unclear)) {
-    const text = s(item).replace(/_/g, " ").trim();
-    if (!text || shouldSuppressReviewNote(text)) continue;
-    flags.push({
+    const text = compactText(s(item).replace(/_/g, " "), 180);
+    if (!text) continue;
+    out.push({
       level: "medium",
       title: "Needs review",
-      body: normalizeIssueText(`${text} is still unclear.`),
+      body: `${text} is still unclear.`,
     });
   }
 
   for (const item of arr(obj(model.recommendation).notes)) {
-    const note = s(item);
-    if (!note || shouldSuppressReviewNote(note)) continue;
+    const note = compactText(s(item), 180);
+    if (!note) continue;
 
-    const safeLevel =
-      /high risk|should be corrected|did not clearly answer/i.test(note)
+    out.push({
+      level: /high risk|should be corrected|did not clearly answer/i.test(note)
         ? "high"
-        : "medium";
-
-    flags.push({
-      level: safeLevel,
-      title: safeLevel === "high" ? "High risk" : "Review note",
-      body: normalizeIssueText(note),
+        : "medium",
+      title: /high risk|should be corrected/i.test(note)
+        ? "High risk"
+        : "Review note",
+      body: note,
     });
   }
 
-  const deduped = [];
   const seen = new Set();
+  const deduped = [];
 
-  for (const item of flags) {
+  for (const item of out) {
     const key = `${item.level}|${item.title}|${item.body}`.toLowerCase();
-    if (!item.body || seen.has(key)) continue;
+    if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(item);
   }
 
   return deduped.slice(0, 6);
-}
-
-function pickSoftReviewNote(model = {}) {
-  const flags = buildDraftReviewFlags(model);
-  if (!flags.length) return null;
-  return flags[0];
 }
 
 function bubbleShell(role = "assistant") {
@@ -489,23 +521,13 @@ function bubbleShell(role = "assistant") {
   return "rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] text-text shadow-[0_10px_28px_rgba(15,23,42,0.05)]";
 }
 
-const bubbleMotion = {
-  hidden: { opacity: 0, y: 10, scale: 0.992 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
-  },
-};
-
-function ChatBubble({ role = "assistant", body = "" }) {
+function ChatBubble({ role = "assistant", body = "", meta = "" }) {
   const isUser = role === "user";
 
   return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+    <motion.div variants={bubbleMotion()} initial="hidden" animate="visible">
       <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-        <div className={`max-w-[76%] px-4 py-3 ${bubbleShell(role)}`}>
+        <div className={`max-w-[78%] px-4 py-3 ${bubbleShell(role)}`}>
           <div
             className={`whitespace-pre-wrap text-[14px] leading-[1.68] tracking-[-0.01em] ${
               isUser ? "text-white/96" : "text-[rgba(15,23,42,0.92)]"
@@ -513,6 +535,15 @@ function ChatBubble({ role = "assistant", body = "" }) {
           >
             {body}
           </div>
+          {meta ? (
+            <div
+              className={`mt-2 text-[11px] ${
+                isUser ? "text-white/64" : "text-text-subtle"
+              }`}
+            >
+              {meta}
+            </div>
+          ) : null}
         </div>
       </div>
     </motion.div>
@@ -522,7 +553,7 @@ function ChatBubble({ role = "assistant", body = "" }) {
 function TypingBubble() {
   return (
     <motion.div
-      variants={bubbleMotion}
+      variants={bubbleMotion()}
       initial="hidden"
       animate="visible"
       className="flex justify-start"
@@ -542,7 +573,7 @@ function StatusNotice({ message = "" }) {
   if (!s(message)) return null;
 
   return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
+    <motion.div variants={bubbleMotion()} initial="hidden" animate="visible">
       <div className="rounded-[18px] border border-[rgba(239,68,68,0.12)] bg-[rgba(255,244,244,0.9)] px-4 py-3 text-[13px] leading-6 text-[#7f1d1d]">
         <div className="flex items-start gap-2">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -594,12 +625,12 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
         </div>
 
         <div className="mt-4 text-[21px] font-semibold tracking-[-0.045em] text-text">
-          Salam. Gəlin bunu səliqəli quraq.
+          Gəlin bunu professional quraq.
         </div>
 
         <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
-          Kanalları sonra da bağlaya bilərsiniz. Əvvəl biznesiniz üçün təmiz və
-          professional bir setup draft yığaq.
+          Əvvəl business truth toplanır. Sonra chatbotun greeting, closing, tone
+          və response behavior hissəsi formalaşır. Yekunda isə review və launch.
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -612,6 +643,231 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
             {busy ? "Starting..." : "Start setup"}
             <Sparkles className="h-4 w-4" strokeWidth={2} />
           </ActionButton>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function PhaseCard({ title, tone, status, summary, progressText }) {
+  return (
+    <div className="rounded-[20px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(249,250,251,0.98))] px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+          {title}
+        </div>
+        <div className={`text-[12px] font-medium ${toneClass(tone)}`}>{status}</div>
+      </div>
+      <div className="mt-2 text-[13px] leading-6 text-text-muted">{summary}</div>
+      {progressText ? (
+        <div className="mt-2 text-[12px] font-medium text-text-subtle">
+          {progressText}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SectionRow({ section = {}, last = false }) {
+  const status = lower(section.status);
+  const tone = toneForSectionStatus(status);
+
+  const leading =
+    tone === "success" ? (
+      <CheckCircle2 className="h-4 w-4 text-success" />
+    ) : tone === "warning" ? (
+      <Circle className="h-4 w-4 text-warning" />
+    ) : tone === "danger" ? (
+      <LockKeyhole className="h-4 w-4 text-danger" />
+    ) : (
+      <Circle className="h-4 w-4 text-text-subtle" />
+    );
+
+  return (
+    <div
+      className={`grid grid-cols-[24px_minmax(0,1fr)] gap-3 px-4 py-3 ${
+        last ? "" : "border-b border-[rgba(15,23,42,0.06)]"
+      }`}
+    >
+      <div className="pt-0.5">{leading}</div>
+      <div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="text-[13px] font-medium tracking-[-0.01em] text-text">
+            {s(section.title || section.label || section.key)}
+          </div>
+          <div className={`text-[12px] ${toneClass(tone)}`}>
+            {status === "ready"
+              ? "Ready"
+              : status === "needs_review"
+                ? "Needs review"
+                : status === "missing"
+                  ? "Missing"
+                  : "Not applicable"}
+          </div>
+        </div>
+
+        {arr(section.missingFields).length > 0 ? (
+          <div className="mt-1 text-[12px] leading-6 text-text-subtle">
+            Missing: {arr(section.missingFields).join(", ")}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function EditorialRow({ label, value, noBorder = false }) {
+  if (!s(value)) return null;
+
+  return (
+    <div
+      className={`grid gap-2 py-3.5 sm:grid-cols-[170px_minmax(0,1fr)] ${
+        noBorder ? "" : "border-b border-[rgba(15,23,42,0.06)]"
+      }`}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+        {label}
+      </div>
+      <div className="text-[14px] leading-7 tracking-[-0.01em] text-text">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ReviewSignal({ level = "medium", title = "", body = "" }) {
+  const accent =
+    level === "high"
+      ? {
+          dot: "bg-[#dc2626]",
+          title: "text-[#991b1b]",
+          body: "text-[#7f1d1d]",
+          line: "bg-[rgba(220,38,38,0.18)]",
+        }
+      : {
+          dot: "bg-[#d97706]",
+          title: "text-[#92400e]",
+          body: "text-[#78350f]",
+          line: "bg-[rgba(217,119,6,0.16)]",
+        };
+
+  return (
+    <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
+      <div className="relative flex justify-center">
+        <div className={`mt-1 h-2.5 w-2.5 rounded-full ${accent.dot}`} />
+        <div className={`absolute top-5 bottom-0 w-px ${accent.line}`} />
+      </div>
+      <div className="pb-4">
+        <div className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${accent.title}`}>
+          {title}
+        </div>
+        <div className={`mt-1 text-[13px] leading-6 ${accent.body}`}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function SmartDraftCard({ model, finalizing, onFinalize }) {
+  const draft = obj(model.draft);
+  const reviewFlags = reviewFlagsFromModel(model);
+
+  const rows = [
+    ["Business name", draft.businessName],
+    ["What the business does", draft.whatThisBusinessIs],
+    ["Website", draft.websiteUrl],
+    ["Core services", listPreview(draft.coreServices, 6)],
+    ["Pricing posture", draft.pricingPosture],
+    ["Contact routes", listPreview(draft.contactRoutes, 6)],
+    ["Hours", listPreview(draft.hours, 4)],
+    ["Human handoff", draft.humanHandoff],
+    ["Greeting behavior", draft.greetingBehaviorSummary],
+    ["Closing behavior", draft.closingBehaviorSummary],
+    ["Tone behavior", draft.toneBehaviorSummary],
+    ["Pricing response", draft.pricingBehaviorSummary],
+    ["Location response", draft.locationBehaviorSummary],
+    ["Booking routing", draft.bookingBehaviorSummary],
+    ["Contact preference", draft.contactBehaviorSummary],
+    ["Handoff behavior", draft.handoffBehaviorSummary],
+  ].filter(([, value]) => s(value));
+
+  const hasHighRisk = reviewFlags.some((item) => item.level === "high");
+  const statusLabel =
+    model.readyForApproval === true
+      ? hasHighRisk
+        ? "Review required"
+        : reviewFlags.length > 0
+          ? "Ready with notes"
+          : "Ready for approval"
+      : "In progress";
+
+  const statusTone = hasHighRisk
+    ? "text-[#991b1b]"
+    : reviewFlags.length > 0
+      ? "text-[#92400e]"
+      : "text-[#0f172a]";
+
+  return (
+    <motion.div variants={bubbleMotion()} initial="hidden" animate="visible">
+      <div className="flex justify-start">
+        <div className="max-w-[90%] min-w-0">
+          <div className="relative overflow-hidden rounded-[26px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,252,0.98))] shadow-[0_26px_80px_rgba(15,23,42,0.09)]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.2),rgba(15,23,42,0))]" />
+            <div className="relative px-5 py-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                    Review & launch
+                  </div>
+                  <div className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
+                    Setup draft
+                  </div>
+                  <div className={`mt-1 text-[12px] font-medium ${statusTone}`}>
+                    {statusLabel}
+                  </div>
+                </div>
+
+                {model.readyForApproval === true ? (
+                  <ActionButton
+                    tone="primary"
+                    onClick={onFinalize}
+                    disabled={finalizing}
+                  >
+                    {finalizing ? "Approving..." : "Approve & launch"}
+                    <ArrowRight className="h-4 w-4" strokeWidth={2} />
+                  </ActionButton>
+                ) : null}
+              </div>
+
+              <div className="mt-4 rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-white/80 px-4 py-2.5">
+                {rows.map(([label, value], index) => (
+                  <EditorialRow
+                    key={`${label}-${index}`}
+                    label={label}
+                    value={value}
+                    noBorder={index === rows.length - 1}
+                  />
+                ))}
+              </div>
+
+              {reviewFlags.length > 0 ? (
+                <div className="mt-4 rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-white/80 px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                    Review signals
+                  </div>
+                  <div className="mt-3">
+                    {reviewFlags.map((item, index) => (
+                      <ReviewSignal
+                        key={`${item.level}-${item.title}-${index}`}
+                        level={item.level}
+                        title={item.title}
+                        body={item.body}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -673,208 +929,99 @@ function Composer({
   );
 }
 
-function SoftReviewWhisper({ note = null }) {
-  const item = note ? obj(note) : {};
-  if (!s(item.body)) return null;
+function useTypingState(active = false) {
+  const [visible, setVisible] = useState(false);
 
-  const tone =
-    item.level === "high"
-      ? "text-[#991b1b]"
-      : "text-[rgba(120,53,15,0.92)]";
+  useEffect(() => {
+    if (!active) {
+      setVisible(false);
+      return;
+    }
 
-  return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      <div className="flex justify-start">
-        <div className="max-w-[76%] pl-1">
-          <div className="flex items-center gap-2 text-[11px] font-medium tracking-[-0.01em] text-text-muted">
-            <Sparkles className="h-3.5 w-3.5 text-brand" />
-            <span>Hidden analysis</span>
-          </div>
-          <div className={`mt-1 text-[12px] leading-6 ${tone}`}>
-            {item.title}: {item.body}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
+    const timer = window.setTimeout(() => {
+      setVisible(true);
+    }, TYPING_BUBBLE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [active]);
+
+  return visible;
 }
 
-function EditorialRow({ label, value, noBorder = false }) {
-  return (
-    <div
-      className={`grid gap-2 py-3.5 sm:grid-cols-[158px_minmax(0,1fr)] ${
-        noBorder ? "" : "border-b border-[rgba(15,23,42,0.06)]"
-      }`}
-    >
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-        {label}
-      </div>
-      <div className="text-[14px] leading-7 tracking-[-0.01em] text-text">
-        {value}
-      </div>
-    </div>
-  );
+function buildPhaseCardsFromSections(sections = []) {
+  const groups = sectionGroups(sections);
+
+  const business = phaseProgress(groups.business_truth);
+  const conversation = phaseProgress(groups.conversation_policy);
+  const review = phaseProgress(groups.review_and_launch);
+
+  return [
+    {
+      key: "business_truth",
+      title: "Business truth",
+      tone:
+        business.total > 0 && business.ready === business.total
+          ? "success"
+          : business.ready > 0 || business.needsReview > 0
+            ? "warning"
+            : "neutral",
+      status:
+        business.total > 0 && business.ready === business.total
+          ? "Ready"
+          : business.ready > 0 || business.needsReview > 0
+            ? "In progress"
+            : "Not started",
+      summary:
+        "Core facts the AI can safely answer from: identity, services, contacts, hours, pricing, and handoff rules.",
+      progressText:
+        business.total > 0 ? `${business.ready}/${business.total} ready` : "",
+    },
+    {
+      key: "conversation_policy",
+      title: "Conversation policy",
+      tone:
+        conversation.total > 0 && conversation.ready === conversation.total
+          ? "success"
+          : conversation.ready > 0 || conversation.needsReview > 0
+            ? "warning"
+            : "neutral",
+      status:
+        conversation.total > 0 && conversation.ready === conversation.total
+          ? "Ready"
+          : conversation.ready > 0 || conversation.needsReview > 0
+            ? "In progress"
+            : "Waiting",
+      summary:
+        "Greeting, closing, tone, and routing behavior that shape how the assistant actually speaks.",
+      progressText:
+        conversation.total > 0
+          ? `${conversation.ready}/${conversation.total} ready`
+          : "",
+    },
+    {
+      key: "review_and_launch",
+      title: "Review & launch",
+      tone:
+        review.total > 0 && review.ready === review.total
+          ? "success"
+          : "neutral",
+      status:
+        review.total > 0 && review.ready === review.total
+          ? "Ready"
+          : "Locked",
+      summary:
+        "The final draft opens here only after business truth and conversation policy are ready.",
+      progressText: review.total > 0 ? `${review.ready}/${review.total} ready` : "",
+    },
+  ];
 }
 
-function ReviewSignal({ level = "medium", title = "", body = "" }) {
-  const accent =
-    level === "high"
-      ? {
-          dot: "bg-[#dc2626]",
-          title: "text-[#991b1b]",
-          body: "text-[#7f1d1d]",
-          line: "bg-[rgba(220,38,38,0.18)]",
-        }
-      : {
-          dot: "bg-[#d97706]",
-          title: "text-[#92400e]",
-          body: "text-[#78350f]",
-          line: "bg-[rgba(217,119,6,0.16)]",
-        };
-
-  return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-3">
-      <div className="relative flex justify-center">
-        <div className={`mt-1 h-2.5 w-2.5 rounded-full ${accent.dot}`} />
-        <div className={`absolute top-5 bottom-0 w-px ${accent.line}`} />
-      </div>
-      <div className="pb-4">
-        <div className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${accent.title}`}>
-          {title}
-        </div>
-        <div className={`mt-1 text-[13px] leading-6 ${accent.body}`}>{body}</div>
-      </div>
-    </div>
-  );
-}
-
-function SmartDraftCard({ model, finalizing, onFinalize }) {
-  const draft = obj(model.draft);
-  const reviewFlags = buildDraftReviewFlags(model);
-
-  const rows = [
-    ["Business name", draft.businessName],
-    ["What the business does", draft.whatThisBusinessIs],
-    ["Website", draft.websiteUrl],
-    ["Core services", listPreview(draft.coreServices, 6)],
-    ["Pricing posture", draft.pricingPosture],
-    ["Contact routes", listPreview(draft.contactRoutes, 6)],
-    ["Hours", listPreview(draft.hours, 4)],
-    ["Human handoff", draft.humanHandoff],
-  ].filter(([, value]) => s(value));
-
-  const hasHighRisk = reviewFlags.some((item) => item.level === "high");
-  const statusLabel =
-    model.readyForApproval === true || isDraftReadyMessage(model.message)
-      ? hasHighRisk
-        ? "Review required"
-        : reviewFlags.length > 0
-          ? "Ready with notes"
-          : "Ready for approval"
-      : "In progress";
-
-  const statusTone = hasHighRisk
-    ? "text-[#991b1b]"
-    : reviewFlags.length > 0
-      ? "text-[#92400e]"
-      : "text-[#0f172a]";
-
-  return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      <div className="flex justify-start">
-        <div className="max-w-[88%] min-w-0">
-          <div className="relative overflow-hidden rounded-[26px] rounded-bl-[12px] rounded-tr-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,252,0.98))] shadow-[0_26px_80px_rgba(15,23,42,0.09)]">
-            <div className="pointer-events-none absolute inset-0 opacity-[0.58]">
-              <div className="absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.2),rgba(15,23,42,0))]" />
-              <div className="absolute right-0 top-0 h-[240px] w-[240px] bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent_68%)]" />
-            </div>
-
-            <div className="relative px-5 py-5 sm:px-6 sm:py-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-                    <Sparkles className="h-4 w-4 text-brand" />
-                    Setup draft
-                  </div>
-
-                  <div className="mt-3 text-[23px] font-semibold tracking-[-0.05em] text-text">
-                    Draft ready
-                  </div>
-
-                  {s(model.message) ? (
-                    <div className="mt-2 max-w-[560px] text-[14px] leading-7 tracking-[-0.01em] text-text-subtle">
-                      {model.message}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="shrink-0 text-right">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                    Status
-                  </div>
-                  <div className={`mt-2 text-[13px] font-medium ${statusTone}`}>
-                    {statusLabel}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 border-t border-[rgba(15,23,42,0.06)]">
-                {rows.map(([label, value], index) => (
-                  <EditorialRow
-                    key={label}
-                    label={label}
-                    value={value}
-                    noBorder={index === rows.length - 1 && reviewFlags.length === 0}
-                  />
-                ))}
-              </div>
-
-              {reviewFlags.length ? (
-                <div className="mt-6 border-t border-[rgba(15,23,42,0.06)] pt-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-                      Review intelligence
-                    </div>
-                    <div className="text-[11px] text-text-subtle">
-                      surfaced from hidden analysis
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    {reviewFlags.map((item, index) => (
-                      <ReviewSignal
-                        key={`${item.level}-${item.title}-${index}`}
-                        level={item.level}
-                        title={item.title}
-                        body={item.body}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-2 flex flex-wrap items-center gap-3 pt-2">
-                <ActionButton tone="primary" onClick={onFinalize} disabled={finalizing}>
-                  {finalizing ? "Finalizing..." : "Approve and finish setup"}
-                </ActionButton>
-
-                <div className="text-[12px] leading-6 text-text-subtle">
-                  {reviewFlags.length
-                    ? "Review the flagged points before approval."
-                    : "This draft is structurally ready for approval."}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function SetupAssistantSectionsContent({
+export default function SetupAssistantSections({
+  storageKey: _storageKey,
   sessionHydrated = false,
-  assistant,
+  assistant = {},
   reviewPayload = null,
   saving = false,
   finalizing = false,
@@ -885,245 +1032,281 @@ function SetupAssistantSectionsContent({
   onStartSetup,
   onGoToChannels,
 }) {
-  const scrollRef = useRef(null);
-  const textareaRef = useRef(null);
-
   const [composerValue, setComposerValue] = useState("");
-  const [localError, setLocalError] = useState("");
+  const [localTimeline, setLocalTimeline] = useState([]);
   const [pendingUserMessage, setPendingUserMessage] = useState("");
-  const [setupPrimed, setSetupPrimed] = useState(false);
-  const [showTypingBubble, setShowTypingBubble] = useState(false);
+  const [awaitingResponse, setAwaitingResponse] = useState(false);
 
-  const busy = saving || finalizing || capturingSource;
+  const textareaRef = useRef(null);
+  const scrollerRef = useRef(null);
 
-  const finalModel = useMemo(
+  const model = useMemo(
     () => buildFinalViewModel(reviewPayload, assistant),
     [reviewPayload, assistant]
   );
 
-  const smartDraftReady = useMemo(
-    () => shouldShowSmartDraft(finalModel),
-    [finalModel]
-  );
+  const canonicalTimeline = useMemo(() => {
+    const timeline = arr(model.timeline);
+    const nextQuestion = obj(model.nextQuestion);
 
-  const currentQuestion = finalModel.nextQuestion;
-  const questionCopy = useMemo(
-    () => normalizeQuestionCopy(currentQuestion),
-    [currentQuestion]
-  );
+    if (timeline.length > 0) return timeline;
 
-  const serverTimeline = useMemo(
-    () => arr(finalModel.timeline).map(normalizeTimelineEntry),
-    [finalModel.timeline]
-  );
-
-  const hasAssistantTimelineMessage = useMemo(
-    () =>
-      serverTimeline.some(
-        (item) => item.role === "assistant" && Boolean(s(item.body))
-      ),
-    [serverTimeline]
-  );
-
-  const hasServerUserTurn = useMemo(
-    () => serverTimeline.some((item) => item.role === "user" && s(item.body)),
-    [serverTimeline]
-  );
-
-  const showWelcome = !setupPrimed && serverTimeline.length === 0 && !busy;
-
-  const hideComposer =
-    !showWelcome &&
-    sessionHydrated &&
-    smartDraftReady &&
-    !s(currentQuestion?.key || currentQuestion?.step);
-
-  const composerPlaceholder = useMemo(() => {
-    if (showWelcome) return DEFAULT_COMPOSER_PLACEHOLDER;
-    if (hideComposer) return "";
-    if (s(questionCopy.placeholder)) return questionCopy.placeholder;
-    return DEFAULT_COMPOSER_PLACEHOLDER;
-  }, [showWelcome, hideComposer, questionCopy.placeholder]);
-
-  const staticAssistantMessage = useMemo(() => {
-    if (showWelcome) return "";
-    if (hasAssistantTimelineMessage) return "";
-    if (s(finalModel.message)) return finalModel.message;
-    if (s(questionCopy.body)) return questionCopy.body;
-    return "";
-  }, [
-    showWelcome,
-    hasAssistantTimelineMessage,
-    finalModel.message,
-    questionCopy.body,
-  ]);
-
-  const visiblePendingUserMessage = useMemo(() => {
-    if (!s(pendingUserMessage)) return "";
-    if (timelineHasUserMessage(serverTimeline, pendingUserMessage)) return "";
-    return pendingUserMessage;
-  }, [pendingUserMessage, serverTimeline]);
-
-  const softReviewNote = useMemo(() => {
-    if (showWelcome) return null;
-    if (smartDraftReady) return null;
-    if (busy) return null;
-    if (!hasServerUserTurn) return null;
-    return pickSoftReviewNote(finalModel);
-  }, [showWelcome, smartDraftReady, busy, hasServerUserTurn, finalModel]);
-
-  const visibleErrorMessage = useMemo(
-    () =>
-      resolveVisibleErrorMessage({
-        localError,
-        externalError: errorMessage,
-        assistantError: finalModel.error,
-      }),
-    [localError, errorMessage, finalModel.error]
-  );
-
-  useEffect(() => {
-    if (!busy) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setShowTypingBubble(true);
-    }, TYPING_BUBBLE_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-      setShowTypingBubble(false);
-    };
-  }, [busy]);
-
-  useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [
-    serverTimeline,
-    visiblePendingUserMessage,
-    showTypingBubble,
-    visibleErrorMessage,
-    smartDraftReady,
-    staticAssistantMessage,
-    showWelcome,
-    softReviewNote,
-  ]);
-
-  useEffect(() => {
-    if (!sessionHydrated || showWelcome || busy || hideComposer) return;
-    textareaRef.current?.focus?.();
-  }, [sessionHydrated, showWelcome, busy, hideComposer, serverTimeline.length]);
-
-  async function handleStartSetupClick() {
-    if (busy) return;
-    setLocalError("");
-
-    try {
-      await onStartSetup?.();
-      setSetupPrimed(true);
-      requestAnimationFrame(() => {
-        textareaRef.current?.focus?.();
-      });
-    } catch (error) {
-      setLocalError(s(error?.message, "Setup could not be started."));
+    if (s(model.message)) {
+      return [
+        {
+          id: "assistant-initial-message",
+          role: "assistant",
+          body: s(model.message),
+          meta: nextQuestion?.phaseLabel || phaseLabelFromKey(model.phase),
+          questionKey: lower(nextQuestion.key),
+          phase: lower(nextQuestion.phase || model.phase),
+        },
+      ];
     }
-  }
 
-  async function handleMessageSubmit() {
-    const text = s(composerValue);
-    if (!text || busy || hideComposer) return;
+    return [];
+  }, [model]);
 
-    setLocalError("");
-    setPendingUserMessage(text);
-    setComposerValue("");
+  useEffect(() => {
+    setLocalTimeline((prev) => {
+      if (!canonicalTimeline.length) return prev;
 
-    try {
-      const response = await onParseMessage?.({
-        mode: "message",
-        message: text,
-        text,
-        value: text,
-        step:
-          s(currentQuestion?.step || currentQuestion?.key || "company") ||
-          "company",
-        questionKey: s(currentQuestion?.key),
-      });
+      const out = [];
+      const seen = new Set();
 
-      const responseTimeline = responseTimelineFromPayload(response);
-      if (timelineHasUserMessage(responseTimeline, text)) {
-        setPendingUserMessage("");
+      for (const item of [...canonicalTimeline, ...prev]) {
+        const key =
+          s(item.id) ||
+          `${lower(item.role)}|${normalizeComparableMessage(item.body)}|${lower(
+            item.questionKey
+          )}`;
+        if (!item.body || seen.has(key)) continue;
+        seen.add(key);
+        out.push(item);
       }
 
-      requestAnimationFrame(() => {
-        if (!hideComposer) {
-          textareaRef.current?.focus?.();
-        }
+      return out;
+    });
+  }, [canonicalTimeline]);
+
+  useEffect(() => {
+    if (!pendingUserMessage) return;
+    if (!timelineHasUserMessage(localTimeline, pendingUserMessage)) return;
+
+    setPendingUserMessage("");
+    setAwaitingResponse(false);
+  }, [localTimeline, pendingUserMessage]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    if (saving || capturingSource || finalizing) return;
+
+    if (pendingUserMessage) return;
+
+    setAwaitingResponse(false);
+  }, [sessionHydrated, saving, capturingSource, finalizing, pendingUserMessage]);
+
+  useEffect(() => {
+    const node = scrollerRef.current;
+    if (!node) return;
+    node.scrollTo({
+      top: node.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [localTimeline, awaitingResponse, saving, capturingSource, finalizing]);
+
+  const activeQuestion = normalizeQuestion(model.nextQuestion);
+  const questionCopy = normalizeQuestionCopy(activeQuestion);
+  const busy = saving || capturingSource || finalizing;
+  const showTyping = useTypingState(
+    awaitingResponse || saving || capturingSource || finalizing
+  );
+  const showDraft = shouldShowDraft(model);
+  const reviewFlags = reviewFlagsFromModel(model);
+  const phaseCards = buildPhaseCardsFromSections(arr(model.sections));
+  const groupedSections = sectionGroups(arr(model.sections));
+  const hasSession =
+    Boolean(s(obj(assistant).session?.id)) || localTimeline.length > 0 || showDraft;
+
+  async function handleSubmit() {
+    const text = s(composerValue);
+    if (!text || busy || !activeQuestion?.step) return;
+
+    const userEntry = {
+      id: `local-user-${Date.now()}`,
+      role: "user",
+      body: text,
+      meta: activeQuestion.phaseLabel || phaseLabelFromKey(activeQuestion.phase),
+      questionKey: lower(activeQuestion.key),
+      phase: lower(activeQuestion.phase),
+    };
+
+    setLocalTimeline((prev) => [...prev, userEntry]);
+    setComposerValue("");
+    setPendingUserMessage(text);
+    setAwaitingResponse(true);
+
+    try {
+      await onParseMessage?.({
+        text,
+        step: s(activeQuestion.step || activeQuestion.key),
       });
-    } catch (error) {
-      setPendingUserMessage("");
-      setLocalError(s(error?.message, "Message processing failed."));
+    } catch {
+      setAwaitingResponse(false);
     }
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
-      <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
-        <div className="space-y-4 pb-4">
-          <StatusNotice message={visibleErrorMessage} />
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="border-b border-[rgba(15,23,42,0.06)] px-5 py-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+          Setup flow
+        </div>
+        <div className="mt-2 text-[19px] font-semibold tracking-[-0.04em] text-text">
+          Business truth → Conversation policy → Review & launch
+        </div>
+        <div className="mt-1 text-[13px] leading-6 text-text-subtle">
+          Əvvəl AI-nın nəyi doğru bilməli olduğunu qururuq, sonra necə danışacağını.
+        </div>
+      </div>
 
-          {showWelcome ? (
+      <div
+        ref={scrollerRef}
+        className="min-h-0 flex-1 overflow-y-auto px-5 py-5"
+      >
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
+          {!hasSession ? (
             <WelcomeCard
               busy={busy}
-              onStartSetup={handleStartSetupClick}
+              onStartSetup={onStartSetup}
               onGoToChannels={onGoToChannels}
             />
           ) : null}
 
+          {hasSession ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="grid gap-3 md:grid-cols-3"
+            >
+              {phaseCards.map((item) => (
+                <PhaseCard key={item.key} {...item} />
+              ))}
+            </motion.div>
+          ) : null}
+
+          {arr(groupedSections.business_truth).length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+            >
+              <div className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                Business truth coverage
+              </div>
+              {arr(groupedSections.business_truth).map((section, index, all) => (
+                <SectionRow
+                  key={s(section.key || index)}
+                  section={section}
+                  last={index === all.length - 1}
+                />
+              ))}
+            </motion.div>
+          ) : null}
+
+          {arr(groupedSections.conversation_policy).length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+            >
+              <div className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                Conversation policy coverage
+              </div>
+              {arr(groupedSections.conversation_policy).map((section, index, all) => (
+                <SectionRow
+                  key={s(section.key || index)}
+                  section={section}
+                  last={index === all.length - 1}
+                />
+              ))}
+            </motion.div>
+          ) : null}
+
           <AnimatePresence initial={false}>
-            {serverTimeline.map((item) => (
-              <ChatBubble key={item.id} role={item.role} body={item.body} />
+            {localTimeline.map((item) => (
+              <ChatBubble
+                key={item.id}
+                role={item.role}
+                body={item.body}
+                meta={item.meta}
+              />
             ))}
           </AnimatePresence>
 
-          {s(staticAssistantMessage) ? (
-            <ChatBubble role="assistant" body={staticAssistantMessage} />
-          ) : null}
+          {showTyping ? <TypingBubble /> : null}
 
-          {s(visiblePendingUserMessage) ? (
-            <ChatBubble role="user" body={visiblePendingUserMessage} />
-          ) : null}
-
-          {showTypingBubble ? <TypingBubble /> : null}
-
-          {softReviewNote ? <SoftReviewWhisper note={softReviewNote} /> : null}
-
-          {smartDraftReady ? (
+          {showDraft ? (
             <SmartDraftCard
-              model={finalModel}
+              model={model}
               finalizing={finalizing}
               onFinalize={onFinalize}
             />
+          ) : model.draftPreviewHidden === true && hasAnyDraftContent(model.draft) ? (
+            <motion.div variants={bubbleMotion()} initial="hidden" animate="visible">
+              <div className="flex justify-start">
+                <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+                  <div className="text-[13px] leading-6 text-text-muted">
+                    Draft görünüşü hələ gizlidir. Əvvəl business truth və conversation
+                    policy hissələrini tamamlayırıq, sonra review mərhələsində tam draft açılır.
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           ) : null}
+
+          {reviewFlags.length > 0 && !showDraft ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="rounded-[20px] border border-[rgba(15,23,42,0.06)] bg-white/90 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                Setup review signals
+              </div>
+              <div className="mt-3">
+                {reviewFlags.map((item, index) => (
+                  <ReviewSignal
+                    key={`${item.level}-${item.title}-${index}`}
+                    level={item.level}
+                    title={item.title}
+                    body={item.body}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          ) : null}
+
+          <StatusNotice message={errorMessage || model.error} />
         </div>
       </div>
 
-      {!showWelcome && sessionHydrated && !hideComposer ? (
+      {hasSession ? (
         <Composer
           value={composerValue}
           busy={busy}
-          placeholder={composerPlaceholder}
+          placeholder={
+            questionCopy.placeholder || DEFAULT_COMPOSER_PLACEHOLDER
+          }
           textareaRef={textareaRef}
           onChange={setComposerValue}
-          onSubmit={handleMessageSubmit}
+          onSubmit={handleSubmit}
         />
       ) : null}
     </div>
   );
-}
-
-export default function SetupAssistantSections(props) {
-  return <SetupAssistantSectionsContent {...props} />;
 }

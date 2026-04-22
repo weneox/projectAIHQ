@@ -51,7 +51,7 @@ function buildHoursDraft(value = []) {
   return order.map((day, index) => ({
     day,
     enabled: existing[index]?.enabled === true,
-    closed: existing[index]?.closed !== false,
+    closed: existing[index]?.closed === true,
     openTime: s(existing[index]?.openTime),
     closeTime: s(existing[index]?.closeTime),
     allDay: existing[index]?.allDay === true,
@@ -83,6 +83,7 @@ function buildDefaultAssistant() {
       pricingPosture: {},
       handoffRules: {},
       sourceMetadata: {},
+      assistantBehaviorDraft: {},
       assistantState: {},
       progress: {},
       version: 0,
@@ -108,11 +109,16 @@ function buildDefaultAssistant() {
       message: "",
       assistantMessage: "",
       draft: {},
+      reviewDraft: {},
+      draftPreviewHidden: false,
+      draftVisibilityMode: "",
       confidence: {},
       recommendation: {},
       readyForApproval: false,
+      finalizeAvailable: false,
       sourceSignals: {},
       interviewPlan: {},
+      aiBehavior: {},
       rejectedInputs: [],
       provider: "",
       model: "",
@@ -142,11 +148,16 @@ function normalizeDecisionAssistant(value = {}) {
     message: s(source.message || source.assistantMessage),
     assistantMessage: s(source.assistantMessage || source.message),
     draft: obj(source.draft),
+    reviewDraft: obj(source.reviewDraft),
+    draftPreviewHidden: source.draftPreviewHidden === true,
+    draftVisibilityMode: s(source.draftVisibilityMode),
     confidence: obj(source.confidence),
     recommendation: obj(source.recommendation),
     readyForApproval: source.readyForApproval === true,
+    finalizeAvailable: source.finalizeAvailable === true,
     sourceSignals: obj(source.sourceSignals),
     interviewPlan: obj(source.interviewPlan),
+    aiBehavior: obj(source.aiBehavior),
     reviewSessionId: s(source.reviewSessionId),
     draftVersion: Number(source.draftVersion || 0),
     rejectedInputs: arr(source.rejectedInputs),
@@ -190,6 +201,12 @@ function normalizeAssistantState(input = null) {
       pricingPosture: obj(draft.pricingPosture),
       handoffRules: obj(draft.handoffRules),
       sourceMetadata: obj(draft.sourceMetadata),
+      assistantBehaviorDraft: obj(
+        draft.assistantBehaviorDraft ||
+          draft.assistantBehavior ||
+          draft.assistant_behavior_draft ||
+          draft.assistant_behavior
+      ),
       assistantState: obj(draft.assistantState),
       progress: obj(draft.progress),
       version: Number(draft.version || 0),
@@ -222,7 +239,7 @@ function buildAssistantFromApi(base = {}, response = {}) {
   return normalizeAssistantState({
     ...base,
     session: obj(root.session),
-    review: obj(setup.review),
+    review: obj(setup.review || root.review),
     websitePrefill: obj(setup.websitePrefill),
     setupSummary: obj(setup.summary),
     draft: obj(setup.draft),
@@ -254,7 +271,8 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
     localTimeline.length ||
       s(localAssistant.message || localAssistant.assistantMessage) ||
       s(obj(localAssistant.nextQuestion).key) ||
-      localAssistant.readyForApproval === true
+      localAssistant.readyForApproval === true ||
+      Object.keys(obj(localAssistant.reviewDraft)).length
   );
 
   const mergedAssistant = hasLocalLiveState
@@ -296,6 +314,7 @@ function clearSetupConversationStorage(tenantKey = "") {
 function hasVisibleSetupState(state = {}) {
   const assistant = obj(state.assistant);
   const draft = obj(state.draft);
+  const reviewDraft = obj(assistant.reviewDraft);
   const profile = obj(draft.businessProfile);
   const sourceMetadata = obj(draft.sourceMetadata);
 
@@ -320,7 +339,9 @@ function hasVisibleSetupState(state = {}) {
       s(sourceMetadata.primarySourceUrl) ||
       s(obj(assistant.nextQuestion).key) ||
       s(assistant.message || assistant.assistantMessage) ||
-      assistant.readyForApproval === true
+      assistant.readyForApproval === true ||
+      Object.keys(reviewDraft).length > 0 ||
+      arr(assistant.sections).length > 0
   );
 }
 
@@ -330,6 +351,7 @@ export default function FloatingAiWidget({
   onOpenChange,
   assistant = null,
   presentation = "floating",
+  storageKey = "",
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -468,8 +490,8 @@ export default function FloatingAiWidget({
   ]);
 
   const conversationStorageKey = useMemo(
-    () => getConversationStorageKey(workspace.tenantKey),
-    [workspace.tenantKey]
+    () => s(storageKey) || getConversationStorageKey(workspace.tenantKey),
+    [storageKey, workspace.tenantKey]
   );
 
   const canReset = useMemo(
@@ -679,6 +701,7 @@ export default function FloatingAiWidget({
           assistant: {
             ...obj(prev.assistant),
             readyForApproval: false,
+            finalizeAvailable: false,
           },
         })
       );

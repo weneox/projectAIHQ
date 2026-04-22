@@ -20,8 +20,45 @@ function splitRoute(value = "") {
   };
 }
 
+function normalizePhaseKey(value = "") {
+  const raw = s(value).toLowerCase();
+  if (!raw) return "";
+
+  if (
+    raw === "business" ||
+    raw === "business_truth" ||
+    raw === "truth" ||
+    raw === "facts"
+  ) {
+    return "business_truth";
+  }
+
+  if (
+    raw === "behavior" ||
+    raw === "conversation" ||
+    raw === "conversation_policy" ||
+    raw === "policy"
+  ) {
+    return "conversation_policy";
+  }
+
+  if (
+    raw === "review" ||
+    raw === "launch" ||
+    raw === "review_and_launch" ||
+    raw === "final"
+  ) {
+    return "review_and_launch";
+  }
+
+  return "";
+}
+
 export const PRODUCT_HOME_ROUTE = "/home";
 export const SETUP_WIDGET_ROUTE = `${PRODUCT_HOME_ROUTE}?assistant=setup`;
+export const SETUP_BUSINESS_TRUTH_ROUTE = `${SETUP_WIDGET_ROUTE}&phase=business_truth`;
+export const SETUP_CONVERSATION_POLICY_ROUTE = `${SETUP_WIDGET_ROUTE}&phase=conversation_policy`;
+export const SETUP_REVIEW_AND_LAUNCH_ROUTE = `${SETUP_WIDGET_ROUTE}&phase=review_and_launch`;
 export const WORKSPACE_SELECTION_ROUTE = "/select-workspace";
 
 const LEGACY_PRODUCT_HOME_ROUTES = Object.freeze([
@@ -35,7 +72,82 @@ const LEGACY_PRODUCT_HOME_ROUTES = Object.freeze([
   "/incidents",
 ]);
 
-function normalizeSetupRoute(_target = "") {
+function buildSetupRouteForPhase(phase = "") {
+  const normalizedPhase = normalizePhaseKey(phase);
+
+  if (normalizedPhase === "business_truth") {
+    return SETUP_BUSINESS_TRUTH_ROUTE;
+  }
+
+  if (normalizedPhase === "conversation_policy") {
+    return SETUP_CONVERSATION_POLICY_ROUTE;
+  }
+
+  if (normalizedPhase === "review_and_launch") {
+    return SETUP_REVIEW_AND_LAUNCH_ROUTE;
+  }
+
+  return SETUP_WIDGET_ROUTE;
+}
+
+function normalizeSetupRoute(target = "") {
+  const raw = s(target);
+  if (!raw) return SETUP_WIDGET_ROUTE;
+
+  const { pathname, search } = splitRoute(raw);
+  const normalizedPath = pathname.toLowerCase();
+  const params = new URLSearchParams(search || "");
+
+  const explicitPhase = normalizePhaseKey(
+    params.get("phase") ||
+      params.get("step") ||
+      params.get("section") ||
+      params.get("mode")
+  );
+
+  if (explicitPhase) {
+    return buildSetupRouteForPhase(explicitPhase);
+  }
+
+  if (
+    normalizedPath === "/setup" ||
+    normalizedPath === "/setup/" ||
+    normalizedPath === "/home"
+  ) {
+    if (s(params.get("assistant")).toLowerCase() === "setup") {
+      return SETUP_WIDGET_ROUTE;
+    }
+  }
+
+  if (
+    normalizedPath === "/setup/business" ||
+    normalizedPath === "/setup/business-truth" ||
+    normalizedPath === "/setup/truth" ||
+    normalizedPath === "/setup/facts"
+  ) {
+    return SETUP_BUSINESS_TRUTH_ROUTE;
+  }
+
+  if (
+    normalizedPath === "/setup/behavior" ||
+    normalizedPath === "/setup/conversation" ||
+    normalizedPath === "/setup/policy"
+  ) {
+    return SETUP_CONVERSATION_POLICY_ROUTE;
+  }
+
+  if (
+    normalizedPath === "/setup/review" ||
+    normalizedPath === "/setup/launch" ||
+    normalizedPath === "/setup/final"
+  ) {
+    return SETUP_REVIEW_AND_LAUNCH_ROUTE;
+  }
+
+  if (normalizedPath === "/setup" || normalizedPath.startsWith("/setup/")) {
+    return SETUP_WIDGET_ROUTE;
+  }
+
   return SETUP_WIDGET_ROUTE;
 }
 
@@ -49,7 +161,7 @@ function normalizeLegacyAppRoute(target = "") {
   if (!normalizedPath) return "";
 
   if (normalizedPath === "/setup" || normalizedPath.startsWith("/setup/")) {
-    return SETUP_WIDGET_ROUTE;
+    return normalizeSetupRoute(raw);
   }
 
   for (const legacyPath of LEGACY_PRODUCT_HOME_ROUTES) {
@@ -237,4 +349,6 @@ export const __test__ = {
   normalizeLegacyAppRoute,
   normalizeRoute,
   normalizeSetupRoute,
+  normalizePhaseKey,
+  buildSetupRouteForPhase,
 };
