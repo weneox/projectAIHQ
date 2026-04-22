@@ -2,6 +2,18 @@ import { cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, vi } from "vitest";
 
+vi.mock("react-router-dom", () =>
+  import("../mocks/react-router-dom.smoke-mock.jsx")
+);
+
+vi.mock("react-router/dom", () =>
+  import("../mocks/react-router-dom.smoke-mock.jsx")
+);
+
+vi.mock("react-router", () =>
+  import("../mocks/react-router-dom.smoke-mock.jsx")
+);
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
