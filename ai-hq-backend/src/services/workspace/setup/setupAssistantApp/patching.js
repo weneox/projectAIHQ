@@ -13,10 +13,15 @@ import {
   inferContactType,
   normalizeBehaviorPolicyKey,
   normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeClosingBehaviorMode as importedNormalizeClosingBehaviorMode,
   normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeEmpathyLevelMode as importedNormalizeEmpathyLevelMode,
+  normalizeGreetingBehaviorMode as importedNormalizeGreetingBehaviorMode,
   normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
   normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizeMessageLengthMode as importedNormalizeMessageLengthMode,
   normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
+  normalizeToneBehaviorMode as importedNormalizeToneBehaviorMode,
   normalizeWebsiteUrl,
   nowIso,
   splitAnswerList,
@@ -30,16 +35,21 @@ import {
   sanitizeAssistantState,
   sanitizeBookingPolicy,
   sanitizeBusinessProfile,
+  sanitizeClosingPolicy,
   sanitizeContactPolicy,
   sanitizeContacts,
+  sanitizeGreetingPolicy,
   sanitizeHandoffPolicy,
   sanitizeHandoffRules,
   sanitizeLocationPolicy,
+  sanitizePlatformDefaults,
   sanitizePricingPolicy,
   sanitizePricingPosture,
   sanitizeProgress,
   sanitizeServices,
   sanitizeSourceMetadata,
+  sanitizeTenantOverrides,
+  sanitizeTonePolicy,
 } from "./sanitize.js";
 
 const normalizePricingBehaviorModeSafe =
@@ -67,11 +77,41 @@ const normalizeHandoffBehaviorModeSafe =
     ? importedNormalizeHandoffBehaviorMode
     : () => "";
 
+const normalizeGreetingBehaviorModeSafe =
+  typeof importedNormalizeGreetingBehaviorMode === "function"
+    ? importedNormalizeGreetingBehaviorMode
+    : () => "";
+
+const normalizeClosingBehaviorModeSafe =
+  typeof importedNormalizeClosingBehaviorMode === "function"
+    ? importedNormalizeClosingBehaviorMode
+    : () => "";
+
+const normalizeToneBehaviorModeSafe =
+  typeof importedNormalizeToneBehaviorMode === "function"
+    ? importedNormalizeToneBehaviorMode
+    : () => "";
+
+const normalizeMessageLengthModeSafe =
+  typeof importedNormalizeMessageLengthMode === "function"
+    ? importedNormalizeMessageLengthMode
+    : () => "";
+
+const normalizeEmpathyLevelModeSafe =
+  typeof importedNormalizeEmpathyLevelMode === "function"
+    ? importedNormalizeEmpathyLevelMode
+    : () => "";
+
 const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
 const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
 const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
 const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
 const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
+const normalizeGreetingBehaviorMode = normalizeGreetingBehaviorModeSafe;
+const normalizeClosingBehaviorMode = normalizeClosingBehaviorModeSafe;
+const normalizeToneBehaviorMode = normalizeToneBehaviorModeSafe;
+const normalizeMessageLengthMode = normalizeMessageLengthModeSafe;
+const normalizeEmpathyLevelMode = normalizeEmpathyLevelModeSafe;
 
 function normalizeStep(value = "") {
   const raw = s(value).toLowerCase();
@@ -85,6 +125,9 @@ function normalizeStep(value = "") {
 
 function isBehaviorStep(step = "") {
   return [
+    "greeting_behavior",
+    "closing_behavior",
+    "tone_behavior",
     "pricing_behavior",
     "location_behavior",
     "booking_behavior",
@@ -95,6 +138,9 @@ function isBehaviorStep(step = "") {
 
 function behaviorPolicyKeyFromStep(step = "") {
   const safeStep = normalizeStep(step);
+  if (safeStep === "greeting_behavior") return "greeting";
+  if (safeStep === "closing_behavior") return "closing";
+  if (safeStep === "tone_behavior") return "tone";
   if (safeStep === "pricing_behavior") return "pricing";
   if (safeStep === "location_behavior") return "location";
   if (safeStep === "booking_behavior") return "booking";
@@ -459,6 +505,17 @@ function normalizeDirectPatchBody(body = {}) {
     );
   }
 
+  const platformDefaults = pickAliasedField(root, [
+    "platformDefaults",
+    "platform_defaults",
+  ]);
+  const tenantOverrides = pickAliasedField(root, [
+    "tenantOverrides",
+    "tenant_overrides",
+  ]);
+  const greetingPolicy = pickAliasedField(root, ["greetingPolicy", "greeting_policy"]);
+  const closingPolicy = pickAliasedField(root, ["closingPolicy", "closing_policy"]);
+  const tonePolicy = pickAliasedField(root, ["tonePolicy", "tone_policy"]);
   const pricingPolicy = pickAliasedField(root, ["pricingPolicy", "pricing_policy"]);
   const locationPolicy = pickAliasedField(root, ["locationPolicy", "location_policy"]);
   const bookingPolicy = pickAliasedField(root, ["bookingPolicy", "booking_policy"]);
@@ -466,6 +523,11 @@ function normalizeDirectPatchBody(body = {}) {
   const handoffPolicy = pickAliasedField(root, ["handoffPolicy", "handoff_policy"]);
 
   if (
+    platformDefaults.provided ||
+    tenantOverrides.provided ||
+    greetingPolicy.provided ||
+    closingPolicy.provided ||
+    tonePolicy.provided ||
     pricingPolicy.provided ||
     locationPolicy.provided ||
     bookingPolicy.provided ||
@@ -474,6 +536,15 @@ function normalizeDirectPatchBody(body = {}) {
   ) {
     out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft({
       ...(obj(out.assistantBehaviorDraft) || {}),
+      platformDefaults: platformDefaults.provided
+        ? obj(platformDefaults.value)
+        : undefined,
+      tenantOverrides: tenantOverrides.provided
+        ? obj(tenantOverrides.value)
+        : undefined,
+      greetingPolicy: greetingPolicy.provided ? obj(greetingPolicy.value) : undefined,
+      closingPolicy: closingPolicy.provided ? obj(closingPolicy.value) : undefined,
+      tonePolicy: tonePolicy.provided ? obj(tonePolicy.value) : undefined,
       pricingPolicy: pricingPolicy.provided ? obj(pricingPolicy.value) : undefined,
       locationPolicy: locationPolicy.provided ? obj(locationPolicy.value) : undefined,
       bookingPolicy: bookingPolicy.provided ? obj(bookingPolicy.value) : undefined,
@@ -535,7 +606,8 @@ function buildSourceCandidateFromAnswer(answer = "") {
 function buildPricingBehaviorPatch(answer = "", current = {}) {
   const text = s(answer);
   const lower = text.toLowerCase();
-  const currentPolicy = obj(obj(current.assistantBehaviorDraft).pricingPolicy);
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.pricingPolicy);
 
   const explicitMode =
     normalizePricingBehaviorMode(text) ||
@@ -576,10 +648,11 @@ function buildPricingBehaviorPatch(answer = "", current = {}) {
         askServiceFirst: mode === "ask_service_first",
         preferredTargetType: "pricing_page",
         preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note:
-          targetUrl || explicitMode
-            ? ""
-            : text,
+        note: targetUrl || explicitMode ? "" : text,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...obj(currentBehavior.tenantOverrides),
+        enabled: true,
       }),
     },
   };
@@ -588,7 +661,8 @@ function buildPricingBehaviorPatch(answer = "", current = {}) {
 function buildLocationBehaviorPatch(answer = "", current = {}) {
   const text = s(answer);
   const lower = text.toLowerCase();
-  const currentPolicy = obj(obj(current.assistantBehaviorDraft).locationPolicy);
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.locationPolicy);
 
   const explicitMode =
     normalizeLocationBehaviorMode(text) ||
@@ -615,10 +689,11 @@ function buildLocationBehaviorPatch(answer = "", current = {}) {
         shouldSummarizeBeforeRedirect: mode === "text_then_map",
         preferredTargetType: "map",
         preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note:
-          targetUrl || explicitMode
-            ? ""
-            : text,
+        note: targetUrl || explicitMode ? "" : text,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...obj(currentBehavior.tenantOverrides),
+        enabled: true,
       }),
     },
   };
@@ -627,7 +702,8 @@ function buildLocationBehaviorPatch(answer = "", current = {}) {
 function buildBookingBehaviorPatch(answer = "", current = {}) {
   const text = s(answer);
   const lower = text.toLowerCase();
-  const currentPolicy = obj(obj(current.assistantBehaviorDraft).bookingPolicy);
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.bookingPolicy);
 
   const explicitMode =
     normalizeBookingBehaviorMode(text) ||
@@ -652,10 +728,11 @@ function buildBookingBehaviorPatch(answer = "", current = {}) {
         collectLeadFirst: mode === "collect_then_route",
         preferredTargetType: "booking",
         preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note:
-          targetUrl || explicitMode
-            ? ""
-            : text,
+        note: targetUrl || explicitMode ? "" : text,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...obj(currentBehavior.tenantOverrides),
+        enabled: true,
       }),
     },
   };
@@ -664,7 +741,8 @@ function buildBookingBehaviorPatch(answer = "", current = {}) {
 function buildContactBehaviorPatch(answer = "", current = {}) {
   const text = s(answer);
   const lower = text.toLowerCase();
-  const currentPolicy = obj(obj(current.assistantBehaviorDraft).contactPolicy);
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.contactPolicy);
 
   const explicitMode =
     normalizeContactBehaviorMode(text) ||
@@ -692,10 +770,11 @@ function buildContactBehaviorPatch(answer = "", current = {}) {
         preferredChannel,
         preferredTargetType: "contact",
         preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note:
-          targetUrl || explicitMode
-            ? ""
-            : text,
+        note: targetUrl || explicitMode ? "" : text,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...obj(currentBehavior.tenantOverrides),
+        enabled: true,
       }),
     },
   };
@@ -704,7 +783,8 @@ function buildContactBehaviorPatch(answer = "", current = {}) {
 function buildHandoffBehaviorPatch(answer = "", current = {}) {
   const text = s(answer);
   const lower = text.toLowerCase();
-  const currentPolicy = obj(obj(current.assistantBehaviorDraft).handoffPolicy);
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.handoffPolicy);
 
   const explicitMode =
     normalizeHandoffBehaviorMode(text) ||
@@ -726,6 +806,161 @@ function buildHandoffBehaviorPatch(answer = "", current = {}) {
         requiresReason: mode === "ask_then_handoff",
         note: explicitMode ? "" : text,
       }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...obj(currentBehavior.tenantOverrides),
+        enabled: true,
+      }),
+    },
+  };
+}
+
+function buildGreetingBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.greetingPolicy);
+  const currentOverrides = obj(currentBehavior.tenantOverrides);
+  const currentDefaults = obj(currentBehavior.platformDefaults);
+
+  const explicitMode =
+    normalizeGreetingBehaviorMode(text) ||
+    (/premium|concierge/i.test(lower) ? "premium_concierge" : "") ||
+    (/brief|qısa/i.test(lower) ? "brief_professional" : "") ||
+    (/friendly|səmimi|local/i.test(lower) ? "friendly_local" : "") ||
+    (/warm|isti|professional|peşəkar/i.test(lower)
+      ? "warm_professional"
+      : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "warm_professional");
+
+  const looksLikeCustomLine =
+    text.length >= 8 &&
+    !explicitMode &&
+    !/(professional|premium|brief|friendly|warm|qısa|isti|səmimi)/i.test(text);
+
+  return {
+    assistantBehaviorDraft: {
+      platformDefaults: sanitizePlatformDefaults({
+        ...currentDefaults,
+        greetingMode: mode,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...currentOverrides,
+        enabled: true,
+        greetingOverrideActive: looksLikeCustomLine || Boolean(explicitMode),
+      }),
+      greetingPolicy: sanitizeGreetingPolicy({
+        ...currentPolicy,
+        mode,
+        openingLine: looksLikeCustomLine ? text : currentPolicy.openingLine,
+        note: looksLikeCustomLine || explicitMode ? "" : text,
+      }),
+    },
+  };
+}
+
+function buildClosingBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.closingPolicy);
+  const currentOverrides = obj(currentBehavior.tenantOverrides);
+  const currentDefaults = obj(currentBehavior.platformDefaults);
+
+  const explicitMode =
+    normalizeClosingBehaviorMode(text) ||
+    (/premium/i.test(lower) ? "premium_invite" : "") ||
+    (/brief|qısa/i.test(lower) ? "brief_invite" : "") ||
+    (/soft|yumşaq/i.test(lower) ? "soft_close" : "") ||
+    (/warm|isti|invite|dəvət/i.test(lower) ? "warm_invite" : "");
+
+  const mode = explicitMode || s(currentPolicy.mode || "warm_invite");
+
+  const looksLikeCustomLine =
+    text.length >= 8 &&
+    !explicitMode &&
+    !/(brief|premium|soft|warm|invite|qısa|isti|dəvət)/i.test(text);
+
+  return {
+    assistantBehaviorDraft: {
+      platformDefaults: sanitizePlatformDefaults({
+        ...currentDefaults,
+        closingMode: mode,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...currentOverrides,
+        enabled: true,
+        closingOverrideActive: looksLikeCustomLine || Boolean(explicitMode),
+      }),
+      closingPolicy: sanitizeClosingPolicy({
+        ...currentPolicy,
+        mode,
+        closingLine: looksLikeCustomLine ? text : currentPolicy.closingLine,
+        note: looksLikeCustomLine || explicitMode ? "" : text,
+      }),
+    },
+  };
+}
+
+function buildToneBehaviorPatch(answer = "", current = {}) {
+  const text = s(answer);
+  const lower = text.toLowerCase();
+  const currentBehavior = obj(current.assistantBehaviorDraft);
+  const currentPolicy = obj(currentBehavior.tonePolicy);
+  const currentOverrides = obj(currentBehavior.tenantOverrides);
+  const currentDefaults = obj(currentBehavior.platformDefaults);
+
+  const explicitMode =
+    normalizeToneBehaviorMode(text) ||
+    (/premium|polished/i.test(lower) ? "premium_polished" : "") ||
+    (/warm|human|isti|insani/i.test(lower) ? "warm_human" : "") ||
+    (/direct|clear|düz|qısa/i.test(lower) ? "direct_clear" : "") ||
+    (/professional|reassuring|arxayın|peşəkar/i.test(lower)
+      ? "professional_reassuring"
+      : "");
+
+  const messageLength =
+    normalizeMessageLengthMode(text) ||
+    (/detailed|ətraflı|izahlı/i.test(lower)
+      ? "detailed"
+      : /concise|brief|short|qısa/i.test(lower)
+        ? "concise"
+        : "balanced");
+
+  const empathyLevel =
+    normalizeEmpathyLevelMode(text) ||
+    (/high empathy|çox empati|very empathetic/i.test(lower)
+      ? "high"
+      : /light empathy|minimal empathy|az empati/i.test(lower)
+        ? "light"
+        : "balanced");
+
+  const mode = explicitMode || s(currentPolicy.mode || "professional_reassuring");
+
+  return {
+    assistantBehaviorDraft: {
+      platformDefaults: sanitizePlatformDefaults({
+        ...currentDefaults,
+        toneMode: mode,
+        messageLength,
+        empathyLevel,
+      }),
+      tenantOverrides: sanitizeTenantOverrides({
+        ...currentOverrides,
+        enabled: true,
+        toneOverrideActive: Boolean(explicitMode || messageLength || empathyLevel),
+      }),
+      tonePolicy: sanitizeTonePolicy({
+        ...currentPolicy,
+        mode,
+        messageLength,
+        empathyLevel,
+        shouldStayConcise: messageLength === "concise",
+        shouldAvoidOverexplaining: messageLength !== "detailed",
+        shouldSoundPremium: mode === "premium_polished",
+        shouldSoundLocalFriendly: mode === "warm_human",
+        note: explicitMode ? "" : text,
+      }),
     },
   };
 }
@@ -733,6 +968,15 @@ function buildHandoffBehaviorPatch(answer = "", current = {}) {
 function buildBehaviorAnswerPatch(step = "", answer = "", current = {}) {
   const safeStep = normalizeStep(step);
 
+  if (safeStep === "greeting_behavior") {
+    return buildGreetingBehaviorPatch(answer, current);
+  }
+  if (safeStep === "closing_behavior") {
+    return buildClosingBehaviorPatch(answer, current);
+  }
+  if (safeStep === "tone_behavior") {
+    return buildToneBehaviorPatch(answer, current);
+  }
   if (safeStep === "pricing_behavior") {
     return buildPricingBehaviorPatch(answer, current);
   }
@@ -1111,6 +1355,11 @@ function sanitizeAcceptedBehaviorPatch(acceptedPatch = {}) {
 
   return sanitizeAssistantBehaviorDraft({
     assistantBehaviorDraft:
+      obj(source.assistantBehaviorDraft).platformDefaults ||
+      obj(source.assistantBehaviorDraft).tenantOverrides ||
+      obj(source.assistantBehaviorDraft).greetingPolicy ||
+      obj(source.assistantBehaviorDraft).closingPolicy ||
+      obj(source.assistantBehaviorDraft).tonePolicy ||
       obj(source.assistantBehaviorDraft).pricingPolicy ||
       obj(source.assistantBehaviorDraft).locationPolicy ||
       obj(source.assistantBehaviorDraft).bookingPolicy ||
@@ -1118,6 +1367,11 @@ function sanitizeAcceptedBehaviorPatch(acceptedPatch = {}) {
       obj(source.assistantBehaviorDraft).handoffPolicy
         ? obj(source.assistantBehaviorDraft)
         : {
+            platformDefaults: obj(source.platformDefaults || source.platform_defaults),
+            tenantOverrides: obj(source.tenantOverrides || source.tenant_overrides),
+            greetingPolicy: obj(source.greetingPolicy || source.greeting_policy),
+            closingPolicy: obj(source.closingPolicy || source.closing_policy),
+            tonePolicy: obj(source.tonePolicy || source.tone_policy),
             pricingPolicy: obj(source.pricingPolicy || source.pricing_policy),
             locationPolicy: obj(source.locationPolicy || source.location_policy),
             bookingPolicy: obj(source.bookingPolicy || source.booking_policy),
