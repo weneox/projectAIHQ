@@ -45,8 +45,42 @@ function hasMeaningfulHealthChange(previous = null, next = null) {
     safePrevious.status !== safeNext.status ||
     safePrevious.primaryReasonCode !== safeNext.primaryReasonCode ||
     !arraysEqual(safePrevious.reasonCodes, safeNext.reasonCodes) ||
-    safePrevious.autonomousOperation !== safeNext.autonomousOperation ||
-    !arraysEqual(safePrevious.repairActions, safeNext.repairActions)
+    safePrevious.autonomousOperation !== safeNext.autonomousOperation
+  );
+}
+
+function buildAdvisorySnapshot({
+  health = null,
+  freshness = null,
+  runtimeProjection = null,
+  activeReviewSessionId = "",
+  activeReviewSession = null,
+} = {}) {
+  const safeHealth = normalizeHealthSnapshot(health);
+  const cause = buildCauseFields({
+    freshness,
+    runtimeProjection,
+    activeReviewSession,
+    repairActions: safeHealth.repairActions,
+  });
+
+  return {
+    repairActions: safeHealth.repairActions,
+    activeReviewSessionId: s(
+      activeReviewSessionId || obj(activeReviewSession).id
+    ),
+    reviewConflictPresent: cause.reviewConflictPresent,
+  };
+}
+
+function hasAdvisoryChange(previous = null, next = null) {
+  const safePrevious = obj(previous);
+  const safeNext = obj(next);
+  return (
+    !arraysEqual(safePrevious.repairActions, safeNext.repairActions) ||
+    s(safePrevious.activeReviewSessionId) !== s(safeNext.activeReviewSessionId) ||
+    Boolean(safePrevious.reviewConflictPresent) !==
+      Boolean(safeNext.reviewConflictPresent)
   );
 }
 
@@ -198,6 +232,51 @@ function buildHealthTransitionPayload({
   };
 }
 
+function buildAdvisoryChangedPayload({
+  previousAdvisory = null,
+  nextAdvisory = null,
+  tenantId = "",
+  tenantKey = "",
+  latestTruthVersionId = "",
+  runtimeProjection = null,
+  freshness = null,
+  triggerSource = "",
+  repairTrigger = "",
+  requestedBy = "",
+} = {}) {
+  const previous = obj(previousAdvisory);
+  const next = obj(nextAdvisory);
+
+  return {
+    tenantKey: s(tenantKey),
+    tenantId: s(tenantId),
+    latestTruthVersionId: s(
+      latestTruthVersionId || obj(freshness).expectedPublishedTruthVersionId
+    ),
+    runtimeProjectionId: s(
+      obj(runtimeProjection).id || obj(freshness).runtimeProjectionId
+    ),
+    previousRepairActions: arr(previous.repairActions),
+    nextRepairActions: arr(next.repairActions),
+    previousActiveReviewSessionId: s(previous.activeReviewSessionId),
+    nextActiveReviewSessionId: s(next.activeReviewSessionId),
+    previousReviewConflictPresent: Boolean(previous.reviewConflictPresent),
+    nextReviewConflictPresent: Boolean(next.reviewConflictPresent),
+    triggerSource: s(triggerSource),
+    repairTrigger: s(repairTrigger),
+    requestedBy: s(requestedBy),
+    didRepairActionsChange: !arraysEqual(
+      previous.repairActions,
+      next.repairActions
+    ),
+    didReviewSessionChange:
+      s(previous.activeReviewSessionId) !== s(next.activeReviewSessionId),
+    didReviewConflictChange:
+      Boolean(previous.reviewConflictPresent) !==
+      Boolean(next.reviewConflictPresent),
+  };
+}
+
 export function emitRuntimeProjectionHealthTransition({
   logger = null,
   health = null,
@@ -214,6 +293,13 @@ export function emitRuntimeProjectionHealthTransition({
   durationMs = null,
 } = {}) {
   const next = normalizeHealthSnapshot(health);
+  const nextAdvisory = buildAdvisorySnapshot({
+    health,
+    freshness,
+    runtimeProjection,
+    activeReviewSessionId,
+    activeReviewSession,
+  });
   const runtimeProjectionId = s(
     obj(runtimeProjection).id || obj(freshness).runtimeProjectionId
   );
@@ -222,9 +308,80 @@ export function emitRuntimeProjectionHealthTransition({
     tenantKey,
     runtimeProjectionId,
   });
-  const previous = runtimeProjectionHealthState.get(cacheKey) || null;
+  const previousEntry = runtimeProjectionHealthState.get(cacheKey) || null;
+  const previous = previousEntry?.health || null;
+  const previousAdvisory = previousEntry?.advisory || null;
 
   if (previous && !hasMeaningfulHealthChange(previous, next)) {
+    if (next.status === "healthy" && hasAdvisoryChange(previousAdvisory, nextAdvisory)) {
+      const advisoryPayload = buildAdvisoryChangedPayload({
+        previousAdvisory,
+        nextAdvisory,
+        tenantId,
+        tenantKey,
+        latestTruthVersionId,
+        runtimeProjection,
+        freshness,
+        triggerSource,
+        repairTrigger,
+        requestedBy,
+      });
+
+      logEvent(
+        logger,
+        "info",
+        "runtime.projection.advisory.changed",
+        advisoryPayload
+      );
+
+      runtimeProjectionHealthState.set(cacheKey, {
+        health: next,
+        advisory: nextAdvisory,
+      });
+
+      return {
+        emitted: true,
+        previous,
+        next,
+        payload: advisoryPayload,
+      };
+    }
+
+    if (
+      next.status !== "healthy" &&
+      !arraysEqual(previous.repairActions, next.repairActions)
+    ) {
+      const payload = buildHealthTransitionPayload({
+        previousHealth: previous,
+        nextHealth: next,
+        freshness,
+        runtimeProjection,
+        tenantId,
+        tenantKey,
+        latestTruthVersionId,
+        activeReviewSessionId,
+        activeReviewSession,
+        triggerSource,
+        repairTrigger,
+        requestedBy,
+        durationMs,
+      });
+
+      logEvent(logger, "warn", "runtime.projection.health.transition", payload);
+
+      runtimeProjectionHealthState.set(cacheKey, {
+        health: next,
+        advisory: nextAdvisory,
+      });
+
+      return {
+        emitted: true,
+        previous,
+        next,
+        payload,
+      };
+    }
+
     return {
       emitted: false,
       previous,
@@ -258,7 +415,10 @@ export function emitRuntimeProjectionHealthTransition({
     payload
   );
 
-  runtimeProjectionHealthState.set(cacheKey, next);
+  runtimeProjectionHealthState.set(cacheKey, {
+    health: next,
+    advisory: nextAdvisory,
+  });
 
   return {
     emitted: true,

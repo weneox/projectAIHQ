@@ -265,6 +265,142 @@ test("runtime projection health suppresses repeated identical transition spam", 
 
     assert.equal(transitions.length, 1);
     assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
+    assert.equal(
+      entries.some(
+        (entry) => entry.event === "runtime.projection.advisory.changed"
+      ),
+      false
+    );
+  });
+});
+
+test("runtime projection health emits searchable stale to healthy recovery transitions", async () => {
+  await captureConsoleEvents(async (entries) => {
+    healthTest.buildRuntimeProjectionHealthModel({
+      runtimeProjection: {
+        id: "projection-3",
+        tenant_id: "tenant-3",
+        tenant_key: "gamma",
+        status: "stale",
+      },
+      freshness: {
+        stale: true,
+        reasons: ["projection_hash_mismatch"],
+        tenantId: "tenant-3",
+        tenantKey: "gamma",
+        runtimeProjectionId: "projection-3",
+        runtimeStatus: "stale",
+      },
+      latestTruthVersion: {
+        id: "truth-v1",
+      },
+    });
+
+    healthTest.buildRuntimeProjectionHealthModel({
+      runtimeProjection: {
+        id: "projection-3",
+        tenant_id: "tenant-3",
+        tenant_key: "gamma",
+        status: "ready",
+      },
+      freshness: {
+        stale: false,
+        reasons: [],
+        tenantId: "tenant-3",
+        tenantKey: "gamma",
+        runtimeProjectionId: "projection-3",
+        runtimeStatus: "ready",
+      },
+      latestTruthVersion: {
+        id: "truth-v1",
+      },
+    });
+
+    const transitions = entries.filter(
+      (entry) => entry.event === "runtime.projection.health.transition"
+    );
+
+    assert.equal(transitions.length, 2);
+    assert.equal(transitions[0]?.payload?.nextStatus, "stale");
+    assert.equal(transitions[1]?.payload?.previousStatus, "stale");
+    assert.equal(transitions[1]?.payload?.nextStatus, "healthy");
+    assert.equal(
+      transitions[1]?.payload?.previousPrimaryReasonCode,
+      "projection_stale"
+    );
+    assert.equal(transitions[1]?.payload?.nextPrimaryReasonCode, "");
+    assert.equal(transitions[1]?.payload?.didStatusChange, true);
+    assert.equal(transitions[1]?.payload?.didReasonChange, true);
+  });
+});
+
+test("runtime projection health emits advisory change events for healthy-only advisory drift", async () => {
+  await captureConsoleEvents(async (entries) => {
+    const baseInput = {
+      runtimeProjection: {
+        id: "projection-4",
+        tenant_id: "tenant-4",
+        tenant_key: "delta",
+        status: "ready",
+      },
+      freshness: {
+        stale: false,
+        reasons: [],
+        tenantId: "tenant-4",
+        tenantKey: "delta",
+        runtimeProjectionId: "projection-4",
+        runtimeStatus: "ready",
+      },
+      latestTruthVersion: {
+        id: "truth-v1",
+      },
+    };
+
+    healthTest.buildRuntimeProjectionHealthModel(baseInput);
+    healthTest.buildRuntimeProjectionHealthModel({
+      ...baseInput,
+      activeReviewSession: {
+        id: "review-4",
+      },
+    });
+
+    const transitions = entries.filter(
+      (entry) => entry.event === "runtime.projection.health.transition"
+    );
+    const advisory = entries.filter(
+      (entry) => entry.event === "runtime.projection.advisory.changed"
+    );
+
+    assert.equal(transitions.length, 1);
+    assert.equal(transitions[0]?.payload?.nextStatus, "healthy");
+    assert.equal(advisory.length, 1);
+    assert.equal(advisory[0]?.payload?.tenantKey, "delta");
+    assert.equal(advisory[0]?.payload?.tenantId, "tenant-4");
+    assert.equal(advisory[0]?.payload?.latestTruthVersionId, "truth-v1");
+    assert.equal(advisory[0]?.payload?.runtimeProjectionId, "projection-4");
+    assert.deepEqual(advisory[0]?.payload?.previousRepairActions, []);
+    assert.deepEqual(advisory[0]?.payload?.nextRepairActions, [
+      "review_conflicts",
+    ]);
+    assert.equal(
+      advisory[0]?.payload?.previousActiveReviewSessionId,
+      ""
+    );
+    assert.equal(
+      advisory[0]?.payload?.nextActiveReviewSessionId,
+      "review-4"
+    );
+    assert.equal(
+      advisory[0]?.payload?.previousReviewConflictPresent,
+      false
+    );
+    assert.equal(
+      advisory[0]?.payload?.nextReviewConflictPresent,
+      true
+    );
+    assert.equal(advisory[0]?.payload?.didRepairActionsChange, true);
+    assert.equal(advisory[0]?.payload?.didReviewSessionChange, true);
+    assert.equal(advisory[0]?.payload?.didReviewConflictChange, true);
   });
 });
 
