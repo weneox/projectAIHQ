@@ -43,13 +43,23 @@ test("getNextQuestion enters behavior only after business steps are complete", (
 
   const next = getNextQuestion({}, draft, {}, { locale: "en" });
 
-  assert.equal(next.key, "pricing_behavior");
+  assert.equal(next.key, "greeting_behavior");
   assert.equal(next.group, "assistant_behavior");
 });
 
 test("satisfied behavior steps are skipped and irrelevant behavior is auto-satisfied", () => {
   const draft = buildCompleteBusinessDraft({
     assistantBehaviorDraft: {
+      greetingPolicy: {
+        mode: "brief_professional",
+      },
+      closingPolicy: {
+        mode: "brief_invite",
+      },
+      tonePolicy: {
+        mode: "direct_clear",
+        messageLength: "concise",
+      },
       pricingPolicy: {
         mode: "ask_service_first",
         askServiceFirst: true,
@@ -65,6 +75,9 @@ test("satisfied behavior steps are skipped and irrelevant behavior is auto-satis
     },
   });
 
+  assert.equal(isQuestionSatisfied("greeting_behavior", draft), true);
+  assert.equal(isQuestionSatisfied("closing_behavior", draft), true);
+  assert.equal(isQuestionSatisfied("tone_behavior", draft), true);
   assert.equal(isQuestionSatisfied("pricing_behavior", draft), true);
   assert.equal(isQuestionSatisfied("contact_behavior", draft), true);
   assert.equal(isQuestionSatisfied("handoff_behavior", draft), true);
@@ -72,4 +85,3 @@ test("satisfied behavior steps are skipped and irrelevant behavior is auto-satis
   assert.equal(isQuestionSatisfied("booking_behavior", draft), true);
   assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }), null);
 });
-

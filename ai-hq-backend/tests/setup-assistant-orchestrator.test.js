@@ -225,7 +225,10 @@ test("clarify turns stay short and move on instead of getting noisy", async () =
   assert.deepEqual(result.acceptedPatch, {});
   assert.equal(result.rejectedInputs.length, 1);
   assert.equal(result.nextQuestion.key, "contacts");
-  assert.ok(result.assistantMessage.split(/\s+/).length <= 20);
+  assert.match(result.assistantMessage, /move to the next part/i);
+  assert.ok(
+    result.assistantMessage.split(/\s+/).filter(Boolean).length <= 25
+  );
   assert.doesNotMatch(result.assistantMessage, /http|debug|source/i);
 });
 

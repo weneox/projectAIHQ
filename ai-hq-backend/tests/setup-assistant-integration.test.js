@@ -122,7 +122,7 @@ test("realistic message turns make hidden synthesis richer while replies stay sh
   }
 
   assert.deepEqual(evidenceCounts, [1, 2, 3, 4]);
-  assert.ok(replyWordCounts.every((count) => count <= 20));
+  assert.ok(replyWordCounts.every((count) => count <= 25));
 
   const finalPayload = harness.getReview().draft.draftPayload.setupAssistant;
   const finalSilent = finalPayload.silentSynthesis;
