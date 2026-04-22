@@ -16,16 +16,13 @@ export default mergeConfig(
   defineConfig({
     resolve: {
       alias: {
+        // Smoke UI always resolves the router through one local shim.
         "react-router-dom": routerMockPath,
-        "react-router/dom": routerMockPath,
-        "react-router": routerMockPath,
       },
     },
     test: {
       name: "frontend-smoke-ui",
-      environment: "jsdom",
       globals: true,
-
       include: [
         "src/test/App.smoke.test.jsx",
         "src/test/components/admin/AdminPageShell.test.jsx",
@@ -38,6 +35,7 @@ export default mergeConfig(
         "src/test/components/layout/Sidebar.test.jsx",
         "src/test/pages/AdminTenants.test.jsx",
         "src/test/pages/AdminTeam.test.jsx",
+        "src/test/pages/ChannelCatalog.test.jsx",
         "src/test/pages/Executions.smoke.test.jsx",
         "src/test/pages/Voice.test.jsx",
         "src/test/pages/Comments.test.jsx",
@@ -46,19 +44,6 @@ export default mergeConfig(
         "src/test/pages/Truth/TruthViewerPage.smoke.test.jsx",
         "src/test/surfaces/workspace/WorkspacePage.smoke.test.jsx",
       ],
-
-      exclude: ["dist/**", "node_modules/**"],
-      passWithNoTests: false,
-
-      pool: "vmThreads",
-      maxWorkers: 1,
-      minWorkers: 1,
-      fileParallelism: false,
-      isolate: true,
-
-      testTimeout: 30000,
-      hookTimeout: 30000,
-      teardownTimeout: 10000,
     },
   })
 );

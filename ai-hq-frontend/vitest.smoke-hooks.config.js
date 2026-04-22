@@ -12,7 +12,6 @@ export default mergeConfig(
   defineConfig({
     test: {
       name: "frontend-smoke-hooks",
-      environment: "jsdom",
       globals: true,
       include: [
         "src/test/hooks/useAsyncSurfaceState.test.jsx",
@@ -28,16 +27,6 @@ export default mergeConfig(
         "src/test/components/inbox/hooks/useInboxThreadListSurface.test.jsx",
         "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx",
       ],
-      exclude: ["dist/**", "node_modules/**"],
-      passWithNoTests: false,
-      pool: "vmThreads",
-      maxWorkers: 1,
-      minWorkers: 1,
-      fileParallelism: false,
-      isolate: true,
-      testTimeout: 30000,
-      hookTimeout: 30000,
-      teardownTimeout: 10000,
     },
   })
 );

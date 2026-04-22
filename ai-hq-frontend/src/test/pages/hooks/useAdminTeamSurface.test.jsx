@@ -55,7 +55,9 @@ describe("useAdminTeamSurface", () => {
       result.current.patchCreate("full_name", "Operator");
     });
 
-    await result.current.createUser();
+    await act(async () => {
+      await result.current.createUser();
+    });
 
     await waitFor(() => {
       expect(result.current.surface.saveSuccess).toMatch(/operator@example.com has been created/i);

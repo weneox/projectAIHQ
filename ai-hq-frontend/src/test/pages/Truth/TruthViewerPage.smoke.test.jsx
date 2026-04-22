@@ -1,8 +1,15 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "../../mocks/react-router-dom.smoke-mock.jsx";
+import { MemoryRouter } from "react-router-dom";
 
 const useWorkspaceTenantKey = vi.fn();
 const getSettingsTrustView = vi.fn();
@@ -543,9 +550,11 @@ describe("Truth viewer smoke", () => {
 
     expect(await screen.findByText("North Clinic")).toBeInTheDocument();
 
-    emitLaunchSliceRefresh({
-      tenantKey: "acme",
-      reason: "truth-updated",
+    act(() => {
+      emitLaunchSliceRefresh({
+        tenantKey: "acme",
+        reason: "truth-updated",
+      });
     });
 
     await waitFor(() => {

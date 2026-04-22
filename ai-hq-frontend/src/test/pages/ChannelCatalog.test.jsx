@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -383,9 +384,11 @@ describe("ChannelCatalog", () => {
     await findChannelCard("DM automation");
     expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
 
-    emitLaunchSliceRefresh({
-      tenantKey: "acme",
-      reason: "test-refresh",
+    act(() => {
+      emitLaunchSliceRefresh({
+        tenantKey: "acme",
+        reason: "test-refresh",
+      });
     });
 
     await waitFor(() => {

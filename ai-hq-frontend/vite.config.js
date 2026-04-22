@@ -56,11 +56,16 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       setupFiles: "./src/test/setup/vitest.setup.js",
       css: true,
+      passWithNoTests: false,
+      exclude: ["dist/**", "node_modules/**"],
       pool: "vmThreads",
       fileParallelism: false,
       maxWorkers: 1,
       minWorkers: 1,
       isolate: true,
+      testTimeout: 30000,
+      hookTimeout: 30000,
+      teardownTimeout: 10000,
       server: {
         deps: {
           inline: ["react-router", "react-router-dom", "react-router/dom"],
