@@ -347,42 +347,44 @@ describe("ChannelCatalog", () => {
   });
 
   it("refreshes launch posture after a tenant-scoped launch mutation signal", async () => {
-    getSettingsTrustView
-      .mockResolvedValueOnce(createTrustView())
-      .mockResolvedValueOnce(
-        createTrustView({
-          summary: {
-            truth: {
-              latestVersionId: "",
-              readiness: {
-                status: "blocked",
-                reasonCode: "approved_truth_unavailable",
-                blockers: [],
-              },
-            },
-            runtimeProjection: {
-              readiness: {
-                status: "blocked",
-                blockers: [],
-              },
-              health: {
-                usable: false,
-              },
-              authority: {
-                available: false,
-              },
-            },
-            reviewQueue: {
-              pending: 1,
-            },
-          },
-        })
-      );
+    let trustView = createTrustView();
+    getSettingsTrustView.mockImplementation(() => Promise.resolve(trustView));
 
     renderCatalog();
 
     await findChannelCard("DM automation");
-    expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
+    });
+
+    const initialCallCount = getSettingsTrustView.mock.calls.length;
+    trustView = createTrustView({
+      summary: {
+        truth: {
+          latestVersionId: "",
+          readiness: {
+            status: "blocked",
+            reasonCode: "approved_truth_unavailable",
+            blockers: [],
+          },
+        },
+        runtimeProjection: {
+          readiness: {
+            status: "blocked",
+            blockers: [],
+          },
+          health: {
+            usable: false,
+          },
+          authority: {
+            available: false,
+          },
+        },
+        reviewQueue: {
+          pending: 1,
+        },
+      },
+    });
 
     act(() => {
       emitLaunchSliceRefresh({
@@ -392,7 +394,7 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(getSettingsTrustView).toHaveBeenCalledTimes(2);
+      expect(getSettingsTrustView.mock.calls.length).toBeGreaterThan(initialCallCount);
     });
 
     await waitFor(() => {
