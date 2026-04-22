@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "../../mocks/react-router-dom.smoke-mock.jsx";
 import { describe, expect, it } from "vitest";
 
 import Sidebar from "../../../components/layout/Sidebar.jsx";
