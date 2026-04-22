@@ -237,15 +237,22 @@ function normalizeComparableMessage(value = "") {
   return s(value).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function timelineHasUserMessage(timeline = [], text = "") {
-  const target = normalizeComparableMessage(text);
-  if (!target) return false;
+function mergeTimelineEntries(...segments) {
+  const out = [];
+  const seen = new Set();
 
-  return arr(timeline).some(
-    (item) =>
-      item?.role === "user" &&
-      normalizeComparableMessage(item?.body) === target
-  );
+  for (const item of segments.flatMap((segment) => arr(segment))) {
+    const key =
+      s(item?.id) ||
+      `${lower(item?.role)}|${normalizeComparableMessage(item?.body)}|${lower(
+        item?.questionKey
+      )}`;
+    if (!item?.body || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
 }
 
 function phaseLabelFromKey(value = "") {
@@ -933,14 +940,12 @@ function useTypingState(active = false) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setVisible(true);
-    }, TYPING_BUBBLE_DELAY_MS);
+    const timer = window.setTimeout(
+      () => {
+        setVisible(active);
+      },
+      active ? TYPING_BUBBLE_DELAY_MS : 0
+    );
 
     return () => {
       window.clearTimeout(timer);
@@ -1034,8 +1039,6 @@ export default function SetupAssistantSections({
 }) {
   const [composerValue, setComposerValue] = useState("");
   const [localTimeline, setLocalTimeline] = useState([]);
-  const [pendingUserMessage, setPendingUserMessage] = useState("");
-  const [awaitingResponse, setAwaitingResponse] = useState(false);
 
   const textareaRef = useRef(null);
   const scrollerRef = useRef(null);
@@ -1067,44 +1070,21 @@ export default function SetupAssistantSections({
     return [];
   }, [model]);
 
-  useEffect(() => {
-    setLocalTimeline((prev) => {
-      if (!canonicalTimeline.length) return prev;
+  const displayTimeline = useMemo(
+    () => mergeTimelineEntries(canonicalTimeline, localTimeline),
+    [canonicalTimeline, localTimeline]
+  );
 
-      const out = [];
-      const seen = new Set();
-
-      for (const item of [...canonicalTimeline, ...prev]) {
-        const key =
-          s(item.id) ||
-          `${lower(item.role)}|${normalizeComparableMessage(item.body)}|${lower(
-            item.questionKey
-          )}`;
-        if (!item.body || seen.has(key)) continue;
-        seen.add(key);
-        out.push(item);
-      }
-
-      return out;
-    });
-  }, [canonicalTimeline]);
-
-  useEffect(() => {
-    if (!pendingUserMessage) return;
-    if (!timelineHasUserMessage(localTimeline, pendingUserMessage)) return;
-
-    setPendingUserMessage("");
-    setAwaitingResponse(false);
-  }, [localTimeline, pendingUserMessage]);
-
-  useEffect(() => {
-    if (!sessionHydrated) return;
-    if (saving || capturingSource || finalizing) return;
-
-    if (pendingUserMessage) return;
-
-    setAwaitingResponse(false);
-  }, [sessionHydrated, saving, capturingSource, finalizing, pendingUserMessage]);
+  const activeQuestion = normalizeQuestion(model.nextQuestion);
+  const questionCopy = normalizeQuestionCopy(activeQuestion);
+  const busy = saving || capturingSource || finalizing;
+  const showTyping = useTypingState(sessionHydrated && busy);
+  const showDraft = shouldShowDraft(model);
+  const reviewFlags = reviewFlagsFromModel(model);
+  const phaseCards = buildPhaseCardsFromSections(arr(model.sections));
+  const groupedSections = sectionGroups(arr(model.sections));
+  const hasSession =
+    Boolean(s(obj(assistant).session?.id)) || displayTimeline.length > 0 || showDraft;
 
   useEffect(() => {
     const node = scrollerRef.current;
@@ -1113,20 +1093,7 @@ export default function SetupAssistantSections({
       top: node.scrollHeight,
       behavior: "smooth",
     });
-  }, [localTimeline, awaitingResponse, saving, capturingSource, finalizing]);
-
-  const activeQuestion = normalizeQuestion(model.nextQuestion);
-  const questionCopy = normalizeQuestionCopy(activeQuestion);
-  const busy = saving || capturingSource || finalizing;
-  const showTyping = useTypingState(
-    awaitingResponse || saving || capturingSource || finalizing
-  );
-  const showDraft = shouldShowDraft(model);
-  const reviewFlags = reviewFlagsFromModel(model);
-  const phaseCards = buildPhaseCardsFromSections(arr(model.sections));
-  const groupedSections = sectionGroups(arr(model.sections));
-  const hasSession =
-    Boolean(s(obj(assistant).session?.id)) || localTimeline.length > 0 || showDraft;
+  }, [displayTimeline, showTyping, busy]);
 
   async function handleSubmit() {
     const text = s(composerValue);
@@ -1143,8 +1110,6 @@ export default function SetupAssistantSections({
 
     setLocalTimeline((prev) => [...prev, userEntry]);
     setComposerValue("");
-    setPendingUserMessage(text);
-    setAwaitingResponse(true);
 
     try {
       await onParseMessage?.({
@@ -1152,7 +1117,7 @@ export default function SetupAssistantSections({
         step: s(activeQuestion.step || activeQuestion.key),
       });
     } catch {
-      setAwaitingResponse(false);
+      return;
     }
   }
 
@@ -1237,7 +1202,7 @@ export default function SetupAssistantSections({
           ) : null}
 
           <AnimatePresence initial={false}>
-            {localTimeline.map((item) => (
+            {displayTimeline.map((item) => (
               <ChatBubble
                 key={item.id}
                 role={item.role}

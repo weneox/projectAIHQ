@@ -968,7 +968,7 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
 function buildTruthRuntimeState({ trustPayload, launchChannel }) {
   const truth = obj(trustPayload?.summary?.truth);
   const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
-  const truthReadiness = obj(trust.truthReadiness || truth.readiness);
+  const truthReadiness = obj(truth.truthReadiness || truth.readiness);
   const runtimeReadiness = obj(runtimeProjection.readiness);
   const health = obj(runtimeProjection.health);
   const truthReady =
