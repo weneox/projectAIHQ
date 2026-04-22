@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from "vite";
+import { defineConfig, mergeConfig } from "vitest/config";
 
 import baseConfig from "./vite.config.js";
 
@@ -11,6 +11,9 @@ export default mergeConfig(
   resolvedBaseConfig,
   defineConfig({
     test: {
+      name: "frontend-smoke-hooks",
+      environment: "jsdom",
+      globals: true,
       include: [
         "src/test/hooks/useAsyncSurfaceState.test.jsx",
         "src/test/hooks/useActionState.test.jsx",
@@ -23,10 +26,18 @@ export default mergeConfig(
         "src/test/hooks/useInboxData.test.jsx",
         "src/test/components/inbox/hooks/useInboxComposerSurface.test.jsx",
         "src/test/components/inbox/hooks/useInboxThreadListSurface.test.jsx",
-        "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx",
+        "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx"
       ],
       exclude: ["dist/**", "node_modules/**"],
       passWithNoTests: false,
-    },
+      pool: "forks",
+      maxWorkers: 1,
+      minWorkers: 1,
+      fileParallelism: false,
+      isolate: true,
+      testTimeout: 30000,
+      hookTimeout: 30000,
+      teardownTimeout: 10000
+    }
   })
 );
