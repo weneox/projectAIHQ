@@ -63,7 +63,7 @@ export default defineConfig(({ mode }) => {
       isolate: true,
       server: {
         deps: {
-          inline: ["react-router", "react-router-dom"],
+          inline: ["react-router", "react-router-dom", "react-router/dom"],
         },
       },
     },
