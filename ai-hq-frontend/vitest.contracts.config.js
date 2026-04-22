@@ -1,21 +1,25 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-    test: {
-      environment: "node",
-      include: [
-        "src/test/env/validation.test.js",
-        "src/test/api/truth.test.js",
-        "src/test/api/trust.test.js",
-        "src/test/lib/appEntry.test.js",
-      ],
+  test: {
+    name: "frontend-contracts",
+    environment: "node",
+    include: [
+      "src/test/env/validation.test.js",
+      "src/test/api/truth.test.js",
+      "src/test/api/trust.test.js",
+      "src/test/lib/appEntry.test.js",
+    ],
     exclude: ["dist/**", "node_modules/**"],
     setupFiles: [],
+    passWithNoTests: false,
     pool: "vmThreads",
-    fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
+    fileParallelism: false,
     isolate: true,
-    passWithNoTests: false,
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    teardownTimeout: 10000,
   },
 });

@@ -26,7 +26,7 @@ export default mergeConfig(
         "src/test/hooks/useInboxData.test.jsx",
         "src/test/components/inbox/hooks/useInboxComposerSurface.test.jsx",
         "src/test/components/inbox/hooks/useInboxThreadListSurface.test.jsx",
-        "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx"
+        "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx",
       ],
       exclude: ["dist/**", "node_modules/**"],
       passWithNoTests: false,
@@ -37,7 +37,7 @@ export default mergeConfig(
       isolate: true,
       testTimeout: 30000,
       hookTimeout: 30000,
-      teardownTimeout: 10000
-    }
+      teardownTimeout: 10000,
+    },
   })
 );
