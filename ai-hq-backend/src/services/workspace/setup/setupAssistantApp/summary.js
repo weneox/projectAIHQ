@@ -4,6 +4,13 @@ import {
   buildSetupSourceCoverage,
   buildSetupSourceSignals,
 } from "./sourceSignals.js";
+import {
+  buildDefaultAssistantBehaviorDraft,
+  normalizeClosingBehaviorMode,
+  normalizeGreetingBehaviorMode,
+  normalizeToneBehaviorMode,
+} from "./shared.js";
+import { isBehaviorStepRelevant } from "./questions.js";
 
 export const SETUP_SUMMARY_SECTION_ORDER = [
   "profile",
@@ -12,6 +19,14 @@ export const SETUP_SUMMARY_SECTION_ORDER = [
   "pricing",
   "contacts",
   "handoff",
+  "greeting_behavior",
+  "closing_behavior",
+  "tone_behavior",
+  "pricing_behavior",
+  "location_behavior",
+  "booking_behavior",
+  "contact_behavior",
+  "handoff_behavior",
 ];
 
 function normalizeSummaryContext(context = {}) {
@@ -76,6 +91,7 @@ function buildProfileStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : partial ? "needs_review" : "missing",
     reportReady: completed || sourceCoverage.identity === true,
     sourceCovered: sourceCoverage.identity === true,
+    phase: "business_truth",
     missingFields: [
       hasName ? "" : "business_name",
       hasDescription ? "" : "business_description",
@@ -105,6 +121,7 @@ function buildServicesStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : partial ? "needs_review" : "missing",
     reportReady: completed || sourceCoverage.services === true,
     sourceCovered: sourceCoverage.services === true,
+    phase: "business_truth",
     missingFields: completed ? [] : ["services"],
     metric: {
       explicitCount,
@@ -136,6 +153,7 @@ function buildHoursStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : partial ? "needs_review" : "missing",
     reportReady: completed || sourceCoverage.hours === true,
     sourceCovered: sourceCoverage.hours === true,
+    phase: "business_truth",
     missingFields: completed ? [] : ["hours"],
     metric: {
       explicitConfigured,
@@ -166,6 +184,7 @@ function buildPricingStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : partial ? "needs_review" : "missing",
     reportReady: completed || sourceCoverage.pricing === true,
     sourceCovered: sourceCoverage.pricing === true,
+    phase: "business_truth",
     missingFields: completed ? [] : ["pricing_posture"],
     metric: {
       hasPricingMode: Boolean(s(pricing.pricingMode)),
@@ -191,6 +210,7 @@ function buildContactsStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : partial ? "needs_review" : "missing",
     reportReady: completed || sourceCoverage.contacts === true,
     sourceCovered: sourceCoverage.contacts === true,
+    phase: "business_truth",
     missingFields: completed ? [] : ["contact_route"],
     metric: {
       explicitCount,
@@ -217,6 +237,7 @@ function buildHandoffStatus(draft = {}, coverageContext = {}) {
     status: completed ? "ready" : "missing",
     reportReady: completed,
     sourceCovered: false,
+    phase: "business_truth",
     missingFields: completed ? [] : ["handoff_rules"],
     metric: {
       enabled: handoff.enabled === true,
@@ -225,6 +246,304 @@ function buildHandoffStatus(draft = {}, coverageContext = {}) {
       hasDerivedRule: Boolean(s(draftState.humanHandoff)),
     },
   };
+}
+
+function buildGreetingBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.greetingPolicy);
+  const overrides = obj(behavior.tenantOverrides);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().greetingPolicy);
+
+  const completed = Boolean(
+    s(policy.openingLine) ||
+      s(policy.followupLeadIn) ||
+      s(policy.note) ||
+      normalizeGreetingBehaviorMode(policy.mode || defaults.mode) !==
+        normalizeGreetingBehaviorMode(defaults.mode) ||
+      overrides.greetingOverrideActive === true
+  );
+
+  return {
+    completed,
+    partial: completed,
+    status: completed ? "ready" : "missing",
+    reportReady: completed,
+    sourceCovered: false,
+    phase: "conversation_policy",
+    missingFields: completed ? [] : ["greeting_behavior"],
+    metric: {
+      hasOpeningLine: Boolean(s(policy.openingLine)),
+      hasFollowupLeadIn: Boolean(s(policy.followupLeadIn)),
+      overrideActive: overrides.greetingOverrideActive === true,
+      mode: s(policy.mode || defaults.mode),
+    },
+  };
+}
+
+function buildClosingBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.closingPolicy);
+  const overrides = obj(behavior.tenantOverrides);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().closingPolicy);
+
+  const completed = Boolean(
+    s(policy.closingLine) ||
+      s(policy.note) ||
+      normalizeClosingBehaviorMode(policy.mode || defaults.mode) !==
+        normalizeClosingBehaviorMode(defaults.mode) ||
+      policy.includeHumanOfferWhenRelevant === false ||
+      policy.includeNextStepPrompt === false ||
+      overrides.closingOverrideActive === true
+  );
+
+  return {
+    completed,
+    partial: completed,
+    status: completed ? "ready" : "missing",
+    reportReady: completed,
+    sourceCovered: false,
+    phase: "conversation_policy",
+    missingFields: completed ? [] : ["closing_behavior"],
+    metric: {
+      hasClosingLine: Boolean(s(policy.closingLine)),
+      includeNextStepPrompt:
+        policy.includeNextStepPrompt !== false,
+      includeHumanOfferWhenRelevant:
+        policy.includeHumanOfferWhenRelevant !== false,
+      overrideActive: overrides.closingOverrideActive === true,
+      mode: s(policy.mode || defaults.mode),
+    },
+  };
+}
+
+function buildToneBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.tonePolicy);
+  const platformDefaults = obj(behavior.platformDefaults);
+  const overrides = obj(behavior.tenantOverrides);
+  const defaults = buildDefaultAssistantBehaviorDraft();
+  const defaultTone = obj(defaults.tonePolicy);
+  const defaultPlatform = obj(defaults.platformDefaults);
+
+  const completed = Boolean(
+    s(policy.note) ||
+      s(policy.mode) ||
+      s(policy.messageLength) ||
+      s(policy.empathyLevel) ||
+      normalizeToneBehaviorMode(policy.mode || defaultTone.mode) !==
+        normalizeToneBehaviorMode(defaultTone.mode) ||
+      s(policy.messageLength || platformDefaults.messageLength) !==
+        s(defaultTone.messageLength || defaultPlatform.messageLength) ||
+      s(policy.empathyLevel || platformDefaults.empathyLevel) !==
+        s(defaultTone.empathyLevel || defaultPlatform.empathyLevel) ||
+      policy.shouldSoundPremium === true ||
+      policy.shouldSoundLocalFriendly === true ||
+      policy.shouldAvoidOverexplaining === false ||
+      policy.shouldStayConcise === false ||
+      overrides.toneOverrideActive === true
+  );
+
+  return {
+    completed,
+    partial: completed,
+    status: completed ? "ready" : "missing",
+    reportReady: completed,
+    sourceCovered: false,
+    phase: "conversation_policy",
+    missingFields: completed ? [] : ["tone_behavior"],
+    metric: {
+      mode: s(policy.mode || defaultTone.mode),
+      messageLength: s(
+        policy.messageLength || platformDefaults.messageLength || defaultTone.messageLength
+      ),
+      empathyLevel: s(
+        policy.empathyLevel || platformDefaults.empathyLevel || defaultTone.empathyLevel
+      ),
+      overrideActive: overrides.toneOverrideActive === true,
+    },
+  };
+}
+
+function buildGenericBehaviorStatus({
+  questionKey = "",
+  policy = {},
+  defaults = {},
+  metricBuilder = null,
+  isConfigured = false,
+  relevant = false,
+}) {
+  if (!relevant) {
+    return {
+      completed: true,
+      partial: false,
+      status: "not_applicable",
+      reportReady: true,
+      sourceCovered: false,
+      phase: "conversation_policy",
+      missingFields: [],
+      metric:
+        typeof metricBuilder === "function"
+          ? metricBuilder({ policy, defaults, relevant })
+          : {},
+    };
+  }
+
+  return {
+    completed: isConfigured,
+    partial: isConfigured,
+    status: isConfigured ? "ready" : "missing",
+    reportReady: isConfigured,
+    sourceCovered: false,
+    phase: "conversation_policy",
+    missingFields: isConfigured ? [] : [questionKey],
+    metric:
+      typeof metricBuilder === "function"
+        ? metricBuilder({ policy, defaults, relevant })
+        : {},
+  };
+}
+
+function buildPricingBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.pricingPolicy);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
+  const relevant = isBehaviorStepRelevant("pricing_behavior", draft);
+
+  const isConfigured = Boolean(
+    s(policy.preferredTargetUrl) ||
+      s(policy.fallbackTargetUrl) ||
+      s(policy.note) ||
+      s(policy.mode) ||
+      policy.askServiceFirst === true
+  );
+
+  return buildGenericBehaviorStatus({
+    questionKey: "pricing_behavior",
+    policy,
+    defaults,
+    relevant,
+    isConfigured,
+    metricBuilder: ({ policy: row, defaults: rowDefaults }) => ({
+      mode: s(row.mode || rowDefaults.mode),
+      hasPreferredTarget: Boolean(s(row.preferredTargetUrl)),
+      askServiceFirst: row.askServiceFirst === true,
+      notePresent: Boolean(s(row.note)),
+    }),
+  });
+}
+
+function buildLocationBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.locationPolicy);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
+  const relevant = isBehaviorStepRelevant("location_behavior", draft);
+
+  const isConfigured = Boolean(
+    s(policy.preferredTargetUrl) ||
+      s(policy.fallbackTargetUrl) ||
+      s(policy.note) ||
+      s(policy.mode)
+  );
+
+  return buildGenericBehaviorStatus({
+    questionKey: "location_behavior",
+    policy,
+    defaults,
+    relevant,
+    isConfigured,
+    metricBuilder: ({ policy: row, defaults: rowDefaults }) => ({
+      mode: s(row.mode || rowDefaults.mode),
+      hasPreferredTarget: Boolean(s(row.preferredTargetUrl)),
+      notePresent: Boolean(s(row.note)),
+    }),
+  });
+}
+
+function buildBookingBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.bookingPolicy);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
+  const relevant = isBehaviorStepRelevant("booking_behavior", draft);
+
+  const isConfigured = Boolean(
+    s(policy.preferredTargetUrl) ||
+      s(policy.fallbackTargetUrl) ||
+      s(policy.note) ||
+      s(policy.mode) ||
+      policy.collectLeadFirst === true
+  );
+
+  return buildGenericBehaviorStatus({
+    questionKey: "booking_behavior",
+    policy,
+    defaults,
+    relevant,
+    isConfigured,
+    metricBuilder: ({ policy: row, defaults: rowDefaults }) => ({
+      mode: s(row.mode || rowDefaults.mode),
+      hasPreferredTarget: Boolean(s(row.preferredTargetUrl)),
+      collectLeadFirst: row.collectLeadFirst === true,
+      notePresent: Boolean(s(row.note)),
+    }),
+  });
+}
+
+function buildContactBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.contactPolicy);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
+  const relevant = isBehaviorStepRelevant("contact_behavior", draft);
+
+  const isConfigured = Boolean(
+    s(policy.preferredTargetUrl) ||
+      s(policy.fallbackTargetUrl) ||
+      s(policy.note) ||
+      s(policy.mode) ||
+      s(policy.preferredChannel)
+  );
+
+  return buildGenericBehaviorStatus({
+    questionKey: "contact_behavior",
+    policy,
+    defaults,
+    relevant,
+    isConfigured,
+    metricBuilder: ({ policy: row, defaults: rowDefaults }) => ({
+      mode: s(row.mode || rowDefaults.mode),
+      preferredChannel: s(row.preferredChannel),
+      hasPreferredTarget: Boolean(s(row.preferredTargetUrl)),
+      notePresent: Boolean(s(row.note)),
+    }),
+  });
+}
+
+function buildHandoffBehaviorStatus(draft = {}) {
+  const behavior = obj(draft.assistantBehaviorDraft);
+  const policy = obj(behavior.handoffPolicy);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
+  const relevant = isBehaviorStepRelevant("handoff_behavior", draft);
+
+  const isConfigured = Boolean(
+    s(policy.note) ||
+      s(policy.mode) ||
+      policy.requiresReason === false
+  );
+
+  return buildGenericBehaviorStatus({
+    questionKey: "handoff_behavior",
+    policy,
+    defaults,
+    relevant,
+    isConfigured,
+    metricBuilder: ({ policy: row, defaults: rowDefaults }) => ({
+      mode: s(row.mode || rowDefaults.mode),
+      requiresReason:
+        typeof row.requiresReason === "boolean"
+          ? row.requiresReason
+          : rowDefaults.requiresReason === true,
+      notePresent: Boolean(s(row.note)),
+    }),
+  });
 }
 
 export function buildSectionStatus(draft = {}, context = {}) {
@@ -237,6 +556,15 @@ export function buildSectionStatus(draft = {}, context = {}) {
     pricing: buildPricingStatus(draft, coverageContext),
     contacts: buildContactsStatus(draft, coverageContext),
     handoff: buildHandoffStatus(draft, coverageContext),
+
+    greeting_behavior: buildGreetingBehaviorStatus(draft),
+    closing_behavior: buildClosingBehaviorStatus(draft),
+    tone_behavior: buildToneBehaviorStatus(draft),
+    pricing_behavior: buildPricingBehaviorStatus(draft),
+    location_behavior: buildLocationBehaviorStatus(draft),
+    booking_behavior: buildBookingBehaviorStatus(draft),
+    contact_behavior: buildContactBehaviorStatus(draft),
+    handoff_behavior: buildHandoffBehaviorStatus(draft),
   };
 }
 
@@ -247,6 +575,9 @@ function normalizeBlockerSeverity(key = "", state = {}) {
     if (key === "profile") return "high";
     if (key === "services") return "high";
     if (key === "contacts") return "high";
+    if (key === "greeting_behavior") return "medium";
+    if (key === "closing_behavior") return "medium";
+    if (key === "tone_behavior") return "medium";
     return "medium";
   }
 
@@ -260,17 +591,21 @@ export function buildConfirmationBlockers(
 ) {
   const coverageContext = buildCoverageContext(draft, context);
 
-  return SETUP_SUMMARY_SECTION_ORDER.filter(
-    (key) => obj(sectionStatus[key]).completed !== true
-  ).map((key) => {
+  return SETUP_SUMMARY_SECTION_ORDER.filter((key) => {
+    const state = obj(sectionStatus[key]);
+    return state.completed !== true && s(state.status) !== "not_applicable";
+  }).map((key) => {
     const state = obj(sectionStatus[key]);
 
     return {
       key,
+      step: key,
       severity: normalizeBlockerSeverity(key, state),
+      reason: `${key} still needs confirmation.`,
       reasonCode: `${key}_${state.status || "missing"}`,
       sourceCovered: state.sourceCovered === true,
       reportReady: state.reportReady === true,
+      phase: s(state.phase || "business_truth"),
       missingFields: arr(state.missingFields),
       metric: obj(state.metric),
       sourceSignalsPreview:
@@ -333,6 +668,28 @@ export function buildSummary(draft = {}, context = {}) {
     context
   );
 
+  const businessTruthReady = [
+    "profile",
+    "services",
+    "hours",
+    "pricing",
+    "contacts",
+    "handoff",
+  ].every((key) => obj(sectionStatus[key]).completed === true);
+
+  const conversationPolicyReady = [
+    "greeting_behavior",
+    "closing_behavior",
+    "tone_behavior",
+    "pricing_behavior",
+    "location_behavior",
+    "booking_behavior",
+    "contact_behavior",
+    "handoff_behavior",
+  ]
+    .filter((key) => s(obj(sectionStatus[key]).status) !== "not_applicable")
+    .every((key) => obj(sectionStatus[key]).completed === true);
+
   const hasAnyDraft =
     completionCount > 0 ||
     partialCount > 0 ||
@@ -355,6 +712,8 @@ export function buildSummary(draft = {}, context = {}) {
     reportReadyCount,
     totalSections: SETUP_SUMMARY_SECTION_ORDER.length,
     blockerCount: confirmationBlockers.length,
+    businessTruthReady,
+    conversationPolicyReady,
     sectionStatus,
     confirmationBlockers,
     servicesCount: Math.max(
@@ -378,11 +737,26 @@ export function buildSummary(draft = {}, context = {}) {
 }
 
 export function buildReviewState(_draft = {}, summary = {}, _context = {}) {
+  const blockerCount = Number(summary.blockerCount || 0) || 0;
+  const hasAnyDraft = summary.hasAnyDraft === true;
+  const businessTruthReady = summary.businessTruthReady === true;
+  const conversationPolicyReady = summary.conversationPolicyReady === true;
+  const readyForApproval =
+    hasAnyDraft && blockerCount === 0 && businessTruthReady && conversationPolicyReady;
+
   return {
-    status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
-    readyForReview: false,
-    readyForApproval: false,
-    finalizeAvailable: false,
-    message: "",
+    status: hasAnyDraft
+      ? readyForApproval
+        ? "ready_for_review"
+        : "draft_in_progress"
+      : "awaiting_input",
+    readyForReview: hasAnyDraft,
+    readyForApproval,
+    finalizeAvailable: readyForApproval,
+    message: readyForApproval
+      ? "Business truth and conversation policy are ready for final review."
+      : hasAnyDraft
+        ? "Setup draft is still being completed."
+        : "",
   };
 }
