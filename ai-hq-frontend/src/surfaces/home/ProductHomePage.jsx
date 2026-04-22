@@ -12,6 +12,7 @@ import {
   LoadingSurface,
   PageCanvas,
 } from "../../components/ui/AppShellPrimitives.jsx";
+import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import { cx } from "../../lib/cx.js";
 import {
   compactSentence,
@@ -38,8 +39,11 @@ function pluralize(count, noun) {
 }
 
 function hasSetupDraft(home) {
-  const draft = home?.assistant?.draft || {};
+  const assistant = home?.assistant || {};
+  const draft = assistant?.draft || {};
+  const reviewDraft = assistant?.reviewDraft || {};
   const profile = draft.businessProfile || {};
+  const reviewProfile = reviewDraft.businessProfile || {};
 
   return Boolean(
     s(profile.companyName) ||
@@ -47,7 +51,14 @@ function hasSetupDraft(home) {
       s(profile.websiteUrl) ||
       arr(draft.services).length ||
       arr(draft.contacts).length ||
-      arr(draft.hours).length
+      arr(draft.hours).length ||
+      s(reviewProfile.companyName) ||
+      s(reviewProfile.description) ||
+      s(reviewProfile.websiteUrl) ||
+      arr(reviewDraft.coreServices).length ||
+      arr(reviewDraft.contactRoutes).length ||
+      arr(reviewDraft.workingHoursLines).length ||
+      arr(assistant.sections).length
   );
 }
 
@@ -69,6 +80,48 @@ function shortChannelLabel(channel = {}) {
 
 function channelHandle(channel = {}) {
   return s(channel.accountHandle);
+}
+
+function assistantSections(home) {
+  return arr(home?.assistant?.sections);
+}
+
+function phaseKey(section = {}) {
+  return lower(section.phase) || "business_truth";
+}
+
+function applicablePhaseSections(home, targetPhase = "") {
+  return assistantSections(home).filter((section) => {
+    const status = lower(section.status);
+    return phaseKey(section) === targetPhase && status !== "not_applicable";
+  });
+}
+
+function phaseProgress(home, targetPhase = "") {
+  const sections = applicablePhaseSections(home, targetPhase);
+  const total = sections.length;
+  const ready = sections.filter((item) => lower(item.status) === "ready").length;
+  const needsReview = sections.filter(
+    (item) => lower(item.status) === "needs_review"
+  ).length;
+  const missing = sections.filter((item) => lower(item.status) === "missing").length;
+  const started = ready > 0 || needsReview > 0;
+  const complete = total > 0 && ready === total;
+
+  return {
+    total,
+    ready,
+    needsReview,
+    missing,
+    started,
+    complete,
+  };
+}
+
+function setupInterviewPhase(home) {
+  const phase = lower(home?.assistant?.phase);
+  if (!phase) return "";
+  return phase;
 }
 
 function humanChannelState(home) {
@@ -107,6 +160,10 @@ function humanChannelState(home) {
 function humanSetupState(home) {
   const approved = home?.assistant?.hasApprovedSetupBaseline === true;
   const draftExists = hasSetupDraft(home);
+  const businessTruth = phaseProgress(home, "business_truth");
+  const conversationPolicy = phaseProgress(home, "conversation_policy");
+  const readyForApproval = home?.assistant?.readyForApproval === true;
+  const phase = setupInterviewPhase(home);
 
   if (approved && !draftExists) {
     return {
@@ -126,11 +183,38 @@ function humanSetupState(home) {
     };
   }
 
-  if (draftExists) {
+  if (readyForApproval) {
+    return {
+      label: "Setup",
+      value: "Review ready",
+      hint: "Business truth and conversation policy are ready for final review",
+      tone: "success",
+    };
+  }
+
+  if (conversationPolicy.started && !conversationPolicy.complete) {
+    return {
+      label: "Setup",
+      value: "Behavior in progress",
+      hint: "Conversation policy is still being shaped",
+      tone: "warning",
+    };
+  }
+
+  if (businessTruth.started && !businessTruth.complete) {
+    return {
+      label: "Setup",
+      value: "Business truth",
+      hint: "Core business facts are still being confirmed",
+      tone: "warning",
+    };
+  }
+
+  if (draftExists || phase === "interview") {
     return {
       label: "Setup",
       value: "In progress",
-      hint: "A draft exists and still needs review",
+      hint: "A setup draft exists and still needs review",
       tone: "warning",
     };
   }
@@ -223,6 +307,9 @@ function buildHeroCopy(home) {
   const runtimeReady = home?.truthRuntime?.ready === true;
   const unread = unreadCount(home);
   const inboxUnavailable = lower(home?.inboxState?.status) === "unavailable";
+  const businessTruth = phaseProgress(home, "business_truth");
+  const conversationPolicy = phaseProgress(home, "conversation_policy");
+  const readyForApproval = home?.assistant?.readyForApproval === true;
 
   if (home?.launchReady) {
     return {
@@ -246,7 +333,31 @@ function buildHeroCopy(home) {
     return {
       title: "Start the business setup.",
       summary:
-        "Add the business details first, then review them before anything goes live.",
+        "Begin with business truth first, then shape conversation policy before anything goes live.",
+    };
+  }
+
+  if (!businessTruth.complete) {
+    return {
+      title: "Finish the business truth.",
+      summary:
+        "The system still needs the core business facts it can safely answer from.",
+    };
+  }
+
+  if (!conversationPolicy.complete) {
+    return {
+      title: "Shape the conversation policy.",
+      summary:
+        "Now define greeting, closing, tone, and response behavior before review.",
+    };
+  }
+
+  if (readyForApproval && !truthReady) {
+    return {
+      title: "Review the setup draft.",
+      summary:
+        "Business truth and conversation policy are ready. Review them before launch.",
     };
   }
 
@@ -309,6 +420,166 @@ function buildMetaLine(home) {
   }
 
   return parts;
+}
+
+function buildSetupPhaseCards(home) {
+  const businessTruth = phaseProgress(home, "business_truth");
+  const conversationPolicy = phaseProgress(home, "conversation_policy");
+  const readyForApproval = home?.assistant?.readyForApproval === true;
+  const approved = home?.assistant?.hasApprovedSetupBaseline === true;
+  const draftHidden = home?.assistant?.draftPreviewHidden === true;
+  const setupStarted = hasSetupDraft(home);
+  const openSetupAction = {
+    label: "Open setup",
+    path: SETUP_WIDGET_ROUTE,
+  };
+  const reviewAction = {
+    label: "Review setup",
+    path: SETUP_WIDGET_ROUTE,
+  };
+
+  const businessTruthCard = (() => {
+    if (!setupStarted && businessTruth.total === 0) {
+      return {
+        key: "business_truth",
+        title: "Business truth",
+        status: "Start",
+        summary:
+          "Capture the core facts the AI can safely answer from: business identity, services, contact routes, hours, pricing, and handoff cases.",
+        tone: "neutral",
+        complete: false,
+        action: openSetupAction,
+      };
+    }
+
+    if (businessTruth.complete) {
+      return {
+        key: "business_truth",
+        title: "Business truth",
+        status: "Ready",
+        summary:
+          "Core business facts are present and ready for final review.",
+        tone: "success",
+        complete: true,
+        action: reviewAction,
+      };
+    }
+
+    return {
+      key: "business_truth",
+      title: "Business truth",
+      status:
+        businessTruth.ready > 0
+          ? `${businessTruth.ready}/${businessTruth.total} ready`
+          : "In progress",
+      summary:
+        businessTruth.missing > 0
+          ? `${pluralize(businessTruth.missing, "area")} still need confirmation before the AI can answer reliably.`
+          : "Business truth is being shaped.",
+      tone: "warning",
+      complete: false,
+      action: openSetupAction,
+    };
+  })();
+
+  const conversationCard = (() => {
+    if (!setupStarted && conversationPolicy.total === 0) {
+      return {
+        key: "conversation_policy",
+        title: "Conversation policy",
+        status: "Later",
+        summary:
+          "After the business truth is clear, define greeting, closing, tone, and response behavior.",
+        tone: "neutral",
+        complete: false,
+        action: openSetupAction,
+      };
+    }
+
+    if (conversationPolicy.total === 0) {
+      return {
+        key: "conversation_policy",
+        title: "Conversation policy",
+        status: "Waiting",
+        summary:
+          "Behavior questions will appear after the business truth is filled enough to shape the assistant.",
+        tone: "info",
+        complete: false,
+        action: openSetupAction,
+      };
+    }
+
+    if (conversationPolicy.complete) {
+      return {
+        key: "conversation_policy",
+        title: "Conversation policy",
+        status: "Ready",
+        summary:
+          "Greeting, closing, tone, and channel response behavior are ready for review.",
+        tone: "success",
+        complete: true,
+        action: reviewAction,
+      };
+    }
+
+    return {
+      key: "conversation_policy",
+      title: "Conversation policy",
+      status:
+        conversationPolicy.ready > 0
+          ? `${conversationPolicy.ready}/${conversationPolicy.total} ready`
+          : "In progress",
+      summary:
+        conversationPolicy.missing > 0
+          ? `${pluralize(conversationPolicy.missing, "behavior rule")} still need to be confirmed.`
+          : "Behavior policy is being shaped.",
+      tone: "warning",
+      complete: false,
+      action: openSetupAction,
+    };
+  })();
+
+  const reviewCard = (() => {
+    if (approved) {
+      return {
+        key: "review_and_launch",
+        title: "Review & launch",
+        status: "Approved",
+        summary:
+          "Approved setup is already backing the live workspace.",
+        tone: "success",
+        complete: true,
+        action: { label: "Open truth", path: "/truth" },
+      };
+    }
+
+    if (readyForApproval) {
+      return {
+        key: "review_and_launch",
+        title: "Review & launch",
+        status: "Ready",
+        summary: draftHidden
+          ? "The polished draft stays hidden until review. Open setup to review and approve it."
+          : "Open setup to review the final draft and approve launch.",
+        tone: "success",
+        complete: false,
+        action: reviewAction,
+      };
+    }
+
+    return {
+      key: "review_and_launch",
+      title: "Review & launch",
+      status: "Blocked",
+      summary:
+        "Final review stays locked until both business truth and conversation policy are ready.",
+      tone: "danger",
+      complete: false,
+      action: openSetupAction,
+    };
+  })();
+
+  return [businessTruthCard, conversationCard, reviewCard];
 }
 
 function toneClass(tone = "neutral") {
@@ -491,6 +762,51 @@ function StepRow({ step, home, active = false, last = false, onNavigate }) {
   );
 }
 
+function SetupPhaseRow({ item, last = false, onNavigate }) {
+  const action = normalizeNavigationAction(item.action);
+  const clickable = Boolean(action?.path);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (clickable) onNavigate(action);
+      }}
+      disabled={!clickable}
+      className={cx(
+        "group grid w-full grid-cols-[34px_minmax(0,1fr)_22px] items-start gap-4 px-4 py-3.5 text-left transition-[background-color] duration-base ease-premium",
+        !last && "border-b border-line-soft",
+        clickable ? "hover:bg-surface-subtle" : "cursor-default"
+      )}
+    >
+      <div className="flex items-start justify-center pt-[2px]">
+        <StepLeading step={item} active={false} />
+      </div>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="text-[15px] font-semibold tracking-[-0.02em] text-text">
+            {item.title}
+          </div>
+          <div className={cx("text-[12px] font-medium", toneClass(item.tone))}>
+            {item.status}
+          </div>
+        </div>
+
+        <div className="mt-1 text-[14px] leading-6 text-text-muted">
+          {item.summary}
+        </div>
+      </div>
+
+      <div className="flex items-start justify-end pt-[2px]">
+        {clickable ? (
+          <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" />
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
 function ProductHomeLoadingSurface() {
   return (
     <PageCanvas>
@@ -541,6 +857,13 @@ export default function ProductHomePage() {
 
   const steps = arr(home.launchSteps);
   const activeStepId = s(home?.nextStep?.id);
+  const setupPhaseCards = buildSetupPhaseCards(home);
+  const showSetupPhases =
+    setupPhaseCards.length > 0 &&
+    (hasSetupDraft(home) ||
+      home?.assistant?.readyForApproval === true ||
+      home?.assistant?.hasApprovedSetupBaseline === true ||
+      home?.launchReady !== true);
 
   return (
     <PageCanvas className="space-y-5">
@@ -620,6 +943,30 @@ export default function ProductHomePage() {
           ))}
         </div>
       </section>
+
+      {showSetupPhases ? (
+        <section className="space-y-3">
+          <div>
+            <div className="text-[1.2rem] font-semibold tracking-[-0.035em] text-text">
+              Setup flow
+            </div>
+            <div className="mt-1.5 text-[14px] leading-6 text-text-muted">
+              Business truth comes first, then conversation policy, then final review and launch.
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+            {setupPhaseCards.map((item, index) => (
+              <SetupPhaseRow
+                key={item.key}
+                item={item}
+                last={index === setupPhaseCards.length - 1}
+                onNavigate={navigateFromAction}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <div>
