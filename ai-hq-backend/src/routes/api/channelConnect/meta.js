@@ -34,6 +34,7 @@ import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "pages_show_list",
   "pages_read_engagement",
+  "pages_messaging",
   "business_management",
   "instagram_basic",
   "instagram_manage_messages",
@@ -1840,6 +1841,8 @@ async function recordMetaConnectFailure({
   permissionSummary = {},
   pageDiscovery = {},
   candidateCount = 0,
+  selected = {},
+  failureDetails = null,
   log = createSafeLogger(),
 } = {}) {
   const connectDiagnostic = buildPendingMetaConnectDiagnosticPayload({
@@ -1854,6 +1857,16 @@ async function recordMetaConnectFailure({
     pageDiscovery,
     candidateCount,
   });
+  const safeFailureDetails = obj(failureDetails);
+  const pageId = cleanNullable(
+    s(safeFailureDetails?.pageId || selected?.pageId || "")
+  );
+  const igUserId = cleanNullable(
+    s(safeFailureDetails?.igUserId || selected?.igUserId || "")
+  );
+  const responseErrorMessage = cleanNullable(
+    s(safeFailureDetails?.response?.error?.message)
+  );
 
   await savePendingMetaConnectDiagnostic(
     db,
@@ -1882,6 +1895,9 @@ async function recordMetaConnectFailure({
       permissionVerificationStatus:
         connectDiagnostic.permissionVerificationStatus || null,
       permissionSource: connectDiagnostic.permissionSource || null,
+      pageId,
+      igUserId,
+      responseErrorMessage,
       pageDiscovery: connectDiagnostic.pageDiscovery,
       candidateCount: connectDiagnostic.candidateCount,
     }
@@ -1898,6 +1914,9 @@ async function recordMetaConnectFailure({
     permissionVerificationStatus:
       connectDiagnostic.permissionVerificationStatus || null,
     permissionSource: connectDiagnostic.permissionSource || null,
+    pageId,
+    igUserId,
+    responseErrorMessage,
     pageDiscovery: connectDiagnostic.pageDiscovery,
     candidateCount: connectDiagnostic.candidateCount,
   });
@@ -1906,6 +1925,9 @@ async function recordMetaConnectFailure({
     status,
     details: {
       stage,
+      pageId,
+      igUserId,
+      responseErrorMessage,
     },
   });
 }
@@ -3366,6 +3388,8 @@ export async function handleMetaCallback({
       permissionSummary,
       pageDiscovery: enrichedPageDiscovery,
       candidateCount: candidates.length,
+      selected,
+      failureDetails: error?.details,
       log: actorLog,
     });
   }

@@ -30,6 +30,8 @@ const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule
 
 const originalFetch = globalThis.fetch;
 const subscribedAppsRequests = [];
+let subscribedAppsResponsePayload = { success: true };
+let subscribedAppsResponseStatus = 200;
 
 function createJsonResponse(payload = {}, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -74,6 +76,8 @@ function getMetaSubscribedAppsRequest(input, init = {}) {
 
 test.beforeEach(() => {
   subscribedAppsRequests.length = 0;
+  subscribedAppsResponsePayload = { success: true };
+  subscribedAppsResponseStatus = 200;
 });
 
 test.before(() => {
@@ -83,7 +87,10 @@ test.before(() => {
     if (subscriptionRequest) {
       assert.equal(subscriptionRequest.method, "POST");
       subscribedAppsRequests.push(subscriptionRequest);
-      return createJsonResponse({ success: true }, 200);
+      return createJsonResponse(
+        subscribedAppsResponsePayload,
+        subscribedAppsResponseStatus
+      );
     }
 
     const url = resolveRequestUrl(input);
@@ -587,11 +594,13 @@ test("dm-first launch scopes match the current live Meta permission contract", (
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
     "pages_read_engagement",
+    "pages_messaging",
     "business_management",
     "instagram_basic",
     "instagram_manage_messages",
   ]);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_manage_metadata"), false);
+  assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_messaging"), true);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("instagram_manage_comments"), false);
 });
 
@@ -613,6 +622,10 @@ test("oauth connect url requests only the live DM-first Meta scopes", async () =
   assert.equal(
     parsed.searchParams.get("scope")?.includes("pages_manage_metadata") || false,
     false
+  );
+  assert.equal(
+    parsed.searchParams.get("scope")?.includes("pages_messaging") || false,
+    true
   );
 });
 
@@ -1123,6 +1136,57 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.equal(status.account.igUserId, "ig-1");
   assert.equal(status.runtime.hasPageAccessToken, true);
   assert.equal(status.runtime.hasOperationalIds, true);
+});
+
+test("subscription failure audit preserves scopes, ids, and the full Meta error message", async () => {
+  const db = new FakeChannelConnectDb();
+  const logEntries = [];
+  const reqLog = createFakeReqLogger(logEntries);
+  const metaErrorMessage =
+    "(#200) To subscribe to the messages field, one of the pages_messaging permissions is required";
+
+  subscribedAppsResponseStatus = 403;
+  subscribedAppsResponsePayload = {
+    error: {
+      message: metaErrorMessage,
+      type: "OAuthException",
+      code: 200,
+    },
+  };
+
+  await assert.rejects(
+    () => invokeSingleAccountCallback(db, { reqLog }),
+    (error) => {
+      assert.equal(error?.reasonCode, "meta_instagram_subscription_failed");
+      return true;
+    }
+  );
+
+  const auditEntry = db.auditEntries.find(
+    (entry) => entry.action === "settings.channel.meta.connect_failed"
+  );
+  assert.ok(auditEntry);
+  assert.deepEqual(auditEntry?.meta?.requestedScopes, META_DM_LAUNCH_SCOPES);
+  assert.deepEqual(auditEntry?.meta?.grantedScopes, META_DM_LAUNCH_SCOPES);
+  assert.equal(auditEntry?.meta?.pageId, "page-1");
+  assert.equal(auditEntry?.meta?.igUserId, "ig-1");
+  assert.equal(auditEntry?.meta?.responseErrorMessage, metaErrorMessage);
+
+  const failedLogEntry = logEntries.find(
+    (entry) => entry.event === "meta.connect.failed"
+  );
+  assert.ok(failedLogEntry);
+  assert.deepEqual(
+    failedLogEntry?.payload?.requestedScopes,
+    META_DM_LAUNCH_SCOPES
+  );
+  assert.deepEqual(failedLogEntry?.payload?.grantedScopes, META_DM_LAUNCH_SCOPES);
+  assert.equal(failedLogEntry?.payload?.pageId, "page-1");
+  assert.equal(failedLogEntry?.payload?.igUserId, "ig-1");
+  assert.equal(
+    failedLogEntry?.payload?.responseErrorMessage,
+    metaErrorMessage
+  );
 });
 
 test("reconnect cleanly rebinds a stale deauthorized channel to the newly selected page and instagram account", async () => {
