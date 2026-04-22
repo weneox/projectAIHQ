@@ -34,7 +34,6 @@ import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "pages_show_list",
   "pages_read_engagement",
-  "pages_manage_metadata",
   "business_management",
   "instagram_basic",
   "instagram_manage_messages",
@@ -60,6 +59,15 @@ export const META_USER_TOKEN_EXPIRING_SOON_MS = 10 * 60 * 1000;
 
 export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
+
+const META_DM_WEBHOOK_SUBSCRIPTION_SOURCE = "instagram_subscribed_apps";
+const META_DM_WEBHOOK_SUBSCRIPTION_FIELDS = Object.freeze(["messages"]);
+const META_DM_WEBHOOK_SUBSCRIPTION_INPUT_MISSING_REASON =
+  "meta_instagram_subscription_input_missing";
+const META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON =
+  "meta_instagram_subscription_failed";
+const META_DM_WEBHOOK_SUBSCRIPTION_MISSING_REASON =
+  "meta_instagram_subscription_missing";
 
 const META_PAGE_DISCOVERY_FIELDS = [
   "id",
@@ -631,6 +639,8 @@ function buildConnectedChannelConfig({
     webhook_subscription_ok: webhookSubscription?.ok === true,
     webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
     webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
+    webhook_subscription_ig_user_id: cleanNullable(webhookSubscription?.igUserId),
+    webhook_subscription_fields: arr(webhookSubscription?.subscribedFields),
     webhook_subscription_source: cleanNullable(webhookSubscription?.source),
     webhook_subscription_reason:
       webhookSubscription?.ok === true
@@ -667,6 +677,8 @@ function buildConnectedChannelHealth({
     webhook_subscription_ok: webhookSubscription?.ok === true,
     webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
     webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
+    webhook_subscription_ig_user_id: cleanNullable(webhookSubscription?.igUserId),
+    webhook_subscription_fields: arr(webhookSubscription?.subscribedFields),
     webhook_subscription_source: cleanNullable(webhookSubscription?.source),
     webhook_subscription_reason:
       webhookSubscription?.ok === true
@@ -1201,13 +1213,13 @@ async function subscribeMetaInstagramAccountToApp({
   const safeIgUserId = s(igUserId);
   const safeUserAccessToken = s(userAccessToken);
   const subscribedAt = new Date().toISOString();
-  const source = "instagram_subscribed_apps";
-  const subscribedFields = ["messages"];
+  const source = META_DM_WEBHOOK_SUBSCRIPTION_SOURCE;
+  const subscribedFields = [...META_DM_WEBHOOK_SUBSCRIPTION_FIELDS];
   const subscribedFieldsValue = subscribedFields.join(",");
 
   if (!safeIgUserId || !safeUserAccessToken) {
     throw buildMetaConnectFailureError(
-      "meta_page_subscription_input_missing",
+      META_DM_WEBHOOK_SUBSCRIPTION_INPUT_MISSING_REASON,
       "Meta Instagram webhook subscription could not start because the Instagram professional account id or user access token is missing.",
       {
         status: 409,
@@ -1260,7 +1272,7 @@ async function subscribeMetaInstagramAccountToApp({
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
-      reasonCode: ok ? "" : "meta_page_subscription_failed",
+      reasonCode: ok ? "" : META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
       response: {
         success:
           response === true
@@ -1276,7 +1288,7 @@ async function subscribeMetaInstagramAccountToApp({
       log.error("meta.connect.webhook_subscription.failed", null, result);
       throw buildMetaConnectFailureError(
         result.reasonCode,
-        "Meta page webhook subscription failed.",
+        "Meta Instagram webhook subscription failed.",
         {
           status: 409,
           details: result,
@@ -1295,13 +1307,13 @@ async function subscribeMetaInstagramAccountToApp({
       subscribedAt,
       subscribedFields,
       subscribedFieldsValue,
-      reasonCode: "meta_page_subscription_failed",
+      reasonCode: META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON,
       error: s(error?.message || error),
     };
     log.error("meta.connect.webhook_subscription.failed", error, result);
     throw buildMetaConnectFailureError(
       result.reasonCode,
-      "Meta page webhook subscription failed.",
+      "Meta Instagram webhook subscription failed.",
       {
         status: Number(error?.status || 409),
         details: result,
@@ -2390,14 +2402,14 @@ function buildMetaStatusBlockers({
   }
 
   if (
-    (reasonCode === "meta_page_subscription_missing" ||
-      reasonCode === "meta_page_subscription_failed") &&
+    (reasonCode === META_DM_WEBHOOK_SUBSCRIPTION_MISSING_REASON ||
+      reasonCode === META_DM_WEBHOOK_SUBSCRIPTION_FAILED_REASON) &&
     !hasSubscription
   ) {
     blockers.push({
-      title: "Meta page webhook subscription is not active.",
+      title: "Instagram webhook subscription is not active.",
       subtitle:
-        "Instagram DM automation stays fail-closed until the connected Facebook Page is subscribed to this app webhook.",
+        "Instagram DM automation stays fail-closed until the connected Instagram professional account is subscribed to this app webhook.",
       reasonCode,
       target: {
         section: "channels",
@@ -2589,7 +2601,10 @@ function buildMetaStatusPayload({
   } else if (connectedByRow && !hasSubscription) {
     state = oauthEnvReady ? "reconnect_required" : "blocked";
     reasonCode = oauthEnvReady
-      ? s(snapshot.webhookSubscriptionReason || "meta_page_subscription_missing")
+      ? s(
+          snapshot.webhookSubscriptionReason ||
+            META_DM_WEBHOOK_SUBSCRIPTION_MISSING_REASON
+        )
       : "meta_oauth_env_missing";
   } else if (connectedByRow) {
     state = "connected";

@@ -529,6 +529,7 @@ async function invokeSingleAccountCallback(
     getMetaPageInstagramContextForUserTokenFn,
     getMetaPageInstagramContextForPageTokenFn,
     getMetaPageAccessContextForUserTokenFn,
+    reqLog,
   } = {}
 ) {
   const page = {
@@ -558,6 +559,7 @@ async function invokeSingleAccountCallback(
           buildPageEnrichmentLookup([page])
         )(pageId, pageAccessToken)),
     getMetaPageAccessContextForUserTokenFn,
+    reqLog,
   });
 }
 
@@ -585,11 +587,11 @@ test("dm-first launch scopes match the current live Meta permission contract", (
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
     "pages_read_engagement",
-    "pages_manage_metadata",
     "business_management",
     "instagram_basic",
     "instagram_manage_messages",
   ]);
+  assert.equal(META_DM_LAUNCH_SCOPES.includes("pages_manage_metadata"), false);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("instagram_manage_comments"), false);
 });
 
@@ -607,6 +609,10 @@ test("oauth connect url requests only the live DM-first Meta scopes", async () =
   assert.equal(
     parsed.searchParams.get("scope"),
     META_DM_LAUNCH_SCOPES.join(",")
+  );
+  assert.equal(
+    parsed.searchParams.get("scope")?.includes("pages_manage_metadata") || false,
+    false
   );
 });
 
@@ -1016,8 +1022,10 @@ test("callback fails closed when Meta omits a required granted permission", asyn
 
 test("single-account callback subscribes the Instagram professional account and still connects when /me/accounts already includes Instagram linkage", async () => {
   const db = new FakeChannelConnectDb();
+  const logEntries = [];
+  const reqLog = createFakeReqLogger(logEntries);
 
-  const callbackResult = await invokeSingleAccountCallback(db);
+  const callbackResult = await invokeSingleAccountCallback(db, { reqLog });
 
   assert.equal(callbackResult.type, "success");
   assert.match(callbackResult.redirectUrl || "", /meta_connected=1/);
@@ -1038,6 +1046,10 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.equal(db.channel?.health?.webhook_subscription_ok, true);
   assert.equal(db.channel?.config?.webhook_subscription_page_id, "page-1");
   assert.equal(db.channel?.health?.webhook_subscription_page_id, "page-1");
+  assert.equal(db.channel?.config?.webhook_subscription_ig_user_id, "ig-1");
+  assert.equal(db.channel?.health?.webhook_subscription_ig_user_id, "ig-1");
+  assert.deepEqual(db.channel?.config?.webhook_subscription_fields, ["messages"]);
+  assert.deepEqual(db.channel?.health?.webhook_subscription_fields, ["messages"]);
   assert.equal(
     db.channel?.config?.webhook_subscription_source,
     "instagram_subscribed_apps"
@@ -1046,6 +1058,36 @@ test("single-account callback subscribes the Instagram professional account and 
     db.channel?.health?.webhook_subscription_source,
     "instagram_subscribed_apps"
   );
+
+  const logEvents = logEntries.map((entry) => entry.event);
+  const webhookStartIndex = logEvents.indexOf(
+    "meta.connect.webhook_subscription.start"
+  );
+  const webhookSuccessIndex = logEvents.indexOf(
+    "meta.connect.webhook_subscription.success"
+  );
+  const channelUpsertedIndex = logEvents.indexOf("meta.connect.channel_upserted");
+  assert.notEqual(webhookStartIndex, -1);
+  assert.notEqual(webhookSuccessIndex, -1);
+  assert.notEqual(channelUpsertedIndex, -1);
+  assert.ok(webhookStartIndex < webhookSuccessIndex);
+  assert.ok(webhookSuccessIndex < channelUpsertedIndex);
+  assert.equal(
+    logEntries[webhookStartIndex]?.payload?.source,
+    "instagram_subscribed_apps"
+  );
+  assert.deepEqual(logEntries[webhookStartIndex]?.payload?.subscribedFields, [
+    "messages",
+  ]);
+  assert.equal(
+    logEntries[webhookSuccessIndex]?.payload?.source,
+    "instagram_subscribed_apps"
+  );
+  assert.deepEqual(logEntries[webhookSuccessIndex]?.payload?.subscribedFields, [
+    "messages",
+  ]);
+  assert.equal(logEntries[channelUpsertedIndex]?.payload?.pageId, "page-1");
+  assert.equal(logEntries[channelUpsertedIndex]?.payload?.igUserId, "ig-1");
 
   const connectedAudits = db.auditEntries.filter(
     (entry) => entry.action === "settings.channel.meta.connected"
