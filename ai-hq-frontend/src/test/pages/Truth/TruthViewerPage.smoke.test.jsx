@@ -337,8 +337,12 @@ describe("Truth viewer smoke", () => {
         name: /business data version compare/i,
       })
     ).toBeInTheDocument();
-    expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
-    expect(screen.getByText(/compared version behavior/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/^selected version behavior$/i)
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/^compared version behavior$/i)
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/rolling back to v3 would revert 1 canonical field/i)
     ).toBeInTheDocument();
