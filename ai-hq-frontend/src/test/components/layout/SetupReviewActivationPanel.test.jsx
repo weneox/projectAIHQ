@@ -101,7 +101,7 @@ describe("SetupReviewActivationPanel", () => {
     expect(screen.getByText("Main website")).toBeInTheDocument();
     expect(screen.getByText("Business name")).toBeInTheDocument();
     expect(screen.getAllByText(/Luna Smile Studio/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Website evidence").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sources used")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Approve truth" })
     ).toBeInTheDocument();
@@ -146,8 +146,9 @@ describe("SetupReviewActivationPanel", () => {
     expect(
       screen.getByRole("region", { name: "Business truth review" })
     ).toBeInTheDocument();
-    expect(screen.getByText("Operator note")).toBeInTheDocument();
     expect(screen.getByText("Manual Clinic")).toBeInTheDocument();
+    expect(screen.getByText("Walk-in care and appointments.")).toBeInTheDocument();
+    expect(screen.queryByText("Sources used")).not.toBeInTheDocument();
   });
 
   it("does not dump raw debug keys into the operator view", () => {

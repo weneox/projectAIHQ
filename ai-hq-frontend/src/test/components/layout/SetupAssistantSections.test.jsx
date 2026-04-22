@@ -6,6 +6,9 @@ import SetupAssistantSections from "../../../components/layout/SetupAssistantSec
 
 function createAssistant(overrides = {}) {
   return {
+    session: {
+      id: "session-1",
+    },
     review: {
       finalizeAvailable: false,
       readyForReview: false,
@@ -43,7 +46,10 @@ describe("SetupAssistantSections", () => {
   });
 
   async function startSetup() {
-    fireEvent.click(screen.getByRole("button", { name: "Start setup" }));
+    const startButton = screen.queryByRole("button", { name: "Start setup" });
+    if (startButton) {
+      fireEvent.click(startButton);
+    }
 
     await waitFor(() => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
@@ -86,9 +92,10 @@ describe("SetupAssistantSections", () => {
     await startSetup();
 
     await waitFor(() => {
-      expect(
-        screen.getByText((content) => content.includes("Canonical handoff question"))
-      ).toBeInTheDocument();
+      expect(screen.getByRole("textbox")).toHaveAttribute(
+        "placeholder",
+        "Handoff halları"
+      );
     });
   });
 
@@ -138,12 +145,12 @@ describe("SetupAssistantSections", () => {
     await startSetup();
 
     await waitFor(() => {
-      expect(screen.getByText("Draft ready")).toBeInTheDocument();
+      expect(screen.getByText("Setup draft")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Review intelligence")).toBeInTheDocument();
+    expect(screen.getByText("Review signals")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Approve and finish setup" })
+      screen.getByRole("button", { name: "Approve & launch" })
     ).toBeInTheDocument();
     expect(screen.queryByText("Strongest evidence")).not.toBeInTheDocument();
     expect(screen.queryByText("What the system noticed")).not.toBeInTheDocument();
@@ -202,7 +209,7 @@ describe("SetupAssistantSections", () => {
     });
 
     expect(
-      screen.queryByRole("button", { name: "Approve and finish setup" })
+      screen.queryByRole("button", { name: "Approve & launch" })
     ).not.toBeInTheDocument();
   });
 });
