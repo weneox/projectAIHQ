@@ -61,6 +61,8 @@ export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
 
 const META_DM_WEBHOOK_SUBSCRIPTION_SOURCE = "page_subscribed_apps";
+const META_DM_WEBHOOK_SUBSCRIPTION_PRODUCT_MANAGED_SOURCE = "product_managed";
+const META_DM_WEBHOOK_SUBSCRIPTION_PRODUCT_MANAGED_MODE = "product_managed";
 const META_DM_WEBHOOK_SUBSCRIPTION_FIELDS = Object.freeze(["messages"]);
 const META_DM_WEBHOOK_SUBSCRIPTION_INPUT_MISSING_REASON =
   "meta_instagram_subscription_input_missing";
@@ -532,6 +534,15 @@ function readMetaPageAccessToken(secrets = {}) {
 function readMetaChannelSnapshot(channel = {}) {
   const config = obj(channel?.config);
   const health = obj(channel?.health);
+  const webhookSubscriptionRequired =
+    health.webhook_subscription_required === false ||
+    config.webhook_subscription_required === false
+      ? false
+      : true;
+  const webhookSubscriptionOk =
+    !webhookSubscriptionRequired ||
+    health.webhook_subscription_ok === true ||
+    config.webhook_subscription_ok === true;
 
   return {
     displayName: s(
@@ -578,9 +589,11 @@ function readMetaChannelSnapshot(channel = {}) {
     manualReconnectRequired: health.manual_reconnect_required === true,
     connectionState: s(health.connection_state),
     authStatus: s(health.auth_status),
-    webhookSubscriptionOk:
-      health.webhook_subscription_ok === true ||
-      config.webhook_subscription_ok === true,
+    webhookSubscriptionRequired,
+    webhookSubscriptionMode: s(
+      health.webhook_subscription_mode || config.webhook_subscription_mode
+    ),
+    webhookSubscriptionOk,
     webhookSubscriptionAt: s(
       health.webhook_subscription_at || config.webhook_subscription_at
     ),
@@ -608,6 +621,10 @@ function buildConnectedChannelConfig({
   webhookSubscription = null,
   connectedAt = new Date().toISOString(),
 } = {}) {
+  const webhookSubscriptionRequired = webhookSubscription?.required !== false;
+  const webhookSubscriptionOk =
+    !webhookSubscriptionRequired || webhookSubscription?.ok === true;
+
   return {
     connected_via: "oauth",
     auth_model: "instagram_dm_page_access",
@@ -636,14 +653,16 @@ function buildConnectedChannelConfig({
     last_connected_username: cleanNullable(selected?.igUsername),
     last_known_page_id: cleanNullable(selected?.pageId),
     last_known_ig_user_id: cleanNullable(selected?.igUserId),
-    webhook_subscription_ok: webhookSubscription?.ok === true,
+    webhook_subscription_ok: webhookSubscriptionOk,
+    webhook_subscription_required: webhookSubscriptionRequired,
+    webhook_subscription_mode: cleanNullable(webhookSubscription?.mode),
     webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
     webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
     webhook_subscription_ig_user_id: cleanNullable(webhookSubscription?.igUserId),
     webhook_subscription_fields: arr(webhookSubscription?.subscribedFields),
     webhook_subscription_source: cleanNullable(webhookSubscription?.source),
     webhook_subscription_reason:
-      webhookSubscription?.ok === true
+      webhookSubscriptionOk
         ? null
         : cleanNullable(webhookSubscription?.reasonCode),
     manual_reconnect_mode: "oauth",
@@ -658,6 +677,9 @@ function buildConnectedChannelHealth({
   connectedAt = new Date().toISOString(),
 } = {}) {
   const userTokenExpiresAt = buildUserTokenExpiresAt(tokenJson);
+  const webhookSubscriptionRequired = webhookSubscription?.required !== false;
+  const webhookSubscriptionOk =
+    !webhookSubscriptionRequired || webhookSubscription?.ok === true;
 
   return {
     oauth_connected: true,
@@ -674,14 +696,16 @@ function buildConnectedChannelHealth({
     meta_user_id: cleanNullable(metaUserProfile?.id),
     oauth_env_ready: hasMetaOauthEnv(),
     gateway_ready: hasMetaGatewayEnv(),
-    webhook_subscription_ok: webhookSubscription?.ok === true,
+    webhook_subscription_ok: webhookSubscriptionOk,
+    webhook_subscription_required: webhookSubscriptionRequired,
+    webhook_subscription_mode: cleanNullable(webhookSubscription?.mode),
     webhook_subscription_at: cleanNullable(webhookSubscription?.subscribedAt),
     webhook_subscription_page_id: cleanNullable(webhookSubscription?.pageId),
     webhook_subscription_ig_user_id: cleanNullable(webhookSubscription?.igUserId),
     webhook_subscription_fields: arr(webhookSubscription?.subscribedFields),
     webhook_subscription_source: cleanNullable(webhookSubscription?.source),
     webhook_subscription_reason:
-      webhookSubscription?.ok === true
+      webhookSubscriptionOk
         ? null
         : cleanNullable(webhookSubscription?.reasonCode),
   };
@@ -1373,6 +1397,42 @@ async function subscribeMetaInstagramAccountToApp({
       }
     );
   }
+}
+
+function buildProductManagedMetaWebhookSubscription({
+  pageId = "",
+  igUserId = "",
+  log = createSafeLogger(),
+  subscribedAt = new Date().toISOString(),
+} = {}) {
+  const safePageId = s(pageId);
+  const safeIgUserId = s(igUserId);
+  const subscribedFields = [...META_DM_WEBHOOK_SUBSCRIPTION_FIELDS];
+  const subscribedFieldsValue = subscribedFields.join(",");
+  const result = {
+    ok: true,
+    required: false,
+    mode: META_DM_WEBHOOK_SUBSCRIPTION_PRODUCT_MANAGED_MODE,
+    source: META_DM_WEBHOOK_SUBSCRIPTION_PRODUCT_MANAGED_SOURCE,
+    pageId: safePageId,
+    igUserId: safeIgUserId,
+    subscribedAt,
+    subscribedFields,
+    subscribedFieldsValue,
+    graphHost: "graph.facebook.com",
+    graphVersion: s(cfg.meta.apiVersion, "v23.0"),
+    pageLevelSubscriptionAttempted: false,
+    reasonCode: "",
+  };
+
+  log.info("meta.connect.webhook_subscription.skipped", {
+    ...result,
+    webhookSubscriptionRequired: false,
+    explanation:
+      "Instagram Business Login uses product-level Instagram webhooks already configured in Meta; skipping page-level subscribed_apps subscription.",
+  });
+
+  return result;
 }
 
 function firstInstagramNodeFromCollection(value) {
@@ -2095,11 +2155,11 @@ async function connectInstagramChannel({
     secretKey: "page_access_token",
     saved: Boolean(savedPageToken),
   });
-  const webhookSubscription = await subscribeMetaInstagramAccountToApp({
+  const webhookSubscription = buildProductManagedMetaWebhookSubscription({
     pageId: resolvedSelected.pageId,
     igUserId: resolvedSelected.igUserId,
-    pageAccessToken: resolvedSelected.pageAccessToken,
     log,
+    subscribedAt: connectedAt,
   });
   await deleteMetaSecretKeys(db, tenant.id, [
     "access_token",

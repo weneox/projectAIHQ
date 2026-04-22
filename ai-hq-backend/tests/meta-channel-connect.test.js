@@ -1037,7 +1037,7 @@ test("callback fails closed when Meta omits a required granted permission", asyn
   ]);
 });
 
-test("single-account callback subscribes the Instagram professional account and still connects when /me/accounts already includes Instagram linkage", async () => {
+test("single-account callback skips page-level subscribed_apps and still connects when Instagram webhooks are product-managed", async () => {
   const db = new FakeChannelConnectDb();
   const logEntries = [];
   const reqLog = createFakeReqLogger(logEntries);
@@ -1051,16 +1051,19 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.equal(callbackResult.payload?.igUserId, "ig-1");
   assert.equal(callbackResult.payload?.sourceId, "source-1");
   assert.equal(db.channel?.status, "connected");
-  assert.equal(subscribedAppsRequests.length, 1);
-  assert.equal(subscribedAppsRequests[0]?.hostname, "graph.facebook.com");
-  assert.match(
-    subscribedAppsRequests[0]?.pathname || "",
-    /\/page-1\/subscribed_apps$/
-  );
-  assert.equal(subscribedAppsRequests[0]?.accessToken, "page-token-1");
-  assert.equal(subscribedAppsRequests[0]?.subscribedFields, "messages");
+  assert.equal(subscribedAppsRequests.length, 0);
   assert.equal(db.channel?.config?.webhook_subscription_ok, true);
   assert.equal(db.channel?.health?.webhook_subscription_ok, true);
+  assert.equal(db.channel?.config?.webhook_subscription_required, false);
+  assert.equal(db.channel?.health?.webhook_subscription_required, false);
+  assert.equal(
+    db.channel?.config?.webhook_subscription_mode,
+    "product_managed"
+  );
+  assert.equal(
+    db.channel?.health?.webhook_subscription_mode,
+    "product_managed"
+  );
   assert.equal(db.channel?.config?.webhook_subscription_page_id, "page-1");
   assert.equal(db.channel?.health?.webhook_subscription_page_id, "page-1");
   assert.equal(db.channel?.config?.webhook_subscription_ig_user_id, "ig-1");
@@ -1069,55 +1072,55 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.deepEqual(db.channel?.health?.webhook_subscription_fields, ["messages"]);
   assert.equal(
     db.channel?.config?.webhook_subscription_source,
-    "page_subscribed_apps"
+    "product_managed"
   );
   assert.equal(
     db.channel?.health?.webhook_subscription_source,
-    "page_subscribed_apps"
+    "product_managed"
   );
 
   const logEvents = logEntries.map((entry) => entry.event);
-  const webhookStartIndex = logEvents.indexOf(
-    "meta.connect.webhook_subscription.start"
-  );
-  const webhookSuccessIndex = logEvents.indexOf(
-    "meta.connect.webhook_subscription.success"
+  const webhookSkippedIndex = logEvents.indexOf(
+    "meta.connect.webhook_subscription.skipped"
   );
   const channelUpsertedIndex = logEvents.indexOf("meta.connect.channel_upserted");
-  assert.notEqual(webhookStartIndex, -1);
-  assert.notEqual(webhookSuccessIndex, -1);
+  assert.equal(
+    logEvents.includes("meta.connect.webhook_subscription.start"),
+    false
+  );
+  assert.equal(
+    logEvents.includes("meta.connect.webhook_subscription.success"),
+    false
+  );
+  assert.notEqual(webhookSkippedIndex, -1);
   assert.notEqual(channelUpsertedIndex, -1);
-  assert.ok(webhookStartIndex < webhookSuccessIndex);
-  assert.ok(webhookSuccessIndex < channelUpsertedIndex);
+  assert.ok(webhookSkippedIndex < channelUpsertedIndex);
   assert.equal(
-    logEntries[webhookStartIndex]?.payload?.source,
-    "page_subscribed_apps"
+    logEntries[webhookSkippedIndex]?.payload?.source,
+    "product_managed"
   );
-  assert.deepEqual(logEntries[webhookStartIndex]?.payload?.subscribedFields, [
+  assert.equal(
+    logEntries[webhookSkippedIndex]?.payload?.mode,
+    "product_managed"
+  );
+  assert.equal(
+    logEntries[webhookSkippedIndex]?.payload?.webhookSubscriptionRequired,
+    false
+  );
+  assert.equal(
+    logEntries[webhookSkippedIndex]?.payload?.pageLevelSubscriptionAttempted,
+    false
+  );
+  assert.deepEqual(logEntries[webhookSkippedIndex]?.payload?.subscribedFields, [
     "messages",
   ]);
   assert.equal(
-    logEntries[webhookStartIndex]?.payload?.tokenKind,
-    "page_access_token"
-  );
-  assert.equal(
-    logEntries[webhookStartIndex]?.payload?.graphHost,
+    logEntries[webhookSkippedIndex]?.payload?.graphHost,
     "graph.facebook.com"
   );
-  assert.equal(
-    logEntries[webhookSuccessIndex]?.payload?.source,
-    "page_subscribed_apps"
-  );
-  assert.deepEqual(logEntries[webhookSuccessIndex]?.payload?.subscribedFields, [
-    "messages",
-  ]);
-  assert.equal(
-    logEntries[webhookSuccessIndex]?.payload?.tokenKind,
-    "page_access_token"
-  );
-  assert.equal(
-    logEntries[webhookSuccessIndex]?.payload?.graphHost,
-    "graph.facebook.com"
+  assert.match(
+    logEntries[webhookSkippedIndex]?.payload?.explanation || "",
+    /product-level Instagram webhooks/i
   );
   assert.equal(logEntries[channelUpsertedIndex]?.payload?.pageId, "page-1");
   assert.equal(logEntries[channelUpsertedIndex]?.payload?.igUserId, "ig-1");
@@ -1140,102 +1143,67 @@ test("single-account callback subscribes the Instagram professional account and 
   assert.equal(status.account.igUserId, "ig-1");
   assert.equal(status.runtime.hasPageAccessToken, true);
   assert.equal(status.runtime.hasOperationalIds, true);
+  assert.equal(status.runtime.hasWebhookSubscription, true);
+  assert.equal(status.reasonCode, "");
 });
 
-test("subscription failure audit preserves scopes, ids, and the full Meta error message", async () => {
+test("status stays connected when webhook readiness is product-managed instead of page-subscribed", async () => {
   const db = new FakeChannelConnectDb();
-  const logEntries = [];
-  const reqLog = createFakeReqLogger(logEntries);
-  const metaErrorMessage =
-    "(#200) To subscribe to the messages field, one of the permissions is missing";
-  const metaErrorType = "OAuthException";
-  const metaErrorCode = 200;
-  const metaErrorSubcode = 1234567;
-  const metaFbTraceId = "TRACE123";
-
-  subscribedAppsResponseStatus = 403;
-  subscribedAppsResponsePayload = {
-    error: {
-      message: metaErrorMessage,
-      type: metaErrorType,
-      code: metaErrorCode,
-      error_subcode: metaErrorSubcode,
-      fbtrace_id: metaFbTraceId,
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "page-1",
+    external_user_id: "ig-1",
+    external_username: "acme",
+    status: "connected",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      last_connected_page_name: "Acme",
+      last_connected_username: "acme",
+      webhook_subscription_ok: false,
+      webhook_subscription_required: false,
+      webhook_subscription_mode: "product_managed",
+      webhook_subscription_source: "product_managed",
     },
+    secrets_ref: "meta",
+    health: {
+      connection_state: "connected",
+      auth_status: "authorized",
+      token_type: "bearer",
+      webhook_subscription_ok: false,
+      webhook_subscription_required: false,
+      webhook_subscription_mode: "product_managed",
+      webhook_subscription_source: "product_managed",
+    },
+    last_sync_at: "2026-04-05T03:00:00.000Z",
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
   };
+  await seedMetaPageAccessToken(db);
 
-  let connectError = null;
-  await assert.rejects(
-    () => invokeSingleAccountCallback(db, { reqLog }),
-    (error) => {
-      connectError = error;
-      assert.equal(error?.reasonCode, "meta_instagram_subscription_failed");
-      return true;
-    }
-  );
+  const status = await readMetaStatus(db);
 
-  const webhookFailedLogEntry = logEntries.find(
-    (entry) => entry.event === "meta.connect.webhook_subscription.failed"
-  );
-  assert.ok(webhookFailedLogEntry);
+  assert.equal(status.connected, true);
+  assert.equal(status.state, "connected");
+  assert.equal(status.reasonCode, "");
+  assert.equal(status.runtime.hasWebhookSubscription, true);
+  assert.equal(status.runtime.hasPageAccessToken, true);
+  assert.equal(status.channel?.config?.webhook_subscription_required, false);
+  assert.equal(status.channel?.health?.webhook_subscription_required, false);
   assert.equal(
-    webhookFailedLogEntry?.payload?.responseErrorMessage,
-    metaErrorMessage
+    status.channel?.config?.webhook_subscription_mode,
+    "product_managed"
   );
-  assert.equal(webhookFailedLogEntry?.payload?.responseErrorType, metaErrorType);
-  assert.equal(webhookFailedLogEntry?.payload?.responseErrorCode, metaErrorCode);
   assert.equal(
-    webhookFailedLogEntry?.payload?.responseErrorSubcode,
-    metaErrorSubcode
+    status.channel?.health?.webhook_subscription_mode,
+    "product_managed"
   );
-  assert.equal(webhookFailedLogEntry?.payload?.responseFbTraceId, metaFbTraceId);
-  assert.equal(
-    webhookFailedLogEntry?.payload?.response?.error?.message,
-    metaErrorMessage
-  );
-
-  const auditEntry = db.auditEntries.find(
-    (entry) => entry.action === "settings.channel.meta.connect_failed"
-  );
-  assert.ok(auditEntry);
-  assert.deepEqual(auditEntry?.meta?.requestedScopes, META_DM_LAUNCH_SCOPES);
-  assert.deepEqual(auditEntry?.meta?.grantedScopes, META_DM_LAUNCH_SCOPES);
-  assert.equal(auditEntry?.meta?.pageId, "page-1");
-  assert.equal(auditEntry?.meta?.igUserId, "ig-1");
-  assert.equal(auditEntry?.meta?.responseErrorMessage, metaErrorMessage);
-  assert.equal(auditEntry?.meta?.responseErrorType, metaErrorType);
-  assert.equal(auditEntry?.meta?.responseErrorCode, metaErrorCode);
-  assert.equal(auditEntry?.meta?.responseErrorSubcode, metaErrorSubcode);
-  assert.equal(auditEntry?.meta?.responseFbTraceId, metaFbTraceId);
-
-  const failedLogEntry = logEntries.find(
-    (entry) => entry.event === "meta.connect.failed"
-  );
-  assert.ok(failedLogEntry);
-  assert.deepEqual(
-    failedLogEntry?.payload?.requestedScopes,
-    META_DM_LAUNCH_SCOPES
-  );
-  assert.deepEqual(failedLogEntry?.payload?.grantedScopes, META_DM_LAUNCH_SCOPES);
-  assert.equal(failedLogEntry?.payload?.pageId, "page-1");
-  assert.equal(failedLogEntry?.payload?.igUserId, "ig-1");
-  assert.equal(
-    failedLogEntry?.payload?.responseErrorMessage,
-    metaErrorMessage
-  );
-  assert.equal(failedLogEntry?.payload?.responseErrorType, metaErrorType);
-  assert.equal(failedLogEntry?.payload?.responseErrorCode, metaErrorCode);
-  assert.equal(
-    failedLogEntry?.payload?.responseErrorSubcode,
-    metaErrorSubcode
-  );
-  assert.equal(failedLogEntry?.payload?.responseFbTraceId, metaFbTraceId);
-
-  assert.equal(connectError?.details?.responseErrorMessage, metaErrorMessage);
-  assert.equal(connectError?.details?.responseErrorType, metaErrorType);
-  assert.equal(connectError?.details?.responseErrorCode, metaErrorCode);
-  assert.equal(connectError?.details?.responseErrorSubcode, metaErrorSubcode);
-  assert.equal(connectError?.details?.responseFbTraceId, metaFbTraceId);
 });
 
 test("reconnect cleanly rebinds a stale deauthorized channel to the newly selected page and instagram account", async () => {
