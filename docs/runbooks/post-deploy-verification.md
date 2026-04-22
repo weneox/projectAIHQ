@@ -46,6 +46,6 @@ npm run ops:postdeploy:verify
 1. Save the failing output.
 2. Collect the health payloads from each service.
 3. Follow:
-   - [environment-parity-verification.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\environment-parity-verification.md)
-   - [schema-migration-safety.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\schema-migration-safety.md)
-   - [production-rollback.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\production-rollback.md)
+   - [environment-parity-verification.md](./environment-parity-verification.md)
+   - [schema-migration-safety.md](./schema-migration-safety.md)
+   - [production-rollback.md](./production-rollback.md)
