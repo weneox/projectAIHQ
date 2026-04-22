@@ -5,10 +5,14 @@ export const REVIEW_MESSAGE =
 
 export const SETUP_ASSISTANT_NAMESPACE = "setup_assistant";
 export const SETUP_ASSISTANT_SOURCE_TYPE = "setup_assistant";
-export const SETUP_ASSISTANT_CURRENT_STEP = "company";
+export const SETUP_ASSISTANT_CURRENT_STEP = "business_model";
 
 export const SETUP_BUSINESS_SECTION = "business";
 export const SETUP_BEHAVIOR_SECTION = "assistant_behavior";
+
+export const SETUP_PHASE_BUSINESS_TRUTH = "business_truth";
+export const SETUP_PHASE_CONVERSATION_POLICY = "conversation_policy";
+export const SETUP_PHASE_REVIEW_AND_LAUNCH = "review_and_launch";
 
 export const SOURCE_PRIORITY = {
   "": 0,
@@ -25,6 +29,9 @@ export const BEHAVIOR_POLICY_KEYS = [
   "booking",
   "contact",
   "handoff",
+  "greeting",
+  "closing",
+  "tone",
 ];
 
 export const PRICING_BEHAVIOR_MODES = [
@@ -61,6 +68,39 @@ export const HANDOFF_BEHAVIOR_MODES = [
   "contextual_handoff",
   "ask_then_handoff",
   "direct_handoff",
+];
+
+export const GREETING_BEHAVIOR_MODES = [
+  "warm_professional",
+  "brief_professional",
+  "premium_concierge",
+  "friendly_local",
+];
+
+export const CLOSING_BEHAVIOR_MODES = [
+  "warm_invite",
+  "brief_invite",
+  "premium_invite",
+  "soft_close",
+];
+
+export const TONE_BEHAVIOR_MODES = [
+  "professional_reassuring",
+  "warm_human",
+  "premium_polished",
+  "direct_clear",
+];
+
+export const MESSAGE_LENGTH_MODES = [
+  "concise",
+  "balanced",
+  "detailed",
+];
+
+export const EMPATHY_LEVEL_MODES = [
+  "light",
+  "balanced",
+  "high",
 ];
 
 export const WEBSITE_PATTERN =
@@ -148,6 +188,9 @@ export function normalizeBehaviorPolicyKey(value = "") {
   if (key === "booking_policy") return "booking";
   if (key === "contact_policy") return "contact";
   if (key === "handoff_policy") return "handoff";
+  if (key === "greeting_policy") return "greeting";
+  if (key === "closing_policy") return "closing";
+  if (key === "tone_policy") return "tone";
   return BEHAVIOR_POLICY_KEYS.includes(key) ? key : "";
 }
 
@@ -218,8 +261,107 @@ export function normalizeHandoffBehaviorMode(value = "") {
   return "";
 }
 
+export function normalizeGreetingBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "warm professional") return "warm_professional";
+  if (raw === "brief professional") return "brief_professional";
+  if (raw === "premium concierge") return "premium_concierge";
+  if (raw === "friendly local") return "friendly_local";
+
+  if (GREETING_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeClosingBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "warm invite") return "warm_invite";
+  if (raw === "brief invite") return "brief_invite";
+  if (raw === "premium invite") return "premium_invite";
+  if (raw === "soft close") return "soft_close";
+
+  if (CLOSING_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeToneBehaviorMode(value = "") {
+  const raw = s(value).toLowerCase();
+
+  if (raw === "professional reassuring") return "professional_reassuring";
+  if (raw === "warm human") return "warm_human";
+  if (raw === "premium polished") return "premium_polished";
+  if (raw === "direct clear") return "direct_clear";
+
+  if (TONE_BEHAVIOR_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeMessageLengthMode(value = "") {
+  const raw = s(value).toLowerCase();
+  if (MESSAGE_LENGTH_MODES.includes(raw)) return raw;
+  return "";
+}
+
+export function normalizeEmpathyLevelMode(value = "") {
+  const raw = s(value).toLowerCase();
+  if (EMPATHY_LEVEL_MODES.includes(raw)) return raw;
+  return "";
+}
+
 export function buildDefaultAssistantBehaviorDraft() {
   return {
+    platformDefaults: {
+      greetingMode: "warm_professional",
+      closingMode: "warm_invite",
+      toneMode: "professional_reassuring",
+      messageLength: "balanced",
+      empathyLevel: "balanced",
+      emojiPolicy: "minimal",
+      askOneQuestionAtATime: true,
+      avoidHardSell: true,
+      admitUncertainty: true,
+      neverInventBusinessFacts: true,
+      useCustomerProvidedNameCarefully: true,
+      languageMode: "match_customer_when_safe",
+      handoffPriority: "protect_trust",
+    },
+
+    tenantOverrides: {
+      enabled: true,
+      greetingOverrideActive: false,
+      closingOverrideActive: false,
+      toneOverrideActive: false,
+    },
+
+    greetingPolicy: {
+      mode: "warm_professional",
+      openingLine: "",
+      followupLeadIn: "",
+      mentionBusinessName: true,
+      mentionChannelContext: false,
+      note: "",
+    },
+
+    closingPolicy: {
+      mode: "warm_invite",
+      closingLine: "",
+      includeNextStepPrompt: true,
+      includeHumanOfferWhenRelevant: true,
+      note: "",
+    },
+
+    tonePolicy: {
+      mode: "professional_reassuring",
+      messageLength: "balanced",
+      empathyLevel: "balanced",
+      shouldStayConcise: true,
+      shouldAvoidOverexplaining: true,
+      shouldSoundPremium: false,
+      shouldSoundLocalFriendly: false,
+      note: "",
+    },
+
     pricingPolicy: {
       mode: "answer_then_link",
       publicAnswerAllowed: true,
@@ -231,6 +373,7 @@ export function buildDefaultAssistantBehaviorDraft() {
       fallbackTargetUrl: "",
       note: "",
     },
+
     locationPolicy: {
       mode: "text_then_map",
       redirectEnabled: true,
@@ -240,6 +383,7 @@ export function buildDefaultAssistantBehaviorDraft() {
       fallbackTargetUrl: "",
       note: "",
     },
+
     bookingPolicy: {
       mode: "best_available",
       redirectEnabled: true,
@@ -249,6 +393,7 @@ export function buildDefaultAssistantBehaviorDraft() {
       fallbackTargetUrl: "",
       note: "",
     },
+
     contactPolicy: {
       mode: "best_available",
       preferredChannel: "",
@@ -257,6 +402,7 @@ export function buildDefaultAssistantBehaviorDraft() {
       fallbackTargetUrl: "",
       note: "",
     },
+
     handoffPolicy: {
       mode: "contextual_handoff",
       requiresReason: true,

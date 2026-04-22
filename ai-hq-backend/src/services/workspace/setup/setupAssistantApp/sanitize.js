@@ -7,11 +7,16 @@ import {
   inferContactType,
   normalizeBehaviorPolicyKey,
   normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
+  normalizeClosingBehaviorMode as importedNormalizeClosingBehaviorMode,
   normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
+  normalizeEmpathyLevelMode as importedNormalizeEmpathyLevelMode,
+  normalizeGreetingBehaviorMode as importedNormalizeGreetingBehaviorMode,
   normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
   normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
+  normalizeMessageLengthMode as importedNormalizeMessageLengthMode,
   normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
   normalizeSourceType,
+  normalizeToneBehaviorMode as importedNormalizeToneBehaviorMode,
   normalizeWebsiteUrl,
   slugify,
   sourceTypeLabel,
@@ -43,11 +48,41 @@ const normalizeHandoffBehaviorModeSafe =
     ? importedNormalizeHandoffBehaviorMode
     : () => "";
 
+const normalizeClosingBehaviorModeSafe =
+  typeof importedNormalizeClosingBehaviorMode === "function"
+    ? importedNormalizeClosingBehaviorMode
+    : () => "";
+
+const normalizeGreetingBehaviorModeSafe =
+  typeof importedNormalizeGreetingBehaviorMode === "function"
+    ? importedNormalizeGreetingBehaviorMode
+    : () => "";
+
+const normalizeToneBehaviorModeSafe =
+  typeof importedNormalizeToneBehaviorMode === "function"
+    ? importedNormalizeToneBehaviorMode
+    : () => "";
+
+const normalizeMessageLengthModeSafe =
+  typeof importedNormalizeMessageLengthMode === "function"
+    ? importedNormalizeMessageLengthMode
+    : () => "";
+
+const normalizeEmpathyLevelModeSafe =
+  typeof importedNormalizeEmpathyLevelMode === "function"
+    ? importedNormalizeEmpathyLevelMode
+    : () => "";
+
 const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
 const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
 const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
 const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
 const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
+const normalizeGreetingBehaviorMode = normalizeGreetingBehaviorModeSafe;
+const normalizeClosingBehaviorMode = normalizeClosingBehaviorModeSafe;
+const normalizeToneBehaviorMode = normalizeToneBehaviorModeSafe;
+const normalizeMessageLengthMode = normalizeMessageLengthModeSafe;
+const normalizeEmpathyLevelMode = normalizeEmpathyLevelModeSafe;
 
 export function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
@@ -418,6 +453,195 @@ export function sanitizeHandoffPolicy(value = {}) {
   });
 }
 
+export function sanitizePlatformDefaults(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().platformDefaults);
+
+  return compactDraftObject({
+    greetingMode:
+      normalizeGreetingBehaviorMode(source.greetingMode || source.greeting_mode) ||
+      defaults.greetingMode,
+    closingMode:
+      normalizeClosingBehaviorMode(source.closingMode || source.closing_mode) ||
+      defaults.closingMode,
+    toneMode:
+      normalizeToneBehaviorMode(source.toneMode || source.tone_mode) ||
+      defaults.toneMode,
+    messageLength:
+      normalizeMessageLengthMode(
+        source.messageLength || source.message_length
+      ) || defaults.messageLength,
+    empathyLevel:
+      normalizeEmpathyLevelMode(
+        source.empathyLevel || source.empathy_level
+      ) || defaults.empathyLevel,
+    emojiPolicy:
+      s(source.emojiPolicy || source.emoji_policy).toLowerCase() ||
+      defaults.emojiPolicy,
+    askOneQuestionAtATime:
+      typeof source.askOneQuestionAtATime === "boolean"
+        ? source.askOneQuestionAtATime
+        : typeof source.ask_one_question_at_a_time === "boolean"
+          ? source.ask_one_question_at_a_time
+          : defaults.askOneQuestionAtATime,
+    avoidHardSell:
+      typeof source.avoidHardSell === "boolean"
+        ? source.avoidHardSell
+        : typeof source.avoid_hard_sell === "boolean"
+          ? source.avoid_hard_sell
+          : defaults.avoidHardSell,
+    admitUncertainty:
+      typeof source.admitUncertainty === "boolean"
+        ? source.admitUncertainty
+        : typeof source.admit_uncertainty === "boolean"
+          ? source.admit_uncertainty
+          : defaults.admitUncertainty,
+    neverInventBusinessFacts:
+      typeof source.neverInventBusinessFacts === "boolean"
+        ? source.neverInventBusinessFacts
+        : typeof source.never_invent_business_facts === "boolean"
+          ? source.never_invent_business_facts
+          : defaults.neverInventBusinessFacts,
+    useCustomerProvidedNameCarefully:
+      typeof source.useCustomerProvidedNameCarefully === "boolean"
+        ? source.useCustomerProvidedNameCarefully
+        : typeof source.use_customer_provided_name_carefully === "boolean"
+          ? source.use_customer_provided_name_carefully
+          : defaults.useCustomerProvidedNameCarefully,
+    languageMode:
+      s(source.languageMode || source.language_mode).toLowerCase() ||
+      defaults.languageMode,
+    handoffPriority:
+      s(source.handoffPriority || source.handoff_priority).toLowerCase() ||
+      defaults.handoffPriority,
+  });
+}
+
+export function sanitizeTenantOverrides(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().tenantOverrides);
+
+  return compactDraftObject({
+    enabled:
+      typeof source.enabled === "boolean"
+        ? source.enabled
+        : defaults.enabled,
+    greetingOverrideActive:
+      typeof source.greetingOverrideActive === "boolean"
+        ? source.greetingOverrideActive
+        : typeof source.greeting_override_active === "boolean"
+          ? source.greeting_override_active
+          : defaults.greetingOverrideActive,
+    closingOverrideActive:
+      typeof source.closingOverrideActive === "boolean"
+        ? source.closingOverrideActive
+        : typeof source.closing_override_active === "boolean"
+          ? source.closing_override_active
+          : defaults.closingOverrideActive,
+    toneOverrideActive:
+      typeof source.toneOverrideActive === "boolean"
+        ? source.toneOverrideActive
+        : typeof source.tone_override_active === "boolean"
+          ? source.tone_override_active
+          : defaults.toneOverrideActive,
+  });
+}
+
+export function sanitizeGreetingPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().greetingPolicy);
+
+  return compactDraftObject({
+    mode:
+      normalizeGreetingBehaviorMode(source.mode || source.defaultBehavior) ||
+      defaults.mode,
+    openingLine: s(source.openingLine || source.opening_line),
+    followupLeadIn: s(source.followupLeadIn || source.followup_lead_in),
+    mentionBusinessName:
+      typeof source.mentionBusinessName === "boolean"
+        ? source.mentionBusinessName
+        : typeof source.mention_business_name === "boolean"
+          ? source.mention_business_name
+          : defaults.mentionBusinessName,
+    mentionChannelContext:
+      typeof source.mentionChannelContext === "boolean"
+        ? source.mentionChannelContext
+        : typeof source.mention_channel_context === "boolean"
+          ? source.mention_channel_context
+          : defaults.mentionChannelContext,
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeClosingPolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().closingPolicy);
+
+  return compactDraftObject({
+    mode:
+      normalizeClosingBehaviorMode(source.mode || source.defaultBehavior) ||
+      defaults.mode,
+    closingLine: s(source.closingLine || source.closing_line),
+    includeNextStepPrompt:
+      typeof source.includeNextStepPrompt === "boolean"
+        ? source.includeNextStepPrompt
+        : typeof source.include_next_step_prompt === "boolean"
+          ? source.include_next_step_prompt
+          : defaults.includeNextStepPrompt,
+    includeHumanOfferWhenRelevant:
+      typeof source.includeHumanOfferWhenRelevant === "boolean"
+        ? source.includeHumanOfferWhenRelevant
+        : typeof source.include_human_offer_when_relevant === "boolean"
+          ? source.include_human_offer_when_relevant
+          : defaults.includeHumanOfferWhenRelevant,
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
+export function sanitizeTonePolicy(value = {}) {
+  const source = obj(value);
+  const defaults = obj(buildDefaultAssistantBehaviorDraft().tonePolicy);
+
+  return compactDraftObject({
+    mode:
+      normalizeToneBehaviorMode(source.mode || source.defaultBehavior) ||
+      defaults.mode,
+    messageLength:
+      normalizeMessageLengthMode(
+        source.messageLength || source.message_length
+      ) || defaults.messageLength,
+    empathyLevel:
+      normalizeEmpathyLevelMode(
+        source.empathyLevel || source.empathy_level
+      ) || defaults.empathyLevel,
+    shouldStayConcise:
+      typeof source.shouldStayConcise === "boolean"
+        ? source.shouldStayConcise
+        : typeof source.should_stay_concise === "boolean"
+          ? source.should_stay_concise
+          : defaults.shouldStayConcise,
+    shouldAvoidOverexplaining:
+      typeof source.shouldAvoidOverexplaining === "boolean"
+        ? source.shouldAvoidOverexplaining
+        : typeof source.should_avoid_overexplaining === "boolean"
+          ? source.should_avoid_overexplaining
+          : defaults.shouldAvoidOverexplaining,
+    shouldSoundPremium:
+      typeof source.shouldSoundPremium === "boolean"
+        ? source.shouldSoundPremium
+        : typeof source.should_sound_premium === "boolean"
+          ? source.should_sound_premium
+          : defaults.shouldSoundPremium,
+    shouldSoundLocalFriendly:
+      typeof source.shouldSoundLocalFriendly === "boolean"
+        ? source.shouldSoundLocalFriendly
+        : typeof source.should_sound_local_friendly === "boolean"
+          ? source.should_sound_local_friendly
+          : defaults.shouldSoundLocalFriendly,
+    note: sanitizeBehaviorNote(source.note),
+  });
+}
+
 export function sanitizeAssistantBehaviorDraft(value = {}) {
   const source = obj(value);
   const nested = obj(
@@ -429,6 +653,46 @@ export function sanitizeAssistantBehaviorDraft(value = {}) {
   const defaults = buildDefaultAssistantBehaviorDraft();
 
   return {
+    platformDefaults: sanitizePlatformDefaults(
+      obj(
+        source.platformDefaults ||
+          source.platform_defaults ||
+          nested.platformDefaults ||
+          defaults.platformDefaults
+      )
+    ),
+    tenantOverrides: sanitizeTenantOverrides(
+      obj(
+        source.tenantOverrides ||
+          source.tenant_overrides ||
+          nested.tenantOverrides ||
+          defaults.tenantOverrides
+      )
+    ),
+    greetingPolicy: sanitizeGreetingPolicy(
+      obj(
+        source.greetingPolicy ||
+          source.greeting_policy ||
+          nested.greetingPolicy ||
+          defaults.greetingPolicy
+      )
+    ),
+    closingPolicy: sanitizeClosingPolicy(
+      obj(
+        source.closingPolicy ||
+          source.closing_policy ||
+          nested.closingPolicy ||
+          defaults.closingPolicy
+      )
+    ),
+    tonePolicy: sanitizeTonePolicy(
+      obj(
+        source.tonePolicy ||
+          source.tone_policy ||
+          nested.tonePolicy ||
+          defaults.tonePolicy
+      )
+    ),
     pricingPolicy: sanitizePricingPolicy(
       obj(
         source.pricingPolicy ||
@@ -860,6 +1124,21 @@ export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
       source.assistant_behavior
   );
 
+  const platformDefaultsPatch = obj(
+    source.platformDefaults || source.platform_defaults || nested.platformDefaults
+  );
+  const tenantOverridesPatch = obj(
+    source.tenantOverrides || source.tenant_overrides || nested.tenantOverrides
+  );
+  const greetingPatch = obj(
+    source.greetingPolicy || source.greeting_policy || nested.greetingPolicy
+  );
+  const closingPatch = obj(
+    source.closingPolicy || source.closing_policy || nested.closingPolicy
+  );
+  const tonePatch = obj(
+    source.tonePolicy || source.tone_policy || nested.tonePolicy
+  );
   const pricingPatch = obj(
     source.pricingPolicy || source.pricing_policy || nested.pricingPolicy
   );
@@ -877,6 +1156,26 @@ export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
   );
 
   return {
+    platformDefaults: sanitizePlatformDefaults({
+      ...obj(a.platformDefaults),
+      ...platformDefaultsPatch,
+    }),
+    tenantOverrides: sanitizeTenantOverrides({
+      ...obj(a.tenantOverrides),
+      ...tenantOverridesPatch,
+    }),
+    greetingPolicy: sanitizeGreetingPolicy({
+      ...obj(a.greetingPolicy),
+      ...greetingPatch,
+    }),
+    closingPolicy: sanitizeClosingPolicy({
+      ...obj(a.closingPolicy),
+      ...closingPatch,
+    }),
+    tonePolicy: sanitizeTonePolicy({
+      ...obj(a.tonePolicy),
+      ...tonePatch,
+    }),
     pricingPolicy: mergePricingPolicy(a.pricingPolicy, pricingPatch),
     locationPolicy: mergeLocationPolicy(a.locationPolicy, locationPatch),
     bookingPolicy: mergeBookingPolicy(a.bookingPolicy, bookingPatch),
