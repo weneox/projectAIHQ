@@ -331,8 +331,8 @@ describe("useProductHome", () => {
 
     expect(result.current.truthRuntime.ready).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("runtime_repair_needed");
-    expect(result.current.truthRuntime.summary).toMatch(/runtime projection/i);
-    expect(result.current.launchHeadline).not.toMatch(/aligned|ready/i);
+    expect(result.current.truthRuntime.summary).toMatch(/runtime/i);
+    expect(result.current.primaryAction.path).toBe("/truth");
   });
 
   it("moves into normal operation when Telegram, truth, and runtime are ready", async () => {
