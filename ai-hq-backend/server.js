@@ -6,7 +6,7 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 
-import { cfg } from "./src/config.js";
+import { cfg, getMetaConnectOauthConfig } from "./src/config.js";
 import { assertConfigValid, isDbRequiredAppEnv } from "./src/config/validate.js";
 import { printFeatureReport } from "./src/config/featureReport.js";
 import {
@@ -82,6 +82,52 @@ function isWebsiteWidgetInstallCorsPath(req) {
   );
 }
 
+function buildMetaConnectInvalidReason(metaConnectOauth = {}) {
+  const secretConfig = metaConnectOauth?.secretConfig || {};
+  if (secretConfig.mismatch) return "secret_env_mismatch";
+  if (!secretConfig.resolvedSecret) return "missing_connect_secret";
+  if (!metaConnectOauth?.hasAppId) return "missing_meta_app_id";
+  if (!metaConnectOauth?.hasRedirectUri) return "missing_meta_redirect_uri";
+  return "incomplete_connect_oauth_config";
+}
+
+function validateAndLogMetaConnectConfig(logger) {
+  const metaConnectOauth = getMetaConnectOauthConfig();
+  const secretConfig = metaConnectOauth.secretConfig || {};
+
+  if (secretConfig.mismatch || !metaConnectOauth.hasOauthFull) {
+    const reason = buildMetaConnectInvalidReason(metaConnectOauth);
+    logger.error("meta.config.invalid", null, {
+      service: "ai-hq-backend",
+      secretRole: "connect_oauth",
+      reason,
+      explicitEnvPresent: secretConfig.explicitPresent === true,
+      fallbackEnvPresent: secretConfig.fallbackPresent === true,
+      explicitFingerprint: secretConfig.explicitFingerprint || "",
+      fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+      hasAppId: metaConnectOauth.hasAppId === true,
+      hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+      configOutcome: "invalid",
+    });
+
+    throw new Error(
+      reason === "secret_env_mismatch"
+        ? "META_CONNECT_APP_SECRET and META_APP_SECRET are both set but differ. ai-hq-backend must resolve a single Meta connect/reconnect secret."
+        : "META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI are required for Meta connect/reconnect startup."
+    );
+  }
+
+  logger.info("meta.config.loaded", {
+    service: "ai-hq-backend",
+    secretRole: "connect_oauth",
+    secretSource: secretConfig.resolvedSource || "",
+    secretFingerprint: secretConfig.resolvedFingerprint || "",
+    hasAppId: metaConnectOauth.hasAppId === true,
+    hasRedirectUri: metaConnectOauth.hasRedirectUri === true,
+    configOutcome: "ok",
+  });
+}
+
 function createAuditLogger(db) {
   return {
     async log({
@@ -130,11 +176,11 @@ function createAuditLogger(db) {
 }
 
 async function main() {
-  assertConfigValid(console);
-  printFeatureReport(console);
-
   const processWorkerCapable = cfg.app.processRole !== "web";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
+  validateAndLogMetaConnectConfig(logger);
+  assertConfigValid(console);
+  printFeatureReport(console);
   const runtimeIncidentRetentionPolicy = {
     retainDays: 14,
     maxRows: 5000,

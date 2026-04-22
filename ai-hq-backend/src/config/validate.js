@@ -1,4 +1,4 @@
-import { cfg } from "../config.js";
+import { cfg, getMetaConnectOauthConfig } from "../config.js";
 import {
   createValidationIssue,
   formatValidationFailure,
@@ -398,25 +398,37 @@ export function getConfigIssues() {
     );
   }
 
-  const hasMetaOauthPartial =
-    isNonEmpty(cfg?.meta?.appId) ||
-    isNonEmpty(cfg?.meta?.appSecret) ||
-    isNonEmpty(cfg?.meta?.redirectUri);
+  const metaConnectOauth = getMetaConnectOauthConfig();
+  const hasMetaOauthPartial = metaConnectOauth.hasOauthPartial;
+  const hasMetaOauthFull = metaConnectOauth.hasOauthFull;
 
-  const hasMetaOauthFull =
-    isNonEmpty(cfg?.meta?.appId) &&
-    isNonEmpty(cfg?.meta?.appSecret) &&
-    isNonEmpty(cfg?.meta?.redirectUri);
+  if (metaConnectOauth?.secretConfig?.mismatch) {
+    pushIssue(
+      issues,
+      "error",
+      "meta.oauth",
+      "META_CONNECT_APP_SECRET and META_APP_SECRET are both set but differ. ai-hq-backend must resolve a single connect/reconnect secret.",
+      {
+        category: "provider-oauth",
+        envKeys: ["META_CONNECT_APP_SECRET", "META_APP_SECRET"],
+      }
+    );
+  }
 
   if (hasMetaOauthPartial && !hasMetaOauthFull) {
     pushIssue(
       issues,
       "error",
       "meta.oauth",
-      "META_APP_ID, META_APP_SECRET, and META_REDIRECT_URI must all be set together.",
+      "META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI must all be set together.",
       {
         category: "provider-oauth",
-        envKeys: ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"],
+        envKeys: [
+          "META_APP_ID",
+          "META_CONNECT_APP_SECRET",
+          "META_APP_SECRET",
+          "META_REDIRECT_URI",
+        ],
       }
     );
   }

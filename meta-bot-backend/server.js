@@ -9,8 +9,10 @@ import {
   AIHQ_BASE_URL,
   AIHQ_INTERNAL_TOKEN,
   APP_ENV,
+  VERIFY_TOKEN,
   PORT,
   REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
+  assertMetaWebhookSecretConfig,
 } from "./src/config.js";
 import { registerPublicPages } from "./src/routes/publicPages.js";
 import { registerWebhookRoutes } from "./src/routes/webhook.js";
@@ -28,6 +30,33 @@ const logger = createStructuredLogger({
   service: "meta-bot-backend",
   env: APP_ENV,
 });
+
+try {
+  const metaWebhookSecretConfig = assertMetaWebhookSecretConfig();
+  logger.info("meta.config.loaded", {
+    service: "meta-bot-backend",
+    secretRole: "webhook_verification",
+    secretSource: metaWebhookSecretConfig.resolvedSource || "",
+    secretFingerprint: metaWebhookSecretConfig.resolvedFingerprint || "",
+    verifyTokenPresent: Boolean(String(VERIFY_TOKEN || "").trim()),
+    configOutcome: "ok",
+  });
+} catch (error) {
+  const secretConfig = error?.secretConfig || {};
+  logger.error("meta.config.invalid", error, {
+    service: "meta-bot-backend",
+    secretRole: "webhook_verification",
+    reason: String(error?.reason || "missing_webhook_secret"),
+    explicitEnvPresent: secretConfig.explicitPresent === true,
+    fallbackEnvPresent: secretConfig.fallbackPresent === true,
+    explicitFingerprint: secretConfig.explicitFingerprint || "",
+    fallbackFingerprint: secretConfig.fallbackFingerprint || "",
+    verifyTokenPresent: Boolean(String(VERIFY_TOKEN || "").trim()),
+    configOutcome: "invalid",
+  });
+  throw error;
+}
+
 const bootReadiness = await checkAihqOperationalBootReadiness({
   fetchFn: globalThis.fetch?.bind(globalThis),
   baseUrl: AIHQ_BASE_URL,

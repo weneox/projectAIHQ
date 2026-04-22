@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import crypto from "crypto";
 import express from "express";
 
+process.env.META_WEBHOOK_APP_SECRET = "meta-secret";
 process.env.META_APP_SECRET = "meta-secret";
 process.env.AIHQ_INTERNAL_TOKEN = "internal-meta-token";
 process.env.AIHQ_BASE_URL =
   process.env.AIHQ_BASE_URL || "https://aihq.example.test";
 
-const { signMetaBody } = await import("../src/config.js");
+const { readMetaWebhookAppSecret, signMetaBody } = await import("../src/config.js");
 const { registerWebhookRoutes } = await import("../src/routes/webhook.js");
 const { internalOutboundRoutes } = await import("../src/routes/internal.outbound.js");
 const {
@@ -17,6 +18,62 @@ const {
 } = await import("../src/services/runtimeReliability.js");
 
 const originalFetch = global.fetch;
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+function restoreMetaSecretEnv(snapshot) {
+  for (const key of ["META_WEBHOOK_APP_SECRET", "META_APP_SECRET"]) {
+    if (snapshot[key] === undefined) delete process.env[key];
+    else process.env[key] = snapshot[key];
+  }
+}
+
+async function withMetaSecretEnv(
+  { preferred = undefined, fallback = undefined } = {},
+  work
+) {
+  const snapshot = {
+    META_WEBHOOK_APP_SECRET: process.env.META_WEBHOOK_APP_SECRET,
+    META_APP_SECRET: process.env.META_APP_SECRET,
+  };
+
+  try {
+    if (preferred === undefined) delete process.env.META_WEBHOOK_APP_SECRET;
+    else process.env.META_WEBHOOK_APP_SECRET = preferred;
+
+    if (fallback === undefined) delete process.env.META_APP_SECRET;
+    else process.env.META_APP_SECRET = fallback;
+
+    return await work();
+  } finally {
+    restoreMetaSecretEnv(snapshot);
+  }
+}
+
+async function captureStructuredLogs(work) {
+  const entries = [];
+
+  function capture(line) {
+    const value = String(line ?? "");
+    try {
+      entries.push(JSON.parse(value));
+    } catch {
+      entries.push({ raw: value });
+    }
+  }
+
+  console.log = capture;
+  console.error = capture;
+
+  try {
+    await work(entries);
+  } finally {
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+  }
+
+  return entries;
+}
 
 function createMockRes(onFinish) {
   return {
@@ -96,6 +153,8 @@ async function invokeHandler(appOrRouter, method, path, req = {}) {
 
 test.after(() => {
   global.fetch = originalFetch;
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
 });
 
 test("valid Meta webhook signature is accepted", async () => {
@@ -124,7 +183,7 @@ test("legacy Meta signature header is accepted when x-hub-signature-256 is absen
   const body = { object: "page", entry: [] };
   const rawBody = Buffer.from(JSON.stringify(body), "utf8");
   const signature = `sha1=${crypto
-    .createHmac("sha1", process.env.META_APP_SECRET)
+    .createHmac("sha1", readMetaWebhookAppSecret())
     .update(rawBody)
     .digest("hex")}`;
 
@@ -229,6 +288,62 @@ test("signature verification uses raw body bytes instead of parsed body reserial
 
   assert.equal(res.statusCode, 200);
 });
+
+test(
+  "signed webhook succeeds with preferred META_WEBHOOK_APP_SECRET",
+  { concurrency: false },
+  async () => {
+    await withMetaSecretEnv(
+      { preferred: "preferred-secret", fallback: undefined },
+      async () => {
+        const app = express();
+        registerWebhookRoutes(app);
+
+        const body = { object: "page", entry: [] };
+        const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+        const signature = signMetaBody(rawBody);
+
+        const { res } = await invokeHandler(app, "post", "/webhook", {
+          body,
+          rawBody,
+          headers: {
+            "x-hub-signature-256": signature,
+          },
+        });
+
+        assert.equal(res.statusCode, 200);
+      }
+    );
+  }
+);
+
+test(
+  "signed webhook succeeds with fallback META_APP_SECRET when preferred env is absent",
+  { concurrency: false },
+  async () => {
+    await withMetaSecretEnv(
+      { preferred: undefined, fallback: "fallback-secret" },
+      async () => {
+        const app = express();
+        registerWebhookRoutes(app);
+
+        const body = { object: "page", entry: [] };
+        const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+        const signature = signMetaBody(rawBody);
+
+        const { res } = await invokeHandler(app, "post", "/webhook", {
+          body,
+          rawBody,
+          headers: {
+            "x-hub-signature-256": signature,
+          },
+        });
+
+        assert.equal(res.statusCode, 200);
+      }
+    );
+  }
+);
 
 test("malformed internal outbound payload is rejected", async () => {
   const router = internalOutboundRoutes();
@@ -515,3 +630,235 @@ test("meta webhook executes automation normally when approved projected runtime 
   );
   assert.ok(seenUrls.some((url) => url.includes("graph.facebook.com")));
 });
+
+test(
+  "end-to-end signed webhook path emits searchable ingress events in order",
+  { concurrency: false },
+  async () => {
+    const app = express();
+    registerWebhookRoutes(app);
+
+    const seenUrls = [];
+    global.fetch = async (url) => {
+      const target = String(url);
+      seenUrls.push(target);
+
+      if (target.includes("/api/tenants/resolve-channel")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              ok: true,
+              tenantKey: "acme",
+              tenantId: "tenant-1",
+              resolvedChannel: "instagram",
+              tenant: {
+                id: "tenant-1",
+                tenant_key: "acme",
+              },
+              channelConfig: {
+                channelType: "instagram",
+              },
+              projectedRuntime: {
+                authority: {
+                  mode: "strict",
+                  required: true,
+                  available: true,
+                  source: "approved_runtime_projection",
+                  tenantId: "tenant-1",
+                  tenantKey: "acme",
+                  runtimeProjectionId: "projection-1",
+                },
+                tenant: {
+                  tenantId: "tenant-1",
+                  tenantKey: "acme",
+                  companyName: "Acme",
+                },
+                channels: {
+                  meta: {
+                    channelType: "instagram",
+                    pageId: "page-1",
+                    igUserId: "ig-1",
+                  },
+                },
+              },
+            });
+          },
+        };
+      }
+
+      if (target.endsWith("/api/inbox/ingest")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              ok: true,
+              tenant: {
+                tenant_key: "acme",
+              },
+              thread: {
+                id: "thread-1",
+              },
+              actions: [
+                {
+                  type: "send_message",
+                  channel: "instagram",
+                  recipientId: "user-1",
+                  text: "Hello back",
+                  meta: {
+                    tenantKey: "acme",
+                    skipOutboundAck: true,
+                  },
+                },
+              ],
+            });
+          },
+        };
+      }
+
+      if (target.includes("/api/internal/providers/meta-channel-access")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              ok: true,
+              projectedRuntime: {
+                authority: {
+                  mode: "strict",
+                  required: true,
+                  available: true,
+                  source: "approved_runtime_projection",
+                  tenantId: "tenant-1",
+                  tenantKey: "acme",
+                  runtimeProjectionId: "projection-1",
+                },
+                tenant: {
+                  tenantId: "tenant-1",
+                  tenantKey: "acme",
+                  companyName: "Acme",
+                },
+              },
+              operationalChannels: {
+                meta: {
+                  available: true,
+                  ready: true,
+                  provider: "meta",
+                  channelType: "instagram",
+                  pageId: "page-1",
+                  igUserId: "ig-1",
+                },
+              },
+              providerAccess: {
+                provider: "meta",
+                tenantKey: "acme",
+                tenantId: "tenant-1",
+                available: true,
+                pageId: "page-1",
+                igUserId: "ig-1",
+                pageAccessToken: "token-1",
+                appSecret: "app-secret",
+                secretKeys: ["page_access_token", "app_secret"],
+              },
+            });
+          },
+        };
+      }
+
+      if (target.includes("graph.facebook.com")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              message_id: "meta-message-1",
+            });
+          },
+        };
+      }
+
+      throw new Error(`unexpected fetch target: ${target}`);
+    };
+
+    const body = {
+      object: "page",
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "user-1" },
+              recipient: { id: "page-1", instagram_id: "ig-1" },
+              timestamp: Date.now(),
+              message: { mid: "mid-log-1", text: "hello" },
+            },
+          ],
+        },
+      ],
+    };
+    const rawBody = Buffer.from(JSON.stringify(body), "utf8");
+    const signature = signMetaBody(rawBody);
+
+    const entries = await captureStructuredLogs(async () => {
+      const { res } = await invokeHandler(app, "post", "/webhook", {
+        body,
+        rawBody,
+        requestId: "req-1",
+        correlationId: "corr-1",
+        headers: {
+          "x-hub-signature-256": signature,
+        },
+      });
+
+      assert.equal(res.statusCode, 200);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const events = entries
+      .filter((entry) => entry && typeof entry === "object")
+      .map((entry) => entry.event)
+      .filter(Boolean);
+    const requiredSequence = [
+      "meta.webhook.verify.accepted",
+      "meta.webhook.event.accepted",
+      "meta.webhook.forward.started",
+      "meta.webhook.forward.succeeded",
+      "meta.webhook.actions.started",
+      "meta.webhook.actions.succeeded",
+    ];
+
+    let lastIndex = -1;
+    for (const eventName of requiredSequence) {
+      const nextIndex = events.indexOf(eventName);
+      assert.notEqual(nextIndex, -1, `expected log event ${eventName}`);
+      assert.ok(
+        nextIndex > lastIndex,
+        `${eventName} should appear after the prior ingress event`
+      );
+      lastIndex = nextIndex;
+    }
+
+    const acceptedEntry = entries.find(
+      (entry) => entry?.event === "meta.webhook.event.accepted"
+    );
+    assert.equal(acceptedEntry?.channel, "instagram");
+    assert.equal(acceptedEntry?.pageId, "page-1");
+    assert.equal(acceptedEntry?.igUserId, "ig-1");
+    assert.equal(acceptedEntry?.userId, "user-1");
+    assert.equal(acceptedEntry?.externalMessageId, "mid-log-1");
+    assert.equal(Boolean(acceptedEntry?.dedupeKey), true);
+    assert.equal(acceptedEntry?.requestId, "req-1");
+    assert.equal(acceptedEntry?.correlationId, "corr-1");
+
+    const verifyEntry = entries.find(
+      (entry) => entry?.event === "meta.webhook.verify.accepted"
+    );
+    assert.equal(verifyEntry?.secretSource, "META_WEBHOOK_APP_SECRET");
+    assert.equal(verifyEntry?.signatureHeaderName, "x-hub-signature-256");
+    assert.equal(verifyEntry?.rawBodyLength, rawBody.length);
+    assert.equal(verifyEntry?.requestId, "req-1");
+    assert.equal(verifyEntry?.correlationId, "corr-1");
+    assert.equal(seenUrls.some((url) => url.endsWith("/api/inbox/ingest")), true);
+  }
+);

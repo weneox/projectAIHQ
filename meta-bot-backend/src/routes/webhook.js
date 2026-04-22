@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createStructuredLogger } from "@aihq/shared-contracts/logger";
-import { META_APP_SECRET, VERIFY_TOKEN } from "../config.js";
+import { VERIFY_TOKEN, getMetaWebhookSecretConfig } from "../config.js";
 import { extractMetaEvents } from "../utils/metaParser.js";
 import {
   forwardToAiHq,
@@ -253,6 +253,7 @@ function buildVerificationDebugFields({
   computedSignature = "",
   signatureAlgorithm = "",
   secret = "",
+  secretSource = "",
   rawBody = null,
   rawBodySource = "",
   reason = "",
@@ -260,13 +261,20 @@ function buildVerificationDebugFields({
   const safeSecret = s(secret);
   const safeReason = s(reason);
   return {
+    requestId: s(req?.requestId),
+    correlationId: s(req?.correlationId),
     hasMetaAppSecret: Boolean(safeSecret),
+    hasAppSecret: Boolean(safeSecret),
     metaAppSecretFingerprint: fingerprintSecret(safeSecret),
+    secretFingerprint: fingerprintSecret(safeSecret),
+    secretSource: s(secretSource),
     receivedSignatureHeaderName: s(signatureHeaderName),
+    signatureHeaderName: s(signatureHeaderName),
     receivedSignaturePresent: Boolean(s(receivedSignature)),
     receivedSignatureAlgorithm: s(signatureAlgorithm),
     rawBodyPresent: Buffer.isBuffer(rawBody),
     rawBodyByteLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
+    rawBodyLength: Buffer.isBuffer(rawBody) ? rawBody.length : 0,
     verificationBodySource: s(rawBodySource),
     parsedBodyPresent: req?.body !== undefined,
     parsedBodyMatchesRawBody: computeParsedBodyMatch(rawBody, req?.body),
@@ -278,17 +286,59 @@ function buildVerificationDebugFields({
   };
 }
 
+function buildWebhookTraceFields(
+  ev = {},
+  requestContext = {},
+  { tenantKey = "", dedupeKey = "" } = {}
+) {
+  return {
+    tenantKey: s(tenantKey),
+    channel: s(ev?.channel || "").toLowerCase(),
+    pageId: s(ev?.pageId || ""),
+    igUserId: s(ev?.igUserId || ""),
+    userId: s(ev?.userId || ""),
+    externalThreadId: s(ev?.externalThreadId || ev?.userId || ""),
+    externalMessageId: s(ev?.messageId || ev?.mid || ""),
+    externalCommentId: s(ev?.externalCommentId || ""),
+    eventType: s(ev?.eventType || ""),
+    dedupeKey: s(dedupeKey),
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+  };
+}
+
 export function verifyMetaWebhookSignature(req) {
-  const secret = s(META_APP_SECRET);
-  if (!secret) {
-    recordWebhookVerificationFailure("missing_meta_app_secret");
+  const secretConfig = getMetaWebhookSecretConfig();
+  const secret = s(secretConfig.resolvedSecret);
+  if (secretConfig.mismatch) {
+    recordWebhookVerificationFailure("secret_env_mismatch");
     logger.error(
       "meta.webhook.verify.rejected",
       null,
       buildVerificationDebugFields({
         req,
         secret,
-        reason: "missing_meta_app_secret",
+        secretSource: secretConfig.resolvedSource,
+        reason: "secret_env_mismatch",
+      })
+    );
+    return {
+      ok: false,
+      status: 500,
+      error: "webhook_auth_misconfigured",
+    };
+  }
+
+  if (!secret) {
+    recordWebhookVerificationFailure("missing_webhook_secret");
+    logger.error(
+      "meta.webhook.verify.rejected",
+      null,
+      buildVerificationDebugFields({
+        req,
+        secret,
+        secretSource: secretConfig.resolvedSource,
+        reason: "missing_webhook_secret",
       })
     );
     return {
@@ -308,6 +358,7 @@ export function verifyMetaWebhookSignature(req) {
         req,
         signatureHeaderName: headerName,
         secret,
+        secretSource: secretConfig.resolvedSource,
         rawBody,
         rawBodySource,
         reason: "missing_meta_signature",
@@ -330,6 +381,7 @@ export function verifyMetaWebhookSignature(req) {
         receivedSignature: headerValue,
         signatureAlgorithm: parsedSignature.algorithm || expectedAlgorithm,
         secret,
+        secretSource: secretConfig.resolvedSource,
         rawBody,
         rawBodySource,
         reason: parsedSignature.reason,
@@ -351,6 +403,7 @@ export function verifyMetaWebhookSignature(req) {
         receivedSignature: parsedSignature.normalized,
         signatureAlgorithm: parsedSignature.algorithm,
         secret,
+        secretSource: secretConfig.resolvedSource,
         rawBodySource,
         reason: "missing_raw_body",
       }),
@@ -377,6 +430,7 @@ export function verifyMetaWebhookSignature(req) {
         computedSignature: expected,
         signatureAlgorithm: parsedSignature.algorithm,
         secret,
+        secretSource: secretConfig.resolvedSource,
         rawBody,
         rawBodySource,
         reason: "invalid_meta_signature",
@@ -398,6 +452,7 @@ export function verifyMetaWebhookSignature(req) {
       computedSignature: expected,
       signatureAlgorithm: parsedSignature.algorithm,
       secret,
+      secretSource: secretConfig.resolvedSource,
       rawBody,
       rawBodySource,
       reason: "accepted",
@@ -626,12 +681,17 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
   }
 
   const payload = buildAihqInboxPayload(ev, rawBody, tenantCtx);
+  const baseTrace = buildWebhookTraceFields(ev, requestContext, {
+    tenantKey: tenantCtx.tenantKey,
+    dedupeKey: requestContext?.dedupeKey,
+  });
 
   requestLogger.info("meta.webhook.text.received", {
     ...summarizeInbound(ev),
     tenantKey: tenantCtx.tenantKey,
   });
 
+  requestLogger.info("meta.webhook.forward.started", baseTrace);
   const out = await forwardToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
 
@@ -645,11 +705,17 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     leadScore: Number(out?.json?.leadScore || 0),
     actionsCount: Array.isArray(out?.json?.actions) ? out.json.actions.length : 0,
     threadId: s(out?.json?.thread?.id || ""),
-    tenantKey: resolvedTenantKey,
-    preview: safeJsonPreview(out?.json),
-  });
+      tenantKey: resolvedTenantKey,
+      preview: safeJsonPreview(out?.json),
+    });
 
   if (!out.ok) {
+    requestLogger.warn("meta.webhook.forward.failed", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      status: Number(out?.status || 0),
+      error: s(out?.error || ""),
+    });
     requestLogger.warn("meta.webhook.text.forward_failed", {
       channel: s(ev?.channel || ""),
       userId: s(ev?.userId || ""),
@@ -660,6 +726,12 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     });
     return;
   }
+
+  requestLogger.info("meta.webhook.forward.succeeded", {
+    ...baseTrace,
+    tenantKey: resolvedTenantKey,
+    status: Number(out?.status || 0),
+  });
 
   const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
 
@@ -674,23 +746,55 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     return;
   }
 
-  const exec = await executeMetaActions(actions, {
-    channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
-    userId: s(ev?.userId || ""),
-    recipientId: s(ev?.userId || ""),
+  requestLogger.info("meta.webhook.actions.started", {
+    ...baseTrace,
     tenantKey: resolvedTenantKey,
-    threadId: s(out?.json?.thread?.id || ""),
-    pageId: s(ev?.pageId || ""),
-    igUserId: s(ev?.igUserId || ""),
-    meta: {
+    actionsCount: actions.length,
+  });
+  let exec = null;
+  try {
+    exec = await executeMetaActions(actions, {
+      channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
+      userId: s(ev?.userId || ""),
+      recipientId: s(ev?.userId || ""),
+      tenantKey: resolvedTenantKey,
+      threadId: s(out?.json?.thread?.id || ""),
       pageId: s(ev?.pageId || ""),
       igUserId: s(ev?.igUserId || ""),
-    },
-  });
+      meta: {
+        pageId: s(ev?.pageId || ""),
+        igUserId: s(ev?.igUserId || ""),
+      },
+    });
+  } catch (error) {
+    requestLogger.error("meta.webhook.actions.failed", error, {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+    });
+    throw error;
+  }
+
+  const execSummary = summarizeExec(exec);
+  if (exec?.ok) {
+    requestLogger.info("meta.webhook.actions.succeeded", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+      ...execSummary,
+    });
+  } else {
+    requestLogger.warn("meta.webhook.actions.failed", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+      ...execSummary,
+    });
+  }
 
   requestLogger.info("meta.webhook.text.actions_executed", {
     tenantKey: resolvedTenantKey,
-    ...summarizeExec(exec),
+    ...execSummary,
   });
 }
 
@@ -710,12 +814,17 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
   }
 
   const payload = buildAihqCommentPayload(ev, rawBody, tenantCtx);
+  const baseTrace = buildWebhookTraceFields(ev, requestContext, {
+    tenantKey: tenantCtx.tenantKey,
+    dedupeKey: requestContext?.dedupeKey,
+  });
 
   requestLogger.info("meta.webhook.comment.received", {
     ...summarizeInbound(ev),
     tenantKey: tenantCtx.tenantKey,
   });
 
+  requestLogger.info("meta.webhook.forward.started", baseTrace);
   const out = await forwardCommentToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
 
@@ -728,11 +837,17 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     requiresHuman: Boolean(out?.json?.classification?.requiresHuman),
     shouldCreateLead: Boolean(out?.json?.classification?.shouldCreateLead),
     commentId: s(out?.json?.comment?.id || ""),
-    tenantKey: resolvedTenantKey,
-    preview: safeJsonPreview(out?.json),
-  });
+      tenantKey: resolvedTenantKey,
+      preview: safeJsonPreview(out?.json),
+    });
 
   if (!out.ok) {
+    requestLogger.warn("meta.webhook.forward.failed", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      status: Number(out?.status || 0),
+      error: s(out?.error || ""),
+    });
     requestLogger.warn("meta.webhook.comment.forward_failed", {
       channel: s(ev?.channel || ""),
       userId: s(ev?.userId || ""),
@@ -743,6 +858,12 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     });
     return;
   }
+
+  requestLogger.info("meta.webhook.forward.succeeded", {
+    ...baseTrace,
+    tenantKey: resolvedTenantKey,
+    status: Number(out?.status || 0),
+  });
 
   const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
 
@@ -755,27 +876,59 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     return;
   }
 
-  const exec = await executeMetaActions(actions, {
-    channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
-    userId: s(ev?.userId || ""),
-    recipientId: s(ev?.userId || ""),
+  requestLogger.info("meta.webhook.actions.started", {
+    ...baseTrace,
     tenantKey: resolvedTenantKey,
-    threadId: s(out?.json?.thread?.id || ""),
-    externalCommentId: s(ev?.externalCommentId || ""),
-    externalPostId: s(ev?.externalPostId || ""),
-    pageId: s(ev?.pageId || ""),
-    igUserId: s(ev?.igUserId || ""),
-    meta: {
-      pageId: s(ev?.pageId || ""),
-      igUserId: s(ev?.igUserId || ""),
+    actionsCount: actions.length,
+  });
+  let exec = null;
+  try {
+    exec = await executeMetaActions(actions, {
+      channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
+      userId: s(ev?.userId || ""),
+      recipientId: s(ev?.userId || ""),
+      tenantKey: resolvedTenantKey,
+      threadId: s(out?.json?.thread?.id || ""),
       externalCommentId: s(ev?.externalCommentId || ""),
       externalPostId: s(ev?.externalPostId || ""),
-    },
-  });
+      pageId: s(ev?.pageId || ""),
+      igUserId: s(ev?.igUserId || ""),
+      meta: {
+        pageId: s(ev?.pageId || ""),
+        igUserId: s(ev?.igUserId || ""),
+        externalCommentId: s(ev?.externalCommentId || ""),
+        externalPostId: s(ev?.externalPostId || ""),
+      },
+    });
+  } catch (error) {
+    requestLogger.error("meta.webhook.actions.failed", error, {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+    });
+    throw error;
+  }
+
+  const execSummary = summarizeExec(exec);
+  if (exec?.ok) {
+    requestLogger.info("meta.webhook.actions.succeeded", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+      ...execSummary,
+    });
+  } else {
+    requestLogger.warn("meta.webhook.actions.failed", {
+      ...baseTrace,
+      tenantKey: resolvedTenantKey,
+      actionsCount: actions.length,
+      ...execSummary,
+    });
+  }
 
   requestLogger.info("meta.webhook.comment.actions_executed", {
     tenantKey: resolvedTenantKey,
-    ...summarizeExec(exec),
+    ...execSummary,
   });
 }
 
@@ -794,6 +947,10 @@ export function registerWebhookRoutes(app) {
   });
 
   app.post("/webhook", async (req, res) => {
+    const requestContext = {
+      requestId: s(req.requestId),
+      correlationId: s(req.correlationId),
+    };
     const verified = verifyMetaWebhookSignature(req);
     if (!verified.ok) {
       return res.status(verified.status || 403).json({
@@ -808,6 +965,10 @@ export function registerWebhookRoutes(app) {
       const events = extractMetaEvents(req.body);
 
       if (!events.length) {
+        logger.info("meta.webhook.event.ignored", {
+          ...buildWebhookTraceFields({}, requestContext),
+          reason: "empty_event_batch",
+        });
         logger.info("meta.webhook.ignored.empty");
         return;
       }
@@ -821,6 +982,12 @@ export function registerWebhookRoutes(app) {
 
         const dedupe = markInboundEventProcessed(ev);
         if (dedupe.duplicate) {
+          logger.info("meta.webhook.event.ignored", {
+            ...buildWebhookTraceFields(ev, requestContext, {
+              dedupeKey: dedupe.key,
+            }),
+            reason: "duplicate_suppressed",
+          });
           logger.info("meta.webhook.duplicate_suppressed", {
             dedupeKey: dedupe.key,
             ...summarizeInbound(ev),
@@ -829,6 +996,12 @@ export function registerWebhookRoutes(app) {
         }
 
         if (ignored || !supported) {
+          logger.info("meta.webhook.event.ignored", {
+            ...buildWebhookTraceFields(ev, requestContext, {
+              dedupeKey: dedupe.key,
+            }),
+            reason: s(ev?.ignoreReason || "unsupported"),
+          });
           logger.info("meta.webhook.ignored.event", {
             eventType,
             channel: s(ev?.channel || "unknown"),
@@ -841,6 +1014,12 @@ export function registerWebhookRoutes(app) {
 
         if (eventType === "text") {
           if (!userId) {
+            logger.warn("meta.webhook.event.ignored", {
+              ...buildWebhookTraceFields(ev, requestContext, {
+                dedupeKey: dedupe.key,
+              }),
+              reason: "missing_user_id",
+            });
             logger.warn("meta.webhook.text.ignored_missing_user", {
               ...summarizeInbound(ev),
               dedupeKey: dedupe.key,
@@ -849,6 +1028,12 @@ export function registerWebhookRoutes(app) {
           }
 
           if (!text) {
+            logger.info("meta.webhook.event.ignored", {
+              ...buildWebhookTraceFields(ev, requestContext, {
+                dedupeKey: dedupe.key,
+              }),
+              reason: "empty_text",
+            });
             logger.info("meta.webhook.text.ignored_empty", {
               ...summarizeInbound(ev),
               dedupeKey: dedupe.key,
@@ -856,15 +1041,26 @@ export function registerWebhookRoutes(app) {
             continue;
           }
 
+          logger.info("meta.webhook.event.accepted", {
+            ...buildWebhookTraceFields(ev, requestContext, {
+              dedupeKey: dedupe.key,
+            }),
+          });
           await handleSupportedTextEvent(ev, req.body, {
-            requestId: s(req.requestId),
-            correlationId: s(req.correlationId),
+            ...requestContext,
+            dedupeKey: dedupe.key,
           });
           continue;
         }
 
         if (eventType === "comment") {
           if (!s(ev?.externalCommentId || "")) {
+            logger.warn("meta.webhook.event.ignored", {
+              ...buildWebhookTraceFields(ev, requestContext, {
+                dedupeKey: dedupe.key,
+              }),
+              reason: "missing_comment_id",
+            });
             logger.warn("meta.webhook.comment.ignored_missing_comment_id", {
               ...summarizeInbound(ev),
               dedupeKey: dedupe.key,
@@ -873,6 +1069,12 @@ export function registerWebhookRoutes(app) {
           }
 
           if (!text) {
+            logger.info("meta.webhook.event.ignored", {
+              ...buildWebhookTraceFields(ev, requestContext, {
+                dedupeKey: dedupe.key,
+              }),
+              reason: "empty_comment_text",
+            });
             logger.info("meta.webhook.comment.ignored_empty", {
               ...summarizeInbound(ev),
               dedupeKey: dedupe.key,
@@ -880,13 +1082,24 @@ export function registerWebhookRoutes(app) {
             continue;
           }
 
+          logger.info("meta.webhook.event.accepted", {
+            ...buildWebhookTraceFields(ev, requestContext, {
+              dedupeKey: dedupe.key,
+            }),
+          });
           await handleSupportedCommentEvent(ev, req.body, {
-            requestId: s(req.requestId),
-            correlationId: s(req.correlationId),
+            ...requestContext,
+            dedupeKey: dedupe.key,
           });
           continue;
         }
 
+        logger.info("meta.webhook.event.ignored", {
+          ...buildWebhookTraceFields(ev, requestContext, {
+            dedupeKey: dedupe.key,
+          }),
+          reason: "supported_non_handled",
+        });
         logger.info("meta.webhook.ignored.supported_non_handled", {
           eventType,
           channel: s(ev?.channel || "unknown"),
@@ -897,6 +1110,8 @@ export function registerWebhookRoutes(app) {
     } catch (err) {
       logger.error("meta.webhook.processing_failed", err, {
         message: s(err?.message || err),
+        requestId: requestContext.requestId,
+        correlationId: requestContext.correlationId,
       });
     }
   });

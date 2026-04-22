@@ -11,38 +11,93 @@ function restoreEnv(snapshot) {
   }
 }
 
+async function loadConfigFresh(tag = "default") {
+  const url = new URL(`../src/config.js?case=${tag}`, import.meta.url);
+  return import(url.href);
+}
+
 async function loadValidateFresh(tag = "default") {
   const url = new URL(`../src/config/validate.js?case=${tag}`, import.meta.url);
   return import(url.href);
 }
 
-test("meta config issues carry environment classification metadata", async () => {
-  const envSnapshot = {
-    APP_ENV: process.env.APP_ENV,
-    NODE_ENV: process.env.NODE_ENV,
-    META_APP_SECRET: process.env.META_APP_SECRET,
-    VERIFY_TOKEN: process.env.VERIFY_TOKEN,
-    AIHQ_BASE_URL: process.env.AIHQ_BASE_URL,
-    AIHQ_INTERNAL_TOKEN: process.env.AIHQ_INTERNAL_TOKEN,
-  };
+test(
+  "meta-bot config prefers META_WEBHOOK_APP_SECRET over legacy fallback",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
 
-  try {
-    process.env.APP_ENV = "production";
-    process.env.NODE_ENV = "production";
-    delete process.env.META_APP_SECRET;
+    try {
+      process.env.META_WEBHOOK_APP_SECRET = "preferred-secret";
+      process.env.META_APP_SECRET = "preferred-secret";
 
-    const { getConfigIssues } = await loadValidateFresh("prod-meta-secret");
-    const issues = getConfigIssues();
+      const { getMetaWebhookSecretConfig } = await loadConfigFresh("preferred");
+      const secretConfig = getMetaWebhookSecretConfig();
 
-    const secretIssue = issues.find((item) => item.key === "META_APP_SECRET");
-
-    assert.ok(secretIssue);
-    assert.equal(secretIssue.level, "error");
-    assert.equal(secretIssue.category, "providers");
-    assert.equal(secretIssue.phase, "runtime");
-    assert.ok(Array.isArray(secretIssue.envKeys));
-    assert.ok(secretIssue.envKeys.includes("META_APP_SECRET"));
-  } finally {
-    restoreEnv(envSnapshot);
+      assert.equal(secretConfig.resolvedSecret, "preferred-secret");
+      assert.equal(secretConfig.resolvedSource, "META_WEBHOOK_APP_SECRET");
+      assert.equal(secretConfig.mismatch, false);
+      assert.equal(secretConfig.resolvedFingerprint.length > 0, true);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
   }
-});
+);
+
+test(
+  "meta-bot config falls back to META_APP_SECRET when explicit env is absent",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      delete process.env.META_WEBHOOK_APP_SECRET;
+      process.env.META_APP_SECRET = "fallback-secret";
+
+      const { getMetaWebhookSecretConfig } = await loadConfigFresh("fallback");
+      const secretConfig = getMetaWebhookSecretConfig();
+
+      assert.equal(secretConfig.resolvedSecret, "fallback-secret");
+      assert.equal(secretConfig.resolvedSource, "META_APP_SECRET");
+      assert.equal(secretConfig.mismatch, false);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "meta-bot config validation fails when explicit and fallback secrets differ",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      process.env.APP_ENV = "production";
+      process.env.NODE_ENV = "production";
+      process.env.VERIFY_TOKEN = "verify-token";
+      process.env.PUBLIC_BASE_URL = "https://meta.example.test";
+      process.env.AIHQ_BASE_URL = "https://aihq.example.test";
+      process.env.AIHQ_INTERNAL_TOKEN = "internal-token";
+      process.env.CONTACT_EMAIL = "ops@example.test";
+      process.env.META_WEBHOOK_APP_SECRET = "preferred-secret";
+      process.env.META_APP_SECRET = "fallback-secret";
+
+      const { getConfigIssues } = await loadValidateFresh("mismatch");
+      const issues = getConfigIssues();
+      const secretIssue = issues.find(
+        (item) => item.key === "META_WEBHOOK_APP_SECRET"
+      );
+
+      assert.ok(secretIssue);
+      assert.equal(secretIssue.level, "error");
+      assert.equal(secretIssue.category, "providers");
+      assert.equal(secretIssue.phase, "runtime");
+      assert.ok(secretIssue.envKeys.includes("META_WEBHOOK_APP_SECRET"));
+      assert.ok(secretIssue.envKeys.includes("META_APP_SECRET"));
+      assert.match(String(secretIssue.message || ""), /differ/i);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);

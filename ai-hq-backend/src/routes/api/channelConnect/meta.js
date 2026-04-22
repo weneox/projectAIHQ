@@ -2519,9 +2519,14 @@ function buildMetaStatusBlockers({
     blockers.push({
       title: "Meta OAuth is not configured.",
       subtitle:
-        "META_APP_ID, META_APP_SECRET, and META_REDIRECT_URI must all be configured before connect or reconnect can start.",
+        "META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI must all be configured before connect or reconnect can start.",
       reasonCode,
-      envKeys: ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"],
+      envKeys: [
+        "META_APP_ID",
+        "META_CONNECT_APP_SECRET",
+        "META_APP_SECRET",
+        "META_REDIRECT_URI",
+      ],
     });
   }
 
@@ -2622,9 +2627,14 @@ function buildMetaStatusBlockers({
     blockers.push({
       title: "Reconnect is currently unavailable.",
       subtitle:
-        "The current tenant channel is connected, but META_APP_ID, META_APP_SECRET, and META_REDIRECT_URI are required before a future reconnect can start.",
+        "The current tenant channel is connected, but META_APP_ID, META_CONNECT_APP_SECRET (or legacy META_APP_SECRET), and META_REDIRECT_URI are required before a future reconnect can start.",
       reasonCode: "meta_oauth_env_missing",
-      envKeys: ["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"],
+      envKeys: [
+        "META_APP_ID",
+        "META_CONNECT_APP_SECRET",
+        "META_APP_SECRET",
+        "META_REDIRECT_URI",
+      ],
     });
   }
 

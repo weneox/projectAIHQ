@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-import { CONTACT_EMAIL, META_APP_SECRET } from "../config.js";
+import { CONTACT_EMAIL, readMetaWebhookAppSecret } from "../config.js";
 import { createAihqMetaChannelLifecycleClient } from "../services/aihqMetaChannelLifecycleClient.js";
 import { getBaseUrl, safeStr } from "../utils/http.js";
 
@@ -31,7 +31,7 @@ function parseMetaSignedRequest(raw = "") {
   const signature = decodeBase64Url(encodedSig);
   const payloadBuffer = decodeBase64Url(encodedPayload);
   const expected = crypto
-    .createHmac("sha256", s(META_APP_SECRET))
+    .createHmac("sha256", s(readMetaWebhookAppSecret()))
     .update(encodedPayload)
     .digest();
 
@@ -174,7 +174,7 @@ export function registerPublicPages(
         return res.status(400).json({ ok: false, error: "missing_signed_request" });
       }
 
-      if (!s(META_APP_SECRET)) {
+      if (!s(readMetaWebhookAppSecret())) {
         return res.status(500).json({ ok: false, error: "meta_app_secret_missing" });
       }
 

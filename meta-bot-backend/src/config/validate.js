@@ -3,11 +3,11 @@ import {
   AIHQ_INTERNAL_TOKEN,
   APP_ENV,
   CONTACT_EMAIL,
-  META_APP_SECRET,
   REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
   N8N_WEBHOOK_URL,
   PUBLIC_BASE_URL,
   VERIFY_TOKEN,
+  getMetaWebhookSecretConfig,
 } from "../config.js";
 import {
   createValidationIssue,
@@ -76,15 +76,28 @@ export function getConfigIssues() {
     );
   }
 
-  if (!s(META_APP_SECRET)) {
+  const metaWebhookSecret = getMetaWebhookSecretConfig();
+
+  if (metaWebhookSecret.mismatch) {
     pushIssue(
       issues,
       "error",
-      "META_APP_SECRET",
-      "META_APP_SECRET is required for webhook signature verification.",
+      "META_WEBHOOK_APP_SECRET",
+      "META_WEBHOOK_APP_SECRET and META_APP_SECRET are both set but differ. meta-bot-backend must resolve a single webhook verification secret.",
       {
         category: "providers",
-        envKeys: ["META_APP_SECRET"],
+        envKeys: ["META_WEBHOOK_APP_SECRET", "META_APP_SECRET"],
+      }
+    );
+  } else if (!s(metaWebhookSecret.resolvedSecret)) {
+    pushIssue(
+      issues,
+      "error",
+      "META_WEBHOOK_APP_SECRET",
+      "META_WEBHOOK_APP_SECRET is required for webhook signature verification. META_APP_SECRET is only a legacy fallback.",
+      {
+        category: "providers",
+        envKeys: ["META_WEBHOOK_APP_SECRET", "META_APP_SECRET"],
       }
     );
   }

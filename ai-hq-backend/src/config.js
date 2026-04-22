@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -40,6 +42,73 @@ function prodDefaultBool(v, fallbackProd = true) {
   ).toLowerCase();
   const prodLike = !["", "development", "dev", "test"].includes(env);
   return prodLike ? fallbackProd : false;
+}
+
+function fingerprintSecret(secret = "") {
+  const safeSecret = s(secret);
+  return safeSecret
+    ? crypto.createHash("sha256").update(safeSecret).digest("hex").slice(0, 12)
+    : "";
+}
+
+function resolveSecretContract(
+  explicitEnvName,
+  fallbackEnvName = "META_APP_SECRET",
+  env = process.env
+) {
+  const explicitValue = s(env?.[explicitEnvName], "");
+  const fallbackValue = s(env?.[fallbackEnvName], "");
+  const explicitPresent = Boolean(explicitValue);
+  const fallbackPresent = Boolean(fallbackValue);
+  const mismatch =
+    explicitPresent && fallbackPresent && explicitValue !== fallbackValue;
+  const resolvedSecret = explicitPresent ? explicitValue : fallbackValue;
+  const resolvedSource = explicitPresent
+    ? explicitEnvName
+    : fallbackPresent
+      ? fallbackEnvName
+      : "";
+
+  return {
+    explicitEnvName,
+    fallbackEnvName,
+    explicitPresent,
+    fallbackPresent,
+    explicitFingerprint: fingerprintSecret(explicitValue),
+    fallbackFingerprint: fingerprintSecret(fallbackValue),
+    mismatch,
+    resolvedSecret,
+    resolvedSource,
+    resolvedFingerprint: fingerprintSecret(resolvedSecret),
+  };
+}
+
+export function getMetaConnectSecretConfig(env = process.env) {
+  return resolveSecretContract("META_CONNECT_APP_SECRET", "META_APP_SECRET", env);
+}
+
+export function getMetaConnectOauthConfig(env = process.env) {
+  const secretConfig = getMetaConnectSecretConfig(env);
+  const appId = s(env?.META_APP_ID, "");
+  const redirectUri = s(env?.META_REDIRECT_URI, "");
+  const hasAppId = Boolean(appId);
+  const hasRedirectUri = Boolean(redirectUri);
+  const hasSecret = Boolean(secretConfig.resolvedSecret);
+
+  return {
+    appId,
+    redirectUri,
+    hasAppId,
+    hasRedirectUri,
+    hasSecret,
+    hasOauthPartial: hasAppId || hasRedirectUri || hasSecret,
+    hasOauthFull: hasAppId && hasRedirectUri && hasSecret,
+    secretConfig,
+  };
+}
+
+export function readMetaConnectAppSecret(env = process.env) {
+  return getMetaConnectSecretConfig(env).resolvedSecret;
 }
 
 export const cfg = {
@@ -237,7 +306,8 @@ export const cfg = {
     apiVersion: s(process.env.META_API_VERSION, "v23.0"),
 
     appId: s(process.env.META_APP_ID, ""),
-    appSecret: s(process.env.META_APP_SECRET, ""),
+    appSecret: readMetaConnectAppSecret(process.env),
+    appSecretSource: getMetaConnectSecretConfig(process.env).resolvedSource,
     redirectUri: s(process.env.META_REDIRECT_URI, ""),
   },
 
