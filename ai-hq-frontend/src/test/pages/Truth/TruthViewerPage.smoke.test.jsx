@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "../../mocks/react-router-dom.smoke-mock.jsx";
 
 const useWorkspaceTenantKey = vi.fn();
 const getSettingsTrustView = vi.fn();
