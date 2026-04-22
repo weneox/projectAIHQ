@@ -30,7 +30,7 @@ export default mergeConfig(
       ],
       exclude: ["dist/**", "node_modules/**"],
       passWithNoTests: false,
-      pool: "forks",
+      pool: "vmThreads",
       maxWorkers: 1,
       minWorkers: 1,
       fileParallelism: false,
