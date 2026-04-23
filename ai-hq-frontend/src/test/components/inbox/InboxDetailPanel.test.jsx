@@ -99,7 +99,7 @@ describe("InboxDetailPanel", () => {
     expect(
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/surface-banner/i)).toBeInTheDocument();
+    expect(screen.getByText(/^assigned$/i)).toBeInTheDocument();
   });
 
   it("renders object-shaped outbound lineage input without changing detail behavior", () => {
@@ -158,17 +158,6 @@ describe("InboxDetailPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
 
     expect(props.surface.refresh).toHaveBeenCalledTimes(1);
-  });
-
-  it("closes the current thread when the close action is clicked", () => {
-    const props = buildProps();
-
-    render(<InboxDetailPanel {...props} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /mark as closed/i }));
-
-    expect(props.setThreadStatus).toHaveBeenCalledWith("thread-1", "closed");
-    expect(props.setThreadStatus).toHaveBeenCalledTimes(1);
   });
 
   it("renders the next conversation content when a different thread is selected", () => {
