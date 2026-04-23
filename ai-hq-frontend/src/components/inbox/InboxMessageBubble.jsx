@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 
 import { fmtRelative } from "../../lib/inbox-ui.js";
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
@@ -46,7 +46,7 @@ function resolveDisplayName(message, inbound, thread) {
   }
 
   if (message?.sender_type === "agent") return "You";
-  if (message?.sender_type === "ai") return "AI";
+  if (message?.sender_type === "ai") return "AI HQ";
   return "Reply";
 }
 
@@ -78,7 +78,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.20)]">
+    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.18)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -90,6 +90,14 @@ function InboundAvatar({ title, avatarUrl }) {
       ) : (
         initials
       )}
+    </div>
+  );
+}
+
+function AIBadge() {
+  return (
+    <div className="ml-3 mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D8E4FF] bg-[#F5F8FF] text-[#4F7CFF] shadow-[0_8px_18px_-14px_rgba(79,124,255,0.24)]">
+      <Sparkles className="h-4 w-4" />
     </div>
   );
 }
@@ -117,26 +125,26 @@ function BubbleShell({ side = "left", children }) {
   const incoming = side === "left";
 
   const bodyClass = incoming
-    ? "rounded-[20px] rounded-bl-[9px] border border-[#E5EAF1] bg-white text-[#0F172A]"
-    : "rounded-[20px] rounded-br-[9px] border border-[#D7DFE8] bg-[#EEF2F4] text-[#0F172A]";
+    ? "rounded-[22px] rounded-bl-[10px] border border-[#E7E0D5] bg-[#FFF8EE] text-[#0F172A]"
+    : "rounded-[22px] rounded-br-[10px] border border-[#D7E3FF] bg-[#EAF2FF] text-[#0F172A]";
 
-  const tailOuterClass = incoming
-    ? "absolute -left-[8px] bottom-[8px] h-[18px] w-[18px] rounded-bl-[14px] border-b border-l border-[#E5EAF1] bg-white"
-    : "absolute -right-[8px] bottom-[8px] h-[18px] w-[18px] rounded-br-[14px] border-b border-r border-[#D7DFE8] bg-[#EEF2F4]";
+  const outerTailClass = incoming
+    ? "absolute -left-[9px] bottom-[8px] h-[20px] w-[20px] rounded-bl-[15px] border-b border-l border-[#E7E0D5] bg-[#FFF8EE]"
+    : "absolute -right-[9px] bottom-[8px] h-[20px] w-[20px] rounded-br-[15px] border-b border-r border-[#D7E3FF] bg-[#EAF2FF]";
 
-  const tailCutClass = incoming
-    ? "absolute -left-[12px] bottom-[7px] h-[22px] w-[12px] rounded-br-[14px] bg-[var(--inbox-surface,#F8FAFC)]"
-    : "absolute -right-[12px] bottom-[7px] h-[22px] w-[12px] rounded-bl-[14px] bg-[var(--inbox-surface,#F8FAFC)]";
+  const cutTailClass = incoming
+    ? "absolute -left-[14px] bottom-[7px] h-[24px] w-[14px] rounded-br-[15px] bg-[var(--inbox-surface,#F8FAFC)]"
+    : "absolute -right-[14px] bottom-[7px] h-[24px] w-[14px] rounded-bl-[15px] bg-[var(--inbox-surface,#F8FAFC)]";
 
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
       <div className="relative inline-block max-w-full align-top">
-        <span aria-hidden="true" className={tailOuterClass} />
-        <span aria-hidden="true" className={tailCutClass} />
+        <span aria-hidden="true" className={outerTailClass} />
+        <span aria-hidden="true" className={cutTailClass} />
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-4 py-3 text-[15px] leading-[1.62] shadow-[0_16px_28px_-24px_rgba(15,23,42,0.16)]",
+            "relative z-[1] inline-block max-w-full px-4 py-3.5 text-[15px] leading-[1.6] shadow-[0_18px_30px_-26px_rgba(15,23,42,0.14)]",
             bodyClass,
           ].join(" ")}
         >
@@ -202,13 +210,13 @@ export default function InboxMessageBubble({
   if (inbound) {
     return (
       <div className="flex w-full justify-start">
-        <div className="flex w-full items-start gap-3 pr-[12%] md:pr-[16%] lg:pr-[20%] xl:pr-[24%]">
+        <div className="flex w-full items-start gap-3 pr-[10%] md:pr-[14%] lg:pr-[18%] xl:pr-[22%]">
           <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
           <div className="min-w-0 flex-1">
             <MessageMeta name={displayName} sentAt={sentAt} align="start" />
 
-            <div className="mt-1 max-w-[min(760px,76%)]">
+            <div className="mt-1 max-w-[min(780px,78%)]">
               <BubbleShell side="left">
                 {text ? (
                   <div className="whitespace-pre-wrap break-words">{text}</div>
@@ -232,21 +240,26 @@ export default function InboxMessageBubble({
     );
   }
 
-  const outgoingLabel = m?.sender_type === "agent" ? "You" : "AI";
+  const outgoingLabel = m?.sender_type === "agent" ? "You" : "AI HQ";
+  const showAIBadge = m?.sender_type === "ai" || m?.sender_type !== "agent";
 
   return (
     <div className="flex w-full justify-end">
-      <div className="w-full pl-[26%] md:pl-[30%] lg:pl-[35%] xl:pl-[40%]">
+      <div className="w-full pl-[28%] md:pl-[32%] lg:pl-[37%] xl:pl-[42%]">
         <MessageMeta name={outgoingLabel} sentAt={sentAt} align="end" />
 
-        <div className="mt-1 ml-auto max-w-[min(620px,100%)]">
-          <BubbleShell side="right">
-            {text ? (
-              <div className="whitespace-pre-wrap break-words">{text}</div>
-            ) : (
-              <span className="text-[#94A3B8]">(empty message)</span>
-            )}
-          </BubbleShell>
+        <div className="mt-1 flex justify-end">
+          <div className="ml-auto flex max-w-[min(620px,100%)] items-start justify-end">
+            <BubbleShell side="right">
+              {text ? (
+                <div className="whitespace-pre-wrap break-words">{text}</div>
+              ) : (
+                <span className="text-[#94A3B8]">(empty message)</span>
+              )}
+            </BubbleShell>
+
+            {showAIBadge ? <AIBadge /> : null}
+          </div>
         </div>
 
         {showInspect ? (

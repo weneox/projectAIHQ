@@ -543,20 +543,45 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
 function EmptyComposerDock() {
   return (
     <div className="w-full px-4 pb-4 md:px-6 md:pb-6">
-      <div className="w-full rounded-[24px] border border-[#E6EAF0] bg-white px-5 py-4 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.2)]">
+      <div className="w-full rounded-[30px] border border-[#E7ECF3] bg-white px-5 py-4 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.16)]">
         <div className="flex items-end gap-4">
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+            >
+              ☺
+            </button>
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+            >
+              ⎋
+            </button>
+          </div>
+
           <textarea
             disabled
             rows={1}
-            placeholder="Write a reply"
-            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
+            placeholder="Mesaj yazın..."
+            className="min-h-[30px] flex-1 resize-none bg-transparent px-0 py-2 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
           />
+
           <button
             type="button"
             disabled
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[#E2E8F0] px-5 text-[13px] font-medium text-[#64748B]"
+            className="inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#E6ECF5] bg-[#EEF3FA] text-[#A0AEC0]"
           >
-            Send
+            →
           </button>
         </div>
       </div>
@@ -850,7 +875,7 @@ export default function InboxDetailPanel({
           <>
             <div
               ref={scrollViewportRef}
-              className="h-full overflow-y-auto pb-[320px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="h-full overflow-y-auto pb-[300px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {surface?.loading && !hasThread ? (
                 <InboxDetailSkeleton />
