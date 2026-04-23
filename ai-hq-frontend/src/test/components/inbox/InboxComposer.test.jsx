@@ -1,48 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../components/feedback/SurfaceBanner.jsx", () => ({
-  default: () => <div>surface-banner</div>,
-}));
-
-vi.mock("../../../components/ui/Button.jsx", () => ({
-  default: ({
-    children,
-    onClick,
-    disabled,
-    ariaLabel,
-    "aria-label": ariaLabelProp,
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabelProp || ariaLabel}
-    >
-      {children}
-    </button>
-  ),
-}));
-
 import InboxComposer from "../../../components/inbox/InboxComposer.jsx";
 
 function renderComposer(props = {}) {
   const baseProps = {
-    selectedThread: { id: "thread_1", handoff_active: false },
-    surface: {
-      saveSuccess: "",
-      saveError: "",
-      unavailable: false,
-      error: "",
-    },
-    actionState: {
-      isActionPending: vi.fn().mockReturnValue(false),
-    },
-    replyText: "",
-    setReplyText: vi.fn(),
+    value: "",
+    onChange: vi.fn(),
     onSend: vi.fn(),
-    onReleaseHandoff: vi.fn(),
-    embedded: true,
+    disabled: false,
+    sending: false,
+    showReturnToAi: false,
+    onReturnToAi: vi.fn(),
+    submitLabel: "Send",
   };
 
   const merged = { ...baseProps, ...props };
@@ -62,26 +32,27 @@ describe("InboxComposer", () => {
     const onSend = vi.fn();
 
     renderComposer({
-      replyText: "Hello there",
+      value: "Hello there",
       onSend,
     });
 
-    fireEvent.keyDown(screen.getByLabelText(/reply to conversation/i), {
+    fireEvent.keyDown(screen.getByRole("textbox"), {
       key: "Enter",
     });
 
     expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith("Hello there");
   });
 
   it("does not send on Shift+Enter", () => {
     const onSend = vi.fn();
 
     renderComposer({
-      replyText: "Hello there",
+      value: "Hello there",
       onSend,
     });
 
-    fireEvent.keyDown(screen.getByLabelText(/reply to conversation/i), {
+    fireEvent.keyDown(screen.getByRole("textbox"), {
       key: "Enter",
       shiftKey: true,
     });
@@ -89,42 +60,32 @@ describe("InboxComposer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("does not send while IME composition is active", () => {
+  it("does not send when the composer value is blank", () => {
     const onSend = vi.fn();
 
     renderComposer({
-      replyText: "こんにちは",
+      value: "   ",
       onSend,
     });
 
-    const textarea = screen.getByLabelText(/reply to conversation/i);
-
-    fireEvent.compositionStart(textarea);
-    fireEvent.keyDown(textarea, {
+    fireEvent.keyDown(screen.getByRole("textbox"), {
       key: "Enter",
-      nativeEvent: { isComposing: true },
     });
-    fireEvent.compositionEnd(textarea);
 
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("disables send when surface is unavailable", () => {
+  it("disables send when the composer is disabled", () => {
     const onSend = vi.fn();
 
     renderComposer({
-      replyText: "Blocked reply",
+      value: "Blocked reply",
       onSend,
-      surface: {
-        saveSuccess: "",
-        saveError: "",
-        unavailable: true,
-        error: "",
-      },
+      disabled: true,
     });
 
     const sendButton = screen.getByRole("button", {
-      name: /send operator reply/i,
+      name: /^send$/i,
     });
 
     expect(sendButton).toBeDisabled();
@@ -134,18 +95,18 @@ describe("InboxComposer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("shows return to AI when handoff is active", () => {
-    const onReleaseHandoff = vi.fn();
+  it("shows return to AI when enabled", () => {
+    const onReturnToAi = vi.fn();
 
     renderComposer({
-      selectedThread: { id: "thread_1", handoff_active: true },
-      onReleaseHandoff,
+      showReturnToAi: true,
+      onReturnToAi,
     });
 
     const button = screen.getByRole("button", { name: /return to ai/i });
     expect(button).toBeInTheDocument();
 
     fireEvent.click(button);
-    expect(onReleaseHandoff).toHaveBeenCalledTimes(1);
+    expect(onReturnToAi).toHaveBeenCalledTimes(1);
   });
 });

@@ -66,7 +66,6 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
     expect(
       screen.getByText(/checking in on your booking request/i)
     ).toBeInTheDocument();
@@ -94,7 +93,6 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
     expect(screen.getByText(/following up now/i)).toBeInTheDocument();
     expect(screen.queryByText(/waiting for attempt truth/i)).not.toBeInTheDocument();
   });
@@ -124,7 +122,6 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
     expect(screen.getByText(/checking status for you now/i)).toBeInTheDocument();
     expect(screen.queryByText(/attempt truth may be stale/i)).not.toBeInTheDocument();
   });
@@ -162,7 +159,6 @@ describe("InboxMessageBubble", () => {
       />
     );
 
-    expect(screen.getByText(/^operator$/i)).toBeInTheDocument();
     expect(screen.getByText(/structured lineage should bind/i)).toBeInTheDocument();
     expect(
       screen.queryByText(/most recent delivery attempt failed on attempt 1 of 3/i)

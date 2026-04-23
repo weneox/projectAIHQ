@@ -17,11 +17,8 @@ function buildProps(overrides = {}) {
       {
         id: "message-1",
         direction: "outbound",
-        role: "operator",
-        sender_role: "operator",
+        sender_type: "agent",
         text: "Your appointment request is on the way.",
-        body: "Your appointment request is on the way.",
-        message_text: "Your appointment request is on the way.",
         created_at: "2026-03-29T10:00:00.000Z",
       },
     ],
@@ -87,33 +84,22 @@ describe("InboxDetailPanel", () => {
 
     render(<InboxDetailPanel {...props} />);
 
-    expect(screen.getByText(/alex morgan/i)).toBeInTheDocument();
-
+    expect(screen.getByRole("switch")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("switch", { name: /enable inbox automatic replies/i })
+      screen.getByRole("button", { name: /conversation details/i })
     ).toBeInTheDocument();
-
     expect(
-      screen.getByRole("button", { name: /refresh conversation/i })
+      screen.getByRole("button", { name: /mark as closed/i })
     ).toBeInTheDocument();
-
-    expect(screen.getByRole("button", { name: /^details$/i })).toBeInTheDocument();
-
     expect(
-      screen.getByRole("button", { name: /conversation actions/i })
+      screen.getByRole("button", { name: /more actions/i })
     ).toBeInTheDocument();
-
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
-
     expect(
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
-
-    expect(screen.getByText(/^thread assigned\.$/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /^details$/i }));
-
-    expect(props.onOpenDetails).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/surface-banner/i)).toBeInTheDocument();
   });
 
   it("renders object-shaped outbound lineage input without changing detail behavior", () => {
@@ -140,103 +126,95 @@ describe("InboxDetailPanel", () => {
 
     render(<InboxDetailPanel {...props} />);
 
-    expect(screen.getByRole("button", { name: /^details$/i })).toBeInTheDocument();
-
     expect(
-      screen.getByRole("button", { name: /conversation actions/i })
+      screen.getByRole("button", { name: /conversation details/i })
     ).toBeInTheDocument();
-
+    expect(
+      screen.getByRole("button", { name: /more actions/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
   });
 
-  it("calls onToggleAutomation with next state when auto-reply switch is clicked", () => {
-    const props = buildProps({
-      automationControl: {
-        enabled: false,
-        disabled: false,
-        loading: false,
-        saving: false,
-      },
-    });
+  it("opens conversation details when the detail action is clicked", () => {
+    const props = buildProps();
 
     render(<InboxDetailPanel {...props} />);
 
     fireEvent.click(
-      screen.getByRole("switch", { name: /enable inbox automatic replies/i })
+      screen.getByRole("button", { name: /conversation details/i })
     );
 
-    expect(props.onToggleAutomation).toHaveBeenCalledWith(true);
-    expect(props.onToggleAutomation).toHaveBeenCalledTimes(1);
+    expect(props.onOpenDetails).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call onToggleAutomation when auto-reply switch is disabled", () => {
-    const props = buildProps({
-      automationControl: {
-        enabled: false,
-        disabled: true,
-        loading: false,
-        saving: false,
-      },
-    });
+  it("refreshes the detail surface when refresh is clicked", () => {
+    const props = buildProps();
 
     render(<InboxDetailPanel {...props} />);
 
-    fireEvent.click(
-      screen.getByRole("switch", { name: /enable inbox automatic replies/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
 
-    expect(props.onToggleAutomation).not.toHaveBeenCalled();
+    expect(props.surface.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onToggleAutomation with false when auto-reply is currently enabled", () => {
-    const props = buildProps({
-      automationControl: {
-        enabled: true,
-        disabled: false,
-        loading: false,
-        saving: false,
-      },
-    });
+  it("closes the current thread when the close action is clicked", () => {
+    const props = buildProps();
 
     render(<InboxDetailPanel {...props} />);
 
-    fireEvent.click(
-      screen.getByRole("switch", { name: /disable inbox automatic replies/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /mark as closed/i }));
 
-    expect(props.onToggleAutomation).toHaveBeenCalledWith(false);
-    expect(props.onToggleAutomation).toHaveBeenCalledTimes(1);
+    expect(props.setThreadStatus).toHaveBeenCalledWith("thread-1", "closed");
+    expect(props.setThreadStatus).toHaveBeenCalledTimes(1);
   });
 
-  it("restores avatar image when a different thread is opened after an avatar error", () => {
+  it("renders the next conversation content when a different thread is selected", () => {
     const initialProps = buildProps({
       selectedThread: {
         id: "thread-1",
         customer_name: "Alex Morgan",
-        avatar_url: "https://example.test/alex.png",
       },
+      messages: [
+        {
+          id: "message-1",
+          direction: "outbound",
+          sender_type: "agent",
+          text: "Initial conversation content.",
+          created_at: "2026-03-29T10:00:00.000Z",
+        },
+      ],
     });
 
     const { rerender } = render(<InboxDetailPanel {...initialProps} />);
 
-    const initialAvatar = screen.getByAltText(/alex morgan/i);
-    fireEvent.error(initialAvatar);
-
-    expect(screen.queryByAltText(/alex morgan/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/initial conversation content/i)
+    ).toBeInTheDocument();
 
     const nextProps = buildProps({
       selectedThread: {
         id: "thread-2",
         customer_name: "Jamie Reed",
-        avatar_url: "https://example.test/jamie.png",
       },
+      messages: [
+        {
+          id: "message-2",
+          direction: "outbound",
+          sender_type: "agent",
+          text: "Next conversation content.",
+          created_at: "2026-03-29T11:00:00.000Z",
+        },
+      ],
     });
 
     rerender(<InboxDetailPanel {...nextProps} />);
 
-    expect(screen.getByAltText(/jamie reed/i)).toBeInTheDocument();
+    expect(screen.getByText(/next conversation content/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/initial conversation content/i)
+    ).not.toBeInTheDocument();
   });
 });
