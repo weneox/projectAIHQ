@@ -96,7 +96,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E7ECF3] bg-[#EAF1FB] text-[12px] font-semibold text-[#4B6784] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.22)]">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#E8EEF7] text-[12px] font-semibold text-[#55708E] shadow-[0_10px_20px_-18px_rgba(15,23,42,0.22)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -118,8 +118,8 @@ function BubbleTime({ value, incoming }) {
   return (
     <span
       className={[
-        "whitespace-nowrap text-[11px] font-medium leading-none",
-        incoming ? "text-[#8E99A8]" : "text-white/80",
+        "select-none whitespace-nowrap text-[11px] font-medium leading-none",
+        incoming ? "text-[#919BAA]" : "text-white/78",
       ].join(" ")}
     >
       {value}
@@ -127,32 +127,31 @@ function BubbleTime({ value, incoming }) {
   );
 }
 
-function NaturalBubble({ side = "left", text, sentAt }) {
+function PremiumBubble({ side = "left", text, sentAt }) {
   const incoming = side === "left";
 
   const bubbleClass = incoming
-    ? "border border-[#E6EBF2] bg-[#FFFFFF] text-[#111827]"
-    : "border border-[#2F84DA] bg-[#3390EC] text-white";
+    ? "bg-[#FFFFFF] text-[#0F172A] rounded-[19px] rounded-bl-[7px]"
+    : "bg-[#3390EC] text-white rounded-[19px] rounded-br-[7px]";
 
-  const tailBaseClass = incoming
-    ? "absolute bottom-[2px] -left-[5px] h-[18px] w-[18px] rounded-full border border-[#E6EBF2] border-r-0 border-t-0 bg-[#FFFFFF]"
-    : "absolute bottom-[2px] -right-[5px] h-[18px] w-[18px] rounded-full border border-[#2F84DA] border-l-0 border-t-0 bg-[#3390EC]";
+  const tailBlobClass = incoming
+    ? "absolute bottom-[4px] -left-[4px] h-[14px] w-[14px] rounded-full bg-[#FFFFFF]"
+    : "absolute bottom-[4px] -right-[4px] h-[14px] w-[14px] rounded-full bg-[#3390EC]";
 
   const tailCutClass = incoming
-    ? "absolute bottom-[-1px] -left-[9px] h-[19px] w-[11px] rounded-br-[16px] bg-[var(--inbox-surface,#F8FAFC)]"
-    : "absolute bottom-[-1px] -right-[9px] h-[19px] w-[11px] rounded-bl-[16px] bg-[var(--inbox-surface,#F8FAFC)]";
+    ? "absolute bottom-[4px] -left-[10px] h-[15px] w-[10px] rounded-r-full bg-[var(--inbox-surface,#F8FAFC)]"
+    : "absolute bottom-[4px] -right-[10px] h-[15px] w-[10px] rounded-l-full bg-[var(--inbox-surface,#F8FAFC)]";
 
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
-      <div className="relative inline-block max-w-full">
-        <span aria-hidden="true" className={tailBaseClass} />
+      <div className="relative inline-block max-w-full overflow-visible">
+        <span aria-hidden="true" className={tailBlobClass} />
         <span aria-hidden="true" className={tailCutClass} />
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full rounded-[21px] px-[15px] pb-[8px] pt-[10px]",
-            "shadow-[0_14px_34px_-26px_rgba(15,23,42,0.18)]",
-            incoming ? "rounded-bl-[8px]" : "rounded-br-[8px]",
+            "relative z-[1] inline-block max-w-full px-[15px] pb-[8px] pt-[10px]",
+            "shadow-[0_12px_28px_-22px_rgba(15,23,42,0.18)]",
             bubbleClass,
           ].join(" ")}
         >
@@ -240,7 +239,8 @@ export default function InboxMessageBubble({
 
   const displayName = resolveDisplayName(m, inbound, thread);
   const avatarUrl = inbound ? resolveAvatarUrl(m, thread) : "";
-  const bubbleWidthClass = "max-w-[min(440px,72vw)]";
+
+  const bubbleWidthClass = "max-w-[min(460px,72vw)]";
 
   if (inbound) {
     return (
@@ -249,7 +249,7 @@ export default function InboxMessageBubble({
           <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
           <div className={bubbleWidthClass}>
-            <NaturalBubble side="left" text={text} sentAt={sentAt} />
+            <PremiumBubble side="left" text={text} sentAt={sentAt} />
 
             {showInspect ? (
               <InspectBlock
@@ -268,7 +268,7 @@ export default function InboxMessageBubble({
   return (
     <div className="flex w-full justify-end px-3 py-[5px] sm:px-5">
       <div className={bubbleWidthClass}>
-        <NaturalBubble side="right" text={text} sentAt={sentAt} />
+        <PremiumBubble side="right" text={text} sentAt={sentAt} />
 
         {showInspect ? (
           <InspectBlock
