@@ -78,7 +78,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E4E7EC] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155]">
+    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.22)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -98,7 +98,7 @@ function MessageMeta({ name, sentAt, align = "start" }) {
   return (
     <div
       className={[
-        "flex items-center gap-2 px-1 text-[12px] leading-5",
+        "flex items-center gap-2 px-0.5 text-[12px] leading-5",
         align === "end" ? "justify-end text-right" : "justify-start text-left",
       ].join(" ")}
     >
@@ -113,25 +113,31 @@ function MessageMeta({ name, sentAt, align = "start" }) {
   );
 }
 
-function BubbleFrame({ side = "left", children }) {
-  const isRight = side === "right";
+function BubbleShell({ side = "left", children }) {
+  const incoming = side === "left";
 
-  const shellClass = isRight
-    ? "rounded-[18px] rounded-br-[8px] border border-[#D8DEE6] bg-[#EEF2F6] text-[#0F172A]"
-    : "rounded-[18px] rounded-bl-[8px] border border-[#E4E7EC] bg-white text-[#0F172A]";
+  const bodyClass = incoming
+    ? "rounded-[20px] rounded-bl-[9px] border border-[#E5EAF1] bg-white text-[#0F172A]"
+    : "rounded-[20px] rounded-br-[9px] border border-[#D8E1EB] bg-[#EEF2F6] text-[#0F172A]";
 
-  const tailClass = isRight
-    ? "absolute bottom-3 -right-[5px] h-3 w-3 rotate-45 border-b border-r border-[#D8DEE6] bg-[#EEF2F6]"
-    : "absolute bottom-3 -left-[5px] h-3 w-3 rotate-45 border-b border-l border-[#E4E7EC] bg-white";
+  const tailOuterClass = incoming
+    ? "absolute -left-[8px] bottom-[8px] h-[18px] w-[18px] rounded-bl-[14px] border-b border-l border-[#E5EAF1] bg-white"
+    : "absolute -right-[8px] bottom-[8px] h-[18px] w-[18px] rounded-br-[14px] border-b border-r border-[#D8E1EB] bg-[#EEF2F6]";
+
+  const tailCutClass = incoming
+    ? "absolute -left-[12px] bottom-[7px] h-[22px] w-[12px] rounded-br-[14px] bg-[var(--inbox-surface,#F8FAFC)]"
+    : "absolute -right-[12px] bottom-[7px] h-[22px] w-[12px] rounded-bl-[14px] bg-[var(--inbox-surface,#F8FAFC)]";
 
   return (
-    <div className={isRight ? "flex justify-end" : "flex justify-start"}>
-      <div className="relative inline-block max-w-full">
-        <span aria-hidden="true" className={tailClass} />
+    <div className={incoming ? "flex justify-start" : "flex justify-end"}>
+      <div className="relative inline-block max-w-full align-top">
+        <span aria-hidden="true" className={tailOuterClass} />
+        <span aria-hidden="true" className={tailCutClass} />
+
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-4 py-3 text-[15px] leading-[1.65] shadow-none",
-            shellClass,
+            "relative z-[1] inline-block max-w-full px-4 py-3 text-[15px] leading-[1.62] shadow-[0_16px_28px_-24px_rgba(15,23,42,0.18)]",
+            bodyClass,
           ].join(" ")}
         >
           {children}
@@ -149,7 +155,7 @@ function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
         align === "end" ? "justify-end" : "justify-start",
       ].join(" ")}
     >
-      <div className="max-w-[60%]">
+      <div className="max-w-[62%]">
         <button
           type="button"
           onClick={onToggle}
@@ -196,20 +202,20 @@ export default function InboxMessageBubble({
   if (inbound) {
     return (
       <div className="flex w-full justify-start">
-        <div className="flex w-full items-start gap-3 pr-[14%] md:pr-[18%] lg:pr-[24%] xl:pr-[28%]">
+        <div className="flex w-full items-start gap-3 pr-[14%] md:pr-[18%] lg:pr-[22%] xl:pr-[26%]">
           <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
           <div className="min-w-0 flex-1">
             <MessageMeta name={displayName} sentAt={sentAt} align="start" />
 
-            <div className="mt-1">
-              <BubbleFrame side="left">
+            <div className="mt-1 max-w-[min(760px,74%)]">
+              <BubbleShell side="left">
                 {text ? (
                   <div className="whitespace-pre-wrap break-words">{text}</div>
                 ) : (
                   <span className="text-[#94A3B8]">(empty message)</span>
                 )}
-              </BubbleFrame>
+              </BubbleShell>
             </div>
 
             {showInspect ? (
@@ -230,17 +236,17 @@ export default function InboxMessageBubble({
 
   return (
     <div className="flex w-full justify-end">
-      <div className="w-full pl-[22%] md:pl-[28%] lg:pl-[34%] xl:pl-[38%]">
+      <div className="w-full pl-[24%] md:pl-[29%] lg:pl-[34%] xl:pl-[39%]">
         <MessageMeta name={outgoingLabel} sentAt={sentAt} align="end" />
 
-        <div className="mt-1">
-          <BubbleFrame side="right">
+        <div className="mt-1 ml-auto max-w-[min(660px,100%)]">
+          <BubbleShell side="right">
             {text ? (
               <div className="whitespace-pre-wrap break-words">{text}</div>
             ) : (
               <span className="text-[#94A3B8]">(empty message)</span>
             )}
-          </BubbleFrame>
+          </BubbleShell>
         </div>
 
         {showInspect ? (
