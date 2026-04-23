@@ -80,7 +80,10 @@ function resolveConversationTitle(thread) {
   const externalUserId = s(thread?.external_user_id);
   const externalThreadId = s(thread?.external_thread_id);
   const channel = lower(
-    thread?.channel || thread?.channel_type || thread?.provider || thread?.source_type
+    thread?.channel ||
+      thread?.channel_type ||
+      thread?.provider ||
+      thread?.source_type
   );
 
   if (displayName && !isPlaceholderDisplayName(displayName)) {
@@ -95,13 +98,8 @@ function resolveConversationTitle(thread) {
     return externalUsername;
   }
 
-  if (channel === "instagram" && externalUserId) {
-    return "Instagram User";
-  }
-
-  if (channel === "telegram" && externalUserId) {
-    return "Telegram User";
-  }
+  if (channel === "instagram" && externalUserId) return "Instagram User";
+  if (channel === "telegram" && externalUserId) return "Telegram User";
 
   if (externalUserId && !looksLikeNumericIdentity(externalUserId)) {
     return externalUserId;
@@ -443,8 +441,8 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
       >
         <span
           className={[
-            "inline-block h-4.5 w-4.5 rounded-full bg-white transition-transform duration-200",
-            enabled ? "translate-x-[20px]" : "translate-x-[3px]",
+            "inline-block h-[18px] w-[18px] rounded-full bg-white transition-transform duration-200",
+            enabled ? "translate-x-[18px]" : "translate-x-[3px]",
           ].join(" ")}
         />
       </button>
@@ -493,7 +491,10 @@ function ConversationIdentity({ thread }) {
         {metaItems.length ? (
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#64748B]">
             {metaItems.map((item, index) => (
-              <div key={`${item}-${index}`} className="inline-flex items-center gap-2">
+              <div
+                key={`${item}-${index}`}
+                className="inline-flex items-center gap-2"
+              >
                 {index > 0 ? <span className="text-[#CBD5E1]">•</span> : null}
                 <span>{item}</span>
               </div>
@@ -566,7 +567,7 @@ function EmptyComposerDock() {
 function FloatingComposerSlot({ children }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.70)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-14">
+      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.68)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-16">
         <div className="pointer-events-auto">{children}</div>
       </div>
     </div>
@@ -856,7 +857,10 @@ export default function InboxDetailPanel({
               ) : !hasThread ? (
                 <EmptyConversationState />
               ) : (
-                <div className="flex min-h-full w-full flex-col px-4 py-6 md:px-6 lg:px-8 xl:px-10">
+                <div
+                  className="flex min-h-full w-full flex-col px-4 py-6 md:px-5 lg:px-6 xl:px-8"
+                  style={{ "--inbox-surface": "#F8FAFC" }}
+                >
                   {showSurfaceBanner ? (
                     <div className="mb-4 w-full">
                       <SurfaceBanner

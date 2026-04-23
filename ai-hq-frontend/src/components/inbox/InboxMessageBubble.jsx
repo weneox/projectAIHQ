@@ -78,7 +78,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.22)]">
+    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.20)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -118,11 +118,11 @@ function BubbleShell({ side = "left", children }) {
 
   const bodyClass = incoming
     ? "rounded-[20px] rounded-bl-[9px] border border-[#E5EAF1] bg-white text-[#0F172A]"
-    : "rounded-[20px] rounded-br-[9px] border border-[#D8E1EB] bg-[#EEF2F6] text-[#0F172A]";
+    : "rounded-[20px] rounded-br-[9px] border border-[#D7DFE8] bg-[#EEF2F4] text-[#0F172A]";
 
   const tailOuterClass = incoming
     ? "absolute -left-[8px] bottom-[8px] h-[18px] w-[18px] rounded-bl-[14px] border-b border-l border-[#E5EAF1] bg-white"
-    : "absolute -right-[8px] bottom-[8px] h-[18px] w-[18px] rounded-br-[14px] border-b border-r border-[#D8E1EB] bg-[#EEF2F6]";
+    : "absolute -right-[8px] bottom-[8px] h-[18px] w-[18px] rounded-br-[14px] border-b border-r border-[#D7DFE8] bg-[#EEF2F4]";
 
   const tailCutClass = incoming
     ? "absolute -left-[12px] bottom-[7px] h-[22px] w-[12px] rounded-br-[14px] bg-[var(--inbox-surface,#F8FAFC)]"
@@ -136,7 +136,7 @@ function BubbleShell({ side = "left", children }) {
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-4 py-3 text-[15px] leading-[1.62] shadow-[0_16px_28px_-24px_rgba(15,23,42,0.18)]",
+            "relative z-[1] inline-block max-w-full px-4 py-3 text-[15px] leading-[1.62] shadow-[0_16px_28px_-24px_rgba(15,23,42,0.16)]",
             bodyClass,
           ].join(" ")}
         >
@@ -202,13 +202,13 @@ export default function InboxMessageBubble({
   if (inbound) {
     return (
       <div className="flex w-full justify-start">
-        <div className="flex w-full items-start gap-3 pr-[14%] md:pr-[18%] lg:pr-[22%] xl:pr-[26%]">
+        <div className="flex w-full items-start gap-3 pr-[12%] md:pr-[16%] lg:pr-[20%] xl:pr-[24%]">
           <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
           <div className="min-w-0 flex-1">
             <MessageMeta name={displayName} sentAt={sentAt} align="start" />
 
-            <div className="mt-1 max-w-[min(760px,74%)]">
+            <div className="mt-1 max-w-[min(760px,76%)]">
               <BubbleShell side="left">
                 {text ? (
                   <div className="whitespace-pre-wrap break-words">{text}</div>
@@ -236,10 +236,10 @@ export default function InboxMessageBubble({
 
   return (
     <div className="flex w-full justify-end">
-      <div className="w-full pl-[24%] md:pl-[29%] lg:pl-[34%] xl:pl-[39%]">
+      <div className="w-full pl-[26%] md:pl-[30%] lg:pl-[35%] xl:pl-[40%]">
         <MessageMeta name={outgoingLabel} sentAt={sentAt} align="end" />
 
-        <div className="mt-1 ml-auto max-w-[min(660px,100%)]">
+        <div className="mt-1 ml-auto max-w-[min(620px,100%)]">
           <BubbleShell side="right">
             {text ? (
               <div className="whitespace-pre-wrap break-words">{text}</div>
