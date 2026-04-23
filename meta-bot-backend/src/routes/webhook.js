@@ -8,6 +8,7 @@ import {
 } from "../services/aihqClient.js";
 import { executeMetaActions } from "../services/actionExecutor.js";
 import { resolveTenantContextFromMetaEvent } from "../services/tenantResolver.js";
+import { resolveMetaProfileForInbound } from "../services/metaProfileLookup.js";
 import {
   markInboundEventProcessed,
   recordWebhookVerificationFailure,
@@ -15,6 +16,10 @@ import {
 
 function s(v) {
   return String(v ?? "").trim();
+}
+
+function lower(v) {
+  return s(v).toLowerCase();
 }
 
 function safeJsonPreview(v, limit = 220) {
@@ -42,12 +47,56 @@ function normalizeUrlLike(value = "") {
   return "";
 }
 
+function pickFirst(...values) {
+  for (const value of values) {
+    const next = s(value);
+    if (next) return next;
+  }
+  return "";
+}
+
 function pickFirstUrl(...values) {
   for (const value of values) {
     const next = normalizeUrlLike(value);
     if (next) return next;
   }
   return "";
+}
+
+function looksLikeNumericIdentity(value = "") {
+  const safe = s(value);
+  if (!safe) return false;
+  return /^\d{5,}$/.test(safe);
+}
+
+function isPlaceholderDisplayName(value = "") {
+  const safe = lower(value);
+  if (!safe) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "website user",
+    "web user",
+    "user",
+    "unknown",
+  ].includes(safe);
+}
+
+function normalizeUsername(value = "") {
+  return s(value).replace(/^@+/, "");
+}
+
+function prefersResolvedName(value = "") {
+  const safe = s(value);
+  if (!safe) return false;
+  if (looksLikeNumericIdentity(safe)) return false;
+  if (isPlaceholderDisplayName(safe)) return false;
+  return true;
 }
 
 function buildAvatarPayloadFromEvent(ev = {}) {
@@ -226,15 +275,10 @@ const logger = createStructuredLogger({
   service: "meta-bot-backend",
   component: "webhook",
 });
+
 const META_SIGNATURE_HEADER_CANDIDATES = Object.freeze([
-  {
-    name: "x-hub-signature-256",
-    algorithm: "sha256",
-  },
-  {
-    name: "x-hub-signature",
-    algorithm: "sha1",
-  },
+  { name: "x-hub-signature-256", algorithm: "sha256" },
+  { name: "x-hub-signature", algorithm: "sha1" },
 ]);
 
 function summarizeExec(exec) {
@@ -339,6 +383,7 @@ function parseMetaSignatureHeader(signature = "", expectedAlgorithm = "") {
 
   const algorithm = s(match[1]).toLowerCase();
   const digest = s(match[2]).toLowerCase();
+
   if (expectedAlgorithm && algorithm !== expectedAlgorithm) {
     return {
       ok: false,
@@ -350,6 +395,7 @@ function parseMetaSignatureHeader(signature = "", expectedAlgorithm = "") {
 
   const expectedDigestLength =
     algorithm === "sha256" ? 64 : algorithm === "sha1" ? 40 : 0;
+
   if (!expectedDigestLength) {
     return {
       ok: false,
@@ -453,6 +499,7 @@ function buildVerificationDebugFields({
 } = {}) {
   const safeSecret = s(secret);
   const safeReason = s(reason);
+
   return {
     requestId: s(req?.requestId),
     correlationId: s(req?.correlationId),
@@ -486,7 +533,7 @@ function buildWebhookTraceFields(
 ) {
   return {
     tenantKey: s(tenantKey),
-    channel: s(ev?.channel || "").toLowerCase(),
+    channel: lower(ev?.channel || ""),
     pageId: s(ev?.pageId || ""),
     igUserId: s(ev?.igUserId || ""),
     userId: s(ev?.userId || ""),
@@ -503,6 +550,7 @@ function buildWebhookTraceFields(
 export function verifyMetaWebhookSignature(req) {
   const secretConfig = getMetaWebhookSecretConfig();
   const secret = s(secretConfig.resolvedSecret);
+
   if (secretConfig.mismatch) {
     recordWebhookVerificationFailure("secret_env_mismatch");
     logger.error(
@@ -544,6 +592,7 @@ export function verifyMetaWebhookSignature(req) {
   const { headerName, headerValue, expectedAlgorithm } =
     pickMetaSignatureHeader(req);
   const { rawBody, source: rawBodySource } = readRawBodyBuffer(req);
+
   if (!headerValue) {
     recordWebhookVerificationFailure("missing_meta_signature");
     logger.warn("meta.webhook.verify.rejected", {
@@ -607,6 +656,7 @@ export function verifyMetaWebhookSignature(req) {
       error: "missing_raw_body",
     };
   }
+
   const expected = computeMetaSignature(
     rawBody,
     secret,
@@ -651,11 +701,12 @@ export function verifyMetaWebhookSignature(req) {
       reason: "accepted",
     })
   );
+
   return { ok: true };
 }
 
 function buildCustomerContextFromEvent(ev) {
-  const channel = s(ev?.channel || "instagram").toLowerCase() || "instagram";
+  const channel = lower(ev?.channel || "instagram") || "instagram";
   const avatar = buildAvatarPayloadFromEvent(ev);
 
   const sharedIdentity = {
@@ -690,7 +741,7 @@ function buildCustomerContextFromEvent(ev) {
       profilePictureUrl: s(avatar.profilePictureUrl || ""),
     },
     instagram:
-      channel === "instagram" || channel === "facebook"
+      channel === "instagram" || channel === "facebook" || channel === "messenger"
         ? {
             username: s(ev?.username || ""),
             fullName: s(ev?.customerName || ""),
@@ -759,7 +810,7 @@ function buildTenantContextFromResolved(tenantCtx) {
 }
 
 function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
-  const channel = s(ev?.channel || "instagram").toLowerCase() || "instagram";
+  const channel = lower(ev?.channel || "instagram") || "instagram";
   const externalUserId = s(ev?.userId || "");
   const externalMessageId = s(ev?.messageId || ev?.mid || "");
   const externalThreadId = s(ev?.externalThreadId || externalUserId || "");
@@ -819,7 +870,7 @@ function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
 }
 
 function buildAihqCommentPayload(ev, rawBody, tenantCtx) {
-  const channel = s(ev?.channel || "instagram").toLowerCase() || "instagram";
+  const channel = lower(ev?.channel || "instagram") || "instagram";
   const customerContext = buildCustomerContextFromEvent(ev);
   const conversationContext = buildConversationContextFromEvent(ev);
   const tenantContext = buildTenantContextFromResolved(tenantCtx);
@@ -900,7 +951,7 @@ function summarizeInbound(ev) {
 
 async function resolveTenantForEvent(ev, requestContext = {}, requestLogger = null) {
   const out = await resolveTenantContextFromMetaEvent({
-    channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
+    channel: lower(ev?.channel || "instagram") || "instagram",
     recipientId: s(ev?.recipientId || ""),
     pageId: s(ev?.pageId || ""),
     igUserId: s(ev?.igUserId || ""),
@@ -931,454 +982,419 @@ function pickResolvedTenantKey(aihqResponse, tenantCtx) {
   return s(aihqResponse?.json?.tenant?.tenant_key || tenantCtx?.tenantKey || "");
 }
 
-async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
-  const requestLogger = logger.child({
-    requestId: s(requestContext?.requestId),
-    correlationId: s(requestContext?.correlationId),
-  });
-  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
+function pickResolvedTenantId(aihqResponse, tenantCtx) {
+  return s(
+    aihqResponse?.json?.tenant?.tenant_id ||
+      tenantCtx?.tenant?.tenantId ||
+      tenantCtx?.tenant?.id ||
+      ""
+  );
+}
 
-  if (!tenantCtx.ok) {
-    requestLogger.warn("meta.webhook.text.tenant_resolution_failed", {
+function extractActionsFromAihqResponse(json = {}) {
+  const safe = normalizeObj(json);
+
+  if (Array.isArray(safe.actions)) return safe.actions;
+  if (Array.isArray(safe?.decision?.actions)) return safe.decision.actions;
+  if (Array.isArray(safe?.result?.actions)) return safe.result.actions;
+  if (Array.isArray(safe?.data?.actions)) return safe.data.actions;
+  return [];
+}
+
+function extractThreadIdFromAihqResponse(json = {}) {
+  const safe = normalizeObj(json);
+
+  return s(
+    safe?.threadId ||
+      safe?.thread_id ||
+      safe?.thread?.id ||
+      safe?.result?.threadId ||
+      safe?.result?.thread?.id ||
+      ""
+  );
+}
+
+async function enrichInboundEventProfile(ev = {}, tenantCtx = {}, requestLogger = logger) {
+  const safeEvent = { ...ev };
+  const safeChannel = lower(safeEvent?.channel || "instagram") || "instagram";
+
+  if (!["instagram", "facebook", "messenger"].includes(safeChannel)) {
+    return safeEvent;
+  }
+
+  if (!s(safeEvent?.userId)) {
+    return safeEvent;
+  }
+
+  const lookup = await resolveMetaProfileForInbound({
+    channel: safeChannel,
+    userId: s(safeEvent?.userId),
+    recipientId: s(safeEvent?.recipientId),
+    pageId: s(safeEvent?.pageId),
+    igUserId: s(safeEvent?.igUserId),
+  });
+
+  if (!lookup?.ok || !lookup?.profile) {
+    requestLogger.info("meta.webhook.profile_lookup.skipped", {
+      channel: safeChannel,
+      userId: s(safeEvent?.userId),
+      recipientId: s(safeEvent?.recipientId),
+      pageId: s(safeEvent?.pageId),
+      igUserId: s(safeEvent?.igUserId),
+      error: s(lookup?.error),
+      status: Number(lookup?.status || 0),
+    });
+    return safeEvent;
+  }
+
+  const resolvedUsername = normalizeUsername(lookup.profile.username);
+  const resolvedFullName = s(lookup.profile.fullName);
+  const resolvedAvatarUrl = normalizeUrlLike(lookup.profile.avatarUrl);
+
+  const currentName = s(safeEvent?.customerName);
+  const currentUsername = normalizeUsername(safeEvent?.username);
+  const currentAvatarUrl = pickFirstUrl(
+    safeEvent?.avatar_url,
+    safeEvent?.avatarUrl,
+    safeEvent?.profile_picture_url,
+    safeEvent?.profilePictureUrl
+  );
+
+  if (!currentUsername && resolvedUsername) {
+    safeEvent.username = resolvedUsername;
+  }
+
+  if (!prefersResolvedName(currentName) && prefersResolvedName(resolvedFullName)) {
+    safeEvent.customerName = resolvedFullName;
+  }
+
+  if (!currentAvatarUrl && resolvedAvatarUrl) {
+    safeEvent.avatar_url = resolvedAvatarUrl;
+    safeEvent.avatarUrl = resolvedAvatarUrl;
+    safeEvent.profile_picture_url = resolvedAvatarUrl;
+    safeEvent.profilePictureUrl = resolvedAvatarUrl;
+  }
+
+  requestLogger.info("meta.webhook.profile_lookup.enriched", {
+    channel: safeChannel,
+    userId: s(safeEvent?.userId),
+    recipientId: s(safeEvent?.recipientId),
+    pageId: s(safeEvent?.pageId),
+    igUserId: s(safeEvent?.igUserId),
+    addedUsername: Boolean(!currentUsername && resolvedUsername),
+    addedFullName: Boolean(
+      !prefersResolvedName(currentName) && prefersResolvedName(resolvedFullName)
+    ),
+    addedAvatarUrl: Boolean(!currentAvatarUrl && resolvedAvatarUrl),
+  });
+
+  return safeEvent;
+}
+
+async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
+  const requestLogger =
+    logger.child?.({
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      flow: "meta_text_event",
+    }) || logger;
+
+  const dedupe = markInboundEventProcessed(ev);
+  if (dedupe.duplicate) {
+    requestLogger.info("meta.webhook.text.duplicate_suppressed", {
       ...summarizeInbound(ev),
-      error: tenantCtx.error,
+      dedupeKey: dedupe.key,
     });
     return;
   }
 
-  const payload = buildAihqInboxPayload(ev, rawBody, tenantCtx);
-  const baseTrace = buildWebhookTraceFields(ev, requestContext, {
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
+  if (!tenantCtx.ok) {
+    requestLogger.warn("meta.webhook.text.tenant_resolution_failed", {
+      ...summarizeInbound(ev),
+      error: tenantCtx.error,
+      dedupeKey: dedupe.key,
+    });
+    return;
+  }
+
+  const enrichedEvent = await enrichInboundEventProfile(ev, tenantCtx, requestLogger);
+  const payload = buildAihqInboxPayload(enrichedEvent, rawBody, tenantCtx);
+  const baseTrace = buildWebhookTraceFields(enrichedEvent, requestContext, {
     tenantKey: tenantCtx.tenantKey,
-    dedupeKey: requestContext?.dedupeKey,
+    dedupeKey: dedupe.key,
   });
 
   requestLogger.info("meta.webhook.text.received", {
-    ...summarizeInbound(ev),
+    ...summarizeInbound(enrichedEvent),
     tenantKey: tenantCtx.tenantKey,
+    dedupeKey: dedupe.key,
   });
 
   requestLogger.info("meta.webhook.forward.started", baseTrace);
   const out = await forwardToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
+  const resolvedTenantId = pickResolvedTenantId(out, tenantCtx);
 
   requestLogger.info("meta.webhook.text.forwarded", {
-    ok: out.ok,
-    status: out.status,
-    error: out.error,
-    duplicate: Boolean(out?.json?.duplicate),
-    deduped: Boolean(out?.json?.deduped),
-    intent: s(out?.json?.intent || ""),
-    leadScore: Number(out?.json?.leadScore || 0),
-    actionsCount: Array.isArray(out?.json?.actions) ? out.json.actions.length : 0,
-    threadId: s(out?.json?.thread?.id || ""),
-      tenantKey: resolvedTenantKey,
-      preview: safeJsonPreview(out?.json),
-    });
-
-  if (!out.ok) {
-    requestLogger.warn("meta.webhook.forward.failed", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      status: Number(out?.status || 0),
-      error: s(out?.error || ""),
-    });
-    requestLogger.warn("meta.webhook.text.forward_failed", {
-      channel: s(ev?.channel || ""),
-      userId: s(ev?.userId || ""),
-      externalMessageId: s(ev?.messageId || ev?.mid || ""),
-      error: s(out?.error || ""),
-      status: Number(out?.status || 0),
-      tenantKey: resolvedTenantKey,
-    });
-    return;
-  }
-
-  requestLogger.info("meta.webhook.forward.succeeded", {
     ...baseTrace,
-    tenantKey: resolvedTenantKey,
+    ok: Boolean(out?.ok),
     status: Number(out?.status || 0),
+    error: s(out?.error),
+    resolvedTenantKey,
   });
 
-  const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
-
-  if (!actions.length) {
-    requestLogger.info("meta.webhook.text.no_actions", {
-      duplicate: Boolean(out?.json?.duplicate),
-      deduped: Boolean(out?.json?.deduped),
-      intent: s(out?.json?.intent || ""),
-      threadId: s(out?.json?.thread?.id || ""),
-      tenantKey: resolvedTenantKey,
+  if (!out?.ok) {
+    requestLogger.warn("meta.webhook.text.forward_failed", {
+      ...baseTrace,
+      status: Number(out?.status || 0),
+      error: s(out?.error),
+      responsePreview: safeJsonPreview(out?.json),
     });
     return;
   }
 
-  requestLogger.info("meta.webhook.actions.started", {
-    ...baseTrace,
+  const actions = extractActionsFromAihqResponse(out?.json);
+  if (!actions.length) {
+    requestLogger.info("meta.webhook.actions.none", {
+      ...baseTrace,
+      resolvedTenantKey,
+    });
+    return;
+  }
+
+  const threadId = extractThreadIdFromAihqResponse(out?.json);
+  const exec = await executeMetaActions(actions, {
+    channel: lower(enrichedEvent?.channel || "instagram") || "instagram",
+    recipientId: s(enrichedEvent?.recipientId),
+    userId: s(enrichedEvent?.userId),
     tenantKey: resolvedTenantKey,
-    actionsCount: actions.length,
+    tenantId: resolvedTenantId,
+    threadId,
+    pageId: s(enrichedEvent?.pageId),
+    igUserId: s(enrichedEvent?.igUserId),
+    meta: {
+      tenantKey: resolvedTenantKey,
+      tenantId: resolvedTenantId,
+      threadId,
+      pageId: s(enrichedEvent?.pageId),
+      igUserId: s(enrichedEvent?.igUserId),
+      recipientId: s(enrichedEvent?.recipientId),
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      dedupeKey: dedupe.key,
+    },
   });
-  let exec = null;
-  try {
-    exec = await executeMetaActions(actions, {
-      channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
-      userId: s(ev?.userId || ""),
-      recipientId: s(ev?.userId || ""),
-      tenantKey: resolvedTenantKey,
-      threadId: s(out?.json?.thread?.id || ""),
-      pageId: s(ev?.pageId || ""),
-      igUserId: s(ev?.igUserId || ""),
-      meta: {
-        pageId: s(ev?.pageId || ""),
-        igUserId: s(ev?.igUserId || ""),
-      },
-    });
-  } catch (error) {
-    requestLogger.error("meta.webhook.actions.failed", error, {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-    });
-    throw error;
-  }
 
-  const execSummary = summarizeExec(exec);
-  if (exec?.ok) {
-    requestLogger.info("meta.webhook.actions.succeeded", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-      ...execSummary,
-    });
-  } else {
-    requestLogger.warn("meta.webhook.actions.failed", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-      ...execSummary,
-    });
-  }
-
-  requestLogger.info("meta.webhook.text.actions_executed", {
-    tenantKey: resolvedTenantKey,
-    ...execSummary,
+  requestLogger.info("meta.webhook.actions.executed", {
+    ...baseTrace,
+    resolvedTenantKey,
+    threadId,
+    execution: summarizeExec(exec),
   });
 }
 
 async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
-  const requestLogger = logger.child({
-    requestId: s(requestContext?.requestId),
-    correlationId: s(requestContext?.correlationId),
-  });
-  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
+  const requestLogger =
+    logger.child?.({
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      flow: "meta_comment_event",
+    }) || logger;
 
+  const dedupe = markInboundEventProcessed(ev);
+  if (dedupe.duplicate) {
+    requestLogger.info("meta.webhook.comment.duplicate_suppressed", {
+      ...summarizeInbound(ev),
+      dedupeKey: dedupe.key,
+    });
+    return;
+  }
+
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
   if (!tenantCtx.ok) {
     requestLogger.warn("meta.webhook.comment.tenant_resolution_failed", {
       ...summarizeInbound(ev),
       error: tenantCtx.error,
+      dedupeKey: dedupe.key,
     });
     return;
   }
 
-  const payload = buildAihqCommentPayload(ev, rawBody, tenantCtx);
-  const baseTrace = buildWebhookTraceFields(ev, requestContext, {
+  const enrichedEvent = await enrichInboundEventProfile(ev, tenantCtx, requestLogger);
+  const payload = buildAihqCommentPayload(enrichedEvent, rawBody, tenantCtx);
+  const baseTrace = buildWebhookTraceFields(enrichedEvent, requestContext, {
     tenantKey: tenantCtx.tenantKey,
-    dedupeKey: requestContext?.dedupeKey,
+    dedupeKey: dedupe.key,
   });
 
   requestLogger.info("meta.webhook.comment.received", {
-    ...summarizeInbound(ev),
+    ...summarizeInbound(enrichedEvent),
     tenantKey: tenantCtx.tenantKey,
+    dedupeKey: dedupe.key,
   });
 
-  requestLogger.info("meta.webhook.forward.started", baseTrace);
+  requestLogger.info("meta.webhook.comment_forward.started", baseTrace);
   const out = await forwardCommentToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
+  const resolvedTenantId = pickResolvedTenantId(out, tenantCtx);
 
   requestLogger.info("meta.webhook.comment.forwarded", {
-    ok: out.ok,
-    status: out.status,
-    error: out.error,
-    classification: s(out?.json?.classification?.category || ""),
-    priority: s(out?.json?.classification?.priority || ""),
-    requiresHuman: Boolean(out?.json?.classification?.requiresHuman),
-    shouldCreateLead: Boolean(out?.json?.classification?.shouldCreateLead),
-    commentId: s(out?.json?.comment?.id || ""),
-      tenantKey: resolvedTenantKey,
-      preview: safeJsonPreview(out?.json),
-    });
-
-  if (!out.ok) {
-    requestLogger.warn("meta.webhook.forward.failed", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      status: Number(out?.status || 0),
-      error: s(out?.error || ""),
-    });
-    requestLogger.warn("meta.webhook.comment.forward_failed", {
-      channel: s(ev?.channel || ""),
-      userId: s(ev?.userId || ""),
-      externalCommentId: s(ev?.externalCommentId || ""),
-      error: s(out?.error || ""),
-      status: Number(out?.status || 0),
-      tenantKey: resolvedTenantKey,
-    });
-    return;
-  }
-
-  requestLogger.info("meta.webhook.forward.succeeded", {
     ...baseTrace,
-    tenantKey: resolvedTenantKey,
+    ok: Boolean(out?.ok),
     status: Number(out?.status || 0),
+    error: s(out?.error),
+    resolvedTenantKey,
   });
 
-  const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
-
-  if (!actions.length) {
-    requestLogger.info("meta.webhook.comment.no_actions", {
-      classification: s(out?.json?.classification?.category || ""),
-      commentId: s(out?.json?.comment?.id || ""),
-      tenantKey: resolvedTenantKey,
+  if (!out?.ok) {
+    requestLogger.warn("meta.webhook.comment.forward_failed", {
+      ...baseTrace,
+      status: Number(out?.status || 0),
+      error: s(out?.error),
+      responsePreview: safeJsonPreview(out?.json),
     });
     return;
   }
 
-  requestLogger.info("meta.webhook.actions.started", {
-    ...baseTrace,
+  const actions = extractActionsFromAihqResponse(out?.json);
+  if (!actions.length) {
+    requestLogger.info("meta.webhook.comment_actions.none", {
+      ...baseTrace,
+      resolvedTenantKey,
+    });
+    return;
+  }
+
+  const exec = await executeMetaActions(actions, {
+    channel: lower(enrichedEvent?.channel || "instagram") || "instagram",
+    recipientId: s(enrichedEvent?.recipientId),
+    userId: s(enrichedEvent?.userId),
+    externalCommentId: s(enrichedEvent?.externalCommentId),
+    commentId: s(enrichedEvent?.externalCommentId),
     tenantKey: resolvedTenantKey,
-    actionsCount: actions.length,
+    tenantId: resolvedTenantId,
+    pageId: s(enrichedEvent?.pageId),
+    igUserId: s(enrichedEvent?.igUserId),
+    meta: {
+      tenantKey: resolvedTenantKey,
+      tenantId: resolvedTenantId,
+      pageId: s(enrichedEvent?.pageId),
+      igUserId: s(enrichedEvent?.igUserId),
+      recipientId: s(enrichedEvent?.recipientId),
+      externalCommentId: s(enrichedEvent?.externalCommentId),
+      externalParentCommentId: s(enrichedEvent?.externalParentCommentId),
+      externalPostId: s(enrichedEvent?.externalPostId),
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      dedupeKey: dedupe.key,
+    },
   });
-  let exec = null;
-  try {
-    exec = await executeMetaActions(actions, {
-      channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
-      userId: s(ev?.userId || ""),
-      recipientId: s(ev?.userId || ""),
-      tenantKey: resolvedTenantKey,
-      threadId: s(out?.json?.thread?.id || ""),
-      externalCommentId: s(ev?.externalCommentId || ""),
-      externalPostId: s(ev?.externalPostId || ""),
-      pageId: s(ev?.pageId || ""),
-      igUserId: s(ev?.igUserId || ""),
-      meta: {
-        pageId: s(ev?.pageId || ""),
-        igUserId: s(ev?.igUserId || ""),
-        externalCommentId: s(ev?.externalCommentId || ""),
-        externalPostId: s(ev?.externalPostId || ""),
-      },
-    });
-  } catch (error) {
-    requestLogger.error("meta.webhook.actions.failed", error, {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-    });
-    throw error;
+
+  requestLogger.info("meta.webhook.comment_actions.executed", {
+    ...baseTrace,
+    resolvedTenantKey,
+    execution: summarizeExec(exec),
+  });
+}
+
+function verifyWebhookChallenge(req, res) {
+  const mode = s(req.query["hub.mode"]);
+  const token = s(req.query["hub.verify_token"]);
+  const challenge = s(req.query["hub.challenge"]);
+
+  if (mode !== "subscribe") {
+    return res.status(400).send("Unsupported mode");
   }
 
-  const execSummary = summarizeExec(exec);
-  if (exec?.ok) {
-    requestLogger.info("meta.webhook.actions.succeeded", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-      ...execSummary,
-    });
-  } else {
-    requestLogger.warn("meta.webhook.actions.failed", {
-      ...baseTrace,
-      tenantKey: resolvedTenantKey,
-      actionsCount: actions.length,
-      ...execSummary,
+  if (!VERIFY_TOKEN || token !== VERIFY_TOKEN) {
+    return res.status(403).send("Forbidden");
+  }
+
+  return res.status(200).send(challenge || "ok");
+}
+
+async function receiveWebhook(req, res) {
+  const requestContext = {
+    requestId: s(req?.requestId),
+    correlationId: s(req?.correlationId),
+  };
+
+  const verification = verifyMetaWebhookSignature(req);
+  if (!verification.ok) {
+    return res.status(verification.status || 403).json({
+      ok: false,
+      error: verification.error || "webhook_verification_failed",
     });
   }
 
-  requestLogger.info("meta.webhook.comment.actions_executed", {
-    tenantKey: resolvedTenantKey,
-    ...execSummary,
+  const body = normalizeObj(req.body);
+  const events = Array.isArray(extractMetaEvents(body)) ? extractMetaEvents(body) : [];
+
+  logger.info("meta.webhook.received", {
+    requestId: requestContext.requestId,
+    correlationId: requestContext.correlationId,
+    totalEvents: events.length,
+    object: s(body?.object || ""),
+  });
+
+  for (const ev of events) {
+    const safeEvent = normalizeObj(ev);
+
+    if (safeEvent.ignored === true || safeEvent.supported !== true) {
+      logger.info("meta.webhook.event.ignored", {
+        requestId: requestContext.requestId,
+        correlationId: requestContext.correlationId,
+        ...summarizeInbound(safeEvent),
+      });
+      continue;
+    }
+
+    try {
+      if (lower(safeEvent?.eventType) === "comment") {
+        await handleSupportedCommentEvent(safeEvent, body, requestContext);
+        continue;
+      }
+
+      if (lower(safeEvent?.eventType) === "text") {
+        await handleSupportedTextEvent(safeEvent, body, requestContext);
+        continue;
+      }
+
+      logger.info("meta.webhook.event.unsupported_supported_branch", {
+        requestId: requestContext.requestId,
+        correlationId: requestContext.correlationId,
+        ...summarizeInbound(safeEvent),
+      });
+    } catch (error) {
+      logger.error("meta.webhook.event.unhandled_error", error, {
+        requestId: requestContext.requestId,
+        correlationId: requestContext.correlationId,
+        ...summarizeInbound(safeEvent),
+      });
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    received: true,
+    events: events.length,
   });
 }
 
 export function registerWebhookRoutes(app) {
-  app.get("/webhook", (req, res) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      logger.info("meta.webhook.challenge.verified");
-      return res.status(200).send(String(challenge || ""));
-    }
-
-    return res.sendStatus(403);
-  });
-
-  app.post("/webhook", async (req, res) => {
-    const requestContext = {
-      requestId: s(req.requestId),
-      correlationId: s(req.correlationId),
-    };
-    const verified = verifyMetaWebhookSignature(req);
-    if (!verified.ok) {
-      return res.status(verified.status || 403).json({
-        ok: false,
-        error: verified.error,
-      });
-    }
-
-    res.sendStatus(200);
-
-    try {
-      const events = extractMetaEvents(req.body);
-
-      if (!events.length) {
-        logger.info("meta.webhook.event.ignored", {
-          ...buildWebhookTraceFields({}, requestContext),
-          reason: "empty_event_batch",
-        });
-        logger.info("meta.webhook.ignored.empty");
-        return;
-      }
-
-      for (const ev of events) {
-        const supported = Boolean(ev?.supported);
-        const ignored = Boolean(ev?.ignored);
-        const userId = s(ev?.userId || "");
-        const text = s(ev?.text || "");
-        const eventType = s(ev?.eventType || "unknown");
-
-        const dedupe = markInboundEventProcessed(ev);
-        if (dedupe.duplicate) {
-          logger.info("meta.webhook.event.ignored", {
-            ...buildWebhookTraceFields(ev, requestContext, {
-              dedupeKey: dedupe.key,
-            }),
-            reason: "duplicate_suppressed",
-          });
-          logger.info("meta.webhook.duplicate_suppressed", {
-            dedupeKey: dedupe.key,
-            ...summarizeInbound(ev),
-          });
-          continue;
-        }
-
-        if (ignored || !supported) {
-          logger.info("meta.webhook.event.ignored", {
-            ...buildWebhookTraceFields(ev, requestContext, {
-              dedupeKey: dedupe.key,
-            }),
-            reason: s(ev?.ignoreReason || "unsupported"),
-          });
-          logger.info("meta.webhook.ignored.event", {
-            eventType,
-            channel: s(ev?.channel || "unknown"),
-            userId,
-            reason: s(ev?.ignoreReason || "unsupported"),
-            dedupeKey: dedupe.key,
-          });
-          continue;
-        }
-
-        if (eventType === "text") {
-          if (!userId) {
-            logger.warn("meta.webhook.event.ignored", {
-              ...buildWebhookTraceFields(ev, requestContext, {
-                dedupeKey: dedupe.key,
-              }),
-              reason: "missing_user_id",
-            });
-            logger.warn("meta.webhook.text.ignored_missing_user", {
-              ...summarizeInbound(ev),
-              dedupeKey: dedupe.key,
-            });
-            continue;
-          }
-
-          if (!text) {
-            logger.info("meta.webhook.event.ignored", {
-              ...buildWebhookTraceFields(ev, requestContext, {
-                dedupeKey: dedupe.key,
-              }),
-              reason: "empty_text",
-            });
-            logger.info("meta.webhook.text.ignored_empty", {
-              ...summarizeInbound(ev),
-              dedupeKey: dedupe.key,
-            });
-            continue;
-          }
-
-          logger.info("meta.webhook.event.accepted", {
-            ...buildWebhookTraceFields(ev, requestContext, {
-              dedupeKey: dedupe.key,
-            }),
-          });
-          await handleSupportedTextEvent(ev, req.body, {
-            ...requestContext,
-            dedupeKey: dedupe.key,
-          });
-          continue;
-        }
-
-        if (eventType === "comment") {
-          if (!s(ev?.externalCommentId || "")) {
-            logger.warn("meta.webhook.event.ignored", {
-              ...buildWebhookTraceFields(ev, requestContext, {
-                dedupeKey: dedupe.key,
-              }),
-              reason: "missing_comment_id",
-            });
-            logger.warn("meta.webhook.comment.ignored_missing_comment_id", {
-              ...summarizeInbound(ev),
-              dedupeKey: dedupe.key,
-            });
-            continue;
-          }
-
-          if (!text) {
-            logger.info("meta.webhook.event.ignored", {
-              ...buildWebhookTraceFields(ev, requestContext, {
-                dedupeKey: dedupe.key,
-              }),
-              reason: "empty_comment_text",
-            });
-            logger.info("meta.webhook.comment.ignored_empty", {
-              ...summarizeInbound(ev),
-              dedupeKey: dedupe.key,
-            });
-            continue;
-          }
-
-          logger.info("meta.webhook.event.accepted", {
-            ...buildWebhookTraceFields(ev, requestContext, {
-              dedupeKey: dedupe.key,
-            }),
-          });
-          await handleSupportedCommentEvent(ev, req.body, {
-            ...requestContext,
-            dedupeKey: dedupe.key,
-          });
-          continue;
-        }
-
-        logger.info("meta.webhook.event.ignored", {
-          ...buildWebhookTraceFields(ev, requestContext, {
-            dedupeKey: dedupe.key,
-          }),
-          reason: "supported_non_handled",
-        });
-        logger.info("meta.webhook.ignored.supported_non_handled", {
-          eventType,
-          channel: s(ev?.channel || "unknown"),
-          userId,
-          dedupeKey: dedupe.key,
-        });
-      }
-    } catch (err) {
-      logger.error("meta.webhook.processing_failed", err, {
-        message: s(err?.message || err),
-        requestId: requestContext.requestId,
-        correlationId: requestContext.correlationId,
-      });
-    }
-  });
+  app.get("/webhook", verifyWebhookChallenge);
+  app.post("/webhook", receiveWebhook);
 }
+
+export const __test__ = {
+  parseMetaSignatureHeader,
+  computeMetaSignature,
+  buildCustomerContextFromEvent,
+  buildConversationContextFromEvent,
+  buildTenantContextFromResolved,
+  buildAihqInboxPayload,
+  buildAihqCommentPayload,
+  summarizeInbound,
+  enrichInboundEventProfile,
+};

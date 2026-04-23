@@ -1,5 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock3, Instagram, Send } from "lucide-react";
+
+import instagramLogo from "../../assets/channels/instagram.svg";
+import telegramLogo from "../../assets/channels/telegram.svg";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -180,8 +183,7 @@ function resolveMeta(thread = {}) {
   if (thread?.handoff_active) {
     return {
       label: "Handoff",
-      tone:
-        "bg-[rgba(255,247,237,0.96)] text-[rgba(180,83,9,0.96)]",
+      tone: "bg-[rgba(255,247,237,0.96)] text-[rgba(180,83,9,0.96)]",
     };
   }
 
@@ -189,8 +191,7 @@ function resolveMeta(thread = {}) {
   if (channel) {
     return {
       label: channel,
-      tone:
-        "bg-[rgba(248,250,252,0.96)] text-[rgba(71,85,105,0.96)]",
+      tone: "bg-[rgba(248,250,252,0.96)] text-[rgba(71,85,105,0.96)]",
     };
   }
 
@@ -205,16 +206,34 @@ function ChannelBadge({ channel }) {
 
   if (normalized === "instagram") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_52%,#8134af_78%,#515bd4_100%)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
-        <Instagram className="h-2.5 w-2.5" strokeWidth={2.2} />
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+        <img
+          src={instagramLogo}
+          alt="Instagram"
+          className="h-full w-full object-cover"
+          draggable="false"
+        />
       </span>
     );
   }
 
   if (normalized === "telegram") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[rgba(34,158,217,1)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
-        <Send className="h-2.5 w-2.5" strokeWidth={2.4} />
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+        <img
+          src={telegramLogo}
+          alt="Telegram"
+          className="h-full w-full object-cover"
+          draggable="false"
+        />
+      </span>
+    );
+  }
+
+  if (normalized === "facebook" || normalized === "messenger") {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[rgba(37,99,235,0.98)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+        <Send className="h-2.5 w-2.5" strokeWidth={2.2} />
       </span>
     );
   }
@@ -239,6 +258,12 @@ export default function InboxThreadCard({
   const channelKey = useMemo(() => resolveChannelKey(thread), [thread]);
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;
+
+  useEffect(() => {
+    if (failedAvatarKey && failedAvatarKey !== avatarKey) {
+      setFailedAvatarKey("");
+    }
+  }, [avatarKey, failedAvatarKey]);
 
   return (
     <button
