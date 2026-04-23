@@ -854,7 +854,7 @@ export default function InboxDetailPanel({
           <>
             <div
               ref={scrollViewportRef}
-              className="h-full overflow-y-auto pb-[194px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="h-full overflow-y-auto pb-[280px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {surface?.loading && !hasThread ? (
                 <InboxDetailSkeleton />
@@ -884,11 +884,12 @@ export default function InboxDetailPanel({
                       </div>
                     </div>
                   ) : (
-                    <div className="mx-auto mt-auto w-full max-w-[920px] space-y-4">
+                    <div className="mx-auto mt-auto w-full max-w-[920px] space-y-5">
                       {visibleMessages.map((message) => (
                         <InboxMessageBubble
                           key={message.id}
                           m={message}
+                          thread={selectedThread}
                           attemptsByCorrelation={attemptsByCorrelation}
                           enableInspect={false}
                         />
