@@ -370,8 +370,8 @@ test(
 
         assert.ok(listedThread, "thread should be listed");
         assert.equal(s(listedThread?.customer_name), "Taylor Visitor");
-      assert.equal(
-        s(listedThread?.last_message_text),
+        assert.equal(
+          s(listedThread?.last_message_text),
         "Hi Taylor — how can we help?"
         );
       }
