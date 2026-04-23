@@ -160,25 +160,38 @@ function attachTelegramAvatarToInput(input = {}, avatarResult = null) {
   const patch = buildTelegramAvatarPatch(avatarResult);
   if (!patch) return input;
 
-  const next = {
+  const existingCustomerContext = obj(input?.customerContext);
+  const existingTelegramContext = obj(existingCustomerContext?.telegram);
+  const existingProfileContext = obj(existingCustomerContext?.profile);
+  const existingMeta = obj(input?.meta);
+  const existingMetaTelegram = obj(existingMeta?.telegram);
+  const existingIdentity = obj(existingMeta?.identity);
+
+  return {
     ...input,
     customerContext: {
-      ...obj(input?.customerContext),
+      ...existingCustomerContext,
+      profile: {
+        ...existingProfileContext,
+        ...patch,
+      },
       telegram: {
-        ...obj(obj(input?.customerContext).telegram),
+        ...existingTelegramContext,
         ...patch,
       },
     },
     meta: {
-      ...obj(input?.meta),
+      ...existingMeta,
+      identity: {
+        ...existingIdentity,
+        ...patch,
+      },
       telegram: {
-        ...obj(obj(input?.meta).telegram),
+        ...existingMetaTelegram,
         ...patch,
       },
     },
   };
-
-  return next;
 }
 
 function normalizeTelegramWebhookUpdate(update = {}, tenantKey = "") {
@@ -231,6 +244,7 @@ function normalizeTelegramWebhookUpdate(update = {}, tenantKey = "") {
   const username = s(from?.username) || null;
   const firstName = s(from?.first_name) || null;
   const lastName = s(from?.last_name) || null;
+  const fullName = buildTelegramCustomerName(from);
   const timestamp =
     Number(message?.date || 0) > 0 ? Number(message.date) * 1000 : Date.now();
 
@@ -243,16 +257,25 @@ function normalizeTelegramWebhookUpdate(update = {}, tenantKey = "") {
       externalThreadId: chatId,
       externalUserId: userId,
       externalUsername: username,
-      customerName: buildTelegramCustomerName(from),
+      customerName: fullName,
       externalMessageId: `telegram:${chatId}:${messageId}`,
       text,
       timestamp,
       raw: safeUpdate,
       customerContext: {
+        fullName,
+        username,
+        externalUserId: userId,
+        channel: TELEGRAM_CHANNEL,
+        profile: {
+          fullName,
+          username,
+        },
         telegram: {
           chatId,
           userId,
           username,
+          fullName,
           firstName,
           lastName,
         },
@@ -274,14 +297,23 @@ function normalizeTelegramWebhookUpdate(update = {}, tenantKey = "") {
       },
       meta: {
         source: TELEGRAM_PROVIDER,
+        provider: TELEGRAM_PROVIDER,
         platform: TELEGRAM_PROVIDER,
+        channel: TELEGRAM_CHANNEL,
         timestamp,
         raw: safeUpdate,
+        identity: {
+          externalUserId: userId,
+          externalThreadId: chatId,
+          externalUsername: username,
+          customerName: fullName,
+        },
         telegram: {
           updateId,
           chatId,
           userId,
           username,
+          fullName,
           firstName,
           lastName,
           messageId,
@@ -324,6 +356,7 @@ function buildInternalIngestRequest(req, tenantKey, normalizedInput) {
     body: {
       ...normalizedInput,
       source: TELEGRAM_PROVIDER,
+      provider: TELEGRAM_PROVIDER,
       platform: TELEGRAM_PROVIDER,
       channel: TELEGRAM_CHANNEL,
     },
