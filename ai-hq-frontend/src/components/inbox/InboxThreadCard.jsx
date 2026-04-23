@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Clock3, Instagram, Send } from "lucide-react";
 
 function s(v, d = "") {
@@ -239,12 +239,6 @@ export default function InboxThreadCard({
   const channelKey = useMemo(() => resolveChannelKey(thread), [thread]);
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;
-
-  useEffect(() => {
-    if (failedAvatarKey && failedAvatarKey !== avatarKey) {
-      setFailedAvatarKey("");
-    }
-  }, [avatarKey, failedAvatarKey]);
 
   return (
     <button
