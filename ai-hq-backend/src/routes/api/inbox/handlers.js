@@ -189,6 +189,26 @@ async function auditSafe(db, entry = {}) {
   } catch {}
 }
 
+function sqlQuoteLiteral(value = "") {
+  return `'${String(value ?? "").replace(/'/g, "''")}'`;
+}
+
+function buildSqlNotInList(values = []) {
+  const normalized = [...new Set((Array.isArray(values) ? values : [])
+    .map((value) => lower(value))
+    .filter(Boolean))];
+
+  if (!normalized.length) {
+    return "('')";
+  }
+
+  return `(${normalized.map((value) => sqlQuoteLiteral(value)).join(", ")})`;
+}
+
+const NOISE_MESSAGE_TYPE_SQL = buildSqlNotInList(NOISE_MESSAGE_TYPES);
+const NOISE_SENDER_TYPE_SQL = buildSqlNotInList(NOISE_SENDER_TYPES);
+const NOISE_SOURCE_SQL = buildSqlNotInList(NOISE_SOURCES);
+
 function buildRenderablePreviewLateralSql() {
   return `
     left join lateral (
@@ -197,30 +217,20 @@ function buildRenderablePreviewLateralSql() {
       where m.thread_id = t.id
         and m.tenant_key = t.tenant_key
         and nullif(btrim(coalesce(m.text, '')), '') is not null
-        and lower(coalesce(m.message_type, '')) not in (${NOISE_MESSAGE_TYPES.map((_, i) => `$${i + 1000}`).join(", ")})
-        and lower(coalesce(m.sender_type, '')) not in (${NOISE_SENDER_TYPES.map((_, i) => `$${i + 1100}`).join(", ")})
-        and lower(coalesce(m.meta->>'source', '')) not in (${NOISE_SOURCES.map((_, i) => `$${i + 1200}`).join(", ")})
+        and lower(coalesce(m.message_type, '')) not in ${NOISE_MESSAGE_TYPE_SQL}
+        and lower(coalesce(m.sender_type, '')) not in ${NOISE_SENDER_TYPE_SQL}
+        and lower(coalesce(m.meta->>'source', '')) not in ${NOISE_SOURCE_SQL}
         and lower(
           coalesce(
             m.meta->>'originalMessageType',
             m.meta->>'original_message_type',
             ''
           )
-        ) not in (${NOISE_MESSAGE_TYPES.map((_, i) => `$${i + 1300}`).join(", ")})
+        ) not in ${NOISE_MESSAGE_TYPE_SQL}
       order by m.sent_at desc, m.created_at desc
       limit 1
     ) last_message on true
   `;
-}
-
-function buildThreadListNoiseValues(values = []) {
-  return [
-    ...values,
-    ...NOISE_MESSAGE_TYPES,
-    ...NOISE_SENDER_TYPES,
-    ...NOISE_SOURCES,
-    ...NOISE_MESSAGE_TYPES,
-  ];
 }
 
 export function inboxHandlers({ db, wsHub }) {
@@ -270,8 +280,6 @@ export function inboxHandlers({ db, wsHub }) {
 
       values.push(limit);
 
-      const noiseBoundValues = buildThreadListNoiseValues(values);
-
       const sql = `
         select
           t.id,
@@ -305,7 +313,7 @@ export function inboxHandlers({ db, wsHub }) {
         limit $${values.length}::int
       `;
 
-      const result = await db.query(sql, noiseBoundValues);
+      const result = await db.query(sql, values);
       const threads = (result.rows || []).map((row) => ({
         ...normalizeThread(row),
         last_message_text: pickConversationPreviewText(row.last_message_text),
