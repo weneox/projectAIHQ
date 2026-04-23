@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { fmtRelative } from "../../lib/inbox-ui.js";
@@ -27,13 +27,6 @@ function initialsFromName(value = "") {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
-}
-
-function resolveSenderLabel(message, inbound) {
-  if (inbound) return "Customer";
-  if (message?.sender_type === "agent") return "You";
-  if (message?.sender_type === "ai") return "AI";
-  return "Reply";
 }
 
 function resolveDisplayName(message, inbound, thread) {
@@ -72,30 +65,6 @@ function resolveAvatarUrl(message, thread) {
   );
 }
 
-function resolveBubbleTone(message, inbound) {
-  if (inbound) {
-    return {
-      metaTone: "text-[rgba(71,85,105,0.92)]",
-      bubble:
-        "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(15,23,42,0.96)] shadow-[0_14px_32px_-26px_rgba(15,23,42,0.12)]",
-    };
-  }
-
-  if (message?.sender_type === "agent") {
-    return {
-      metaTone: "text-[rgba(100,116,139,0.94)]",
-      bubble:
-        "border-[rgba(15,23,42,0.06)] bg-[rgba(246,248,250,0.98)] text-[rgba(15,23,42,0.96)] shadow-[0_14px_30px_-24px_rgba(15,23,42,0.10)]",
-    };
-  }
-
-  return {
-    metaTone: "text-[rgba(100,116,139,0.94)]",
-    bubble:
-      "border-[rgba(148,163,184,0.18)] bg-[rgba(248,250,252,0.98)] text-[rgba(15,23,42,0.96)] shadow-[0_14px_30px_-24px_rgba(15,23,42,0.10)]",
-  };
-}
-
 function shouldAllowInspect(message, enableInspect) {
   if (!enableInspect) return false;
   const replayTrace = normalizeReplayTrace(message);
@@ -109,15 +78,15 @@ function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
   return (
     <div
       className={[
-        "mt-1 flex w-full",
+        "mt-2 flex w-full",
         align === "end" ? "justify-end" : "justify-start",
       ].join(" ")}
     >
-      <div className="w-fit max-w-[84%] sm:max-w-[78%] xl:max-w-[70%]">
+      <div className="w-fit max-w-[min(72%,640px)]">
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-1.5 text-[11px] font-medium text-[rgba(71,85,105,0.92)] transition-colors hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.88)]"
+          className="inline-flex items-center gap-2 rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-1.5 text-[11px] font-medium text-[rgba(71,85,105,0.9)] transition-colors hover:bg-[rgba(248,250,252,0.98)] hover:text-[rgba(15,23,42,0.88)]"
         >
           {open ? (
             <ChevronUp className="h-3.5 w-3.5" />
@@ -146,7 +115,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="mt-[18px] flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.96)] text-[11px] font-semibold text-[rgba(51,65,85,0.9)] shadow-[0_10px_22px_-18px_rgba(15,23,42,0.16)]">
+    <div className="mt-[22px] flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[#F8FAFC] text-[11px] font-semibold text-[rgba(51,65,85,0.9)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -162,6 +131,43 @@ function InboundAvatar({ title, avatarUrl }) {
   );
 }
 
+function MetaRow({ name, sentAt, align = "start" }) {
+  return (
+    <div
+      className={[
+        "flex items-center gap-2 px-1 text-[12px]",
+        align === "end" ? "justify-end text-right" : "justify-start text-left",
+      ].join(" ")}
+    >
+      <span className="font-medium text-[rgba(71,85,105,0.96)]">{name}</span>
+      {sentAt ? (
+        <>
+          <span className="text-[rgba(203,213,225,1)]">•</span>
+          <span className="text-[rgba(148,163,184,0.98)]">{sentAt}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function Bubble({ children, tone = "inbound" }) {
+  const toneClass =
+    tone === "outbound"
+      ? "border-[rgba(15,23,42,0.08)] bg-[#F4F6F8] text-[rgba(15,23,42,0.96)]"
+      : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(15,23,42,0.96)]";
+
+  return (
+    <div
+      className={[
+        "w-fit max-w-[min(72%,640px)] rounded-[14px] border px-4 py-3 text-[15px] leading-7 shadow-none",
+        toneClass,
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function InboxMessageBubble({
   m,
   thread = null,
@@ -171,97 +177,62 @@ export default function InboxMessageBubble({
   const [inspectOpen, setInspectOpen] = useState(false);
 
   const inbound = m?.direction === "inbound";
-  const label = resolveSenderLabel(m, inbound);
-  const displayName = resolveDisplayName(m, inbound, thread);
-  const tone = resolveBubbleTone(m, inbound);
-  const showInspect = shouldAllowInspect(m, enableInspect);
   const sentAt = fmtRelative(m?.sent_at || m?.created_at);
   const text = s(m?.text);
-  const inboundAvatarUrl = useMemo(
-    () => (inbound ? resolveAvatarUrl(m, thread) : ""),
-    [inbound, m, thread]
-  );
+  const displayName = resolveDisplayName(m, inbound, thread);
+  const avatarUrl = inbound ? resolveAvatarUrl(m, thread) : "";
+  const showInspect = shouldAllowInspect(m, enableInspect);
 
   if (inbound) {
     return (
-      <div className="flex items-start gap-3">
-        <InboundAvatar title={displayName} avatarUrl={inboundAvatarUrl} />
+      <div className="flex w-full justify-start">
+        <div className="flex max-w-full items-start gap-3">
+          <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
-        <div className="min-w-0 flex flex-col items-start gap-1.5">
-          <div
-            className={[
-              "flex items-center gap-2 px-1 text-[11px]",
-              tone.metaTone,
-            ].join(" ")}
-          >
-            <span className="font-medium">{displayName || label}</span>
-            {sentAt ? (
-              <>
-                <span className="text-[rgba(203,213,225,0.96)]">•</span>
-                <span className="text-[rgba(148,163,184,0.96)]">{sentAt}</span>
-              </>
+          <div className="min-w-0 max-w-full">
+            <MetaRow name={displayName} sentAt={sentAt} align="start" />
+
+            <div className="mt-1">
+              <Bubble tone="inbound">
+                {text ? (
+                  <div className="whitespace-pre-wrap break-words">{text}</div>
+                ) : (
+                  <span className="text-[rgba(148,163,184,0.98)]">
+                    (empty message)
+                  </span>
+                )}
+              </Bubble>
+            </div>
+
+            {showInspect ? (
+              <InspectBlock
+                open={inspectOpen}
+                onToggle={() => setInspectOpen((current) => !current)}
+                traceSource={m}
+                align="start"
+              />
             ) : null}
           </div>
-
-          <div
-            className={[
-              "w-fit max-w-[82%] sm:max-w-[74%] xl:max-w-[66%] rounded-[16px] border px-4 py-3 text-[14.5px] leading-7",
-              tone.bubble,
-            ].join(" ")}
-          >
-            {text ? (
-              <div className="whitespace-pre-wrap break-words">{text}</div>
-            ) : (
-              <span className="text-[rgba(148,163,184,0.96)]">
-                (empty message)
-              </span>
-            )}
-          </div>
-
-          {showInspect ? (
-            <InspectBlock
-              open={inspectOpen}
-              onToggle={() => setInspectOpen((current) => !current)}
-              traceSource={m}
-              align="start"
-            />
-          ) : null}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex justify-end">
-      <div className="min-w-0 flex flex-col items-end gap-1.5">
-        <div
-          className={[
-            "flex items-center gap-2 px-1 text-[11px]",
-            tone.metaTone,
-          ].join(" ")}
-        >
-          <span className="font-medium">{label}</span>
-          {sentAt ? (
-            <>
-              <span className="text-[rgba(203,213,225,0.96)]">•</span>
-              <span className="text-[rgba(148,163,184,0.96)]">{sentAt}</span>
-            </>
-          ) : null}
-        </div>
+    <div className="flex w-full justify-end">
+      <div className="min-w-0 max-w-full">
+        <MetaRow name="AI" sentAt={sentAt} align="end" />
 
-        <div
-          className={[
-            "w-fit max-w-[82%] sm:max-w-[74%] xl:max-w-[66%] rounded-[16px] border px-4 py-3 text-[14.5px] leading-7",
-            tone.bubble,
-          ].join(" ")}
-        >
-          {text ? (
-            <div className="whitespace-pre-wrap break-words">{text}</div>
-          ) : (
-            <span className="text-[rgba(148,163,184,0.96)]">
-              (empty message)
-            </span>
-          )}
+        <div className="mt-1 flex justify-end">
+          <Bubble tone="outbound">
+            {text ? (
+              <div className="whitespace-pre-wrap break-words">{text}</div>
+            ) : (
+              <span className="text-[rgba(148,163,184,0.98)]">
+                (empty message)
+              </span>
+            )}
+          </Bubble>
         </div>
 
         {showInspect ? (

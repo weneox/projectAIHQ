@@ -861,9 +861,9 @@ export default function InboxDetailPanel({
               ) : !hasThread ? (
                 <EmptyConversationState />
               ) : (
-                <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-6 py-6">
+                <div className="flex min-h-full w-full flex-col px-8 py-6 lg:px-10">
                   {showSurfaceBanner ? (
-                    <div className="mx-auto mb-4 w-full max-w-[920px]">
+                    <div className="mb-4 w-full">
                       <SurfaceBanner
                         surface={surface}
                         unavailableMessage="Conversation detail is temporarily unavailable."
@@ -884,7 +884,7 @@ export default function InboxDetailPanel({
                       </div>
                     </div>
                   ) : (
-                    <div className="mx-auto mt-auto w-full max-w-[920px] space-y-5">
+                    <div className="mt-auto w-full space-y-6">
                       {visibleMessages.map((message) => (
                         <InboxMessageBubble
                           key={message.id}
