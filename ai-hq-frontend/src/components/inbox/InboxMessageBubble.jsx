@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { fmtRelative } from "../../lib/inbox-ui.js";
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
@@ -9,146 +9,124 @@ function s(value) {
   return String(value ?? "").trim();
 }
 
-function obj(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
+function formatBubbleTime(value) {
+  if (!value) return "";
 
-function initialsFromName(value = "") {
-  const parts = String(value || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "C";
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
-
-function resolveDisplayName(message, inbound, thread) {
-  const meta = obj(message?.meta);
-
-  if (inbound) {
-    return (
-      s(
-        message?.sender_name ||
-          meta?.senderName ||
-          meta?.sender_name ||
-          thread?.display_name ||
-          thread?.displayName ||
-          thread?.customer_name
-      ) || "Customer"
-    );
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return s(fmtRelative(value));
   }
 
-  if (message?.sender_type === "agent") return "You";
-  if (message?.sender_type === "ai") return "AI HQ";
-  return "Reply";
-}
-
-function resolveAvatarUrl(message, thread) {
-  const meta = obj(message?.meta);
-
-  return s(
-    message?.avatar_url ||
-      message?.sender_avatar_url ||
-      meta?.avatarUrl ||
-      meta?.avatar_url ||
-      meta?.profilePicture ||
-      meta?.profile_picture ||
-      thread?.avatar_url ||
-      thread?.avatarUrl
-  );
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
+  } catch {
+    return s(fmtRelative(value));
+  }
 }
 
 function shouldAllowInspect(message, enableInspect) {
   if (!enableInspect) return false;
   const replayTrace = normalizeReplayTrace(message);
+
   return Boolean(
     replayTrace?.hasTrace &&
       (message?.sender_type === "ai" || message?.direction === "outbound")
   );
 }
 
-function InboundAvatar({ title, avatarUrl }) {
-  const initials = initialsFromName(title);
+function BubbleTime({ value }) {
+  if (!value) return null;
 
   return (
-    <div className="mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#334155] shadow-[0_8px_18px_-14px_rgba(15,23,42,0.18)]">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={title}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-        />
-      ) : (
-        initials
-      )}
-    </div>
+    <span className="select-none whitespace-nowrap text-[12px] font-medium tracking-[0.01em] text-[rgba(15,23,42,0.46)]">
+      {value}
+    </span>
   );
 }
 
-function AIBadge() {
-  return (
-    <div className="ml-3 mt-[22px] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D8E4FF] bg-[#F5F8FF] text-[#4F7CFF] shadow-[0_8px_18px_-14px_rgba(79,124,255,0.24)]">
-      <Sparkles className="h-4 w-4" />
-    </div>
-  );
-}
-
-function MessageMeta({ name, sentAt, align = "start" }) {
-  return (
-    <div
-      className={[
-        "flex items-center gap-2 px-0.5 text-[12px] leading-5",
-        align === "end" ? "justify-end text-right" : "justify-start text-left",
-      ].join(" ")}
-    >
-      <span className="font-medium text-[#64748B]">{name}</span>
-      {sentAt ? (
-        <>
-          <span className="text-[#CBD5E1]">•</span>
-          <span className="text-[#94A3B8]">{sentAt}</span>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function BubbleShell({ side = "left", children }) {
+function TelegramBubble({
+  side = "left",
+  text,
+  sentAt,
+  tone = "default",
+}) {
   const incoming = side === "left";
+  const outgoing = !incoming;
 
-  const bodyClass = incoming
-    ? "rounded-[22px] rounded-bl-[10px] border border-[#E7E0D5] bg-[#FFF8EE] text-[#0F172A]"
-    : "rounded-[22px] rounded-br-[10px] border border-[#D7E3FF] bg-[#EAF2FF] text-[#0F172A]";
+  const bubbleClass = incoming
+    ? [
+        "rounded-[18px] rounded-bl-[7px]",
+        "border border-[rgba(15,23,42,0.06)]",
+        "bg-[rgba(255,255,255,0.96)]",
+        "text-[#111827]",
+      ].join(" ")
+    : [
+        "rounded-[18px] rounded-br-[7px]",
+        "border border-[rgba(110,168,86,0.18)]",
+        "bg-[rgba(234,255,221,0.98)]",
+        tone === "ai" ? "text-[#0F172A]" : "text-[#111827]",
+      ].join(" ");
 
   const outerTailClass = incoming
-    ? "absolute -left-[9px] bottom-[8px] h-[20px] w-[20px] rounded-bl-[15px] border-b border-l border-[#E7E0D5] bg-[#FFF8EE]"
-    : "absolute -right-[9px] bottom-[8px] h-[20px] w-[20px] rounded-br-[15px] border-b border-r border-[#D7E3FF] bg-[#EAF2FF]";
+    ? [
+        "pointer-events-none absolute -left-[6px] bottom-0 h-[14px] w-[14px]",
+        "rounded-bl-[12px] border-b border-l border-[rgba(15,23,42,0.06)]",
+        "bg-[rgba(255,255,255,0.96)]",
+      ].join(" ")
+    : [
+        "pointer-events-none absolute -right-[6px] bottom-0 h-[14px] w-[14px]",
+        "rounded-br-[12px] border-b border-r border-[rgba(110,168,86,0.18)]",
+        "bg-[rgba(234,255,221,0.98)]",
+      ].join(" ");
 
   const cutTailClass = incoming
-    ? "absolute -left-[14px] bottom-[7px] h-[24px] w-[14px] rounded-br-[15px] bg-[var(--inbox-surface,#F8FAFC)]"
-    : "absolute -right-[14px] bottom-[7px] h-[24px] w-[14px] rounded-bl-[15px] bg-[var(--inbox-surface,#F8FAFC)]";
+    ? [
+        "pointer-events-none absolute -left-[10px] bottom-0 h-[16px] w-[10px]",
+        "rounded-br-[12px] bg-[var(--inbox-surface,#F1F5F9)]",
+      ].join(" ")
+    : [
+        "pointer-events-none absolute -right-[10px] bottom-0 h-[16px] w-[10px]",
+        "rounded-bl-[12px] bg-[var(--inbox-surface,#F1F5F9)]",
+      ].join(" ");
 
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
-      <div className="relative inline-block max-w-full align-top">
+      <div className="relative inline-flex max-w-full">
         <span aria-hidden="true" className={outerTailClass} />
         <span aria-hidden="true" className={cutTailClass} />
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-4 py-3.5 text-[15px] leading-[1.6] shadow-[0_18px_30px_-26px_rgba(15,23,42,0.14)]",
-            bodyClass,
+            "relative z-[1] inline-flex max-w-full min-w-[64px] flex-col",
+            "px-[14px] pb-[7px] pt-[9px]",
+            "shadow-[0_1px_0_rgba(0,0,0,0.05),0_10px_24px_-18px_rgba(15,23,42,0.28)]",
+            bubbleClass,
           ].join(" ")}
         >
-          {children}
+          {text ? (
+            <>
+              <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.42] text-inherit">
+                {text}
+              </div>
+
+              <div className="mt-[3px] flex justify-end pl-5">
+                <BubbleTime value={sentAt} />
+              </div>
+            </>
+          ) : (
+            <div className="flex min-h-[34px] flex-col justify-end">
+              <span className="text-[14px] text-[rgba(15,23,42,0.42)]">
+                (empty message)
+              </span>
+              <div className="mt-[3px] flex justify-end pl-5">
+                <BubbleTime value={sentAt} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -163,7 +141,7 @@ function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
         align === "end" ? "justify-end" : "justify-start",
       ].join(" ")}
     >
-      <div className="max-w-[62%]">
+      <div className="max-w-[82%]">
         <button
           type="button"
           onClick={onToggle}
@@ -201,66 +179,36 @@ export default function InboxMessageBubble({
   const [inspectOpen, setInspectOpen] = useState(false);
 
   const inbound = m?.direction === "inbound";
-  const sentAt = fmtRelative(m?.sent_at || m?.created_at);
   const text = s(m?.text);
-  const displayName = resolveDisplayName(m, inbound, thread);
-  const avatarUrl = inbound ? resolveAvatarUrl(m, thread) : "";
+  const sentAt = formatBubbleTime(m?.sent_at || m?.created_at);
   const showInspect = shouldAllowInspect(m, enableInspect);
+
+  const tone =
+    m?.sender_type === "ai" ? "ai" : m?.sender_type === "agent" ? "agent" : "default";
 
   if (inbound) {
     return (
-      <div className="flex w-full justify-start">
-        <div className="flex w-full items-start gap-3 pr-[10%] md:pr-[14%] lg:pr-[18%] xl:pr-[22%]">
-          <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
+      <div className="flex w-full justify-start px-2 py-[2px] sm:px-3">
+        <div className="max-w-[min(760px,82%)]">
+          <TelegramBubble side="left" text={text} sentAt={sentAt} tone={tone} />
 
-          <div className="min-w-0 flex-1">
-            <MessageMeta name={displayName} sentAt={sentAt} align="start" />
-
-            <div className="mt-1 max-w-[min(780px,78%)]">
-              <BubbleShell side="left">
-                {text ? (
-                  <div className="whitespace-pre-wrap break-words">{text}</div>
-                ) : (
-                  <span className="text-[#94A3B8]">(empty message)</span>
-                )}
-              </BubbleShell>
-            </div>
-
-            {showInspect ? (
-              <InspectBlock
-                open={inspectOpen}
-                onToggle={() => setInspectOpen((current) => !current)}
-                traceSource={m}
-                align="start"
-              />
-            ) : null}
-          </div>
+          {showInspect ? (
+            <InspectBlock
+              open={inspectOpen}
+              onToggle={() => setInspectOpen((current) => !current)}
+              traceSource={m}
+              align="start"
+            />
+          ) : null}
         </div>
       </div>
     );
   }
 
-  const outgoingLabel = m?.sender_type === "agent" ? "You" : "AI HQ";
-  const showAIBadge = m?.sender_type === "ai" || m?.sender_type !== "agent";
-
   return (
-    <div className="flex w-full justify-end">
-      <div className="w-full pl-[28%] md:pl-[32%] lg:pl-[37%] xl:pl-[42%]">
-        <MessageMeta name={outgoingLabel} sentAt={sentAt} align="end" />
-
-        <div className="mt-1 flex justify-end">
-          <div className="ml-auto flex max-w-[min(620px,100%)] items-start justify-end">
-            <BubbleShell side="right">
-              {text ? (
-                <div className="whitespace-pre-wrap break-words">{text}</div>
-              ) : (
-                <span className="text-[#94A3B8]">(empty message)</span>
-              )}
-            </BubbleShell>
-
-            {showAIBadge ? <AIBadge /> : null}
-          </div>
-        </div>
+    <div className="flex w-full justify-end px-2 py-[2px] sm:px-3">
+      <div className="max-w-[min(760px,82%)]">
+        <TelegramBubble side="right" text={text} sentAt={sentAt} tone={tone} />
 
         {showInspect ? (
           <InspectBlock
