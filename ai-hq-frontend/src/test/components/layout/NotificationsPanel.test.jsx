@@ -7,7 +7,10 @@ describe("NotificationsPanel", () => {
   it("renders honest empty state", () => {
     render(<NotificationsPanel open notifications={[]} onClose={() => {}} />);
 
-    expect(screen.getByText(/no notifications yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/^no notifications$/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/new activity will appear here/i)
+    ).toBeInTheDocument();
   });
 
   it("renders notifications and allows mark read", () => {

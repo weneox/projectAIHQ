@@ -6,18 +6,23 @@ const getDurableExecutionSummary = vi.fn();
 const getDurableExecution = vi.fn();
 const retryDurableExecution = vi.fn();
 
-vi.mock("../../../api/executions.js", () => ({
-  listDurableExecutions: (...args) => listDurableExecutions(...args),
-  getDurableExecutionSummary: (...args) => getDurableExecutionSummary(...args),
-  getDurableExecution: (...args) => getDurableExecution(...args),
-  retryDurableExecution: (...args) => retryDurableExecution(...args),
-}));
-
-import { useExecutionsSurface } from "../../../pages/hooks/useExecutionsSurface.js";
+async function loadExecutionsSurfaceModule() {
+  vi.resetModules();
+  vi.doMock("../../../api/executions.js", () => ({
+    listDurableExecutions: (...args) => listDurableExecutions(...args),
+    getDurableExecutionSummary: (...args) => getDurableExecutionSummary(...args),
+    getDurableExecution: (...args) => getDurableExecution(...args),
+    retryDurableExecution: (...args) => retryDurableExecution(...args),
+  }));
+  return import("../../../pages/hooks/useExecutionsSurface.js");
+}
 
 describe("useExecutionsSurface", () => {
-  beforeEach(() => {
+  let useExecutionsSurface;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    ({ useExecutionsSurface } = await loadExecutionsSurfaceModule());
     listDurableExecutions.mockResolvedValue([
       {
         id: "exec-1",
@@ -49,6 +54,11 @@ describe("useExecutionsSurface", () => {
 
     await act(async () => {
       await result.current.openExecution("exec-1");
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedId).toBe("exec-1");
+      expect(result.current.detail.execution?.id).toBe("exec-1");
     });
 
     await act(async () => {

@@ -64,11 +64,17 @@ describe("Incidents", () => {
   it("renders recent incidents and retention badges", () => {
     render(<Incidents />);
 
-    expect(screen.getByRole("heading", { name: "Incident Trail" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /incident trail/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/retain 14 days/i)).toBeInTheDocument();
     expect(screen.getByText(/max 5000 incidents/i)).toBeInTheDocument();
-    expect(screen.getByText(/current incident posture/i)).toBeInTheDocument();
-    expect(screen.getByText(/degraded over the last 24h/i)).toBeInTheDocument();
+    expect(screen.getByText(/^incident posture$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^degraded$/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/recent durable incidents/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 incident matched the current filter set/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/voice test route failed/i)).toBeInTheDocument();
     expect(screen.getAllByText(/voice_test_failed/i).length).toBeGreaterThan(0);
   });

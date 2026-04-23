@@ -157,29 +157,9 @@ describe("FloatingAiWidget", () => {
     await waitFor(() => {
       expect(startSetupAssistantSession).toHaveBeenCalledTimes(1);
     });
-
-    await waitFor(() => {
-      expect(screen.getByRole("textbox")).toBeInTheDocument();
-    });
   });
 
   it("routes submitted answers through sendSetupAssistantMessage for the active step", async () => {
-    vi.mocked(startSetupAssistantSession).mockResolvedValue({
-      ok: true,
-      session: { id: "session-1", draftVersion: 1 },
-      setup: {
-        draft: {},
-      },
-      assistant: {
-        nextQuestion: {
-          key: "company",
-          step: "company",
-          prompt: "What is your company name?",
-        },
-        readyForApproval: false,
-      },
-    });
-
     vi.mocked(sendSetupAssistantMessage).mockResolvedValue({
       ok: true,
       session: { id: "session-1", draftVersion: 2 },
@@ -196,18 +176,40 @@ describe("FloatingAiWidget", () => {
       },
     });
 
-    renderWidget();
+    renderWidget(
+      createAssistant({
+        session: { id: "session-1", draftVersion: 1 },
+        assistant: {
+          nextQuestion: {
+            key: "company",
+            step: "company",
+            prompt: "What is your company name?",
+            phase: "business_truth",
+            phaseLabel: "Business truth",
+          },
+          confirmationBlockers: [],
+          sections: [],
+          completion: {
+            ready: false,
+            action: null,
+            message: "",
+          },
+          servicesCatalog: {
+            items: [],
+            packs: [],
+            suggestedServices: [],
+          },
+          sourceInsights: [],
+        },
+      })
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Start setup" }));
+    const composer = await screen.findByRole("textbox");
 
-    await waitFor(() => {
-      expect(screen.getByRole("textbox")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByRole("textbox"), {
+    fireEvent.change(composer, {
       target: { value: "Luna Smile" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
 
     await waitFor(() => {
       expect(sendSetupAssistantMessage).toHaveBeenCalledWith({

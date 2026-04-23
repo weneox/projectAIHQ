@@ -7,21 +7,26 @@ const getDurableExecutionSummary = vi.fn();
 const getDurableExecution = vi.fn();
 const retryDurableExecution = vi.fn();
 
-vi.mock("../../api/executions.js", () => ({
-  listDurableExecutions: (...args) => listDurableExecutions(...args),
-  getDurableExecutionSummary: (...args) => getDurableExecutionSummary(...args),
-  getDurableExecution: (...args) => getDurableExecution(...args),
-  retryDurableExecution: (...args) => retryDurableExecution(...args),
-}));
-
-import Executions from "../../pages/Executions.jsx";
+async function loadExecutionsPage() {
+  vi.resetModules();
+  vi.doMock("../../api/executions.js", () => ({
+    listDurableExecutions: (...args) => listDurableExecutions(...args),
+    getDurableExecutionSummary: (...args) => getDurableExecutionSummary(...args),
+    getDurableExecution: (...args) => getDurableExecution(...args),
+    retryDurableExecution: (...args) => retryDurableExecution(...args),
+  }));
+  return import("../../pages/Executions.jsx");
+}
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-beforeEach(() => {
+let Executions;
+
+beforeEach(async () => {
+  ({ default: Executions } = await loadExecutionsPage());
   listDurableExecutions.mockResolvedValue([
     {
       id: "exec-1",
@@ -173,17 +178,26 @@ describe("Executions durable surface", () => {
     const summarySection = screen.getByText(/worker health/i).closest("section");
     expect(summarySection).not.toBeNull();
     expect(within(summarySection).getByText("Dead-lettered")).toBeInTheDocument();
-    expect(within(summarySection).getByText(/attention needed/i)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /meta\.outbound\.send/i })).toBeInTheDocument();
+    expect(
+      await within(summarySection).findByText(/attention needed/i)
+    ).toBeInTheDocument();
+    const queueItem = await screen.findByRole("button", {
+      name: /meta\.outbound\.send/i,
+    });
+    expect(queueItem).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /meta.outbound.send/i }));
+    fireEvent.click(queueItem);
 
     expect(await screen.findByText(/manual retry audit/i)).toBeInTheDocument();
     const auditSection = screen.getByText(/manual retry audit/i).closest("section");
     expect(auditSection).not.toBeNull();
     expect(within(auditSection).getByText(/actor:\s*operator@acme\.test/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /manual retry/i }));
+    const retryButton = screen.getByRole("button", { name: /manual retry/i });
+    await waitFor(() => {
+      expect(retryButton).toBeEnabled();
+    });
+    fireEvent.click(retryButton);
 
     await waitFor(() => {
       expect(retryDurableExecution).toHaveBeenCalledWith("exec-1");
@@ -198,8 +212,7 @@ describe("Executions durable surface", () => {
       </MemoryRouter>
     );
 
-    expect(
-      await screen.findByText(/durable execution controls are temporarily unavailable/i)
-    ).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(/executions unavailable/i)).toBeInTheDocument();
   });
 });

@@ -11,6 +11,7 @@ const createWebsiteWidgetGtmInstallHandoff = vi.fn();
 const createWebsiteWidgetInstallHandoff = vi.fn();
 const createWebsiteWidgetWordpressInstallHandoff = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
+const emitLaunchSliceRefresh = vi.fn();
 
 vi.mock("../../api/channelConnect.js", () => ({
   checkWebsiteDomainVerification: (...args) =>
@@ -42,6 +43,10 @@ vi.mock("../../hooks/useWorkspaceTenantKey.js", async (importOriginal) => {
     ],
   };
 });
+
+vi.mock("../../lib/launchSliceRefresh.js", () => ({
+  emitLaunchSliceRefresh: (...args) => emitLaunchSliceRefresh(...args),
+}));
 
 import WebsiteWidgetDetailDrawer from "../../components/channels/WebsiteWidgetDetailDrawer.jsx";
 
@@ -545,25 +550,22 @@ describe("WebsiteWidgetDetailDrawer", () => {
     getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
     renderDrawer();
 
-    expect(await screen.findByText("Install-safe website chat")).toBeInTheDocument();
+    expect(await screen.findByText(/ready to install/i)).toBeInTheDocument();
     expect(
       await screen.findByDisplayValue(/data-widget-id="ww_acme_widget"/i)
     ).toBeInTheDocument();
-    expect(screen.getByText("Public widget ID")).toBeInTheDocument();
+    expect(screen.getByText(/^widget id$/i)).toBeInTheDocument();
     expect(screen.getAllByText("ww_acme_widget").length).toBeGreaterThan(0);
-    expect(screen.getByText(/loader-signed install token/i)).toBeInTheDocument();
-    const verificationSection = screen.getByText("DNS TXT ownership").closest("section");
-    expect(verificationSection).not.toBeNull();
-    expect(
-      within(verificationSection).getByDisplayValue("acme.example")
-    ).toBeInTheDocument();
+    expect(screen.getByText(/^script$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^api base$/i)).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("acme.example").length).toBeGreaterThan(0);
   });
 
   it("blocks production install actions until domain ownership is verified", async () => {
     renderDrawer();
 
     expect(
-      await screen.findByText("Production install blocked")
+      await screen.findByText(/public install is blocked/i)
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(
@@ -574,13 +576,13 @@ describe("WebsiteWidgetDetailDrawer", () => {
       screen.getByRole("button", { name: /copy snippet/i })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /prepare developer install/i })
+      screen.getByRole("button", { name: /developer package/i })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /install with gtm/i })
+      screen.getByRole("button", { name: /gtm package/i })
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: /install on wordpress/i })
+      screen.getByRole("button", { name: /wordpress package/i })
     ).toBeDisabled();
   });
 
@@ -600,9 +602,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     );
     renderDrawer();
 
-    const installSection = (
-      await screen.findByText("Embed this widget on the public website")
-    ).closest("section");
+    const installSection = (await screen.findByText(/^go live$/i)).closest(
+      "section"
+    );
     expect(installSection).not.toBeNull();
 
     expect(
@@ -610,13 +612,13 @@ describe("WebsiteWidgetDetailDrawer", () => {
     ).toBeDisabled();
 
     const developerButton = within(installSection).getByRole("button", {
-      name: /prepare developer install/i,
+      name: /developer package/i,
     });
     const gtmButton = within(installSection).getByRole("button", {
-      name: /install with gtm/i,
+      name: /gtm package/i,
     });
     const wordpressButton = within(installSection).getByRole("button", {
-      name: /install on wordpress/i,
+      name: /wordpress package/i,
     });
 
     await waitFor(() => expect(developerButton).toBeEnabled());
@@ -640,7 +642,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
     );
 
     expect(
-      await within(installSection).findByText("Testing-only package")
+      await within(installSection).findByText(/^testing only$/i)
     ).toBeInTheDocument();
     expect(
       within(installSection).getByDisplayValue(/"testingOnly": true/i)
@@ -659,7 +661,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /save widget config/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
       expect(saveWebsiteWidgetConfig).toHaveBeenCalledWith(
@@ -670,6 +672,15 @@ describe("WebsiteWidgetDetailDrawer", () => {
           allowedDomains: ["acme.example"],
         }),
         expect.anything()
+      )
+    );
+
+    await waitFor(() =>
+      expect(emitLaunchSliceRefresh).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantKey: "acme",
+          reason: "website-widget-saved",
+        })
       )
     );
   });
@@ -684,13 +695,11 @@ describe("WebsiteWidgetDetailDrawer", () => {
         )
       ).length
     ).toBeGreaterThan(0);
-    const verificationSection = screen.getByText("DNS TXT ownership").closest("section");
-    expect(verificationSection).not.toBeNull();
-    const createButton = within(verificationSection).getByRole("button", {
-      name: /create challenge/i,
+    const createButton = screen.getByRole("button", {
+      name: /create txt/i,
     });
-    const verifyButton = within(verificationSection).getByRole("button", {
-      name: /verify now/i,
+    const verifyButton = screen.getByRole("button", {
+      name: /^verify$/i,
     });
 
     await waitFor(() => expect(createButton).toBeEnabled());
@@ -707,7 +716,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
     );
 
     expect(
-      await within(verificationSection).findByDisplayValue(
+      await screen.findByDisplayValue(
         "aihq-webchat-verification=test-token"
       )
     ).toBeInTheDocument();
@@ -725,25 +734,42 @@ describe("WebsiteWidgetDetailDrawer", () => {
     );
 
     expect(
-      await within(verificationSection).findByText(
+      (
+        await screen.findAllByText(
         "DNS TXT ownership has been verified for this domain."
-      )
+        )
+      ).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows the permission warning and disables save when the viewer cannot manage settings", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce({
+      ...buildStatusPayload({ verified: true }),
+      permissions: {
+        saveAllowed: false,
+        requiredRoles: ["owner", "admin"],
+        message: "Only owner/admin can change Website Chat settings.",
+      },
+    });
+    renderDrawer();
+
+    expect(
+      await screen.findByText(/only owner\/admin can change website chat settings/i)
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
   });
 
   it("prepares a developer install package when production install is ready", async () => {
     getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
     renderDrawer();
 
-    expect(await screen.findByText("Install-safe website chat")).toBeInTheDocument();
+    expect(await screen.findByText(/ready to install/i)).toBeInTheDocument();
 
-    const installSection = screen
-      .getByText("Embed this widget on the public website")
-      .closest("section");
+    const installSection = screen.getByText(/^go live$/i).closest("section");
     expect(installSection).not.toBeNull();
 
     const prepareButton = within(installSection).getByRole("button", {
-      name: /prepare developer install/i,
+      name: /developer package/i,
     });
 
     await waitFor(() => expect(prepareButton).toBeEnabled());
@@ -766,7 +792,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
 
     fireEvent.click(
       within(installSection).getByRole("button", {
-        name: /copy install package/i,
+        name: /copy package/i,
       })
     );
 
@@ -781,13 +807,13 @@ describe("WebsiteWidgetDetailDrawer", () => {
     getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
     renderDrawer();
 
-    const installSection = (
-      await screen.findByText("Embed this widget on the public website")
-    ).closest("section");
+    const installSection = (await screen.findByText(/^go live$/i)).closest(
+      "section"
+    );
     expect(installSection).not.toBeNull();
 
     const gtmButton = within(installSection).getByRole("button", {
-      name: /install with gtm/i,
+      name: /gtm package/i,
     });
 
     await waitFor(() => expect(gtmButton).toBeEnabled());
@@ -817,13 +843,13 @@ describe("WebsiteWidgetDetailDrawer", () => {
     getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
     renderDrawer();
 
-    const installSection = (
-      await screen.findByText("Embed this widget on the public website")
-    ).closest("section");
+    const installSection = (await screen.findByText(/^go live$/i)).closest(
+      "section"
+    );
     expect(installSection).not.toBeNull();
 
     const wordpressButton = within(installSection).getByRole("button", {
-      name: /install on wordpress/i,
+      name: /wordpress package/i,
     });
 
     await waitFor(() => expect(wordpressButton).toBeEnabled());

@@ -11,7 +11,7 @@ describe("GovernanceCockpit", () => {
   it("renders safe defaults when truth and runtime telemetry are sparse", () => {
     render(<GovernanceCockpit truth={{}} trust={{}} />);
 
-    expect(screen.getByText(/^governance cockpit$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^business data review$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/policy telemetry is unavailable/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/no canonical area summary was returned/i)).toBeInTheDocument();
     expect(screen.getByText(/channel autonomy telemetry is unavailable/i)).toBeInTheDocument();
@@ -319,7 +319,7 @@ describe("GovernanceCockpit", () => {
       />
     );
 
-    expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval and runtime state/i)).toBeInTheDocument();
     expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
     expect(screen.getAllByText(/stale/i).length).toBeGreaterThan(0);
@@ -360,11 +360,7 @@ describe("GovernanceCockpit", () => {
       })
     );
     fireEvent.click(screen.getByRole("button", { name: /^all events \(2\)$/i }));
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /policy control change.*operate in safer mode/i,
-      })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /policy control change/i }));
     expect(
       screen.getByText(/intentionally restricted to operator-only execution/i)
     ).toBeInTheDocument();
