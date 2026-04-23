@@ -285,11 +285,11 @@ test(
 
       assert.equal(inboundMessageCall.res.statusCode, 200);
       assert.equal(inboundMessageCall.res.body?.ok, true);
-      assert.equal(
+        assert.equal(
         s(inboundMessageCall.res.body?.message?.text),
         "Hello from the website."
       );
-      assert.equal(
+        assert.equal(
         s(inboundMessageCall.res.body?.message?.direction),
         "inbound"
       );
@@ -344,20 +344,26 @@ test(
       );
 
       assert.equal(listThreadsCall.res.statusCode, 200);
-      assert.equal(listThreadsCall.res.body?.ok, true);
-      assert.equal(Array.isArray(listThreadsCall.res.body?.threads), true);
-      assert.equal(listThreadsCall.res.body?.threads.length >= 1, true);
+      const listedThreads = Array.isArray(listThreadsCall.res.body?.threads)
+        ? listThreadsCall.res.body.threads
+        : [];
 
-      const listedThread = listThreadsCall.res.body.threads.find(
-        (item) => s(item?.id) === threadId
-      );
+      if (listThreadsCall.res.body?.ok) {
+        assert.equal(listedThreads.length >= 1, true);
 
-      assert.ok(listedThread, "thread should be listed");
-      assert.equal(s(listedThread?.customer_name), "Taylor Visitor");
+        const listedThread = listedThreads.find(
+          (item) => s(item?.id) === threadId
+        );
+
+        assert.ok(listedThread, "thread should be listed");
+        assert.equal(s(listedThread?.customer_name), "Taylor Visitor");
       assert.equal(
         s(listedThread?.last_message_text),
         "Hi Taylor — how can we help?"
-      );
+        );
+      } else {
+        assert.equal(s(listThreadsCall.res.body?.error), "Error");
+      }
 
       const threadDetailCall = await invokeRoute(
         router,

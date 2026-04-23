@@ -108,17 +108,23 @@ test("inbox browser routes require operator-role access", async () => {
 
 test("inbox thread status mutation fails closed when the uuid is outside the authenticated tenant", async () => {
   const threadId = "22222222-2222-4222-8222-222222222222";
+  let sawScopedLookup = false;
   let sawScopedUpdate = false;
 
   const db = {
     async query(text, params = []) {
       const sql = String(text || "").toLowerCase();
 
+      if (sql.includes("select") && sql.includes("from inbox_threads")) {
+        sawScopedLookup = true;
+        assert.match(sql, /where id = \$1::uuid\s+and tenant_key = \$2::text/);
+        assert.equal(params[0], threadId);
+        assert.equal(params[1], "acme");
+        return { rows: [] };
+      }
+
       if (sql.includes("update inbox_threads")) {
         sawScopedUpdate = true;
-        assert.match(sql, /where id = \$1::uuid\s+and tenant_key = \$3::text/);
-        assert.equal(params[0], threadId);
-        assert.equal(params[2], "acme");
         return { rows: [] };
       }
 
@@ -134,7 +140,8 @@ test("inbox thread status mutation fails closed when the uuid is outside the aut
     body: { status: "closed" },
   });
 
-  assert.equal(sawScopedUpdate, true);
+  assert.equal(sawScopedLookup, true);
+  assert.equal(sawScopedUpdate, false);
   assert.equal(result.res.statusCode, 200);
   assert.equal(result.res.body?.ok, false);
   assert.equal(result.res.body?.error, "thread not found");
