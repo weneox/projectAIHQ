@@ -94,6 +94,169 @@ function resolveMessageOriginalType(message = {}) {
   return lower(meta?.originalMessageType || meta?.original_message_type || "");
 }
 
+function normalizeUrlLike(value = "") {
+  const next = s(value);
+  if (!next) return "";
+  if (
+    next.startsWith("https://") ||
+    next.startsWith("http://") ||
+    next.startsWith("/")
+  ) {
+    return next;
+  }
+  return "";
+}
+
+function pickFirstUrl(...values) {
+  for (const value of values) {
+    const normalized = normalizeUrlLike(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function resolveDirectAvatarUrl(row = {}) {
+  const meta = asObject(row?.meta);
+  const customerContext = asObject(meta?.customerContext);
+  const profile = asObject(customerContext?.profile);
+  const instagramCtx = asObject(customerContext?.instagram);
+  const telegramCtx = asObject(customerContext?.telegram);
+  const metaCtx = asObject(customerContext?.meta);
+  const raw = asObject(meta?.raw);
+
+  const rawSender = asObject(raw?.sender);
+  const rawFrom = asObject(raw?.from);
+  const rawProfile = asObject(raw?.profile);
+  const rawContact = asObject(raw?.contact);
+  const rawRecipient = asObject(raw?.recipient);
+
+  const metaInstagram = asObject(meta?.instagram);
+  const metaTelegram = asObject(meta?.telegram);
+  const metaProfile = asObject(meta?.profile);
+
+  return pickFirstUrl(
+    row?.avatar_url,
+    row?.avatarUrl,
+
+    meta?.avatar_url,
+    meta?.avatarUrl,
+    meta?.profile_picture_url,
+    meta?.profilePictureUrl,
+    meta?.profile_pic,
+    meta?.profilePic,
+    meta?.picture,
+
+    metaProfile?.avatar_url,
+    metaProfile?.avatarUrl,
+    metaProfile?.profile_picture_url,
+    metaProfile?.profilePictureUrl,
+    metaProfile?.profile_pic,
+    metaProfile?.profilePic,
+
+    customerContext?.avatar_url,
+    customerContext?.avatarUrl,
+    customerContext?.profile_picture_url,
+    customerContext?.profilePictureUrl,
+    customerContext?.profile_pic,
+    customerContext?.profilePic,
+
+    profile?.avatar_url,
+    profile?.avatarUrl,
+    profile?.profile_picture_url,
+    profile?.profilePictureUrl,
+    profile?.profile_pic,
+    profile?.profilePic,
+
+    instagramCtx?.avatar_url,
+    instagramCtx?.avatarUrl,
+    instagramCtx?.profile_picture_url,
+    instagramCtx?.profilePictureUrl,
+    instagramCtx?.profile_pic,
+    instagramCtx?.profilePic,
+    instagramCtx?.picture,
+
+    telegramCtx?.avatar_url,
+    telegramCtx?.avatarUrl,
+    telegramCtx?.profile_picture_url,
+    telegramCtx?.profilePictureUrl,
+    telegramCtx?.profile_pic,
+    telegramCtx?.profilePic,
+    telegramCtx?.picture,
+
+    metaCtx?.avatar_url,
+    metaCtx?.avatarUrl,
+    metaCtx?.profile_picture_url,
+    metaCtx?.profilePictureUrl,
+    metaCtx?.profile_pic,
+    metaCtx?.profilePic,
+    metaCtx?.picture,
+
+    metaInstagram?.avatar_url,
+    metaInstagram?.avatarUrl,
+    metaInstagram?.profile_picture_url,
+    metaInstagram?.profilePictureUrl,
+    metaInstagram?.profile_pic,
+    metaInstagram?.profilePic,
+    metaInstagram?.picture,
+
+    metaTelegram?.avatar_url,
+    metaTelegram?.avatarUrl,
+    metaTelegram?.profile_picture_url,
+    metaTelegram?.profilePictureUrl,
+    metaTelegram?.profile_pic,
+    metaTelegram?.profilePic,
+    metaTelegram?.picture,
+
+    raw?.avatar_url,
+    raw?.avatarUrl,
+    raw?.profile_picture_url,
+    raw?.profilePictureUrl,
+    raw?.profile_pic,
+    raw?.profilePic,
+    raw?.picture,
+
+    rawSender?.avatar_url,
+    rawSender?.avatarUrl,
+    rawSender?.profile_picture_url,
+    rawSender?.profilePictureUrl,
+    rawSender?.profile_pic,
+    rawSender?.profilePic,
+    rawSender?.picture,
+
+    rawFrom?.avatar_url,
+    rawFrom?.avatarUrl,
+    rawFrom?.profile_picture_url,
+    rawFrom?.profilePictureUrl,
+    rawFrom?.profile_pic,
+    rawFrom?.profilePic,
+    rawFrom?.picture,
+
+    rawProfile?.avatar_url,
+    rawProfile?.avatarUrl,
+    rawProfile?.profile_picture_url,
+    rawProfile?.profilePictureUrl,
+    rawProfile?.profile_pic,
+    rawProfile?.profilePic,
+    rawProfile?.picture,
+
+    rawContact?.avatar_url,
+    rawContact?.avatarUrl,
+    rawContact?.profile_picture_url,
+    rawContact?.profilePictureUrl,
+    rawContact?.profile_pic,
+    rawContact?.profilePic,
+    rawContact?.picture,
+
+    rawRecipient?.avatar_url,
+    rawRecipient?.avatarUrl,
+    rawRecipient?.profile_picture_url,
+    rawRecipient?.profilePictureUrl,
+    rawRecipient?.profile_pic,
+    rawRecipient?.profilePic,
+    rawRecipient?.picture
+  );
+}
+
 export function isRenderableConversationMessage(message = {}) {
   if (!message || typeof message !== "object") return false;
 
@@ -155,30 +318,54 @@ export function resolveThreadAvatarState(row = {}) {
   const customerTelegram = asObject(asObject(meta?.customerContext)?.telegram);
 
   const avatarFileId =
-    fixText(telegram?.avatarFileId || customerTelegram?.avatarFileId || "") ||
-    "";
+    fixText(
+      telegram?.avatarFileId ||
+        customerTelegram?.avatarFileId ||
+        customerTelegram?.fileId ||
+        customerTelegram?.file_id ||
+        ""
+    ) || "";
   const avatarFileUniqueId =
     fixText(
-      telegram?.avatarFileUniqueId || customerTelegram?.avatarFileUniqueId || ""
+      telegram?.avatarFileUniqueId ||
+        customerTelegram?.avatarFileUniqueId ||
+        customerTelegram?.fileUniqueId ||
+        customerTelegram?.file_unique_id ||
+        ""
     ) || "";
   const avatarFilePath =
     fixText(
-      telegram?.avatarFilePath || customerTelegram?.avatarFilePath || ""
+      telegram?.avatarFilePath ||
+        customerTelegram?.avatarFilePath ||
+        customerTelegram?.filePath ||
+        customerTelegram?.file_path ||
+        ""
     ) || "";
   const avatarFetchedAt =
     fixText(
-      telegram?.avatarFetchedAt || customerTelegram?.avatarFetchedAt || ""
+      telegram?.avatarFetchedAt ||
+        customerTelegram?.avatarFetchedAt ||
+        customerTelegram?.fetchedAt ||
+        customerTelegram?.fetched_at ||
+        ""
     ) || "";
   const avatarUserId =
-    fixText(telegram?.avatarUserId || customerTelegram?.avatarUserId || "") ||
-    "";
+    fixText(
+      telegram?.avatarUserId ||
+        customerTelegram?.avatarUserId ||
+        customerTelegram?.userId ||
+        customerTelegram?.user_id ||
+        ""
+    ) || "";
+
+  const directAvatarUrl = resolveDirectAvatarUrl(row);
 
   let avatarAvailable = null;
   if (typeof telegram?.avatarAvailable === "boolean") {
     avatarAvailable = telegram.avatarAvailable;
   } else if (typeof customerTelegram?.avatarAvailable === "boolean") {
     avatarAvailable = customerTelegram.avatarAvailable;
-  } else if (avatarFilePath || avatarFileId) {
+  } else if (avatarFilePath || avatarFileId || directAvatarUrl) {
     avatarAvailable = true;
   }
 
@@ -189,6 +376,7 @@ export function resolveThreadAvatarState(row = {}) {
     avatarFilePath,
     avatarFetchedAt,
     avatarUserId,
+    directAvatarUrl,
   };
 }
 
@@ -196,9 +384,15 @@ function buildThreadAvatarUrl(row = {}, avatarState = null) {
   const threadId = s(row?.id);
   const channel = fixText(row?.channel || "").toLowerCase();
 
+  const avatar = avatarState || resolveThreadAvatarState(row);
+  const directAvatarUrl = normalizeUrlLike(avatar?.directAvatarUrl);
+
+  if (directAvatarUrl) {
+    return directAvatarUrl;
+  }
+
   if (!threadId || channel !== "telegram") return "";
 
-  const avatar = avatarState || resolveThreadAvatarState(row);
   const hasNegativeCache =
     avatar?.avatarAvailable === false &&
     !s(avatar?.avatarFilePath) &&
@@ -299,6 +493,7 @@ export function normalizeThread(row) {
 
     avatar_available: avatarState.avatarAvailable,
     avatar_updated_at: avatarState.avatarFetchedAt || null,
+    avatar_direct_url: avatarState.directAvatarUrl || "",
     avatar_url: buildThreadAvatarUrl(row, avatarState),
   };
 }

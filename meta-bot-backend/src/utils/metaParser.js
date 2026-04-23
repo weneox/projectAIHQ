@@ -25,8 +25,59 @@ function cleanText(v) {
   return s(v);
 }
 
+function cleanUsername(v) {
+  const next = s(v).replace(/^@+/, "");
+  return next || "";
+}
+
 function hasText(v) {
   return cleanText(v).length > 0;
+}
+
+function looksLikeNumericIdentity(v) {
+  const next = cleanText(v);
+  return /^\d{5,}$/.test(next);
+}
+
+function isPlaceholderName(v) {
+  const next = lower(v);
+  if (!next) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "user",
+    "unknown",
+  ].includes(next);
+}
+
+function pickBestName(...candidates) {
+  for (const candidate of candidates) {
+    const value = cleanText(candidate);
+    if (!value) continue;
+    if (looksLikeNumericIdentity(value)) continue;
+    if (isPlaceholderName(value)) continue;
+    return value;
+  }
+  return "";
+}
+
+function pickBestUsername(...candidates) {
+  for (const candidate of candidates) {
+    const value = cleanUsername(candidate);
+    if (!value) continue;
+    if (looksLikeNumericIdentity(value)) continue;
+    return value;
+  }
+  return "";
+}
+
+function joinNameParts(...parts) {
+  return parts.map((part) => cleanText(part)).filter(Boolean).join(" ");
 }
 
 function normalizeTimestamp(v, fallback = Date.now()) {
@@ -58,7 +109,9 @@ function normalizeTimestamp(v, fallback = Date.now()) {
 function inferChannelFromMessaging(ev = {}) {
   const platform = lower(ev?.platform);
   if (platform.includes("instagram")) return "instagram";
-  if (platform.includes("facebook") || platform.includes("messenger")) return "facebook";
+  if (platform.includes("facebook") || platform.includes("messenger")) {
+    return "facebook";
+  }
   return "instagram";
 }
 
@@ -119,12 +172,21 @@ function pickChangeIgUserId(change = {}) {
     s(value?.ig_user_id) ||
     s(value?.recipient?.instagram_id) ||
     s(value?.recipient?.ig_user_id) ||
-    s(value?.from?.id && inferChannelFromChange(change) === "instagram" ? value?.from?.id : "") ||
+    s(
+      value?.from?.id && inferChannelFromChange(change) === "instagram"
+        ? value?.from?.id
+        : ""
+    ) ||
     ""
   );
 }
 
-function pickExternalAccountId({ channel = "", recipientId = "", pageId = "", igUserId = "" }) {
+function pickExternalAccountId({
+  channel = "",
+  recipientId = "",
+  pageId = "",
+  igUserId = "",
+}) {
   const ch = lower(channel);
   if (ch === "instagram") {
     return s(igUserId || recipientId || pageId);
@@ -192,13 +254,11 @@ function baseEvent({
     messageId: msgId,
     mid: s(mid || messageId || ""),
     externalThreadId: s(externalThreadId || uid || ""),
-    username: s(username),
-    customerName: s(customerName),
-
+    username: cleanUsername(username),
+    customerName: cleanText(customerName),
     externalCommentId: s(externalCommentId),
     externalParentCommentId: s(externalParentCommentId),
     externalPostId: s(externalPostId),
-
     raw,
     supported: Boolean(supported),
     ignored: Boolean(ignored),
@@ -251,6 +311,67 @@ function pickChangeAttachments(value = {}) {
   return out;
 }
 
+function resolveMessagingIdentity(ev = {}) {
+  const message = isObject(ev?.message) ? ev.message : {};
+  const sender = isObject(ev?.sender) ? ev.sender : {};
+  const recipient = isObject(ev?.recipient) ? ev.recipient : {};
+  const from = isObject(ev?.from) ? ev.from : {};
+  const profile = isObject(ev?.profile) ? ev.profile : {};
+  const user = isObject(ev?.user) ? ev.user : {};
+  const contact = isObject(ev?.contact) ? ev.contact : {};
+  const senderProfile = isObject(ev?.sender_profile) ? ev.sender_profile : {};
+  const userProfile = isObject(ev?.user_profile) ? ev.user_profile : {};
+
+  const username = pickBestUsername(
+    ev?.username,
+    ev?.user_name,
+    ev?.screen_name,
+    message?.username,
+    message?.from?.username,
+    sender?.username,
+    from?.username,
+    recipient?.username,
+    profile?.username,
+    user?.username,
+    contact?.username,
+    senderProfile?.username,
+    userProfile?.username
+  );
+
+  const customerName = pickBestName(
+    ev?.customerName,
+    ev?.customer_name,
+    ev?.name,
+    ev?.full_name,
+    joinNameParts(ev?.first_name, ev?.last_name),
+    message?.name,
+    message?.full_name,
+    sender?.name,
+    sender?.full_name,
+    joinNameParts(sender?.first_name, sender?.last_name),
+    from?.name,
+    from?.full_name,
+    joinNameParts(from?.first_name, from?.last_name),
+    profile?.name,
+    profile?.full_name,
+    joinNameParts(profile?.first_name, profile?.last_name),
+    user?.name,
+    user?.full_name,
+    joinNameParts(user?.first_name, user?.last_name),
+    contact?.name,
+    contact?.full_name,
+    senderProfile?.name,
+    senderProfile?.full_name,
+    userProfile?.name,
+    userProfile?.full_name
+  );
+
+  return {
+    username,
+    customerName,
+  };
+}
+
 function parseMessagingItem(ev = {}) {
   const channel = inferChannelFromMessaging(ev);
   const senderId = s(ev?.sender?.id);
@@ -262,6 +383,7 @@ function parseMessagingItem(ev = {}) {
   const text = cleanText(message?.text);
   const messageId = s(message?.mid || message?.id || "");
   const attachments = pickMessagingAttachments(ev);
+  const identity = resolveMessagingIdentity(ev);
 
   if (ev?.read) {
     return baseEvent({
@@ -277,6 +399,8 @@ function parseMessagingItem(ev = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "read_event",
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -294,6 +418,8 @@ function parseMessagingItem(ev = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "delivery_event",
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -311,6 +437,8 @@ function parseMessagingItem(ev = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "reaction_event",
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -330,6 +458,8 @@ function parseMessagingItem(ev = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "echo_message",
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -349,6 +479,8 @@ function parseMessagingItem(ev = {}) {
       externalThreadId: senderId,
       raw: ev,
       supported: true,
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -371,6 +503,8 @@ function parseMessagingItem(ev = {}) {
       ignoreReason: "attachment_only",
       attachments,
       hasAttachments: true,
+      username: identity.username,
+      customerName: identity.customerName,
     });
   }
 
@@ -389,6 +523,8 @@ function parseMessagingItem(ev = {}) {
     supported: false,
     ignored: true,
     ignoreReason: "unsupported_messaging_event",
+    username: identity.username,
+    customerName: identity.customerName,
   });
 }
 
@@ -399,11 +535,20 @@ function parseWhatsAppChange(change = {}) {
   const timestamp = normalizeTimestamp(msg?.timestamp, Date.now());
   const messageId = s(msg?.id || "");
   const userId = s(value?.contacts?.[0]?.wa_id) || s(msg?.from);
-  const recipientId = s(value?.metadata?.phone_number_id || value?.metadata?.display_phone_number || "");
+  const recipientId =
+    s(value?.metadata?.phone_number_id || value?.metadata?.display_phone_number || "");
   const pageId = "";
   const igUserId = "";
   const attachments = pickChangeAttachments(value);
   const type = lower(msg?.type);
+  const username = pickBestUsername(
+    value?.contacts?.[0]?.profile?.name,
+    value?.contacts?.[0]?.username
+  );
+  const customerName = pickBestName(
+    value?.contacts?.[0]?.profile?.name,
+    value?.contacts?.[0]?.name
+  );
 
   if (type === "reaction") {
     return baseEvent({
@@ -421,6 +566,8 @@ function parseWhatsAppChange(change = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "reaction_event",
+      username,
+      customerName,
     });
   }
 
@@ -440,6 +587,8 @@ function parseWhatsAppChange(change = {}) {
       externalThreadId: userId,
       raw: change,
       supported: true,
+      username,
+      customerName,
     });
   }
 
@@ -462,6 +611,8 @@ function parseWhatsAppChange(change = {}) {
       ignoreReason: "attachment_only",
       attachments,
       hasAttachments: true,
+      username,
+      customerName,
     });
   }
 
@@ -480,7 +631,53 @@ function parseWhatsAppChange(change = {}) {
     supported: false,
     ignored: true,
     ignoreReason: "unsupported_whatsapp_event",
+    username,
+    customerName,
   });
+}
+
+function resolveInstagramLikeChangeIdentity(change = {}) {
+  const value = change?.value || {};
+  const msg0 = value?.messages?.[0] || {};
+  const fromObj = value?.from || {};
+  const senderObj = value?.sender || {};
+  const recipientObj = value?.recipient || {};
+  const profileObj = value?.profile || {};
+  const contactObj = value?.contact || {};
+
+  const username = pickBestUsername(
+    value?.username,
+    value?.user_name,
+    fromObj?.username,
+    senderObj?.username,
+    recipientObj?.username,
+    msg0?.username,
+    profileObj?.username,
+    contactObj?.username
+  );
+
+  const customerName = pickBestName(
+    value?.customerName,
+    value?.customer_name,
+    value?.name,
+    value?.full_name,
+    joinNameParts(value?.first_name, value?.last_name),
+    fromObj?.name,
+    fromObj?.full_name,
+    joinNameParts(fromObj?.first_name, fromObj?.last_name),
+    senderObj?.name,
+    senderObj?.full_name,
+    joinNameParts(senderObj?.first_name, senderObj?.last_name),
+    profileObj?.name,
+    profileObj?.full_name,
+    contactObj?.name,
+    contactObj?.full_name
+  );
+
+  return {
+    username,
+    customerName,
+  };
 }
 
 function parseInstagramLikeMessageChange(change = {}) {
@@ -489,6 +686,7 @@ function parseInstagramLikeMessageChange(change = {}) {
   const fromObj = value?.from || {};
   const senderObj = value?.sender || {};
   const recipientObj = value?.recipient || {};
+  const identity = resolveInstagramLikeChangeIdentity(change);
 
   const text =
     cleanText(value?.message) ||
@@ -503,10 +701,7 @@ function parseInstagramLikeMessageChange(change = {}) {
     Date.now();
 
   const messageId =
-    s(msg0?.id) ||
-    s(msg0?.mid) ||
-    s(value?.message_id) ||
-    "";
+    s(msg0?.id) || s(msg0?.mid) || s(value?.message_id) || "";
 
   const userId =
     s(fromObj?.id) ||
@@ -515,9 +710,7 @@ function parseInstagramLikeMessageChange(change = {}) {
     s(msg0?.from);
 
   const recipientId =
-    s(recipientObj?.id) ||
-    s(value?.recipient_id) ||
-    "";
+    s(recipientObj?.id) || s(value?.recipient_id) || "";
 
   const pageId = pickChangePageId(change);
   const igUserId = pickChangeIgUserId(change);
@@ -537,8 +730,8 @@ function parseInstagramLikeMessageChange(change = {}) {
       messageId,
       mid: s(msg0?.mid || messageId),
       externalThreadId: userId,
-      username: s(value?.username || fromObj?.username || senderObj?.username || ""),
-      customerName: s(value?.name || fromObj?.name || senderObj?.name || ""),
+      username: identity.username,
+      customerName: identity.customerName,
       raw: change,
       supported: true,
     });
@@ -557,6 +750,8 @@ function parseInstagramLikeMessageChange(change = {}) {
       messageId,
       mid: s(msg0?.mid || messageId),
       externalThreadId: userId,
+      username: identity.username,
+      customerName: identity.customerName,
       raw: change,
       supported: false,
       ignored: true,
@@ -577,6 +772,8 @@ function parseInstagramLikeMessageChange(change = {}) {
     timestamp,
     messageId,
     mid: s(msg0?.mid || messageId),
+    username: identity.username,
+    customerName: identity.customerName,
     raw: change,
     supported: false,
     ignored: true,
@@ -648,19 +845,21 @@ function parseCommentChange(change = {}) {
     s(commentObj?.from?.id) ||
     "";
 
-  const username =
-    s(fromObj?.username) ||
-    s(value?.username) ||
-    s(senderObj?.username) ||
-    s(commentObj?.from?.username) ||
-    "";
+  const username = pickBestUsername(
+    fromObj?.username,
+    value?.username,
+    senderObj?.username,
+    commentObj?.from?.username
+  );
 
-  const customerName =
-    s(fromObj?.name) ||
-    s(value?.name) ||
-    s(senderObj?.name) ||
-    s(commentObj?.from?.name) ||
-    "";
+  const customerName = pickBestName(
+    fromObj?.name,
+    value?.name,
+    senderObj?.name,
+    commentObj?.from?.name,
+    joinNameParts(fromObj?.first_name, fromObj?.last_name),
+    joinNameParts(senderObj?.first_name, senderObj?.last_name)
+  );
 
   const timestamp =
     normalizeTimestamp(value?.created_time, 0) ||
@@ -669,7 +868,9 @@ function parseCommentChange(change = {}) {
     Date.now();
 
   const channel =
-    field.includes("facebook") || field.includes("messenger") ? "facebook" : "instagram";
+    field.includes("facebook") || field.includes("messenger")
+      ? "facebook"
+      : "instagram";
 
   const pageId = pickChangePageId(change);
   const igUserId = pickChangeIgUserId(change);
@@ -687,6 +888,8 @@ function parseCommentChange(change = {}) {
       supported: false,
       ignored: true,
       ignoreReason: "unsupported_comment_change",
+      username,
+      customerName,
     });
   }
 
