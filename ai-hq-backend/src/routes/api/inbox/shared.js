@@ -1,7 +1,3 @@
-// src/routes/api/inbox/shared.js
-// FINAL v1.1 — inbox shared helpers and normalizers
-// migrated from inbox.shared.js
-
 import { deepFix, fixText } from "../../../utils/textFix.js";
 
 export function toInt(v, fallback) {
@@ -18,7 +14,9 @@ export function s(v) {
 }
 
 export function truthy(v) {
-  return ["1", "true", "yes", "on"].includes(String(v ?? "").trim().toLowerCase());
+  return ["1", "true", "yes", "on"].includes(
+    String(v ?? "").trim().toLowerCase()
+  );
 }
 
 function toMs(v) {
@@ -56,23 +54,124 @@ function boolOr(v, fallback) {
   return typeof v === "boolean" ? v : fallback;
 }
 
+function lower(v, d = "") {
+  return s(v || d).toLowerCase();
+}
+
+function looksLikeNumericIdentity(value = "") {
+  const safe = s(value);
+  if (!safe) return false;
+  return /^\d{5,}$/.test(safe);
+}
+
+function isControlLikeMessageType(value = "") {
+  return [
+    "system",
+    "typing",
+    "typing_on",
+    "typing_off",
+    "typing-on",
+    "typing-off",
+    "typingon",
+    "typingoff",
+    "typing_start",
+    "typing_stop",
+    "typing-start",
+    "typing-stop",
+    "mark_seen",
+    "mark-seen",
+    "markseen",
+    "seen",
+    "read",
+    "delivery",
+    "reaction",
+    "echo",
+  ].includes(lower(value));
+}
+
+function resolveMessageOriginalType(message = {}) {
+  const meta = asObject(message?.meta);
+  return lower(meta?.originalMessageType || meta?.original_message_type || "");
+}
+
+export function isRenderableConversationMessage(message = {}) {
+  if (!message || typeof message !== "object") return false;
+
+  const storageType = lower(message?.message_type);
+  const originalType = resolveMessageOriginalType(message);
+  const senderType = lower(message?.sender_type);
+  const meta = asObject(message?.meta);
+  const source = lower(meta?.source);
+
+  if (isControlLikeMessageType(storageType)) return false;
+  if (isControlLikeMessageType(originalType)) return false;
+  if (["system", "decision"].includes(senderType)) return false;
+  if (
+    ["decision", "decision_engine", "decision-event", "system"].includes(source)
+  ) {
+    return false;
+  }
+
+  return Boolean(fixText(message?.text || ""));
+}
+
+export function resolveThreadDisplayName(row = {}) {
+  const customerName = fixText(row?.customer_name || "");
+  const externalUsername = fixText(row?.external_username || "");
+  const externalUserId = fixText(row?.external_user_id || "");
+  const channel = lower(
+    row?.channel || row?.channel_type || row?.provider || row?.source_type
+  );
+
+  if (customerName && !looksLikeNumericIdentity(customerName)) {
+    return customerName;
+  }
+
+  if (externalUsername) {
+    return externalUsername.startsWith("@")
+      ? externalUsername
+      : `@${externalUsername}`;
+  }
+
+  if (channel === "instagram") return "Instagram User";
+  if (channel === "telegram") return "Telegram User";
+  if (externalUserId || customerName) return "Customer";
+  return "Conversation";
+}
+
+export function pickConversationPreviewText(value = "", fallback = "") {
+  const safeValue = fixText(value || "");
+  if (safeValue) return safeValue;
+
+  const safeFallback = fixText(fallback || "");
+  if (safeFallback) return safeFallback;
+
+  return "";
+}
+
 export function resolveThreadAvatarState(row = {}) {
   const meta = asObject(row?.meta);
   const telegram = asObject(meta?.telegram);
   const customerTelegram = asObject(asObject(meta?.customerContext)?.telegram);
 
   const avatarFileId =
-    fixText(telegram?.avatarFileId || customerTelegram?.avatarFileId || "") || "";
+    fixText(telegram?.avatarFileId || customerTelegram?.avatarFileId || "") ||
+    "";
   const avatarFileUniqueId =
     fixText(
       telegram?.avatarFileUniqueId || customerTelegram?.avatarFileUniqueId || ""
     ) || "";
   const avatarFilePath =
-    fixText(telegram?.avatarFilePath || customerTelegram?.avatarFilePath || "") || "";
+    fixText(
+      telegram?.avatarFilePath || customerTelegram?.avatarFilePath || ""
+    ) || "";
   const avatarFetchedAt =
-    fixText(telegram?.avatarFetchedAt || customerTelegram?.avatarFetchedAt || "") || "";
+    fixText(
+      telegram?.avatarFetchedAt || customerTelegram?.avatarFetchedAt || ""
+    ) || "";
   const avatarUserId =
-    fixText(telegram?.avatarUserId || customerTelegram?.avatarUserId || "") || "";
+    fixText(telegram?.avatarUserId || customerTelegram?.avatarUserId || "") ||
+    "";
 
   let avatarAvailable = null;
   if (typeof telegram?.avatarAvailable === "boolean") {
@@ -154,6 +253,10 @@ export function normalizeThread(row) {
     meta,
   });
 
+  const customerName = fixText(row.customer_name || "");
+  const externalUsername = fixText(row.external_username || "");
+  const externalUserId = fixText(row.external_user_id || "");
+
   return {
     ...row,
     id: s(row.id),
@@ -161,9 +264,15 @@ export function normalizeThread(row) {
     tenant_key: fixText(row.tenant_key || ""),
     channel: fixText(row.channel || ""),
     external_thread_id: fixText(row.external_thread_id || ""),
-    external_user_id: fixText(row.external_user_id || ""),
-    external_username: fixText(row.external_username || ""),
-    customer_name: fixText(row.customer_name || ""),
+    external_user_id: externalUserId,
+    external_username: externalUsername,
+    customer_name: customerName,
+    display_name: resolveThreadDisplayName({
+      ...row,
+      customer_name: customerName,
+      external_username: externalUsername,
+      external_user_id: externalUserId,
+    }),
     status: fixText(row.status || ""),
     unread_count: Number(row.unread_count || 0),
     assigned_to: fixText(row.assigned_to || ""),
@@ -176,7 +285,9 @@ export function normalizeThread(row) {
         : Boolean(handoffMeta.active),
 
     handoff_reason: fixText(row.handoff_reason || handoffMeta.reason || ""),
-    handoff_priority: fixText(row.handoff_priority || handoffMeta.priority || "normal"),
+    handoff_priority: fixText(
+      row.handoff_priority || handoffMeta.priority || "normal"
+    ),
     handoff_at: row.handoff_at || handoffMeta.at || null,
     handoff_by: fixText(row.handoff_by || handoffMeta.by || ""),
 
@@ -195,7 +306,8 @@ export function normalizeThread(row) {
 export function normalizeMessage(row) {
   if (!row) return null;
 
-  return {
+  const meta = asObject(row.meta);
+  const normalized = {
     ...row,
     id: s(row.id),
     thread_id: s(row.thread_id),
@@ -207,9 +319,14 @@ export function normalizeMessage(row) {
     message_type: fixText(row.message_type || ""),
     text: fixText(row.text || ""),
     attachments: asArray(row.attachments),
-    meta: asObject(row.meta),
+    meta,
     sent_at: row.sent_at || null,
     created_at: row.created_at || null,
+  };
+
+  return {
+    ...normalized,
+    is_renderable: isRenderableConversationMessage(normalized),
   };
 }
 
@@ -350,7 +467,9 @@ export function normalizeTenant(row) {
 
   const bannedPhrases = asStringArray(row.banned_phrases);
 
-  const brandName = fixText(row.brand_name || row.company_name || row.tenant_key || "");
+  const brandName = fixText(
+    row.brand_name || row.company_name || row.tenant_key || ""
+  );
   const servicesList = splitSummaryToList(row.services_summary);
   const audienceSummary = fixText(row.audience_summary || "");
   const servicesSummary = fixText(row.services_summary || "");

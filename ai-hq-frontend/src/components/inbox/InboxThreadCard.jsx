@@ -1,8 +1,12 @@
-import { useState } from "react";
-import { Clock3 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Clock3, Instagram, Send } from "lucide-react";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
+}
+
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
 }
 
 function initialsFromName(value = "") {
@@ -19,22 +23,63 @@ function initialsFromName(value = "") {
     .join("");
 }
 
-function resolveDisplayName(thread = {}) {
-  return (
-    s(thread.customer_name) ||
-    s(thread.external_username) ||
-    s(thread.external_user_id) ||
-    "Conversation"
+function looksLikeNumericIdentity(value = "") {
+  const safe = s(value);
+  if (!safe) return false;
+  return /^\d{5,}$/.test(safe);
+}
+
+function resolveSafeDisplayName(thread = {}) {
+  const customerName = s(thread.customer_name);
+  const externalUsername = s(thread.external_username);
+  const externalUserId = s(thread.external_user_id);
+  const channel = lower(
+    thread.channel || thread.channel_type || thread.provider || thread.source_type
   );
+
+  if (customerName && !looksLikeNumericIdentity(customerName)) {
+    return customerName;
+  }
+
+  if (externalUsername) {
+    return externalUsername.startsWith("@")
+      ? externalUsername
+      : `@${externalUsername}`;
+  }
+
+  if (customerName) {
+    if (channel === "instagram") return "Instagram User";
+    if (channel === "telegram") return "Telegram User";
+    return "Customer";
+  }
+
+  if (externalUserId) {
+    if (channel === "instagram") return "Instagram User";
+    if (channel === "telegram") return "Telegram User";
+    return "Customer";
+  }
+
+  return "Conversation";
 }
 
 function resolvePreview(thread = {}) {
-  return (
+  const preview =
     s(thread.last_message_text) ||
     s(thread.last_message_preview) ||
     s(thread.subject) ||
-    s(thread.title) ||
-    "No message preview yet"
+    s(thread.title);
+
+  if (!preview) return "No message preview yet";
+  return preview;
+}
+
+function resolveChannelKey(thread = {}) {
+  return lower(
+    thread.channel ||
+      thread.channel_label ||
+      thread.channel_type ||
+      thread.provider ||
+      thread.source_type
   );
 }
 
@@ -43,7 +88,8 @@ function resolveChannelLabel(thread = {}) {
     s(thread.channel_label) ||
     s(thread.channel_type) ||
     s(thread.provider) ||
-    s(thread.source_type);
+    s(thread.source_type) ||
+    s(thread.channel);
 
   if (!raw) return "";
 
@@ -132,12 +178,34 @@ function resolveMeta(thread = {}) {
   };
 }
 
+function ChannelBadge({ channel }) {
+  const normalized = lower(channel);
+
+  if (normalized === "instagram") {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_52%,#8134af_78%,#515bd4_100%)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+        <Instagram className="h-2.5 w-2.5" strokeWidth={2.2} />
+      </span>
+    );
+  }
+
+  if (normalized === "telegram") {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[rgba(34,158,217,1)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+        <Send className="h-2.5 w-2.5" strokeWidth={2.4} />
+      </span>
+    );
+  }
+
+  return null;
+}
+
 export default function InboxThreadCard({
   thread,
   selected = false,
   onOpen,
 }) {
-  const name = resolveDisplayName(thread);
+  const name = resolveSafeDisplayName(thread);
   const preview = resolvePreview(thread);
   const unreadCount = Number(thread?.unread_count || 0);
   const timeLabel = formatRelativeTime(
@@ -146,8 +214,15 @@ export default function InboxThreadCard({
   const meta = resolveMeta(thread);
   const avatarUrl = resolveAvatarUrl(thread);
   const avatarKey = `${s(thread?.id)}:${avatarUrl}`;
+  const channelKey = useMemo(() => resolveChannelKey(thread), [thread]);
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;
+
+  useEffect(() => {
+    if (failedAvatarKey && failedAvatarKey !== avatarKey) {
+      setFailedAvatarKey("");
+    }
+  }, [avatarKey, failedAvatarKey]);
 
   return (
     <button
@@ -160,24 +235,28 @@ export default function InboxThreadCard({
           : "bg-transparent hover:bg-[rgba(248,250,252,0.82)]",
       ].join(" ")}
     >
-      <div
-        className={[
-          "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12px] font-semibold ring-1",
-          resolveAvatarTone(name),
-        ].join(" ")}
-      >
-        {avatarUrl && !avatarFailed ? (
-          <img
-            src={avatarUrl}
-            alt={name}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-            onError={() => setFailedAvatarKey(avatarKey)}
-          />
-        ) : (
-          initialsFromName(name)
-        )}
+      <div className="relative">
+        <div
+          className={[
+            "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12px] font-semibold ring-1",
+            resolveAvatarTone(name),
+          ].join(" ")}
+        >
+          {avatarUrl && !avatarFailed ? (
+            <img
+              src={avatarUrl}
+              alt={name}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+              onError={() => setFailedAvatarKey(avatarKey)}
+            />
+          ) : (
+            initialsFromName(name)
+          )}
+        </div>
+
+        <ChannelBadge channel={channelKey} />
       </div>
 
       <div className="min-w-0 flex-1">

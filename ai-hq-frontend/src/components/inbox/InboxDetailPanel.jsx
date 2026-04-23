@@ -20,6 +20,14 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
 function initialsFromName(value = "") {
   const parts = String(value || "")
     .trim()
@@ -111,6 +119,56 @@ function formatConversationMeta(thread) {
   }
 
   return items;
+}
+
+function resolveOriginalMessageType(message = {}) {
+  const meta = obj(message?.meta);
+  return lower(meta?.originalMessageType || meta?.original_message_type || "");
+}
+
+function isControlLikeMessageType(value = "") {
+  return [
+    "system",
+    "typing",
+    "typing_on",
+    "typing_off",
+    "typing-on",
+    "typing-off",
+    "typingon",
+    "typingoff",
+    "typing_start",
+    "typing_stop",
+    "typing-start",
+    "typing-stop",
+    "mark_seen",
+    "mark-seen",
+    "markseen",
+    "seen",
+    "read",
+    "delivery",
+    "reaction",
+    "echo",
+  ].includes(lower(value));
+}
+
+function isRenderableConversationMessage(message = {}) {
+  if (!message || typeof message !== "object") return false;
+
+  const storageType = lower(message?.message_type);
+  const originalType = resolveOriginalMessageType(message);
+  const senderType = lower(message?.sender_type);
+  const source = lower(message?.meta?.source);
+
+  if (isControlLikeMessageType(storageType)) return false;
+  if (isControlLikeMessageType(originalType)) return false;
+  if (["system", "decision"].includes(senderType)) return false;
+  if (
+    ["decision", "decision_engine", "decision-event", "system"].includes(source)
+  ) {
+    return false;
+  }
+
+  return Boolean(s(message?.text));
 }
 
 function QuietIconButton({
@@ -598,6 +656,14 @@ export default function InboxDetailPanel({
   const menuOpen =
     Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
 
+  const visibleMessages = useMemo(
+    () =>
+      Array.isArray(messages)
+        ? messages.filter((message) => isRenderableConversationMessage(message))
+        : [],
+    [messages]
+  );
+
   useEffect(() => {
     if (!hasThread) {
       shouldStickToBottomRef.current = true;
@@ -615,7 +681,7 @@ export default function InboxDetailPanel({
     }
 
     lastThreadIdRef.current = currentThreadId;
-  }, [currentThreadId, messages.length, hasThread]);
+  }, [currentThreadId, visibleMessages.length, hasThread]);
 
   useEffect(() => {
     const viewport = scrollViewportRef.current;
@@ -740,20 +806,20 @@ export default function InboxDetailPanel({
                     </div>
                   ) : null}
 
-                  {!messages.length ? (
+                  {!visibleMessages.length ? (
                     <div className="flex min-h-[320px] items-center justify-center">
                       <div className="w-full max-w-[520px] rounded-[26px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.92)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
                         <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
                           No messages yet
                         </div>
                         <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
-                          This conversation has no message history yet.
+                          This conversation has no visible message history yet.
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="mx-auto mt-auto w-full max-w-[920px] space-y-4">
-                      {messages.map((message) => (
+                      {visibleMessages.map((message) => (
                         <InboxMessageBubble
                           key={message.id}
                           m={message}

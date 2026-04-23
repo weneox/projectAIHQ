@@ -13,10 +13,6 @@ function defaultPlatformForChannel(channel = "") {
   return safeChannel || "instagram";
 }
 
-function defaultCustomerLabelForChannel(channel = "") {
-  return lower(channel) === "telegram" ? "Telegram User" : "Instagram User";
-}
-
 function normalizeTimestamp(value) {
   if (value == null || value === "") return Date.now();
 
@@ -41,6 +37,142 @@ function cleanText(value) {
   return fixText(s(value));
 }
 
+function cleanNullableText(value) {
+  const next = cleanText(value);
+  return next || null;
+}
+
+function cleanUsername(value) {
+  const next = cleanText(value).replace(/^@+/, "");
+  return next || null;
+}
+
+function looksLikeNumericIdentity(value = "") {
+  const safe = cleanText(value);
+  if (!safe) return false;
+  return /^\d{5,}$/.test(safe);
+}
+
+function isPlaceholderDisplayName(value = "") {
+  const safe = lower(value);
+  if (!safe) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "website user",
+    "web user",
+    "user",
+    "unknown",
+  ].includes(safe);
+}
+
+function joinNameParts(...parts) {
+  const joined = parts
+    .map((part) => cleanText(part))
+    .filter(Boolean)
+    .join(" ");
+
+  return joined || "";
+}
+
+function pickBestCustomerName(...candidates) {
+  for (const candidate of candidates) {
+    const value = cleanText(candidate);
+    if (!value) continue;
+    if (looksLikeNumericIdentity(value)) continue;
+    if (isPlaceholderDisplayName(value)) continue;
+    return value;
+  }
+
+  return null;
+}
+
+function buildCustomerNameFromContexts({
+  rawCustomerName = "",
+  rawExternalUsername = "",
+  customerContext = {},
+  raw = {},
+  from = {},
+} = {}) {
+  const safeCustomerContext = normalizeObj(customerContext);
+  const safeRaw = normalizeObj(raw);
+  const safeFrom = normalizeObj(from);
+
+  const telegramCtx = normalizeObj(safeCustomerContext.telegram);
+  const instagramCtx = normalizeObj(safeCustomerContext.instagram);
+  const metaCtx = normalizeObj(safeCustomerContext.meta);
+  const profileCtx = normalizeObj(safeCustomerContext.profile);
+
+  const fromFullName = joinNameParts(
+    safeFrom.fullName,
+    safeFrom.first_name,
+    safeFrom.last_name
+  );
+
+  const ctxFullName = joinNameParts(
+    safeCustomerContext.fullName,
+    safeCustomerContext.firstName,
+    safeCustomerContext.lastName
+  );
+
+  const profileFullName = joinNameParts(
+    profileCtx.fullName,
+    profileCtx.firstName,
+    profileCtx.lastName
+  );
+
+  const telegramFullName = joinNameParts(
+    telegramCtx.fullName,
+    telegramCtx.firstName,
+    telegramCtx.lastName
+  );
+
+  const instagramFullName = joinNameParts(
+    instagramCtx.fullName,
+    instagramCtx.firstName,
+    instagramCtx.lastName
+  );
+
+  const metaFullName = joinNameParts(
+    metaCtx.fullName,
+    metaCtx.firstName,
+    metaCtx.lastName
+  );
+
+  return pickBestCustomerName(
+    rawCustomerName,
+    safeFrom.fullName,
+    safeFrom.name,
+    fromFullName,
+    safeCustomerContext.fullName,
+    safeCustomerContext.displayName,
+    safeCustomerContext.name,
+    ctxFullName,
+    profileCtx.displayName,
+    profileCtx.name,
+    profileFullName,
+    telegramCtx.displayName,
+    telegramCtx.name,
+    telegramFullName,
+    instagramCtx.displayName,
+    instagramCtx.name,
+    instagramFullName,
+    metaCtx.displayName,
+    metaCtx.name,
+    metaFullName,
+    safeRaw?.customerName,
+    safeRaw?.customer_name,
+    safeRaw?.from?.name,
+    safeRaw?.from?.fullName,
+    rawExternalUsername
+  );
+}
+
 export function parseIngestRequest(req) {
   const tenantKey = resolveTenantKeyFromReq(req);
   const channel =
@@ -51,46 +183,61 @@ export function parseIngestRequest(req) {
     cleanText(req.body?.provider || req.body?.source || defaultProviderForChannel(channel)) ||
     defaultProviderForChannel(channel);
 
+  const raw = normalizeObj(req.body?.raw);
+  const from = normalizeObj(req.body?.from);
+  const customerContext = normalizeObj(req.body?.customerContext);
+  const formData = normalizeObj(req.body?.formData);
+  const leadContext = normalizeObj(req.body?.leadContext);
+  const conversationContext = normalizeObj(req.body?.conversationContext);
+  const tenantContext = normalizeObj(req.body?.tenantContext);
+  const requestMeta = normalizeObj(req.body?.meta);
+
   const externalUserId =
-    cleanText(
+    cleanNullableText(
       req.body?.externalUserId ||
         req.body?.userId ||
-        req.body?.from?.userId ||
-        req.body?.from?.id ||
-        req.body?.customerContext?.telegram?.userId ||
-        req.body?.customerContext?.telegram?.user_id
+        from?.userId ||
+        from?.id ||
+        customerContext?.telegram?.userId ||
+        customerContext?.telegram?.user_id ||
+        customerContext?.instagram?.userId ||
+        customerContext?.instagram?.user_id ||
+        customerContext?.meta?.userId ||
+        customerContext?.meta?.user_id
     ) || null;
 
   const externalThreadId =
-    cleanText(
+    cleanNullableText(
       req.body?.externalThreadId ||
         req.body?.threadExternalId ||
         req.body?.threadId ||
         req.body?.chatId ||
-        req.body?.customerContext?.telegram?.chatId ||
-        req.body?.customerContext?.telegram?.chat_id
+        customerContext?.telegram?.chatId ||
+        customerContext?.telegram?.chat_id
     ) || null;
 
   const externalUsername =
-    cleanText(
+    cleanUsername(
       req.body?.externalUsername ||
-        req.body?.from?.username ||
+        from?.username ||
         req.body?.username ||
-        req.body?.customerContext?.telegram?.username
+        customerContext?.username ||
+        customerContext?.telegram?.username ||
+        customerContext?.instagram?.username ||
+        customerContext?.meta?.username
     ) || null;
 
   const customerName =
-    cleanText(
-      req.body?.customerName ||
-        req.body?.from?.fullName ||
-        req.body?.from?.name ||
-        externalUsername ||
-        externalUserId ||
-        defaultCustomerLabelForChannel(channel)
-    ) || defaultCustomerLabelForChannel(channel);
+    buildCustomerNameFromContexts({
+      rawCustomerName: req.body?.customerName,
+      rawExternalUsername: externalUsername,
+      customerContext,
+      raw,
+      from,
+    }) || null;
 
   const externalMessageId =
-    cleanText(
+    cleanNullableText(
       req.body?.externalMessageId ||
         req.body?.messageExternalId ||
         req.body?.message?.id
@@ -100,14 +247,6 @@ export function parseIngestRequest(req) {
   const timestamp = normalizeTimestamp(
     req.body?.timestamp || req.body?.message?.timestamp || req.body?.receivedAt
   );
-
-  const raw = normalizeObj(req.body?.raw);
-  const customerContext = normalizeObj(req.body?.customerContext);
-  const formData = normalizeObj(req.body?.formData);
-  const leadContext = normalizeObj(req.body?.leadContext);
-  const conversationContext = normalizeObj(req.body?.conversationContext);
-  const tenantContext = normalizeObj(req.body?.tenantContext);
-  const requestMeta = normalizeObj(req.body?.meta);
 
   return {
     tenantKey,
@@ -130,11 +269,21 @@ export function parseIngestRequest(req) {
       source: cleanText(requestMeta.source || req.body?.source || provider) || provider,
       provider: cleanText(requestMeta.provider || provider) || provider,
       platform:
-        cleanText(requestMeta.platform || req.body?.platform || defaultPlatformForChannel(channel)) ||
-        defaultPlatformForChannel(channel),
+        cleanText(
+          requestMeta.platform ||
+            req.body?.platform ||
+            defaultPlatformForChannel(channel)
+        ) || defaultPlatformForChannel(channel),
       channel,
       timestamp,
       raw,
+      from,
+      identity: {
+        externalUserId: externalUserId || "",
+        externalThreadId: externalThreadId || "",
+        externalUsername: externalUsername || "",
+        customerName: customerName || "",
+      },
       customerContext,
       formData,
       leadContext,
@@ -184,7 +333,7 @@ export function parseOutboundRequest(req, existingThread) {
   const meta = normalizeObj(req.body?.meta);
 
   const recipientId =
-    cleanText(
+    cleanNullableText(
       req.body?.recipientId ||
         req.body?.recipient_id ||
         meta?.recipientId ||
@@ -195,11 +344,15 @@ export function parseOutboundRequest(req, existingThread) {
         existingThread?.external_user_id
     ) || null;
 
-  const senderType = cleanText(req.body?.senderType || req.body?.sender_type || "ai").toLowerCase() || "ai";
+  const senderType =
+    cleanText(req.body?.senderType || req.body?.sender_type || "ai").toLowerCase() ||
+    "ai";
   const externalMessageId =
-    cleanText(req.body?.providerMessageId || req.body?.externalMessageId || "") || null;
+    cleanNullableText(req.body?.providerMessageId || req.body?.externalMessageId || "") ||
+    null;
 
-  const requestedMessageType = lower(req.body?.messageType || req.body?.message_type || "text") || "text";
+  const requestedMessageType =
+    lower(req.body?.messageType || req.body?.message_type || "text") || "text";
   const messageType = normalizeInboxMessageType(requestedMessageType, "text");
   const text = cleanText(req.body?.text || "");
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
