@@ -914,4 +914,4 @@ export default function InboxDetailPanel({
       </div>
     </section>
   );
-}
+}  
