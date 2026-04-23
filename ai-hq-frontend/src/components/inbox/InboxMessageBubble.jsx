@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { fmtRelative } from "../../lib/inbox-ui.js";
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
 import InboxReplayTraceCard from "./InboxReplayTraceCard.jsx";
 
@@ -69,9 +68,7 @@ function formatBubbleTime(value) {
   if (!value) return "";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return s(fmtRelative(value));
-  }
+  if (Number.isNaN(date.getTime())) return "";
 
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -80,7 +77,7 @@ function formatBubbleTime(value) {
       hour12: false,
     }).format(date);
   } catch {
-    return s(fmtRelative(value));
+    return "";
   }
 }
 
@@ -99,7 +96,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/90 bg-[#DCE7F6] text-[12px] font-semibold text-[#37506B] shadow-[0_10px_22px_-16px_rgba(15,23,42,0.28)]">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E7ECF3] bg-[#EAF1FB] text-[12px] font-semibold text-[#4B6784] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.22)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -121,8 +118,8 @@ function BubbleTime({ value, incoming }) {
   return (
     <span
       className={[
-        "select-none whitespace-nowrap text-[11px] font-medium tracking-[0.01em]",
-        incoming ? "text-[#8A94A6]" : "text-white/72",
+        "whitespace-nowrap text-[11px] font-medium leading-none",
+        incoming ? "text-[#8E99A8]" : "text-white/80",
       ].join(" ")}
     >
       {value}
@@ -130,72 +127,60 @@ function BubbleTime({ value, incoming }) {
   );
 }
 
-function BubbleTail({ side = "left", fill = "#FFFFFF", stroke = "#E5E7EB" }) {
-  const isLeft = side === "left";
-
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 18 18"
-      className={[
-        "pointer-events-none absolute bottom-[2px] h-[16px] w-[16px]",
-        isLeft ? "-left-[8px]" : "-right-[8px] scale-x-[-1]",
-      ].join(" ")}
-    >
-      <path
-        d="M16.5 1.5C11.2 1.9 7.4 4.4 5.1 8.1C3.4 10.9 2.7 14 1.5 16.5C5.9 15.8 8.9 14.9 11.1 13.2C14.3 10.8 15.9 7.3 16.5 1.5Z"
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TelegramBubble({ side = "left", text, sentAt }) {
+function NaturalBubble({ side = "left", text, sentAt }) {
   const incoming = side === "left";
 
-  const fill = incoming ? "#FFFFFF" : "#3390EC";
-  const stroke = incoming ? "#E4E8EF" : "#2C82D8";
+  const bubbleClass = incoming
+    ? "border border-[#E6EBF2] bg-[#FFFFFF] text-[#111827]"
+    : "border border-[#2F84DA] bg-[#3390EC] text-white";
+
+  const tailBaseClass = incoming
+    ? "absolute bottom-[2px] -left-[5px] h-[18px] w-[18px] rounded-full border border-[#E6EBF2] border-r-0 border-t-0 bg-[#FFFFFF]"
+    : "absolute bottom-[2px] -right-[5px] h-[18px] w-[18px] rounded-full border border-[#2F84DA] border-l-0 border-t-0 bg-[#3390EC]";
+
+  const tailCutClass = incoming
+    ? "absolute bottom-[-1px] -left-[9px] h-[19px] w-[11px] rounded-br-[16px] bg-[var(--inbox-surface,#F8FAFC)]"
+    : "absolute bottom-[-1px] -right-[9px] h-[19px] w-[11px] rounded-bl-[16px] bg-[var(--inbox-surface,#F8FAFC)]";
 
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
       <div className="relative inline-block max-w-full">
-        <BubbleTail side={side} fill={fill} stroke={stroke} />
+        <span aria-hidden="true" className={tailBaseClass} />
+        <span aria-hidden="true" className={tailCutClass} />
 
         <div
           className={[
-            "relative inline-block max-w-full rounded-[20px] px-[14px] pb-[8px] pt-[10px]",
-            "shadow-[0_12px_30px_-24px_rgba(15,23,42,0.22)]",
-            incoming
-              ? "rounded-bl-[8px] border border-[#E4E8EF] bg-[#FFFFFF] text-[#0F172A]"
-              : "rounded-br-[8px] border border-[#2C82D8] bg-[#3390EC] text-white",
+            "relative z-[1] inline-block max-w-full rounded-[21px] px-[15px] pb-[8px] pt-[10px]",
+            "shadow-[0_14px_34px_-26px_rgba(15,23,42,0.18)]",
+            incoming ? "rounded-bl-[8px]" : "rounded-br-[8px]",
+            bubbleClass,
           ].join(" ")}
         >
           {text ? (
-            <div className="max-w-full">
+            <>
               <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
                 {text}
               </div>
-              <div className="mt-[4px] flex justify-end pl-6">
+
+              <div className="mt-[5px] flex justify-end pl-6">
                 <BubbleTime value={sentAt} incoming={incoming} />
               </div>
-            </div>
+            </>
           ) : (
-            <div className="max-w-full">
+            <>
               <div
                 className={[
                   "text-[14px]",
-                  incoming ? "text-[#94A3B8]" : "text-white/72",
+                  incoming ? "text-[#94A3B8]" : "text-white/78",
                 ].join(" ")}
               >
                 (empty message)
               </div>
-              <div className="mt-[4px] flex justify-end pl-6">
+
+              <div className="mt-[5px] flex justify-end pl-6">
                 <BubbleTime value={sentAt} incoming={incoming} />
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -255,17 +240,16 @@ export default function InboxMessageBubble({
 
   const displayName = resolveDisplayName(m, inbound, thread);
   const avatarUrl = inbound ? resolveAvatarUrl(m, thread) : "";
-
-  const bubbleWidthClass = "max-w-[min(430px,72vw)]";
+  const bubbleWidthClass = "max-w-[min(440px,72vw)]";
 
   if (inbound) {
     return (
-      <div className="flex w-full justify-start px-3 py-[4px] sm:px-5">
+      <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
         <div className="flex max-w-full items-end gap-2.5">
           <InboundAvatar title={displayName} avatarUrl={avatarUrl} />
 
           <div className={bubbleWidthClass}>
-            <TelegramBubble side="left" text={text} sentAt={sentAt} />
+            <NaturalBubble side="left" text={text} sentAt={sentAt} />
 
             {showInspect ? (
               <InspectBlock
@@ -282,9 +266,9 @@ export default function InboxMessageBubble({
   }
 
   return (
-    <div className="flex w-full justify-end px-3 py-[4px] sm:px-5">
+    <div className="flex w-full justify-end px-3 py-[5px] sm:px-5">
       <div className={bubbleWidthClass}>
-        <TelegramBubble side="right" text={text} sentAt={sentAt} />
+        <NaturalBubble side="right" text={text} sentAt={sentAt} />
 
         {showInspect ? (
           <InspectBlock
