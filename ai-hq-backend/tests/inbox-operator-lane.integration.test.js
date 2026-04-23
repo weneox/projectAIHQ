@@ -307,7 +307,7 @@ test(
         s(inboundMessageCall.res.body?.message?.direction),
         "inbound"
       );
-      assert.equal(
+        assert.equal(
         Number(inboundMessageCall.res.body?.thread?.unread_count ?? 0),
         1
       );
@@ -358,11 +358,10 @@ test(
       );
 
       if (assertOperatorReadCall(listThreadsCall)) {
-      const listedThreads = Array.isArray(listThreadsCall.res.body?.threads)
-        ? listThreadsCall.res.body.threads
-        : [];
+        const listedThreads = Array.isArray(listThreadsCall.res.body?.threads)
+          ? listThreadsCall.res.body.threads
+          : [];
 
-      if (listThreadsCall.res.body?.ok) {
         assert.equal(listedThreads.length >= 1, true);
 
         const listedThread = listedThreads.find(
@@ -415,7 +414,7 @@ test(
         s(messagesCall.res.body?.messages?.[1]?.text),
         "Hi Taylor — how can we help?"
       );
-      assert.equal(
+        assert.equal(
         s(messagesCall.res.body?.messages?.[1]?.direction),
         "outbound"
       );
