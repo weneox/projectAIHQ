@@ -254,8 +254,8 @@ function QuietIconButton({
       className={[
         "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
         active
-          ? "border-[rgba(37,99,235,0.14)] bg-[rgba(239,246,255,0.96)] text-[rgba(37,99,235,0.96)]"
-          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(71,85,105,0.92)] hover:border-[rgba(15,23,42,0.12)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.9)]",
+          ? "border-[#D7E3F5] bg-[#F3F7FB] text-[#2563EB]"
+          : "border-[#E6EAF0] bg-white text-[#64748B] hover:border-[#D8E0EA] hover:bg-[#F8FAFC] hover:text-[#0F172A]",
         disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -279,8 +279,8 @@ function HeaderActionButton({
       className={[
         "inline-flex h-10 items-center gap-2 rounded-[14px] border px-4 text-[13px] font-medium transition-all",
         tone === "danger"
-          ? "border-[rgba(239,68,68,0.12)] bg-white text-[rgba(185,28,28,0.94)] hover:bg-[rgba(254,242,242,0.92)]"
-          : "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(15,23,42,0.88)] hover:bg-[rgba(248,250,252,0.96)]",
+          ? "border-[#F0D4D4] bg-white text-[#B42318] hover:bg-[#FEF3F2]"
+          : "border-[#E6EAF0] bg-white text-[#0F172A] hover:bg-[#F8FAFC]",
         disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -364,7 +364,7 @@ function DetailActionMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-[calc(100%+10px)] z-30 w-56 overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white p-1.5 shadow-[0_22px_60px_-32px_rgba(15,23,42,0.24)]"
+      className="absolute right-0 top-[calc(100%+10px)] z-30 w-56 overflow-hidden rounded-[18px] border border-[#E6EAF0] bg-white p-1.5 shadow-[0_22px_60px_-32px_rgba(15,23,42,0.24)]"
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -381,7 +381,7 @@ function DetailActionMenu({
               "flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[13px] transition-colors",
               item.disabled
                 ? "cursor-not-allowed opacity-45"
-                : "text-[rgba(51,65,85,0.94)] hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.94)]",
+                : "text-[#334155] hover:bg-[#F8FAFC] hover:text-[#0F172A]",
             ].join(" ")}
           >
             <Icon className="h-4 w-4" />
@@ -400,9 +400,9 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
   const disabled = automationControl?.disabled === true;
 
   return (
-    <div className="inline-flex items-center gap-3 rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-2">
+    <div className="inline-flex items-center gap-3 rounded-[16px] border border-[#E6EAF0] bg-white px-3 py-2">
       <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-[rgba(15,23,42,0.88)]">
+        <span className="text-[13px] font-medium text-[#0F172A]">
           Auto-reply
         </span>
 
@@ -410,8 +410,8 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
           className={[
             "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
             enabled
-              ? "bg-[rgba(34,197,94,0.12)] text-[rgba(21,128,61,0.96)]"
-              : "bg-[rgba(148,163,184,0.14)] text-[rgba(71,85,105,0.96)]",
+              ? "bg-[#DCFCE7] text-[#15803D]"
+              : "bg-[#E2E8F0] text-[#475569]",
           ].join(" ")}
         >
           {loading ? "Checking" : enabled ? "On" : "Off"}
@@ -436,14 +436,14 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
         className={[
           "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-200",
           enabled
-            ? "border-[rgba(37,99,235,0.2)] bg-[rgba(37,99,235,0.98)]"
-            : "border-[rgba(15,23,42,0.12)] bg-[rgba(148,163,184,0.28)]",
+            ? "border-[#C8D6F0] bg-[#2563EB]"
+            : "border-[#D7DEE8] bg-[#CBD5E1]",
           disabled || loading || saving ? "cursor-not-allowed opacity-60" : "",
         ].join(" ")}
       >
         <span
           className={[
-            "inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_8px_18px_-10px_rgba(15,23,42,0.42)] transition-transform duration-200",
+            "inline-block h-4.5 w-4.5 rounded-full bg-white transition-transform duration-200",
             enabled ? "translate-x-[20px]" : "translate-x-[3px]",
           ].join(" ")}
         />
@@ -469,7 +469,7 @@ function ConversationIdentity({ thread }) {
 
   return (
     <div className="flex min-w-0 items-center gap-4">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[16px] font-semibold text-[rgba(37,99,235,0.96)] ring-1 ring-[rgba(37,99,235,0.10)]">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#DCE6F5] bg-[#EFF6FF] text-[16px] font-semibold text-[#2563EB]">
         {avatarUrl && !avatarFailed ? (
           <img
             key={avatarIdentity}
@@ -486,17 +486,15 @@ function ConversationIdentity({ thread }) {
       </div>
 
       <div className="min-w-0">
-        <div className="truncate text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+        <div className="truncate text-[16px] font-semibold text-[#0F172A]">
           {title}
         </div>
 
         {metaItems.length ? (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[rgba(100,116,139,0.96)]">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#64748B]">
             {metaItems.map((item, index) => (
               <div key={`${item}-${index}`} className="inline-flex items-center gap-2">
-                {index > 0 ? (
-                  <span className="text-[rgba(203,213,225,0.96)]">•</span>
-                ) : null}
+                {index > 0 ? <span className="text-[#CBD5E1]">•</span> : null}
                 <span>{item}</span>
               </div>
             ))}
@@ -512,18 +510,18 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
     <div className="flex h-full min-h-[420px] items-center justify-center px-8 py-10">
       <div className="flex max-w-[560px] flex-col items-center text-center">
         <div className="relative mb-7">
-          <div className="absolute inset-0 blur-3xl bg-[rgba(148,163,184,0.08)]" />
+          <div className="absolute inset-0 bg-[rgba(148,163,184,0.08)] blur-3xl" />
           <PlugZap
             className="relative h-24 w-24 text-[rgba(100,116,139,0.52)]"
             strokeWidth={1.55}
           />
         </div>
 
-        <div className="text-[28px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
+        <div className="text-[28px] font-semibold tracking-[-0.02em] text-[#0F172A]">
           Connect a channel to activate the inbox
         </div>
 
-        <div className="mt-3 max-w-[440px] text-[15px] leading-8 text-[rgba(100,116,139,0.96)]">
+        <div className="mt-3 max-w-[440px] text-[15px] leading-8 text-[#64748B]">
           Your live inbox will appear here once Website chat, Meta, Telegram,
           or another launch channel is connected.
         </div>
@@ -531,7 +529,7 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
         <button
           type="button"
           onClick={onOpenChannels}
-          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[14px] bg-[rgba(37,99,235,0.98)] px-5 text-[14px] font-semibold text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.62)] transition-all hover:-translate-y-[1px]"
+          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[14px] bg-[#2563EB] px-5 text-[14px] font-semibold text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.62)] transition-all hover:-translate-y-[1px]"
         >
           <span>Open channels</span>
           <ArrowRight className="h-4 w-4" />
@@ -543,19 +541,19 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
 
 function EmptyComposerDock() {
   return (
-    <div className="w-full px-6 pb-6">
-      <div className="mx-auto w-full max-w-[960px] rounded-[26px] border border-[rgba(15,23,42,0.08)] bg-white/92 px-5 py-4 shadow-[0_28px_70px_-46px_rgba(15,23,42,0.24)] backdrop-blur">
+    <div className="w-full px-4 pb-4 md:px-6 md:pb-6">
+      <div className="w-full rounded-[24px] border border-[#E6EAF0] bg-white px-5 py-4 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.2)]">
         <div className="flex items-end gap-4">
           <textarea
             disabled
             rows={1}
             placeholder="Write a reply"
-            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[rgba(15,23,42,0.94)] placeholder:text-[rgba(148,163,184,0.96)] outline-none disabled:cursor-not-allowed"
+            className="min-h-[58px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
           />
           <button
             type="button"
             disabled
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(148,163,184,0.22)] px-5 text-[13px] font-medium text-[rgba(100,116,139,0.96)]"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[#E2E8F0] px-5 text-[13px] font-medium text-[#64748B]"
           >
             Send
           </button>
@@ -578,12 +576,13 @@ function FloatingComposerSlot({ children }) {
 function EmptyConversationState() {
   return (
     <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
-      <div className="w-full max-w-[520px] rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
-        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+      <div className="w-full max-w-[520px] rounded-[28px] border border-[#E6EAF0] bg-white px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
+        <div className="text-[18px] font-semibold text-[#0F172A]">
           Select a conversation
         </div>
-        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
-          Choose a conversation from the left to review the messages and send a reply.
+        <div className="mt-2 text-[14px] leading-7 text-[#64748B]">
+          Choose a conversation from the left to review the messages and send a
+          reply.
         </div>
       </div>
     </div>
@@ -610,28 +609,24 @@ function ConversationHeader({
 
   if (!launchChannelConnected) {
     return (
-      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-6 py-5 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
-        <div>
-          <div className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
-            Inbox
-          </div>
-        </div>
+      <div className="shrink-0 border-b border-[#EEF2F6] bg-[rgba(255,255,255,0.92)] px-6 py-5 backdrop-blur">
+        <div className="text-[16px] font-semibold text-[#0F172A]">Inbox</div>
       </div>
     );
   }
 
   return (
-    <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] px-6 py-5 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.78)]">
+    <div className="shrink-0 border-b border-[#EEF2F6] bg-[rgba(255,255,255,0.92)] px-6 py-5 backdrop-blur">
       <div className="flex items-center justify-between gap-5">
         <div className="min-w-0 flex-1">
           {hasThread ? (
             <ConversationIdentity thread={thread} />
           ) : (
             <div>
-              <div className="text-[16px] font-semibold text-[rgba(15,23,42,0.96)]">
+              <div className="text-[16px] font-semibold text-[#0F172A]">
                 Inbox
               </div>
-              <div className="mt-1 text-[12.5px] text-[rgba(100,116,139,0.96)]">
+              <div className="mt-1 text-[12.5px] text-[#64748B]">
                 Select a conversation to view messages and reply.
               </div>
             </div>
@@ -681,7 +676,7 @@ function ConversationHeader({
           </div>
 
           {hasThread && unreadCount > 0 ? (
-            <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[rgba(37,99,235,0.98)] px-2 py-0.5 text-[11px] font-semibold text-white">
+            <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#2563EB] px-2 py-0.5 text-[11px] font-semibold text-white">
               {unreadCount}
             </span>
           ) : null}
@@ -803,7 +798,7 @@ export default function InboxDetailPanel({
       surface?.saveSuccess);
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">
       <ConversationHeader
         thread={selectedThread}
         unreadCount={unreadCount}
@@ -854,14 +849,14 @@ export default function InboxDetailPanel({
           <>
             <div
               ref={scrollViewportRef}
-              className="h-full overflow-y-auto pb-[280px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="h-full overflow-y-auto pb-[320px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {surface?.loading && !hasThread ? (
                 <InboxDetailSkeleton />
               ) : !hasThread ? (
                 <EmptyConversationState />
               ) : (
-                <div className="flex min-h-full w-full flex-col px-8 py-6 lg:px-10">
+                <div className="flex min-h-full w-full flex-col px-4 py-6 md:px-6 lg:px-8 xl:px-10">
                   {showSurfaceBanner ? (
                     <div className="mb-4 w-full">
                       <SurfaceBanner
@@ -874,11 +869,11 @@ export default function InboxDetailPanel({
 
                   {!visibleMessages.length ? (
                     <div className="flex min-h-[320px] items-center justify-center">
-                      <div className="w-full max-w-[520px] rounded-[26px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.92)] px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
-                        <div className="text-[18px] font-semibold text-[rgba(15,23,42,0.96)]">
+                      <div className="w-full max-w-[520px] rounded-[26px] border border-[#E6EAF0] bg-white px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
+                        <div className="text-[18px] font-semibold text-[#0F172A]">
                           No messages yet
                         </div>
-                        <div className="mt-2 text-[14px] leading-7 text-[rgba(100,116,139,0.96)]">
+                        <div className="mt-2 text-[14px] leading-7 text-[#64748B]">
                           This conversation has no visible message history yet.
                         </div>
                       </div>
@@ -902,7 +897,7 @@ export default function InboxDetailPanel({
 
             <FloatingComposerSlot>
               {hasThread && composer ? (
-                <div className="w-full px-6 pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
+                <div className="w-full px-4 pb-4 md:px-6 md:pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
                   {composer}
                 </div>
               ) : (
@@ -914,4 +909,4 @@ export default function InboxDetailPanel({
       </div>
     </section>
   );
-}  
+}
