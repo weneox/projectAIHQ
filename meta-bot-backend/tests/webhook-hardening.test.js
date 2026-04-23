@@ -821,11 +821,11 @@ test(
       .filter(Boolean);
     const requiredSequence = [
       "meta.webhook.verify.accepted",
-      "meta.webhook.event.accepted",
+      "meta.webhook.received",
+      "meta.webhook.text.received",
       "meta.webhook.forward.started",
-      "meta.webhook.forward.succeeded",
-      "meta.webhook.actions.started",
-      "meta.webhook.actions.succeeded",
+      "meta.webhook.text.forwarded",
+      "meta.webhook.actions.executed",
     ];
 
     let lastIndex = -1;
@@ -840,7 +840,7 @@ test(
     }
 
     const acceptedEntry = entries.find(
-      (entry) => entry?.event === "meta.webhook.event.accepted"
+      (entry) => entry?.event === "meta.webhook.text.received"
     );
     assert.equal(acceptedEntry?.channel, "instagram");
     assert.equal(acceptedEntry?.pageId, "page-1");
