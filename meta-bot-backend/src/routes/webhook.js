@@ -29,6 +29,199 @@ function normalizeObj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function normalizeUrlLike(value = "") {
+  const next = s(value);
+  if (!next) return "";
+  if (
+    next.startsWith("https://") ||
+    next.startsWith("http://") ||
+    next.startsWith("/")
+  ) {
+    return next;
+  }
+  return "";
+}
+
+function pickFirstUrl(...values) {
+  for (const value of values) {
+    const next = normalizeUrlLike(value);
+    if (next) return next;
+  }
+  return "";
+}
+
+function buildAvatarPayloadFromEvent(ev = {}) {
+  const raw = normalizeObj(ev?.raw);
+  const value = normalizeObj(raw?.value);
+  const from = normalizeObj(raw?.from);
+  const sender = normalizeObj(raw?.sender);
+  const recipient = normalizeObj(raw?.recipient);
+  const profile = normalizeObj(raw?.profile);
+  const user = normalizeObj(raw?.user);
+  const contact = normalizeObj(raw?.contact);
+  const senderProfile = normalizeObj(raw?.sender_profile);
+  const userProfile = normalizeObj(raw?.user_profile);
+
+  const valueFrom = normalizeObj(value?.from);
+  const valueSender = normalizeObj(value?.sender);
+  const valueRecipient = normalizeObj(value?.recipient);
+  const valueProfile = normalizeObj(value?.profile);
+  const valueContact = normalizeObj(value?.contact);
+  const valueComment = normalizeObj(value?.comment);
+  const commentFrom = normalizeObj(valueComment?.from);
+
+  const avatarUrl = pickFirstUrl(
+    ev?.avatar_url,
+    ev?.avatarUrl,
+    ev?.profile_picture_url,
+    ev?.profilePictureUrl,
+    ev?.profile_pic,
+    ev?.profilePic,
+    ev?.picture,
+
+    raw?.avatar_url,
+    raw?.avatarUrl,
+    raw?.profile_picture_url,
+    raw?.profilePictureUrl,
+    raw?.profile_pic,
+    raw?.profilePic,
+    raw?.picture,
+
+    from?.avatar_url,
+    from?.avatarUrl,
+    from?.profile_picture_url,
+    from?.profilePictureUrl,
+    from?.profile_pic,
+    from?.profilePic,
+    from?.picture,
+
+    sender?.avatar_url,
+    sender?.avatarUrl,
+    sender?.profile_picture_url,
+    sender?.profilePictureUrl,
+    sender?.profile_pic,
+    sender?.profilePic,
+    sender?.picture,
+
+    recipient?.avatar_url,
+    recipient?.avatarUrl,
+    recipient?.profile_picture_url,
+    recipient?.profilePictureUrl,
+    recipient?.profile_pic,
+    recipient?.profilePic,
+    recipient?.picture,
+
+    profile?.avatar_url,
+    profile?.avatarUrl,
+    profile?.profile_picture_url,
+    profile?.profilePictureUrl,
+    profile?.profile_pic,
+    profile?.profilePic,
+    profile?.picture,
+
+    user?.avatar_url,
+    user?.avatarUrl,
+    user?.profile_picture_url,
+    user?.profilePictureUrl,
+    user?.profile_pic,
+    user?.profilePic,
+    user?.picture,
+
+    contact?.avatar_url,
+    contact?.avatarUrl,
+    contact?.profile_picture_url,
+    contact?.profilePictureUrl,
+    contact?.profile_pic,
+    contact?.profilePic,
+    contact?.picture,
+
+    senderProfile?.avatar_url,
+    senderProfile?.avatarUrl,
+    senderProfile?.profile_picture_url,
+    senderProfile?.profilePictureUrl,
+    senderProfile?.profile_pic,
+    senderProfile?.profilePic,
+    senderProfile?.picture,
+
+    userProfile?.avatar_url,
+    userProfile?.avatarUrl,
+    userProfile?.profile_picture_url,
+    userProfile?.profilePictureUrl,
+    userProfile?.profile_pic,
+    userProfile?.profilePic,
+    userProfile?.picture,
+
+    value?.avatar_url,
+    value?.avatarUrl,
+    value?.profile_picture_url,
+    value?.profilePictureUrl,
+    value?.profile_pic,
+    value?.profilePic,
+    value?.picture,
+
+    valueFrom?.avatar_url,
+    valueFrom?.avatarUrl,
+    valueFrom?.profile_picture_url,
+    valueFrom?.profilePictureUrl,
+    valueFrom?.profile_pic,
+    valueFrom?.profilePic,
+    valueFrom?.picture,
+
+    valueSender?.avatar_url,
+    valueSender?.avatarUrl,
+    valueSender?.profile_picture_url,
+    valueSender?.profilePictureUrl,
+    valueSender?.profile_pic,
+    valueSender?.profilePic,
+    valueSender?.picture,
+
+    valueRecipient?.avatar_url,
+    valueRecipient?.avatarUrl,
+    valueRecipient?.profile_picture_url,
+    valueRecipient?.profilePictureUrl,
+    valueRecipient?.profile_pic,
+    valueRecipient?.profilePic,
+    valueRecipient?.picture,
+
+    valueProfile?.avatar_url,
+    valueProfile?.avatarUrl,
+    valueProfile?.profile_picture_url,
+    valueProfile?.profilePictureUrl,
+    valueProfile?.profile_pic,
+    valueProfile?.profilePic,
+    valueProfile?.picture,
+
+    valueContact?.avatar_url,
+    valueContact?.avatarUrl,
+    valueContact?.profile_picture_url,
+    valueContact?.profilePictureUrl,
+    valueContact?.profile_pic,
+    valueContact?.profilePic,
+    valueContact?.picture,
+
+    valueComment?.avatar_url,
+    valueComment?.avatarUrl,
+    valueComment?.profile_picture_url,
+    valueComment?.profilePictureUrl,
+    valueComment?.profile_pic,
+    valueComment?.profilePic,
+    valueComment?.picture,
+
+    commentFrom?.avatar_url,
+    commentFrom?.avatarUrl,
+    commentFrom?.profile_picture_url,
+    commentFrom?.profilePictureUrl,
+    commentFrom?.profile_pic,
+    commentFrom?.profilePic,
+    commentFrom?.picture
+  );
+
+  return {
+    avatarUrl,
+    profilePictureUrl: avatarUrl,
+  };
+}
+
 const logger = createStructuredLogger({
   service: "meta-bot-backend",
   component: "webhook",
@@ -462,13 +655,54 @@ export function verifyMetaWebhookSignature(req) {
 }
 
 function buildCustomerContextFromEvent(ev) {
-  return {
+  const channel = s(ev?.channel || "instagram").toLowerCase() || "instagram";
+  const avatar = buildAvatarPayloadFromEvent(ev);
+
+  const sharedIdentity = {
     fullName: s(ev?.customerName || ""),
     username: s(ev?.username || ""),
     externalUserId: s(ev?.userId || ""),
-    channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
+    channel,
     pageId: s(ev?.pageId || ""),
     igUserId: s(ev?.igUserId || ""),
+    avatar_url: s(avatar.avatarUrl || ""),
+    avatarUrl: s(avatar.avatarUrl || ""),
+    profile_picture_url: s(avatar.profilePictureUrl || ""),
+    profilePictureUrl: s(avatar.profilePictureUrl || ""),
+  };
+
+  return {
+    ...sharedIdentity,
+    profile: {
+      fullName: s(ev?.customerName || ""),
+      username: s(ev?.username || ""),
+      avatar_url: s(avatar.avatarUrl || ""),
+      avatarUrl: s(avatar.avatarUrl || ""),
+      profile_picture_url: s(avatar.profilePictureUrl || ""),
+      profilePictureUrl: s(avatar.profilePictureUrl || ""),
+    },
+    meta: {
+      pageId: s(ev?.pageId || ""),
+      igUserId: s(ev?.igUserId || ""),
+      avatar_url: s(avatar.avatarUrl || ""),
+      avatarUrl: s(avatar.avatarUrl || ""),
+      profile_picture_url: s(avatar.profilePictureUrl || ""),
+      profilePictureUrl: s(avatar.profilePictureUrl || ""),
+    },
+    instagram:
+      channel === "instagram" || channel === "facebook"
+        ? {
+            username: s(ev?.username || ""),
+            fullName: s(ev?.customerName || ""),
+            userId: s(ev?.userId || ""),
+            pageId: s(ev?.pageId || ""),
+            igUserId: s(ev?.igUserId || ""),
+            avatar_url: s(avatar.avatarUrl || ""),
+            avatarUrl: s(avatar.avatarUrl || ""),
+            profile_picture_url: s(avatar.profilePictureUrl || ""),
+            profilePictureUrl: s(avatar.profilePictureUrl || ""),
+          }
+        : {},
   };
 }
 
@@ -533,6 +767,13 @@ function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
   const customerContext = buildCustomerContextFromEvent(ev);
   const conversationContext = buildConversationContextFromEvent(ev);
   const tenantContext = buildTenantContextFromResolved(tenantCtx);
+  const avatarUrl = s(
+    customerContext?.avatar_url ||
+      customerContext?.profile_picture_url ||
+      customerContext?.instagram?.avatar_url ||
+      customerContext?.instagram?.profile_picture_url ||
+      ""
+  );
 
   return {
     tenantKey: s(tenantCtx?.tenantKey || ""),
@@ -543,8 +784,8 @@ function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
     externalUserId,
     externalThreadId,
     externalMessageId,
-    externalUsername: s(ev?.username || ""),
-    customerName: s(ev?.customerName || ""),
+    externalUsername: s(ev?.username || customerContext?.username || ""),
+    customerName: s(ev?.customerName || customerContext?.fullName || ""),
     text,
     timestamp: Number(ev?.timestamp || Date.now()),
     raw: rawBody,
@@ -564,6 +805,10 @@ function buildAihqInboxPayload(ev, rawBody, tenantCtx) {
       externalAccountId: s(ev?.externalAccountId || ""),
       externalThreadId,
       externalMessageId,
+      avatar_url: avatarUrl,
+      avatarUrl: avatarUrl,
+      profile_picture_url: avatarUrl,
+      profilePictureUrl: avatarUrl,
     },
     metaAccount: {
       recipientId: s(ev?.recipientId || ""),
@@ -578,6 +823,13 @@ function buildAihqCommentPayload(ev, rawBody, tenantCtx) {
   const customerContext = buildCustomerContextFromEvent(ev);
   const conversationContext = buildConversationContextFromEvent(ev);
   const tenantContext = buildTenantContextFromResolved(tenantCtx);
+  const avatarUrl = s(
+    customerContext?.avatar_url ||
+      customerContext?.profile_picture_url ||
+      customerContext?.instagram?.avatar_url ||
+      customerContext?.instagram?.profile_picture_url ||
+      ""
+  );
 
   return {
     tenantKey: s(tenantCtx?.tenantKey || ""),
@@ -591,8 +843,8 @@ function buildAihqCommentPayload(ev, rawBody, tenantCtx) {
     externalPostId: s(ev?.externalPostId || ""),
 
     externalUserId: s(ev?.userId || ""),
-    externalUsername: s(ev?.username || ""),
-    customerName: s(ev?.customerName || ""),
+    externalUsername: s(ev?.username || customerContext?.username || ""),
+    customerName: s(ev?.customerName || customerContext?.fullName || ""),
 
     text: s(ev?.text || ""),
     timestamp: Number(ev?.timestamp || Date.now()),
@@ -603,6 +855,20 @@ function buildAihqCommentPayload(ev, rawBody, tenantCtx) {
     leadContext: {},
     conversationContext,
     tenantContext,
+
+    meta: {
+      source: "meta",
+      provider: "meta",
+      platform: channel,
+      channel,
+      recipientId: s(ev?.recipientId || ""),
+      pageId: s(ev?.pageId || ""),
+      igUserId: s(ev?.igUserId || ""),
+      avatar_url: avatarUrl,
+      avatarUrl: avatarUrl,
+      profile_picture_url: avatarUrl,
+      profilePictureUrl: avatarUrl,
+    },
 
     metaAccount: {
       recipientId: s(ev?.recipientId || ""),
