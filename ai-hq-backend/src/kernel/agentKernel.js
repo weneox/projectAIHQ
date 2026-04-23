@@ -13,7 +13,7 @@
 // ✅ keep debug path
 // ✅ future-ready for content.analyze + content.fix_plan
 
-import OpenAI from "openai";
+import OpenAI from "openai"; 
 import { cfg } from "../config.js";
 import { normalizePromptInput } from "../services/promptInput.js";
 import { buildPromptBundle } from "../services/promptBundle.js";
