@@ -30,6 +30,7 @@ function formatBubbleTime(value) {
 
 function shouldAllowInspect(message, enableInspect) {
   if (!enableInspect) return false;
+
   const replayTrace = normalizeReplayTrace(message);
 
   return Boolean(
@@ -42,55 +43,49 @@ function BubbleTime({ value }) {
   if (!value) return null;
 
   return (
-    <span className="select-none whitespace-nowrap text-[12px] font-medium tracking-[0.01em] text-[rgba(15,23,42,0.46)]">
+    <span className="select-none whitespace-nowrap text-[12px] font-medium tracking-[0.01em] text-[#7E8A97]">
       {value}
     </span>
   );
 }
 
-function TelegramBubble({
-  side = "left",
-  text,
-  sentAt,
-  tone = "default",
-}) {
+function TelegramBubble({ side = "left", text, sentAt, tone = "default" }) {
   const incoming = side === "left";
-  const outgoing = !incoming;
 
   const bubbleClass = incoming
     ? [
         "rounded-[18px] rounded-bl-[7px]",
-        "border border-[rgba(15,23,42,0.06)]",
-        "bg-[rgba(255,255,255,0.96)]",
+        "border border-[#E5E9EE]",
+        "bg-[#FFFFFF]",
         "text-[#111827]",
       ].join(" ")
     : [
         "rounded-[18px] rounded-br-[7px]",
-        "border border-[rgba(110,168,86,0.18)]",
-        "bg-[rgba(234,255,221,0.98)]",
-        tone === "ai" ? "text-[#0F172A]" : "text-[#111827]",
+        "border border-[#D8E8C7]",
+        tone === "ai" ? "bg-[#EAF6DA]" : "bg-[#EEF8E2]",
+        "text-[#111827]",
       ].join(" ");
 
   const outerTailClass = incoming
     ? [
         "pointer-events-none absolute -left-[6px] bottom-0 h-[14px] w-[14px]",
-        "rounded-bl-[12px] border-b border-l border-[rgba(15,23,42,0.06)]",
-        "bg-[rgba(255,255,255,0.96)]",
+        "rounded-bl-[12px] border-b border-l border-[#E5E9EE]",
+        "bg-[#FFFFFF]",
       ].join(" ")
     : [
         "pointer-events-none absolute -right-[6px] bottom-0 h-[14px] w-[14px]",
-        "rounded-br-[12px] border-b border-r border-[rgba(110,168,86,0.18)]",
-        "bg-[rgba(234,255,221,0.98)]",
+        "rounded-br-[12px] border-b border-r border-[#D8E8C7]",
+        tone === "ai" ? "bg-[#EAF6DA]" : "bg-[#EEF8E2]",
       ].join(" ");
 
   const cutTailClass = incoming
     ? [
         "pointer-events-none absolute -left-[10px] bottom-0 h-[16px] w-[10px]",
-        "rounded-br-[12px] bg-[var(--inbox-surface,#F1F5F9)]",
+        "rounded-br-[12px] bg-[var(--inbox-surface,#EAF1E4)]",
       ].join(" ")
     : [
         "pointer-events-none absolute -right-[10px] bottom-0 h-[16px] w-[10px]",
-        "rounded-bl-[12px] bg-[var(--inbox-surface,#F1F5F9)]",
+        "rounded-bl-[12px] bg-[var(--inbox-surface,#EAF1E4)]",
       ].join(" ");
 
   return (
@@ -103,7 +98,7 @@ function TelegramBubble({
           className={[
             "relative z-[1] inline-flex max-w-full min-w-[64px] flex-col",
             "px-[14px] pb-[7px] pt-[9px]",
-            "shadow-[0_1px_0_rgba(0,0,0,0.05),0_10px_24px_-18px_rgba(15,23,42,0.28)]",
+            "shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_18px_-16px_rgba(15,23,42,0.18)]",
             bubbleClass,
           ].join(" ")}
         >
@@ -119,7 +114,7 @@ function TelegramBubble({
             </>
           ) : (
             <div className="flex min-h-[34px] flex-col justify-end">
-              <span className="text-[14px] text-[rgba(15,23,42,0.42)]">
+              <span className="text-[14px] text-[#94A3B8]">
                 (empty message)
               </span>
               <div className="mt-[3px] flex justify-end pl-5">
@@ -172,7 +167,7 @@ function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
 
 export default function InboxMessageBubble({
   m,
-  thread = null,
+  thread: _thread = null,
   attemptsByCorrelation: _attemptsByCorrelation,
   enableInspect = false,
 }) {
@@ -184,7 +179,11 @@ export default function InboxMessageBubble({
   const showInspect = shouldAllowInspect(m, enableInspect);
 
   const tone =
-    m?.sender_type === "ai" ? "ai" : m?.sender_type === "agent" ? "agent" : "default";
+    m?.sender_type === "ai"
+      ? "ai"
+      : m?.sender_type === "agent"
+        ? "agent"
+        : "default";
 
   if (inbound) {
     return (
