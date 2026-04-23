@@ -1,18 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowRight,
-  CheckCheck,
-  MoreHorizontal,
-  PlugZap,
-  RefreshCw,
-  ShieldAlert,
-  SlidersHorizontal,
-  UserCog,
-  XCircle,
-} from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+import { ArrowRight, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
+import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
 import { InboxDetailSkeleton } from "./InboxLoadingSurface.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
@@ -26,20 +17,6 @@ function lower(v, d = "") {
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
-}
-
-function initialsFromName(value = "") {
-  const parts = String(value || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "C";
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
 }
 
 function looksLikeNumericIdentity(value = "") {
@@ -111,10 +88,6 @@ function resolveConversationTitle(thread) {
 
   if (externalUserId) return "Customer";
   return "Conversation";
-}
-
-function resolveThreadAvatarUrl(thread) {
-  return s(thread?.avatar_url || thread?.avatarUrl || "");
 }
 
 function resolveChannelLabel(thread) {
@@ -235,277 +208,6 @@ function isRenderableConversationMessage(message = {}) {
   return Boolean(s(message?.text));
 }
 
-function QuietIconButton({
-  children,
-  onClick,
-  disabled = false,
-  label = "",
-  active = false,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={[
-        "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition-all",
-        active
-          ? "border-[#D7E3F5] bg-[#F3F7FB] text-[#2563EB]"
-          : "border-[#E6EAF0] bg-white text-[#64748B] hover:border-[#D8E0EA] hover:bg-[#F8FAFC] hover:text-[#0F172A]",
-        disabled ? "cursor-not-allowed opacity-45" : "",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
-function HeaderActionButton({
-  label,
-  onClick,
-  disabled = false,
-  tone = "default",
-  icon = null,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={[
-        "inline-flex h-10 items-center gap-2 rounded-[14px] border px-4 text-[13px] font-medium transition-all",
-        tone === "danger"
-          ? "border-[#F0D4D4] bg-white text-[#B42318] hover:bg-[#FEF3F2]"
-          : "border-[#E6EAF0] bg-white text-[#0F172A] hover:bg-[#F8FAFC]",
-        disabled ? "cursor-not-allowed opacity-45" : "",
-      ].join(" ")}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function DetailActionMenu({
-  open,
-  anchorRef,
-  onClose,
-  onMarkRead,
-  canMarkRead,
-  onAssign,
-  onHandoff,
-  onResolve,
-  disabledMap,
-}) {
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function handlePointer(event) {
-      const target = event.target;
-      if (menuRef.current?.contains(target)) return;
-      if (anchorRef.current?.contains(target)) return;
-      onClose?.();
-    }
-
-    function handleEscape(event) {
-      if (event.key === "Escape") onClose?.();
-    }
-
-    document.addEventListener("mousedown", handlePointer);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointer);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [open, anchorRef, onClose]);
-
-  if (!open) return null;
-
-  const items = [
-    canMarkRead
-      ? {
-          key: "read",
-          label: disabledMap.read ? "Marking..." : "Mark as read",
-          icon: CheckCheck,
-          onClick: onMarkRead,
-          disabled: disabledMap.read,
-        }
-      : null,
-    {
-      key: "assign",
-      label: disabledMap.assign ? "Assigning..." : "Assign",
-      icon: UserCog,
-      onClick: onAssign,
-      disabled: disabledMap.assign,
-    },
-    {
-      key: "handoff",
-      label: disabledMap.handoff ? "Starting..." : "Start handoff",
-      icon: ShieldAlert,
-      onClick: onHandoff,
-      disabled: disabledMap.handoff || disabledMap.handoffLocked,
-    },
-    {
-      key: "resolved",
-      label: disabledMap.resolved ? "Resolving..." : "Resolve",
-      icon: CheckCheck,
-      onClick: onResolve,
-      disabled: disabledMap.resolved,
-    },
-  ].filter(Boolean);
-
-  return (
-    <div
-      ref={menuRef}
-      className="absolute right-0 top-[calc(100%+10px)] z-30 w-56 overflow-hidden rounded-[18px] border border-[#E6EAF0] bg-white p-1.5 shadow-[0_22px_60px_-32px_rgba(15,23,42,0.24)]"
-    >
-      {items.map((item) => {
-        const Icon = item.icon;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => {
-              item.onClick?.();
-              onClose?.();
-            }}
-            disabled={item.disabled}
-            className={[
-              "flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[13px] transition-colors",
-              item.disabled
-                ? "cursor-not-allowed opacity-45"
-                : "text-[#334155] hover:bg-[#F8FAFC] hover:text-[#0F172A]",
-            ].join(" ")}
-          >
-            <Icon className="h-4 w-4" />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function InboxAutomationSwitch({ automationControl, onToggle }) {
-  const loading = automationControl?.loading === true;
-  const saving = automationControl?.saving === true;
-  const enabled = automationControl?.enabled === true;
-  const disabled = automationControl?.disabled === true;
-
-  return (
-    <div className="inline-flex items-center gap-3 rounded-[16px] border border-[#E6EAF0] bg-white px-3 py-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-[#0F172A]">
-          Auto-reply
-        </span>
-
-        <span
-          className={[
-            "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
-            enabled
-              ? "bg-[#DCFCE7] text-[#15803D]"
-              : "bg-[#E2E8F0] text-[#475569]",
-          ].join(" ")}
-        >
-          {loading ? "Checking" : enabled ? "On" : "Off"}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        aria-label={
-          enabled
-            ? "Disable inbox automatic replies"
-            : "Enable inbox automatic replies"
-        }
-        title={s(automationControl?.disabledReason)}
-        onClick={() => {
-          if (disabled || loading || saving) return;
-          onToggle?.(!enabled);
-        }}
-        disabled={disabled || loading || saving}
-        className={[
-          "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-200",
-          enabled
-            ? "border-[#C8D6F0] bg-[#2563EB]"
-            : "border-[#D7DEE8] bg-[#CBD5E1]",
-          disabled || loading || saving ? "cursor-not-allowed opacity-60" : "",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "inline-block h-[18px] w-[18px] rounded-full bg-white transition-transform duration-200",
-            enabled ? "translate-x-[18px]" : "translate-x-[3px]",
-          ].join(" ")}
-        />
-      </button>
-    </div>
-  );
-}
-
-function ConversationIdentity({ thread }) {
-  const title = resolveConversationTitle(thread);
-  const metaItems = formatConversationMeta(thread);
-  const avatar = initialsFromName(title);
-  const avatarUrl = resolveThreadAvatarUrl(thread);
-  const avatarIdentity = `${s(thread?.id)}::${avatarUrl}`;
-  const [failedAvatarIdentity, setFailedAvatarIdentity] = useState("");
-  const avatarFailed = failedAvatarIdentity === avatarIdentity;
-
-  useEffect(() => {
-    if (failedAvatarIdentity && failedAvatarIdentity !== avatarIdentity) {
-      setFailedAvatarIdentity("");
-    }
-  }, [avatarIdentity, failedAvatarIdentity]);
-
-  return (
-    <div className="flex min-w-0 items-center gap-4">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#DCE6F5] bg-[#EFF6FF] text-[16px] font-semibold text-[#2563EB]">
-        {avatarUrl && !avatarFailed ? (
-          <img
-            key={avatarIdentity}
-            src={avatarUrl}
-            alt={title}
-            loading="eager"
-            decoding="async"
-            className="h-full w-full object-cover"
-            onError={() => setFailedAvatarIdentity(avatarIdentity)}
-          />
-        ) : (
-          avatar
-        )}
-      </div>
-
-      <div className="min-w-0">
-        <div className="truncate text-[16px] font-semibold text-[#0F172A]">
-          {title}
-        </div>
-
-        {metaItems.length ? (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#64748B]">
-            {metaItems.map((item, index) => (
-              <div
-                key={`${item}-${index}`}
-                className="inline-flex items-center gap-2"
-              >
-                {index > 0 ? <span className="text-[#CBD5E1]">•</span> : null}
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function ConnectChannelEmptyState({ onOpenChannels }) {
   return (
     <div className="flex h-full min-h-[420px] items-center justify-center px-8 py-10">
@@ -615,103 +317,6 @@ function EmptyConversationState() {
   );
 }
 
-function ConversationHeader({
-  thread,
-  unreadCount,
-  onOpenDetails,
-  onRefresh,
-  onCloseThread,
-  onMenuToggle,
-  menuOpen,
-  menuAnchorRef,
-  menu,
-  surface,
-  automationControl,
-  onToggleAutomation,
-  disabledMap,
-  launchChannelConnected,
-}) {
-  const hasThread = Boolean(thread?.id);
-
-  if (!launchChannelConnected) {
-    return (
-      <div className="shrink-0 border-b border-[#EEF2F6] bg-[rgba(255,255,255,0.92)] px-6 py-5 backdrop-blur">
-        <div className="text-[16px] font-semibold text-[#0F172A]">Inbox</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="shrink-0 border-b border-[#EEF2F6] bg-[rgba(255,255,255,0.92)] px-6 py-5 backdrop-blur">
-      <div className="flex items-center justify-between gap-5">
-        <div className="min-w-0 flex-1">
-          {hasThread ? (
-            <ConversationIdentity thread={thread} />
-          ) : (
-            <div>
-              <div className="text-[16px] font-semibold text-[#0F172A]">
-                Inbox
-              </div>
-              <div className="mt-1 text-[12.5px] text-[#64748B]">
-                Select a conversation to view messages and reply.
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <InboxAutomationSwitch
-            automationControl={automationControl}
-            onToggle={onToggleAutomation}
-          />
-
-          <HeaderActionButton
-            label="Details"
-            onClick={onOpenDetails}
-            disabled={!hasThread}
-            icon={<SlidersHorizontal className="h-4 w-4" />}
-          />
-
-          <HeaderActionButton
-            label={disabledMap.closed ? "Closing..." : "Mark as closed"}
-            onClick={onCloseThread}
-            disabled={!hasThread || disabledMap.closed}
-            tone="danger"
-            icon={<XCircle className="h-4 w-4" />}
-          />
-
-          <QuietIconButton
-            onClick={onRefresh}
-            disabled={!hasThread || surface?.loading || surface?.saving}
-            label="Refresh conversation"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </QuietIconButton>
-
-          <div className="relative" ref={menuAnchorRef}>
-            <QuietIconButton
-              onClick={onMenuToggle}
-              disabled={!hasThread}
-              label="Conversation actions"
-              active={menuOpen}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </QuietIconButton>
-
-            {menu}
-          </div>
-
-          {hasThread && unreadCount > 0 ? (
-            <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#2563EB] px-2 py-0.5 text-[11px] font-semibold text-white">
-              {unreadCount}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -734,14 +339,9 @@ export default function InboxDetailPanel({
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const currentThreadId = s(selectedThread?.id);
 
-  const [openMenuThreadId, setOpenMenuThreadId] = useState("");
-  const menuAnchorRef = useRef(null);
   const scrollViewportRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
   const lastThreadIdRef = useRef("");
-
-  const menuOpen =
-    Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
 
   const visibleMessages = useMemo(
     () =>
@@ -788,17 +388,6 @@ export default function InboxDetailPanel({
     };
   }, [currentThreadId]);
 
-  function closeMenu() {
-    setOpenMenuThreadId("");
-  }
-
-  function toggleMenu() {
-    if (!currentThreadId) return;
-    setOpenMenuThreadId((prev) =>
-      prev === currentThreadId ? "" : currentThreadId
-    );
-  }
-
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
     [outboundAttempts]
@@ -823,11 +412,19 @@ export default function InboxDetailPanel({
       surface?.saveError ||
       surface?.saveSuccess);
 
+  const conversationTitle = resolveConversationTitle(selectedThread);
+  const conversationMetaItems = formatConversationMeta(selectedThread);
+
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">
-      <ConversationHeader
-        thread={selectedThread}
+      <InboxDetailHeaderCompact
+        launchChannelConnected={launchChannelConnected}
+        hasThread={hasThread}
+        title={conversationTitle}
+        metaItems={conversationMetaItems}
         unreadCount={unreadCount}
+        automationControl={automationControl}
+        onToggleAutomation={onToggleAutomation}
         onOpenDetails={onOpenDetails}
         onRefresh={surface?.refresh}
         onCloseThread={() => {
@@ -835,37 +432,28 @@ export default function InboxDetailPanel({
             setThreadStatus(selectedThread.id, "closed");
           }
         }}
-        onMenuToggle={toggleMenu}
-        menuOpen={menuOpen}
-        menuAnchorRef={menuAnchorRef}
-        surface={surface}
-        automationControl={automationControl}
-        onToggleAutomation={onToggleAutomation}
+        onMarkRead={() => {
+          if (selectedThread?.id) {
+            markRead(selectedThread.id);
+          }
+        }}
+        canMarkRead={canMarkRead}
+        onAssign={() => {
+          if (selectedThread?.id) {
+            assignThread(selectedThread.id);
+          }
+        }}
+        onHandoff={() => {
+          if (selectedThread?.id) {
+            activateHandoff(selectedThread.id);
+          }
+        }}
+        onResolve={() => {
+          if (selectedThread?.id) {
+            setThreadStatus(selectedThread.id, "resolved");
+          }
+        }}
         disabledMap={disabledMap}
-        launchChannelConnected={launchChannelConnected}
-        menu={
-          <DetailActionMenu
-            open={menuOpen}
-            anchorRef={menuAnchorRef}
-            onClose={closeMenu}
-            onMarkRead={() => {
-              if (selectedThread?.id) markRead(selectedThread.id);
-            }}
-            canMarkRead={canMarkRead}
-            onAssign={() => {
-              if (selectedThread?.id) assignThread(selectedThread.id);
-            }}
-            onHandoff={() => {
-              if (selectedThread?.id) activateHandoff(selectedThread.id);
-            }}
-            onResolve={() => {
-              if (selectedThread?.id) {
-                setThreadStatus(selectedThread.id, "resolved");
-              }
-            }}
-            disabledMap={disabledMap}
-          />
-        }
       />
 
       <div className="relative min-h-0 flex-1">
