@@ -319,15 +319,15 @@ test(
 
       assert.equal(inboundMessageCall.res.statusCode, 200);
       assert.equal(inboundMessageCall.res.body?.ok, true);
-        assert.equal(
+      assert.equal(
         s(inboundMessageCall.res.body?.message?.text),
         "Hello from the website."
       );
-        assert.equal(
+      assert.equal(
         s(inboundMessageCall.res.body?.message?.direction),
         "inbound"
       );
-        assert.equal(
+      assert.equal(
         Number(inboundMessageCall.res.body?.thread?.unread_count ?? 0),
         1
       );
@@ -392,7 +392,7 @@ test(
         assert.equal(s(listedThread?.customer_name), "Taylor Visitor");
         assert.equal(
           s(listedThread?.last_message_text),
-        "Hi Taylor — how can we help?"
+          "Hi Taylor — how can we help?"
         );
       }
 
@@ -432,13 +432,13 @@ test(
         assert.equal(Array.isArray(messagesCall.res.body?.messages), true);
         assert.equal(messagesCall.res.body?.messages.length, 2);
         assert.equal(
-        s(messagesCall.res.body?.messages?.[0]?.text),
-        "Hello from the website."
+          s(messagesCall.res.body?.messages?.[0]?.text),
+          "Hello from the website."
         );
         assert.equal(
-        s(messagesCall.res.body?.messages?.[1]?.text),
-        "Hi Taylor — how can we help?"
-      );
+          s(messagesCall.res.body?.messages?.[1]?.text),
+          "Hi Taylor — how can we help?"
+        );
         assert.equal(
           s(messagesCall.res.body?.messages?.[1]?.direction),
           "outbound"
@@ -545,6 +545,10 @@ test(
           s(activateHandoffCall.res.body?.thread?.handoff_reason),
           "manual_review"
         );
+        assert.equal(
+          s(activateHandoffCall.res.body?.thread?.assigned_to),
+          "human_handoff"
+        );
       }
 
       const releaseHandoffCall = await invokeRoute(
@@ -564,6 +568,10 @@ test(
       if (threadDetailReadable) {
         assert.equal(releaseHandoffOk, true);
         assert.equal(releaseHandoffCall.res.body?.thread?.handoff_active, false);
+        assert.equal(
+          s(releaseHandoffCall.res.body?.thread?.assigned_to),
+          "human_handoff"
+        );
       }
 
       const resolveStatusCall = await invokeRoute(
@@ -584,6 +592,10 @@ test(
       if (threadDetailReadable) {
         assert.equal(resolveStatusOk, true);
         assert.equal(s(resolveStatusCall.res.body?.thread?.status), "resolved");
+        assert.equal(
+          s(resolveStatusCall.res.body?.thread?.assigned_to),
+          "human_handoff"
+        );
       }
 
       const finalDetailCall = await invokeRoute(
@@ -601,7 +613,7 @@ test(
         assert.equal(Number(finalDetailCall.res.body?.thread?.unread_count ?? 0), 0);
         assert.equal(
           s(finalDetailCall.res.body?.thread?.assigned_to),
-          "operator_queue"
+          "human_handoff"
         );
         assert.equal(finalDetailCall.res.body?.thread?.handoff_active, false);
       }
