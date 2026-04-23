@@ -42,14 +42,77 @@ function initialsFromName(value = "") {
     .join("");
 }
 
+function looksLikeNumericIdentity(value = "") {
+  const safe = s(value);
+  if (!safe) return false;
+  return /^\d{5,}$/.test(safe);
+}
+
+function isPlaceholderDisplayName(value = "") {
+  const safe = lower(value);
+  if (!safe) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "website user",
+    "web user",
+    "user",
+    "unknown",
+  ].includes(safe);
+}
+
+function normalizeUsername(value = "") {
+  const safe = s(value).replace(/^@+/, "");
+  if (!safe) return "";
+  if (looksLikeNumericIdentity(safe)) return "";
+  return safe;
+}
+
 function resolveConversationTitle(thread) {
-  return (
-    s(thread?.customer_name) ||
-    s(thread?.external_username) ||
-    s(thread?.external_user_id) ||
-    s(thread?.external_thread_id) ||
-    "Conversation"
+  const displayName = s(thread?.display_name || thread?.displayName);
+  const customerName = s(thread?.customer_name);
+  const externalUsername = normalizeUsername(thread?.external_username);
+  const externalUserId = s(thread?.external_user_id);
+  const externalThreadId = s(thread?.external_thread_id);
+  const channel = lower(
+    thread?.channel || thread?.channel_type || thread?.provider || thread?.source_type
   );
+
+  if (displayName && !isPlaceholderDisplayName(displayName)) {
+    return displayName;
+  }
+
+  if (customerName && !looksLikeNumericIdentity(customerName)) {
+    return customerName;
+  }
+
+  if (externalUsername) {
+    return externalUsername;
+  }
+
+  if (channel === "instagram" && externalUserId) {
+    return "Instagram User";
+  }
+
+  if (channel === "telegram" && externalUserId) {
+    return "Telegram User";
+  }
+
+  if (externalUserId && !looksLikeNumericIdentity(externalUserId)) {
+    return externalUserId;
+  }
+
+  if (externalThreadId && !looksLikeNumericIdentity(externalThreadId)) {
+    return externalThreadId;
+  }
+
+  if (externalUserId) return "Customer";
+  return "Conversation";
 }
 
 function resolveThreadAvatarUrl(thread) {
@@ -61,7 +124,8 @@ function resolveChannelLabel(thread) {
     s(thread?.channel_label) ||
     s(thread?.channel_type) ||
     s(thread?.provider) ||
-    s(thread?.source_type);
+    s(thread?.source_type) ||
+    s(thread?.channel);
 
   if (!raw) return "";
 
@@ -105,8 +169,8 @@ function formatConversationMeta(thread) {
     s(thread?.status) ||
     (thread?.handoff_active ? "handoff active" : "");
 
-  if (channel) items.push(channel);
   if (customerSince) items.push(customerSince);
+
   if (
     status &&
     !["open", "conversation"].includes(String(status).toLowerCase())
@@ -117,6 +181,8 @@ function formatConversationMeta(thread) {
         .replace(/\b\w/g, (char) => char.toUpperCase())
     );
   }
+
+  if (channel) items.push(channel);
 
   return items;
 }

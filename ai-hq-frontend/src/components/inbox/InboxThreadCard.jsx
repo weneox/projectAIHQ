@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock3, Instagram, Send } from "lucide-react";
 
 function s(v, d = "") {
@@ -29,28 +29,50 @@ function looksLikeNumericIdentity(value = "") {
   return /^\d{5,}$/.test(safe);
 }
 
+function isPlaceholderDisplayName(value = "") {
+  const safe = lower(value);
+  if (!safe) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "website user",
+    "web user",
+    "user",
+    "unknown",
+  ].includes(safe);
+}
+
+function normalizeUsername(value = "") {
+  const safe = s(value).replace(/^@+/, "");
+  if (!safe) return "";
+  if (looksLikeNumericIdentity(safe)) return "";
+  return safe;
+}
+
 function resolveSafeDisplayName(thread = {}) {
+  const displayName = s(thread.display_name || thread.displayName);
   const customerName = s(thread.customer_name);
-  const externalUsername = s(thread.external_username);
+  const externalUsername = normalizeUsername(thread.external_username);
   const externalUserId = s(thread.external_user_id);
   const channel = lower(
     thread.channel || thread.channel_type || thread.provider || thread.source_type
   );
+
+  if (displayName && !isPlaceholderDisplayName(displayName)) {
+    return displayName;
+  }
 
   if (customerName && !looksLikeNumericIdentity(customerName)) {
     return customerName;
   }
 
   if (externalUsername) {
-    return externalUsername.startsWith("@")
-      ? externalUsername
-      : `@${externalUsername}`;
-  }
-
-  if (customerName) {
-    if (channel === "instagram") return "Instagram User";
-    if (channel === "telegram") return "Telegram User";
-    return "Customer";
+    return externalUsername;
   }
 
   if (externalUserId) {
@@ -218,6 +240,12 @@ export default function InboxThreadCard({
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;
 
+  useEffect(() => {
+    if (failedAvatarKey && failedAvatarKey !== avatarKey) {
+      setFailedAvatarKey("");
+    }
+  }, [avatarKey, failedAvatarKey]);
+
   return (
     <button
       type="button"
@@ -238,6 +266,7 @@ export default function InboxThreadCard({
         >
           {avatarUrl && !avatarFailed ? (
             <img
+              key={avatarKey}
               src={avatarUrl}
               alt={name}
               loading="lazy"

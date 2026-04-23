@@ -97,7 +97,12 @@ const NOISE_MESSAGE_TYPES = [
 ];
 
 const NOISE_SENDER_TYPES = ["system", "decision"];
-const NOISE_SOURCES = ["decision", "decision_engine", "decision-event", "system"];
+const NOISE_SOURCES = [
+  "decision",
+  "decision_engine",
+  "decision-event",
+  "system",
+];
 
 function isControlMessageType(value) {
   const x = lower(value);
@@ -132,10 +137,16 @@ function normalizeInboxMessageType(value, fallback = "text") {
   }
 
   if (isControlMessageType(x)) return "system";
-  if (["typing", "typing_start", "typing-start", "typingon", "typing-on"].includes(x)) {
+  if (
+    ["typing", "typing_start", "typing-start", "typingon", "typing-on"].includes(
+      x
+    )
+  ) {
     return "system";
   }
-  if (["typing_stop", "typing-stop", "typingoff", "typing-off"].includes(x)) {
+  if (
+    ["typing_stop", "typing-stop", "typingoff", "typing-off"].includes(x)
+  ) {
     return "system";
   }
   if (["seen", "read", "markseen", "mark-seen"].includes(x)) {
@@ -194,9 +205,13 @@ function sqlQuoteLiteral(value = "") {
 }
 
 function buildSqlNotInList(values = []) {
-  const normalized = [...new Set((Array.isArray(values) ? values : [])
-    .map((value) => lower(value))
-    .filter(Boolean))];
+  const normalized = [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => lower(value))
+        .filter(Boolean)
+    ),
+  ];
 
   if (!normalized.length) {
     return "('')";
@@ -232,6 +247,105 @@ function buildRenderablePreviewLateralSql() {
     ) last_message on true
   `;
 }
+
+const THREAD_LIST_IDENTITY_LATERAL = `
+  left join lateral (
+    select
+      nullif(btrim(coalesce(
+        m.meta->'identity'->>'externalUsername',
+        m.meta->'customerContext'->>'username',
+        m.meta->'customerContext'->'profile'->>'username',
+        m.meta->'customerContext'->'instagram'->>'username',
+        m.meta->'customerContext'->'telegram'->>'username',
+        m.meta->'customerContext'->'meta'->>'username',
+        m.meta->'raw'->>'username',
+        m.meta->'raw'->'from'->>'username',
+        m.meta->'raw'->'sender'->>'username',
+        m.meta->'raw'->'profile'->>'username',
+        ''
+      )), '') as fallback_external_username,
+
+      nullif(btrim(coalesce(
+        m.meta->'identity'->>'customerName',
+        m.meta->'customerContext'->>'fullName',
+        m.meta->'customerContext'->>'displayName',
+        m.meta->'customerContext'->>'name',
+        m.meta->'customerContext'->'profile'->>'fullName',
+        m.meta->'customerContext'->'profile'->>'displayName',
+        m.meta->'customerContext'->'profile'->>'name',
+        m.meta->'customerContext'->'instagram'->>'fullName',
+        m.meta->'customerContext'->'instagram'->>'displayName',
+        m.meta->'customerContext'->'instagram'->>'name',
+        m.meta->'customerContext'->'telegram'->>'fullName',
+        m.meta->'customerContext'->'telegram'->>'displayName',
+        m.meta->'customerContext'->'telegram'->>'name',
+        m.meta->'customerContext'->'meta'->>'fullName',
+        m.meta->'customerContext'->'meta'->>'displayName',
+        m.meta->'customerContext'->'meta'->>'name',
+        m.meta->'raw'->>'customerName',
+        m.meta->'raw'->>'customer_name',
+        m.meta->'raw'->>'name',
+        m.meta->'raw'->>'full_name',
+        m.meta->'raw'->'from'->>'name',
+        m.meta->'raw'->'from'->>'fullName',
+        m.meta->'raw'->'from'->>'full_name',
+        m.meta->'raw'->'sender'->>'name',
+        m.meta->'raw'->'sender'->>'fullName',
+        m.meta->'raw'->'sender'->>'full_name',
+        m.meta->'raw'->'profile'->>'name',
+        m.meta->'raw'->'profile'->>'fullName',
+        m.meta->'raw'->'profile'->>'full_name',
+        ''
+      )), '') as fallback_customer_name,
+
+      nullif(btrim(coalesce(
+        m.meta->>'avatar_url',
+        m.meta->>'avatarUrl',
+        m.meta->>'profile_picture_url',
+        m.meta->>'profilePictureUrl',
+        m.meta->'customerContext'->>'avatar_url',
+        m.meta->'customerContext'->>'avatarUrl',
+        m.meta->'customerContext'->>'profile_picture_url',
+        m.meta->'customerContext'->>'profilePictureUrl',
+        m.meta->'customerContext'->'profile'->>'avatar_url',
+        m.meta->'customerContext'->'profile'->>'avatarUrl',
+        m.meta->'customerContext'->'profile'->>'profile_picture_url',
+        m.meta->'customerContext'->'profile'->>'profilePictureUrl',
+        m.meta->'customerContext'->'instagram'->>'avatar_url',
+        m.meta->'customerContext'->'instagram'->>'avatarUrl',
+        m.meta->'customerContext'->'instagram'->>'profile_picture_url',
+        m.meta->'customerContext'->'instagram'->>'profilePictureUrl',
+        m.meta->'customerContext'->'telegram'->>'avatar_url',
+        m.meta->'customerContext'->'telegram'->>'avatarUrl',
+        m.meta->'customerContext'->'telegram'->>'profile_picture_url',
+        m.meta->'customerContext'->'telegram'->>'profilePictureUrl',
+        m.meta->'raw'->>'avatar_url',
+        m.meta->'raw'->>'avatarUrl',
+        m.meta->'raw'->>'profile_picture_url',
+        m.meta->'raw'->>'profilePictureUrl',
+        m.meta->'raw'->'from'->>'avatar_url',
+        m.meta->'raw'->'from'->>'avatarUrl',
+        m.meta->'raw'->'from'->>'profile_picture_url',
+        m.meta->'raw'->'from'->>'profilePictureUrl',
+        m.meta->'raw'->'sender'->>'avatar_url',
+        m.meta->'raw'->'sender'->>'avatarUrl',
+        m.meta->'raw'->'sender'->>'profile_picture_url',
+        m.meta->'raw'->'sender'->>'profilePictureUrl',
+        m.meta->'raw'->'profile'->>'avatar_url',
+        m.meta->'raw'->'profile'->>'avatarUrl',
+        m.meta->'raw'->'profile'->>'profile_picture_url',
+        m.meta->'raw'->'profile'->>'profilePictureUrl',
+        ''
+      )), '') as fallback_avatar_url
+    from inbox_messages m
+    where m.thread_id = t.id
+      and m.tenant_key = t.tenant_key
+      and lower(coalesce(m.direction, '')) = 'inbound'
+      and lower(coalesce(m.sender_type, '')) = 'customer'
+    order by m.sent_at desc, m.created_at desc
+    limit 1
+  ) latest_identity on true
+`;
 
 export function inboxHandlers({ db, wsHub }) {
   const r = express.Router();
@@ -270,8 +384,8 @@ export function inboxHandlers({ db, wsHub }) {
         const i = values.length;
         where += `
           and (
-            coalesce(t.customer_name, '') ilike $${i}
-            or coalesce(t.external_username, '') ilike $${i}
+            coalesce(t.customer_name, latest_identity.fallback_customer_name, '') ilike $${i}
+            or coalesce(t.external_username, latest_identity.fallback_external_username, '') ilike $${i}
             or coalesce(t.external_user_id, '') ilike $${i}
             or coalesce(t.external_thread_id, '') ilike $${i}
           )
@@ -288,8 +402,19 @@ export function inboxHandlers({ db, wsHub }) {
           t.channel,
           t.external_thread_id,
           t.external_user_id,
-          t.external_username,
-          t.customer_name,
+          coalesce(
+            nullif(btrim(t.external_username), ''),
+            nullif(btrim(latest_identity.fallback_external_username), '')
+          ) as external_username,
+          coalesce(
+            case
+              when nullif(btrim(t.customer_name), '') is not null
+                and coalesce(t.customer_name, '') !~ '^\\d{5,}$'
+              then t.customer_name
+              else null
+            end,
+            nullif(btrim(latest_identity.fallback_customer_name), '')
+          ) as customer_name,
           t.status,
           t.last_message_at,
           t.last_inbound_at,
@@ -305,8 +430,13 @@ export function inboxHandlers({ db, wsHub }) {
           t.handoff_by,
           t.created_at,
           t.updated_at,
+          coalesce(
+            nullif(btrim(latest_identity.fallback_avatar_url), ''),
+            ''
+          ) as avatar_url,
           coalesce(last_message.text, '') as last_message_text
         from inbox_threads t
+        ${THREAD_LIST_IDENTITY_LATERAL}
         ${buildRenderablePreviewLateralSql()}
         ${where}
         order by coalesce(t.last_message_at, t.updated_at, t.created_at) desc
@@ -1199,7 +1329,8 @@ export function inboxHandlers({ db, wsHub }) {
     const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
     const assignedTo = fixText(s(req.body?.assignedTo || actor)) || actor;
-    const reason = fixText(s(req.body?.reason || "manual_review")) || "manual_review";
+    const reason =
+      fixText(s(req.body?.reason || "manual_review")) || "manual_review";
     const priority = fixText(s(req.body?.priority || "high")) || "high";
 
     if (!threadId) {
