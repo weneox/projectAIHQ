@@ -64,6 +64,24 @@ function looksLikeNumericIdentity(value = "") {
   return /^\d{5,}$/.test(safe);
 }
 
+function isPlaceholderDisplayName(value = "") {
+  const safe = lower(value);
+  if (!safe) return true;
+
+  return [
+    "customer",
+    "conversation",
+    "instagram user",
+    "telegram user",
+    "facebook user",
+    "whatsapp user",
+    "website user",
+    "web user",
+    "user",
+    "unknown",
+  ].includes(safe);
+}
+
 function isControlLikeMessageType(value = "") {
   return [
     "system",
@@ -113,6 +131,149 @@ function pickFirstUrl(...values) {
     if (normalized) return normalized;
   }
   return "";
+}
+
+function cleanDisplayValue(value = "") {
+  return fixText(value || "");
+}
+
+function joinNameParts(...parts) {
+  return parts
+    .map((part) => cleanDisplayValue(part))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function normalizeUsernameCandidate(value = "") {
+  const next = cleanDisplayValue(value).replace(/^@+/, "");
+  if (!next) return "";
+  if (looksLikeNumericIdentity(next)) return "";
+  return next;
+}
+
+function normalizeDisplayNameCandidate(value = "") {
+  const next = cleanDisplayValue(value);
+  if (!next) return "";
+  if (looksLikeNumericIdentity(next)) return "";
+  if (isPlaceholderDisplayName(next)) return "";
+  return next;
+}
+
+function pickBestUsername(...values) {
+  for (const value of values) {
+    const next = normalizeUsernameCandidate(value);
+    if (next) return next;
+  }
+  return "";
+}
+
+function pickBestDisplayName(...values) {
+  for (const value of values) {
+    const next = normalizeDisplayNameCandidate(value);
+    if (next) return next;
+  }
+  return "";
+}
+
+function resolveDisplayIdentityFromMeta(row = {}) {
+  const meta = asObject(row?.meta);
+  const identity = asObject(meta?.identity);
+  const customerContext = asObject(meta?.customerContext);
+  const profile = asObject(customerContext?.profile);
+  const instagramCtx = asObject(customerContext?.instagram);
+  const telegramCtx = asObject(customerContext?.telegram);
+  const metaCtx = asObject(customerContext?.meta);
+  const raw = asObject(meta?.raw);
+
+  const rawFrom = asObject(raw?.from);
+  const rawSender = asObject(raw?.sender);
+  const rawProfile = asObject(raw?.profile);
+  const rawUser = asObject(raw?.user);
+  const rawContact = asObject(raw?.contact);
+
+  const bestUsername = pickBestUsername(
+    row?.external_username,
+    identity?.externalUsername,
+    customerContext?.username,
+    profile?.username,
+    instagramCtx?.username,
+    telegramCtx?.username,
+    metaCtx?.username,
+    raw?.username,
+    rawFrom?.username,
+    rawSender?.username,
+    rawProfile?.username,
+    rawUser?.username,
+    rawContact?.username
+  );
+
+  const bestDisplayName = pickBestDisplayName(
+    row?.customer_name,
+    identity?.customerName,
+    meta?.customerName,
+    meta?.customer_name,
+
+    customerContext?.fullName,
+    customerContext?.displayName,
+    customerContext?.name,
+    joinNameParts(customerContext?.firstName, customerContext?.lastName),
+
+    profile?.fullName,
+    profile?.displayName,
+    profile?.name,
+    joinNameParts(profile?.firstName, profile?.lastName),
+
+    instagramCtx?.fullName,
+    instagramCtx?.displayName,
+    instagramCtx?.name,
+    joinNameParts(instagramCtx?.firstName, instagramCtx?.lastName),
+
+    telegramCtx?.fullName,
+    telegramCtx?.displayName,
+    telegramCtx?.name,
+    joinNameParts(telegramCtx?.firstName, telegramCtx?.lastName),
+
+    metaCtx?.fullName,
+    metaCtx?.displayName,
+    metaCtx?.name,
+    joinNameParts(metaCtx?.firstName, metaCtx?.lastName),
+
+    raw?.customerName,
+    raw?.customer_name,
+    raw?.name,
+    raw?.full_name,
+    joinNameParts(raw?.first_name, raw?.last_name),
+
+    rawFrom?.name,
+    rawFrom?.fullName,
+    rawFrom?.full_name,
+    joinNameParts(rawFrom?.first_name, rawFrom?.last_name),
+
+    rawSender?.name,
+    rawSender?.fullName,
+    rawSender?.full_name,
+    joinNameParts(rawSender?.first_name, rawSender?.last_name),
+
+    rawProfile?.name,
+    rawProfile?.fullName,
+    rawProfile?.full_name,
+    joinNameParts(rawProfile?.first_name, rawProfile?.last_name),
+
+    rawUser?.name,
+    rawUser?.fullName,
+    rawUser?.full_name,
+    joinNameParts(rawUser?.first_name, rawUser?.last_name),
+
+    rawContact?.name,
+    rawContact?.fullName,
+    rawContact?.full_name,
+    joinNameParts(rawContact?.first_name, rawContact?.last_name)
+  );
+
+  return {
+    bestUsername,
+    bestDisplayName,
+  };
 }
 
 function resolveDirectAvatarUrl(row = {}) {
@@ -279,26 +440,23 @@ export function isRenderableConversationMessage(message = {}) {
 }
 
 export function resolveThreadDisplayName(row = {}) {
-  const customerName = fixText(row?.customer_name || "");
-  const externalUsername = fixText(row?.external_username || "");
-  const externalUserId = fixText(row?.external_user_id || "");
   const channel = lower(
     row?.channel || row?.channel_type || row?.provider || row?.source_type
   );
+  const { bestDisplayName, bestUsername } = resolveDisplayIdentityFromMeta(row);
+  const externalUserId = fixText(row?.external_user_id || "");
 
-  if (customerName && !looksLikeNumericIdentity(customerName)) {
-    return customerName;
+  if (bestDisplayName) {
+    return bestDisplayName;
   }
 
-  if (externalUsername) {
-    return externalUsername.startsWith("@")
-      ? externalUsername
-      : `@${externalUsername}`;
+  if (bestUsername) {
+    return bestUsername.startsWith("@") ? bestUsername : `@${bestUsername}`;
   }
 
   if (channel === "instagram") return "Instagram User";
   if (channel === "telegram") return "Telegram User";
-  if (externalUserId || customerName) return "Customer";
+  if (externalUserId) return "Customer";
   return "Conversation";
 }
 
@@ -450,6 +608,13 @@ export function normalizeThread(row) {
   const customerName = fixText(row.customer_name || "");
   const externalUsername = fixText(row.external_username || "");
   const externalUserId = fixText(row.external_user_id || "");
+  const displayName = resolveThreadDisplayName({
+    ...row,
+    customer_name: customerName,
+    external_username: externalUsername,
+    external_user_id: externalUserId,
+    meta,
+  });
 
   return {
     ...row,
@@ -461,12 +626,8 @@ export function normalizeThread(row) {
     external_user_id: externalUserId,
     external_username: externalUsername,
     customer_name: customerName,
-    display_name: resolveThreadDisplayName({
-      ...row,
-      customer_name: customerName,
-      external_username: externalUsername,
-      external_user_id: externalUserId,
-    }),
+    display_name: displayName,
+    displayName,
     status: fixText(row.status || ""),
     unread_count: Number(row.unread_count || 0),
     assigned_to: fixText(row.assigned_to || ""),
