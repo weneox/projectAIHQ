@@ -21,9 +21,9 @@ function resolveBubbleTone(message, inbound) {
     return {
       wrapAlign: "items-start",
       metaAlign: "justify-start text-left",
+      bubbleAlign: "self-start",
       bubble:
-        "border-[rgba(15,23,42,0.08)] bg-white text-[rgba(15,23,42,0.94)] shadow-[0_18px_40px_-34px_rgba(15,23,42,0.18)]",
-      footerAlign: "justify-start text-left",
+        "border-[rgba(15,23,42,0.07)] bg-white text-[rgba(15,23,42,0.94)] shadow-[0_18px_36px_-30px_rgba(15,23,42,0.14)]",
     };
   }
 
@@ -31,18 +31,18 @@ function resolveBubbleTone(message, inbound) {
     return {
       wrapAlign: "items-end",
       metaAlign: "justify-end text-right",
+      bubbleAlign: "self-end",
       bubble:
-        "border-[rgba(37,99,235,0.12)] bg-[linear-gradient(180deg,rgba(239,246,255,0.98),rgba(232,240,255,0.96))] text-[rgba(15,23,42,0.96)] shadow-[0_22px_48px_-34px_rgba(37,99,235,0.28)]",
-      footerAlign: "justify-end text-right",
+        "border-[rgba(37,99,235,0.10)] bg-[rgba(239,246,255,0.92)] text-[rgba(15,23,42,0.96)] shadow-[0_18px_36px_-30px_rgba(37,99,235,0.18)]",
     };
   }
 
   return {
     wrapAlign: "items-end",
     metaAlign: "justify-end text-right",
+    bubbleAlign: "self-end",
     bubble:
-      "border-[rgba(37,99,235,0.12)] bg-[linear-gradient(180deg,rgba(243,247,255,0.98),rgba(235,242,255,0.96))] text-[rgba(15,23,42,0.96)] shadow-[0_22px_48px_-34px_rgba(37,99,235,0.24)]",
-    footerAlign: "justify-end text-right",
+      "border-[rgba(59,130,246,0.09)] bg-[rgba(244,247,255,0.94)] text-[rgba(15,23,42,0.96)] shadow-[0_18px_36px_-30px_rgba(59,130,246,0.14)]",
   };
 }
 
@@ -55,32 +55,39 @@ function shouldAllowInspect(message, enableInspect) {
   );
 }
 
-function InspectBlock({ open, onToggle, traceSource }) {
+function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
   return (
-    <div className="mt-2 w-full max-w-[76%]">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="inline-flex items-center gap-2 rounded-[12px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-1.5 text-[11px] font-medium text-[rgba(71,85,105,0.92)] transition-colors hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.88)]"
-      >
-        {open ? (
-          <ChevronUp className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5" />
-        )}
-        {open ? "Hide trace" : "Inspect trace"}
-      </button>
+    <div
+      className={[
+        "mt-2 flex w-full",
+        align === "end" ? "justify-end" : "justify-start",
+      ].join(" ")}
+    >
+      <div className="w-fit max-w-[84%] sm:max-w-[78%] xl:max-w-[70%]">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(15,23,42,0.08)] bg-white px-3 py-1.5 text-[11px] font-medium text-[rgba(71,85,105,0.92)] transition-colors hover:bg-[rgba(248,250,252,0.96)] hover:text-[rgba(15,23,42,0.88)]"
+        >
+          {open ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+          {open ? "Hide trace" : "Inspect trace"}
+        </button>
 
-      {open ? (
-        <div className="mt-2">
-          <InboxReplayTraceCard
-            traceSource={traceSource}
-            compact
-            title="Message trace"
-            subtitle="Replay metadata attached to this action."
-          />
-        </div>
-      ) : null}
+        {open ? (
+          <div className="mt-2">
+            <InboxReplayTraceCard
+              traceSource={traceSource}
+              compact
+              title="Message trace"
+              subtitle="Replay metadata attached to this action."
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -100,14 +107,17 @@ export default function InboxMessageBubble({
   const text = s(m?.text);
 
   return (
-    <div className={`flex flex-col ${tone.wrapAlign}`}>
+    <div className={["flex flex-col gap-1.5", tone.wrapAlign].join(" ")}>
       <div
-        className={`mb-2 flex w-full max-w-[76%] items-center gap-2 px-1 text-[11px] ${tone.metaAlign}`}
+        className={[
+          "flex w-fit max-w-[84%] sm:max-w-[78%] xl:max-w-[70%] items-center gap-2 px-1 text-[11px]",
+          tone.metaAlign,
+        ].join(" ")}
       >
-        <span className="font-medium text-[rgba(51,65,85,0.92)]">{who}</span>
+        <span className="font-medium text-[rgba(51,65,85,0.9)]">{who}</span>
         {sentAt ? (
           <>
-            <span className="text-[rgba(148,163,184,0.92)]">|</span>
+            <span className="text-[rgba(203,213,225,0.96)]">•</span>
             <span className="text-[rgba(148,163,184,0.96)]">{sentAt}</span>
           </>
         ) : null}
@@ -115,30 +125,26 @@ export default function InboxMessageBubble({
 
       <div
         className={[
-          "w-full max-w-[76%] rounded-[22px] border px-5 py-4 text-[15px] leading-8",
+          "w-fit max-w-[84%] sm:max-w-[78%] xl:max-w-[70%] rounded-[18px] border px-4 py-3 text-[14.5px] leading-7",
           tone.bubble,
+          tone.bubbleAlign,
         ].join(" ")}
       >
         {text ? (
           <div className="whitespace-pre-wrap break-words">{text}</div>
         ) : (
-          <span className="text-[rgba(148,163,184,0.96)]">(empty message)</span>
+          <span className="text-[rgba(148,163,184,0.96)]">
+            (empty message)
+          </span>
         )}
       </div>
-
-      {!inbound && sentAt ? (
-        <div
-          className={`mt-2 flex w-full max-w-[76%] items-center gap-2 px-1 text-[11px] text-[rgba(148,163,184,0.96)] ${tone.footerAlign}`}
-        >
-          <span>{sentAt}</span>
-        </div>
-      ) : null}
 
       {showInspect ? (
         <InspectBlock
           open={inspectOpen}
           onToggle={() => setInspectOpen((current) => !current)}
           traceSource={m}
+          align={inbound ? "start" : "end"}
         />
       ) : null}
     </div>
