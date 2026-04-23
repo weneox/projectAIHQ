@@ -29,6 +29,10 @@ function getRouteHandler(router, path, method) {
   return layer?.route?.stack?.[0]?.handle || null;
 }
 
+function isScopedThreadLookup(sql) {
+  return sql.includes("from inbox_threads") && sql.includes("where t.id = $1::uuid");
+}
+
 test("public outbound thread message creation persists authoritative attempt correlation instead of emitting an empty shell", async () => {
   const threadId = "11111111-1111-4111-8111-111111111111";
   const tenantId = "22222222-2222-4222-8222-222222222222";
@@ -67,7 +71,9 @@ test("public outbound thread message creation persists authoritative attempt cor
     async query(text, params = []) {
       const sql = String(text || "").toLowerCase();
 
-      if (sql.includes("from inbox_threads") && sql.includes("where id = $1::uuid")) {
+      if (isScopedThreadLookup(sql)) {
+        assert.equal(params[0], threadId);
+        assert.equal(params[1], "acme");
         return { rows: [threadRow] };
       }
 
@@ -252,7 +258,9 @@ test("thread message reads classify legacy outbound rows without attempts as his
     async query(text, params = []) {
       const sql = String(text || "").toLowerCase();
 
-      if (sql.includes("from inbox_threads") && sql.includes("where id = $1::uuid")) {
+      if (isScopedThreadLookup(sql)) {
+        assert.equal(params[0], threadId);
+        assert.equal(params[1], "acme");
         return {
           rows: [
             {
@@ -330,6 +338,12 @@ test("thread message reads classify legacy outbound rows without attempts as his
   const req = {
     params: { id: threadId },
     query: {},
+    auth: {
+      tenantKey: "acme",
+    },
+    headers: {
+      "x-tenant-key": "acme",
+    },
   };
   const res = createMockRes();
 

@@ -117,7 +117,7 @@ test("inbox thread status mutation fails closed when the uuid is outside the aut
 
       if (sql.includes("select") && sql.includes("from inbox_threads")) {
         sawScopedLookup = true;
-        assert.match(sql, /where id = \$1::uuid\s+and tenant_key = \$2::text/);
+        assert.match(sql, /where t\.id = \$1::uuid\s+and t\.tenant_key = \$2::text/);
         assert.equal(params[0], threadId);
         assert.equal(params[1], "acme");
         return { rows: [] };
