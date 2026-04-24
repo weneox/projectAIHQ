@@ -1,889 +1,1109 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// src/components/Header.tsx
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowUpRight, ChevronDown, Globe, Menu, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Globe2, Menu, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { DEFAULT_LANG, type Lang } from "../i18n/lang";
-
-type MegaMenuId = "products" | "company" | null;
-
-type MenuItem = {
-  label: string;
-  to: string;
-  note?: string;
-};
-
-type MenuColumn = {
-  title: string;
-  items: MenuItem[];
-};
 
 function cx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-function isLang(value: string | undefined | null): value is Lang {
-  return Boolean(value && ["az", "en", "tr", "ru", "es"].includes(value));
+const LANG_MENU: Lang[] = ["az", "tr", "ru", "en", "es"];
+const O_LOGO_SRC = "/image/neox-logo.png";
+
+function isLang(x: string | undefined | null): x is Lang {
+  if (!x) return false;
+  const v = String(x).toLowerCase();
+  return (LANG_MENU as readonly string[]).includes(v);
 }
 
-function withLang(path: string, lang: Lang) {
-  if (path === "/") return `/${lang}`;
-  return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function stripLangPrefix(pathname: string) {
-  return pathname.replace(/^\/(az|en|tr|ru|es)(?=\/|$)/i, "") || "/";
-}
-
-function langLabel(lang: Lang) {
-  switch (lang) {
-    case "az":
-      return "AZ";
-    case "en":
-      return "EN";
-    case "tr":
-      return "TR";
-    case "ru":
-      return "RU";
-    case "es":
-      return "ES";
-    default:
-      return String(lang).toUpperCase();
-  }
-}
-
-function langFullName(lang: Lang) {
-  switch (lang) {
+function langFullName(c: Lang) {
+  switch (c) {
     case "az":
       return "Azərbaycan";
-    case "en":
-      return "English";
     case "tr":
-      return "Türkçe";
+      return "Türk";
     case "ru":
       return "Русский";
+    case "en":
+      return "English";
     case "es":
       return "Español";
     default:
-      return String(lang).toUpperCase();
+      return String(c).toUpperCase();
   }
 }
 
-export default function Header({ introReady = true }: { introReady?: boolean }) {
-  const { pathname, search, hash } = useLocation();
-  const { lang: routeLang } = useParams<{ lang?: string }>();
+type ItemDef = {
+  id: string;
+  label: string;
+  note?: string;
+  to: string;
+};
+
+type MegaKind = "capabilities" | "company";
+type MobileTab = "main" | MegaKind;
+
+export default function Header({ introReady }: { introReady: boolean }) {
+  const { i18n, t } = useTranslation();
+  const { lang: paramLang } = useParams<{ lang?: string }>();
+  const lang: Lang = isLang(paramLang) ? (paramLang as Lang) : DEFAULT_LANG;
+
+  const location = useLocation();
   const navigate = useNavigate();
+  const mobilePanelId = useId();
+  const megaPanelId = useId();
 
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const lang: Lang = isLang(routeLang) ? routeLang : DEFAULT_LANG;
+  const headerRef = useRef<HTMLElement | null>(null);
+  const langRef = useRef<HTMLDivElement | null>(null);
 
-  const [activeMega, setActiveMega] = useState<MegaMenuId>(null);
+  const [openMega, setOpenMega] = useState<MegaKind | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSoft, setMobileSoft] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("main");
 
-  const productColumns = useMemo<MenuColumn[]>(
+  const tr = useCallback(
+    (key: string, fallback: string) => {
+      const value = t(key);
+      return typeof value === "string" && value && value !== key ? value : fallback;
+    },
+    [t]
+  );
+
+  const withLang = useCallback(
+    (to: string) => {
+      if (to === "/") return `/${lang}`;
+      return `/${lang}${to.startsWith("/") ? to : `/${to}`}`;
+    },
+    [lang]
+  );
+
+  const closeMega = useCallback(() => setOpenMega(null), []);
+
+  const closeMobile = useCallback(() => {
+    setMobileSoft(false);
+    window.setTimeout(() => setMobileOpen(false), 190);
+  }, []);
+
+  const switchLang = useCallback(
+    (next: Lang) => {
+      if (next === lang) return;
+
+      const rest = location.pathname.replace(/^\/[a-z]{2}(?=\/|$)/i, "");
+      const cleaned = rest === "" ? "/" : rest;
+      const target = cleaned === "/" ? `/${next}` : `/${next}${cleaned}`;
+
+      setLangOpen(false);
+      closeMega();
+      setMobileOpen(false);
+
+      Promise.resolve(i18n.changeLanguage(next))
+        .catch(() => {})
+        .finally(() => navigate(target + location.search + location.hash, { replace: false }));
+    },
+    [closeMega, i18n, lang, location.hash, location.pathname, location.search, navigate]
+  );
+
+  const capabilities: ItemDef[] = useMemo(
     () => [
       {
-        title: "Products",
-        items: [
-          {
-            label: "AI Chat Systems",
-            to: "/services/chatbot-24-7",
-            note: "Website, social, inbound automation",
-          },
-          {
-            label: "Workflow Automation",
-            to: "/services/business-workflows",
-            note: "Approvals, routing, internal actions",
-          },
-          {
-            label: "Web Experiences",
-            to: "/services/websites",
-            note: "Landing pages, sites, premium interfaces",
-          },
-        ],
+        id: "chatbot-24-7",
+        label: "AI Chat Systems",
+        note: "Website, social, inbound automation",
+        to: "/services/chatbot-24-7",
       },
       {
-        title: "Solutions",
-        items: [
-          {
-            label: "Use Cases",
-            to: "/use-cases",
-            note: "Operational flows by business model",
-          },
-          {
-            label: "Pricing",
-            to: "/pricing",
-            note: "Scope-based engagement direction",
-          },
-          {
-            label: "Contact",
-            to: "/contact",
-            note: "Discuss your business system",
-          },
-        ],
+        id: "business-workflows",
+        label: "Workflow Automation",
+        note: "Approvals, routing, internal actions",
+        to: "/services/business-workflows",
+      },
+      {
+        id: "websites",
+        label: "Web Experiences",
+        note: "Landing pages, premium interfaces",
+        to: "/services/websites",
+      },
+      {
+        id: "mobile-apps",
+        label: "Mobile Apps",
+        note: "Customer and operator apps",
+        to: "/services/mobile-apps",
+      },
+      {
+        id: "smm-automation",
+        label: "Social Automation",
+        note: "Content, response and lead flows",
+        to: "/services/smm-automation",
+      },
+      {
+        id: "technical-support",
+        label: "Technical Support",
+        note: "Setup, maintenance and repair",
+        to: "/services/technical-support",
       },
     ],
     []
   );
 
-  const companyColumns = useMemo<MenuColumn[]>(
+  const company: ItemDef[] = useMemo(
     () => [
       {
-        title: "Company",
-        items: [
-          {
-            label: "About NEOX",
-            to: "/about",
-            note: "How we think and what we build",
-          },
-          {
-            label: "Blog",
-            to: "/blog",
-            note: "Insights, writing, execution",
-          },
-          {
-            label: "Resources",
-            to: "/blog",
-            note: "Product direction and thinking",
-          },
-        ],
+        id: "about",
+        label: "About NEOX",
+        note: "Company, philosophy and direction",
+        to: "/about",
       },
       {
-        title: "Explore",
-        items: [
-          {
-            label: "Services",
-            to: "/services/chatbot-24-7",
-            note: "Execution pillars and system layers",
-          },
-          {
-            label: "Use Cases",
-            to: "/use-cases",
-            note: "Business application examples",
-          },
-          {
-            label: "Contact",
-            to: "/contact",
-            note: "Start a direct conversation",
-          },
-        ],
+        id: "use-cases",
+        label: "Use Cases",
+        note: "Healthcare, retail, logistics and more",
+        to: "/use-cases",
+      },
+      {
+        id: "pricing",
+        label: "Pricing",
+        note: "Scope-based engagement direction",
+        to: "/pricing",
+      },
+      {
+        id: "contact",
+        label: "Contact",
+        note: "Discuss your business system",
+        to: "/contact",
       },
     ],
     []
   );
 
-  const simpleNav = useMemo(
+  const resources: ItemDef[] = useMemo(
     () => [
-      { label: "Resources", to: "/blog" },
-      { label: "Contact", to: "/contact" },
+      {
+        id: "blog",
+        label: "Blog",
+        note: "Ideas, product notes and AI strategy",
+        to: "/blog",
+      },
+      {
+        id: "faq",
+        label: "FAQ",
+        note: "Quick answers before starting",
+        to: "/faq",
+      },
+      {
+        id: "guides",
+        label: "Guides",
+        note: "Practical implementation references",
+        to: "/resources/guides",
+      },
     ],
     []
   );
 
-  const currentMegaColumns = activeMega === "products" ? productColumns : companyColumns;
+  const megaItems = openMega === "company" ? company : capabilities;
+  const megaTitle = openMega === "company" ? "Company" : "Capabilities";
 
   useEffect(() => {
-    setActiveMega(null);
+    closeMega();
     setLangOpen(false);
     setMobileOpen(false);
-  }, [pathname, search, hash]);
+    setMobileSoft(false);
+    setMobileTab("main");
+  }, [closeMega, location.pathname, location.search, location.hash]);
 
   useEffect(() => {
-    const prev = document.documentElement.style.overflow;
-    if (mobileOpen) document.documentElement.style.overflow = "hidden";
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = mobileOpen ? "hidden" : "";
     return () => {
-      document.documentElement.style.overflow = prev;
+      root.style.overflow = prev;
     };
   }, [mobileOpen]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveMega(null);
-        setLangOpen(false);
-        setMobileOpen(false);
-      }
-    };
-
-    const onMouseDown = (event: MouseEvent) => {
-      const node = event.target as Node | null;
-      if (!node) return;
-      if (rootRef.current && !rootRef.current.contains(node)) {
-        setActiveMega(null);
-        setLangOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onMouseDown);
-
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onMouseDown);
-    };
-  }, []);
-
-  const switchLang = (nextLang: Lang) => {
-    if (nextLang === lang) {
-      setLangOpen(false);
+    if (!mobileOpen) {
+      setMobileSoft(false);
       return;
     }
+    const frame = requestAnimationFrame(() => setMobileSoft(true));
+    return () => cancelAnimationFrame(frame);
+  }, [mobileOpen]);
 
-    const rest = stripLangPrefix(pathname);
-    const nextPath = rest === "/" ? `/${nextLang}` : `/${nextLang}${rest}`;
+  useEffect(() => {
+    const onDown = (event: MouseEvent) => {
+      const node = event.target as Node;
+      if (headerRef.current && !headerRef.current.contains(node)) {
+        closeMega();
+      }
+      if (langOpen && langRef.current && !langRef.current.contains(node)) {
+        setLangOpen(false);
+      }
+    };
 
-    setLangOpen(false);
-    setMobileOpen(false);
-    setActiveMega(null);
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [closeMega, langOpen]);
 
-    navigate(`${nextPath}${search}${hash}`);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (mobileOpen) closeMobile();
+      closeMega();
+      setLangOpen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closeMega, closeMobile, mobileOpen]);
+
+  const MegaPanel = () => {
+    if (!openMega) return null;
+
+    return (
+      <div
+        id={megaPanelId}
+        className="neoMegaWrap is-open"
+        role="menu"
+        aria-label={megaTitle}
+        onMouseEnter={() => setOpenMega(openMega)}
+      >
+        <div className="neoMegaCanvas">
+          <div className="neoMegaLeft">
+            <div className="neoMegaKicker">{megaTitle}</div>
+
+            <div className="neoMegaList">
+              {megaItems.map((item) => (
+                <NavLink
+                  key={item.id}
+                  to={withLang(item.to)}
+                  role="menuitem"
+                  className={({ isActive }) => cx("neoMegaItem", isActive && "is-active")}
+                  onClick={closeMega}
+                >
+                  <span className="neoMegaCopy">
+                    <span className="neoMegaName">{item.label}</span>
+                    {item.note ? <span className="neoMegaNote">{item.note}</span> : null}
+                  </span>
+                  <ArrowUpRight className="neoMegaArrow" size={17} strokeWidth={1.9} aria-hidden="true" />
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="neoMegaMedia" aria-hidden="true" />
+        </div>
+      </div>
+    );
   };
 
+  const LangPanel = (
+    <div className="neoLangPanel" role="menu" aria-label="Language menu" aria-hidden={!langOpen}>
+      {LANG_MENU.map((code) => (
+        <button
+          key={code}
+          type="button"
+          role="menuitem"
+          className={cx("neoLangItem", code === lang && "is-active")}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => switchLang(code)}
+        >
+          <span className="neoLangCode">{String(code).toUpperCase()}</span>
+          <span className="neoLangName">{langFullName(code)}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  const MobileItem = ({ item, strong = false }: { item: ItemDef; strong?: boolean }) => (
+    <NavLink
+      to={withLang(item.to)}
+      className={({ isActive }) => cx("neoMItem", strong && "neoMItem--strong", isActive && "is-active")}
+      onClick={closeMobile}
+    >
+      <span className="neoMItemText">
+        <b>{item.label}</b>
+        {item.note ? <small>{item.note}</small> : null}
+      </span>
+      <ArrowUpRight size={16} strokeWidth={1.9} aria-hidden="true" />
+    </NavLink>
+  );
+
+  const mobileItems =
+    mobileTab === "capabilities"
+      ? capabilities
+      : mobileTab === "company"
+        ? company
+        : [
+            { id: "home", label: tr("nav.home", "Home"), to: "/" },
+            { id: "resources", label: "Resources", note: "Blog, FAQ and guides", to: "/blog" },
+            { id: "contact", label: tr("nav.contact", "Contact"), to: "/contact" },
+          ];
+
   return (
-    <>
+    <header
+      ref={headerRef}
+      className={cx("neoHdr", introReady && "neoHdr--in", openMega && "is-megaOpen")}
+      onMouseLeave={() => closeMega()}
+    >
       <style>{`
-        .nx-headerRoot{
-          position: fixed;
-          inset: 0 0 auto 0;
-          z-index: 1200;
-          pointer-events: none;
+        .neoHdr,
+        .neoHdr *{
+          box-sizing:border-box;
         }
 
-        .nx-headerShell{
-          width: 100%;
-          pointer-events: auto;
+        .neoHdr a,
+        .neoHdr a:hover,
+        .neoHdr a:focus,
+        .neoHdr a:active{
+          text-decoration:none !important;
         }
 
-        .nx-headerBar{
-          min-height: 72px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(255,255,255,.97);
-          border-bottom: 1px solid rgba(15,23,42,.07);
-          box-shadow: 0 8px 22px rgba(15,23,42,.04);
-          backdrop-filter: blur(14px);
+        .neoHdr{
+          position:fixed;
+          top:0;
+          left:0;
+          right:0;
+          z-index:99999;
+          background:#fff;
+          color:#0a1020;
+          opacity:0;
+          transform:translate3d(0,-10px,0);
+          box-shadow:0 16px 44px rgba(7,13,28,.055);
+          transition:
+            opacity .32s cubic-bezier(.2,.8,.2,1),
+            transform .32s cubic-bezier(.2,.8,.2,1),
+            box-shadow .22s ease;
         }
 
-        .nx-headerInner{
-          width: min(1380px, calc(100% - 40px));
-          min-height: 72px;
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          align-items: center;
-          gap: 22px;
+        .neoHdr--in{
+          opacity:1;
+          transform:translate3d(0,0,0);
         }
 
-        .nx-brand{
-          display: inline-flex;
-          align-items: center;
-          gap: 12px;
-          min-width: 0;
-          text-decoration: none !important;
+        .neoHdr.is-megaOpen{
+          box-shadow:0 10px 28px rgba(7,13,28,.045);
         }
 
-        .nx-brandMark{
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex: 0 0 auto;
+        .neoInner{
+          position:relative;
+          height:76px;
+          width:100%;
+          padding:0 clamp(18px,5vw,80px);
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:24px;
+          background:#fff;
         }
 
-        .nx-brandMark img{
-          width: 34px;
-          height: 34px;
-          object-fit: contain;
-          display: block;
+        .neoBrand{
+          display:inline-flex;
+          align-items:center;
+          gap:12px;
+          min-width:0;
+          color:#0a1020;
         }
 
-        .nx-brandText{
-          display: inline-flex;
-          align-items: center;
+        .neoBrandMark{
+          width:42px;
+          height:42px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          transition:transform .22s cubic-bezier(.2,.8,.2,1), filter .22s ease;
         }
 
-        .nx-brandTitle{
-          color: #0f172a;
-          font-size: 13px;
-          line-height: 1;
-          font-weight: 800;
-          letter-spacing: .02em;
+        .neoBrandLogo{
+          width:38px;
+          height:38px;
+          object-fit:contain;
+          display:block;
+          filter:drop-shadow(0 9px 18px rgba(9,22,45,.18));
+          user-select:none;
+          -webkit-user-drag:none;
         }
 
-        .nx-nav{
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 2px;
-          min-width: 0;
+        .neoBrandWord{
+          font-size:14px;
+          font-weight:850;
+          letter-spacing:-.02em;
+          color:#111827;
+          line-height:1;
         }
 
-        .nx-navBtn,
-        .nx-navLink{
-          min-height: 40px;
-          padding: 0 14px;
-          border-radius: 10px;
-          border: 0;
-          background: transparent;
-          color: #334155;
-          font-size: 14px;
-          font-weight: 650;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          text-decoration: none !important;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: color .18s ease, background .18s ease;
+        .neoBrand:hover .neoBrandMark{
+          transform:translateY(-1px) scale(1.025);
+          filter:drop-shadow(0 13px 22px rgba(14,31,64,.16));
         }
 
-        .nx-navBtn:hover,
-        .nx-navLink:hover,
-        .nx-navBtn.is-open{
-          color: #0f172a;
-          background: rgba(15,23,42,.04);
+        .neoNav{
+          position:absolute;
+          left:50%;
+          top:50%;
+          transform:translate(-50%,-50%);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:7px;
+          white-space:nowrap;
         }
 
-        .nx-navRight{
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          justify-content: flex-end;
+        .neoTop,
+        .neoTopLink{
+          height:42px;
+          border:0;
+          background:transparent;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:7px;
+          padding:0 14px;
+          border-radius:12px;
+          color:#263145;
+          font-size:14px;
+          font-weight:760;
+          letter-spacing:-.025em;
+          line-height:1;
+          cursor:pointer;
+          transition:
+            color .16s ease,
+            background .16s ease,
+            transform .16s cubic-bezier(.2,.8,.2,1);
         }
 
-        .nx-langWrap{
-          position: relative;
+        .neoTop:hover,
+        .neoTop.is-active,
+        .neoTopLink:hover,
+        .neoTopLink.is-active{
+          color:#060b16;
+          background:#f5f6f8;
         }
 
-        .nx-langBtn{
-          min-height: 40px;
-          padding: 0 12px;
-          border-radius: 10px;
-          border: 1px solid rgba(15,23,42,.08);
-          background: #ffffff;
-          color: #334155;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 650;
-          cursor: pointer;
-          box-shadow: 0 2px 8px rgba(15,23,42,.03);
+        .neoTop:active,
+        .neoTopLink:active{
+          transform:translateY(1px);
         }
 
-        .nx-langPanel{
-          position: absolute;
-          top: calc(100% + 10px);
-          right: 0;
-          width: 220px;
-          padding: 8px;
-          border-radius: 16px;
-          border: 1px solid rgba(15,23,42,.08);
-          background: rgba(255,255,255,.98);
-          box-shadow: 0 18px 42px rgba(15,23,42,.10);
-          backdrop-filter: blur(16px);
+        .neoChev{
+          opacity:.62;
+          transition:transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
         }
 
-        .nx-langItem{
-          width: 100%;
-          min-height: 42px;
-          padding: 0 12px;
-          border-radius: 10px;
-          border: 1px solid transparent;
-          background: transparent;
-          color: #334155;
-          font-size: 14px;
-          font-weight: 650;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          cursor: pointer;
-          transition: background .18s ease, border-color .18s ease, color .18s ease;
+        .neoTop.is-open .neoChev{
+          transform:rotate(180deg);
+          opacity:.95;
         }
 
-        .nx-langItem:hover,
-        .nx-langItem.is-active{
-          background: rgba(37,99,235,.07);
-          border-color: rgba(37,99,235,.08);
-          color: #2563eb;
+        .neoRight{
+          display:flex;
+          align-items:center;
+          justify-content:flex-end;
+          gap:10px;
+          min-width:0;
         }
 
-        .nx-cta{
-          min-height: 40px;
-          padding: 0 16px;
-          border-radius: 10px;
-          border: 1px solid rgba(37,99,235,.18);
-          background: linear-gradient(180deg, #315fe9 0%, #244fda 100%);
-          color: #ffffff;
-          font-size: 14px;
-          font-weight: 750;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          text-decoration: none !important;
-          box-shadow: 0 10px 22px rgba(37,99,235,.14);
-          white-space: nowrap;
-          transition: transform .18s ease, box-shadow .18s ease;
+        .neoLangWrap{
+          position:relative;
+          display:inline-flex;
         }
 
-        .nx-cta:hover{
-          transform: translateY(-1px);
-          box-shadow: 0 14px 28px rgba(37,99,235,.18);
+        .neoLangBtn{
+          height:44px;
+          min-width:92px;
+          border-radius:12px;
+          border:1px solid #edf0f5;
+          background:#fff;
+          color:#111827;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:9px;
+          padding:0 13px;
+          font-size:13px;
+          font-weight:780;
+          cursor:pointer;
+          box-shadow:0 10px 26px rgba(8,18,38,.045);
+          transition:border-color .16s ease, box-shadow .16s ease, background .16s ease;
         }
 
-        .nx-mobileBtn{
-          display: none;
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
-          border: 1px solid rgba(15,23,42,.08);
-          background: #ffffff;
-          color: #0f172a;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
+        .neoLangBtn:hover,
+        .neoLangWrap.is-open .neoLangBtn{
+          border-color:#dfe5ee;
+          background:#fbfcfe;
+          box-shadow:0 14px 32px rgba(8,18,38,.07);
         }
 
-        .nx-megaWrap{
-          background: transparent;
+        .neoLangPanel{
+          position:absolute;
+          top:calc(100% + 10px);
+          right:0;
+          width:236px;
+          padding:8px;
+          border-radius:16px;
+          border:1px solid #edf0f5;
+          background:#fff;
+          box-shadow:0 28px 70px rgba(7,13,28,.16);
+          opacity:0;
+          pointer-events:none;
+          transform:translate3d(0,-8px,0) scale(.985);
+          transform-origin:top right;
+          transition:opacity .18s ease, transform .2s cubic-bezier(.2,.8,.2,1);
         }
 
-        .nx-mega{
-          width: min(1380px, calc(100% - 40px));
-          margin: 0 auto;
-          border-top: 1px solid rgba(15,23,42,.06);
-          border-left: 1px solid rgba(15,23,42,.06);
-          border-right: 1px solid rgba(15,23,42,.06);
-          border-bottom: 1px solid rgba(15,23,42,.08);
-          background: rgba(255,255,255,.98);
-          box-shadow: 0 20px 46px rgba(15,23,42,.10);
-          overflow: hidden;
+        .neoLangWrap.is-open .neoLangPanel{
+          opacity:1;
+          pointer-events:auto;
+          transform:translate3d(0,0,0) scale(1);
         }
 
-        .nx-megaInner{
-          display: grid;
-          grid-template-columns: 1.08fr .92fr;
+        .neoLangItem{
+          width:100%;
+          min-height:42px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+          border:0;
+          border-radius:11px;
+          background:transparent;
+          color:#182234;
+          padding:0 11px;
+          cursor:pointer;
+          transition:background .16s ease, color .16s ease;
         }
 
-        .nx-megaCols{
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0;
-          padding: 26px 20px;
+        .neoLangItem:hover,
+        .neoLangItem.is-active{
+          background:#f5f7fb;
+          color:#07101f;
         }
 
-        .nx-megaCol{
-          padding: 0 10px;
+        .neoLangCode{
+          font-size:12px;
+          font-weight:850;
+          letter-spacing:.12em;
         }
 
-        .nx-megaColTitle{
-          margin-bottom: 14px;
-          color: #64748b;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: .14em;
-          text-transform: uppercase;
+        .neoLangName{
+          font-size:12px;
+          font-weight:600;
+          color:#6a7588;
         }
 
-        .nx-megaList{
-          display: grid;
-          gap: 8px;
+        .neoCta{
+          height:44px;
+          min-width:126px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:9px;
+          padding:0 17px;
+          border-radius:12px;
+          background:#2457ff;
+          color:#fff !important;
+          font-size:14px;
+          font-weight:820;
+          letter-spacing:-.02em;
+          box-shadow:0 18px 38px rgba(36,87,255,.24);
+          transition:transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s ease, background .16s ease;
         }
 
-        .nx-megaLink{
-          padding: 13px 14px;
-          border-radius: 14px;
-          border: 1px solid transparent;
-          text-decoration: none !important;
-          transition: background .18s ease, border-color .18s ease, transform .18s ease;
+        .neoCta:hover{
+          background:#1d4df0;
+          transform:translateY(-1px);
+          box-shadow:0 22px 44px rgba(36,87,255,.28);
         }
 
-        .nx-megaLink:hover{
-          background: rgba(15,23,42,.03);
-          border-color: rgba(15,23,42,.05);
-          transform: translateY(-1px);
+        .neoBurger{
+          width:44px;
+          height:44px;
+          display:none;
+          align-items:center;
+          justify-content:center;
+          border-radius:12px;
+          border:1px solid #edf0f5;
+          background:#fff;
+          color:#121b2d;
+          cursor:pointer;
+          box-shadow:0 10px 26px rgba(8,18,38,.045);
         }
 
-        .nx-megaLabel{
-          color: #0f172a;
-          font-size: 16px;
-          line-height: 1.2;
-          font-weight: 750;
-          letter-spacing: -.02em;
+        .neoMegaWrap{
+          position:absolute;
+          top:100%;
+          left:0;
+          right:0;
+          background:#fff;
+          overflow:hidden;
+          opacity:0;
+          pointer-events:none;
+          clip-path:inset(0 0 100% 0);
+          transform:translate3d(0,-8px,0);
+          box-shadow:0 44px 80px rgba(7,13,28,.13);
+          transition:
+            opacity .18s ease,
+            transform .28s cubic-bezier(.2,.8,.2,1),
+            clip-path .32s cubic-bezier(.2,.8,.2,1);
+          will-change:opacity, transform, clip-path;
         }
 
-        .nx-megaNote{
-          margin-top: 6px;
-          color: #64748b;
-          font-size: 13px;
-          line-height: 1.55;
+        .neoMegaWrap.is-open{
+          opacity:1;
+          pointer-events:auto;
+          clip-path:inset(0 0 0 0);
+          transform:translate3d(0,0,0);
         }
 
-        .nx-megaAside{
-          padding: 20px;
-          border-left: 1px solid rgba(15,23,42,.06);
-          background:
-            radial-gradient(420px 220px at 10% 0%, rgba(37,99,235,.07), transparent 62%),
-            linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-          display: grid;
-          align-content: center;
+        .neoMegaCanvas{
+          width:100%;
+          min-height:342px;
+          display:grid;
+          grid-template-columns:minmax(360px,44%) minmax(0,1fr);
+          gap:0;
+          padding:34px clamp(22px,5vw,82px) 38px;
+          background:#fff;
         }
 
-        .nx-megaCard{
-          padding: 20px;
-          border-radius: 18px;
-          border: 1px solid rgba(15,23,42,.08);
-          background: rgba(255,255,255,.84);
-          box-shadow: 0 10px 24px rgba(15,23,42,.05);
+        .neoMegaLeft{
+          min-width:0;
+          max-width:720px;
+          padding-right:clamp(28px,4vw,72px);
         }
 
-        .nx-megaEyebrow{
-          color: #64748b;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: .16em;
-          text-transform: uppercase;
+        .neoMegaKicker{
+          margin-bottom:20px;
+          color:#667287;
+          font-size:12px;
+          font-weight:850;
+          letter-spacing:.18em;
+          text-transform:uppercase;
         }
 
-        .nx-megaHeadline{
-          margin-top: 10px;
-          color: #0f172a;
-          font-size: 28px;
-          line-height: 1.04;
-          font-weight: 800;
-          letter-spacing: -.04em;
-          max-width: 520px;
+        .neoMegaList{
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          column-gap:40px;
+          row-gap:0;
         }
 
-        .nx-megaText{
-          margin-top: 12px;
-          color: #475569;
-          font-size: 14px;
-          line-height: 1.75;
-          max-width: 520px;
+        .neoMegaItem{
+          min-height:72px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:18px;
+          padding:14px 0;
+          color:#0d1728;
+          border:0;
+          background:transparent;
+          position:relative;
+          transition:color .16s ease, transform .16s cubic-bezier(.2,.8,.2,1);
         }
 
-        .nx-megaPills{
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-top: 16px;
+        .neoMegaItem::after{
+          content:"";
+          position:absolute;
+          left:0;
+          right:0;
+          bottom:0;
+          height:1px;
+          background:linear-gradient(90deg, rgba(15,23,42,.09), rgba(15,23,42,0));
+          transform-origin:left;
+          transform:scaleX(.72);
+          opacity:.8;
+          transition:transform .18s ease, opacity .18s ease;
         }
 
-        .nx-megaPill{
-          min-height: 34px;
-          padding: 0 12px;
-          border-radius: 999px;
-          border: 1px solid rgba(15,23,42,.08);
-          background: rgba(255,255,255,.9);
-          color: #334155;
-          display: inline-flex;
-          align-items: center;
-          font-size: 12px;
-          font-weight: 650;
+        .neoMegaItem:hover,
+        .neoMegaItem.is-active{
+          color:#2457ff;
+          transform:translateX(3px);
         }
 
-        .nx-mobilePanel{
-          display: none;
+        .neoMegaItem:hover::after,
+        .neoMegaItem.is-active::after{
+          transform:scaleX(1);
+          opacity:1;
         }
 
-        @media (max-width: 1120px){
-          .nx-nav{
-            display: none;
+        .neoMegaCopy{
+          min-width:0;
+          display:grid;
+          gap:5px;
+        }
+
+        .neoMegaName{
+          font-size:17px;
+          line-height:1.1;
+          font-weight:860;
+          letter-spacing:-.035em;
+        }
+
+        .neoMegaNote{
+          color:#6a7689;
+          font-size:14px;
+          line-height:1.35;
+          font-weight:560;
+          letter-spacing:-.015em;
+        }
+
+        .neoMegaArrow{
+          flex:0 0 auto;
+          color:currentColor;
+          opacity:.68;
+        }
+
+        .neoMegaMedia{
+          min-height:270px;
+          background:#fff;
+        }
+
+        .neoMOv{
+          position:fixed;
+          inset:0;
+          z-index:100000;
+          opacity:0;
+          pointer-events:none;
+          transition:opacity .18s ease;
+        }
+
+        .neoMOv.is-open{
+          opacity:1;
+          pointer-events:auto;
+        }
+
+        .neoBg{
+          position:absolute;
+          inset:0;
+          border:0;
+          background:rgba(9,14,24,.22);
+          -webkit-backdrop-filter:blur(6px);
+          backdrop-filter:blur(6px);
+        }
+
+        .neoSheet{
+          position:absolute;
+          top:78px;
+          left:0;
+          right:0;
+          background:#fff;
+          color:#0a1020;
+          box-shadow:0 34px 80px rgba(7,13,28,.22);
+          transform:translate3d(0,-14px,0);
+          opacity:0;
+          transition:transform .24s cubic-bezier(.2,.8,.2,1), opacity .2s ease;
+          overflow:hidden;
+        }
+
+        .neoSheet.is-open{
+          transform:translate3d(0,0,0);
+          opacity:1;
+        }
+
+        .neoMTop{
+          height:66px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:14px;
+          padding:0 18px;
+          background:#fff;
+        }
+
+        .neoMTitle{
+          font-size:12px;
+          font-weight:860;
+          letter-spacing:.18em;
+          color:#6b7587;
+          text-transform:uppercase;
+        }
+
+        .neoMClose{
+          width:42px;
+          height:42px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border-radius:12px;
+          border:1px solid #edf0f5;
+          background:#fff;
+          color:#111827;
+          cursor:pointer;
+        }
+
+        .neoMTabs{
+          display:grid;
+          grid-template-columns:repeat(3,1fr);
+          gap:8px;
+          padding:0 18px 14px;
+        }
+
+        .neoTab{
+          min-height:42px;
+          border:0;
+          border-radius:12px;
+          background:#f5f7fb;
+          color:#2b3548;
+          font-size:13px;
+          font-weight:780;
+          cursor:pointer;
+        }
+
+        .neoTab.is-on{
+          background:#111827;
+          color:#fff;
+        }
+
+        .neoMBody{
+          display:grid;
+          gap:0;
+          max-height:min(62vh,560px);
+          overflow:auto;
+          padding:0 18px 18px;
+          -webkit-overflow-scrolling:touch;
+        }
+
+        .neoMItem{
+          min-height:66px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:16px;
+          padding:14px 0;
+          color:#0f172a;
+          border-bottom:1px solid #edf0f5;
+        }
+
+        .neoMItemText{
+          display:grid;
+          gap:4px;
+          min-width:0;
+        }
+
+        .neoMItemText b{
+          font-size:17px;
+          line-height:1.15;
+          font-weight:830;
+          letter-spacing:-.035em;
+        }
+
+        .neoMItemText small{
+          color:#6b7587;
+          font-size:13px;
+          line-height:1.35;
+        }
+
+        @media (max-width:1180px){
+          .neoNav{
+            gap:2px;
           }
 
-          .nx-mobileBtn{
-            display: inline-flex;
+          .neoTop,
+          .neoTopLink{
+            padding:0 10px;
+            font-size:13px;
           }
 
-          .nx-headerInner{
-            grid-template-columns: auto 1fr auto;
-          }
-
-          .nx-navRight .nx-cta{
-            display: none;
+          .neoCta{
+            min-width:112px;
           }
         }
 
-        @media (max-width: 760px){
-          .nx-headerBar{
-            min-height: 64px;
+        @media (max-width:980px){
+          .neoInner{
+            height:68px;
+            padding:0 14px;
           }
 
-          .nx-headerInner{
-            width: calc(100% - 24px);
-            min-height: 64px;
-            gap: 10px;
+          .neoNav,
+          .neoCta{
+            display:none;
           }
 
-          .nx-langWrap{
-            display: none;
+          .neoBurger{
+            display:inline-flex;
           }
 
-          .nx-brandMark img{
-            width: 30px;
-            height: 30px;
+          .neoBrandMark{
+            width:40px;
+            height:40px;
           }
 
-          .nx-brandTitle{
-            font-size: 13px;
+          .neoBrandLogo{
+            width:36px;
+            height:36px;
           }
 
-          .nx-mobilePanel{
-            display: block;
-            width: calc(100% - 24px);
-            margin: 0 auto;
-            border-left: 1px solid rgba(15,23,42,.06);
-            border-right: 1px solid rgba(15,23,42,.06);
-            border-bottom: 1px solid rgba(15,23,42,.08);
-            background: rgba(255,255,255,.98);
-            box-shadow: 0 18px 40px rgba(15,23,42,.10);
-            overflow: hidden;
+          .neoBrandWord{
+            font-size:13px;
           }
 
-          .nx-mobileInner{
-            padding: 12px;
-            display: grid;
-            gap: 8px;
+          .neoLangBtn{
+            height:42px;
+            min-width:82px;
+            padding:0 11px;
           }
 
-          .nx-mobileItem{
-            min-height: 46px;
-            padding: 0 14px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: #334155;
-            font-size: 15px;
-            font-weight: 650;
-            text-decoration: none !important;
-            border: 1px solid transparent;
-            background: transparent;
+          .neoSheet{
+            top:68px;
+          }
+        }
+
+        @media (max-width:560px){
+          .neoBrandWord{
+            display:none;
           }
 
-          .nx-mobileItem:hover{
-            background: rgba(15,23,42,.03);
-            border-color: rgba(15,23,42,.05);
+          .neoMTabs{
+            grid-template-columns:1fr;
           }
+        }
 
-          .nx-megaWrap{
-            display: none;
+        @media (prefers-reduced-motion:reduce){
+          .neoHdr,
+          .neoMegaWrap,
+          .neoSheet,
+          .neoBrandMark,
+          .neoTop,
+          .neoTopLink,
+          .neoCta{
+            transition:none !important;
           }
         }
       `}</style>
 
-      <header ref={rootRef} className={cx("nx-headerRoot", introReady && "is-ready")}>
-        <div className="nx-headerShell">
-          <div className="nx-headerBar">
-            <div className="nx-headerInner">
-              <Link to={withLang("/", lang)} className="nx-brand" aria-label="NEOX">
-                <span className="nx-brandMark">
-                  <img src="/image/neox-logo.png" alt="NEOX" draggable={false} />
-                </span>
+      <div className="neoInner">
+        <Link to={`/${lang}`} className="neoBrand" aria-label="NEOX" data-wg-notranslate>
+          <span className="neoBrandMark" aria-hidden="true">
+            <img className="neoBrandLogo" src={O_LOGO_SRC} alt="" loading="eager" decoding="async" draggable={false} />
+          </span>
+          <span className="neoBrandWord">NEOX</span>
+        </Link>
 
-                <span className="nx-brandText">
-                  <span className="nx-brandTitle">NEOX</span>
-                </span>
-              </Link>
+        <nav className="neoNav" aria-label="Primary navigation">
+          <NavLink to={withLang("/")} end className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}>
+            {tr("nav.home", "Home")}
+          </NavLink>
 
-              <nav className="nx-nav" aria-label="Primary navigation">
-                <button
-                  type="button"
-                  className={cx("nx-navBtn", activeMega === "products" && "is-open")}
-                  onClick={() => {
-                    setLangOpen(false);
-                    setActiveMega((prev) => (prev === "products" ? null : "products"));
-                  }}
-                >
-                  Our Products & Services
-                  <ChevronDown size={16} />
-                </button>
+          <button
+            type="button"
+            className={cx("neoTop", openMega === "capabilities" && "is-open is-active")}
+            aria-haspopup="menu"
+            aria-expanded={openMega === "capabilities"}
+            aria-controls={megaPanelId}
+            onMouseEnter={() => setOpenMega("capabilities")}
+            onFocus={() => setOpenMega("capabilities")}
+            onClick={() => setOpenMega((current) => (current === "capabilities" ? null : "capabilities"))}
+          >
+            Capabilities
+            <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
+          </button>
 
-                <button
-                  type="button"
-                  className={cx("nx-navBtn", activeMega === "company" && "is-open")}
-                  onClick={() => {
-                    setLangOpen(false);
-                    setActiveMega((prev) => (prev === "company" ? null : "company"));
-                  }}
-                >
-                  Company
-                  <ChevronDown size={16} />
-                </button>
+          <button
+            type="button"
+            className={cx("neoTop", openMega === "company" && "is-open is-active")}
+            aria-haspopup="menu"
+            aria-expanded={openMega === "company"}
+            aria-controls={megaPanelId}
+            onMouseEnter={() => setOpenMega("company")}
+            onFocus={() => setOpenMega("company")}
+            onClick={() => setOpenMega((current) => (current === "company" ? null : "company"))}
+          >
+            Company
+            <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
+          </button>
 
-                {simpleNav.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={withLang(item.to, lang)}
-                    className="nx-navLink"
-                    onClick={() => setActiveMega(null)}
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
+          <NavLink to={withLang("/blog")} className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}>
+            Resources
+          </NavLink>
 
-              <div className="nx-navRight">
-                <div className="nx-langWrap">
-                  <button
-                    type="button"
-                    className="nx-langBtn"
-                    onClick={() => {
-                      setActiveMega(null);
-                      setLangOpen((prev) => !prev);
-                    }}
-                  >
-                    <Globe size={15} />
-                    {langLabel(lang)}
-                    <ChevronDown size={14} />
-                  </button>
+          <NavLink to={withLang("/contact")} className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}>
+            {tr("nav.contact", "Contact")}
+          </NavLink>
+        </nav>
 
-                  {langOpen ? (
-                    <div className="nx-langPanel">
-                      {(["az", "en", "tr", "ru", "es"] as Lang[]).map((code) => (
-                        <button
-                          key={code}
-                          type="button"
-                          className={cx("nx-langItem", code === lang && "is-active")}
-                          onClick={() => switchLang(code)}
-                        >
-                          <span>{langFullName(code)}</span>
-                          <span>{langLabel(code)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                <Link to={withLang("/contact", lang)} className="nx-cta">
-                  Contact
-                  <ArrowUpRight size={16} />
-                </Link>
-
-                <button
-                  type="button"
-                  className="nx-mobileBtn"
-                  aria-label={mobileOpen ? "Close menu" : "Open menu"}
-                  onClick={() => {
-                    setActiveMega(null);
-                    setLangOpen(false);
-                    setMobileOpen((prev) => !prev);
-                  }}
-                >
-                  {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-                </button>
-              </div>
-            </div>
+        <div className="neoRight">
+          <div ref={langRef} className={cx("neoLangWrap", langOpen && "is-open")} data-wg-notranslate>
+            <button
+              type="button"
+              className="neoLangBtn"
+              aria-haspopup="menu"
+              aria-expanded={langOpen}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                closeMega();
+                setLangOpen((value) => !value);
+              }}
+            >
+              <Globe2 size={16} strokeWidth={1.9} aria-hidden="true" />
+              {String(lang).toUpperCase()}
+              <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+            </button>
+            {LangPanel}
           </div>
 
-          {activeMega ? (
-            <div className="nx-megaWrap">
-              <div className="nx-mega">
-                <div className="nx-megaInner">
-                  <div className="nx-megaCols">
-                    {currentMegaColumns.map((column) => (
-                      <div key={column.title} className="nx-megaCol">
-                        <div className="nx-megaColTitle">{column.title}</div>
+          <NavLink to={withLang("/contact")} className="neoCta">
+            Contact
+            <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+          </NavLink>
 
-                        <div className="nx-megaList">
-                          {column.items.map((item) => (
-                            <Link
-                              key={item.label}
-                              to={withLang(item.to, lang)}
-                              className="nx-megaLink"
-                              onClick={() => setActiveMega(null)}
-                            >
-                              <div className="nx-megaLabel">{item.label}</div>
-                              {item.note ? <div className="nx-megaNote">{item.note}</div> : null}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <aside className="nx-megaAside">
-                    <div className="nx-megaCard">
-                      <div className="nx-megaEyebrow">
-                        {activeMega === "products" ? "Operational Layer" : "Company Direction"}
-                      </div>
-
-                      <div className="nx-megaHeadline">
-                        {activeMega === "products"
-                          ? "Structured products for modern business flows."
-                          : "A cleaner company layer with strong execution logic."}
-                      </div>
-
-                      <div className="nx-megaText">
-                        {activeMega === "products"
-                          ? "Burada sonra product preview, short visual card, və ya featured block yerləşdirəcəyik. Hələlik sadəcə məntiq və düzgün struktur qurulub."
-                          : "Burada sonra company preview, key message, və ya featured case yerləşdirəcəyik. Hələlik məqsəd header və mega-menu strukturudur."}
-                      </div>
-
-                      <div className="nx-megaPills">
-                        <span className="nx-megaPill">Preview area</span>
-                        <span className="nx-megaPill">Logic ready</span>
-                        <span className="nx-megaPill">Image later</span>
-                      </div>
-                    </div>
-                  </aside>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {mobileOpen ? (
-            <div className="nx-mobilePanel">
-              <div className="nx-mobileInner">
-                <button
-                  type="button"
-                  className="nx-mobileItem"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    setActiveMega("products");
-                  }}
-                >
-                  <span>Our Products & Services</span>
-                  <ChevronDown size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  className="nx-mobileItem"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    setActiveMega("company");
-                  }}
-                >
-                  <span>Company</span>
-                  <ChevronDown size={16} />
-                </button>
-
-                {simpleNav.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={withLang(item.to, lang)}
-                    className="nx-mobileItem"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    <span>{item.label}</span>
-                  </NavLink>
-                ))}
-
-                <NavLink
-                  to={withLang("/contact", lang)}
-                  className="nx-mobileItem"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <span>Contact</span>
-                  <ArrowUpRight size={16} />
-                </NavLink>
-              </div>
-            </div>
-          ) : null}
+          <button
+            className="neoBurger"
+            type="button"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            aria-controls={mobilePanelId}
+            onClick={() => {
+              if (!mobileOpen) {
+                closeMega();
+                setMobileTab("main");
+                setMobileOpen(true);
+              } else {
+                closeMobile();
+              }
+            }}
+          >
+            {mobileOpen ? <X size={19} strokeWidth={2} /> : <Menu size={20} strokeWidth={2} />}
+          </button>
         </div>
-      </header>
-    </>
+      </div>
+
+      <MegaPanel />
+
+      <div id={mobilePanelId} className={cx("neoMOv", mobileOpen && "is-open")} aria-hidden={!mobileOpen}>
+        <button className="neoBg" type="button" aria-label="Close menu" onClick={closeMobile} />
+
+        <div className={cx("neoSheet", mobileSoft && "is-open")} role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div className="neoMTop">
+            <div className="neoMTitle">Navigation</div>
+            <button type="button" className="neoMClose" aria-label="Close menu" onClick={closeMobile}>
+              <X size={18} strokeWidth={2} />
+            </button>
+          </div>
+
+          <div className="neoMTabs" role="tablist" aria-label="Mobile navigation sections">
+            <button type="button" className={cx("neoTab", mobileTab === "main" && "is-on")} onClick={() => setMobileTab("main")}>
+              Main
+            </button>
+            <button type="button" className={cx("neoTab", mobileTab === "capabilities" && "is-on")} onClick={() => setMobileTab("capabilities")}>
+              Capabilities
+            </button>
+            <button type="button" className={cx("neoTab", mobileTab === "company" && "is-on")} onClick={() => setMobileTab("company")}>
+              Company
+            </button>
+          </div>
+
+          <div className="neoMBody">
+            {mobileItems.map((item, index) => (
+              <MobileItem key={item.id} item={item} strong={index === 0 && mobileTab === "main"} />
+            ))}
+
+            {mobileTab === "main" ? resources.map((item) => <MobileItem key={item.id} item={item} />) : null}
+          </div>
+        </div>
+      </div>
+    </header>
   );
 }
