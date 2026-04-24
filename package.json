@@ -10,6 +10,7 @@
     "neox-frontend"
   ],
   "scripts": {
+    "build": "npm run build:neox-frontend",
     "start:ai-hq-backend": "npm run start -w ai-hq-backend",
     "migrate:ai-hq-backend": "npm run migrate -w ai-hq-backend",
     "backfill:operational-data": "npm run backfill:operational-data -w ai-hq-backend",
