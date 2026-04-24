@@ -75,17 +75,16 @@ export default function SmoothWheelScroll({
   locationKey,
   ignoreSelectors,
 
-  // ✅ sürət bir az az, sürüşmə əvvəlki kimi OK
-  strength = 0.095, // ✅ aşağı
-  friction = 0.932, // eyni (glide saxlanır)
-  maxVelocity = 30, // ✅ aşağı
-  softCap = 75,     // ✅ spike daha çox yumşalsın
+  strength = 0.095,
+  friction = 0.932,
+  maxVelocity = 30,
+  softCap = 75,
 
-  maxTravelPerWheel = 1850, // eyni (glide saxlanır)
-  idleBrakeMs = 280,        // eyni
+  maxTravelPerWheel = 1850,
+  idleBrakeMs = 280,
 
-  coastMs = 260,            // eyni
-  stopEaseMs = 820,         // eyni
+  coastMs = 260,
+  stopEaseMs = 820,
 
   wheelDeadzone = 3.2,
 }: Props) {
@@ -195,7 +194,7 @@ export default function SmoothWheelScroll({
         const va = Math.abs(vRef.current);
         if (va > 0) {
           travelBudgetRef.current = Math.max(0, travelBudgetRef.current - va);
-          if (travelBudgetRef.current <= 0 && Math.abs(vRef.current) > 0.20) {
+          if (travelBudgetRef.current <= 0 && Math.abs(vRef.current) > 0.2) {
             startTailStop();
           }
         }
@@ -246,24 +245,22 @@ export default function SmoothWheelScroll({
 
       dy = softenDelta(dy, softCap);
 
-      // ✅ speed down here
       const add = clamp(dy * strength, -maxVelocity, maxVelocity);
 
       const now = performance.now();
       const dt = now - (lastWheelTsRef.current || 0);
       lastWheelTsRef.current = now;
 
-      const carry = dt < 90 ? 0.20 : dt < 160 ? 0.30 : 0.40;
+      const carry = dt < 90 ? 0.2 : dt < 160 ? 0.3 : 0.4;
       vRef.current = clamp(vRef.current * carry + add, -maxVelocity, maxVelocity);
 
-      // ✅ glide saxlanır (budget eyni)
       const a = Math.abs(dy);
       const budgetAdd =
         a < 18
           ? clamp(a * 18.0, 220, 520)
           : a < 55
-          ? clamp(a * 9.2, 520, 1250)
-          : clamp(a * 4.4, 1250, 1750);
+            ? clamp(a * 9.2, 520, 1250)
+            : clamp(a * 4.4, 1250, 1750);
 
       travelBudgetRef.current = clamp(
         travelBudgetRef.current + budgetAdd,
