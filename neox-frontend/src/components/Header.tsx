@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowUpRight, ChevronDown, Globe2, Menu, X } from "lucide-react";
@@ -114,19 +114,19 @@ export default function Header({ introReady }: { introReady: boolean }) {
       {
         id: "chatbot-24-7",
         label: "AI Chat Systems",
-        note: "Website, social, inbound automation",
+        note: "Website, social and inbound automation",
         to: "/services/chatbot-24-7",
       },
       {
         id: "business-workflows",
         label: "Workflow Automation",
-        note: "Approvals, routing, internal actions",
+        note: "Approvals, routing and internal actions",
         to: "/services/business-workflows",
       },
       {
         id: "websites",
         label: "Web Experiences",
-        note: "Landing pages, premium interfaces",
+        note: "Landing pages and premium interfaces",
         to: "/services/websites",
       },
       {
@@ -298,6 +298,15 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoMegaPortal,
           .neoMegaPortal *{
             box-sizing:border-box;
+            font-family:
+              "Inter Variable",
+              Inter,
+              ui-sans-serif,
+              system-ui,
+              -apple-system,
+              BlinkMacSystemFont,
+              "Segoe UI",
+              sans-serif;
           }
 
           .neoMegaPortal a,
@@ -313,14 +322,16 @@ export default function Header({ introReady }: { introReady: boolean }) {
             left:0;
             right:0;
             z-index:99998;
-            background:#fff;
+            background:rgba(255,255,255,.98);
             color:#070b14;
             overflow:hidden;
             opacity:0;
             transform:translate3d(0,-8px,0);
             clip-path:inset(0 0 100% 0);
-            box-shadow:0 28px 52px rgba(7,11,20,.07);
-            animation:neoMegaOpen .28s cubic-bezier(.2,.8,.2,1) forwards;
+            border-top:1px solid rgba(13,20,32,.055);
+            border-bottom:1px solid rgba(13,20,32,.075);
+            box-shadow:0 24px 48px rgba(7,11,20,.06);
+            animation:neoMegaOpen .24s cubic-bezier(.2,.8,.2,1) forwards;
             will-change:opacity, transform, clip-path;
           }
 
@@ -332,75 +343,59 @@ export default function Header({ introReady }: { introReady: boolean }) {
             }
           }
 
-          .neoMegaCanvas{
-            width:100%;
-            min-height:342px;
-            display:grid;
-            grid-template-columns:minmax(360px,44%) minmax(0,1fr);
-            gap:0;
-            padding:34px clamp(22px,5vw,82px) 38px;
-            background:#fff;
-            position:relative;
+          .neoMegaShell{
+            width:min(100%,1440px);
+            margin:0 auto;
+            padding:28px clamp(22px,5vw,80px) 34px;
           }
 
-          .neoMegaCanvas::after{
-            content:"";
-            position:absolute;
-            left:0;
-            right:0;
-            bottom:0;
-            height:1px;
-            background:rgba(7,11,20,.045);
-          }
-
-          .neoMegaLeft{
-            min-width:0;
-            max-width:720px;
-            padding-right:clamp(28px,4vw,72px);
+          .neoMegaHead{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:24px;
+            margin-bottom:22px;
           }
 
           .neoMegaKicker{
-            margin-bottom:20px;
-            color:#7c8595;
-            font-size:12px;
-            font-weight:850;
-            letter-spacing:.18em;
+            margin:0;
+            color:#7f899a;
+            font-size:11px;
+            font-weight:760;
+            letter-spacing:.22em;
             text-transform:uppercase;
+          }
+
+          .neoMegaHint{
+            margin:0;
+            max-width:360px;
+            color:#8a94a6;
+            font-size:13px;
+            line-height:1.4;
+            font-weight:460;
+            letter-spacing:-.01em;
+            text-align:right;
           }
 
           .neoMegaList{
             display:grid;
-            grid-template-columns:repeat(2,minmax(0,1fr));
-            column-gap:40px;
-            row-gap:0;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:0 42px;
           }
 
           .neoMegaItem{
-            min-height:72px;
+            min-height:82px;
             display:flex;
             align-items:center;
             justify-content:space-between;
             gap:18px;
-            padding:14px 0;
+            padding:17px 0;
             color:#1f2735;
             border:0;
+            border-bottom:1px solid rgba(13,20,32,.075);
             background:transparent;
             position:relative;
             transition:color .16s ease, transform .16s cubic-bezier(.2,.8,.2,1);
-          }
-
-          .neoMegaItem::after{
-            content:"";
-            position:absolute;
-            left:0;
-            right:0;
-            bottom:0;
-            height:1px;
-            background:rgba(7,11,20,.07);
-            transform-origin:left;
-            transform:scaleX(.72);
-            opacity:.72;
-            transition:transform .18s ease, opacity .18s ease;
           }
 
           .neoMegaItem:hover,
@@ -409,42 +404,46 @@ export default function Header({ introReady }: { introReady: boolean }) {
             transform:translateX(3px);
           }
 
-          .neoMegaItem:hover::after,
-          .neoMegaItem.is-active::after{
-            transform:scaleX(1);
-            opacity:1;
-          }
-
           .neoMegaCopy{
             min-width:0;
             display:grid;
-            gap:5px;
+            gap:6px;
           }
 
           .neoMegaName{
-            font-size:17px;
-            line-height:1.1;
-            font-weight:830;
-            letter-spacing:-.03em;
+            font-size:16px;
+            line-height:1.12;
+            font-weight:680;
+            letter-spacing:-.035em;
           }
 
           .neoMegaNote{
+            max-width:240px;
             color:#7d8797;
             font-size:14px;
             line-height:1.35;
-            font-weight:560;
+            font-weight:450;
             letter-spacing:-.015em;
           }
 
           .neoMegaArrow{
             flex:0 0 auto;
             color:currentColor;
-            opacity:.66;
+            opacity:.58;
+            transition:opacity .16s ease, transform .16s cubic-bezier(.2,.8,.2,1);
           }
 
-          .neoMegaMedia{
-            min-height:270px;
-            background:#fff;
+          .neoMegaItem:hover .neoMegaArrow,
+          .neoMegaItem.is-active .neoMegaArrow{
+            opacity:.9;
+            transform:translate(2px,-2px);
+          }
+
+          @media (max-width:1100px){
+            .neoMegaList{
+              grid-template-columns:repeat(2,minmax(0,1fr));
+              gap:0 34px;
+            }
           }
 
           @media (max-width:980px){
@@ -460,33 +459,39 @@ export default function Header({ introReady }: { introReady: boolean }) {
               transform:none;
               clip-path:inset(0 0 0 0);
             }
+
+            .neoMegaItem,
+            .neoMegaArrow{
+              transition:none !important;
+            }
           }
         `}</style>
 
-        <div className="neoMegaCanvas">
-          <div className="neoMegaLeft">
-            <div className="neoMegaKicker">{megaTitle}</div>
-
-            <div className="neoMegaList">
-              {megaItems.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={withLang(item.to)}
-                  role="menuitem"
-                  className={({ isActive }) => cx("neoMegaItem", isActive && "is-active")}
-                  onClick={closeMega}
-                >
-                  <span className="neoMegaCopy">
-                    <span className="neoMegaName">{item.label}</span>
-                    {item.note ? <span className="neoMegaNote">{item.note}</span> : null}
-                  </span>
-                  <ArrowUpRight className="neoMegaArrow" size={17} strokeWidth={1.9} aria-hidden="true" />
-                </NavLink>
-              ))}
-            </div>
+        <div className="neoMegaShell">
+          <div className="neoMegaHead">
+            <p className="neoMegaKicker">{megaTitle}</p>
+            <p className="neoMegaHint">
+              {openMega === "company" ? "Company information and ways to start." : "Core systems we build for modern operators."}
+            </p>
           </div>
 
-          <div className="neoMegaMedia" aria-hidden="true" />
+          <div className="neoMegaList">
+            {megaItems.map((item) => (
+              <NavLink
+                key={item.id}
+                to={withLang(item.to)}
+                role="menuitem"
+                className={({ isActive }) => cx("neoMegaItem", isActive && "is-active")}
+                onClick={closeMega}
+              >
+                <span className="neoMegaCopy">
+                  <span className="neoMegaName">{item.label}</span>
+                  {item.note ? <span className="neoMegaNote">{item.note}</span> : null}
+                </span>
+                <ArrowUpRight className="neoMegaArrow" size={16} strokeWidth={1.9} aria-hidden="true" />
+              </NavLink>
+            ))}
+          </div>
         </div>
       </div>,
       document.body
@@ -543,6 +548,15 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoHdr,
           .neoHdr *{
             box-sizing:border-box;
+            font-family:
+              "Inter Variable",
+              Inter,
+              ui-sans-serif,
+              system-ui,
+              -apple-system,
+              BlinkMacSystemFont,
+              "Segoe UI",
+              sans-serif;
           }
 
           .neoHdr a,
@@ -653,7 +667,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             border-radius:10px;
             color:var(--neo-muted);
             font-size:14px;
-            font-weight:700;
+            font-weight:620;
             letter-spacing:-.022em;
             line-height:1;
             cursor:pointer;
@@ -723,7 +737,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             gap:8px;
             padding:0 12px;
             font-size:13px;
-            font-weight:750;
+            font-weight:640;
             cursor:pointer;
             box-shadow:none;
             transition:border-color .16s ease, background .16s ease, color .16s ease;
@@ -783,13 +797,13 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoLangCode{
             font-size:12px;
-            font-weight:850;
+            font-weight:760;
             letter-spacing:.12em;
           }
 
           .neoLangName{
             font-size:12px;
-            font-weight:600;
+            font-weight:480;
             color:#778193;
           }
 
@@ -805,7 +819,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             background:var(--neo-accent);
             color:#fff !important;
             font-size:14px;
-            font-weight:800;
+            font-weight:720;
             letter-spacing:-.02em;
             box-shadow:0 10px 22px rgba(49,72,199,.18);
             transition:
@@ -888,7 +902,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoMTitle{
             font-size:12px;
-            font-weight:860;
+            font-weight:760;
             letter-spacing:.18em;
             color:#7a8495;
             text-transform:uppercase;
@@ -921,7 +935,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             background:#f8f9fb;
             color:#5b6575;
             font-size:13px;
-            font-weight:780;
+            font-weight:640;
             cursor:pointer;
           }
 
@@ -959,7 +973,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoMItemText b{
             font-size:17px;
             line-height:1.15;
-            font-weight:830;
+            font-weight:720;
             letter-spacing:-.035em;
           }
 

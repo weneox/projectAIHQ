@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "@vuer-ai/react-helmet-async";
 
+import "@fontsource-variable/inter/index.css";
 import App from "./App.tsx";
 import "./index.css";
 import "./i18n";

@@ -16,14 +16,16 @@ export default function Home() {
   const lang: Lang = isLang(routeLang) ? routeLang : DEFAULT_LANG;
 
   const terminalItems = [
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
-    "PLACEHOLDER TERMINAL ITEM",
+    "Instagram və WhatsApp cavab axınları",
+    "Sayt çatbotu və lead toplama",
+    "Müştəri sorğularının ağıllı yönləndirilməsi",
+    "Görüş və rezervasiya xatırlatmaları",
+    "Satış sonrası follow-up sistemləri",
+    "FAQ və dəstək cavabları",
+    "CRM və inbox inteqrasiyaları",
+    "Daxili tapşırıq və təsdiq axınları",
+    "Premium landing page və web interfeyslər",
+    "Süni İntellekt əsaslı biznes köməkçiləri",
   ];
 
   const terminalTrack = [...terminalItems, ...terminalItems];
@@ -156,48 +158,54 @@ export default function Home() {
         .hs-terminalWrap{
           position: relative;
           z-index: 3;
-          border-top: 1px solid rgba(255,255,255,.10);
-          background: rgba(0,0,0,.16);
+          border-top: 1px solid rgba(255,255,255,.085);
+          background:
+            linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012)),
+            rgba(3, 10, 22, .34);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
         }
 
         .hs-terminalBar{
           position: relative;
           overflow: hidden;
-          padding: 16px 0;
+          padding: 18px 0;
         }
 
         .hs-terminalTrack{
           display: inline-flex;
           align-items: center;
-          gap: 12px;
+          gap: 38px;
           white-space: nowrap;
           width: max-content;
-          animation: hs-marquee 34s linear infinite;
+          animation: hs-marquee 36s linear infinite;
           will-change: transform;
         }
 
         .hs-terminalItem{
           display: inline-flex;
           align-items: center;
-          gap: 10px;
-          min-height: 40px;
-          padding: 0 16px;
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,.10);
-          color: rgba(255,255,255,.84);
-          background: rgba(255,255,255,.04);
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: .14em;
-          text-transform: uppercase;
+          gap: 11px;
+          color: rgba(255,255,255,.76);
+          background: transparent;
+          border: 0;
+          border-radius: 0;
+          padding: 0;
+          min-height: auto;
+          font-size: 14px;
+          line-height: 1;
+          font-weight: 520;
+          letter-spacing: -.01em;
+          text-transform: none;
         }
 
         .hs-terminalItem::before{
           content: "";
-          width: 8px;
-          height: 8px;
+          width: 5px;
+          height: 5px;
           border-radius: 999px;
-          background: rgba(255,255,255,.8);
+          background: rgba(142, 166, 255, .92);
+          box-shadow: 0 0 0 4px rgba(142, 166, 255, .10);
           flex: 0 0 auto;
         }
 
@@ -205,7 +213,7 @@ export default function Home() {
           position: absolute;
           top: 0;
           bottom: 0;
-          width: 72px;
+          width: 92px;
           z-index: 2;
           pointer-events: none;
         }
@@ -223,6 +231,12 @@ export default function Home() {
         @keyframes hs-marquee{
           0% { transform: translate3d(0,0,0); }
           100% { transform: translate3d(-50%,0,0); }
+        }
+
+        @media (prefers-reduced-motion: reduce){
+          .hs-terminalTrack{
+            animation: none;
+          }
         }
 
         @media (max-width: 760px){
@@ -264,17 +278,19 @@ export default function Home() {
           }
 
           .hs-terminalBar{
-            padding: 14px 0;
+            padding: 15px 0;
+          }
+
+          .hs-terminalTrack{
+            gap: 28px;
           }
 
           .hs-terminalItem{
-            min-height: 36px;
-            padding: 0 12px;
-            font-size: 11px;
+            font-size: 12px;
           }
 
           .hs-terminalFade{
-            width: 32px;
+            width: 36px;
           }
         }
       `}</style>
