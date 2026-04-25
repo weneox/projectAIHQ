@@ -309,7 +309,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoMegaPortal{
             position:fixed;
-            top:76px;
+            top:56px;
             left:0;
             right:0;
             z-index:99998;
@@ -319,7 +319,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             opacity:0;
             transform:translate3d(0,-8px,0);
             clip-path:inset(0 0 100% 0);
-            box-shadow:0 32px 52px rgba(7,11,20,.07);
+            box-shadow:0 28px 52px rgba(7,11,20,.07);
             animation:neoMegaOpen .28s cubic-bezier(.2,.8,.2,1) forwards;
             will-change:opacity, transform, clip-path;
           }
@@ -361,7 +361,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoMegaKicker{
             margin-bottom:20px;
-            color:#68758a;
+            color:#7c8595;
             font-size:12px;
             font-weight:850;
             letter-spacing:.18em;
@@ -382,7 +382,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             justify-content:space-between;
             gap:18px;
             padding:14px 0;
-            color:#0c1424;
+            color:#1f2735;
             border:0;
             background:transparent;
             position:relative;
@@ -405,7 +405,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoMegaItem:hover,
           .neoMegaItem.is-active{
-            color:#2457ff;
+            color:#3148c7;
             transform:translateX(3px);
           }
 
@@ -424,12 +424,12 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoMegaName{
             font-size:17px;
             line-height:1.1;
-            font-weight:860;
-            letter-spacing:-.035em;
+            font-weight:830;
+            letter-spacing:-.03em;
           }
 
           .neoMegaNote{
-            color:#68758a;
+            color:#7d8797;
             font-size:14px;
             line-height:1.35;
             font-weight:560;
@@ -554,14 +554,17 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoHdr{
             --neo-white:#fff;
-            --neo-ink:#070b14;
-            --neo-muted:#667287;
+            --neo-ink:#0d1420;
+            --neo-muted:#6e7786;
+            --neo-muted-strong:#5e6776;
+            --neo-accent:#3148c7;
+            --neo-accent-hover:#293fb8;
             position:fixed;
             top:0;
             left:0;
             right:0;
             z-index:99999;
-            height:76px;
+            height:56px;
             background:var(--neo-white);
             color:var(--neo-ink);
             opacity:0;
@@ -581,7 +584,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoInner{
             position:relative;
             z-index:2;
-            height:76px;
+            height:56px;
             width:100%;
             padding:0 clamp(18px,5vw,80px);
             display:flex;
@@ -595,40 +598,34 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoBrand{
             display:inline-flex;
             align-items:center;
-            gap:12px;
+            justify-content:flex-start;
+            gap:0;
             min-width:0;
             color:var(--neo-ink);
           }
 
           .neoBrandMark{
-            width:42px;
-            height:42px;
+            width:104px;
+            height:40px;
             display:inline-flex;
             align-items:center;
-            justify-content:center;
+            justify-content:flex-start;
             transition:transform .2s cubic-bezier(.2,.8,.2,1), filter .2s ease;
           }
 
           .neoBrandLogo{
-            width:38px;
+            width:100px;
             height:38px;
             object-fit:contain;
+            object-position:left center;
             display:block;
-            filter:drop-shadow(0 7px 16px rgba(7,11,20,.14));
+            filter:none;
             user-select:none;
             -webkit-user-drag:none;
           }
 
-          .neoBrandWord{
-            font-size:14px;
-            font-weight:850;
-            letter-spacing:-.02em;
-            color:var(--neo-ink);
-            line-height:1;
-          }
-
           .neoBrand:hover .neoBrandMark{
-            transform:translateY(-1px) scale(1.02);
+            transform:translateY(-1px) scale(1.015);
           }
 
           .neoNav{
@@ -639,61 +636,50 @@ export default function Header({ introReady }: { introReady: boolean }) {
             display:flex;
             align-items:center;
             justify-content:center;
-            gap:6px;
+            gap:4px;
             white-space:nowrap;
           }
 
           .neoTop,
           .neoTopLink{
-            height:42px;
+            height:34px;
             border:0;
             background:transparent;
             display:inline-flex;
             align-items:center;
             justify-content:center;
             gap:7px;
-            padding:0 13px;
+            padding:0 12px;
             border-radius:10px;
-            color:#172033;
+            color:var(--neo-muted);
             font-size:14px;
-            font-weight:760;
-            letter-spacing:-.025em;
+            font-weight:700;
+            letter-spacing:-.022em;
             line-height:1;
             cursor:pointer;
             position:relative;
-            transition:color .16s ease, transform .16s cubic-bezier(.2,.8,.2,1);
+            transition:
+              color .16s ease,
+              background .16s ease,
+              transform .16s cubic-bezier(.2,.8,.2,1);
           }
 
           .neoTop::after,
           .neoTopLink::after{
-            content:"";
-            position:absolute;
-            left:13px;
-            right:13px;
-            bottom:7px;
-            height:1px;
-            background:currentColor;
-            opacity:0;
-            transform:scaleX(.38);
-            transform-origin:center;
-            transition:opacity .16s ease, transform .16s ease;
+            display:none;
           }
 
           .neoTop:hover,
-          .neoTop.is-active,
-          .neoTop.is-open,
-          .neoTopLink:hover,
-          .neoTopLink.is-active{
-            color:#020713;
-            background:transparent;
+          .neoTopLink:hover{
+            color:var(--neo-muted-strong);
+            background:rgba(13,20,32,.035);
           }
 
-          .neoTop:hover::after,
-          .neoTop.is-open::after,
-          .neoTopLink:hover::after,
-          .neoTopLink.is-active::after{
-            opacity:.28;
-            transform:scaleX(1);
+          .neoTop.is-active,
+          .neoTop.is-open,
+          .neoTopLink.is-active{
+            color:#2e3747;
+            background:rgba(13,20,32,.05);
           }
 
           .neoTop:active,
@@ -702,13 +688,13 @@ export default function Header({ introReady }: { introReady: boolean }) {
           }
 
           .neoChev{
-            opacity:.58;
+            opacity:.62;
             transition:transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s ease;
           }
 
           .neoTop.is-open .neoChev{
             transform:rotate(180deg);
-            opacity:.95;
+            opacity:.9;
           }
 
           .neoRight{
@@ -725,28 +711,29 @@ export default function Header({ introReady }: { introReady: boolean }) {
           }
 
           .neoLangBtn{
-            height:44px;
-            min-width:92px;
-            border-radius:12px;
-            border:1px solid rgba(7,11,20,.08);
-            background:#fff;
-            color:#0b1220;
+            height:38px;
+            min-width:86px;
+            border-radius:14px;
+            border:1px solid rgba(13,20,32,.06);
+            background:#f7f7f8;
+            color:#4f5868;
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            gap:9px;
-            padding:0 13px;
+            gap:8px;
+            padding:0 12px;
             font-size:13px;
-            font-weight:780;
+            font-weight:750;
             cursor:pointer;
             box-shadow:none;
-            transition:border-color .16s ease, background .16s ease;
+            transition:border-color .16s ease, background .16s ease, color .16s ease;
           }
 
           .neoLangBtn:hover,
           .neoLangWrap.is-open .neoLangBtn{
-            border-color:rgba(7,11,20,.16);
-            background:#fff;
+            border-color:rgba(13,20,32,.08);
+            background:#f2f3f5;
+            color:#404857;
           }
 
           .neoLangPanel{
@@ -790,7 +777,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoLangItem:hover,
           .neoLangItem.is-active{
-            background:#f8f9fb;
+            background:#f6f7f9;
             color:#060b16;
           }
 
@@ -803,41 +790,44 @@ export default function Header({ introReady }: { introReady: boolean }) {
           .neoLangName{
             font-size:12px;
             font-weight:600;
-            color:#697487;
+            color:#778193;
           }
 
           .neoCta{
-            height:44px;
-            min-width:126px;
+            height:38px;
+            min-width:132px;
             display:inline-flex;
             align-items:center;
             justify-content:center;
-            gap:9px;
-            padding:0 17px;
-            border-radius:12px;
-            background:#2457ff;
+            gap:8px;
+            padding:0 16px;
+            border-radius:15px;
+            background:var(--neo-accent);
             color:#fff !important;
             font-size:14px;
-            font-weight:820;
+            font-weight:800;
             letter-spacing:-.02em;
-            box-shadow:0 14px 30px rgba(36,87,255,.18);
-            transition:transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s ease, background .16s ease;
+            box-shadow:0 10px 22px rgba(49,72,199,.18);
+            transition:
+              transform .16s cubic-bezier(.2,.8,.2,1),
+              box-shadow .16s ease,
+              background .16s ease;
           }
 
           .neoCta:hover{
-            background:#1d4df0;
+            background:var(--neo-accent-hover);
             transform:translateY(-1px);
-            box-shadow:0 18px 34px rgba(36,87,255,.22);
+            box-shadow:0 14px 26px rgba(49,72,199,.22);
           }
 
           .neoBurger{
-            width:44px;
-            height:44px;
+            width:38px;
+            height:38px;
             display:none;
             align-items:center;
             justify-content:center;
             border-radius:12px;
-            border:1px solid rgba(7,11,20,.08);
+            border:1px solid rgba(13,20,32,.08);
             background:#fff;
             color:#111827;
             cursor:pointer;
@@ -869,7 +859,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
           .neoSheet{
             position:absolute;
-            top:68px;
+            top:56px;
             left:0;
             right:0;
             background:#fff;
@@ -887,7 +877,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
           }
 
           .neoMTop{
-            height:66px;
+            height:64px;
             display:flex;
             align-items:center;
             justify-content:space-between;
@@ -900,7 +890,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
             font-size:12px;
             font-weight:860;
             letter-spacing:.18em;
-            color:#68758a;
+            color:#7a8495;
             text-transform:uppercase;
           }
 
@@ -929,14 +919,14 @@ export default function Header({ introReady }: { introReady: boolean }) {
             border:0;
             border-radius:12px;
             background:#f8f9fb;
-            color:#2b3548;
+            color:#5b6575;
             font-size:13px;
             font-weight:780;
             cursor:pointer;
           }
 
           .neoTab.is-on{
-            background:#111827;
+            background:#101827;
             color:#fff;
           }
 
@@ -974,7 +964,7 @@ export default function Header({ introReady }: { introReady: boolean }) {
           }
 
           .neoMItemText small{
-            color:#68758a;
+            color:#7a8495;
             font-size:13px;
             line-height:1.35;
           }
@@ -991,14 +981,22 @@ export default function Header({ introReady }: { introReady: boolean }) {
             }
 
             .neoCta{
-              min-width:112px;
+              min-width:124px;
+            }
+
+            .neoBrandMark{
+              width:98px;
+            }
+
+            .neoBrandLogo{
+              width:94px;
             }
           }
 
           @media (max-width:980px){
             .neoHdr,
             .neoInner{
-              height:68px;
+              height:56px;
             }
 
             .neoInner{
@@ -1012,32 +1010,40 @@ export default function Header({ introReady }: { introReady: boolean }) {
 
             .neoBurger{
               display:inline-flex;
+              width:38px;
+              height:38px;
             }
 
             .neoBrandMark{
-              width:40px;
-              height:40px;
+              width:92px;
+              height:38px;
             }
 
             .neoBrandLogo{
-              width:36px;
+              width:88px;
               height:36px;
             }
 
-            .neoBrandWord{
-              font-size:13px;
+            .neoLangBtn{
+              height:38px;
+              min-width:76px;
+              padding:0 10px;
             }
 
-            .neoLangBtn{
-              height:42px;
-              min-width:82px;
-              padding:0 11px;
+            .neoSheet{
+              top:56px;
             }
           }
 
           @media (max-width:560px){
-            .neoBrandWord{
-              display:none;
+            .neoBrandMark{
+              width:84px;
+              height:36px;
+            }
+
+            .neoBrandLogo{
+              width:80px;
+              height:34px;
             }
 
             .neoMTabs{
@@ -1062,7 +1068,6 @@ export default function Header({ introReady }: { introReady: boolean }) {
             <span className="neoBrandMark" aria-hidden="true">
               <img className="neoBrandLogo" src={O_LOGO_SRC} alt="" loading="eager" decoding="async" draggable={false} />
             </span>
-            <span className="neoBrandWord">NEOX</span>
           </Link>
 
           <nav className="neoNav" aria-label="Primary navigation">
