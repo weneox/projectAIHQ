@@ -20,6 +20,17 @@ function withLang(lang: Lang, path: string) {
   return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+const heroPhrases = [
+  "ağıllı biznes sistemləri",
+  "premium veb saytlar",
+  "mesajlaşma axınları",
+  "Süni İntellekt cavabları",
+  "satış yönümlü sistemlər",
+  "avtomatlaşdırma qatları",
+  "müştəri idarəetmə axınları",
+  "analitika sistemləri",
+];
+
 const stripItems = [
   "NEOX CORE",
   "VEB SAYT",
@@ -66,6 +77,26 @@ const processSteps = [
   },
 ];
 
+function HeroLoopText() {
+  return (
+    <span className="neox-hero-loop" aria-live="polite">
+      <span className="neox-hero-loop-sizer" aria-hidden="true">
+        ağıllı biznes sistemləri
+      </span>
+
+      {heroPhrases.map((phrase, index) => (
+        <span
+          key={phrase}
+          className="neox-hero-loop-item"
+          style={{ animationDelay: `${index * 3}s` }}
+        >
+          {phrase}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function SystemStrip() {
   const repeated = [...stripItems, ...stripItems, ...stripItems, ...stripItems];
 
@@ -79,7 +110,7 @@ function SystemStrip() {
           {repeated.map((item, index) => (
             <span
               key={`${item}-${index}`}
-              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em] text-slate-500 transition-colors duration-300 hover:text-slate-800"
+              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em]"
             >
               {item}
             </span>
@@ -100,36 +131,27 @@ function HomeHero() {
           <img
             src={HERO_BACKGROUND_URL}
             alt=""
-            className="h-full w-full object-cover object-[64%_center]"
+            className="neox-hero-bg h-full w-full object-cover object-[64%_center]"
           />
 
-          <img
-            src={HERO_BACKGROUND_URL}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[64%_center] blur-[10px]"
-            style={{
-              WebkitMaskImage:
-                "linear-gradient(90deg, black 0%, black 27%, transparent 55%)",
-              maskImage:
-                "linear-gradient(90deg, black 0%, black 27%, transparent 55%)",
-            }}
-          />
-
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.995)_0%,rgba(255,255,255,0.965)_36%,rgba(255,255,255,0.74)_62%,rgba(255,255,255,0.22)_100%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_42%,rgba(255,255,255,0.62)_0%,rgba(255,255,255,0.28)_32%,rgba(255,255,255,0)_60%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0)_46%,rgba(255,255,255,0.1)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,250,252,0.66)_0%,rgba(248,250,252,0.42)_34%,rgba(248,250,252,0.16)_66%,rgba(248,250,252,0.02)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.06)_100%)]" />
         </div>
 
         <div className="relative mx-auto flex w-full max-w-[1460px] items-center px-6 pb-8 pt-10 lg:px-10 lg:pb-10 lg:pt-12">
-          <div className="max-w-[760px]">
-            <h1 className="neox-hero-title max-w-[790px] text-[#070a18]">
-              Ağıllı biznes sistemləri qururuq.
+          <div className="max-w-[960px]">
+            <h1 className="neox-hero-title text-[#070a18]">
+              <span className="neox-hero-title-line">
+                <span>Biz</span>
+                <HeroLoopText />
+              </span>
+              <span className="neox-hero-title-line">qururuq.</span>
             </h1>
 
-            <p className="mt-7 max-w-[650px] text-[1.08rem] font-[520] leading-[1.78] tracking-[-0.018em] text-slate-600 md:text-[1.14rem]">
+            <p className="mt-7 max-w-[650px] text-[1.05rem] font-[540] leading-[1.78] tracking-[-0.018em] text-slate-700 md:text-[1.12rem]">
               Veb sayt, mesajlaşma, avtomatlaşdırma və Süni İntellekt
-              cavablarını birləşdiririk ki, müştəri axını daha səliqəli,
-              sürətli və ölçülə bilən olsun.
+              cavablarını bir sistemdə birləşdiririk. Müştəri axını daha
+              səliqəli, sürətli və ölçülə bilən olur.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">
@@ -176,10 +198,7 @@ function ValueSection() {
                 {card.text}
               </p>
 
-              <Link
-                to={withLang(lang, "/services")}
-                className="nx-link mt-8"
-              >
+              <Link to={withLang(lang, "/services")} className="nx-link mt-8">
                 Daha ətraflı
               </Link>
             </article>
@@ -306,6 +325,25 @@ export default function HomePage() {
           }
         }
 
+        @keyframes neoxHeroPhrase {
+          0% {
+            opacity: 0;
+            transform: translateY(0.18em);
+          }
+
+          4%,
+          10.5% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+
+          12.5%,
+          100% {
+            opacity: 0;
+            transform: translateY(-0.14em);
+          }
+        }
+
         .neox-home-page {
           padding-top: var(--nx-header-h, 64px);
           background: #fff;
@@ -318,12 +356,51 @@ export default function HomePage() {
           flex-direction: column;
         }
 
+        .neox-hero-bg {
+          opacity: 0.98;
+          filter: saturate(1.02) contrast(1.01);
+        }
+
         .neox-hero-title {
-          font-size: clamp(3.2rem, 5.3vw, 6rem);
-          font-weight: 700;
-          line-height: 1.015;
-          letter-spacing: -0.066em;
+          max-width: 980px;
+          font-size: clamp(2.85rem, 4.45vw, 5rem);
+          font-weight: 640;
+          line-height: 1.08;
+          letter-spacing: -0.058em;
           text-wrap: balance;
+        }
+
+        .neox-hero-title-line {
+          display: block;
+        }
+
+        .neox-hero-title-line:first-child {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 0.24em;
+        }
+
+        .neox-hero-loop {
+          position: relative;
+          display: inline-grid;
+          white-space: nowrap;
+          color: #2447c6;
+          vertical-align: baseline;
+        }
+
+        .neox-hero-loop-sizer {
+          grid-area: 1 / 1;
+          visibility: hidden;
+          pointer-events: none;
+        }
+
+        .neox-hero-loop-item {
+          grid-area: 1 / 1;
+          opacity: 0;
+          color: #2447c6;
+          animation: neoxHeroPhrase 24s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+          will-change: opacity, transform;
         }
 
         .neox-home-strip {
@@ -334,8 +411,20 @@ export default function HomePage() {
           animation-play-state: paused;
         }
 
+        .neox-strip-item {
+          color: #64748b;
+          transition: color 180ms ease;
+        }
+
         .neox-strip-item:hover {
-          color: #1f2937;
+          color: #2447c6;
+        }
+
+        @media (max-width: 1100px) {
+          .neox-hero-title {
+            max-width: 860px;
+            font-size: clamp(2.75rem, 6vw, 4.6rem);
+          }
         }
 
         @media (max-width: 900px) {
@@ -345,22 +434,44 @@ export default function HomePage() {
           }
 
           .neox-hero-title {
-            font-size: clamp(3rem, 12vw, 4.7rem);
-            letter-spacing: -0.068em;
+            max-width: 100%;
+            font-size: clamp(2.65rem, 10vw, 4.25rem);
+            line-height: 1.07;
+            letter-spacing: -0.06em;
+          }
+
+          .neox-hero-title-line:first-child {
+            display: block;
+          }
+
+          .neox-hero-loop {
+            display: grid;
+            margin-top: 0.04em;
+            white-space: normal;
+          }
+
+          .neox-hero-loop-item {
+            width: 100%;
           }
         }
 
         @media (max-width: 520px) {
           .neox-hero-title {
-            font-size: 3.1rem;
-            line-height: 1.04;
-            letter-spacing: -0.062em;
+            font-size: 2.85rem;
+            line-height: 1.06;
+            letter-spacing: -0.058em;
           }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .neox-home-strip {
+          .neox-home-strip,
+          .neox-hero-loop-item {
             animation: none;
+          }
+
+          .neox-hero-loop-item:nth-of-type(2) {
+            opacity: 1;
+            transform: none;
           }
         }
       `}</style>
