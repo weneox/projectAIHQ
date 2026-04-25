@@ -1,5 +1,5 @@
 // src/components/Footer.tsx
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { Link, NavLink, useParams } from "react-router-dom";
 import { Instagram, Linkedin, Mail, Phone } from "lucide-react";
 import { DEFAULT_LANG, type Lang } from "../i18n/lang";
@@ -23,16 +23,16 @@ type FooterLink = {
 };
 
 const companyLinks: FooterLink[] = [
-  { label: "About", to: "/about" },
-  { label: "Services", to: "/services" },
-  { label: "Use Cases", to: "/use-cases" },
-  { label: "Pricing", to: "/pricing" },
+  { label: "Haqqımızda", to: "/about" },
+  { label: "Xidmətlər", to: "/services" },
+  { label: "İstifadə sahələri", to: "/use-cases" },
+  { label: "Qiymətlər", to: "/pricing" },
 ];
 
 const resourceLinks: FooterLink[] = [
-  { label: "Blog", to: "/blog" },
-  { label: "FAQ", to: "/faq" },
-  { label: "Guides", to: "/resources/guides" },
+  { label: "Bloq", to: "/blog" },
+  { label: "Suallar", to: "/faq" },
+  { label: "Bələdçilər", to: "/resources/guides" },
 ];
 
 export default function Footer() {
@@ -55,6 +55,15 @@ export default function Footer() {
         .neoFooter,
         .neoFooter *{
           box-sizing:border-box;
+          font-family:
+            "Inter Variable",
+            Inter,
+            ui-sans-serif,
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
         }
 
         .neoFooter a,
@@ -65,34 +74,30 @@ export default function Footer() {
         }
 
         .neoFooter{
-          --ink:#0d1420;
-          --heading:#0b1322;
-          --text:#667286;
-          --muted:#7a8597;
-          --soft:#98a2b3;
-          --line:rgba(13,20,32,.075);
-          --accent:#3148c7;
+          --footer-ink:#0d1420;
+          --footer-text:#5f6b7d;
+          --footer-muted:#7a8597;
+          --footer-line:rgba(13,20,32,.075);
+          --footer-accent:#3148c7;
 
-          background:
-            radial-gradient(circle at 16% 0%, rgba(49,72,199,.045), transparent 30%),
-            linear-gradient(180deg,#fbfcfe 0%,#ffffff 58%,#fbfcfe 100%);
-          border-top:1px solid rgba(13,20,32,.055);
-          color:var(--ink);
+          background:#fff;
+          color:var(--footer-ink);
+          border-top:1px solid var(--footer-line);
         }
 
         .neoFooterShell{
           width:min(100%,1440px);
           margin:0 auto;
-          padding:56px clamp(22px,6vw,92px) 26px;
+          padding:56px clamp(18px,5vw,80px) 26px;
         }
 
         .neoFooterGrid{
           display:grid;
-          grid-template-columns:minmax(220px,1fr) minmax(360px,1.25fr) minmax(260px,1fr);
+          grid-template-columns:minmax(240px,1fr) minmax(360px,1.2fr) minmax(280px,1fr);
           gap:clamp(42px,6vw,92px);
           align-items:start;
           padding-bottom:42px;
-          border-bottom:1px solid var(--line);
+          border-bottom:1px solid var(--footer-line);
         }
 
         .neoFooterBrand{
@@ -112,7 +117,6 @@ export default function Footer() {
         .neoFooterLogo{
           width:108px;
           height:40px;
-          display:block;
           object-fit:contain;
           object-position:left center;
           user-select:none;
@@ -120,12 +124,12 @@ export default function Footer() {
         }
 
         .neoFooterLine{
-          max-width:260px;
+          max-width:300px;
           margin:0;
-          color:var(--text);
+          color:var(--footer-text);
           font-size:14px;
-          line-height:1.55;
-          font-weight:540;
+          line-height:1.6;
+          font-weight:450;
           letter-spacing:-.015em;
         }
 
@@ -143,10 +147,10 @@ export default function Footer() {
 
         .neoFooterTitle{
           margin:0;
-          color:var(--heading);
+          color:var(--footer-ink);
           font-size:12px;
           line-height:1;
-          font-weight:820;
+          font-weight:760;
           letter-spacing:.08em;
           text-transform:uppercase;
         }
@@ -159,10 +163,10 @@ export default function Footer() {
         .neoFooterLink{
           width:max-content;
           max-width:100%;
-          color:var(--text);
+          color:var(--footer-text);
           font-size:15px;
           line-height:1.15;
-          font-weight:610;
+          font-weight:500;
           letter-spacing:-.02em;
           transition:
             color .16s ease,
@@ -171,7 +175,7 @@ export default function Footer() {
 
         .neoFooterLink:hover,
         .neoFooterLink.is-active{
-          color:var(--accent);
+          color:var(--footer-accent);
           transform:translateX(2px);
         }
 
@@ -186,7 +190,7 @@ export default function Footer() {
           display:grid;
           gap:10px;
           width:100%;
-          max-width:260px;
+          max-width:280px;
         }
 
         .neoFooterContactItem{
@@ -198,32 +202,30 @@ export default function Footer() {
           padding:0 13px;
           border-radius:14px;
           border:1px solid rgba(13,20,32,.075);
-          background:rgba(255,255,255,.74);
-          color:var(--text);
+          background:#fff;
+          color:var(--footer-text);
           font-size:14px;
-          font-weight:610;
+          font-weight:500;
           letter-spacing:-.02em;
-          box-shadow:0 10px 24px rgba(13,20,32,.035);
+          box-shadow:none;
           transition:
             transform .16s cubic-bezier(.2,.8,.2,1),
             border-color .16s ease,
-            background .16s ease,
             color .16s ease;
         }
 
         .neoFooterContactItem svg{
-          color:#6f7a8c;
+          color:#7a8597;
         }
 
         .neoFooterContactItem:hover{
           transform:translateY(-1px);
-          border-color:rgba(13,20,32,.13);
-          background:#fff;
+          border-color:rgba(49,72,199,.22);
           color:#0d1420;
         }
 
         .neoFooterContactItem:hover svg{
-          color:var(--accent);
+          color:var(--footer-accent);
         }
 
         .neoFooterSocials{
@@ -239,24 +241,22 @@ export default function Footer() {
           height:38px;
           border-radius:14px;
           border:1px solid rgba(13,20,32,.075);
-          background:rgba(255,255,255,.74);
+          background:#fff;
           color:#667286;
           display:inline-flex;
           align-items:center;
           justify-content:center;
-          box-shadow:0 10px 24px rgba(13,20,32,.035);
+          box-shadow:none;
           transition:
             transform .16s cubic-bezier(.2,.8,.2,1),
             border-color .16s ease,
-            background .16s ease,
             color .16s ease;
         }
 
         .neoFooterSocial:hover{
           transform:translateY(-1px);
           border-color:rgba(49,72,199,.22);
-          background:#fff;
-          color:var(--accent);
+          color:var(--footer-accent);
         }
 
         .neoFooterBottom{
@@ -268,19 +268,12 @@ export default function Footer() {
           padding-top:22px;
         }
 
-        .neoFooterCopy{
+        .neoFooterCopy,
+        .neoFooterMini{
           color:#758195;
           font-size:13px;
           line-height:1.35;
-          font-weight:560;
-          letter-spacing:-.01em;
-        }
-
-        .neoFooterMini{
-          color:#8b95a6;
-          font-size:13px;
-          line-height:1.35;
-          font-weight:540;
+          font-weight:450;
           letter-spacing:-.01em;
         }
 
@@ -348,16 +341,22 @@ export default function Footer() {
               <img className="neoFooterLogo" src={LOGO_SRC} alt="" loading="lazy" decoding="async" draggable={false} />
             </Link>
 
-            <p className="neoFooterLine">Clean automation systems for customer conversations and business workflows.</p>
+            <p className="neoFooterLine">
+              Müştəri mesajları, veb saytlar və biznes prosesləri üçün ağıllı avtomatlaşdırma sistemləri.
+            </p>
           </div>
 
           <nav className="neoFooterNav" aria-label="Footer navigation">
             <div className="neoFooterCol">
-              <h2 className="neoFooterTitle">Company</h2>
+              <h2 className="neoFooterTitle">Şirkət</h2>
 
               <div className="neoFooterLinks">
                 {companyLinks.map((item) => (
-                  <NavLink key={item.to} to={withLang(item.to)} className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}>
+                  <NavLink
+                    key={item.to}
+                    to={withLang(item.to)}
+                    className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}
+                  >
                     {item.label}
                   </NavLink>
                 ))}
@@ -365,11 +364,15 @@ export default function Footer() {
             </div>
 
             <div className="neoFooterCol">
-              <h2 className="neoFooterTitle">Resources</h2>
+              <h2 className="neoFooterTitle">Resurslar</h2>
 
               <div className="neoFooterLinks">
                 {resourceLinks.map((item) => (
-                  <NavLink key={item.to} to={withLang(item.to)} className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}>
+                  <NavLink
+                    key={item.to}
+                    to={withLang(item.to)}
+                    className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}
+                  >
                     {item.label}
                   </NavLink>
                 ))}
@@ -378,7 +381,7 @@ export default function Footer() {
           </nav>
 
           <div className="neoFooterContact">
-            <h2 className="neoFooterTitle">Contact</h2>
+            <h2 className="neoFooterTitle">Əlaqə</h2>
 
             <div className="neoFooterContactList">
               <a className="neoFooterContactItem" href="mailto:info@weneox.com">
@@ -392,7 +395,7 @@ export default function Footer() {
               </a>
             </div>
 
-            <div className="neoFooterSocials" aria-label="Social links">
+            <div className="neoFooterSocials" aria-label="Sosial keçidlər">
               <a className="neoFooterSocial" href="https://www.linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn">
                 <Linkedin size={16} strokeWidth={1.9} aria-hidden="true" />
               </a>
@@ -405,8 +408,8 @@ export default function Footer() {
         </div>
 
         <div className="neoFooterBottom">
-          <div className="neoFooterCopy">© {year} NEOX — Intelligent Automation Systems</div>
-          <div className="neoFooterMini">Built for modern operators.</div>
+          <div className="neoFooterCopy">© {year} NEOX — Ağıllı avtomatlaşdırma sistemləri</div>
+          <div className="neoFooterMini">Modern bizneslər üçün qurulub.</div>
         </div>
       </div>
     </footer>
