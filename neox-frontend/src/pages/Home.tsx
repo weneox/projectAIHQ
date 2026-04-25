@@ -50,7 +50,6 @@ export default function Home() {
           overflow: hidden;
         }
 
-        /* yalnız background slot / skelet */
         .hs-bg{
           position: absolute;
           inset: 0;
@@ -58,7 +57,6 @@ export default function Home() {
           background: #091427;
         }
 
-        /* burası gələcəkdə image/video mount yeri olacaq */
         .hs-bgMediaSlot{
           position: absolute;
           inset: 0;
@@ -70,7 +68,6 @@ export default function Home() {
             linear-gradient(90deg, rgba(255,255,255,.02), rgba(255,255,255,0));
         }
 
-        /* content area */
         .hs-main{
           position: relative;
           z-index: 2;
@@ -156,7 +153,6 @@ export default function Home() {
           border: 1px solid rgba(255,255,255,.22);
         }
 
-        /* hero daxilində görünən terminal */
         .hs-terminalWrap{
           position: relative;
           z-index: 3;
@@ -283,7 +279,7 @@ export default function Home() {
         }
       `}</style>
 
-      <main className="hs-root">
+      <div className="hs-root">
         <div className="hs-shell">
           <section className="hs-hero">
             <div className="hs-bg" />
@@ -335,7 +331,7 @@ export default function Home() {
             </div>
           </section>
         </div>
-      </main>
+      </div>
     </>
   );
 }

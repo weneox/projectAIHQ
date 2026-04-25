@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 import Layout from "./components/Layout";
 import IntroScreen from "./components/IntroScreen";
 import MatrixLoader from "./components/MatrixLoader";
-import SmoothWheelScroll from "./components/SmoothWheelScroll";
 
 // pages
 import Home from "./pages/Home";
@@ -189,80 +188,76 @@ export default function App() {
       {boot === "loader" && <MatrixLoader onDone={handleLoaderDone} />}
 
       {boot === "app" && (
-        <>
-          <SmoothWheelScroll enabled={true} minWidth={980} />
+        <AdminOnlyGate>
+          <Routes>
+            {/* root redirect */}
+            <Route path="/" element={<Navigate to={`/${rootLang}`} replace />} />
 
-          <AdminOnlyGate>
-            <Routes>
-              {/* root redirect */}
-              <Route path="/" element={<Navigate to={`/${rootLang}`} replace />} />
+            {/* magic link legacy redirect */}
+            <Route path="/admin/magic" element={<AdminMagicRedirect toLang={rootLang} />} />
+            <Route path="/admin" element={<Navigate to={`/${rootLang}/admin`} replace />} />
+            <Route path="/admin/*" element={<Navigate to={`/${rootLang}/admin`} replace />} />
 
-              {/* magic link legacy redirect */}
-              <Route path="/admin/magic" element={<AdminMagicRedirect toLang={rootLang} />} />
-              <Route path="/admin" element={<Navigate to={`/${rootLang}/admin`} replace />} />
-              <Route path="/admin/*" element={<Navigate to={`/${rootLang}/admin`} replace />} />
+            {/* lang-scoped app */}
+            <Route path="/:lang" element={<LangGate />}>
+              {/* admin magic consumer */}
+              <Route path="admin/magic" element={<AdminMagic />} />
 
-              {/* lang-scoped app */}
-              <Route path="/:lang" element={<LangGate />}>
-                {/* admin magic consumer */}
-                <Route path="admin/magic" element={<AdminMagic />} />
-
-                {/* admin area */}
-                <Route path="admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="leads" replace />} />
-                  <Route path="leads" element={<AdminLeads />} />
-                  <Route path="chats" element={<AdminChats />} />
-                  <Route path="chats/:id" element={<AdminChats />} />
-                  <Route path="blog" element={<AdminBlog />} />
-                  <Route path="products" element={<AdminProducts />} />
-                  <Route path="media" element={<AdminMedia />} />
-                </Route>
-
-                {/* public pages with layout */}
-                <Route element={<WithLayout />}>
-                  <Route index element={<Home />} />
-                  <Route path="about" element={<About />} />
-
-                  {/* Services */}
-                  <Route path="services" element={<Navigate to="services/chatbot-24-7" replace />} />
-                  <Route path="services/chatbot-24-7" element={<ServiceChatbot247 />} />
-                  <Route path="services/business-workflows" element={<ServiceBusinessWorkflows />} />
-                  <Route path="services/websites" element={<ServiceWebsites />} />
-                  <Route path="services/mobile-apps" element={<ServiceMobileApps />} />
-                  <Route path="services/smm-automation" element={<ServiceSmmAutomation />} />
-                  <Route path="services/technical-support" element={<ServiceTechnicalSupport />} />
-
-                  {/* Use Cases */}
-                  <Route path="use-cases" element={<UseCasesIndex />} />
-                  <Route path="use-cases/healthcare" element={<UseCaseHealthcare />} />
-                  <Route path="use-cases/logistics" element={<UseCaseLogistics />} />
-                  <Route path="use-cases/finance" element={<UseCaseFinance />} />
-                  <Route path="use-cases/retail" element={<UseCaseRetail />} />
-                  <Route path="use-cases/hotels" element={<UseCaseHotel />} />
-
-                  {/* Resources */}
-                  <Route path="resources/docs" element={<ResourcesDocs />} />
-                  <Route path="resources/guides" element={<ResourcesGuides />} />
-
-                  {/* FAQ */}
-                  <Route path="faq" element={<ResourcesFaq />} />
-                  <Route path="resources/faq" element={<ResourcesFaq />} />
-
-                  <Route path="pricing" element={<Pricing />} />
-                  <Route path="contact" element={<Contact />} />
-                  <Route path="privacy" element={<Privacy />} />
-                  <Route path="terms" element={<Terms />} />
-
-                  <Route path="blog" element={<Blog />} />
-                  <Route path="blog/:slug" element={<BlogPost />} />
-                </Route>
+              {/* admin area */}
+              <Route path="admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="leads" replace />} />
+                <Route path="leads" element={<AdminLeads />} />
+                <Route path="chats" element={<AdminChats />} />
+                <Route path="chats/:id" element={<AdminChats />} />
+                <Route path="blog" element={<AdminBlog />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="media" element={<AdminMedia />} />
               </Route>
 
-              {/* fallback */}
-              <Route path="*" element={<Navigate to={`/${DEFAULT_LANG}`} replace />} />
-            </Routes>
-          </AdminOnlyGate>
-        </>
+              {/* public pages with layout */}
+              <Route element={<WithLayout />}>
+                <Route index element={<Home />} />
+                <Route path="about" element={<About />} />
+
+                {/* Services */}
+                <Route path="services" element={<Navigate to="services/chatbot-24-7" replace />} />
+                <Route path="services/chatbot-24-7" element={<ServiceChatbot247 />} />
+                <Route path="services/business-workflows" element={<ServiceBusinessWorkflows />} />
+                <Route path="services/websites" element={<ServiceWebsites />} />
+                <Route path="services/mobile-apps" element={<ServiceMobileApps />} />
+                <Route path="services/smm-automation" element={<ServiceSmmAutomation />} />
+                <Route path="services/technical-support" element={<ServiceTechnicalSupport />} />
+
+                {/* Use Cases */}
+                <Route path="use-cases" element={<UseCasesIndex />} />
+                <Route path="use-cases/healthcare" element={<UseCaseHealthcare />} />
+                <Route path="use-cases/logistics" element={<UseCaseLogistics />} />
+                <Route path="use-cases/finance" element={<UseCaseFinance />} />
+                <Route path="use-cases/retail" element={<UseCaseRetail />} />
+                <Route path="use-cases/hotels" element={<UseCaseHotel />} />
+
+                {/* Resources */}
+                <Route path="resources/docs" element={<ResourcesDocs />} />
+                <Route path="resources/guides" element={<ResourcesGuides />} />
+
+                {/* FAQ */}
+                <Route path="faq" element={<ResourcesFaq />} />
+                <Route path="resources/faq" element={<ResourcesFaq />} />
+
+                <Route path="pricing" element={<Pricing />} />
+                <Route path="contact" element={<Contact />} />
+                <Route path="privacy" element={<Privacy />} />
+                <Route path="terms" element={<Terms />} />
+
+                <Route path="blog" element={<Blog />} />
+                <Route path="blog/:slug" element={<BlogPost />} />
+              </Route>
+            </Route>
+
+            {/* fallback */}
+            <Route path="*" element={<Navigate to={`/${DEFAULT_LANG}`} replace />} />
+          </Routes>
+        </AdminOnlyGate>
       )}
     </>
   );
