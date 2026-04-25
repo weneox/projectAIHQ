@@ -1,3 +1,4 @@
+// src/pages/Home.tsx
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -111,24 +112,24 @@ export default function Home() {
     <>
       <style>{`
         .home-page{
-          background: var(--nx-canvas);
-          color: var(--nx-ink);
-          overflow-x: hidden;
+          background:var(--nx-canvas);
+          color:var(--nx-ink);
+          overflow-x:hidden;
         }
 
         .home-heroShell{
-          min-height: 100vh;
-          padding-top: var(--nx-header-h);
-          background: var(--nx-night);
+          min-height:100vh;
+          padding-top:var(--nx-header-h);
+          background:var(--nx-night);
         }
 
         .home-hero{
-          position: relative;
-          min-height: calc(100svh - var(--nx-header-h));
-          display: grid;
-          grid-template-rows: 1fr auto;
-          overflow: hidden;
-          background: var(--nx-night);
+          position:relative;
+          min-height:calc(100svh - var(--nx-header-h));
+          display:grid;
+          grid-template-rows:1fr auto;
+          overflow:hidden;
+          background:var(--nx-night);
         }
 
         .home-heroBg{
@@ -710,10 +711,6 @@ export default function Home() {
         }
 
         @media (max-width:760px){
-          .home-heroShell{
-            padding-top:var(--nx-header-h);
-          }
-
           .home-hero{
             min-height:calc(100svh - var(--nx-header-h));
           }

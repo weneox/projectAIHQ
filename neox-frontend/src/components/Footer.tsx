@@ -37,7 +37,7 @@ const resourceLinks: FooterLink[] = [
 
 export default function Footer() {
   const { lang: paramLang } = useParams<{ lang?: string }>();
-  const lang: Lang = isLang(paramLang) ? (paramLang as Lang) : DEFAULT_LANG;
+  const lang: Lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
 
   const withLang = useCallback(
     (to: string) => {

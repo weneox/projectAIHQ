@@ -2,11 +2,9 @@
 
 /* -------------------------------------------------------
    NEOX PUBLIC DESIGN SYSTEM
-   One visual language for the marketing website.
 ------------------------------------------------------- */
 
 :root {
-  /* Font */
   font-family:
     "Inter Variable",
     Inter,
@@ -22,23 +20,19 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Brand */
   --nx-blue: #3148c7;
   --nx-blue-hover: #293fb8;
   --nx-blue-soft: rgba(49, 72, 199, 0.08);
 
-  /* Light surface */
   --nx-white: #ffffff;
   --nx-canvas: #fbfcfe;
   --nx-surface: #ffffff;
   --nx-surface-soft: #f6f7f9;
 
-  /* Dark surface */
   --nx-night: #07111f;
   --nx-night-2: #091427;
   --nx-night-soft: #0d192c;
 
-  /* Text */
   --nx-ink: #0d1420;
   --nx-ink-2: #1f2937;
   --nx-text: #313b4d;
@@ -46,12 +40,10 @@
   --nx-soft: #8a95a7;
   --nx-faint: #a8b0bf;
 
-  /* Lines */
   --nx-line: rgba(13, 20, 32, 0.08);
   --nx-line-soft: rgba(13, 20, 32, 0.055);
   --nx-line-dark: rgba(255, 255, 255, 0.1);
 
-  /* Radius */
   --nx-radius-xs: 8px;
   --nx-radius-sm: 10px;
   --nx-radius-md: 14px;
@@ -59,18 +51,15 @@
   --nx-radius-xl: 24px;
   --nx-radius-full: 999px;
 
-  /* Shadows */
   --nx-shadow-soft: 0 16px 40px rgba(13, 20, 32, 0.06);
   --nx-shadow-medium: 0 22px 52px rgba(13, 20, 32, 0.1);
   --nx-shadow-blue: 0 14px 30px rgba(49, 72, 199, 0.2);
 
-  /* Layout */
   --nx-header-h: 56px;
   --nx-container: 1440px;
   --nx-page-x: clamp(18px, 5vw, 80px);
   --nx-section-y: clamp(72px, 9vw, 132px);
 
-  /* Motion */
   --nx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --nx-fast: 160ms;
   --nx-med: 260ms;
@@ -506,7 +495,7 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .nx-nav-link:hover {
-  color: var(--nx-muted-strong, #5e6776);
+  color: #5e6776;
   background: rgba(13, 20, 32, 0.035);
 }
 
@@ -523,38 +512,6 @@ body::-webkit-scrollbar-thumb:hover {
 
 .nx-muted-link:hover {
   color: var(--nx-blue);
-}
-
-/* -------------------------------------------------------
-   Dark hero helpers
-------------------------------------------------------- */
-
-.nx-dark {
-  background:
-    radial-gradient(circle at 18% 18%, rgba(49, 72, 199, 0.13), transparent 32%),
-    radial-gradient(circle at 82% 18%, rgba(49, 72, 199, 0.07), transparent 28%),
-    linear-gradient(180deg, var(--nx-night-2), var(--nx-night));
-  color: #ffffff;
-}
-
-.nx-hero {
-  position: relative;
-  min-height: calc(100svh - var(--nx-header-h));
-  display: grid;
-  grid-template-rows: 1fr auto;
-  overflow: hidden;
-}
-
-.nx-hero-main {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-}
-
-.nx-hero-content {
-  width: min(720px, 100%);
-  padding-block: clamp(38px, 6vw, 78px);
 }
 
 /* -------------------------------------------------------
