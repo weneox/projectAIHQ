@@ -1,207 +1,354 @@
 // src/pages/resources/ResourcesGuides.tsx
-import React, { memo, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Lang } from "../../i18n/lang";
-import { BookOpen, Rocket, ShieldCheck, TrendingUp } from "lucide-react";
+import {
+  ArrowUpRight,
+  BookOpenText,
+  Bot,
+  CheckCircle2,
+  ClipboardList,
+  Compass,
+  FileText,
+  Layers3,
+  MessageSquareText,
+  Sparkles,
+  Workflow,
+} from "lucide-react";
+import { DEFAULT_LANG, LANGS, type Lang } from "../../i18n/lang";
 
-/* ---------------- helpers ---------------- */
-function cx(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
+function isLang(value: string | undefined | null): value is Lang {
+  if (!value) return false;
+  return (LANGS as readonly string[]).includes(value);
 }
 
-/** Reduced motion */
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    if (!mq) return;
-    const on = () => setReduced(!!mq.matches);
-    on();
-    mq.addEventListener ? mq.addEventListener("change", on) : mq.addListener(on);
-    return () => {
-      mq.removeEventListener ? mq.removeEventListener("change", on) : mq.removeListener(on);
-    };
-  }, []);
-  return reduced;
+function useLocalizedPath() {
+  const { lang: paramLang } = useParams<{ lang?: string }>();
+  const lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
+
+  return (path: string) => {
+    if (path === "/") return `/${lang}`;
+    return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
+  };
 }
 
-const GUIDES = [
-  {
-    id: "use-cases",
-    title: "Use-Cases",
-    desc: "Real biznes ssenariləri: healthcare, retail, logistics və s.",
-    icon: BookOpen,
-    to: "/use-cases",
-    glow: "cyan",
-  },
-  {
-    id: "setup",
-    title: "Setup & Launch",
-    desc: "Sistemi sıfırdan qur, deploy et, live-a çıxar.",
-    icon: Rocket,
-    to: "/resources/docs",
-    glow: "amber",
-  },
-  {
-    id: "seo",
-    title: "SEO Growth",
-    desc: "Indexlənmə, page speed və conversion artımı.",
-    icon: TrendingUp,
-    to: "/resources/guides/seo",
-    glow: "violet",
-  },
-  {
-    id: "best",
-    title: "Best Practices",
-    desc: "Security, UX və performans üçün tövsiyələr.",
-    icon: ShieldCheck,
-    to: "/resources/guides/best-practices",
-    glow: "pink",
-  },
-] as const;
+type Guide = {
+  title: string;
+  desc: string;
+  tag: string;
+  icon: typeof Bot;
+};
 
-export default memo(function ResourcesGuides() {
-  const { lang } = useParams<{ lang: Lang }>();
-  const reduced = usePrefersReducedMotion();
+type ChecklistItem = {
+  title: string;
+  desc: string;
+};
+
+const guides: Guide[] = [
+  {
+    title: "Müştəri suallarını necə strukturlaşdırmaq olar?",
+    desc: "FAQ, qiymət, xidmət, çatdırılma və operatora ötürmə suallarını cavab sistemi üçün düzgün ayırmaq.",
+    tag: "Süni İntellekt",
+    icon: Bot,
+  },
+  {
+    title: "Premium vebsayt üçün başlanğıc xəritəsi",
+    desc: "Hero, xidmət bölməsi, əlaqə axını və lead toplama hissəsini qarışdırmadan necə qurmaq olar.",
+    tag: "Vebsayt",
+    icon: Layers3,
+  },
+  {
+    title: "Instagram DM cavab axını necə planlanır?",
+    desc: "Müştəri niyyəti, hazır cavab, lead məlumatı və operatora ötürmə məntiqini sadə sxemə salmaq.",
+    tag: "Mesajlaşma",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Workflow avtomatlaşdırmasına haradan başlamaq lazımdır?",
+    desc: "Ən çox təkrarlanan manual işi tapmaq və onu ölçülə bilən sistemə çevirmək.",
+    tag: "Avtomatlaşdırma",
+    icon: Workflow,
+  },
+  {
+    title: "Layihə brifi necə yazılmalıdır?",
+    desc: "Biznes, problem, kanal, müştəri tipi və gözlənilən nəticəni qısa formada izah etmək.",
+    tag: "Brief",
+    icon: ClipboardList,
+  },
+  {
+    title: "Süni İntellekt üçün təhlükəsiz davranış qaydaları",
+    desc: "Nəyə cavab verə bilər, harada dayanmalıdır və nə vaxt operatora ötürməlidir?",
+    tag: "Nəzarət",
+    icon: Compass,
+  },
+];
+
+const checklist: ChecklistItem[] = [
+  {
+    title: "Müştəri kanallarını yazın",
+    desc: "Instagram, WhatsApp, sayt forması, zəng və digər giriş nöqtələrini qeyd edin.",
+  },
+  {
+    title: "Ən çox verilən sualları toplayın",
+    desc: "Qiymət, xidmət, vaxt, çatdırılma, görüş və şikayət suallarını ayrıca qruplaşdırın.",
+  },
+  {
+    title: "Manual işləri seçin",
+    desc: "Komandanı ən çox yoran təkrar cavab, yönləndirmə və qeydiyyat işlərini müəyyən edin.",
+  },
+  {
+    title: "Nəticəni sadə yazın",
+    desc: "Daha sürətli cavab, daha çox lead, daha az manual iş və ya daha səliqəli veb səth.",
+  },
+];
+
+function GuideCard({ item }: { item: Guide }) {
+  const Icon = item.icon;
 
   return (
-    <main className="pageShell neo-guides">
-      {/* HERO */}
-      <section className="pageHero neo-guides-hero">
-        <div className="neo-guides-glow" aria-hidden />
-        <h1 className="neo-h1">Guides</h1>
-        <p className="neo-sub">
-          Praktik bələdçilər: use-cases, setup, SEO və best practices.
-        </p>
+    <article className="nx-card nx-card--quiet nx-guide-card">
+      <div className="nx-stack">
+        <div className="nx-row nx-row--top">
+          <span className="nx-badge nx-badge--soft nx-badge--plain">
+            <Icon size={16} strokeWidth={2} aria-hidden="true" />
+          </span>
 
-        <div className="pageActions">
-          <Link className="btn btnPrimary" to={`/${lang}/contact`}>Contact</Link>
-          <Link className="btn btnGhost" to={`/${lang}/resources/faq`}>FAQ</Link>
+          <span className="nx-badge nx-badge--plain">{item.tag}</span>
         </div>
-      </section>
 
-      {/* GRID */}
-      <section className="neo-container">
-        <div className="neo-guides-grid">
-          {GUIDES.map((g) => {
-            const Icon = g.icon;
-            return (
-              <Link
-                key={g.id}
-                to={g.to.startsWith("/") ? `/${lang}${g.to}` : `/${lang}/${g.to}`}
-                className={cx(
-                  "neo-guide-card",
-                  `glow-${g.glow}`,
-                  !reduced && "neo-hover-tilt"
-                )}
-              >
-                <div className="neo-guide-ic">
-                  <Icon size={22} />
-                </div>
-                <div className="neo-guide-body">
-                  <h3>{g.title}</h3>
-                  <p>{g.desc}</p>
-                </div>
-                <span className="neo-guide-cta">Open →</span>
-              </Link>
-            );
-          })}
+        <div className="nx-stack-xs">
+          <h2 className="nx-h3">{item.title}</h2>
+          <p className="nx-copy-sm">{item.desc}</p>
         </div>
-      </section>
 
-      {/* CTA STRIP */}
-      <section className="neo-strip-black">
-        <div className="neo-strip-inner">
-          <h2>Need a tailored guide for your business?</h2>
-          <p>Biz sənin use-case-inə uyğun xüsusi bələdçi hazırlaya bilərik.</p>
-          <div className="neo-strip-actions">
-            <Link className="btn btnPrimary" to={`/${lang}/contact`}>Request a guide</Link>
-            <Link className="btn btnGhost" to={`/${lang}/pricing`}>Pricing</Link>
+        <span className="nx-link">
+          Oxu xəritəsi
+          <ArrowUpRight size={15} strokeWidth={2} aria-hidden="true" />
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function ChecklistCard({ item, index }: { item: ChecklistItem; index: number }) {
+  return (
+    <article className="nx-card nx-card--compact nx-card--quiet">
+      <div className="nx-stack-sm">
+        <span className="nx-badge nx-badge--plain">0{index + 1}</span>
+
+        <div className="nx-stack-xs">
+          <h3 className="nx-h4">{item.title}</h3>
+          <p className="nx-copy-sm">{item.desc}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function GuidesPreview() {
+  return (
+    <div className="nx-hero-panel">
+      <div className="nx-hero-panel-inner">
+        <div className="nx-stack-lg">
+          <div className="nx-row nx-row--top">
+            <div className="nx-stack-xs">
+              <span className="nx-badge nx-badge--soft">
+                <BookOpenText size={15} strokeWidth={2} aria-hidden="true" />
+                Bələdçi sistemi
+              </span>
+              <h2 className="nx-h3">Qarışıqlığı sadə xəritəyə çevirin.</h2>
+            </div>
+
+            <Sparkles size={20} strokeWidth={1.9} color="var(--nx-accent)" aria-hidden="true" />
+          </div>
+
+          <div className="nx-grid">
+            {checklist.map((item, index) => (
+              <div key={item.title} className="nx-surface nx-surface--flat nx-surface-pad nx-guide-preview-row">
+                <div className="nx-row">
+                  <div className="nx-stack-xs">
+                    <p className="nx-eyebrow">0{index + 1}</p>
+                    <p className="nx-h4">{item.title}</p>
+                  </div>
+
+                  <CheckCircle2 size={18} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="nx-copy-sm">
+            Yaxşı sistem texniki mürəkkəblikdən yox, düzgün suallardan başlayır.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ResourcesGuides() {
+  const withLang = useLocalizedPath();
+
+  return (
+    <main className="nx-page">
+      <section className="nx-hero">
+        <div className="nx-container">
+          <div className="nx-hero-grid">
+            <div className="nx-hero-copy">
+              <p className="nx-kicker">NEOX / Bələdçilər</p>
+
+              <div className="nx-stack">
+                <h1 className="nx-display">
+                  Biznes sistemini qurmazdan əvvəl{" "}
+                  <span className="nx-gradient-text">doğru xəritə</span> lazımdır.
+                </h1>
+
+                <p className="nx-lead nx-max-copy">
+                  Vebsayt, mesajlaşma, Süni İntellekt cavabları və avtomatlaşdırma üçün praktik başlanğıc
+                  bələdçiləri. Məqsəd çox termin yox, aydın qərardır.
+                </p>
+              </div>
+
+              <div className="nx-actions">
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Biznesimi izah edim
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+
+                <Link to={withLang("/faq")} className="nx-button">
+                  Suallara bax
+                </Link>
+              </div>
+
+              <div className="nx-chip-row">
+                <span className="nx-chip">Brief</span>
+                <span className="nx-chip">Workflow</span>
+                <span className="nx-chip">Süni İntellekt</span>
+              </div>
+            </div>
+
+            <div className="nx-hero-visual">
+              <GuidesPreview />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Local styles (premium, FPS-friendly) */}
-      <style>{`
-        .neo-guides-hero{
-          position:relative;
-          overflow:hidden;
-        }
-        .neo-guides-glow{
-          position:absolute;
-          inset:-40%;
-          background:
-            radial-gradient(40% 30% at 20% 20%, rgba(0,240,255,.12), transparent 60%),
-            radial-gradient(30% 40% at 80% 30%, rgba(255,190,110,.10), transparent 60%),
-            radial-gradient(30% 30% at 50% 80%, rgba(138,111,255,.12), transparent 60%);
-          filter: blur(30px);
-          pointer-events:none;
-        }
-        .neo-guides-grid{
-          display:grid;
-          grid-template-columns: repeat(4, minmax(0,1fr));
-          gap:14px;
-        }
-        @media (max-width: 1024px){
-          .neo-guides-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-        }
-        @media (max-width: 520px){
-          .neo-guides-grid{ grid-template-columns: 1fr; }
-        }
-        .neo-guide-card{
-          position:relative;
-          display:flex;
-          gap:12px;
-          padding:18px;
-          border-radius:18px;
-          border:1px solid rgba(255,255,255,.10);
-          background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-          color:inherit;
-          text-decoration:none;
-          will-change: transform;
-          transform: translateZ(0);
-        }
-        .neo-hover-tilt:hover{
-          transform: translateY(-2px) scale(1.01);
-        }
-        .neo-guide-ic{
-          width:40px; height:40px;
-          border-radius:12px;
-          display:grid; place-items:center;
-          background: rgba(255,255,255,.08);
-          border:1px solid rgba(255,255,255,.14);
-        }
-        .neo-guide-body h3{
-          margin:0; font-size:18px; letter-spacing:-.01em;
-        }
-        .neo-guide-body p{
-          margin:6px 0 0; color: rgba(255,255,255,.68);
-        }
-        .neo-guide-cta{
-          margin-left:auto;
-          align-self:flex-end;
-          opacity:.8;
-          transition: opacity .2s ease;
-        }
-        .neo-guide-card:hover .neo-guide-cta{ opacity:1; }
+      <section className="nx-section nx-section--tight">
+        <div className="nx-container">
+          <div className="nx-stack-xl">
+            <div className="nx-row nx-row--top">
+              <div className="nx-stack-sm nx-max-copy">
+                <p className="nx-kicker">Bələdçilər</p>
+                <h2 className="nx-title-sm">Başlamaq üçün praktik mövzular.</h2>
+              </div>
 
-        /* glows */
-        .glow-cyan::after,
-        .glow-amber::after,
-        .glow-violet::after,
-        .glow-pink::after{
-          content:"";
-          position:absolute; inset:-1px;
-          border-radius:18px;
-          pointer-events:none;
-          filter: blur(14px);
-          opacity:.35;
-        }
-        .glow-cyan::after{ box-shadow: 0 0 0 1px rgba(0,240,255,.25) inset, 0 0 24px rgba(0,240,255,.25); }
-        .glow-amber::after{ box-shadow: 0 0 0 1px rgba(255,190,110,.25) inset, 0 0 24px rgba(255,190,110,.25); }
-        .glow-violet::after{ box-shadow: 0 0 0 1px rgba(138,111,255,.25) inset, 0 0 24px rgba(138,111,255,.25); }
-        .glow-pink::after{ box-shadow: 0 0 0 1px rgba(255,105,180,.25) inset, 0 0 24px rgba(255,105,180,.25); }
-      `}</style>
+              <p className="nx-copy nx-max-tight">
+                Bu bələdçilər sistemi daha düzgün düşünmək üçündür: hansı məlumat lazımdır, hansı iş
+                avtomatlaşdırılmalıdır və nə artıqdır.
+              </p>
+            </div>
+
+            <div className="nx-grid nx-grid--3">
+              {guides.map((item) => (
+                <GuideCard key={item.title} item={item} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section">
+        <div className="nx-container">
+          <div className="nx-split nx-split--top">
+            <div className="nx-stack-lg">
+              <div className="nx-stack">
+                <p className="nx-kicker">Hazırlıq</p>
+                <h2 className="nx-title">Layihəyə başlamazdan əvvəl bu 4 şeyi yazın.</h2>
+                <p className="nx-lead">
+                  Qısa və səliqəli məlumat layihənin daha tez və daha düzgün başlamasına kömək edir.
+                  Böyük sənəd lazım deyil; əsas olan doğru suallara cavabdır.
+                </p>
+              </div>
+
+              <div className="nx-actions">
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Brif göndər
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+
+                <Link to={withLang("/blog")} className="nx-button">
+                  Resurslara bax
+                </Link>
+              </div>
+            </div>
+
+            <div className="nx-grid nx-grid--2">
+              {checklist.map((item, index) => (
+                <ChecklistCard key={item.title} item={item} index={index} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section-divider">
+        <div className="nx-container">
+          <div className="nx-surface nx-surface--raised nx-surface-pad">
+            <div className="nx-split">
+              <div className="nx-stack">
+                <span className="nx-badge nx-badge--soft">
+                  <FileText size={15} strokeWidth={2} aria-hidden="true" />
+                  Qısa brief
+                </span>
+
+                <h2 className="nx-title-sm">Ən yaxşı başlanğıc: problemi bir cümlə ilə yazmaq.</h2>
+
+                <p className="nx-lead">
+                  “Müştərilər Instagram-da çox yazır, cavab gecikir və lead-lər itir.” Bu cümlə artıq
+                  sistem xəritəsi üçün kifayət qədər güclü başlanğıcdır.
+                </p>
+              </div>
+
+              <div className="nx-surface nx-surface--flat nx-surface-pad">
+                <div className="nx-stack-sm">
+                  <h3 className="nx-h3">Brief nümunəsi</h3>
+                  <p className="nx-copy">
+                    Klinikamız üçün premium sayt və Instagram mesajlarına cavab sistemi istəyirik.
+                    Müştərilər daha çox qiymət, xidmət və görüş vaxtı soruşur. Komandamız bu suallara
+                    manual cavab verməkdən yorulur.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section--last nx-section-divider">
+        <div className="nx-container">
+          <div className="nx-stack-lg nx-text-center" style={{ maxWidth: 820, margin: "0 auto" }}>
+            <p className="nx-kicker" style={{ marginInline: "auto" }}>
+              Növbəti addım
+            </p>
+
+            <h2 className="nx-title-sm">Bələdçini oxumaq yox, sistemə çevirmək lazımdır.</h2>
+
+            <p className="nx-lead">
+              Biznesinizi qısa izah edin, hansı veb, cavab və avtomatlaşdırma axınının daha uyğun olduğunu çıxaraq.
+            </p>
+
+            <div className="nx-actions nx-actions--center">
+              <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                Bizə yaz
+                <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+              </Link>
+
+              <Link to={withLang("/services/chatbot-24-7")} className="nx-button">
+                Xidmətlərə bax
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
-});
+}

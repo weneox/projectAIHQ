@@ -1,184 +1,407 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import { ShoppingBag, Landmark, Stethoscope, Truck } from "lucide-react";
+// src/pages/usecases/UseCasesIndex.tsx
+import { Link, useParams } from "react-router-dom";
 import {
-  UC_STYLES,
-  BreadcrumbPill,
-  cx,
-  getLangFromPath,
-  withLang,
-  useMedia,
-  usePrefersReducedMotion,
-  useRevealScopedBatched,
-  useSeo,
-} from "./_ucShared";
+  ArrowUpRight,
+  Building2,
+  CheckCircle2,
+  Hotel,
+  Landmark,
+  MessageSquareText,
+  PackageCheck,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Stethoscope,
+  Truck,
+  Workflow,
+} from "lucide-react";
+import { DEFAULT_LANG, LANGS, type Lang } from "../../i18n/lang";
 
-export default function UseCasesIndex() {
-  const { t } = useTranslation();
-  const { pathname } = useLocation();
-  const lang = getLangFromPath(pathname);
+function isLang(value: string | undefined | null): value is Lang {
+  if (!value) return false;
+  return (LANGS as readonly string[]).includes(value);
+}
 
-  const reduced = usePrefersReducedMotion();
-  const isMobile = useMedia("(max-width: 560px)", false);
-  const rootRef = useRef<HTMLElement | null>(null);
+function useLocalizedPath() {
+  const { lang: paramLang } = useParams<{ lang?: string }>();
+  const lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
 
-  const [enter, setEnter] = useState(false);
-  useEffect(() => {
-    const tt = window.setTimeout(() => setEnter(true), 220);
-    return () => window.clearTimeout(tt);
-  }, []);
-  const d = (ms: number) => ({ ["--d" as any]: `${isMobile ? Math.round(ms * 0.7) : ms}ms` });
+  return (path: string) => {
+    if (path === "/") return `/${lang}`;
+    return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
+  };
+}
 
-  const toContact = withLang("/contact", lang);
-  const toServices = withLang("/services", lang);
+type UseCase = {
+  title: string;
+  desc: string;
+  to: string;
+  tag: string;
+  icon: typeof Stethoscope;
+  points: string[];
+};
 
-  const toRetail = withLang("/use-cases/retail", lang);
-  const toFinance = withLang("/use-cases/finance", lang);
-  const toHealthcare = withLang("/use-cases/healthcare", lang);
-  const toLogistics = withLang("/use-cases/logistics", lang);
+type Result = {
+  value: string;
+  label: string;
+};
 
-  useSeo({
-    title: t("useCases.seo.title", { defaultValue: "NEOX — Use Cases" }),
-    description: t("useCases.seo.description", { defaultValue: "Real scenarios where NEOX automates operations." }),
-    canonicalPath: withLang("/use-cases", lang),
-  });
+const useCases: UseCase[] = [
+  {
+    title: "Klinikalar",
+    desc: "Görüş, qiymət, xidmət sualları və pasiyent mesajları üçün cavab və yönləndirmə sistemi.",
+    to: "/use-cases/healthcare",
+    tag: "Healthcare",
+    icon: Stethoscope,
+    points: ["Appointment axını", "FAQ cavabları", "Operatora ötürmə"],
+  },
+  {
+    title: "Logistika",
+    desc: "Status, çatdırılma, gecikmə və müştəri məlumatlandırması üçün daha səliqəli mesaj axını.",
+    to: "/use-cases/logistics",
+    tag: "Logistics",
+    icon: Truck,
+    points: ["Status sorğuları", "Bildirişlər", "Yönləndirmə"],
+  },
+  {
+    title: "Maliyyə",
+    desc: "Sorğu, sənəd, müraciət və uyğun komanda yönləndirməsi üçün kontrollu cavab sistemi.",
+    to: "/use-cases/finance",
+    tag: "Finance",
+    icon: Landmark,
+    points: ["Müraciət axını", "Sənəd sorğuları", "Riskli hallarda handoff"],
+  },
+  {
+    title: "Retail və mağazalar",
+    desc: "Qiymət, stok, çatdırılma və sifariş suallarını daha sürətli cavablandırmaq üçün sistem.",
+    to: "/use-cases/retail",
+    tag: "Retail",
+    icon: ShoppingBag,
+    points: ["Stok sualları", "Sifariş axını", "Lead toplama"],
+  },
+  {
+    title: "Hotel və resortlar",
+    desc: "Rezervasiya, otaq, qiymət və xidmət sualları üçün premium cavab və yönləndirmə axını.",
+    to: "/use-cases/hotels",
+    tag: "Hospitality",
+    icon: Hotel,
+    points: ["Rezervasiya", "Xidmət məlumatı", "Çoxdilli sorğular"],
+  },
+];
 
-  useRevealScopedBatched(rootRef, { batchSize: 3, batchDelayMs: 90, rootMargin: "0px 0px -18% 0px" });
+const results: Result[] = [
+  { value: "24/7", label: "müştəri cavab rejimi" },
+  { value: "1", label: "vahid mesaj axını" },
+  { value: "↓", label: "manual iş yükü" },
+];
+
+const workflow = [
+  {
+    title: "Sorğu gəlir",
+    desc: "Müştəri Instagram, sayt, WhatsApp və ya formadan yazır.",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Niyyət anlaşılır",
+    desc: "Qiymət, görüş, sifariş, status və ya dəstək sorğusu ayrılır.",
+    icon: Workflow,
+  },
+  {
+    title: "Düzgün cavab və ya handoff",
+    desc: "Sadə sual cavablanır, riskli və satışa yaxın hal operatora ötürülür.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Lead itmir",
+    desc: "Müştəri məlumatı və maraqlandığı mövzu komanda üçün görünən olur.",
+    icon: PackageCheck,
+  },
+];
+
+function UseCaseCard({ item }: { item: UseCase }) {
+  const withLang = useLocalizedPath();
+  const Icon = item.icon;
 
   return (
-    <main ref={rootRef as any} className="uc-page">
-      <style>{UC_STYLES}</style>
+    <Link to={withLang(item.to)} className="nx-card nx-card--link nx-usecase-card">
+      <div className="nx-row nx-row--top">
+        <span className="nx-badge nx-badge--soft nx-badge--plain">
+          <Icon size={16} strokeWidth={2} aria-hidden="true" />
+        </span>
 
-      {/* HERO */}
-      <section className="uc-hero uc-section" aria-label="Use cases hero">
-        <div className="uc-heroBG" aria-hidden="true" />
+        <span className="nx-badge nx-badge--plain">{item.tag}</span>
+      </div>
 
-        <div className="uc-heroInner">
-          <div className="relative z-[1] mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 w-full">
-            <div className="mx-auto max-w-[980px] text-center">
-              <div className="flex justify-center">
-                <BreadcrumbPill text={t("useCases.hero.crumb", { defaultValue: "Use Cases" })} enter={enter} delayMs={0} />
+      <div className="nx-stack-sm">
+        <div className="nx-stack-xs">
+          <h2 className="nx-h3">{item.title}</h2>
+          <p className="nx-copy-sm">{item.desc}</p>
+        </div>
+
+        <ul className="nx-list">
+          {item.points.map((point) => (
+            <li key={point} className="nx-list-item">
+              {point}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="nx-card-footer">
+        <span className="nx-link">
+          Ssenariyə bax
+          <ArrowUpRight size={15} strokeWidth={2} aria-hidden="true" />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function WorkflowCard({ item }: { item: (typeof workflow)[number] }) {
+  const Icon = item.icon;
+
+  return (
+    <article className="nx-card nx-card--compact nx-card--quiet">
+      <div className="nx-stack-sm">
+        <span className="nx-badge nx-badge--soft nx-badge--plain">
+          <Icon size={16} strokeWidth={2} aria-hidden="true" />
+        </span>
+
+        <div className="nx-stack-xs">
+          <h3 className="nx-h4">{item.title}</h3>
+          <p className="nx-copy-sm">{item.desc}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function UseCasesPreview() {
+  return (
+    <div className="nx-hero-panel">
+      <div className="nx-hero-panel-inner">
+        <div className="nx-stack-lg">
+          <div className="nx-row nx-row--top">
+            <div className="nx-stack-xs">
+              <span className="nx-badge nx-badge--soft">
+                <Building2 size={15} strokeWidth={2} aria-hidden="true" />
+                Sektor xəritəsi
+              </span>
+              <h2 className="nx-h3">Eyni sistem, fərqli biznes reallığı.</h2>
+            </div>
+
+            <Sparkles size={20} strokeWidth={1.9} color="var(--nx-accent)" aria-hidden="true" />
+          </div>
+
+          <div className="nx-grid nx-grid--3">
+            {results.map((item) => (
+              <div key={item.label} className="nx-surface nx-surface--flat nx-surface-pad">
+                <div className="nx-metric">
+                  <span className="nx-metric-value">{item.value}</span>
+                  <span className="nx-metric-label">{item.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="nx-grid">
+            {["Kanal seçilir", "Cavab qaydası qurulur", "Operator axını saxlanılır"].map((item) => (
+              <div key={item} className="nx-row">
+                <span className="nx-list-item">{item}</span>
+                <CheckCircle2 size={18} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
+              </div>
+            ))}
+          </div>
+
+          <p className="nx-copy-sm">
+            Klinikada görüş, mağazada stok, hoteldə rezervasiya — məntiq fərqlidir, sistem dili eyni qalır.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function UseCasesIndex() {
+  const withLang = useLocalizedPath();
+
+  return (
+    <main className="nx-page">
+      <section className="nx-hero">
+        <div className="nx-container">
+          <div className="nx-hero-grid">
+            <div className="nx-hero-copy">
+              <p className="nx-kicker">NEOX / İstifadə sahələri</p>
+
+              <div className="nx-stack">
+                <h1 className="nx-display">
+                  Hər sahə üçün <span className="nx-gradient-text">fərqli iş axını</span>, eyni premium sistem.
+                </h1>
+
+                <p className="nx-lead nx-max-copy">
+                  NEOX-un işi hazır şablonu hər biznesə yapışdırmaq deyil. Sektorun real müştəri suallarını,
+                  satış yolunu və komanda işini anlayıb ona uyğun sistem qururuq.
+                </p>
               </div>
 
-              <h1 className={cx("mt-6 text-white break-words uc-enter", enter && "uc-in")} style={d(90)}>
-                <span className="block text-[40px] leading-[1.05] sm:text-[60px] font-semibold">
-                  {t("useCases.hero.title.before", { defaultValue: "Choose a" })}{" "}
-                  <span className="uc-grad">{t("useCases.hero.title.highlight", { defaultValue: "Scenario" })}</span>{" "}
-                  {t("useCases.hero.title.after", { defaultValue: "to explore" })}
-                </span>
-              </h1>
-
-              <p
-                className={cx(
-                  "mt-5 text-[16px] sm:text-[18px] leading-[1.7] text-white/70 break-words uc-enter",
-                  enter && "uc-in"
-                )}
-                style={d(180)}
-              >
-                {t("useCases.hero.subtitle", { defaultValue: "Each page is a real scenario with measurable results." })}
-              </p>
-
-              <div className={cx("mt-8 flex flex-wrap items-center justify-center gap-3 uc-enter", enter && "uc-in")} style={d(270)}>
-                <Link to={toContact} className="uc-btn">
-                  {t("useCases.cta.ownCase", { defaultValue: "Talk to NEOX" })} <span aria-hidden="true">→</span>
+              <div className="nx-actions">
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Öz sahəmi danışım
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
                 </Link>
-                <Link to={toServices} className="uc-btn uc-btnGhost">
-                  {t("useCases.cta.services", { defaultValue: "See Services" })}
+
+                <Link to={withLang("/services/chatbot-24-7")} className="nx-button">
+                  Xidmətlərə bax
                 </Link>
               </div>
 
-              <div className="uc-divider" />
+              <div className="nx-chip-row">
+                <span className="nx-chip">Klinika</span>
+                <span className="nx-chip">Retail</span>
+                <span className="nx-chip">Hotel</span>
+                <span className="nx-chip">Logistika</span>
+              </div>
+            </div>
+
+            <div className="nx-hero-visual">
+              <UseCasesPreview />
             </div>
           </div>
         </div>
-
-        <div className="uc-spacer" />
       </section>
 
-      {/* SCENARIO GRID */}
-      <section className="uc-section py-16 sm:py-20" aria-label="Scenarios">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className={cx("uc-reveal reveal-bottom", "text-center max-w-[880px] mx-auto")}>
-            <h2 className="text-white text-[26px] sm:text-[34px] font-semibold">
-              {t("useCasesIndex.pickTitle", { defaultValue: "Pick a scenario" })}
-            </h2>
-            <p className="mt-3 text-white/65 leading-[1.75]">
-              {t("useCasesIndex.pickSub", {
-                defaultValue: "Open a scenario page to see the story, key automations, and results (then we’ll add the videos).",
-              })}
-            </p>
-          </div>
+      <section className="nx-section nx-section--tight">
+        <div className="nx-container">
+          <div className="nx-stack-xl">
+            <div className="nx-row nx-row--top">
+              <div className="nx-stack-sm nx-max-copy">
+                <p className="nx-kicker">Ssenarilər</p>
+                <h2 className="nx-title-sm">Ən çox uyğunlaşan biznes sahələri.</h2>
+              </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2">
-            <Link to={toRetail} className={cx("uc-reveal reveal-left", "uc-card uc-pop uc-contain")} data-tint="cyan">
-              <div className="flex items-center gap-3">
-                <div className="uc-ic" aria-hidden="true">
-                  <ShoppingBag className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold text-[18px]">Retail</div>
-              </div>
-              <div className="mt-4 uc-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Reduce response time, qualify leads, and automate customer questions — without losing the human touch.
+              <p className="nx-copy nx-max-tight">
+                Bu nümunələr başlanğıc üçündür. Sizin sahə burada yoxdursa belə, prosesiniz varsa,
+                sistem qurmaq mümkündür.
               </p>
-              <div className="mt-6 inline-flex items-center gap-2 text-white/70 font-semibold">
-                Open scenario <span aria-hidden="true">→</span>
-              </div>
-            </Link>
+            </div>
 
-            <Link to={toFinance} className={cx("uc-reveal reveal-right", "uc-card uc-pop uc-contain")} data-tint="violet">
-              <div className="flex items-center gap-3">
-                <div className="uc-ic" aria-hidden="true">
-                  <Landmark className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold text-[18px]">Finance</div>
-              </div>
-              <div className="mt-4 uc-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Automate onboarding, document collection, and follow-ups while keeping compliance and audit clarity.
-              </p>
-              <div className="mt-6 inline-flex items-center gap-2 text-white/70 font-semibold">
-                Open scenario <span aria-hidden="true">→</span>
-              </div>
-            </Link>
-
-            <Link to={toHealthcare} className={cx("uc-reveal reveal-left", "uc-card uc-pop uc-contain")} data-tint="pink">
-              <div className="flex items-center gap-3">
-                <div className="uc-ic" aria-hidden="true">
-                  <Stethoscope className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold text-[18px]">Healthcare</div>
-              </div>
-              <div className="mt-4 uc-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Schedule faster, reduce no-shows, answer patients instantly, and route complex cases to operators.
-              </p>
-              <div className="mt-6 inline-flex items-center gap-2 text-white/70 font-semibold">
-                Open scenario <span aria-hidden="true">→</span>
-              </div>
-            </Link>
-
-            <Link to={toLogistics} className={cx("uc-reveal reveal-right", "uc-card uc-pop uc-contain")} data-tint="amber">
-              <div className="flex items-center gap-3">
-                <div className="uc-ic" aria-hidden="true">
-                  <Truck className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold text-[18px]">Logistics</div>
-              </div>
-              <div className="mt-4 uc-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Track shipments, auto-update customers, and reduce support tickets using event-driven automation.
-              </p>
-              <div className="mt-6 inline-flex items-center gap-2 text-white/70 font-semibold">
-                Open scenario <span aria-hidden="true">→</span>
-              </div>
-            </Link>
+            <div className="nx-grid nx-grid--3">
+              {useCases.map((item) => (
+                <UseCaseCard key={item.title} item={item} />
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {reduced ? null : null}
+      <section className="nx-section">
+        <div className="nx-container">
+          <div className="nx-split nx-split--top">
+            <div className="nx-stack-lg">
+              <div className="nx-stack">
+                <p className="nx-kicker">Ortaq məntiq</p>
+                <h2 className="nx-title">Sektor dəyişir, amma sistemin əsası eyni qalır.</h2>
+                <p className="nx-lead">
+                  Müştəri yazır, sistem niyyəti anlayır, uyğun cavab və ya yönləndirmə edir,
+                  lead isə komanda üçün görünən olur. Fərq sadəcə biznes qaydalarında və cavab mətnlərindədir.
+                </p>
+              </div>
+
+              <div className="nx-actions">
+                <Link to={withLang("/resources/guides")} className="nx-button">
+                  Bələdçilərə bax
+                </Link>
+
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Sistem xəritəsi çıxaraq
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="nx-grid nx-grid--2">
+              {workflow.map((item) => (
+                <WorkflowCard key={item.title} item={item} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section-divider">
+        <div className="nx-container">
+          <div className="nx-surface nx-surface--raised nx-surface-pad">
+            <div className="nx-split">
+              <div className="nx-stack">
+                <span className="nx-badge nx-badge--soft">
+                  <Sparkles size={15} strokeWidth={2} aria-hidden="true" />
+                  Fərdi yanaşma
+                </span>
+
+                <h2 className="nx-title-sm">Sizin biznesiniz üçün ssenarini ayrıca quraq.</h2>
+
+                <p className="nx-lead">
+                  Eyni platforma hər sahəyə eyni cavab verməməlidir. Klinikada pasiyent dili,
+                  mağazada satış dili, hoteldə rezervasiya dili lazımdır.
+                </p>
+              </div>
+
+              <div className="nx-grid">
+                <div className="nx-card nx-card--compact nx-card--quiet">
+                  <div className="nx-stack-xs">
+                    <h3 className="nx-h4">Əvvəl biznes dili</h3>
+                    <p className="nx-copy-sm">
+                      Müştərinin necə yazdığını və komandaya hansı məlumatın lazım olduğunu müəyyən edirik.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="nx-card nx-card--compact nx-card--quiet">
+                  <div className="nx-stack-xs">
+                    <h3 className="nx-h4">Sonra sistem axını</h3>
+                    <p className="nx-copy-sm">
+                      Cavab, yönləndirmə, lead və operator qaydalarını vahid iş səthinə salırıq.
+                    </p>
+                  </div>
+                </div>
+
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary nx-button--full">
+                  Öz sahəmi izah edim
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section--last nx-section-divider">
+        <div className="nx-container">
+          <div className="nx-stack-lg nx-text-center" style={{ maxWidth: 820, margin: "0 auto" }}>
+            <p className="nx-kicker" style={{ marginInline: "auto" }}>
+              Başlayaq
+            </p>
+
+            <h2 className="nx-title-sm">Sahəniz nə olursa olsun, axını sadələşdirmək mümkündür.</h2>
+
+            <p className="nx-lead">
+              Biznesinizi qısa izah edin, sizin sektor üçün hansı cavab, veb və avtomatlaşdırma sisteminin
+              uyğun olduğunu çıxaraq.
+            </p>
+
+            <div className="nx-actions nx-actions--center">
+              <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                Əlaqə saxla
+                <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+              </Link>
+
+              <Link to={withLang("/pricing")} className="nx-button">
+                Qiymət məntiqi
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

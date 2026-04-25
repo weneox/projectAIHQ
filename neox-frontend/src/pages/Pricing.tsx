@@ -1,449 +1,422 @@
 // src/pages/Pricing.tsx
-import React, { useEffect, useState } from "react";
-import { CheckCircle, X, ArrowRight, Sparkles, Shield, Zap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import {
+  ArrowUpRight,
+  Bot,
+  CheckCircle2,
+  Gauge,
+  Layers3,
+  MessageSquareText,
+  ShieldCheck,
+  Sparkles,
+  Workflow,
+} from "lucide-react";
+import { DEFAULT_LANG, LANGS, type Lang } from "../i18n/lang";
 
-function cx(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
+function isLang(value: string | undefined | null): value is Lang {
+  if (!value) return false;
+  return (LANGS as readonly string[]).includes(value);
 }
 
-/** Reveal (failsafe) */
-function useRevealAll(rootMargin = "0px 0px -12% 0px") {
-  useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
-    if (!els.length) return;
+function useLocalizedPath() {
+  const { lang: paramLang } = useParams<{ lang?: string }>();
+  const lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
 
-    const showAll = () => els.forEach((el) => el.classList.add("is-in"));
-
-    if (typeof IntersectionObserver === "undefined") {
-      showAll();
-      return;
-    }
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            (e.target as HTMLElement).classList.add("is-in");
-            io.unobserve(e.target);
-          }
-        }
-      },
-      { threshold: 0.12, rootMargin }
-    );
-
-    els.forEach((el) => io.observe(el));
-
-    // fallback: heç nə olmasa 0.7s sonra hamısını aç
-    const t = window.setTimeout(() => {
-      showAll();
-      io.disconnect();
-    }, 700);
-
-    return () => {
-      window.clearTimeout(t);
-      io.disconnect();
-    };
-  }, [rootMargin]);
+  return (path: string) => {
+    if (path === "/") return `/${lang}`;
+    return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
+  };
 }
 
-/** FAQ accordion */
-function FAQItem({ q, a, i }: { q: string; a: string; i: number }) {
-  const [open, setOpen] = useState(i === 0);
+type PackageItem = {
+  name: string;
+  desc: string;
+  ideal: string;
+  points: string[];
+  featured?: boolean;
+};
+
+type IncludedItem = {
+  title: string;
+  desc: string;
+  icon: typeof Bot;
+};
+
+const packages: PackageItem[] = [
+  {
+    name: "Start",
+    desc: "Kiçik biznes üçün ilkin premium rəqəmsal sistem.",
+    ideal: "Sayt, əsas mesaj axını və sadə avtomatlaşdırma istəyən bizneslər üçün.",
+    points: [
+      "Premium landing və ya kiçik vebsayt",
+      "Əsas əlaqə və lead toplama axını",
+      "Sadə Süni İntellekt cavab strukturu",
+      "Mobil uyğun light premium interfeys",
+    ],
+  },
+  {
+    name: "Growth",
+    desc: "Satış, mesajlaşma və avtomatlaşdırmanı bir sistemə salmaq üçün.",
+    ideal: "Müştəri sorğuları artan, cavab və lead axınını sistemləşdirmək istəyən bizneslər üçün.",
+    points: [
+      "Vebsayt + mesajlaşma axını",
+      "Instagram / sayt sorğuları üçün cavab məntiqi",
+      "Lead yönləndirmə və komanda xəbərdarlığı",
+      "Süni İntellekt üçün FAQ və xidmət strukturu",
+      "İlkin analitika və proses izləmə",
+    ],
+    featured: true,
+  },
+  {
+    name: "Custom",
+    desc: "Tam biznesə uyğun xüsusi sistem və inteqrasiya.",
+    ideal: "Daha böyük əməliyyat, fərqli kanallar və xüsusi iş axını olan komandalar üçün.",
+    points: [
+      "Xüsusi veb platforma və ya dashboard",
+      "Çoxkanallı mesaj və operator axını",
+      "Süni İntellekt davranış qaydaları",
+      "CRM, API və daxili sistem inteqrasiyası",
+      "Davamlı optimallaşdırma və nəzarət",
+    ],
+  },
+];
+
+const included: IncludedItem[] = [
+  {
+    title: "Premium interface",
+    desc: "Panel-panel görünməyən, təmiz və brendə uyğun light səth.",
+    icon: Layers3,
+  },
+  {
+    title: "Süni İntellekt məntiqi",
+    desc: "Sadə chatbot yox, biznes suallarına və xidmət strukturuna uyğun cavab axını.",
+    icon: Bot,
+  },
+  {
+    title: "Mesaj və lead axını",
+    desc: "Sorğuların cavablanması, qeyd olunması və düzgün yerə yönləndirilməsi.",
+    icon: MessageSquareText,
+  },
+  {
+    title: "Avtomatlaşdırma",
+    desc: "Təkrarlanan manual işləri azaltmaq üçün bildiriş, təsdiq və workflow quruluşu.",
+    icon: Workflow,
+  },
+  {
+    title: "Ölçülə bilən nəticə",
+    desc: "Cavab sürəti, lead keyfiyyəti və proses səmərəsi daha görünən olur.",
+    icon: Gauge,
+  },
+  {
+    title: "Kontrollu icra",
+    desc: "Riskli hallarda operatora ötürmə, sərhədlər və təhlükəsiz davranış məntiqi.",
+    icon: ShieldCheck,
+  },
+];
+
+const faq = [
+  {
+    q: "Qiymət niyə sabit paket kimi göstərilmir?",
+    a: "Çünki hər biznesin axını fərqlidir. Sadə landing ilə çoxkanallı Süni İntellekt sistemi eyni qiymət məntiqinə sığmır. Əvvəl ehtiyacı anlayırıq, sonra real təklif veririk.",
+  },
+  {
+    q: "Təkcə vebsayt hazırlamaq olar?",
+    a: "Bəli. Amma məqsəd təkcə gözəl sayt yox, müştəri sorğusunu və satış axınını daha düzgün işlədən veb səth qurmaqdır.",
+  },
+  {
+    q: "Süni İntellekt cavab sistemi ayrıca qoşula bilər?",
+    a: "Bəli. Mövcud saytınıza və ya mesajlaşma kanalınıza uyğun cavab, FAQ, lead və operatora ötürmə axını qura bilərik.",
+  },
+  {
+    q: "Başlamaq üçün nə lazımdır?",
+    a: "Biznes sahəniz, xidmətləriniz, müştərilərin ən çox verdiyi suallar və hazırda sizi yavaşladan proseslər kifayətdir.",
+  },
+];
+
+function PackageCard({ item }: { item: PackageItem }) {
+  return (
+    <article className={item.featured ? "nx-card nx-card--quiet nx-pricing-card is-featured" : "nx-card nx-card--quiet nx-pricing-card"}>
+      <div className="nx-stack">
+        <div className="nx-row nx-row--top">
+          <div className="nx-stack-xs">
+            <span className={item.featured ? "nx-badge nx-badge--soft" : "nx-badge nx-badge--plain"}>
+              {item.featured ? "Ən uyğun" : "Paket"}
+            </span>
+            <h2 className="nx-title-sm">{item.name}</h2>
+          </div>
+
+          {item.featured ? <Sparkles size={20} strokeWidth={1.9} color="var(--nx-accent)" aria-hidden="true" /> : null}
+        </div>
+
+        <p className="nx-copy">{item.desc}</p>
+
+        <div className="nx-surface nx-surface--flat nx-surface-pad nx-pricing-note">
+          <p className="nx-copy-sm">{item.ideal}</p>
+        </div>
+
+        <ul className="nx-list">
+          {item.points.map((point) => (
+            <li key={point} className="nx-list-item">
+              {point}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </article>
+  );
+}
+
+function IncludedCard({ item }: { item: IncludedItem }) {
+  const Icon = item.icon;
 
   return (
-    <div className="neox-card reveal reveal-bottom">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-4 text-left"
-      >
-        <div className="text-white font-semibold">{q}</div>
-        <span
-          className="neox-chip"
-          style={{
-            borderColor: open ? "rgba(0,220,255,.22)" : "rgba(255,255,255,.10)",
-            background: open ? "rgba(0,220,255,.08)" : "rgba(255,255,255,.03)",
-            color: open ? "rgba(190,245,255,.92)" : "rgba(255,255,255,.68)",
-          }}
-        >
-          {open ? "OPEN" : "VIEW"}
+    <article className="nx-card nx-card--compact nx-card--quiet">
+      <div className="nx-stack-sm">
+        <span className="nx-badge nx-badge--soft nx-badge--plain">
+          <Icon size={16} strokeWidth={2} aria-hidden="true" />
         </span>
-      </button>
 
-      {open ? <div className="mt-3 text-white/70 leading-[1.75]">{a}</div> : null}
+        <div className="nx-stack-xs">
+          <h3 className="nx-h4">{item.title}</h3>
+          <p className="nx-copy-sm">{item.desc}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function FaqItem({ q, a }: { q: string; a: string }) {
+  return (
+    <article className="nx-card nx-card--compact nx-card--quiet">
+      <div className="nx-stack-xs">
+        <h3 className="nx-h4">{q}</h3>
+        <p className="nx-copy-sm">{a}</p>
+      </div>
+    </article>
+  );
+}
+
+function PricingPreview() {
+  return (
+    <div className="nx-hero-panel">
+      <div className="nx-hero-panel-inner">
+        <div className="nx-stack-lg">
+          <div className="nx-row nx-row--top">
+            <div className="nx-stack-xs">
+              <span className="nx-badge nx-badge--soft">Təklif məntiqi</span>
+              <h2 className="nx-h3">Əvvəl ehtiyac, sonra qiymət</h2>
+            </div>
+
+            <CheckCircle2 size={20} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
+          </div>
+
+          <div className="nx-grid">
+            <div className="nx-surface nx-surface--flat nx-surface-pad">
+              <div className="nx-row">
+                <div className="nx-stack-xs">
+                  <p className="nx-eyebrow">01</p>
+                  <p className="nx-h4">Biznes axını anlaşılır</p>
+                </div>
+                <span className="nx-badge nx-badge--plain">brief</span>
+              </div>
+            </div>
+
+            <div className="nx-surface nx-surface--flat nx-surface-pad">
+              <div className="nx-row">
+                <div className="nx-stack-xs">
+                  <p className="nx-eyebrow">02</p>
+                  <p className="nx-h4">Sistem xəritəsi hazırlanır</p>
+                </div>
+                <span className="nx-badge nx-badge--plain">scope</span>
+              </div>
+            </div>
+
+            <div className="nx-surface nx-surface--flat nx-surface-pad">
+              <div className="nx-row">
+                <div className="nx-stack-xs">
+                  <p className="nx-eyebrow">03</p>
+                  <p className="nx-h4">Uyğun təklif verilir</p>
+                </div>
+                <span className="nx-badge nx-badge--soft">offer</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="nx-copy-sm">
+            Beləliklə həm sadə layihə şişirdilmir, həm də ciddi sistem yarımçıq qiymətləndirilmır.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
-type Plan = {
-  key: "starter" | "pro" | "enterprise";
-  name: string;
-  desc: string;
-  price: string;
-  period?: string;
-  badge?: string;
-  accent: "cyan" | "violet" | "pink";
-  cta: { label: string; to: string; primary?: boolean };
-  features: Array<{ ok: boolean; text: string }>;
-};
-
-const PLANS: Plan[] = [
-  {
-    key: "starter",
-    name: "Starter",
-    desc: "Kiçik komandalar üçün sürətli başlanğıc.",
-    price: "$99",
-    period: "/month",
-    accent: "violet",
-    cta: { label: "Start Trial", to: "/contact" },
-    features: [
-      { ok: true, text: "Up to 5 AI agents" },
-      { ok: true, text: "10,000 tasks / month" },
-      { ok: true, text: "Basic integrations" },
-      { ok: true, text: "Email support (24h)" },
-      { ok: true, text: "Standard analytics" },
-      { ok: false, text: "Priority support" },
-      { ok: false, text: "Custom integrations" },
-      { ok: false, text: "Dedicated account manager" },
-    ],
-  },
-  {
-    key: "pro",
-    name: "Professional",
-    desc: "Böyüyən bizneslər üçün ən güclü seçim.",
-    price: "$299",
-    period: "/month",
-    badge: "MOST POPULAR",
-    accent: "cyan",
-    cta: { label: "Start Trial", to: "/contact", primary: true },
-    features: [
-      { ok: true, text: "Up to 25 AI agents" },
-      { ok: true, text: "100,000 tasks / month" },
-      { ok: true, text: "Advanced integrations" },
-      { ok: true, text: "Priority support (4h)" },
-      { ok: true, text: "Advanced analytics & reporting" },
-      { ok: true, text: "Custom workflows" },
-      { ok: true, text: "API access" },
-      { ok: false, text: "Dedicated account manager" },
-    ],
-  },
-  {
-    key: "enterprise",
-    name: "Enterprise",
-    desc: "Böyük təşkilatlar üçün xüsusi memarlıq + SLA.",
-    price: "Custom",
-    accent: "pink",
-    cta: { label: "Contact Sales", to: "/contact", primary: true },
-    features: [
-      { ok: true, text: "Unlimited AI agents" },
-      { ok: true, text: "Unlimited tasks" },
-      { ok: true, text: "Custom integrations" },
-      { ok: true, text: "24/7 dedicated support" },
-      { ok: true, text: "Custom analytics & reports" },
-      { ok: true, text: "Dedicated account manager" },
-      { ok: true, text: "On-premise option" },
-      { ok: true, text: "SLA guarantee" },
-    ],
-  },
-];
-
-const FAQS = [
-  {
-    q: "Free trial-da nə var?",
-    a: "Hər plan 14 günlük sınaqla gəlir. O tier-in əsas imkanları aktiv olur. Start üçün sales flow-a görə şərtlər dəyişə bilər.",
-  },
-  {
-    q: "Planı sonra dəyişə bilərəm?",
-    a: "Bəli. İstədiyin vaxt upgrade/downgrade edə bilərsən. Dəyişiklik növbəti billing dövrünün əvvəlində tətbiq olunur.",
-  },
-  {
-    q: "Task limitini keçsəm nə olur?",
-    a: "Limitə yaxınlaşanda xəbərdarlıq edirik. Ya planı yüksəldirsən, ya da əlavə limit veririk. (Səhifədə per-task qiymət yazmırıq.)",
-  },
-  {
-    q: "Annual endirim var?",
-    a: "Bəli. İllik ödənişdə endirim və enterprise üçün multi-year paketlər mövcuddur.",
-  },
-  {
-    q: "Data təhlükəsizdirmi?",
-    a: "Bəli. Şifrələmə, audit log, access control və layihəyə görə compliance tələblərinə uyğun guardrails tətbiq edirik.",
-  },
-  {
-    q: "Dəstək necə işləyir?",
-    a: "Starter: email support. Pro: prioritet support. Enterprise: 24/7 SLA + dedicated support.",
-  },
-];
-
-function AccentRing({ accent }: { accent: Plan["accent"] }) {
-  const ring =
-    accent === "cyan"
-      ? "radial-gradient(closest-side at 50% 40%, rgba(0,220,255,.22), transparent 62%)"
-      : accent === "violet"
-      ? "radial-gradient(closest-side at 50% 40%, rgba(150,90,255,.22), transparent 62%)"
-      : "radial-gradient(closest-side at 50% 40%, rgba(255,80,200,.20), transparent 62%)";
-
-  return (
-    <div
-      aria-hidden
-      className="absolute inset-0 pointer-events-none"
-      style={{
-        background: ring,
-        opacity: 0.9,
-        filter: "blur(0.2px)",
-        maskImage: "radial-gradient(circle at 50% 40%, rgba(0,0,0,1), rgba(0,0,0,0) 70%)",
-      }}
-    />
-  );
-}
-
 export default function Pricing() {
-  useRevealAll();
+  const withLang = useLocalizedPath();
 
   return (
-    <main className="relative overflow-hidden" style={{ background: "#05060b", minHeight: "100vh" }}>
-      {/* HERO */}
-      <section className={cx("neox-hero neox-section", "py-20 sm:py-24")}>
-        <div className="neox-bg" style={{ pointerEvents: "none" }}>
-          <div className="neox-bg-orbs" />
-          <div className="neox-bg-grid" />
-          <div className="neox-bg-scan" />
-          <div className="neox-bg-noise" />
-          <div className="neox-bg-vignette" />
-        </div>
+    <main className="nx-page">
+      <section className="nx-hero">
+        <div className="nx-container">
+          <div className="nx-hero-grid">
+            <div className="nx-hero-copy">
+              <p className="nx-kicker">NEOX / Qiymətlər</p>
 
-        <div className="relative z-[1] mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-[920px] text-center">
-            <div
-              className={cx(
-                "reveal reveal-top",
-                "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2"
-              )}
-            >
-              <Sparkles className="h-4 w-4 text-white/70" />
-              <span className="text-[12px] tracking-[0.14em] uppercase text-white/70">NEOX / Pricing</span>
-            </div>
+              <div className="nx-stack">
+                <h1 className="nx-display">
+                  Qiymət layihənin <span className="nx-gradient-text">real sistem dəyərinə</span> görə formalaşır.
+                </h1>
 
-            <h1 className={cx("reveal reveal-bottom", "mt-5 text-[40px] leading-[1.05] sm:text-[56px] font-semibold text-white")}>
-              Simple pricing.
-              <span className="neox-gradient-text"> Serious automation</span>.
-            </h1>
-
-            <p className={cx("reveal reveal-bottom", "mt-5 text-[16px] sm:text-[18px] leading-[1.7] text-white/70")}>
-              Paketləri “agent sayı + avtomatlaşdırma həcmi + dəstək səviyyəsi” ilə seç.
-              İstədiyin vaxt upgrade edərsən — məqsəd: ölçülən nəticə və stabil sistem.
-            </p>
-
-            <div className={cx("reveal reveal-bottom", "mt-8 flex flex-wrap items-center justify-center gap-3")}>
-              <Link to="/contact" className="cyber-btn">
-                <span className="cyber-btn-inner">Plan seçək →</span>
-              </Link>
-              <Link to="/services" className="cyber-btn cyber-btn-ghost">
-                <span className="cyber-btn-inner">Services</span>
-              </Link>
-            </div>
-
-            <div className="mt-10 neox-hero-divider" />
-          </div>
-        </div>
-      </section>
-
-      {/* PLANS */}
-      <section className="neox-section py-16 sm:py-20">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-4 md:grid-cols-3">
-            {PLANS.map((p, i) => {
-              const isPopular = p.key === "pro";
-              const cardClass = isPopular ? "hud-card" : "neox-card";
-              const dir = i === 0 ? "reveal-left" : i === 1 ? "reveal-top" : "reveal-right";
-
-              return (
-                <div
-                  key={p.key}
-                  className={cx("reveal", dir, cardClass, "relative")}
-                  style={{
-                    padding: isPopular ? 0 : undefined,
-                    overflow: "hidden",
-                    borderColor: isPopular ? "rgba(0,220,255,.22)" : "rgba(255,255,255,.10)",
-                  }}
-                >
-                  {isPopular ? (
-                    <>
-                      <AccentRing accent={p.accent} />
-                      <div className="hud-card-top">
-                        <div className="flex items-center gap-2">
-                          <div className="hud-dot" />
-                          <div className="text-white/75 text-[12px] tracking-[0.14em] uppercase">Recommended</div>
-                        </div>
-                        <span className="hud-tag">{p.badge}</span>
-                      </div>
-
-                      <div className="hud-card-body">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="text-white font-semibold text-[20px]">{p.name}</div>
-                            <div className="text-white/60 text-[13px] mt-1">{p.desc}</div>
-                          </div>
-                          <span className="neox-chip">NEOX</span>
-                        </div>
-
-                        <div className="mt-5 flex items-end gap-2">
-                          <div className="text-white text-[44px] font-semibold leading-none">{p.price}</div>
-                          <div className="text-white/55 pb-1">{p.period}</div>
-                        </div>
-
-                        <div className="mt-5">
-                          <Link to={p.cta.to} className="cyber-btn" style={{ width: "100%", justifyContent: "center" as any }}>
-                            <span className="cyber-btn-inner">{p.cta.label}</span>
-                          </Link>
-                        </div>
-
-                        <div className="mt-6 space-y-3">
-                          {p.features.map((f) => (
-                            <div key={f.text} className="flex items-start gap-2">
-                              {f.ok ? (
-                                <CheckCircle className="w-5 h-5 text-cyan-300 mt-[2px]" />
-                              ) : (
-                                <X className="w-5 h-5 text-white/30 mt-[2px]" />
-                              )}
-                              <span className={cx("leading-[1.6]", f.ok ? "text-white/75" : "text-white/35")}>{f.text}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="hud-shard hud-shard-a" />
-                        <div className="hud-shard hud-shard-b" />
-                        <div className="hud-shard hud-shard-c" />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <AccentRing accent={p.accent} />
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-white font-semibold text-[20px]">{p.name}</div>
-                          <div className="text-white/60 text-[13px] mt-1">{p.desc}</div>
-                        </div>
-                        <span className="neox-chip">Tier</span>
-                      </div>
-
-                      <div className="mt-4 neox-card-line" />
-
-                      <div className="mt-4 flex items-end gap-2">
-                        <div className="text-white text-[40px] font-semibold leading-none">{p.price}</div>
-                        {p.period ? <div className="text-white/55 pb-1">{p.period}</div> : null}
-                      </div>
-
-                      <div className="mt-5">
-                        <Link
-                          to={p.cta.to}
-                          className={cx("cyber-btn", p.cta.primary ? "" : "cyber-btn-ghost")}
-                          style={{ width: "100%", justifyContent: "center" as any }}
-                        >
-                          <span className="cyber-btn-inner">{p.cta.label}</span>
-                        </Link>
-                      </div>
-
-                      <div className="mt-6 space-y-3">
-                        {p.features.map((f) => (
-                          <div key={f.text} className="flex items-start gap-2">
-                            {f.ok ? (
-                              <CheckCircle className="w-5 h-5 text-cyan-300 mt-[2px]" />
-                            ) : (
-                              <X className="w-5 h-5 text-white/30 mt-[2px]" />
-                            )}
-                            <span className={cx("leading-[1.6]", f.ok ? "text-white/75" : "text-white/35")}>{f.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* TRUST ROW */}
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            <div className={cx("reveal reveal-left", "neox-card")}>
-              <div className="flex items-center gap-3">
-                <div className="neox-ic">
-                  <Shield className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold">Security-first</div>
+                <p className="nx-lead nx-max-copy">
+                  NEOX-da qiymət hazır şablon paketindən yox, qurulacaq sistemin dərinliyindən asılıdır:
+                  vebsayt, mesajlaşma, Süni İntellekt cavabları, avtomatlaşdırma və inteqrasiya səviyyəsi.
+                </p>
               </div>
-              <div className="mt-4 neox-card-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Access control, audit log, encryption və production guardrails — enterprise səviyyə yanaşma.
-              </p>
+
+              <div className="nx-actions">
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Təklif al
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+
+                <Link to={withLang("/services/chatbot-24-7")} className="nx-button">
+                  Xidmətlərə bax
+                </Link>
+              </div>
+
+              <div className="nx-chip-row">
+                <span className="nx-chip">Şablon qiymət yox</span>
+                <span className="nx-chip">Biznesə uyğun scope</span>
+                <span className="nx-chip">Premium icra</span>
+              </div>
             </div>
 
-            <div className={cx("reveal reveal-bottom", "neox-card")}>
-              <div className="flex items-center gap-3">
-                <div className="neox-ic">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold">Fast ROI</div>
-              </div>
-              <div className="mt-4 neox-card-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Pilot → KPI → scale. Ən vacibi: ölçülən nəticə və stabil əməliyyat.
-              </p>
-            </div>
-
-            <div className={cx("reveal reveal-right", "neox-card")}>
-              <div className="flex items-center gap-3">
-                <div className="neox-ic">
-                  <ArrowRight className="h-5 w-5" />
-                </div>
-                <div className="text-white font-semibold">Upgrade anytime</div>
-              </div>
-              <div className="mt-4 neox-card-line" />
-              <p className="mt-4 text-white/70 leading-[1.75]">
-                Biznes böyüdükcə agent sayını, inteqrasiyaları və dəstəyi rahat artırırsan.
-              </p>
+            <div className="nx-hero-visual">
+              <PricingPreview />
             </div>
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="neox-section alt py-16 sm:py-20">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className={cx("reveal reveal-top", "text-[28px] sm:text-[38px] font-semibold text-white")}>FAQ</h2>
-            <p className={cx("reveal reveal-bottom", "mt-3 text-white/65 max-w-[780px] mx-auto leading-[1.7]")}>
-              Qısa cavablar. İstəsən, pricing-i tam sənin biznese görə “paket + KPI” kimi də yaza bilərik.
-            </p>
-          </div>
+      <section className="nx-section nx-section--tight">
+        <div className="nx-container">
+          <div className="nx-stack-xl">
+            <div className="nx-row nx-row--top">
+              <div className="nx-stack-sm nx-max-copy">
+                <p className="nx-kicker">Paket məntiqi</p>
+                <h2 className="nx-title-sm">Başlanğıc üçün üç istiqamət.</h2>
+              </div>
 
-          <div className="mt-10 max-w-[860px] mx-auto space-y-4">
-            {FAQS.map((f, i) => (
-              <FAQItem key={f.q} q={f.q} a={f.a} i={i} />
-            ))}
+              <p className="nx-copy nx-max-tight">
+                Bunlar yekun qiymət siyahısı deyil. Sadəcə layihənin həcmini düzgün düşünmək üçün başlanğıc çərçivəsidir.
+              </p>
+            </div>
+
+            <div className="nx-grid nx-grid--3">
+              {packages.map((item) => (
+                <PackageCard key={item.name} item={item} />
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* FINAL CTA */}
-      <section className="neox-final py-16 sm:py-20">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
-          <div className={cx("reveal reveal-bottom", "neox-final-card")}>
-            <div className="max-w-[740px]">
-              <div className="text-white/70 text-[12px] tracking-[0.14em] uppercase">still have questions?</div>
-              <div className="mt-2 text-white text-[24px] sm:text-[30px] font-semibold">
-                Gəl 15 dəqiqəyə planı “sənə uyğun” edək.
+      <section className="nx-section">
+        <div className="nx-container">
+          <div className="nx-split nx-split--top">
+            <div className="nx-stack-lg">
+              <div className="nx-stack">
+                <p className="nx-kicker">Nə daxildir?</p>
+                <h2 className="nx-title">Sadəcə ekran yox, biznes axını qurulur.</h2>
+                <p className="nx-lead">
+                  Layihənin həcmi dəyişə bilər, amma yanaşma eynidir: təmiz interface, real məntiq,
+                  kontrollu Süni İntellekt və ölçülə bilən icra.
+                </p>
               </div>
-              <p className="mt-3 text-white/70 leading-[1.75]">
-                Sən prosesi danış — biz agent arxitekturasını, roadmap-i və ilkin KPI-ları çıxaraq.
+
+              <div className="nx-actions">
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
+                  Bizə yaz
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="nx-grid nx-grid--2">
+              {included.map((item) => (
+                <IncludedCard key={item.title} item={item} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section-divider">
+        <div className="nx-container">
+          <div className="nx-surface nx-surface--raised nx-surface-pad">
+            <div className="nx-split">
+              <div className="nx-stack">
+                <span className="nx-badge nx-badge--soft">
+                  <Sparkles size={15} strokeWidth={2} aria-hidden="true" />
+                  Düzgün təklif
+                </span>
+
+                <h2 className="nx-title-sm">Ən yaxşı qiymət düzgün scope-dan başlayır.</h2>
+
+                <p className="nx-lead">
+                  Sənə lazımsız ekran, panel və modul satmaq istəmirik. Əvvəl real ehtiyacı tapırıq,
+                  sonra daha az, amma daha düzgün sistem qururuq.
+                </p>
+              </div>
+
+              <div className="nx-grid">
+                <div className="nx-card nx-card--compact nx-card--quiet">
+                  <div className="nx-stack-xs">
+                    <h3 className="nx-h4">Kiçik başlamaq olar</h3>
+                    <p className="nx-copy-sm">
+                      Əvvəl sadə sayt və cavab axını qurub, sonra avtomatlaşdırmanı genişləndirmək mümkündür.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="nx-card nx-card--compact nx-card--quiet">
+                  <div className="nx-stack-xs">
+                    <h3 className="nx-h4">Tam sistem də qura bilərik</h3>
+                    <p className="nx-copy-sm">
+                      Çoxkanallı mesajlaşma, lead, CRM, operator və Süni İntellekt cavab axını birlikdə qurula bilər.
+                    </p>
+                  </div>
+                </div>
+
+                <Link to={withLang("/contact")} className="nx-button nx-button--primary nx-button--full">
+                  Layihəni qiymətləndirək
+                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="nx-section nx-section--last">
+        <div className="nx-container">
+          <div className="nx-stack-xl">
+            <div className="nx-row nx-row--top">
+              <div className="nx-stack-sm nx-max-copy">
+                <p className="nx-kicker">Suallar</p>
+                <h2 className="nx-title-sm">Qiymətlə bağlı ən çox verilən suallar.</h2>
+              </div>
+
+              <p className="nx-copy nx-max-tight">
+                Qısa cavab: qiymət ehtiyacdan asılıdır. Amma proses aydın, sadə və əvvəlcədən razılaşdırılmış olur.
               </p>
             </div>
 
-            <Link to="/contact" className="cyber-btn">
-              <span className="cyber-btn-inner">
-                Contact Sales <ArrowRight className="ml-2 w-5 h-5" />
-              </span>
-            </Link>
+            <div className="nx-grid nx-grid--2">
+              {faq.map((item) => (
+                <FaqItem key={item.q} q={item.q} a={item.a} />
+              ))}
+            </div>
           </div>
         </div>
       </section>
