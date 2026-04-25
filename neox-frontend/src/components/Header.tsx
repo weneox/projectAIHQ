@@ -25,7 +25,7 @@ type ItemDef = {
   to: string;
 };
 
-type MegaKind = "services" | "company";
+type MegaKind = "services" | "company" | "resources";
 type MobileTab = "main" | MegaKind;
 
 export default function Header(_props: { introReady: boolean }) {
@@ -111,10 +111,34 @@ export default function Header(_props: { introReady: boolean }) {
         to: "/about",
       },
       {
-        id: "use-cases",
-        label: "İstifadə sahələri",
-        note: "Klinika, mağaza, xidmət və əməliyyat komandaları",
-        to: "/use-cases",
+        id: "healthcare",
+        label: "Klinikalar",
+        note: "Pasiyent sorğuları, randevu və yönləndirmə axınları",
+        to: "/use-cases/healthcare",
+      },
+      {
+        id: "logistics",
+        label: "Logistika",
+        note: "Çatdırılma, status və müştəri məlumatlandırması",
+        to: "/use-cases/logistics",
+      },
+      {
+        id: "finance",
+        label: "Maliyyə",
+        note: "Sorğu, sənəd, uyğunluq və analitik axınlar",
+        to: "/use-cases/finance",
+      },
+      {
+        id: "retail",
+        label: "Pərakəndə satış",
+        note: "Məhsul sorğuları, stok və satış yönləndirməsi",
+        to: "/use-cases/retail",
+      },
+      {
+        id: "hotels",
+        label: "Hotellər",
+        note: "Rezervasiya, qonaq sorğuları və xidmət axınları",
+        to: "/use-cases/hotels",
       },
       {
         id: "pricing",
@@ -146,22 +170,20 @@ export default function Header(_props: { introReady: boolean }) {
         note: "Başlamazdan əvvəl ən çox verilən suallar",
         to: "/faq",
       },
-      {
-        id: "guides",
-        label: "Bələdçilər",
-        note: "Praktiki tətbiq və sistem qurulum izahları",
-        to: "/resources/guides",
-      },
     ],
     []
   );
 
-  const megaItems = openMega === "company" ? company : services;
-  const megaTitle = openMega === "company" ? "Şirkət" : "Xidmətlər";
+  const megaItems = openMega === "company" ? company : openMega === "resources" ? resources : services;
+
+  const megaTitle = openMega === "company" ? "Şirkət" : openMega === "resources" ? "Resurslar" : "Xidmətlər";
+
   const megaHint =
     openMega === "company"
-      ? "Şirkət, istifadə sahələri və əlaqə məlumatları."
-      : "Biznesiniz üçün qurduğumuz əsas rəqəmsal sistemlər.";
+      ? "Şirkət, istifadə sahələri, qiymətlər və əlaqə məlumatları."
+      : openMega === "resources"
+        ? "Bloq və ən çox verilən suallar."
+        : "Biznesiniz üçün qurduğumuz əsas rəqəmsal sistemlər.";
 
   useEffect(() => {
     setMounted(true);
@@ -254,12 +276,15 @@ export default function Header(_props: { introReady: boolean }) {
       ? services
       : mobileTab === "company"
         ? company
-        : [
-            { id: "home", label: "Ana səhifə", to: "/" },
-            { id: "services", label: "Xidmətlər", note: "Süni İntellekt, sayt və avtomatlaşdırma", to: "/services" },
-            { id: "resources", label: "Resurslar", note: "Bloq, suallar və bələdçilər", to: "/blog" },
-            { id: "contact", label: "Əlaqə", note: "Biznesiniz üçün sistemi müzakirə edək", to: "/contact" },
-          ];
+        : mobileTab === "resources"
+          ? resources
+          : [
+              { id: "home", label: "Ana səhifə", to: "/" },
+              { id: "services", label: "Xidmətlər", note: "Süni İntellekt, sayt və avtomatlaşdırma", to: "/services" },
+              { id: "company", label: "Şirkət", note: "Haqqımızda, istifadə sahələri və qiymətlər", to: "/about" },
+              { id: "resources", label: "Resurslar", note: "Bloq və suallar", to: "/blog" },
+              { id: "contact", label: "Əlaqə", note: "Biznesiniz üçün sistemi müzakirə edək", to: "/contact" },
+            ];
 
   if (!mounted) return null;
 
@@ -712,7 +737,7 @@ export default function Header(_props: { introReady: boolean }) {
 
         .neoMTabs{
           display:grid;
-          grid-template-columns:repeat(3,1fr);
+          grid-template-columns:repeat(4,1fr);
           gap:8px;
           padding:14px 18px;
           border-bottom:1px solid rgba(13,20,32,.07);
@@ -911,9 +936,19 @@ export default function Header(_props: { introReady: boolean }) {
               <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
             </button>
 
-            <NavLink to={withLang("/blog")} className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}>
+            <button
+              type="button"
+              className={cx("neoTop", openMega === "resources" && "is-open is-active")}
+              aria-haspopup="menu"
+              aria-expanded={openMega === "resources"}
+              aria-controls={megaPanelId}
+              onMouseEnter={() => setOpenMega("resources")}
+              onFocus={() => setOpenMega("resources")}
+              onClick={() => setOpenMega((current) => (current === "resources" ? null : "resources"))}
+            >
               Resurslar
-            </NavLink>
+              <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
+            </button>
 
             <NavLink to={withLang("/contact")} className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}>
               Əlaqə
@@ -923,7 +958,7 @@ export default function Header(_props: { introReady: boolean }) {
           <div className="neoRight">
             <div className="neoLangPill" aria-label="Sayt dili" data-wg-notranslate>
               <Globe2 size={16} strokeWidth={1.9} aria-hidden="true" />
-              AZ
+              {String(lang).toUpperCase()}
             </div>
 
             <NavLink to={withLang("/contact")} className="neoCta">
@@ -975,29 +1010,23 @@ export default function Header(_props: { introReady: boolean }) {
               <button type="button" className={cx("neoTab", mobileTab === "company" && "is-on")} onClick={() => setMobileTab("company")}>
                 Şirkət
               </button>
+
+              <button type="button" className={cx("neoTab", mobileTab === "resources" && "is-on")} onClick={() => setMobileTab("resources")}>
+                Resurslar
+              </button>
             </div>
 
             <div className="neoMBody">
               {mobileItems.map((item, index) => (
-                <MobileItem key={item.id} item={item} strong={index === 0 && mobileTab === "main"} />
+                <MobileItem key={item.id} item={item} strong={mobileTab === "main" && index === 0} />
               ))}
-
-              {mobileTab === "main" ? resources.map((item) => <MobileItem key={item.id} item={item} />) : null}
             </div>
           </div>
         </div>
       </header>
 
       {openMega ? (
-        <div
-          ref={megaRef}
-          id={megaPanelId}
-          className="neoMegaPortal is-open"
-          role="menu"
-          aria-label={megaTitle}
-          onMouseEnter={() => setOpenMega(openMega)}
-          onMouseLeave={closeMega}
-        >
+        <div ref={megaRef} id={megaPanelId} className="neoMegaPortal" role="menu" aria-label={megaTitle}>
           <div className="neoMegaShell">
             <div className="neoMegaHead">
               <p className="neoMegaKicker">{megaTitle}</p>
@@ -1009,15 +1038,15 @@ export default function Header(_props: { introReady: boolean }) {
                 <NavLink
                   key={item.id}
                   to={withLang(item.to)}
-                  role="menuitem"
                   className={({ isActive }) => cx("neoMegaItem", isActive && "is-active")}
                   onClick={closeMega}
+                  role="menuitem"
                 >
                   <span className="neoMegaCopy">
                     <span className="neoMegaName">{item.label}</span>
                     {item.note ? <span className="neoMegaNote">{item.note}</span> : null}
                   </span>
-                  <ArrowUpRight className="neoMegaArrow" size={16} strokeWidth={1.9} aria-hidden="true" />
+                  <ArrowUpRight className="neoMegaArrow" size={18} strokeWidth={1.9} aria-hidden="true" />
                 </NavLink>
               ))}
             </div>
