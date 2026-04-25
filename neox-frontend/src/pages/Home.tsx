@@ -1,7 +1,24 @@
-import { ArrowUpRight } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+import { DEFAULT_LANG, type Lang } from "../i18n/lang";
 
 const HERO_BACKGROUND_URL =
   "https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=2400&auto=format&fit=crop";
+
+const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
+
+function isLang(value: string | undefined | null): value is Lang {
+  return Boolean(value && (LANGS as readonly string[]).includes(value));
+}
+
+function useSafeLang(): Lang {
+  const { lang } = useParams<{ lang?: string }>();
+  return isLang(lang) ? lang : DEFAULT_LANG;
+}
+
+function withLang(lang: Lang, path: string) {
+  if (path === "/") return `/${lang}`;
+  return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 const stripItems = [
   "NEOX CORE",
@@ -62,7 +79,7 @@ function SystemStrip() {
           {repeated.map((item, index) => (
             <span
               key={`${item}-${index}`}
-              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em] text-slate-500 transition-colors duration-300 hover:text-[#3347d9]"
+              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em] text-slate-500 transition-colors duration-300 hover:text-slate-800"
             >
               {item}
             </span>
@@ -74,6 +91,8 @@ function SystemStrip() {
 }
 
 function HomeHero() {
+  const lang = useSafeLang();
+
   return (
     <section className="neox-home-hero relative overflow-hidden bg-white">
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -87,47 +106,46 @@ function HomeHero() {
           <img
             src={HERO_BACKGROUND_URL}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[64%_center] blur-[12px]"
+            className="absolute inset-0 h-full w-full object-cover object-[64%_center] blur-[10px]"
             style={{
               WebkitMaskImage:
-                "linear-gradient(90deg, black 0%, black 30%, transparent 58%)",
+                "linear-gradient(90deg, black 0%, black 27%, transparent 55%)",
               maskImage:
-                "linear-gradient(90deg, black 0%, black 30%, transparent 58%)",
+                "linear-gradient(90deg, black 0%, black 27%, transparent 55%)",
             }}
           />
 
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.93)_39%,rgba(255,255,255,0.56)_70%,rgba(255,255,255,0.18)_100%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_44%,rgba(255,255,255,0.08)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.995)_0%,rgba(255,255,255,0.965)_36%,rgba(255,255,255,0.74)_62%,rgba(255,255,255,0.22)_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_42%,rgba(255,255,255,0.62)_0%,rgba(255,255,255,0.28)_32%,rgba(255,255,255,0)_60%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0)_46%,rgba(255,255,255,0.1)_100%)]" />
         </div>
 
         <div className="relative mx-auto flex w-full max-w-[1460px] items-center px-6 pb-8 pt-10 lg:px-10 lg:pb-10 lg:pt-12">
           <div className="max-w-[760px]">
-            <h1 className="max-w-[760px] bg-[linear-gradient(112deg,#020617_0%,#020617_58%,#2438b8_100%)] bg-clip-text text-[3.45rem] font-extrabold leading-[1.03] tracking-[-0.074em] text-transparent md:text-[4.55rem] lg:text-[5.05rem]">
+            <h1 className="neox-hero-title max-w-[790px] text-[#070a18]">
               Ağıllı biznes sistemləri qururuq.
             </h1>
 
-            <p className="mt-7 max-w-[620px] text-[1.16rem] font-medium leading-[1.75] tracking-[-0.02em] text-slate-600">
+            <p className="mt-7 max-w-[650px] text-[1.08rem] font-[520] leading-[1.78] tracking-[-0.018em] text-slate-600 md:text-[1.14rem]">
               Veb sayt, mesajlaşma, avtomatlaşdırma və Süni İntellekt
               cavablarını birləşdiririk ki, müştəri axını daha səliqəli,
               sürətli və ölçülə bilən olsun.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">
-              <a
-                href="/az/elaqe"
-                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#3347d9] px-7 text-[16px] font-bold text-white shadow-[0_20px_46px_rgba(51,71,217,0.23)] transition hover:-translate-y-0.5 hover:bg-[#293ac7]"
+              <Link
+                to={withLang(lang, "/contact")}
+                className="nx-button nx-button--primary nx-button--lg"
               >
                 Sistemi quraq
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
+              </Link>
 
-              <a
-                href="/az/xidmetler"
-                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/92 px-7 text-[16px] font-bold text-slate-950 shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:border-slate-300"
+              <Link
+                to={withLang(lang, "/services")}
+                className="nx-button nx-button--secondary nx-button--lg"
               >
                 Xidmətlərə bax
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -139,6 +157,8 @@ function HomeHero() {
 }
 
 function ValueSection() {
+  const lang = useSafeLang();
+
   return (
     <section className="bg-white py-16 lg:py-20">
       <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
@@ -146,23 +166,22 @@ function ValueSection() {
           {valueCards.map((card) => (
             <article
               key={card.title}
-              className="group rounded-[30px] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.045)] transition hover:-translate-y-1 hover:shadow-[0_28px_78px_rgba(15,23,42,0.075)]"
+              className="group rounded-[28px] border border-slate-200/90 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.045)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_78px_rgba(15,23,42,0.075)]"
             >
-              <h3 className="text-[1.7rem] font-bold tracking-[-0.055em] text-slate-950">
+              <h3 className="text-[1.55rem] font-[720] tracking-[-0.048em] text-slate-950">
                 {card.title}
               </h3>
 
-              <p className="mt-5 max-w-[390px] text-[1.02rem] font-medium leading-8 text-slate-600">
+              <p className="mt-5 max-w-[390px] text-[1rem] font-[500] leading-8 text-slate-600">
                 {card.text}
               </p>
 
-              <a
-                href="/az/xidmetler"
-                className="mt-8 inline-flex items-center gap-2 text-[15px] font-bold text-[#3347d9]"
+              <Link
+                to={withLang(lang, "/services")}
+                className="nx-link mt-8"
               >
                 Daha ətraflı
-                <ArrowUpRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </a>
+              </Link>
             </article>
           ))}
         </div>
@@ -177,16 +196,16 @@ function ProcessSection() {
       <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-end">
           <div>
-            <div className="mb-5 text-[12px] font-bold uppercase tracking-[0.2em] text-slate-400">
+            <div className="mb-5 text-[12px] font-[720] uppercase tracking-[0.2em] text-slate-400">
               Proses
             </div>
 
-            <h2 className="max-w-[690px] text-[3.8rem] font-bold leading-[1.04] tracking-[-0.075em] text-slate-950">
+            <h2 className="max-w-[680px] text-[3.15rem] font-[720] leading-[1.06] tracking-[-0.068em] text-slate-950 md:text-[3.55rem]">
               Sadə başlayırıq, sistemli böyüdürük.
             </h2>
           </div>
 
-          <p className="max-w-[660px] text-[1.12rem] font-medium leading-9 text-slate-600 lg:justify-self-end">
+          <p className="max-w-[660px] text-[1.08rem] font-[500] leading-9 text-slate-600 lg:justify-self-end">
             Məqsəd çox ekran, çox panel və qarışıq quruluş deyil. Lazım olan iş
             axınını tapırıq, onu təmiz interfeys və avtomatlaşdırma ilə işlək
             hala gətiririk.
@@ -197,17 +216,17 @@ function ProcessSection() {
           {processSteps.map((step) => (
             <article
               key={step.number}
-              className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm"
+              className="rounded-[26px] border border-slate-200/90 bg-white p-8 shadow-sm"
             >
-              <div className="mb-7 inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2 text-[14px] font-bold text-slate-500">
+              <div className="mb-7 inline-flex rounded-[16px] border border-slate-200 bg-white px-4 py-2 text-[14px] font-[680] text-slate-500">
                 {step.number}
               </div>
 
-              <h3 className="text-[1.35rem] font-bold tracking-[-0.04em] text-slate-950">
+              <h3 className="text-[1.28rem] font-[720] tracking-[-0.035em] text-slate-950">
                 {step.title}
               </h3>
 
-              <p className="mt-4 text-[1rem] font-medium leading-8 text-slate-600">
+              <p className="mt-4 text-[1rem] font-[500] leading-8 text-slate-600">
                 {step.text}
               </p>
             </article>
@@ -219,51 +238,52 @@ function ProcessSection() {
 }
 
 function FinalCta() {
+  const lang = useSafeLang();
+
   return (
     <section className="bg-white py-24">
       <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
-        <div className="rounded-[38px] border border-slate-200 bg-[#f8f9fc] p-8 shadow-[0_30px_100px_rgba(15,23,42,0.075)] md:p-12 lg:p-14">
+        <div className="rounded-[34px] border border-slate-200/90 bg-[#f8f9fc] p-8 shadow-[0_30px_100px_rgba(15,23,42,0.075)] md:p-12 lg:p-14">
           <div className="grid gap-10 lg:grid-cols-[1fr_0.72fr] lg:items-center">
             <div>
-              <div className="mb-5 inline-flex rounded-full border border-[#3347d9]/16 bg-white px-5 py-2 text-[13px] font-bold text-[#3347d9]">
+              <div className="mb-5 inline-flex rounded-[14px] border border-slate-200 bg-white px-5 py-2 text-[13px] font-[680] text-slate-600">
                 Başlamaq üçün
               </div>
 
-              <h2 className="max-w-[760px] text-[3.35rem] font-bold leading-[1.04] tracking-[-0.075em] text-slate-950">
+              <h2 className="max-w-[760px] text-[3rem] font-[720] leading-[1.06] tracking-[-0.068em] text-slate-950 md:text-[3.35rem]">
                 Biznesinizə uyğun sistemi birlikdə quraq.
               </h2>
 
-              <p className="mt-6 max-w-[720px] text-[1.12rem] font-medium leading-9 text-slate-600">
+              <p className="mt-6 max-w-[720px] text-[1.08rem] font-[500] leading-9 text-slate-600">
                 Bir neçə əsas məlumat kifayətdir: nə satırsınız, müştəri haradan
                 yazır və hazırda hansı işlər sizi yavaşladır.
               </p>
             </div>
 
-            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white px-5 py-5">
+            <div className="rounded-[26px] border border-slate-200/90 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4 rounded-[20px] border border-slate-100 bg-white px-5 py-5">
                 <div>
-                  <div className="text-[1.05rem] font-bold text-slate-950">
+                  <div className="text-[1.05rem] font-[720] text-slate-950">
                     İlk addım
                   </div>
 
-                  <div className="mt-2 text-[14px] font-medium leading-6 text-slate-500">
+                  <div className="mt-2 text-[14px] font-[500] leading-6 text-slate-500">
                     Qısa danışıqla sistem xəritəsini və ilk icra istiqamətini
                     müəyyən edirik.
                   </div>
                 </div>
 
-                <div className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500">
+                <div className="shrink-0 rounded-[14px] border border-slate-200 px-4 py-2 text-[13px] font-[680] text-slate-500">
                   15 dəq
                 </div>
               </div>
 
-              <a
-                href="/az/elaqe"
-                className="mt-5 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#3347d9] text-[16px] font-bold text-white shadow-[0_18px_42px_rgba(51,71,217,0.22)] transition hover:-translate-y-0.5 hover:bg-[#293ac7]"
+              <Link
+                to={withLang(lang, "/contact")}
+                className="nx-button nx-button--primary nx-button--lg nx-button--full mt-5"
               >
                 Əlaqə saxla
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -298,6 +318,14 @@ export default function HomePage() {
           flex-direction: column;
         }
 
+        .neox-hero-title {
+          font-size: clamp(3.2rem, 5.3vw, 6rem);
+          font-weight: 700;
+          line-height: 1.015;
+          letter-spacing: -0.066em;
+          text-wrap: balance;
+        }
+
         .neox-home-strip {
           animation: neoxHomeStrip 38s linear infinite;
         }
@@ -307,13 +335,26 @@ export default function HomePage() {
         }
 
         .neox-strip-item:hover {
-          color: #3347d9;
+          color: #1f2937;
         }
 
         @media (max-width: 900px) {
           .neox-home-hero {
             height: auto;
             min-height: calc(100svh - var(--nx-header-h, 64px));
+          }
+
+          .neox-hero-title {
+            font-size: clamp(3rem, 12vw, 4.7rem);
+            letter-spacing: -0.068em;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .neox-hero-title {
+            font-size: 3.1rem;
+            line-height: 1.04;
+            letter-spacing: -0.062em;
           }
         }
 

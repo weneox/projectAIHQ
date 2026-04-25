@@ -1,18 +1,16 @@
 import {
   Bot,
   Building2,
+  Check,
   ChevronDown,
   CircleHelp,
-  Globe2,
   Hotel,
   Landmark,
-  Mail,
   Megaphone,
   Menu,
   MonitorSmartphone,
   Newspaper,
   Smartphone,
-  Sparkles,
   Stethoscope,
   Store,
   Truck,
@@ -30,13 +28,23 @@ function cx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-const LANG_MENU: Lang[] = ["az", "tr", "ru", "en", "es"];
+const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
 const LOGO_SRC = "/image/neox-logo.png";
 
-function isLang(x: string | undefined | null): x is Lang {
-  if (!x) return false;
-  const v = String(x).toLowerCase();
-  return (LANG_MENU as readonly string[]).includes(v);
+const LANG_META: Record<Lang, { label: string; flag: string }> = {
+  az: { label: "AZ", flag: "/image/azerbaijan.png" },
+  tr: { label: "TR", flag: "/image/turkey.png" },
+  ru: { label: "RU", flag: "/image/russia.png" },
+  en: { label: "EN", flag: "/image/english.png" },
+  es: { label: "ES", flag: "/image/spain.png" },
+};
+
+const AI_CHAT_PREVIEW_IMAGE =
+  "https://res.cloudinary.com/dppoomunj/image/upload/v1777145861/ChatGPT_Image_Apr_25_2026_11_36_01_PM_s3x5yd.jpg";
+
+function isLang(value: string | undefined | null): value is Lang {
+  if (!value) return false;
+  return (LANGS as readonly string[]).includes(String(value).toLowerCase());
 }
 
 type ItemDef = {
@@ -44,27 +52,28 @@ type ItemDef = {
   label: string;
   to: string;
   icon: LucideIcon;
+  previewDescription?: string;
+  previewImage?: string;
 };
 
-type MegaKind = "services" | "company" | "resources";
-type MobileTab = "main" | MegaKind;
+type MegaKind = "services" | "industries" | "resources";
 
 export default function Header(_props: { introReady: boolean }) {
   const { lang: paramLang } = useParams<{ lang?: string }>();
   const lang: Lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
 
   const location = useLocation();
+
   const mobilePanelId = useId();
   const megaPanelId = useId();
 
-  const headerRef = useRef<HTMLElement | null>(null);
-  const megaRef = useRef<HTMLDivElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
 
   const [mounted, setMounted] = useState(false);
   const [openMega, setOpenMega] = useState<MegaKind | null>(null);
+  const [langOpen, setLangOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileSoft, setMobileSoft] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("main");
+  const [hoveredMegaItemId, setHoveredMegaItemId] = useState<string | null>(null);
 
   const withLang = useCallback(
     (to: string) => {
@@ -74,12 +83,24 @@ export default function Header(_props: { introReady: boolean }) {
     [lang],
   );
 
-  const closeMega = useCallback(() => setOpenMega(null), []);
+  const buildLangPath = useCallback(
+    (nextLang: Lang) => {
+      const segments = location.pathname.split("/").filter(Boolean);
 
-  const closeMobile = useCallback(() => {
-    setMobileSoft(false);
-    window.setTimeout(() => setMobileOpen(false), 180);
-  }, []);
+      if (segments.length > 0 && isLang(segments[0])) {
+        segments[0] = nextLang;
+      } else {
+        segments.unshift(nextLang);
+      }
+
+      return `/${segments.join("/")}${location.search}${location.hash}`;
+    },
+    [location.hash, location.pathname, location.search],
+  );
+
+  const closeMega = useCallback(() => setOpenMega(null), []);
+  const closeLang = useCallback(() => setLangOpen(false), []);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   const services: ItemDef[] = useMemo(
     () => [
@@ -88,90 +109,95 @@ export default function Header(_props: { introReady: boolean }) {
         label: "Süni İntellekt çat sistemləri",
         to: "/services/chatbot-24-7",
         icon: Bot,
+        previewDescription:
+          "Müştəri mesajlarını avtomatik cavablandırır, sorğuları toplayır və lazım olduqda operatora yönləndirir.",
+        previewImage: AI_CHAT_PREVIEW_IMAGE,
       },
       {
         id: "automation",
         label: "Biznes avtomatlaşdırması",
         to: "/services/business-workflows",
         icon: Workflow,
+        previewDescription:
+          "Təkrarlanan işləri sistemləşdirir, komanda yükünü azaldır və prosesləri daha sürətli edir.",
       },
       {
         id: "websites",
         label: "Premium veb saytlar",
         to: "/services/websites",
         icon: MonitorSmartphone,
+        previewDescription:
+          "Brendinizə uyğun sürətli, premium və etibar yaradan veb saytlar hazırlayırıq.",
       },
       {
         id: "mobile-apps",
         label: "Mobil tətbiqlər",
         to: "/services/mobile-apps",
         icon: Smartphone,
+        previewDescription:
+          "Biznesiniz üçün rahat istifadəli və peşəkar mobil tətbiq həlləri qururuq.",
       },
       {
         id: "social-systems",
         label: "Sosial media sistemləri",
         to: "/services/smm-automation",
         icon: Megaphone,
+        previewDescription:
+          "Mesaj, cavab və kontent axınlarını daha nizamlı idarə etmək üçün sistemlər qururuq.",
       },
       {
         id: "support",
         label: "Texniki dəstək",
         to: "/services/technical-support",
         icon: Wrench,
+        previewDescription:
+          "Sistemlərin stabil işləməsi və texniki problemlərin operativ həlli üçün dəstək veririk.",
       },
     ],
     [],
   );
 
-  const company: ItemDef[] = useMemo(
+  const industries: ItemDef[] = useMemo(
     () => [
-      {
-        id: "about",
-        label: "Haqqımızda",
-        to: "/about",
-        icon: Building2,
-      },
       {
         id: "healthcare",
         label: "Klinikalar",
         to: "/use-cases/healthcare",
         icon: Stethoscope,
+        previewDescription:
+          "Pasiyent ünsiyyəti və daxili iş axınlarını daha sistemli idarə etmək üçün həllər.",
       },
       {
         id: "logistics",
         label: "Logistika",
         to: "/use-cases/logistics",
         icon: Truck,
+        previewDescription:
+          "Sifariş, koordinasiya və operativ ünsiyyət proseslərini sürətləndirən sistemlər.",
       },
       {
         id: "finance",
         label: "Maliyyə",
         to: "/use-cases/finance",
         icon: Landmark,
+        previewDescription:
+          "Müştəri sorğularını və məlumat axınını daha nizamlı və sürətli idarə etməyə kömək edir.",
       },
       {
         id: "retail",
         label: "Pərakəndə satış",
         to: "/use-cases/retail",
         icon: Store,
+        previewDescription:
+          "Satış və müştəri sorğularını vahid axında toplamaq üçün uyğun həllər təqdim edir.",
       },
       {
         id: "hotels",
         label: "Hotellər",
         to: "/use-cases/hotels",
         icon: Hotel,
-      },
-      {
-        id: "pricing",
-        label: "Qiymətlər",
-        to: "/pricing",
-        icon: Sparkles,
-      },
-      {
-        id: "contact",
-        label: "Əlaqə",
-        to: "/contact",
-        icon: Mail,
+        previewDescription:
+          "Rezervasiya və qonaq əlaqələrini daha rahat və sürətli idarə etməyə imkan yaradır.",
       },
     ],
     [],
@@ -184,37 +210,36 @@ export default function Header(_props: { introReady: boolean }) {
         label: "Bloq",
         to: "/blog",
         icon: Newspaper,
+        previewDescription:
+          "Süni İntellekt, avtomatlaşdırma və biznes sistemləri barədə faydalı yazılar.",
       },
       {
         id: "faq",
         label: "Suallar",
         to: "/faq",
         icon: CircleHelp,
+        previewDescription: "Ən çox verilən suallara qısa və aydın cavablar burada toplanıb.",
       },
     ],
     [],
   );
 
   const megaItems =
-    openMega === "company" ? company : openMega === "resources" ? resources : services;
+    openMega === "industries"
+      ? industries
+      : openMega === "resources"
+        ? resources
+        : services;
 
   const megaTitle =
-    openMega === "company" ? "Şirkət" : openMega === "resources" ? "Resurslar" : "Xidmətlər";
+    openMega === "industries"
+      ? "Sahələr"
+      : openMega === "resources"
+        ? "Resurslar"
+        : "Xidmətlər";
 
-  const mobileItems: ItemDef[] =
-    mobileTab === "services"
-      ? services
-      : mobileTab === "company"
-        ? company
-        : mobileTab === "resources"
-          ? resources
-          : [
-              { id: "home", label: "Ana səhifə", to: "/", icon: Sparkles },
-              { id: "services", label: "Xidmətlər", to: "/services", icon: Workflow },
-              { id: "company", label: "Şirkət", to: "/about", icon: Building2 },
-              { id: "resources", label: "Resurslar", to: "/blog", icon: Newspaper },
-              { id: "contact", label: "Əlaqə", to: "/contact", icon: Mail },
-            ];
+  const activePreviewItem =
+    megaItems.find((item) => item.id === hoveredMegaItemId) ?? megaItems[0] ?? null;
 
   useEffect(() => {
     setMounted(true);
@@ -222,73 +247,75 @@ export default function Header(_props: { introReady: boolean }) {
 
   useEffect(() => {
     closeMega();
-    setMobileOpen(false);
-    setMobileSoft(false);
-    setMobileTab("main");
-  }, [closeMega, location.pathname, location.search, location.hash]);
+    closeLang();
+    closeMobile();
+  }, [location.pathname, location.search, location.hash, closeMega, closeLang, closeMobile]);
 
   useEffect(() => {
     const root = document.documentElement;
-    const prev = root.style.overflow;
+    const previous = root.style.overflow;
     root.style.overflow = mobileOpen ? "hidden" : "";
 
     return () => {
-      root.style.overflow = prev;
+      root.style.overflow = previous;
     };
-  }, [mobileOpen]);
-
-  useEffect(() => {
-    if (!mobileOpen) {
-      setMobileSoft(false);
-      return undefined;
-    }
-
-    const frame = requestAnimationFrame(() => setMobileSoft(true));
-    return () => cancelAnimationFrame(frame);
   }, [mobileOpen]);
 
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
       const node = event.target as Node;
-      const inHeader = headerRef.current?.contains(node);
-      const inMega = megaRef.current?.contains(node);
+      const insideShell = shellRef.current?.contains(node);
 
-      if (!inHeader && !inMega) closeMega();
+      if (!insideShell) {
+        closeMega();
+        closeLang();
+      }
+    };
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      closeMega();
+      closeLang();
+      closeMobile();
     };
 
     window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [closeMega]);
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [closeLang, closeMega, closeMobile]);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+    if (!openMega) {
+      setHoveredMegaItemId(null);
+      return;
+    }
 
-      if (mobileOpen) closeMobile();
-      closeMega();
-    };
+    if (openMega === "services") {
+      setHoveredMegaItemId(services[0]?.id ?? null);
+      return;
+    }
 
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [closeMega, closeMobile, mobileOpen]);
+    if (openMega === "industries") {
+      setHoveredMegaItemId(industries[0]?.id ?? null);
+      return;
+    }
 
-  const MobileItem = ({ item }: { item: ItemDef }) => {
-    const Icon = item.icon;
+    if (openMega === "resources") {
+      setHoveredMegaItemId(resources[0]?.id ?? null);
+    }
+  }, [openMega, services, industries, resources]);
 
-    return (
-      <NavLink
-        to={withLang(item.to)}
-        className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
-        onClick={closeMobile}
-      >
-        <span className="neoMIcon" aria-hidden="true">
-          <Icon size={18} strokeWidth={1.9} />
-        </span>
-
-        <span className="neoMText">{item.label}</span>
-      </NavLink>
-    );
-  };
+  const openMenu = useCallback(
+    (kind: MegaKind) => {
+      closeLang();
+      setOpenMega(kind);
+    },
+    [closeLang],
+  );
 
   if (!mounted) return null;
 
@@ -296,24 +323,23 @@ export default function Header(_props: { introReady: boolean }) {
     <>
       <style>{`
         :root {
-          --nx-header-h: 64px;
-          --nx-mega-h: 395px;
+          --nx-header-h: 56px;
+          --nx-mega-h: 286px;
 
-          --neo-surface-bg: rgba(246, 247, 251, 0.91);
-          --neo-surface-blur: blur(30px) saturate(1.08);
-          --neo-surface-shadow: 0 28px 70px rgba(15, 23, 42, 0.10);
-
-          --neo-text: #0d1420;
-          --neo-text-soft: rgba(13, 20, 32, 0.58);
-          --neo-accent: #3347d9;
-          --neo-accent-strong: #2739bb;
+          --neo-bg: rgba(248, 249, 252, 0.955);
+          --neo-panel-bg: rgba(248, 249, 252, 0.968);
+          --neo-blur: blur(22px) saturate(1.02);
+          --neo-text: #0f172a;
+          --neo-muted: rgba(15, 23, 42, 0.58);
+          --neo-accent: #26368f;
+          --neo-accent-hover: #1f2f80;
+          --neo-accent-bright: #4459df;
         }
 
-        .neoHdr,
-        .neoHdr *,
-        .neoSurface,
-        .neoMegaPortal,
-        .neoMegaPortal * {
+        .neoShell,
+        .neoShell *,
+        .neoMOv,
+        .neoMOv * {
           box-sizing: border-box;
           font-family:
             "Inter Variable",
@@ -326,132 +352,112 @@ export default function Header(_props: { introReady: boolean }) {
             sans-serif;
         }
 
-        .neoHdr a,
-        .neoHdr a:hover,
-        .neoHdr a:focus,
-        .neoHdr a:active,
-        .neoMegaPortal a,
-        .neoMegaPortal a:hover,
-        .neoMegaPortal a:focus,
-        .neoMegaPortal a:active {
+        .neoShell a,
+        .neoShell a:hover,
+        .neoShell a:focus,
+        .neoShell a:active,
+        .neoMOv a,
+        .neoMOv a:hover,
+        .neoMOv a:focus,
+        .neoMOv a:active {
           text-decoration: none !important;
         }
 
-        /*
-          TƏK MATERIAL:
-          Header və dropdown artıq ayrı-ayrı background daşımır.
-          Bütün glass görünüşü yalnız bu surface verir.
-        */
-        .neoSurface {
+        .neoShell {
           position: fixed;
-          left: 0;
-          right: 0;
           top: 0;
-          height: var(--nx-header-h);
-          z-index: 2147482998;
-          pointer-events: none;
-          background: var(--neo-surface-bg);
-          -webkit-backdrop-filter: var(--neo-surface-blur);
-          backdrop-filter: var(--neo-surface-blur);
-          box-shadow: none;
-          overflow: hidden;
-          transition:
-            height 0.22s cubic-bezier(.2,.8,.2,1),
-            box-shadow 0.22s ease;
-        }
-
-        .neoSurface.is-open {
-          height: calc(var(--nx-header-h) + var(--nx-mega-h));
-          box-shadow: var(--neo-surface-shadow);
-        }
-
-        .neoSurface::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background:
-            radial-gradient(900px 260px at 14% 0%, rgba(51, 71, 217, 0.045), transparent 72%),
-            radial-gradient(860px 260px at 90% 5%, rgba(51, 71, 217, 0.028), transparent 72%);
-          opacity: 0.82;
-        }
-
-        .neoSurface::after {
-          content: "";
-          position: absolute;
           left: 0;
           right: 0;
-          bottom: 0;
-          height: 1px;
-          pointer-events: none;
-          background: rgba(13, 20, 32, 0.035);
-          opacity: 0;
-        }
-
-        .neoHdr {
-          position: fixed !important;
-          inset: 0 0 auto 0 !important;
-          z-index: 2147483000 !important;
-          width: 100vw !important;
-          height: var(--nx-header-h) !important;
-          background: transparent !important;
-          -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
-          border: 0 !important;
-          box-shadow: none !important;
+          z-index: 2147483000;
+          height: var(--nx-header-h);
+          overflow: visible;
+          background: var(--neo-bg);
+          -webkit-backdrop-filter: var(--neo-blur);
+          backdrop-filter: var(--neo-blur);
           color: var(--neo-text);
-          isolation: isolate;
+          border: 0 !important;
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.6),
+            0 6px 18px rgba(15, 23, 42, 0.018) !important;
+          transition:
+            height 160ms cubic-bezier(.2,.8,.2,1),
+            background-color 160ms ease,
+            box-shadow 160ms ease;
         }
 
-        .neoHdr::before,
-        .neoHdr::after {
+        .neoShell.is-open {
+          height: calc(var(--nx-header-h) + var(--nx-mega-h));
+          background: var(--neo-panel-bg);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.66),
+            0 14px 34px rgba(15, 23, 42, 0.035) !important;
+        }
+
+        .neoShell::before {
           display: none !important;
           content: none !important;
         }
 
-        .neoInner {
-          position: relative;
-          z-index: 2;
+        .neoShell::after {
+          content: "";
+          position: absolute;
+          left: 30px;
+          right: 30px;
+          bottom: 0;
+          height: 1px;
+          background: linear-gradient(
+            90deg,
+            rgba(15, 23, 42, 0) 0%,
+            rgba(15, 23, 42, 0.045) 14%,
+            rgba(15, 23, 42, 0.045) 86%,
+            rgba(15, 23, 42, 0) 100%
+          );
+          pointer-events: none;
+        }
+
+        .neoHdr {
           height: var(--nx-header-h);
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none !important;
+        }
+
+        .neoInner {
+          height: 100%;
           width: 100%;
-          padding: 0 clamp(18px, 5vw, 80px);
+          max-width: 1460px;
+          margin: 0 auto;
+          padding: 0 clamp(18px, 4vw, 40px);
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 24px;
+          position: relative;
         }
 
         .neoBrand {
-          min-width: 116px;
+          min-width: 104px;
           display: inline-flex;
           align-items: center;
-          color: var(--neo-text);
+          flex: 0 0 auto;
         }
 
         .neoBrandMark {
-          width: 106px;
-          height: 42px;
+          width: 96px;
+          height: 32px;
           display: inline-flex;
           align-items: center;
           justify-content: flex-start;
-          transition:
-            transform 0.18s cubic-bezier(.2,.8,.2,1),
-            filter 0.18s ease;
         }
 
         .neoBrandLogo {
-          width: 102px;
-          height: 40px;
+          width: 92px;
+          height: 32px;
           object-fit: contain;
           object-position: left center;
           display: block;
           user-select: none;
           -webkit-user-drag: none;
-        }
-
-        .neoBrand:hover .neoBrandMark {
-          transform: translateY(-1px);
-          filter: drop-shadow(0 10px 18px rgba(13, 20, 32, 0.06));
         }
 
         .neoNav {
@@ -462,13 +468,13 @@ export default function Header(_props: { introReady: boolean }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 22px;
+          gap: 27px;
           white-space: nowrap;
         }
 
         .neoTop,
         .neoTopLink {
-          height: 38px;
+          height: 32px;
           border: 0 !important;
           background: transparent !important;
           box-shadow: none !important;
@@ -478,237 +484,359 @@ export default function Header(_props: { introReady: boolean }) {
           gap: 7px;
           padding: 0 !important;
           border-radius: 0 !important;
-          color: var(--neo-text-soft);
+          color: var(--neo-muted);
           font-size: 14px;
-          font-weight: 700;
-          letter-spacing: -0.03em;
+          font-weight: 560;
+          letter-spacing: -0.024em;
           line-height: 1;
           cursor: pointer;
           outline: none;
           appearance: none;
           -webkit-appearance: none;
-          transition:
-            color 0.16s ease,
-            text-shadow 0.16s ease,
-            transform 0.16s cubic-bezier(.2,.8,.2,1);
+          transition: color 150ms ease;
         }
 
         .neoTop:hover,
-        .neoTopLink:hover,
+        .neoTopLink:hover {
+          color: var(--neo-accent-bright);
+        }
+
         .neoTop.is-open,
         .neoTop.is-active,
         .neoTopLink.is-active {
           color: var(--neo-text);
-          text-shadow: 0 0 18px rgba(51, 71, 217, 0.16);
-        }
-
-        .neoTop:active,
-        .neoTopLink:active {
-          transform: translateY(1px);
         }
 
         .neoChev {
-          opacity: 0.56;
+          opacity: 0.48;
           transition:
-            transform 0.18s cubic-bezier(.2,.8,.2,1),
-            opacity 0.18s ease;
+            transform 160ms ease,
+            opacity 160ms ease,
+            color 160ms ease;
         }
 
-        .neoTop.is-open .neoChev {
+        .neoTop:hover .neoChev,
+        .neoTop.is-open .neoChev,
+        .neoLangBtn:hover .neoChev,
+        .neoLangBtn.is-open .neoChev {
+          color: var(--neo-accent-bright);
+          opacity: 0.86;
+        }
+
+        .neoTop.is-open .neoChev,
+        .neoLangBtn.is-open .neoChev {
           transform: rotate(180deg);
-          opacity: 0.9;
         }
 
         .neoRight {
-          min-width: 236px;
           display: flex;
           align-items: center;
           justify-content: flex-end;
-          gap: 10px;
+          gap: 14px;
+          flex: 0 0 auto;
+          position: relative;
         }
 
-        .neoLangPill {
-          height: 40px;
-          min-width: 86px;
-          border-radius: 16px;
-          border: 0;
-          background: rgba(255, 255, 255, 0.42);
-          -webkit-backdrop-filter: blur(18px);
-          backdrop-filter: blur(18px);
-          color: rgba(13, 20, 32, 0.7);
+        .neoLangWrap {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+        }
+
+        .neoLangBtn {
+          height: 32px;
+          border: 0 !important;
+          border-radius: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
-          padding: 0 13px;
-          font-size: 13px;
-          font-weight: 700;
-          letter-spacing: -0.015em;
+          color: rgba(15, 23, 42, 0.78);
+          font-size: 13.5px;
+          font-weight: 560;
+          letter-spacing: -0.012em;
+          cursor: pointer;
+          transition: color 150ms ease;
+        }
+
+        .neoLangBtn:hover,
+        .neoLangBtn.is-open {
+          color: var(--neo-accent-bright);
+        }
+
+        .neoFlag {
+          width: 24px;
+          height: 16px;
+          display: block;
+          object-fit: cover;
+          object-position: center;
+          flex: 0 0 auto;
+          border-radius: 2px;
+        }
+
+        .neoLangMenu {
+          position: absolute;
+          top: calc(100% + 11px);
+          right: 0;
+          width: 138px;
+          padding: 8px 0;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.95);
+          -webkit-backdrop-filter: blur(22px) saturate(1.04);
+          backdrop-filter: blur(22px) saturate(1.04);
           box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,0.62),
-            0 8px 20px rgba(13,20,32,0.035);
-          user-select: none;
+            0 16px 34px rgba(15, 23, 42, 0.1),
+            inset 0 1px 0 rgba(255,255,255,0.8);
+          opacity: 0;
+          transform: translateY(-5px);
+          animation: neoLangOpen 150ms cubic-bezier(.2,.8,.2,1) forwards;
+        }
+
+        @keyframes neoLangOpen {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .neoLangList {
+          display: grid;
+          gap: 0;
+        }
+
+        .neoLangItem {
+          min-height: 37px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 0 12px;
+          color: rgba(15, 23, 42, 0.58);
+          font-size: 13px;
+          font-weight: 540;
+          letter-spacing: -0.012em;
+          transition: color 140ms ease;
+        }
+
+        .neoLangItem:hover,
+        .neoLangItem.is-active {
+          color: var(--neo-accent-bright);
+        }
+
+        .neoLangItemLeft {
+          min-width: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .neoLangText {
+          color: inherit;
         }
 
         .neoCta {
-          height: 40px;
-          min-width: 142px;
+          height: 34px;
+          min-height: 34px;
+          min-width: 126px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0 17px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, var(--neo-accent) 0%, var(--neo-accent-strong) 100%);
-          color: #fff !important;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 11px;
+          background: var(--neo-accent);
+          color: #ffffff !important;
           font-size: 14px;
-          font-weight: 760;
-          letter-spacing: -0.025em;
-          box-shadow:
-            0 16px 34px rgba(51, 71, 217, 0.22),
-            inset 0 1px 0 rgba(255,255,255,0.22);
+          font-weight: 600;
+          line-height: 1;
+          letter-spacing: -0.016em;
+          box-shadow: none;
+          transform: none;
           transition:
-            transform 0.16s cubic-bezier(.2,.8,.2,1),
-            box-shadow 0.16s ease,
-            filter 0.16s ease;
+            background-color 170ms ease,
+            transform 170ms ease;
         }
 
         .neoCta:hover {
+          background: var(--neo-accent-hover);
+          color: #ffffff !important;
           transform: translateY(-1px);
-          filter: saturate(1.05);
-          box-shadow:
-            0 20px 40px rgba(51, 71, 217, 0.28),
-            inset 0 1px 0 rgba(255,255,255,0.24);
+        }
+
+        .neoCta:active {
+          transform: translateY(0);
         }
 
         .neoBurger {
-          width: 40px;
-          height: 40px;
+          width: 38px;
+          height: 38px;
           display: none;
           align-items: center;
           justify-content: center;
-          border-radius: 14px;
+          border-radius: 12px;
           border: 0;
-          background: rgba(255, 255, 255, 0.42);
-          color: #111827;
+          background: rgba(255, 255, 255, 0.68);
+          color: var(--neo-text);
           cursor: pointer;
-          box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,0.58),
-            0 8px 20px rgba(13,20,32,0.04);
+          box-shadow: none;
         }
 
-        .neoMegaPortal {
-          position: fixed;
-          top: var(--nx-header-h);
-          left: 0;
-          right: 0;
+        .neoMegaPanel {
           height: var(--nx-mega-h);
-          z-index: 2147482999;
-          color: var(--neo-text);
-          overflow: hidden;
-          opacity: 0;
-          transform: translate3d(0, -6px, 0);
-          clip-path: inset(0 0 100% 0);
           background: transparent !important;
-          -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
           border: 0 !important;
           box-shadow: none !important;
-          animation: neoMegaOpen 0.2s cubic-bezier(.2,.8,.2,1) forwards;
-          will-change: opacity, transform, clip-path;
-        }
-
-        .neoMegaPortal::before,
-        .neoMegaPortal::after {
-          display: none !important;
-          content: none !important;
+          overflow: hidden;
+          opacity: 0;
+          transform: translateY(-5px);
+          animation: neoMegaOpen 150ms cubic-bezier(.2,.8,.2,1) forwards;
         }
 
         @keyframes neoMegaOpen {
           to {
             opacity: 1;
-            transform: translate3d(0, 0, 0);
-            clip-path: inset(0 0 0 0);
+            transform: translateY(0);
           }
         }
 
-        .neoMegaShell {
-          position: relative;
-          z-index: 1;
-          width: min(100%, 1460px);
-          height: 100%;
+        .neoMegaInner {
+          width: 100%;
+          max-width: 1460px;
           margin: 0 auto;
-          padding:
-            52px
-            clamp(18px, 5vw, 80px)
-            52px;
-          display: grid;
-          grid-template-columns: minmax(520px, 690px) minmax(280px, 1fr);
-          gap: clamp(46px, 7vw, 130px);
-          align-items: start;
+          padding: 20px clamp(18px, 4vw, 40px) 18px;
         }
 
-        .neoMegaList {
+        .neoMegaTitle {
+          margin: 0 0 16px;
+          color: rgba(15, 23, 42, 0.42);
+          font-size: 12px;
+          font-weight: 640;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+        }
+
+        .neoMegaLayout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 372px;
+          align-items: start;
+          gap: 36px;
+        }
+
+        .neoMegaGrid {
+          max-width: 760px;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 30px 58px;
-          align-content: start;
+          grid-template-rows: repeat(3, 40px);
+          grid-auto-flow: column;
+          gap: 18px 52px;
+        }
+
+        .neoMegaGrid.is-small {
+          max-width: 520px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-rows: none;
+          grid-auto-flow: row;
         }
 
         .neoMegaItem {
-          min-height: 34px;
-          display: flex;
+          min-height: 36px;
+          display: inline-flex;
           align-items: center;
-          gap: 15px;
+          gap: 14px;
           padding: 0;
-          border: 0 !important;
-          background: transparent !important;
-          box-shadow: none !important;
-          color: rgba(13, 20, 32, 0.72);
+          color: rgba(15, 23, 42, 0.7);
+          transform: translateX(0);
           transition:
-            color 0.16s ease,
-            transform 0.16s cubic-bezier(.2,.8,.2,1),
-            text-shadow 0.16s ease;
-        }
-
-        .neoMegaItem:hover,
-        .neoMegaItem.is-active {
-          color: var(--neo-text);
-          transform: translateX(4px);
-          text-shadow: 0 0 18px rgba(51, 71, 217, 0.16);
+            color 170ms ease,
+            transform 170ms ease;
         }
 
         .neoMegaIcon {
-          width: 24px;
-          height: 24px;
+          width: 22px;
+          height: 22px;
           flex: 0 0 auto;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: var(--neo-accent);
-          opacity: 0.86;
+          color: var(--neo-accent-bright);
+          opacity: 0.82;
+          transition:
+            color 170ms ease,
+            opacity 170ms ease,
+            transform 170ms ease;
         }
 
         .neoMegaName {
-          min-width: 0;
           color: inherit;
-          font-size: 16px;
-          line-height: 1.12;
-          font-weight: 740;
-          letter-spacing: -0.045em;
+          font-size: 15px;
+          line-height: 1.18;
+          font-weight: 530;
+          letter-spacing: -0.028em;
+          transition:
+            color 170ms ease,
+            font-weight 170ms ease;
         }
 
-        .neoMegaEmpty {
-          min-height: 210px;
-          pointer-events: none;
+        .neoMegaItem:hover,
+        .neoMegaItem.is-active {
+          color: var(--neo-accent-bright);
+          transform: translateX(4px);
+        }
+
+        .neoMegaItem:hover .neoMegaIcon,
+        .neoMegaItem.is-active .neoMegaIcon {
+          opacity: 1;
+          transform: translateX(1px);
+        }
+
+        .neoMegaItem:hover .neoMegaName,
+        .neoMegaItem.is-active .neoMegaName {
+          font-weight: 580;
+        }
+
+        .neoMegaPreview {
+          min-width: 0;
+        }
+
+        .neoMegaPreviewImage {
+          width: 100%;
+          height: 142px;
+          display: block;
+          object-fit: cover;
+          object-position: center;
+          border-radius: 18px;
+          background: #eef2ff;
+        }
+
+        .neoMegaPreviewText {
+          margin: 10px 0 0;
+          color: rgba(15, 23, 42, 0.72);
+          font-size: 13.5px;
+          line-height: 1.46;
+          font-weight: 510;
+          letter-spacing: -0.014em;
+          max-width: 372px;
+        }
+
+        .neoMegaPreviewPlaceholder {
+          width: 100%;
+          height: 142px;
+          border-radius: 18px;
+          background:
+            linear-gradient(135deg, rgba(68, 89, 223, 0.12), rgba(15, 23, 42, 0.04)),
+            #eef2ff;
         }
 
         .neoMOv {
           position: fixed;
           inset: 0;
-          z-index: 2147483001;
+          z-index: 2147483003;
           opacity: 0;
           pointer-events: none;
-          transition: opacity 0.18s ease;
+          transition: opacity 160ms ease;
         }
 
         .neoMOv.is-open {
@@ -720,425 +848,592 @@ export default function Header(_props: { introReady: boolean }) {
           position: absolute;
           inset: 0;
           border: 0;
-          background: rgba(9, 14, 24, 0.22);
+          background: rgba(15, 23, 42, 0.18);
           -webkit-backdrop-filter: blur(8px);
           backdrop-filter: blur(8px);
         }
 
         .neoSheet {
           position: absolute;
-          top: var(--nx-header-h);
+          top: 12px;
           left: 12px;
           right: 12px;
-          border-radius: 0 0 26px 26px;
-          background: var(--neo-surface-bg);
-          -webkit-backdrop-filter: var(--neo-surface-blur);
-          backdrop-filter: var(--neo-surface-blur);
-          color: var(--neo-text);
-          box-shadow: 0 26px 64px rgba(7, 13, 28, 0.18);
-          transform: translate3d(0, -14px, 0);
-          opacity: 0;
-          transition:
-            transform 0.24s cubic-bezier(.2,.8,.2,1),
-            opacity 0.2s ease;
+          border-radius: 22px;
+          background: rgba(248, 249, 252, 0.97);
+          -webkit-backdrop-filter: blur(22px);
+          backdrop-filter: blur(22px);
+          box-shadow: 0 24px 56px rgba(15, 23, 42, 0.13);
           overflow: hidden;
         }
 
-        .neoSheet.is-open {
-          transform: translate3d(0, 0, 0);
-          opacity: 1;
-        }
-
         .neoMTop {
-          height: 58px;
+          height: 62px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 14px;
           padding: 0 18px;
         }
 
         .neoMTitle {
-          font-size: 12px;
-          font-weight: 780;
-          letter-spacing: 0.14em;
-          color: rgba(13,20,32,0.56);
+          font-size: 13px;
+          font-weight: 620;
+          letter-spacing: 0.12em;
+          color: rgba(15, 23, 42, 0.46);
           text-transform: uppercase;
         }
 
         .neoMClose {
           width: 40px;
           height: 40px;
-          display: flex;
+          border: 0;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.78);
+          color: var(--neo-text);
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          border-radius: 14px;
-          border: 0;
-          background: rgba(255,255,255,0.52);
-          color: #111827;
           cursor: pointer;
-        }
-
-        .neoMTabs {
-          display: grid;
-          grid-template-columns: repeat(4,1fr);
-          gap: 8px;
-          padding: 8px 18px 14px;
-        }
-
-        .neoTab {
-          min-height: 40px;
-          border: 0;
-          border-radius: 14px;
-          background: rgba(13,20,32,0.045);
-          color: rgba(13,20,32,0.62);
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .neoTab.is-on {
-          background: #0d1420;
-          color: #fff;
         }
 
         .neoMBody {
-          display: grid;
-          gap: 6px;
-          max-height: min(62vh, 560px);
+          max-height: min(78vh, 720px);
           overflow: auto;
-          padding: 4px 18px 20px;
-          -webkit-overflow-scrolling: touch;
+          padding: 10px 16px 18px;
+          display: grid;
+          gap: 18px;
+        }
+
+        .neoMGroup {
+          display: grid;
+          gap: 5px;
+        }
+
+        .neoMGroupTitle {
+          padding: 0 8px;
+          margin: 0 0 4px;
+          color: rgba(15, 23, 42, 0.42);
+          font-size: 12px;
+          font-weight: 620;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
         }
 
         .neoMItem {
-          min-height: 54px;
+          min-height: 46px;
           display: flex;
           align-items: center;
-          gap: 13px;
-          padding: 10px 8px;
-          color: rgba(13,20,32,0.78);
-          border-radius: 16px;
+          gap: 12px;
+          padding: 0 8px;
+          border-radius: 14px;
+          color: rgba(15, 23, 42, 0.72);
+          transition:
+            color 160ms ease,
+            background 160ms ease,
+            transform 160ms ease;
         }
 
         .neoMItem:hover,
         .neoMItem.is-active {
-          background: rgba(255,255,255,0.50);
-          color: var(--neo-text);
+          background: rgba(47, 73, 216, 0.07);
+          color: var(--neo-accent-bright);
+          transform: translateX(3px);
         }
 
         .neoMIcon {
-          width: 32px;
-          height: 32px;
+          width: 22px;
+          height: 22px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: var(--neo-accent);
+          color: var(--neo-accent-bright);
+          opacity: 0.74;
+        }
+
+        .neoMItem:hover .neoMIcon,
+        .neoMItem.is-active .neoMIcon {
+          opacity: 1;
         }
 
         .neoMText {
-          font-size: 16px;
-          line-height: 1.15;
-          font-weight: 730;
-          letter-spacing: -0.04em;
+          font-size: 15px;
+          font-weight: 540;
+          letter-spacing: -0.026em;
+        }
+
+        .neoMFooter {
+          padding: 0 16px 18px;
+        }
+
+        .neoMCta {
+          min-height: 48px;
+          width: 100%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 13px;
+          background: var(--neo-accent);
+          color: #fff !important;
+          font-size: 15px;
+          font-weight: 600;
+          letter-spacing: -0.018em;
         }
 
         @media (max-width: 1180px) {
           .neoNav {
-            gap: 16px;
+            gap: 20px;
           }
 
           .neoTop,
           .neoTopLink {
+            font-size: 13.5px;
+          }
+
+          .neoMegaLayout {
+            grid-template-columns: minmax(0, 1fr) 328px;
+            gap: 24px;
+          }
+
+          .neoMegaPreviewImage,
+          .neoMegaPreviewPlaceholder {
+            height: 132px;
+          }
+
+          .neoMegaPreviewText {
+            max-width: 328px;
             font-size: 13px;
-          }
-
-          .neoRight {
-            min-width: 206px;
-          }
-
-          .neoCta {
-            min-width: 128px;
-          }
-
-          .neoBrand {
-            min-width: 100px;
-          }
-
-          .neoBrandMark {
-            width: 98px;
-          }
-
-          .neoBrandLogo {
-            width: 94px;
-          }
-
-          .neoMegaShell {
-            grid-template-columns: minmax(480px, 620px) minmax(160px, 1fr);
-          }
-        }
-
-        @media (max-width: 1040px) {
-          .neoMegaShell {
-            grid-template-columns: 1fr;
-          }
-
-          .neoMegaEmpty {
-            display: none;
+            line-height: 1.42;
           }
         }
 
         @media (max-width: 980px) {
-          .neoInner {
-            padding: 0 16px;
+          :root {
+            --nx-header-h: 60px;
+          }
+
+          .neoShell {
+            height: var(--nx-header-h) !important;
           }
 
           .neoNav,
+          .neoLangWrap,
           .neoCta,
-          .neoLangPill,
-          .neoMegaPortal {
-            display: none;
-          }
-
-          .neoRight {
-            min-width: auto;
+          .neoMegaPanel {
+            display: none !important;
           }
 
           .neoBurger {
             display: inline-flex;
           }
 
+          .neoInner {
+            padding: 0 16px;
+          }
+
           .neoBrandMark {
             width: 94px;
-            height: 40px;
           }
 
           .neoBrandLogo {
             width: 90px;
-            height: 38px;
           }
         }
 
-        @media (max-width: 560px) {
-          :root {
-            --nx-header-h: 62px;
-          }
-
-          .neoBrandMark {
-            width: 84px;
-            height: 36px;
-          }
-
-          .neoBrandLogo {
-            width: 80px;
-            height: 34px;
-          }
-
-          .neoMTabs {
-            grid-template-columns: 1fr 1fr;
+        @media (max-width: 640px) {
+          .neoMegaGrid,
+          .neoMegaGrid.is-small {
+            grid-template-columns: 1fr;
+            grid-template-rows: none;
+            grid-auto-flow: row;
           }
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .neoSurface,
-          .neoMegaPortal {
+          .neoShell,
+          .neoMegaPanel,
+          .neoLangMenu,
+          .neoTop,
+          .neoTopLink,
+          .neoCta,
+          .neoMegaItem,
+          .neoMegaIcon,
+          .neoMegaName,
+          .neoLangBtn,
+          .neoMItem {
             transition: none !important;
             animation: none !important;
           }
 
-          .neoMegaPortal {
-            opacity: 1;
-            transform: none;
-            clip-path: inset(0 0 0 0);
-          }
-
-          .neoSheet,
-          .neoBrandMark,
-          .neoTop,
-          .neoTopLink,
-          .neoCta,
-          .neoMegaItem {
-            transition: none !important;
+          .neoMegaPanel,
+          .neoLangMenu {
+            opacity: 1 !important;
+            transform: none !important;
           }
         }
       `}</style>
 
-      <div className={cx("neoSurface", openMega && "is-open")} aria-hidden="true" />
+      <div ref={shellRef} className={cx("neoShell", openMega && "is-open")}>
+        <header className="neoHdr">
+          <div className="neoInner">
+            <Link to={`/${lang}`} className="neoBrand" aria-label="NEOX" data-wg-notranslate>
+              <span className="neoBrandMark" aria-hidden="true">
+                <img
+                  className="neoBrandLogo"
+                  src={LOGO_SRC}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </span>
+            </Link>
 
-      <header ref={headerRef} className="neoHdr">
-        <div className="neoInner">
-          <Link to={`/${lang}`} className="neoBrand" aria-label="NEOX" data-wg-notranslate>
-            <span className="neoBrandMark" aria-hidden="true">
-              <img
-                className="neoBrandLogo"
-                src={LOGO_SRC}
-                alt=""
-                loading="eager"
-                decoding="async"
-                draggable={false}
-              />
-            </span>
-          </Link>
+            <nav className="neoNav" aria-label="Əsas naviqasiya">
+              <NavLink
+                to={withLang("/")}
+                end
+                onMouseEnter={closeMega}
+                className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}
+              >
+                Ana səhifə
+              </NavLink>
 
-          <nav className="neoNav" aria-label="Əsas naviqasiya">
-            <NavLink
-              to={withLang("/")}
-              end
-              onMouseEnter={closeMega}
-              className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}
-            >
-              Ana səhifə
-            </NavLink>
+              <button
+                type="button"
+                className={cx("neoTop", openMega === "services" && "is-open is-active")}
+                aria-haspopup="menu"
+                aria-expanded={openMega === "services"}
+                aria-controls={megaPanelId}
+                onMouseEnter={() => openMenu("services")}
+                onFocus={() => openMenu("services")}
+                onClick={() => setOpenMega((current) => (current === "services" ? null : "services"))}
+              >
+                Xidmətlər
+                <ChevronDown className="neoChev" size={15} strokeWidth={1.8} aria-hidden="true" />
+              </button>
 
-            <button
-              type="button"
-              className={cx("neoTop", openMega === "services" && "is-open is-active")}
-              aria-haspopup="menu"
-              aria-expanded={openMega === "services"}
-              aria-controls={megaPanelId}
-              onMouseEnter={() => setOpenMega("services")}
-              onFocus={() => setOpenMega("services")}
-              onClick={() => setOpenMega((current) => (current === "services" ? null : "services"))}
-            >
-              Xidmətlər
-              <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                className={cx("neoTop", openMega === "industries" && "is-open is-active")}
+                aria-haspopup="menu"
+                aria-expanded={openMega === "industries"}
+                aria-controls={megaPanelId}
+                onMouseEnter={() => openMenu("industries")}
+                onFocus={() => openMenu("industries")}
+                onClick={() => setOpenMega((current) => (current === "industries" ? null : "industries"))}
+              >
+                Sahələr
+                <ChevronDown className="neoChev" size={15} strokeWidth={1.8} aria-hidden="true" />
+              </button>
 
-            <button
-              type="button"
-              className={cx("neoTop", openMega === "company" && "is-open is-active")}
-              aria-haspopup="menu"
-              aria-expanded={openMega === "company"}
-              aria-controls={megaPanelId}
-              onMouseEnter={() => setOpenMega("company")}
-              onFocus={() => setOpenMega("company")}
-              onClick={() => setOpenMega((current) => (current === "company" ? null : "company"))}
-            >
-              Şirkət
-              <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
-            </button>
+              <NavLink
+                to={withLang("/about")}
+                onMouseEnter={closeMega}
+                className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}
+              >
+                Haqqımızda
+              </NavLink>
 
-            <button
-              type="button"
-              className={cx("neoTop", openMega === "resources" && "is-open is-active")}
-              aria-haspopup="menu"
-              aria-expanded={openMega === "resources"}
-              aria-controls={megaPanelId}
-              onMouseEnter={() => setOpenMega("resources")}
-              onFocus={() => setOpenMega("resources")}
-              onClick={() => setOpenMega((current) => (current === "resources" ? null : "resources"))}
-            >
-              Resurslar
-              <ChevronDown className="neoChev" size={15} strokeWidth={2} aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                className={cx("neoTop", openMega === "resources" && "is-open is-active")}
+                aria-haspopup="menu"
+                aria-expanded={openMega === "resources"}
+                aria-controls={megaPanelId}
+                onMouseEnter={() => openMenu("resources")}
+                onFocus={() => openMenu("resources")}
+                onClick={() => setOpenMega((current) => (current === "resources" ? null : "resources"))}
+              >
+                Resurslar
+                <ChevronDown className="neoChev" size={15} strokeWidth={1.8} aria-hidden="true" />
+              </button>
 
-            <NavLink
-              to={withLang("/contact")}
-              onMouseEnter={closeMega}
-              className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}
-            >
-              Əlaqə
-            </NavLink>
-          </nav>
+              <NavLink
+                to={withLang("/pricing")}
+                onMouseEnter={closeMega}
+                className={({ isActive }) => cx("neoTopLink", isActive && "is-active")}
+              >
+                Qiymətlər
+              </NavLink>
+            </nav>
 
-          <div className="neoRight">
-            <div className="neoLangPill" aria-label="Sayt dili" data-wg-notranslate>
-              <Globe2 size={16} strokeWidth={1.9} aria-hidden="true" />
-              {String(lang).toUpperCase()}
-            </div>
+            <div className="neoRight">
+              <div className="neoLangWrap">
+                <button
+                  type="button"
+                  className={cx("neoLangBtn", langOpen && "is-open")}
+                  aria-haspopup="menu"
+                  aria-expanded={langOpen}
+                  aria-label="Dili dəyiş"
+                  onClick={() => {
+                    closeMega();
+                    setLangOpen((current) => !current);
+                  }}
+                >
+                  <img
+                    className="neoFlag"
+                    src={LANG_META[lang].flag}
+                    alt=""
+                    aria-hidden="true"
+                    loading="eager"
+                    decoding="async"
+                    draggable={false}
+                  />
+                  <span>{LANG_META[lang].label}</span>
+                  <ChevronDown className="neoChev" size={14} strokeWidth={1.8} aria-hidden="true" />
+                </button>
 
-            <NavLink to={withLang("/contact")} className="neoCta">
-              Əlaqə saxla
-            </NavLink>
+                {langOpen ? (
+                  <div className="neoLangMenu" role="menu" aria-label="Dil seçimi">
+                    <div className="neoLangList">
+                      {LANGS.map((item) => {
+                        const active = item === lang;
 
-            <button
-              className="neoBurger"
-              type="button"
-              aria-label={mobileOpen ? "Menyunu bağla" : "Menyunu aç"}
-              aria-expanded={mobileOpen}
-              aria-controls={mobilePanelId}
-              onClick={() => {
-                if (!mobileOpen) {
+                        return (
+                          <Link
+                            key={item}
+                            to={buildLangPath(item)}
+                            className={cx("neoLangItem", active && "is-active")}
+                            onClick={closeLang}
+                            role="menuitem"
+                          >
+                            <span className="neoLangItemLeft">
+                              <img
+                                className="neoFlag"
+                                src={LANG_META[item].flag}
+                                alt=""
+                                aria-hidden="true"
+                                loading="lazy"
+                                decoding="async"
+                                draggable={false}
+                              />
+                              <span className="neoLangText">{LANG_META[item].label}</span>
+                            </span>
+
+                            {active ? <Check size={15} strokeWidth={1.9} aria-hidden="true" /> : null}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <NavLink
+                to={withLang("/contact")}
+                onMouseEnter={() => {
                   closeMega();
-                  setMobileTab("main");
-                  setMobileOpen(true);
-                } else {
-                  closeMobile();
-                }
-              }}
-            >
-              {mobileOpen ? <X size={19} strokeWidth={2} /> : <Menu size={20} strokeWidth={2} />}
-            </button>
+                  closeLang();
+                }}
+                className="neoCta"
+              >
+                Əlaqə saxla
+              </NavLink>
+
+              <button
+                className="neoBurger"
+                type="button"
+                aria-label={mobileOpen ? "Menyunu bağla" : "Menyunu aç"}
+                aria-expanded={mobileOpen}
+                aria-controls={mobilePanelId}
+                onClick={() => {
+                  closeMega();
+                  closeLang();
+                  setMobileOpen((current) => !current);
+                }}
+              >
+                {mobileOpen ? <X size={19} strokeWidth={2} /> : <Menu size={20} strokeWidth={2} />}
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div id={mobilePanelId} className={cx("neoMOv", mobileOpen && "is-open")} aria-hidden={!mobileOpen}>
-          <button className="neoBg" type="button" aria-label="Menyunu bağla" onClick={closeMobile} />
+        {openMega ? (
+          <div id={megaPanelId} className="neoMegaPanel" role="menu" aria-label={megaTitle}>
+            <div className="neoMegaInner">
+              <div className="neoMegaTitle">{megaTitle}</div>
 
-          <div className={cx("neoSheet", mobileSoft && "is-open")} role="dialog" aria-modal="true" aria-label="Mobil menyu">
+              <div className="neoMegaLayout">
+                <div className={cx("neoMegaGrid", megaItems.length <= 2 && "is-small")}>
+                  {megaItems.map((item) => {
+                    const Icon = item.icon;
+                    const previewActive = activePreviewItem?.id === item.id;
+
+                    return (
+                      <NavLink
+                        key={item.id}
+                        to={withLang(item.to)}
+                        className={({ isActive }) =>
+                          cx("neoMegaItem", (isActive || previewActive) && "is-active")
+                        }
+                        onClick={closeMega}
+                        onMouseEnter={() => setHoveredMegaItemId(item.id)}
+                        onFocus={() => setHoveredMegaItemId(item.id)}
+                        role="menuitem"
+                      >
+                        <span className="neoMegaIcon" aria-hidden="true">
+                          <Icon size={20} strokeWidth={1.8} />
+                        </span>
+                        <span className="neoMegaName">{item.label}</span>
+                      </NavLink>
+                    );
+                  })}
+                </div>
+
+                {activePreviewItem ? (
+                  <aside className="neoMegaPreview" aria-live="polite">
+                    {activePreviewItem.previewImage ? (
+                      <img
+                        className="neoMegaPreviewImage"
+                        src={activePreviewItem.previewImage}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="neoMegaPreviewPlaceholder" />
+                    )}
+
+                    <p className="neoMegaPreviewText">
+                      {activePreviewItem.previewDescription ??
+                        "Bu bölmə haqqında qısa məlumat burada göstərilir."}
+                    </p>
+                  </aside>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div id={mobilePanelId} className={cx("neoMOv", mobileOpen && "is-open")} aria-hidden={!mobileOpen}>
+        <button className="neoBg" type="button" aria-label="Menyunu bağla" onClick={closeMobile} />
+
+        {mobileOpen ? (
+          <div className="neoSheet" role="dialog" aria-modal="true" aria-label="Mobil menyu">
             <div className="neoMTop">
               <div className="neoMTitle">Menyu</div>
+
               <button type="button" className="neoMClose" aria-label="Menyunu bağla" onClick={closeMobile}>
                 <X size={18} strokeWidth={2} />
               </button>
             </div>
 
-            <div className="neoMTabs" role="tablist" aria-label="Mobil naviqasiya bölmələri">
-              <button type="button" className={cx("neoTab", mobileTab === "main" && "is-on")} onClick={() => setMobileTab("main")}>
-                Əsas
-              </button>
-
-              <button type="button" className={cx("neoTab", mobileTab === "services" && "is-on")} onClick={() => setMobileTab("services")}>
-                Xidmətlər
-              </button>
-
-              <button type="button" className={cx("neoTab", mobileTab === "company" && "is-on")} onClick={() => setMobileTab("company")}>
-                Şirkət
-              </button>
-
-              <button type="button" className={cx("neoTab", mobileTab === "resources" && "is-on")} onClick={() => setMobileTab("resources")}>
-                Resurslar
-              </button>
-            </div>
-
             <div className="neoMBody">
-              {mobileItems.map((item) => (
-                <MobileItem key={item.id} item={item} />
-              ))}
+              <div className="neoMGroup">
+                <div className="neoMGroupTitle">Əsas</div>
+
+                <NavLink
+                  to={withLang("/")}
+                  end
+                  className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                  onClick={closeMobile}
+                >
+                  <span className="neoMIcon" aria-hidden="true">
+                    <Building2 size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="neoMText">Ana səhifə</span>
+                </NavLink>
+
+                <NavLink
+                  to={withLang("/about")}
+                  className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                  onClick={closeMobile}
+                >
+                  <span className="neoMIcon" aria-hidden="true">
+                    <Building2 size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="neoMText">Haqqımızda</span>
+                </NavLink>
+
+                <NavLink
+                  to={withLang("/pricing")}
+                  className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                  onClick={closeMobile}
+                >
+                  <span className="neoMIcon" aria-hidden="true">
+                    <Building2 size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="neoMText">Qiymətlər</span>
+                </NavLink>
+              </div>
+
+              <div className="neoMGroup">
+                <div className="neoMGroupTitle">Xidmətlər</div>
+
+                {services.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink
+                      key={item.id}
+                      to={withLang(item.to)}
+                      className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                      onClick={closeMobile}
+                    >
+                      <span className="neoMIcon" aria-hidden="true">
+                        <Icon size={18} strokeWidth={1.8} />
+                      </span>
+                      <span className="neoMText">{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+
+              <div className="neoMGroup">
+                <div className="neoMGroupTitle">Sahələr</div>
+
+                {industries.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink
+                      key={item.id}
+                      to={withLang(item.to)}
+                      className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                      onClick={closeMobile}
+                    >
+                      <span className="neoMIcon" aria-hidden="true">
+                        <Icon size={18} strokeWidth={1.8} />
+                      </span>
+                      <span className="neoMText">{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+
+              <div className="neoMGroup">
+                <div className="neoMGroupTitle">Resurslar</div>
+
+                {resources.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink
+                      key={item.id}
+                      to={withLang(item.to)}
+                      className={({ isActive }) => cx("neoMItem", isActive && "is-active")}
+                      onClick={closeMobile}
+                    >
+                      <span className="neoMIcon" aria-hidden="true">
+                        <Icon size={18} strokeWidth={1.8} />
+                      </span>
+                      <span className="neoMText">{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="neoMFooter">
+              <NavLink to={withLang("/contact")} className="neoMCta" onClick={closeMobile}>
+                Əlaqə saxla
+              </NavLink>
             </div>
           </div>
-        </div>
-      </header>
-
-      {openMega ? (
-        <div ref={megaRef} id={megaPanelId} className="neoMegaPortal" role="menu" aria-label={megaTitle}>
-          <div className="neoMegaShell">
-            <div className="neoMegaList">
-              {megaItems.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <NavLink
-                    key={item.id}
-                    to={withLang(item.to)}
-                    className={({ isActive }) => cx("neoMegaItem", isActive && "is-active")}
-                    onClick={closeMega}
-                    role="menuitem"
-                  >
-                    <span className="neoMegaIcon" aria-hidden="true">
-                      <Icon size={20} strokeWidth={1.85} />
-                    </span>
-
-                    <span className="neoMegaName">{item.label}</span>
-                  </NavLink>
-                );
-              })}
-            </div>
-
-            <div className="neoMegaEmpty" aria-hidden="true" />
-          </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </>,
     document.body,
   );
