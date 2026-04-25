@@ -1,317 +1,414 @@
-import { useMemo } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Mail, Phone, Linkedin, Github, ArrowUpRight } from "lucide-react";
+// src/components/Footer.tsx
+import React, { useCallback } from "react";
+import { Link, NavLink, useParams } from "react-router-dom";
+import { Instagram, Linkedin, Mail, Phone } from "lucide-react";
+import { DEFAULT_LANG, type Lang } from "../i18n/lang";
 
-const SUPPORTED_LANGS = ["az", "tr", "en", "ru", "es"] as const;
-type Lang = (typeof SUPPORTED_LANGS)[number];
-
-function getLangFromPath(pathname: string): Lang {
-  const seg = (pathname.split("/")[1] || "").toLowerCase();
-  return (SUPPORTED_LANGS as readonly string[]).includes(seg) ? (seg as Lang) : "az";
+function cx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
 }
 
-function withLang(path: string, lang: Lang) {
-  if (!path.startsWith("/")) return `/${lang}/${path}`;
-  return `/${lang}${path}`;
+const LANG_MENU: Lang[] = ["az", "tr", "ru", "en", "es"];
+const LOGO_SRC = "/image/neox-logo.png";
+
+function isLang(x: string | undefined | null): x is Lang {
+  if (!x) return false;
+  const v = String(x).toLowerCase();
+  return (LANG_MENU as readonly string[]).includes(v);
 }
+
+type FooterLink = {
+  label: string;
+  to: string;
+};
+
+const companyLinks: FooterLink[] = [
+  { label: "About", to: "/about" },
+  { label: "Services", to: "/services" },
+  { label: "Use Cases", to: "/use-cases" },
+  { label: "Pricing", to: "/pricing" },
+];
+
+const resourceLinks: FooterLink[] = [
+  { label: "Blog", to: "/blog" },
+  { label: "FAQ", to: "/faq" },
+  { label: "Guides", to: "/resources/guides" },
+];
 
 export default function Footer() {
-  const { pathname } = useLocation();
-  const lang = useMemo(() => getLangFromPath(pathname), [pathname]);
+  const { lang: paramLang } = useParams<{ lang?: string }>();
+  const lang: Lang = isLang(paramLang) ? (paramLang as Lang) : DEFAULT_LANG;
+
+  const withLang = useCallback(
+    (to: string) => {
+      if (to === "/") return `/${lang}`;
+      return `/${lang}${to.startsWith("/") ? to : `/${to}`}`;
+    },
+    [lang]
+  );
 
   const year = new Date().getFullYear();
-  const phone = "+994 51 800 55 77";
-  const email = "info@weneox.com";
 
   return (
-    <footer className="neox-white-footer">
-      <div className="nwf-shell">
-        <div className="nwf-top">
-          <div className="nwf-brand">
-            <Link to={withLang("/", lang)} className="nwf-logo" aria-label="NEOX">
-              <img src="/image/neox-logo.png" alt="NEOX" draggable={false} />
-            </Link>
-
-            <div>
-              <div className="nwf-name">NEOX</div>
-              <div className="nwf-tag">Operational Intelligence</div>
-            </div>
-          </div>
-
-          <p className="nwf-copy">
-            We build clean automation systems for customer conversations, workflows and business operations.
-          </p>
-        </div>
-
-        <div className="nwf-grid">
-          <div className="nwf-contact">
-            <a href={`mailto:${email}`} className="nwf-contact-item">
-              <Mail size={17} />
-              {email}
-            </a>
-
-            <a href={`tel:${phone.replace(/\s+/g, "")}`} className="nwf-contact-item">
-              <Phone size={17} />
-              {phone}
-            </a>
-          </div>
-
-          <div className="nwf-links">
-            <div>
-              <div className="nwf-title">Company</div>
-              <Link to={withLang("/about", lang)}>About</Link>
-              <Link to={withLang("/services", lang)}>Services</Link>
-              <Link to={withLang("/use-cases", lang)}>Use Cases</Link>
-            </div>
-
-            <div>
-              <div className="nwf-title">Resources</div>
-              <Link to={withLang("/blog", lang)}>Blog</Link>
-              <Link to={withLang("/faq", lang)}>FAQ</Link>
-              <Link to={withLang("/contact", lang)}>Contact</Link>
-            </div>
-          </div>
-
-          <div className="nwf-action">
-            <Link to={withLang("/contact", lang)} className="nwf-cta">
-              Contact
-              <ArrowUpRight size={17} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="nwf-bottom">
-          <span>© {year} NEOX — Intelligent Automation Systems</span>
-
-          <div className="nwf-socials">
-            <a href="#" aria-label="LinkedIn">
-              <Linkedin size={17} />
-            </a>
-            <a href="#" aria-label="GitHub">
-              <Github size={17} />
-            </a>
-            <a href={`mailto:${email}`} aria-label="Email">
-              <Mail size={17} />
-            </a>
-          </div>
-        </div>
-      </div>
-
+    <footer className="neoFooter">
       <style>{`
-        .neox-white-footer{
-          position: relative;
+        .neoFooter,
+        .neoFooter *{
+          box-sizing:border-box;
+        }
+
+        .neoFooter a,
+        .neoFooter a:hover,
+        .neoFooter a:focus,
+        .neoFooter a:active{
+          text-decoration:none !important;
+        }
+
+        .neoFooter{
+          --ink:#0d1420;
+          --heading:#0b1322;
+          --text:#667286;
+          --muted:#7a8597;
+          --soft:#98a2b3;
+          --line:rgba(13,20,32,.075);
+          --accent:#3148c7;
+
           background:
-            radial-gradient(900px 360px at 50% -20%, rgba(37,99,235,.08), transparent 65%),
-            linear-gradient(180deg, #f8fbff 0%, #ffffff 62%);
-          color: #101827;
-          border-top: 1px solid rgba(15,23,42,.08);
-          overflow: hidden;
+            radial-gradient(circle at 16% 0%, rgba(49,72,199,.045), transparent 30%),
+            linear-gradient(180deg,#fbfcfe 0%,#ffffff 58%,#fbfcfe 100%);
+          border-top:1px solid rgba(13,20,32,.055);
+          color:var(--ink);
         }
 
-        .neox-white-footer a{
-          text-decoration: none !important;
-          color: inherit;
+        .neoFooterShell{
+          width:min(100%,1440px);
+          margin:0 auto;
+          padding:56px clamp(22px,6vw,92px) 26px;
         }
 
-        .nwf-shell{
-          width: min(1280px, calc(100% - 48px));
-          margin: 0 auto;
-          padding: 58px 0 26px;
+        .neoFooterGrid{
+          display:grid;
+          grid-template-columns:minmax(220px,1fr) minmax(360px,1.25fr) minmax(260px,1fr);
+          gap:clamp(42px,6vw,92px);
+          align-items:start;
+          padding-bottom:42px;
+          border-bottom:1px solid var(--line);
         }
 
-        .nwf-top{
-          display: grid;
-          grid-template-columns: .9fr 1.1fr;
-          gap: 48px;
-          align-items: end;
-          padding-bottom: 34px;
-          border-bottom: 1px solid rgba(15,23,42,.08);
+        .neoFooterBrand{
+          display:grid;
+          gap:18px;
+          align-content:start;
         }
 
-        .nwf-brand{
-          display: flex;
-          align-items: center;
-          gap: 14px;
+        .neoFooterLogoLink{
+          width:112px;
+          height:42px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:flex-start;
         }
 
-        .nwf-logo{
-          width: 54px;
-          height: 54px;
-          border-radius: 18px;
-          display: grid;
-          place-items: center;
-          background: #fff;
-          border: 1px solid rgba(15,23,42,.08);
-          box-shadow: 0 18px 50px rgba(15,23,42,.08);
+        .neoFooterLogo{
+          width:108px;
+          height:40px;
+          display:block;
+          object-fit:contain;
+          object-position:left center;
+          user-select:none;
+          -webkit-user-drag:none;
         }
 
-        .nwf-logo img{
-          width: 31px;
-          height: 31px;
-          object-fit: contain;
+        .neoFooterLine{
+          max-width:260px;
+          margin:0;
+          color:var(--text);
+          font-size:14px;
+          line-height:1.55;
+          font-weight:540;
+          letter-spacing:-.015em;
         }
 
-        .nwf-name{
-          font-size: 24px;
-          line-height: 1;
-          font-weight: 850;
-          letter-spacing: -.04em;
+        .neoFooterNav{
+          display:grid;
+          grid-template-columns:repeat(2,minmax(130px,1fr));
+          gap:clamp(34px,5vw,72px);
         }
 
-        .nwf-tag{
-          margin-top: 5px;
-          color: #667085;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: .16em;
-          text-transform: uppercase;
+        .neoFooterCol{
+          display:grid;
+          gap:16px;
+          align-content:start;
         }
 
-        .nwf-copy{
-          margin: 0;
-          max-width: 640px;
-          color: #344054;
-          font-size: 18px;
-          line-height: 1.75;
-          font-weight: 500;
+        .neoFooterTitle{
+          margin:0;
+          color:var(--heading);
+          font-size:12px;
+          line-height:1;
+          font-weight:820;
+          letter-spacing:.08em;
+          text-transform:uppercase;
         }
 
-        .nwf-grid{
-          display: grid;
-          grid-template-columns: .9fr 1fr auto;
-          gap: 44px;
-          align-items: start;
-          padding: 34px 0;
+        .neoFooterLinks{
+          display:grid;
+          gap:12px;
         }
 
-        .nwf-contact{
-          display: grid;
-          gap: 10px;
-          align-content: start;
+        .neoFooterLink{
+          width:max-content;
+          max-width:100%;
+          color:var(--text);
+          font-size:15px;
+          line-height:1.15;
+          font-weight:610;
+          letter-spacing:-.02em;
+          transition:
+            color .16s ease,
+            transform .16s cubic-bezier(.2,.8,.2,1);
         }
 
-        .nwf-contact-item{
-          width: fit-content;
-          min-height: 42px;
-          padding: 0 14px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          gap: 9px;
-          color: #344054;
-          background: #fff;
-          border: 1px solid rgba(15,23,42,.08);
-          box-shadow: 0 12px 34px rgba(15,23,42,.05);
-          font-size: 14px;
-          font-weight: 650;
+        .neoFooterLink:hover,
+        .neoFooterLink.is-active{
+          color:var(--accent);
+          transform:translateX(2px);
         }
 
-        .nwf-links{
-          display: grid;
-          grid-template-columns: repeat(2, minmax(140px, 1fr));
-          gap: 28px;
+        .neoFooterContact{
+          display:grid;
+          gap:16px;
+          align-content:start;
+          justify-items:start;
         }
 
-        .nwf-links > div{
-          display: grid;
-          gap: 12px;
+        .neoFooterContactList{
+          display:grid;
+          gap:10px;
+          width:100%;
+          max-width:260px;
         }
 
-        .nwf-title{
-          margin-bottom: 4px;
-          color: #667085;
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: .16em;
-          text-transform: uppercase;
+        .neoFooterContactItem{
+          min-height:38px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:flex-start;
+          gap:9px;
+          padding:0 13px;
+          border-radius:14px;
+          border:1px solid rgba(13,20,32,.075);
+          background:rgba(255,255,255,.74);
+          color:var(--text);
+          font-size:14px;
+          font-weight:610;
+          letter-spacing:-.02em;
+          box-shadow:0 10px 24px rgba(13,20,32,.035);
+          transition:
+            transform .16s cubic-bezier(.2,.8,.2,1),
+            border-color .16s ease,
+            background .16s ease,
+            color .16s ease;
         }
 
-        .nwf-links a{
-          width: fit-content;
-          color: #1d2939;
-          font-size: 15px;
-          font-weight: 650;
-          transition: color .18s ease, transform .18s ease;
+        .neoFooterContactItem svg{
+          color:#6f7a8c;
         }
 
-        .nwf-links a:hover{
-          color: #2458ff;
-          transform: translateX(2px);
+        .neoFooterContactItem:hover{
+          transform:translateY(-1px);
+          border-color:rgba(13,20,32,.13);
+          background:#fff;
+          color:#0d1420;
         }
 
-        .nwf-action{
-          display: flex;
-          justify-content: flex-end;
+        .neoFooterContactItem:hover svg{
+          color:var(--accent);
         }
 
-        .nwf-cta{
-          min-height: 48px;
-          padding: 0 18px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 9px;
-          color: #fff !important;
-          background: #2458ff;
-          border: 1px solid rgba(36,88,255,.2);
-          box-shadow: 0 18px 45px rgba(36,88,255,.22);
-          font-size: 14px;
-          font-weight: 800;
+        .neoFooterSocials{
+          display:flex;
+          align-items:center;
+          justify-content:flex-start;
+          gap:9px;
+          padding-top:2px;
         }
 
-        .nwf-bottom{
-          padding-top: 22px;
-          border-top: 1px solid rgba(15,23,42,.08);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          color: #667085;
-          font-size: 13px;
-          font-weight: 550;
+        .neoFooterSocial{
+          width:38px;
+          height:38px;
+          border-radius:14px;
+          border:1px solid rgba(13,20,32,.075);
+          background:rgba(255,255,255,.74);
+          color:#667286;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          box-shadow:0 10px 24px rgba(13,20,32,.035);
+          transition:
+            transform .16s cubic-bezier(.2,.8,.2,1),
+            border-color .16s ease,
+            background .16s ease,
+            color .16s ease;
         }
 
-        .nwf-socials{
-          display: flex;
-          align-items: center;
-          gap: 9px;
+        .neoFooterSocial:hover{
+          transform:translateY(-1px);
+          border-color:rgba(49,72,199,.22);
+          background:#fff;
+          color:var(--accent);
         }
 
-        .nwf-socials a{
-          width: 38px;
-          height: 38px;
-          border-radius: 999px;
-          display: grid;
-          place-items: center;
-          background: #fff;
-          color: #344054;
-          border: 1px solid rgba(15,23,42,.08);
-          box-shadow: 0 12px 30px rgba(15,23,42,.05);
+        .neoFooterBottom{
+          min-height:64px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:20px;
+          padding-top:22px;
         }
 
-        @media (max-width: 900px){
-          .nwf-shell{
-            width: calc(100% - 28px);
-            padding: 44px 0 22px;
+        .neoFooterCopy{
+          color:#758195;
+          font-size:13px;
+          line-height:1.35;
+          font-weight:560;
+          letter-spacing:-.01em;
+        }
+
+        .neoFooterMini{
+          color:#8b95a6;
+          font-size:13px;
+          line-height:1.35;
+          font-weight:540;
+          letter-spacing:-.01em;
+        }
+
+        @media (max-width:980px){
+          .neoFooterShell{
+            padding:46px 22px 24px;
           }
 
-          .nwf-top,
-          .nwf-grid{
-            grid-template-columns: 1fr;
-            gap: 26px;
+          .neoFooterGrid{
+            grid-template-columns:1fr;
+            gap:34px;
+            padding-bottom:34px;
           }
 
-          .nwf-action{
-            justify-content: flex-start;
+          .neoFooterLine{
+            max-width:520px;
           }
 
-          .nwf-bottom{
-            flex-direction: column;
-            align-items: flex-start;
+          .neoFooterNav{
+            max-width:520px;
+          }
+
+          .neoFooterContactList{
+            max-width:340px;
+          }
+        }
+
+        @media (max-width:560px){
+          .neoFooterShell{
+            padding:40px 18px 22px;
+          }
+
+          .neoFooterNav{
+            grid-template-columns:1fr;
+            gap:30px;
+          }
+
+          .neoFooterContactList{
+            max-width:none;
+          }
+
+          .neoFooterContactItem{
+            width:100%;
+          }
+
+          .neoFooterBottom{
+            align-items:flex-start;
+            flex-direction:column;
+          }
+        }
+
+        @media (prefers-reduced-motion:reduce){
+          .neoFooterLink,
+          .neoFooterContactItem,
+          .neoFooterSocial{
+            transition:none !important;
           }
         }
       `}</style>
+
+      <div className="neoFooterShell">
+        <div className="neoFooterGrid">
+          <div className="neoFooterBrand">
+            <Link to={`/${lang}`} className="neoFooterLogoLink" aria-label="NEOX" data-wg-notranslate>
+              <img className="neoFooterLogo" src={LOGO_SRC} alt="" loading="lazy" decoding="async" draggable={false} />
+            </Link>
+
+            <p className="neoFooterLine">Clean automation systems for customer conversations and business workflows.</p>
+          </div>
+
+          <nav className="neoFooterNav" aria-label="Footer navigation">
+            <div className="neoFooterCol">
+              <h2 className="neoFooterTitle">Company</h2>
+
+              <div className="neoFooterLinks">
+                {companyLinks.map((item) => (
+                  <NavLink key={item.to} to={withLang(item.to)} className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+
+            <div className="neoFooterCol">
+              <h2 className="neoFooterTitle">Resources</h2>
+
+              <div className="neoFooterLinks">
+                {resourceLinks.map((item) => (
+                  <NavLink key={item.to} to={withLang(item.to)} className={({ isActive }) => cx("neoFooterLink", isActive && "is-active")}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          </nav>
+
+          <div className="neoFooterContact">
+            <h2 className="neoFooterTitle">Contact</h2>
+
+            <div className="neoFooterContactList">
+              <a className="neoFooterContactItem" href="mailto:info@weneox.com">
+                <Mail size={16} strokeWidth={1.9} aria-hidden="true" />
+                info@weneox.com
+              </a>
+
+              <a className="neoFooterContactItem" href="tel:+994518005577">
+                <Phone size={16} strokeWidth={1.9} aria-hidden="true" />
+                +994 51 800 55 77
+              </a>
+            </div>
+
+            <div className="neoFooterSocials" aria-label="Social links">
+              <a className="neoFooterSocial" href="https://www.linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn">
+                <Linkedin size={16} strokeWidth={1.9} aria-hidden="true" />
+              </a>
+
+              <a className="neoFooterSocial" href="https://www.instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram">
+                <Instagram size={16} strokeWidth={1.9} aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="neoFooterBottom">
+          <div className="neoFooterCopy">© {year} NEOX — Intelligent Automation Systems</div>
+          <div className="neoFooterMini">Built for modern operators.</div>
+        </div>
+      </div>
     </footer>
   );
 }
