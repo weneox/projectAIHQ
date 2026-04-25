@@ -1,363 +1,335 @@
-// src/pages/Home.tsx
-import { Link, useParams } from "react-router-dom";
-import {
-  ArrowUpRight,
-  BarChart3,
-  Bot,
-  CheckCircle2,
-  Globe2,
-  Layers3,
-  MessageSquareText,
-  ShieldCheck,
-  Sparkles,
-  Workflow,
-} from "lucide-react";
-import { DEFAULT_LANG, LANGS, type Lang } from "../i18n/lang";
+import { ArrowUpRight } from "lucide-react";
 
-function cx(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
+const HERO_BACKGROUND_URL =
+  "https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=2400&auto=format&fit=crop";
 
-function isLang(value: string | undefined | null): value is Lang {
-  if (!value) return false;
-  return (LANGS as readonly string[]).includes(value);
-}
+const stripItems = [
+  "NEOX CORE",
+  "VEB SAYT",
+  "BİZNES WORKFLOW",
+  "MESAJLAŞMA",
+  "AVTOMATLAŞDIRMA",
+  "SÜNİ İNTELLEKT CAVABLARI",
+  "ANALİTİKA",
+  "SƏS QATI",
+  "OPERATOR YÖNLƏNDİRMƏSİ",
+  "BİZNES KONTEKSTİ",
+];
 
-function useLocalizedPath() {
-  const { lang: paramLang } = useParams<{ lang?: string }>();
-  const lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
-
-  return (path: string) => {
-    if (path === "/") return `/${lang}`;
-    return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
-  };
-}
-
-type Feature = {
-  title: string;
-  desc: string;
-  icon: typeof Bot;
-};
-
-type Step = {
-  number: string;
-  title: string;
-  desc: string;
-};
-
-const coreFeatures: Feature[] = [
+const valueCards = [
   {
-    title: "Mesajları bir yerə toplayır",
-    desc: "Instagram, sayt, WhatsApp və digər kanallardan gələn sorğuları vahid iş axınına gətiririk.",
-    icon: MessageSquareText,
+    title: "Veb sistemi qurur",
+    text: "Brendə uyğun, sürətli və satış yönümlü veb səhifələri biznes axını ilə birlikdə hazırlayırıq.",
   },
   {
-    title: "Süni İntellekt cavab verir",
-    desc: "Sadə bot deyil; biznes qaydalarına, xidmətlərə və müştəri niyyətinə görə cavab sistemi qurulur.",
-    icon: Bot,
+    title: "Mesajları idarə edir",
+    text: "Instagram, sayt, WhatsApp və digər kanallardan gələn sorğuları vahid sistemə gətiririk.",
   },
   {
-    title: "Lead və proses axını yaranır",
-    desc: "Sorğu itmir: qeyd olunur, yönləndirilir, izlənir və satış/dəstək prosesinə çevrilir.",
-    icon: Workflow,
+    title: "İş axınını avtomatlaşdırır",
+    text: "Cavab, yönləndirmə, lead izləmə və komanda proseslərini daha səliqəli hala salırıq.",
   },
 ];
 
-const systemCards: Feature[] = [
-  {
-    title: "Vebsayt və landing",
-    desc: "Brendə uyğun, sürətli, premium və satış yönümlü veb səhifələr.",
-    icon: Globe2,
-  },
-  {
-    title: "Avtomatlaşdırma",
-    desc: "Təkrar işləri sistemləşdiririk: cavab, yönləndirmə, təsdiq, bildiriş və izləmə.",
-    icon: Layers3,
-  },
-  {
-    title: "Nəzarət və analitika",
-    desc: "Cavab sürəti, dönüşüm, sorğu tipi və komanda yükü görünən hala gəlir.",
-    icon: BarChart3,
-  },
-  {
-    title: "Təhlükəsiz icra",
-    desc: "Sistem sərhədlərlə işləyir: riskli hallarda operatora ötürmə və nəzarət saxlanılır.",
-    icon: ShieldCheck,
-  },
-];
-
-const steps: Step[] = [
+const processSteps = [
   {
     number: "01",
     title: "Biznesi başa düşürük",
-    desc: "Sahəni, xidmətləri, müştəri suallarını və hazırkı iş axınını xəritələyirik.",
+    text: "Sahəni, xidmətləri, müştəri suallarını və hazırkı iş axınını xəritələyirik.",
   },
   {
     number: "02",
     title: "Sistemi dizayn edirik",
-    desc: "Veb, mesajlaşma, Süni İntellekt cavabları və avtomatlaşdırmanı vahid axına salırıq.",
+    text: "Veb sayt, mesajlaşma, Süni İntellekt cavabları və avtomatlaşdırmanı vahid axına salırıq.",
   },
   {
     number: "03",
     title: "İşlək hala gətiririk",
-    desc: "Sistemi qurur, test edir, ölçür və real müştəri axınına uyğun optimallaşdırırıq.",
+    text: "Sistemi qurur, test edir və real müştəri axınına uyğun optimallaşdırırıq.",
   },
 ];
 
-const proofItems = ["Daha sürətli cavab", "Daha az manual iş", "Daha səliqəli müştəri axını"];
-
-function FeatureCard({ feature }: { feature: Feature }) {
-  const Icon = feature.icon;
+function SystemStrip() {
+  const repeated = [...stripItems, ...stripItems, ...stripItems, ...stripItems];
 
   return (
-    <article className="nx-card nx-card--quiet">
-      <div className="nx-stack-sm">
-        <div className="nx-row nx-row--top">
-          <div className="nx-badge nx-badge--soft nx-badge--plain">
-            <Icon size={16} strokeWidth={2} aria-hidden="true" />
-          </div>
-          <ArrowUpRight size={16} strokeWidth={1.9} className="nx-muted" aria-hidden="true" />
-        </div>
+    <div className="relative z-10 h-[82px] shrink-0 overflow-hidden border-y border-slate-200 bg-[#f7f8fb]">
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f7f8fb] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f7f8fb] to-transparent" />
 
-        <div className="nx-stack-xs">
-          <h3 className="nx-h4">{feature.title}</h3>
-          <p className="nx-copy-sm">{feature.desc}</p>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function StepCard({ step }: { step: Step }) {
-  return (
-    <article className="nx-card nx-card--compact">
-      <div className="nx-stack-sm">
-        <span className="nx-badge nx-badge--plain">{step.number}</span>
-        <div className="nx-stack-xs">
-          <h3 className="nx-h4">{step.title}</h3>
-          <p className="nx-copy-sm">{step.desc}</p>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function HeroSystemPreview() {
-  return (
-    <div className="nx-hero-panel">
-      <div className="nx-hero-panel-inner">
-        <div className="nx-stack-lg">
-          <div className="nx-row nx-row--top">
-            <div className="nx-stack-xs">
-              <span className="nx-badge nx-badge--soft">Canlı sistem</span>
-              <h2 className="nx-h3">Müştəri axını idarədədir</h2>
-            </div>
-
-            <span className="nx-badge nx-badge--plain">NEOX</span>
-          </div>
-
-          <div className="nx-surface nx-surface--flat nx-surface-pad">
-            <div className="nx-stack">
-              <div className="nx-row">
-                <div className="nx-stack-xs">
-                  <p className="nx-eyebrow">Gələn sorğu</p>
-                  <p className="nx-h4">“Qiymət və çatdırılma necədir?”</p>
-                </div>
-                <span className="nx-badge nx-badge--soft">Instagram DM</span>
-              </div>
-
-              <hr className="nx-divider" />
-
-              <div className="nx-grid nx-grid--3">
-                <div className="nx-metric">
-                  <span className="nx-metric-value">24/7</span>
-                  <span className="nx-metric-label">cavab rejimi</span>
-                </div>
-
-                <div className="nx-metric">
-                  <span className="nx-metric-value">3x</span>
-                  <span className="nx-metric-label">daha sürətli yönləndirmə</span>
-                </div>
-
-                <div className="nx-metric">
-                  <span className="nx-metric-value">1</span>
-                  <span className="nx-metric-label">vahid iş axını</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="nx-grid">
-            {proofItems.map((item) => (
-              <div key={item} className="nx-row">
-                <span className="nx-list-item">{item}</span>
-                <CheckCircle2 size={18} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
-              </div>
-            ))}
-          </div>
+      <div className="flex h-full items-center overflow-hidden">
+        <div className="neox-home-strip flex w-max items-center gap-16">
+          {repeated.map((item, index) => (
+            <span
+              key={`${item}-${index}`}
+              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em] text-slate-500 transition-colors duration-300 hover:text-[#3347d9]"
+            >
+              {item}
+            </span>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-export default function Home() {
-  const withLang = useLocalizedPath();
-
+function HomeHero() {
   return (
-    <main className="nx-page">
-      <section className="nx-hero">
-        <div className="nx-container">
-          <div className="nx-hero-grid">
-            <div className="nx-hero-copy">
-              <p className="nx-kicker">NEOX / Süni İntellekt sistemləri</p>
+    <section className="neox-home-hero relative overflow-hidden bg-white">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="absolute inset-0">
+          <img
+            src={HERO_BACKGROUND_URL}
+            alt=""
+            className="h-full w-full object-cover object-[64%_center]"
+          />
 
-              <div className="nx-stack">
-                <h1 className="nx-display">
-                  Biznesiniz üçün <span className="nx-gradient-text">ağıllı iş sistemi</span> qururuq.
-                </h1>
+          <img
+            src={HERO_BACKGROUND_URL}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-[64%_center] blur-[12px]"
+            style={{
+              WebkitMaskImage:
+                "linear-gradient(90deg, black 0%, black 30%, transparent 58%)",
+              maskImage:
+                "linear-gradient(90deg, black 0%, black 30%, transparent 58%)",
+            }}
+          />
 
-                <p className="nx-lead nx-max-copy">
-                  Vebsayt, mesajlaşma, avtomatlaşdırma və Süni İntellekt cavablarını bir sistemə salırıq ki,
-                  müştəri axını daha səliqəli, sürətli və ölçülə bilən olsun.
-                </p>
-              </div>
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.99)_0%,rgba(255,255,255,0.93)_39%,rgba(255,255,255,0.56)_70%,rgba(255,255,255,0.18)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_44%,rgba(255,255,255,0.08)_100%)]" />
+        </div>
 
-              <div className="nx-actions">
-                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
-                  Sistemi quraq
-                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                </Link>
+        <div className="relative mx-auto flex w-full max-w-[1460px] items-center px-6 pb-8 pt-10 lg:px-10 lg:pb-10 lg:pt-12">
+          <div className="max-w-[760px]">
+            <h1 className="max-w-[760px] bg-[linear-gradient(112deg,#020617_0%,#020617_58%,#2438b8_100%)] bg-clip-text text-[3.45rem] font-extrabold leading-[1.03] tracking-[-0.074em] text-transparent md:text-[4.55rem] lg:text-[5.05rem]">
+              Ağıllı biznes sistemləri qururuq.
+            </h1>
 
-                <Link to={withLang("/services/chatbot-24-7")} className="nx-button">
-                  Xidmətlərə bax
-                </Link>
-              </div>
+            <p className="mt-7 max-w-[620px] text-[1.16rem] font-medium leading-[1.75] tracking-[-0.02em] text-slate-600">
+              Veb sayt, mesajlaşma, avtomatlaşdırma və Süni İntellekt
+              cavablarını birləşdiririk ki, müştəri axını daha səliqəli,
+              sürətli və ölçülə bilən olsun.
+            </p>
 
-              <div className="nx-chip-row">
-                <span className="nx-chip">Süni İntellekt cavabları</span>
-                <span className="nx-chip">Premium vebsayt</span>
-                <span className="nx-chip">Avtomatlaşdırma</span>
-              </div>
-            </div>
+            <div className="mt-9 flex flex-wrap items-center gap-4">
+              <a
+                href="/az/elaqe"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#3347d9] px-7 text-[16px] font-bold text-white shadow-[0_20px_46px_rgba(51,71,217,0.23)] transition hover:-translate-y-0.5 hover:bg-[#293ac7]"
+              >
+                Sistemi quraq
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
 
-            <div className="nx-hero-visual">
-              <HeroSystemPreview />
+              <a
+                href="/az/xidmetler"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/92 px-7 text-[16px] font-bold text-slate-950 shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:border-slate-300"
+              >
+                Xidmətlərə bax
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="nx-section nx-section--tight">
-        <div className="nx-container">
-          <div className="nx-grid nx-grid--3">
-            {coreFeatures.map((feature) => (
-              <FeatureCard key={feature.title} feature={feature} />
-            ))}
-          </div>
+      <SystemStrip />
+    </section>
+  );
+}
+
+function ValueSection() {
+  return (
+    <section className="bg-white py-16 lg:py-20">
+      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {valueCards.map((card) => (
+            <article
+              key={card.title}
+              className="group rounded-[30px] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.045)] transition hover:-translate-y-1 hover:shadow-[0_28px_78px_rgba(15,23,42,0.075)]"
+            >
+              <h3 className="text-[1.7rem] font-bold tracking-[-0.055em] text-slate-950">
+                {card.title}
+              </h3>
+
+              <p className="mt-5 max-w-[390px] text-[1.02rem] font-medium leading-8 text-slate-600">
+                {card.text}
+              </p>
+
+              <a
+                href="/az/xidmetler"
+                className="mt-8 inline-flex items-center gap-2 text-[15px] font-bold text-[#3347d9]"
+              >
+                Daha ətraflı
+                <ArrowUpRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </a>
+            </article>
+          ))}
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
-      <section className="nx-section">
-        <div className="nx-container">
-          <div className="nx-split nx-split--top">
-            <div className="nx-stack-lg">
-              <div className="nx-stack">
-                <p className="nx-kicker">Nə qururuq?</p>
-                <h2 className="nx-title">Ayrı-ayrı alətlər yox, vahid biznes səthi.</h2>
-                <p className="nx-lead">
-                  Sayt, mesaj, cavab, lead və komanda işi bir-birindən ayrı görünəndə proses dağılır.
-                  NEOX-un işi bu parçaları premium, sadə və işlək bir sistemə çevirməkdir.
-                </p>
-              </div>
-
-              <div className="nx-actions">
-                <Link to={withLang("/about")} className="nx-button">
-                  Yanaşmamız
-                </Link>
-
-                <Link to={withLang("/use-cases")} className="nx-button nx-button--ghost">
-                  İstifadə sahələri
-                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                </Link>
-              </div>
+function ProcessSection() {
+  return (
+    <section className="bg-[#f7f8fb] py-24">
+      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
+        <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-end">
+          <div>
+            <div className="mb-5 text-[12px] font-bold uppercase tracking-[0.2em] text-slate-400">
+              Proses
             </div>
 
-            <div className="nx-grid nx-grid--2">
-              {systemCards.map((feature) => (
-                <FeatureCard key={feature.title} feature={feature} />
-              ))}
-            </div>
+            <h2 className="max-w-[690px] text-[3.8rem] font-bold leading-[1.04] tracking-[-0.075em] text-slate-950">
+              Sadə başlayırıq, sistemli böyüdürük.
+            </h2>
           </div>
-        </div>
-      </section>
 
-      <section className="nx-section nx-section-divider">
-        <div className="nx-container">
-          <div className="nx-stack-xl">
-            <div className="nx-row nx-row--top">
-              <div className="nx-stack-sm nx-max-copy">
-                <p className="nx-kicker">Proses</p>
-                <h2 className="nx-title-sm">Sadə başlayırıq, sistemli böyüdürük.</h2>
+          <p className="max-w-[660px] text-[1.12rem] font-medium leading-9 text-slate-600 lg:justify-self-end">
+            Məqsəd çox ekran, çox panel və qarışıq quruluş deyil. Lazım olan iş
+            axınını tapırıq, onu təmiz interfeys və avtomatlaşdırma ilə işlək
+            hala gətiririk.
+          </p>
+        </div>
+
+        <div className="mt-14 grid gap-6 lg:grid-cols-3">
+          {processSteps.map((step) => (
+            <article
+              key={step.number}
+              className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm"
+            >
+              <div className="mb-7 inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2 text-[14px] font-bold text-slate-500">
+                {step.number}
               </div>
 
-              <p className="nx-copy nx-max-tight">
-                Məqsəd çox ekran, çox panel, çox qarışıq quruluş deyil. Lazım olan iş axınını tapırıq,
-                onu təmiz interfeys və avtomatlaşdırma ilə işlək hala gətiririk.
+              <h3 className="text-[1.35rem] font-bold tracking-[-0.04em] text-slate-950">
+                {step.title}
+              </h3>
+
+              <p className="mt-4 text-[1rem] font-medium leading-8 text-slate-600">
+                {step.text}
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FinalCta() {
+  return (
+    <section className="bg-white py-24">
+      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
+        <div className="rounded-[38px] border border-slate-200 bg-[#f8f9fc] p-8 shadow-[0_30px_100px_rgba(15,23,42,0.075)] md:p-12 lg:p-14">
+          <div className="grid gap-10 lg:grid-cols-[1fr_0.72fr] lg:items-center">
+            <div>
+              <div className="mb-5 inline-flex rounded-full border border-[#3347d9]/16 bg-white px-5 py-2 text-[13px] font-bold text-[#3347d9]">
+                Başlamaq üçün
+              </div>
+
+              <h2 className="max-w-[760px] text-[3.35rem] font-bold leading-[1.04] tracking-[-0.075em] text-slate-950">
+                Biznesinizə uyğun sistemi birlikdə quraq.
+              </h2>
+
+              <p className="mt-6 max-w-[720px] text-[1.12rem] font-medium leading-9 text-slate-600">
+                Bir neçə əsas məlumat kifayətdir: nə satırsınız, müştəri haradan
+                yazır və hazırda hansı işlər sizi yavaşladır.
               </p>
             </div>
 
-            <div className="nx-grid nx-grid--3">
-              {steps.map((step) => (
-                <StepCard key={step.number} step={step} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white px-5 py-5">
+                <div>
+                  <div className="text-[1.05rem] font-bold text-slate-950">
+                    İlk addım
+                  </div>
 
-      <section className="nx-section nx-section--last">
-        <div className="nx-container">
-          <div className="nx-surface nx-surface--raised nx-surface-pad">
-            <div className="nx-split">
-              <div className="nx-stack">
-                <span className="nx-badge nx-badge--soft">
-                  <Sparkles size={15} strokeWidth={2} aria-hidden="true" />
-                  Başlamaq üçün
-                </span>
-
-                <h2 className="nx-title-sm">Biznesinizə uyğun sistemi birlikdə quraq.</h2>
-
-                <p className="nx-lead">
-                  Bir neçə əsas məlumat kifayətdir: nə satırsınız, müştəri haradan yazır və hazırda
-                  hansı işlər sizi yavaşladır.
-                </p>
-              </div>
-
-              <div className="nx-stack">
-                <div className="nx-grid">
-                  <div className={cx("nx-card", "nx-card--compact", "nx-card--quiet")}>
-                    <div className="nx-row">
-                      <span className="nx-h4">İlk addım</span>
-                      <span className="nx-badge nx-badge--plain">15 dəq</span>
-                    </div>
-                    <p className="nx-copy-sm nx-mt-xs">
-                      Qısa danışıqla sistem xəritəsini və ilk icra istiqamətini müəyyən edirik.
-                    </p>
+                  <div className="mt-2 text-[14px] font-medium leading-6 text-slate-500">
+                    Qısa danışıqla sistem xəritəsini və ilk icra istiqamətini
+                    müəyyən edirik.
                   </div>
                 </div>
 
-                <div className="nx-actions">
-                  <Link to={withLang("/contact")} className="nx-button nx-button--primary nx-button--full">
-                    Əlaqə saxla
-                    <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                  </Link>
+                <div className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500">
+                  15 dəq
                 </div>
               </div>
+
+              <a
+                href="/az/elaqe"
+                className="mt-5 inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#3347d9] text-[16px] font-bold text-white shadow-[0_18px_42px_rgba(51,71,217,0.22)] transition hover:-translate-y-0.5 hover:bg-[#293ac7]"
+              >
+                Əlaqə saxla
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
             </div>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <>
+      <style>{`
+        @keyframes neoxHomeStrip {
+          0% {
+            transform: translateX(0);
+          }
+
+          100% {
+            transform: translateX(-33.333%);
+          }
+        }
+
+        .neox-home-page {
+          padding-top: var(--nx-header-h, 64px);
+          background: #fff;
+        }
+
+        .neox-home-hero {
+          height: calc(100vh - var(--nx-header-h, 64px));
+          height: calc(100svh - var(--nx-header-h, 64px));
+          display: flex;
+          flex-direction: column;
+        }
+
+        .neox-home-strip {
+          animation: neoxHomeStrip 38s linear infinite;
+        }
+
+        .neox-home-strip:hover {
+          animation-play-state: paused;
+        }
+
+        .neox-strip-item:hover {
+          color: #3347d9;
+        }
+
+        @media (max-width: 900px) {
+          .neox-home-hero {
+            height: auto;
+            min-height: calc(100svh - var(--nx-header-h, 64px));
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .neox-home-strip {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      <main className="neox-home-page min-h-screen overflow-x-hidden font-sans text-slate-950 antialiased">
+        <HomeHero />
+        <ValueSection />
+        <ProcessSection />
+        <FinalCta />
+      </main>
+    </>
   );
 }
