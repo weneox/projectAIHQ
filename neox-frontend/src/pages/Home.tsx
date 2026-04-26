@@ -79,31 +79,31 @@ const serviceCards = [
   {
     title: "Biznes iş axınlarını avtomatlaşdırırıq",
     text: "Sifariş, müraciət, qeydiyyat və komanda proseslərini ardıcıl avtomatik axına salırıq.",
-    href: "/services/workflow-automation",
+    href: "/services/business-workflows",
     imageUrl: BUSINESS_VISUAL_TWO,
   },
   {
     title: "Səsli assistantlar qururuq",
     text: "Zənglərə cavab verən, məlumat toplayan və müştərini düzgün istiqamətə yönləndirən səsli sistemlər qururuq.",
-    href: "/services/voice-assistants",
+    href: "/services/chatbot-24-7",
     imageUrl: VOICE_VISUAL,
   },
   {
     title: "Kontent axınını qururuq",
     text: "İdeyadan paylaşımadək kontent planı, çəkiliş, təsdiq və paylaşım prosesini sistemləşdiririk.",
-    href: "/services/content-flow",
+    href: "/services/smm-automation",
     imageUrl: CONTENT_VISUAL,
   },
   {
     title: "24/7 çatbotlar qururuq",
     text: "Sosial media və vebsaytlarda müştəriyə gecə-gündüz cavab verən ağıllı çatbotlar qururuq.",
-    href: "/services/chatbots",
+    href: "/services/chatbot-24-7",
     imageUrl: CHATBOT_VISUAL,
   },
   {
     title: "Brend görünüşünü yaradırıq",
     text: "Logo, rəng, tipografiya və vizual üslubu biznesin xarakterinə uyğun premium şəkildə formalaşdırırıq.",
-    href: "/services/brand-identity",
+    href: "/services/websites",
     imageUrl: BRAND_VISUAL,
   },
 ] as const;
@@ -137,6 +137,18 @@ const processSteps = [
 ] as const;
 
 const HOME_INLINE_CSS = `
+  html,
+  body,
+  #root {
+    scroll-snap-type: none !important;
+  }
+
+  .neox-home-page,
+  .neox-home-page * {
+    scroll-snap-align: none !important;
+    scroll-snap-stop: normal !important;
+  }
+
   .neox-home-extra {
     --home-section-title: clamp(2.05rem, 3vw, 3.15rem);
     --home-section-title-mobile: clamp(2rem, 8vw, 2.75rem);
@@ -251,6 +263,7 @@ const HOME_INLINE_CSS = `
   .neox-interactive-system-section {
     position: relative;
     background: #ffffff;
+    overflow: visible;
   }
 
   .neox-interactive-sticky {
@@ -301,6 +314,8 @@ const HOME_INLINE_CSS = `
     position: absolute;
     width: min(560px, 42vw);
     will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
   }
 
   .neox-gsap-text-one {
@@ -444,9 +459,11 @@ const HOME_INLINE_CSS = `
     box-shadow:
       0 -18px 70px rgba(15, 23, 42, 0.08),
       0 18px 70px rgba(15, 23, 42, 0.065);
-    will-change: transform;
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
     transform-origin: center top;
     backface-visibility: hidden;
+    contain: paint;
   }
 
   .neox-stack-panel--one {
@@ -1164,6 +1181,7 @@ const HOME_INLINE_CSS = `
       transform: none !important;
       border-radius: 34px 34px 0 0 !important;
       opacity: 1 !important;
+      contain: none;
     }
 
     .neox-stack-panel--four {
@@ -1574,7 +1592,12 @@ function HowItWorksSection() {
     window.addEventListener("scroll", requestUpdate, { passive: true });
     window.addEventListener("resize", requestUpdate);
 
+    const lateRefresh = window.setTimeout(() => {
+      requestUpdate();
+    }, 260);
+
     return () => {
+      window.clearTimeout(lateRefresh);
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", requestUpdate);
       window.removeEventListener("resize", requestUpdate);
@@ -1743,10 +1766,15 @@ function InteractiveSystemSection() {
         ],
         { clearProps: "all" },
       );
+
+      window.requestAnimationFrame(() => {
+        ScrollTrigger.refresh();
+      });
+
       return;
     }
 
-    let refreshTimer = 0;
+    let refreshFrame = 0;
 
     const ctx = gsap.context(() => {
       const points = textTwo.querySelectorAll(".neox-gsap-point");
@@ -1814,6 +1842,34 @@ function InteractiveSystemSection() {
         50.5,
       );
 
+      gsap.set([panelOne, panelTwo, panelThree, panelFour], {
+        force3D: true,
+        willChange: "transform, opacity",
+        transformOrigin: "center top",
+      });
+
+      gsap.set(
+        [
+          bg,
+          textOne,
+          textTwo,
+          miniLabel,
+          innerOne,
+          innerTwo,
+          innerThree,
+          innerFour,
+          points,
+          panelOneItems,
+          panelTwoItems,
+          panelThreeItems,
+          panelFourItems,
+        ],
+        {
+          force3D: true,
+          willChange: "transform, opacity",
+        },
+      );
+
       gsap.set(bg, { opacity: 1, scale: 1 });
       gsap.set(textOne, { opacity: 1, y: 0 });
       gsap.set(textTwo, { opacity: 0, y: 44 });
@@ -1849,67 +1905,65 @@ function InteractiveSystemSection() {
         defaults: { ease: "none" },
         scrollTrigger: {
           trigger: section,
-          start: "top top",
-          end: () => `+=${Math.max(window.innerHeight * 3.95, 3180)}`,
-          scrub: 0.92,
+          start: "top top+=1",
+          end: () => `+=${Math.max(window.innerHeight * 5.65, 4550)}`,
+          scrub: true,
           pin: sticky,
           pinSpacing: true,
-          anticipatePin: 1,
+          anticipatePin: 0,
           invalidateOnRefresh: true,
+          refreshPriority: 1,
+          fastScrollEnd: false,
+          preventOverlaps: false,
         },
       });
 
       tl
-        .to(bg, { scale: 0.985, opacity: 0.98, duration: 0.26 }, 0)
-        .to(textOne, { opacity: 0, y: -56, duration: 0.34 }, 0.22)
-        .to(miniLabel, { opacity: 0, y: 18, duration: 0.22 }, 0.24)
-        .to(textTwo, { opacity: 1, y: 0, duration: 0.34 }, 0.54)
-        .to(points, { opacity: 1, y: 0, stagger: 0.05, duration: 0.24 }, 0.68)
+        .to(bg, { scale: 0.985, opacity: 0.98, duration: 0.34 }, 0)
+        .to(textOne, { opacity: 0, y: -44, duration: 0.46 }, 0.28)
+        .to(miniLabel, { opacity: 0, y: 16, duration: 0.28 }, 0.32)
+        .to(textTwo, { opacity: 1, y: 0, duration: 0.48 }, 0.82)
+        .to(points, { opacity: 1, y: 0, stagger: 0.055, duration: 0.32 }, 1.05)
 
-        .to({}, { duration: 0.22 }, 0.98)
-
-        .to(panelOne, { yPercent: 0, duration: 0.78 }, 1.16)
-        .to(innerOne, { autoAlpha: 1, y: 0, duration: 0.16 }, 1.66)
+        .to(panelOne, { yPercent: 0, duration: 1.18 }, 1.72)
+        .to(innerOne, { autoAlpha: 1, y: 0, duration: 0.24 }, 2.36)
         .to(
           panelOneItems,
-          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.2 },
-          1.74,
+          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.28 },
+          2.52,
         )
 
-        .to(panelTwo, { yPercent: PANEL_TWO_REST_Y, duration: 0.82 }, 2.18)
-        .to(innerTwo, { autoAlpha: 1, y: 0, duration: 0.16 }, 2.72)
+        .to(panelTwo, { yPercent: PANEL_TWO_REST_Y, duration: 1.22 }, 3.12)
+        .to(innerTwo, { autoAlpha: 1, y: 0, duration: 0.24 }, 3.82)
         .to(
           panelTwoItems,
-          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.2 },
-          2.8,
+          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.28 },
+          3.98,
         )
 
-        .to(panelThree, { yPercent: PANEL_THREE_REST_Y, duration: 0.78 }, 3.18)
-        .to(innerThree, { autoAlpha: 1, duration: 0.14 }, 3.72)
+        .to(panelThree, { yPercent: PANEL_THREE_REST_Y, duration: 1.18 }, 4.68)
+        .to(innerThree, { autoAlpha: 1, duration: 0.22 }, 5.34)
         .to(
           panelThreeItems,
-          { autoAlpha: 1, stagger: 0.035, duration: 0.18 },
-          3.82,
+          { autoAlpha: 1, stagger: 0.04, duration: 0.24 },
+          5.5,
         )
 
-        .to({}, { duration: 0.44 }, 4.04)
-
-        .to(panelFour, { yPercent: 0, duration: 0.92 }, 4.56)
-        .to(innerFour, { autoAlpha: 1, y: 0, duration: 0.18 }, 4.92)
+        .to(panelFour, { yPercent: 0, duration: 1.34 }, 6.28)
+        .to(innerFour, { autoAlpha: 1, y: 0, duration: 0.28 }, 7.02)
         .to(
           panelFourItems,
-          { autoAlpha: 1, y: 0, stagger: 0.04, duration: 0.22 },
-          5.04,
-        )
-        .to({}, { duration: 0.2 }, 5.32);
-
-      refreshTimer = window.setTimeout(() => {
-        ScrollTrigger.refresh();
-      }, 180);
+          { autoAlpha: 1, y: 0, stagger: 0.04, duration: 0.28 },
+          7.22,
+        );
     }, section);
 
+    refreshFrame = window.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
+
     return () => {
-      window.clearTimeout(refreshTimer);
+      window.cancelAnimationFrame(refreshFrame);
       ctx.revert();
     };
   }, []);
@@ -2271,6 +2325,29 @@ function BuildTogetherSection() {
 }
 
 export default function HomePage() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    const refresh = () => {
+      ScrollTrigger.refresh();
+    };
+
+    const frame = window.requestAnimationFrame(refresh);
+
+    const handleLoad = () => {
+      window.requestAnimationFrame(refresh);
+    };
+
+    window.addEventListener("load", handleLoad, { once: true });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("load", handleLoad);
+    };
+  }, []);
+
   return (
     <main className="nx-page neox-home-page neox-home-extra">
       <style>{HOME_INLINE_CSS}</style>
