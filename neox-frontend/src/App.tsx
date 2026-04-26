@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 

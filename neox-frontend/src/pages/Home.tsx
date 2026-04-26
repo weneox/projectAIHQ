@@ -5,8 +5,6 @@ import { DEFAULT_LANG, type Lang } from "../i18n/lang";
 const HERO_BACKGROUND_VIDEO_URL =
   "https://res.cloudinary.com/dppoomunj/video/upload/v1777159382/9150545-hd_1920_1080_24fps_xw2ces.mov";
 
-const UNIFIED_SYSTEM_IMAGE_URL = "/image/neox-system-visual.png";
-
 const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
 
 function isLang(value: string | undefined | null): value is Lang {
@@ -223,9 +221,7 @@ function HomeHero() {
     );
 
     observer.observe(hero);
-
     document.addEventListener("visibilitychange", syncVideo);
-
     syncVideo();
 
     return () => {
@@ -336,39 +332,6 @@ function ServiceCardsSection() {
               </div>
             </Link>
           ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function UnifiedSystemSection() {
-  return (
-    <section className="nx-section neox-unified-section">
-      <div className="nx-container neox-unified-container">
-        <div className="neox-unified-layout">
-          <div className="neox-unified-visual" aria-hidden="true">
-            <div className="neox-unified-image-wrap">
-              <img
-                src={UNIFIED_SYSTEM_IMAGE_URL}
-                alt=""
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-          </div>
-
-          <div className="neox-unified-copy">
-            <h2 className="nx-section-title neox-balanced-section-title neox-unified-title">
-              Ayrı xidmətlər yox, <span>vahid sistem</span> qururuq.
-            </h2>
-
-            <p className="nx-section-lead neox-unified-lead">
-              Veb sayt, kontent, çatbot, satış və avtomatlaşdırma hissələri
-              bir-birinə bağlı işləyəndə biznes daha sürətli, daha aydın və
-              daha idarəolunan olur.
-            </p>
-          </div>
         </div>
       </div>
     </section>
@@ -592,7 +555,6 @@ export default function HomePage() {
     <main className="nx-page neox-home-page">
       <HomeHero />
       <ServiceCardsSection />
-      <UnifiedSystemSection />
       <HowItWorksSection />
     </main>
   );
