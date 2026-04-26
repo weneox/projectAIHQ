@@ -284,16 +284,7 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-interactive-bg::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: min(74vw, 980px);
-    height: min(42vh, 380px);
-    border-radius: 999px;
-    border: 1px solid rgba(15, 23, 42, 0.052);
-    transform: translate(-50%, -50%);
-    opacity: 0.72;
+    display: none !important;
   }
 
   .neox-interactive-stage {
@@ -451,14 +442,19 @@ const HOME_INLINE_CSS = `
   .neox-stack-panel {
     position: absolute;
     top: var(--nx-header-h, 56px);
-    bottom: auto;
+    left: 0;
+    right: 0;
+    width: 100%;
     height: calc(100% - var(--nx-header-h, 56px));
     overflow: hidden;
     background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.065);
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
     box-shadow:
-      0 -18px 70px rgba(15, 23, 42, 0.08),
-      0 18px 70px rgba(15, 23, 42, 0.065);
+      0 -22px 72px rgba(15, 23, 42, 0.075),
+      0 -1px 0 rgba(15, 23, 42, 0.035);
     will-change: transform, opacity;
     transform: translate3d(0, 0, 0);
     transform-origin: center top;
@@ -467,43 +463,26 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-stack-panel--one {
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: calc(100% - var(--nx-header-h, 56px));
-    border-radius: 54px 54px 0 0;
+    border-radius: 32px 32px 0 0;
     z-index: 10;
   }
 
   .neox-stack-panel--two {
-    left: clamp(28px, 3.25vw, 56px);
-    right: clamp(28px, 3.25vw, 56px);
-    height: calc(100% - var(--nx-header-h, 56px));
-    border-radius: 46px 46px 0 0;
+    border-radius: 32px 32px 0 0;
     z-index: 11;
   }
 
   .neox-stack-panel--three {
-    left: clamp(64px, 7vw, 112px);
-    right: clamp(64px, 7vw, 112px);
-    height: calc(100% - var(--nx-header-h, 56px));
-    border-radius: 42px 42px 0 0;
+    border-radius: 32px 32px 0 0;
     z-index: 12;
   }
 
   .neox-stack-panel--four {
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: calc(100% - var(--nx-header-h, 56px));
     border-radius: 0;
     z-index: 20;
-    border-left: 0;
-    border-right: 0;
-    border-bottom: 0;
     box-shadow:
-      0 -22px 76px rgba(15, 23, 42, 0.1),
-      0 -1px 0 rgba(15, 23, 42, 0.06);
+      0 -24px 80px rgba(15, 23, 42, 0.09),
+      0 -1px 0 rgba(15, 23, 42, 0.055);
   }
 
   .neox-stack-panel-inner {
@@ -515,9 +494,9 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-stack-panel--one .neox-stack-panel-inner {
-    max-width: none;
+    max-width: 1420px;
     width: 100%;
-    padding-top: clamp(16px, 2vw, 28px);
+    padding-top: clamp(18px, 2.2vw, 32px);
     padding-right: clamp(26px, 3.55vw, 62px);
     padding-bottom: clamp(28px, 3.8vw, 52px);
     padding-left: clamp(26px, 3.55vw, 62px);
@@ -526,23 +505,23 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-stack-panel--two .neox-stack-panel-inner {
-    max-width: 1400px;
-    padding-top: clamp(16px, 2vw, 28px);
-    padding-right: clamp(26px, 3vw, 48px);
+    max-width: 1420px;
+    padding-top: clamp(18px, 2.2vw, 32px);
+    padding-right: clamp(26px, 3.55vw, 62px);
     padding-bottom: clamp(28px, 3.8vw, 52px);
-    padding-left: clamp(26px, 3vw, 48px);
+    padding-left: clamp(26px, 3.55vw, 62px);
     overflow: hidden;
     overflow: clip;
   }
 
   .neox-stack-panel--three .neox-stack-panel-inner {
-    max-width: 1280px;
+    max-width: 1320px;
     height: 100%;
     min-height: 0;
-    padding-top: clamp(16px, 2vw, 28px);
-    padding-right: clamp(26px, 3vw, 48px);
+    padding-top: clamp(18px, 2.2vw, 32px);
+    padding-right: clamp(26px, 3.55vw, 62px);
     padding-bottom: clamp(28px, 3.8vw, 52px);
-    padding-left: clamp(26px, 3vw, 48px);
+    padding-left: clamp(26px, 3.55vw, 62px);
     display: block;
     overflow: hidden;
     overflow: clip;
@@ -601,12 +580,12 @@ const HOME_INLINE_CSS = `
     min-height: 300px;
     overflow: hidden;
     padding: 26px;
-    border-radius: 28px;
+    border-radius: 26px;
     border: 1px solid rgba(15, 23, 42, 0.075);
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,249,251,0.96)),
+      linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,249,251,0.98)),
       #ffffff;
-    box-shadow: 0 20px 52px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.055);
     will-change: transform, opacity;
   }
 
@@ -672,7 +651,7 @@ const HOME_INLINE_CSS = `
     display: flex;
     align-items: center;
     padding: 26px;
-    border-radius: 24px;
+    border-radius: 22px;
     background: #0e1420;
     color: #ffffff;
     will-change: transform, opacity;
@@ -690,7 +669,7 @@ const HOME_INLINE_CSS = `
   .neox-stack-metric {
     min-height: 132px;
     padding: 22px;
-    border-radius: 24px;
+    border-radius: 22px;
     background: #f8f9fb;
     border: 1px solid rgba(15, 23, 42, 0.065);
     will-change: transform, opacity;
@@ -718,12 +697,12 @@ const HOME_INLINE_CSS = `
   .neox-stack-system-board {
     min-height: 280px;
     padding: 22px;
-    border-radius: 28px;
+    border-radius: 26px;
     border: 1px solid rgba(15, 23, 42, 0.075);
     background:
-      radial-gradient(420px 220px at 20% 14%, rgba(36, 71, 198, 0.07), transparent 68%),
+      radial-gradient(420px 220px at 20% 14%, rgba(36, 71, 198, 0.06), transparent 68%),
       linear-gradient(180deg, #ffffff, #f8f9fb);
-    box-shadow: 0 22px 62px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 20px 56px rgba(15, 23, 42, 0.055);
     will-change: transform, opacity;
   }
 
@@ -733,8 +712,8 @@ const HOME_INLINE_CSS = `
     gap: 14px;
     align-items: center;
     padding: 14px;
-    border-radius: 19px;
-    background: rgba(255, 255, 255, 0.82);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.84);
     border: 1px solid rgba(15, 23, 42, 0.06);
   }
 
@@ -791,7 +770,7 @@ const HOME_INLINE_CSS = `
     gap: 12px;
     align-items: start;
     padding: 13px 15px 13px 12px;
-    border-radius: 18px;
+    border-radius: 17px;
     background: #f8f9fb;
     border: 1px solid rgba(15, 23, 42, 0.065);
     will-change: transform, opacity;
@@ -1179,7 +1158,7 @@ const HOME_INLINE_CSS = `
       width: 100%;
       height: auto !important;
       transform: none !important;
-      border-radius: 34px 34px 0 0 !important;
+      border-radius: 30px 30px 0 0 !important;
       opacity: 1 !important;
       contain: none;
     }
@@ -1189,7 +1168,7 @@ const HOME_INLINE_CSS = `
     }
 
     .neox-stack-panel + .neox-stack-panel {
-      margin-top: -22px;
+      margin-top: -18px;
     }
 
     .neox-stack-panel-inner {

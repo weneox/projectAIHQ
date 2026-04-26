@@ -1,329 +1,189 @@
 // src/pages/design-lab/CardLab.tsx
-import { Alignment, Fit, Layout, useRive } from "@rive-app/react-canvas";
-import { Link, useParams } from "react-router-dom";
-import { DEFAULT_LANG, LANGS, type Lang } from "../../i18n/lang";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { PointMaterial, Points } from "@react-three/drei";
+import { AdditiveBlending, Color } from "three";
+import { useMemo, useRef } from "react";
 
-function isLang(value: string | undefined | null): value is Lang {
-  return Boolean(value && (LANGS as readonly string[]).includes(value));
-}
+const PALETTES = [
+  ["#1f4fe0", "#4b78ff", "#8eb1ff", "#d9e7ff"],
+  ["#2358ff", "#6f93ff", "#c6d7ff", "#eef4ff"],
+  ["#173fbd", "#3b68f1", "#7ea4ff", "#d7e4ff"],
+] as const;
 
-function useSafeLang(): Lang {
-  const { lang } = useParams<{ lang?: string }>();
-  return isLang(lang) ? lang : DEFAULT_LANG;
-}
+type DustCloudProps = {
+  count?: number;
+  radius?: number;
+  offset?: [number, number, number];
+  spreadX?: number;
+  spreadY?: number;
+  size?: number;
+  opacity?: number;
+  speed?: number;
+  paletteIndex?: number;
+};
 
-function withLang(lang: Lang, path: string) {
-  if (path === "/") return `/${lang}`;
-  return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
-}
+function DustCloud({
+  count = 280,
+  radius = 1,
+  offset = [0, 0, 0],
+  spreadX = 1.4,
+  spreadY = 0.9,
+  size = 0.03,
+  opacity = 0.8,
+  speed = 0.1,
+  paletteIndex = 0,
+}: DustCloudProps) {
+  const ref = useRef<any>(null);
 
-const RIVE_SRC = "/rive/neox-system-flow.riv";
+  const { positions, colors } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const palette = PALETTES[paletteIndex % PALETTES.length].map((hex) => new Color(hex));
 
-function NeoxRiveStage() {
-  const { RiveComponent } = useRive({
-    src: RIVE_SRC,
-    autoplay: true,
-    layout: new Layout({
-      fit: Fit.Contain,
-      alignment: Alignment.Center,
-    }),
+    for (let i = 0; i < count; i += 1) {
+      const i3 = i * 3;
+
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.pow(Math.random(), 0.55) * radius;
+
+      pos[i3] = Math.cos(angle) * distance * spreadX + offset[0];
+      pos[i3 + 1] = Math.sin(angle) * distance * spreadY + offset[1];
+      pos[i3 + 2] = (Math.random() - 0.5) * radius * 0.6 + offset[2];
+
+      const c = palette[Math.floor(Math.random() * palette.length)].clone();
+      c.multiplyScalar(0.82 + Math.random() * 0.28);
+
+      col[i3] = c.r;
+      col[i3 + 1] = c.g;
+      col[i3 + 2] = c.b;
+    }
+
+    return { positions: pos, colors: col };
+  }, [count, radius, offset, spreadX, spreadY, paletteIndex]);
+
+  useFrame((state, delta) => {
+    if (!ref.current) return;
+
+    ref.current.rotation.z += delta * 0.012;
+    ref.current.rotation.y += delta * 0.01;
+    ref.current.position.y = Math.sin(state.clock.elapsedTime * (0.22 + speed)) * 0.03;
+    ref.current.position.x = Math.sin(state.clock.elapsedTime * (0.14 + speed)) * 0.02;
   });
 
   return (
-    <div className="neox-rive-stage">
-      <div className="neox-rive-glow" aria-hidden="true" />
-      <RiveComponent className="neox-rive-canvas" />
+    <Points
+      ref={ref}
+      positions={positions}
+      colors={colors}
+      stride={3}
+      frustumCulled={false}
+    >
+      <PointMaterial
+        transparent
+        vertexColors
+        size={size}
+        sizeAttenuation
+        depthWrite={false}
+        opacity={opacity}
+        blending={AdditiveBlending}
+      />
+    </Points>
+  );
+}
 
-      <div className="neox-rive-empty">
-        <span>Rive visual</span>
-        <strong>public/rive/neox-system-flow.riv</strong>
-        <p>Faylı bu path-ə qoyanda burada animated sistem səhnəsi görünəcək.</p>
-      </div>
+function DustOnly() {
+  return (
+    <div
+      style={{
+        position: "relative",
+        minHeight: "100vh",
+        width: "100%",
+        overflow: "hidden",
+        background: "transparent",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(circle at 72% 48%, rgba(51, 102, 255, 0.10), transparent 16%), radial-gradient(circle at 81% 50%, rgba(136, 174, 255, 0.08), transparent 22%)",
+          filter: "blur(18px)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.98) 22%, rgba(255,255,255,0.82) 34%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.04) 62%, rgba(255,255,255,0.14) 82%, rgba(255,255,255,0.58) 100%)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0.08) 82%, rgba(255,255,255,0.88) 100%)",
+        }}
+      />
+
+      <Canvas
+        dpr={[1, 1.8]}
+        camera={{ position: [0, 0, 4.2], fov: 34 }}
+        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        <DustCloud
+          count={380}
+          radius={1.34}
+          offset={[1.05, 0.02, 0]}
+          spreadX={1.85}
+          spreadY={0.98}
+          size={0.026}
+          opacity={0.8}
+          speed={0.08}
+          paletteIndex={0}
+        />
+
+        <DustCloud
+          count={240}
+          radius={0.88}
+          offset={[1.42, -0.04, 0.03]}
+          spreadX={1.25}
+          spreadY={0.82}
+          size={0.035}
+          opacity={0.68}
+          speed={0.13}
+          paletteIndex={1}
+        />
+
+        <DustCloud
+          count={160}
+          radius={0.58}
+          offset={[1.72, 0.14, -0.04]}
+          spreadX={1.05}
+          spreadY={0.72}
+          size={0.045}
+          opacity={0.5}
+          speed={0.17}
+          paletteIndex={2}
+        />
+      </Canvas>
     </div>
   );
 }
 
-function CardLab() {
-  const lang = useSafeLang();
-
-  return (
-    <main className="neox-rive-page">
-      <style>{`
-        .neox-rive-page {
-          min-height: 100vh;
-          color: #070b18;
-          background:
-            radial-gradient(circle at 50% 8%, rgba(37, 84, 216, 0.075), transparent 34%),
-            linear-gradient(180deg, #f8f9fc 0%, #ffffff 44%, #f8f9fc 100%);
-        }
-
-        .neox-rive-shell {
-          width: min(1480px, calc(100% - 72px));
-          margin: 0 auto;
-          padding: 70px 0 64px;
-        }
-
-        .neox-rive-head {
-          max-width: 850px;
-          margin: 0 auto;
-          text-align: center;
-        }
-
-        .neox-rive-kicker {
-          margin: 0 0 16px;
-          font-size: 13px;
-          line-height: 1;
-          font-weight: 850;
-          letter-spacing: 0.24em;
-          text-transform: uppercase;
-          color: #2554d8;
-        }
-
-        .neox-rive-head h1 {
-          margin: 0;
-          font-size: clamp(44px, 5.25vw, 82px);
-          line-height: 0.94;
-          letter-spacing: -0.078em;
-          font-weight: 850;
-          color: #070b18;
-        }
-
-        .neox-rive-head h1 span {
-          color: #2c5be3;
-        }
-
-        .neox-rive-head p {
-          max-width: 690px;
-          margin: 26px auto 0;
-          font-size: 18px;
-          line-height: 1.75;
-          letter-spacing: -0.025em;
-          color: #65728a;
-        }
-
-        .neox-rive-stage-wrap {
-          margin-top: 68px;
-          position: relative;
-        }
-
-        .neox-rive-stage {
-          position: relative;
-          height: min(560px, 52vw);
-          min-height: 430px;
-          overflow: hidden;
-          border-radius: 36px;
-          border: 1px solid rgba(7, 11, 24, 0.06);
-          background:
-            radial-gradient(circle at 50% 46%, rgba(37, 84, 216, 0.075), transparent 36%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 249, 253, 0.72));
-          box-shadow:
-            0 36px 120px rgba(15, 23, 42, 0.07),
-            inset 0 1px 0 rgba(255, 255, 255, 0.95);
-        }
-
-        .neox-rive-stage::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background:
-            linear-gradient(90deg, rgba(255,255,255,0.9), transparent 16%, transparent 84%, rgba(255,255,255,0.9)),
-            linear-gradient(180deg, rgba(255,255,255,0.86), transparent 22%, transparent 78%, rgba(255,255,255,0.86));
-          pointer-events: none;
-          z-index: 2;
-        }
-
-        .neox-rive-glow {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 720px;
-          height: 320px;
-          transform: translate(-50%, -50%);
-          border-radius: 999px;
-          background: rgba(37, 84, 216, 0.11);
-          filter: blur(62px);
-          opacity: 0.65;
-          pointer-events: none;
-        }
-
-        .neox-rive-canvas {
-          position: relative;
-          z-index: 3;
-          width: 100%;
-          height: 100%;
-        }
-
-        .neox-rive-empty {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          z-index: 1;
-          width: min(520px, calc(100% - 48px));
-          transform: translate(-50%, -50%);
-          text-align: center;
-          pointer-events: none;
-          opacity: 0.72;
-        }
-
-        .neox-rive-empty span {
-          display: block;
-          margin-bottom: 12px;
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: 0.22em;
-          text-transform: uppercase;
-          color: #2554d8;
-        }
-
-        .neox-rive-empty strong {
-          display: block;
-          font-size: clamp(28px, 3vw, 46px);
-          line-height: 1;
-          letter-spacing: -0.06em;
-          color: #07101f;
-        }
-
-        .neox-rive-empty p {
-          max-width: 420px;
-          margin: 16px auto 0;
-          font-size: 15px;
-          line-height: 1.6;
-          color: #65728a;
-        }
-
-        .neox-rive-caption {
-          max-width: 850px;
-          margin: 34px auto 0;
-          text-align: center;
-          font-size: 17px;
-          line-height: 1.7;
-          letter-spacing: -0.025em;
-          color: #5f6c82;
-        }
-
-        .neox-rive-caption strong {
-          color: #07101f;
-          font-weight: 820;
-        }
-
-        .neox-rive-actions {
-          display: flex;
-          justify-content: center;
-          gap: 12px;
-          margin-top: 36px;
-        }
-
-        .neox-rive-button {
-          height: 50px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 24px;
-          border-radius: 14px;
-          text-decoration: none;
-          font-size: 14px;
-          font-weight: 820;
-          letter-spacing: -0.02em;
-          transition:
-            border-color 180ms ease,
-            background 180ms ease,
-            color 180ms ease;
-        }
-
-        .neox-rive-button--ghost {
-          color: #1f2b43;
-          background: rgba(255, 255, 255, 0.72);
-          border: 1px solid rgba(7, 11, 24, 0.1);
-        }
-
-        .neox-rive-button--primary {
-          color: #ffffff;
-          background: #25359a;
-          border: 1px solid #25359a;
-        }
-
-        .neox-rive-button--ghost:hover {
-          color: #2554d8;
-          border-color: rgba(37, 84, 216, 0.24);
-        }
-
-        .neox-rive-button--primary:hover {
-          background: #1e2f91;
-        }
-
-        @media (max-width: 760px) {
-          .neox-rive-shell {
-            width: min(100% - 28px, 540px);
-            padding-top: 48px;
-          }
-
-          .neox-rive-head h1 {
-            font-size: 44px;
-          }
-
-          .neox-rive-head p,
-          .neox-rive-caption {
-            font-size: 16px;
-          }
-
-          .neox-rive-stage-wrap {
-            margin-top: 48px;
-          }
-
-          .neox-rive-stage {
-            height: 520px;
-            min-height: 520px;
-            border-radius: 28px;
-          }
-
-          .neox-rive-actions {
-            flex-direction: column;
-          }
-
-          .neox-rive-button {
-            width: 100%;
-          }
-        }
-      `}</style>
-
-      <section className="neox-rive-shell">
-        <div className="neox-rive-head">
-          <p className="neox-rive-kicker">Vahid sistem</p>
-
-          <h1>
-            Müştəri gəlir, sistem qarşılayır, <span>proses davam edir.</span>
-          </h1>
-
-          <p>
-            İlk təmasdan cavaba, yönləndirməyə və daxili prosesə qədər hər şey
-            bir-birinə bağlı işləyir.
-          </p>
-        </div>
-
-        <div className="neox-rive-stage-wrap">
-          <NeoxRiveStage />
-        </div>
-
-        <p className="neox-rive-caption">
-          <strong>Burada kod artıq workflow çəkmir.</strong> Kod yalnız premium Rive səhnəsini
-          səhifəyə yerləşdirir. Əsas vizual dizayn `.riv` faylında hazırlanır.
-        </p>
-
-        <div className="neox-rive-actions">
-          <Link to={withLang(lang, "/")} className="neox-rive-button neox-rive-button--ghost">
-            Home-a qayıt
-          </Link>
-
-          <Link
-            to={withLang(lang, "/contact")}
-            className="neox-rive-button neox-rive-button--primary"
-          >
-            Sistemi quraq
-          </Link>
-        </div>
-      </section>
-    </main>
-  );
+export default function CardLab() {
+  return <DustOnly />;
 }
-
-export default CardLab;
