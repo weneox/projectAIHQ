@@ -5,7 +5,8 @@ import { DEFAULT_LANG, type Lang } from "../i18n/lang";
 const HERO_BACKGROUND_VIDEO_URL =
   "https://res.cloudinary.com/dppoomunj/video/upload/v1777159382/9150545-hd_1920_1080_24fps_xw2ces.mov";
 
-const UNIFIED_SYSTEM_IMAGE_URL = "/image/neox-system-visual.png";
+const UNIFIED_SYSTEM_IMAGE_URL =
+  "https://res.cloudinary.com/dppoomunj/image/upload/v1777153052/ChatGPT_Image_Apr_26_2026_01_36_45_AM_adfc1t.webp";
 
 const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
 
@@ -1040,12 +1041,64 @@ export default function HomePage() {
         .neox-unified-section {
           position: relative;
           overflow: hidden;
-          padding-top: 118px;
-          padding-bottom: 118px;
-          background: #000000;
+          padding-top: 112px;
+          padding-bottom: 112px;
+          background:
+            radial-gradient(
+              980px 520px at 22% 48%,
+              rgba(28, 92, 255, 0.18),
+              rgba(28, 92, 255, 0.055) 34%,
+              transparent 68%
+            ),
+            radial-gradient(
+              760px 420px at 78% 28%,
+              rgba(255, 255, 255, 0.055),
+              transparent 62%
+            ),
+            linear-gradient(180deg, #020304 0%, #000000 54%, #020304 100%);
           color: #ffffff;
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.075);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+        }
+
+        .neox-unified-section::before {
+          content: "";
+          position: absolute;
+          left: -18%;
+          top: 12%;
+          width: 58%;
+          height: 72%;
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 48% 52%,
+              rgba(47, 124, 255, 0.22),
+              rgba(47, 124, 255, 0.075) 38%,
+              transparent 70%
+            );
+          filter: blur(34px);
+          opacity: 0.86;
+        }
+
+        .neox-unified-section::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(
+              90deg,
+              rgba(0, 0, 0, 0.08) 0%,
+              transparent 24%,
+              transparent 70%,
+              rgba(0, 0, 0, 0.45) 100%
+            ),
+            radial-gradient(
+              720px 360px at 47% 50%,
+              transparent 0%,
+              transparent 58%,
+              rgba(0, 0, 0, 0.28) 100%
+            );
         }
 
         .neox-unified-container {
@@ -1055,52 +1108,117 @@ export default function HomePage() {
 
         .neox-unified-layout {
           display: grid;
-          grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.82fr);
-          gap: clamp(54px, 7vw, 118px);
+          grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+          gap: clamp(42px, 5.8vw, 92px);
           align-items: center;
         }
 
         .neox-unified-visual {
+          position: relative;
           min-width: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+
+        .neox-unified-visual::before {
+          content: "";
+          position: absolute;
+          left: 4%;
+          top: 50%;
+          width: 72%;
+          height: 64%;
+          transform: translateY(-50%);
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 50% 50%,
+              rgba(36, 106, 255, 0.28),
+              rgba(36, 106, 255, 0.11) 38%,
+              transparent 72%
+            );
+          filter: blur(44px);
+          opacity: 0.78;
         }
 
         .neox-unified-image-wrap {
           position: relative;
-          width: 100%;
-          aspect-ratio: 1.42 / 1;
-          overflow: hidden;
-          border-radius: 34px;
-          background: #000000;
-          box-shadow:
-            0 40px 120px rgba(0, 0, 0, 0.62),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+          width: min(112%, 980px);
+          aspect-ratio: 1.48 / 1;
+          margin-left: -42px;
+          overflow: visible;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+          isolation: isolate;
+        }
+
+        .neox-unified-image-wrap::before {
+          content: "";
+          position: absolute;
+          inset: 7% 8% 5% 8%;
+          z-index: -1;
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 50% 50%,
+              rgba(28, 104, 255, 0.26),
+              rgba(28, 104, 255, 0.08) 42%,
+              transparent 72%
+            );
+          filter: blur(34px);
+          opacity: 0.86;
         }
 
         .neox-unified-image-wrap::after {
           content: "";
           position: absolute;
-          inset: 0;
+          inset: -3px;
           pointer-events: none;
           background:
             linear-gradient(
               90deg,
-              rgba(0, 0, 0, 0.1) 0%,
-              rgba(0, 0, 0, 0) 44%,
-              rgba(0, 0, 0, 0.18) 100%
+              #000000 0%,
+              rgba(0, 0, 0, 0.72) 3.5%,
+              rgba(0, 0, 0, 0) 14%,
+              rgba(0, 0, 0, 0) 78%,
+              rgba(0, 0, 0, 0.34) 91%,
+              #000000 100%
+            ),
+            linear-gradient(
+              180deg,
+              #000000 0%,
+              rgba(0, 0, 0, 0.62) 4%,
+              rgba(0, 0, 0, 0) 16%,
+              rgba(0, 0, 0, 0) 76%,
+              rgba(0, 0, 0, 0.46) 91%,
+              #000000 100%
             ),
             radial-gradient(
-              620px 320px at 50% 0%,
-              rgba(255, 255, 255, 0.1),
-              transparent 62%
+              680px 360px at 52% 52%,
+              transparent 0%,
+              transparent 54%,
+              rgba(0, 0, 0, 0.48) 86%,
+              #000000 100%
             );
+          z-index: 2;
         }
 
         .neox-unified-image-wrap img {
+          position: relative;
+          z-index: 1;
           width: 100%;
           height: 100%;
           display: block;
-          object-fit: cover;
+          object-fit: contain;
           object-position: center;
+          transform: scale(1.08);
+          opacity: 0.96;
+          filter:
+            saturate(1.08)
+            contrast(1.05)
+            brightness(0.92)
+            drop-shadow(0 38px 96px rgba(0, 0, 0, 0.58));
         }
 
         .neox-unified-copy {
@@ -1429,7 +1547,12 @@ export default function HomePage() {
           }
 
           .neox-unified-image-wrap {
-            border-radius: 28px;
+            width: min(108%, 820px);
+            margin-left: -18px;
+          }
+
+          .neox-unified-image-wrap img {
+            transform: scale(1.04);
           }
         }
 
@@ -1507,7 +1630,12 @@ export default function HomePage() {
 
           .neox-unified-image-wrap {
             aspect-ratio: 1.08 / 1;
-            border-radius: 24px;
+            width: 112%;
+            margin-left: -6%;
+          }
+
+          .neox-unified-image-wrap img {
+            transform: scale(1.08);
           }
         }
 
