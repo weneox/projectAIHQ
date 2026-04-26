@@ -943,3 +943,1200 @@ a {
     font-size: 14.5px;
   }
 }
+
+/* =========================================================
+   Home System / Reusable NEOX Public Patterns
+   Moved out of Home.tsx so the same visual language can be reused.
+========================================================= */
+
+body:has(.neox-home-page) {
+  overflow-y: auto !important;
+  scrollbar-gutter: auto !important;
+}
+
+body:has(.neox-home-page) #root,
+body:has(.neox-home-page) #root > *,
+body:has(.neox-home-page) #root > * > *,
+body:has(.neox-home-page) #root > * > * > *,
+body:has(.neox-home-page) .nx-page,
+body:has(.neox-home-page) .neox-home-page {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overflow-y: visible !important;
+}
+
+body:has(.neox-home-page) .nx-page::-webkit-scrollbar,
+body:has(.neox-home-page) .neox-home-page::-webkit-scrollbar,
+body:has(.neox-home-page) #root > *::-webkit-scrollbar,
+body:has(.neox-home-page) #root > * > *::-webkit-scrollbar,
+body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+@keyframes neoxHomeStrip {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+@keyframes neoxHeroPhrase {
+  0% {
+    opacity: 0;
+    transform: translateY(0.18em);
+  }
+
+  4%,
+  10.5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  12.5%,
+  100% {
+    opacity: 0;
+    transform: translateY(-0.14em);
+  }
+}
+
+.neox-home-page {
+  display: block;
+  width: 100%;
+  overflow: visible !important;
+}
+
+.neox-home-hero {
+  height: calc(100vh - var(--nx-header-h, 56px));
+  height: calc(100svh - var(--nx-header-h, 56px));
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.neox-home-hero-main {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.neox-hero-media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.neox-hero-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 62% center;
+  opacity: 1;
+  filter: saturate(0.96) contrast(1.02) brightness(1.04);
+  transform: scale(1.01);
+}
+
+.neox-hero-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.neox-hero-overlay--side {
+  background: linear-gradient(
+    90deg,
+    rgba(248, 250, 252, 0.82) 0%,
+    rgba(248, 250, 252, 0.64) 34%,
+    rgba(248, 250, 252, 0.28) 66%,
+    rgba(248, 250, 252, 0.06) 100%
+  );
+}
+
+.neox-hero-overlay--top {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+.neox-hero-overlay--focus {
+  background: radial-gradient(
+    760px 420px at 12% 50%,
+    rgba(255, 255, 255, 0.52),
+    transparent 68%
+  );
+}
+
+.neox-hero-container {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.neox-hero-copy {
+  max-width: 960px;
+}
+
+.neox-hero-title {
+  margin: 0;
+  max-width: 980px;
+  color: var(--nx-ink);
+  font-size: clamp(2.85rem, 4.45vw, 5rem);
+  font-weight: 520;
+  line-height: 1.08;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+
+.neox-hero-title-line {
+  display: block;
+}
+
+.neox-hero-title-line:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.24em;
+}
+
+.neox-hero-loop {
+  position: relative;
+  display: inline-grid;
+  white-space: nowrap;
+  color: var(--nx-blue);
+  vertical-align: baseline;
+}
+
+.neox-hero-loop-sizer {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.neox-hero-loop-item {
+  grid-area: 1 / 1;
+  opacity: 0;
+  color: var(--nx-blue);
+  animation: neoxHeroPhrase 24s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  will-change: opacity, transform;
+}
+
+.neox-hero-lead {
+  margin: 28px 0 0;
+  max-width: 650px;
+  color: #334155;
+  font-size: 1.05rem;
+  font-weight: 430;
+  line-height: 1.78;
+  letter-spacing: -0.018em;
+}
+
+.neox-hero-actions {
+  margin-top: 36px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Reusable moving system strip */
+
+.neox-system-strip {
+  position: relative;
+  z-index: 2;
+  height: 82px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f7f8fb;
+}
+
+.neox-system-strip-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 96px;
+  pointer-events: none;
+}
+
+.neox-system-strip-fade--left {
+  left: 0;
+  background: linear-gradient(90deg, #f7f8fb, transparent);
+}
+
+.neox-system-strip-fade--right {
+  right: 0;
+  background: linear-gradient(270deg, #f7f8fb, transparent);
+}
+
+.neox-system-strip-track-wrap {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.neox-home-strip {
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  animation: neoxHomeStrip 38s linear infinite;
+}
+
+.neox-home-strip:hover {
+  animation-play-state: paused;
+}
+
+.neox-strip-item {
+  height: 82px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  color: var(--nx-muted);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+
+.neox-strip-item:hover {
+  color: var(--nx-blue);
+}
+
+/* Reusable premium title rhythm */
+
+.neox-balanced-section-title {
+  font-size: clamp(2.75rem, 4.45vw, 4.75rem);
+  font-weight: 520;
+  line-height: 1.08;
+  letter-spacing: -0.064em;
+}
+
+.neox-balanced-section-title span {
+  color: var(--nx-blue);
+  font-weight: inherit;
+}
+
+/* Reusable dark service/image cards */
+
+.neox-card-section {
+  padding-top: 88px;
+  padding-bottom: 72px;
+}
+
+.neox-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.neox-system-card {
+  position: relative;
+  min-height: 342px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--nx-radius-xl);
+  background: var(--nx-dark-2);
+  color: #ffffff;
+  box-shadow: var(--nx-shadow-card);
+  isolation: isolate;
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.neox-system-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: var(--nx-shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.neox-card-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(
+      420px 270px at 74% 12%,
+      rgba(255, 255, 255, 0.12),
+      transparent 62%
+    ),
+    #07111f;
+}
+
+.neox-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.68;
+  filter: saturate(0.94) contrast(1.04) brightness(0.82);
+  transform: scale(1.01);
+  transition:
+    opacity 220ms ease,
+    transform 360ms ease,
+    filter 220ms ease;
+}
+
+.neox-system-card:hover .neox-card-cover img {
+  opacity: 0.82;
+  filter: saturate(1.02) contrast(1.05) brightness(0.9);
+  transform: scale(1.045);
+}
+
+.neox-card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(5, 9, 18, 0.12) 0%,
+      rgba(5, 9, 18, 0.44) 46%,
+      rgba(5, 9, 18, 0.88) 100%
+    ),
+    radial-gradient(
+      520px 280px at 22% 8%,
+      rgba(36, 71, 198, 0.26),
+      transparent 62%
+    );
+  pointer-events: none;
+}
+
+.neox-card-content {
+  position: relative;
+  z-index: 2;
+  padding: 26px;
+}
+
+.neox-card-content h3 {
+  margin: 0;
+  max-width: 360px;
+  color: #ffffff;
+  font-size: clamp(1.35rem, 1.65vw, 1.82rem);
+  font-weight: 650;
+  line-height: 1.08;
+  letter-spacing: -0.052em;
+  text-wrap: balance;
+}
+
+.neox-card-content p {
+  margin: 13px 0 0;
+  max-width: 370px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.66;
+  letter-spacing: -0.016em;
+}
+
+.neox-card-action {
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  bottom: 22px;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.neox-system-card:hover .neox-card-action {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.neox-card-action span {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.012em;
+}
+
+/* Reusable dark unified-system split */
+
+.neox-unified-section {
+  min-height: min(820px, calc(100svh - var(--nx-header-h, 56px)));
+  padding-block: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      900px 520px at 26% 44%,
+      rgba(36, 71, 198, 0.18),
+      transparent 62%
+    ),
+    linear-gradient(90deg, #02040a 0%, #03050a 52%, #020205 100%);
+  color: #ffffff;
+}
+
+.neox-unified-container {
+  max-width: none;
+  height: 100%;
+  padding-inline: 0;
+}
+
+.neox-unified-layout {
+  min-height: min(820px, calc(100svh - var(--nx-header-h, 56px)));
+  display: grid;
+  grid-template-columns: minmax(0, 1.14fr) minmax(420px, 0.86fr);
+  align-items: stretch;
+}
+
+.neox-unified-visual {
+  position: relative;
+  min-height: 620px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      620px 390px at 38% 48%,
+      rgba(36, 71, 198, 0.22),
+      transparent 68%
+    ),
+    #02040a;
+}
+
+.neox-unified-visual::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(90deg, rgba(2, 4, 10, 0.5) 0%, transparent 30%, rgba(2, 4, 10, 0.72) 100%),
+    linear-gradient(180deg, rgba(2, 4, 10, 0.18) 0%, transparent 44%, rgba(2, 4, 10, 0.42) 100%);
+  pointer-events: none;
+}
+
+.neox-unified-visual::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  z-index: 3;
+  width: 220px;
+  background: linear-gradient(90deg, transparent, #020205 78%);
+  pointer-events: none;
+}
+
+.neox-unified-image-wrap {
+  position: absolute;
+  inset: -4% -1% -4% -8%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.neox-unified-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.8;
+  filter: saturate(1.06) contrast(1.08) brightness(0.72);
+  transform: scale(1.02);
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0%, #000 9%, #000 76%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, #000 8%, #000 90%, transparent 100%);
+  mask-image:
+    linear-gradient(90deg, transparent 0%, #000 9%, #000 76%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, #000 8%, #000 90%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.neox-unified-copy {
+  position: relative;
+  z-index: 4;
+  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 88px clamp(28px, 7vw, 118px) 88px clamp(28px, 5vw, 88px);
+  background:
+    radial-gradient(
+      520px 320px at 18% 46%,
+      rgba(36, 71, 198, 0.1),
+      transparent 68%
+    ),
+    #020205;
+}
+
+.neox-unified-title {
+  max-width: 660px;
+  color: #ffffff;
+  font-size: clamp(3.2rem, 5.2vw, 5.65rem);
+  letter-spacing: -0.07em;
+}
+
+.neox-unified-title span {
+  color: var(--nx-blue-3);
+}
+
+.neox-unified-lead {
+  margin-top: 26px;
+  max-width: 620px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: clamp(1.02rem, 1.18vw, 1.16rem);
+  line-height: 1.78;
+}
+
+/* Reusable editorial process section */
+
+.neox-process-section {
+  overflow: clip;
+  --neox-process-copy-y: 0px;
+  --neox-process-copy-start: 0px;
+  --neox-process-copy-track-h: 840px;
+}
+
+.neox-process-stage {
+  position: relative;
+}
+
+.neox-process-editorial {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.74fr) minmax(0, 1fr);
+  gap: clamp(42px, 7vw, 108px);
+  align-items: start;
+}
+
+.neox-process-copy-track {
+  position: relative;
+  min-height: var(--neox-process-copy-track-h);
+}
+
+.neox-process-moving {
+  position: absolute;
+  top: var(--neox-process-copy-start);
+  left: 0;
+  max-width: 520px;
+  transform: translate3d(0, var(--neox-process-copy-y), 0);
+  will-change: transform;
+}
+
+.neox-process-title {
+  max-width: 560px;
+}
+
+.neox-process-lead {
+  margin-top: 24px;
+  max-width: 480px;
+}
+
+.neox-process-list-wrap {
+  min-width: 0;
+}
+
+.neox-process-list {
+  display: grid;
+}
+
+.neox-process-row {
+  min-height: 168px;
+  display: grid;
+  grid-template-columns: 78px 1px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  padding: 0 0 44px;
+  opacity: 0.24;
+  transform: translateY(18px);
+  transition:
+    opacity 260ms ease,
+    transform 260ms ease;
+}
+
+.neox-process-row.is-visible,
+.neox-process-row.is-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.neox-process-row-number {
+  color: rgba(36, 71, 198, 0.42);
+  font-size: clamp(2.25rem, 4.6vw, 4.8rem);
+  font-weight: 520;
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+  transition: color 220ms ease;
+}
+
+.neox-process-row.is-active .neox-process-row-number {
+  color: var(--nx-blue);
+}
+
+.neox-process-row-divider {
+  width: 1px;
+  min-height: 124px;
+  background: linear-gradient(
+    180deg,
+    rgba(36, 71, 198, 0.42),
+    rgba(15, 23, 42, 0.07)
+  );
+  transform-origin: top;
+  opacity: 0.38;
+}
+
+.neox-process-row.is-active .neox-process-row-divider {
+  opacity: 0.78;
+}
+
+.neox-process-row-content {
+  padding-top: 4px;
+  max-width: 580px;
+}
+
+.neox-process-row-content h3 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: clamp(1.6rem, 2.45vw, 2.45rem);
+  font-weight: 560;
+  line-height: 1.05;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.neox-process-row-content p {
+  margin: 14px 0 0;
+  max-width: 500px;
+  color: var(--nx-muted);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.76;
+  letter-spacing: -0.016em;
+}
+
+/* Home-system responsive layer */
+
+@media (max-width: 1180px) {
+  .neox-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .neox-unified-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-unified-visual {
+    min-height: 520px;
+  }
+
+  .neox-unified-copy {
+    min-height: auto;
+    padding-block: 78px;
+  }
+
+  .neox-process-editorial {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-process-copy-track {
+    min-height: auto;
+  }
+
+  .neox-process-moving {
+    position: relative;
+    top: auto;
+    transform: none !important;
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 900px) {
+  .neox-home-hero {
+    min-height: calc(100svh - var(--nx-header-h, 60px));
+    height: auto;
+  }
+
+  .neox-home-hero-main {
+    min-height: calc(100svh - var(--nx-header-h, 60px) - 72px);
+  }
+
+  .neox-hero-container {
+    align-items: flex-end;
+    padding-top: 96px;
+    padding-bottom: 58px;
+  }
+
+  .neox-hero-title {
+    font-size: clamp(2.5rem, 10vw, 4.6rem);
+    letter-spacing: -0.064em;
+  }
+
+  .neox-hero-title-line:first-child {
+    display: block;
+  }
+
+  .neox-hero-loop {
+    display: grid;
+    margin-top: 0.04em;
+  }
+
+  .neox-hero-lead {
+    max-width: 560px;
+    font-size: 1rem;
+    line-height: 1.72;
+  }
+
+  .neox-system-strip {
+    height: 72px;
+  }
+
+  .neox-strip-item {
+    height: 72px;
+    font-size: 12px;
+  }
+
+  .neox-home-strip {
+    gap: 42px;
+  }
+
+  .neox-balanced-section-title {
+    font-size: clamp(2.35rem, 8.6vw, 4rem);
+    letter-spacing: -0.06em;
+  }
+
+  .neox-unified-visual {
+    min-height: 440px;
+  }
+
+  .neox-unified-image-wrap {
+    inset: -3% -18% -3% -18%;
+  }
+
+  .neox-unified-copy {
+    padding: 64px 24px 72px;
+  }
+
+  .neox-process-row {
+    grid-template-columns: 64px 1px minmax(0, 1fr);
+    gap: 22px;
+    min-height: 150px;
+  }
+
+  .neox-process-row-content h3 {
+    font-size: clamp(1.42rem, 6vw, 2rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .neox-hero-container {
+    padding-top: 86px;
+    padding-bottom: 48px;
+  }
+
+  .neox-hero-actions {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .neox-hero-actions .nx-button {
+    flex: 1 1 100%;
+  }
+
+  .neox-card-section {
+    padding-top: 72px;
+    padding-bottom: 56px;
+  }
+
+  .neox-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-system-card {
+    min-height: 310px;
+    border-radius: 22px;
+  }
+
+  .neox-card-content {
+    padding: 22px;
+  }
+
+  .neox-card-action {
+    display: none;
+  }
+
+  .neox-unified-section,
+  .neox-unified-layout {
+    min-height: auto;
+  }
+
+  .neox-unified-visual {
+    min-height: 360px;
+  }
+
+  .neox-unified-title {
+    font-size: clamp(2.55rem, 12vw, 4rem);
+  }
+
+  .neox-unified-lead {
+    font-size: 1rem;
+  }
+
+  .neox-process-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding-bottom: 42px;
+  }
+
+  .neox-process-row-divider {
+    width: 100%;
+    min-height: 1px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(36, 71, 198, 0.36),
+      rgba(15, 23, 42, 0.06)
+    );
+  }
+
+  .neox-process-row-number {
+    font-size: 2.4rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .neox-hero-title {
+    font-size: clamp(2.22rem, 13vw, 3.1rem);
+  }
+
+  .neox-hero-lead {
+    font-size: 0.96rem;
+  }
+
+  .neox-unified-copy {
+    padding-inline: 18px;
+  }
+}
+
+/* =========================================================
+   NEOX — Experimental Orbit Card System
+   Reusable premium card idea for public pages.
+========================================================= */
+
+.neox-card-lab-page {
+  min-height: calc(100svh - var(--nx-header-h, 56px));
+  overflow: hidden;
+  background:
+    radial-gradient(
+      900px 420px at 20% 0%,
+      rgba(36, 71, 198, 0.09),
+      transparent 64%
+    ),
+    radial-gradient(
+      780px 420px at 86% 18%,
+      rgba(73, 100, 255, 0.07),
+      transparent 66%
+    ),
+    linear-gradient(180deg, #ffffff 0%, #f6f7fa 100%);
+}
+
+.neox-lab-head {
+  max-width: 860px;
+  margin: 0 auto 56px;
+  text-align: center;
+}
+
+.neox-lab-head .nx-kicker {
+  width: fit-content;
+  margin-inline: auto;
+}
+
+.neox-lab-head .nx-section-title {
+  margin-inline: auto;
+}
+
+.neox-lab-head .nx-section-lead {
+  margin: 22px auto 0;
+}
+
+.neox-orbit-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.neox-orbit-card {
+  position: relative;
+  min-height: 286px;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+  border-radius: var(--nx-radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.075);
+  box-shadow:
+    0 20px 58px rgba(15, 23, 42, 0.065),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  transform: translateZ(0);
+  transition:
+    border-color 190ms ease,
+    box-shadow 190ms ease,
+    transform 190ms ease,
+    background-color 190ms ease;
+}
+
+.neox-orbit-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -2;
+  border-radius: calc(var(--nx-radius-xl) - 1px);
+  background:
+    radial-gradient(
+      420px 220px at 82% 0%,
+      rgba(36, 71, 198, 0.1),
+      transparent 68%
+    ),
+    radial-gradient(
+      300px 220px at 0% 100%,
+      rgba(73, 100, 255, 0.06),
+      transparent 72%
+    );
+  opacity: 0.8;
+  transition: opacity 190ms ease;
+}
+
+.neox-orbit-card::after {
+  content: "";
+  position: absolute;
+  right: -82px;
+  top: -82px;
+  z-index: -1;
+  width: 184px;
+  height: 184px;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 71, 198, 0.14);
+  box-shadow:
+    0 0 0 24px rgba(36, 71, 198, 0.028),
+    0 0 0 54px rgba(36, 71, 198, 0.018);
+  opacity: 0.72;
+  transform: scale(0.92);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    border-color 220ms ease;
+}
+
+.neox-orbit-card:hover {
+  border-color: rgba(36, 71, 198, 0.18);
+  box-shadow:
+    0 30px 86px rgba(15, 23, 42, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  transform: translateY(-3px);
+}
+
+.neox-orbit-card:hover::before {
+  opacity: 1;
+}
+
+.neox-orbit-card:hover::after {
+  opacity: 1;
+  transform: scale(1);
+  border-color: rgba(36, 71, 198, 0.24);
+}
+
+.neox-orbit-card-glow {
+  position: absolute;
+  inset: auto -40px -72px -40px;
+  z-index: -1;
+  height: 150px;
+  background: radial-gradient(
+    420px 130px at 50% 100%,
+    rgba(36, 71, 198, 0.105),
+    transparent 72%
+  );
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 190ms ease,
+    transform 190ms ease;
+  pointer-events: none;
+}
+
+.neox-orbit-card:hover .neox-orbit-card-glow {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.neox-orbit-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.neox-orbit-card-index {
+  color: rgba(36, 71, 198, 0.68);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.neox-orbit-card-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 15px;
+  color: var(--nx-blue);
+  background:
+    linear-gradient(180deg, rgba(36, 71, 198, 0.085), rgba(36, 71, 198, 0.035)),
+    rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(36, 71, 198, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transition:
+    color 190ms ease,
+    border-color 190ms ease,
+    transform 190ms ease,
+    background-color 190ms ease;
+}
+
+.neox-orbit-card:hover .neox-orbit-card-icon {
+  color: #ffffff;
+  background: var(--nx-blue-2);
+  border-color: var(--nx-blue-2);
+  transform: translateY(-2px);
+}
+
+.neox-orbit-card-body {
+  margin-top: 58px;
+}
+
+.neox-orbit-card-body h2 {
+  margin: 0;
+  max-width: 340px;
+  color: var(--nx-ink);
+  font-size: clamp(1.55rem, 2.1vw, 2.28rem);
+  font-weight: 560;
+  line-height: 1.06;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+
+.neox-orbit-card-body p {
+  margin: 14px 0 0;
+  max-width: 350px;
+  color: var(--nx-muted);
+  font-size: 14.8px;
+  font-weight: 510;
+  line-height: 1.7;
+  letter-spacing: -0.016em;
+}
+
+.neox-orbit-card-bottom {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: rgba(15, 23, 42, 0.54);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1;
+  letter-spacing: -0.012em;
+  transition: color 170ms ease;
+}
+
+.neox-orbit-card-bottom svg {
+  color: var(--nx-blue);
+  opacity: 0.72;
+  transform: translate(-2px, 2px);
+  transition:
+    opacity 170ms ease,
+    transform 170ms ease;
+}
+
+.neox-orbit-card:hover .neox-orbit-card-bottom {
+  color: var(--nx-blue);
+}
+
+.neox-orbit-card:hover .neox-orbit-card-bottom svg {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+.neox-lab-actions {
+  margin-top: 42px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+@media (max-width: 1180px) {
+  .neox-orbit-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .neox-lab-head {
+    margin-bottom: 38px;
+    text-align: left;
+  }
+
+  .neox-lab-head .nx-kicker,
+  .neox-lab-head .nx-section-title,
+  .neox-lab-head .nx-section-lead {
+    margin-inline: 0;
+  }
+
+  .neox-orbit-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-orbit-card {
+    min-height: 250px;
+    padding: 22px;
+  }
+
+  .neox-orbit-card-body {
+    margin-top: 42px;
+  }
+
+  .neox-lab-actions {
+    justify-content: flex-start;
+  }
+
+  .neox-lab-actions .nx-button {
+    width: 100%;
+  }
+}

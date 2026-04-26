@@ -14,6 +14,8 @@ import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 
+import CardLab from "./pages/design-lab/CardLab";
+
 import UseCaseHealthcare from "./pages/usecases/UseCaseHealthcare";
 import UseCaseLogistics from "./pages/usecases/UseCaseLogistics";
 import UseCaseFinance from "./pages/usecases/UseCaseFinance";
@@ -150,6 +152,8 @@ export default function App() {
         <Route element={<WithLayout />}>
           <Route index element={<Home />} />
           <Route path="about" element={<About />} />
+
+          <Route path="design-lab/cards" element={<CardLab />} />
 
           <Route path="services" element={<Navigate to="chatbot-24-7" replace />} />
           <Route path="services/chatbot-24-7" element={<ServiceChatbot247 />} />
