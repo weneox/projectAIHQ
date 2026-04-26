@@ -10,11 +10,11 @@ import {
   Menu,
   MonitorSmartphone,
   Newspaper,
-  Smartphone,
-  Stethoscope,
+  Palette,
+  PhoneCall,
   Store,
+  Stethoscope,
   Truck,
-  Wrench,
   Workflow,
   X,
   type LucideIcon,
@@ -39,8 +39,20 @@ const LANG_META: Record<Lang, { label: string; flag: string }> = {
   es: { label: "ES", flag: "/image/spain.png" },
 };
 
-const AI_CHAT_PREVIEW_IMAGE =
-  "https://res.cloudinary.com/dppoomunj/image/upload/v1777145861/ChatGPT_Image_Apr_25_2026_11_36_01_PM_s3x5yd.jpg";
+const SERVICE_IMAGES = {
+  websites:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157607/ChatGPT_Image_Apr_26_2026_02_52_52_AM_k5ua6g.webp",
+  workflow:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157641/5d7f54df-d9ff-4af8-8816-961fdfd809a9_vquktq.webp",
+  voice:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157688/f08b0651-fcd9-4134-b27e-681e2cc2af04_v6e5q8.webp",
+  content:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157728/7980da92-7475-4408-9c82-3fa23b913176_cyoxq8.webp",
+  chatbots:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157761/857c6bd2-374e-4ca1-85e3-3f62ea93a5a4_itzbj8.webp",
+  brand:
+    "https://res.cloudinary.com/dppoomunj/image/upload/v1777157819/cdc46192-1199-4157-9005-df6655aec353_nl1lmz.webp",
+} as const;
 
 function isLang(value: string | undefined | null): value is Lang {
   if (!value) return false;
@@ -105,53 +117,58 @@ export default function Header(_props: { introReady: boolean }) {
   const services: ItemDef[] = useMemo(
     () => [
       {
-        id: "ai-chat",
-        label: "Süni İntellekt çat sistemləri",
-        to: "/services/chatbot-24-7",
-        icon: Bot,
-        previewDescription:
-          "Müştəri mesajlarını avtomatik cavablandırır, sorğuları toplayır və lazım olduqda operatora yönləndirir.",
-        previewImage: AI_CHAT_PREVIEW_IMAGE,
-      },
-      {
-        id: "automation",
-        label: "Biznes avtomatlaşdırması",
-        to: "/services/business-workflows",
-        icon: Workflow,
-        previewDescription:
-          "Təkrarlanan işləri sistemləşdirir, komanda yükünü azaldır və prosesləri daha sürətli edir.",
-      },
-      {
         id: "websites",
-        label: "Premium veb saytlar",
+        label: "Veb saytlar hazırlayırıq",
         to: "/services/websites",
         icon: MonitorSmartphone,
         previewDescription:
-          "Brendinizə uyğun sürətli, premium və etibar yaradan veb saytlar hazırlayırıq.",
+          "Brendinizə uyğun, sürətli, modern və satışa yönəlmiş veb saytlar hazırlayırıq.",
+        previewImage: SERVICE_IMAGES.websites,
       },
       {
-        id: "mobile-apps",
-        label: "Mobil tətbiqlər",
-        to: "/services/mobile-apps",
-        icon: Smartphone,
+        id: "workflow",
+        label: "Biznes iş axınlarını avtomatlaşdırırıq",
+        to: "/services/workflow-automation",
+        icon: Workflow,
         previewDescription:
-          "Biznesiniz üçün rahat istifadəli və peşəkar mobil tətbiq həlləri qururuq.",
+          "Sifariş, müraciət, qeydiyyat və komanda proseslərini ardıcıl avtomatik axına salırıq.",
+        previewImage: SERVICE_IMAGES.workflow,
       },
       {
-        id: "social-systems",
-        label: "Sosial media sistemləri",
-        to: "/services/smm-automation",
+        id: "voice",
+        label: "Səsli assistantlar qururuq",
+        to: "/services/voice-assistants",
+        icon: PhoneCall,
+        previewDescription:
+          "Zənglərə cavab verən, məlumat toplayan və müştərini düzgün istiqamətə yönləndirən səsli sistemlər qururuq.",
+        previewImage: SERVICE_IMAGES.voice,
+      },
+      {
+        id: "content",
+        label: "Kontent axınını qururuq",
+        to: "/services/content-flow",
         icon: Megaphone,
         previewDescription:
-          "Mesaj, cavab və kontent axınlarını daha nizamlı idarə etmək üçün sistemlər qururuq.",
+          "İdeyadan paylaşımadək kontent planı, çəkiliş, təsdiq və paylaşım prosesini sistemləşdiririk.",
+        previewImage: SERVICE_IMAGES.content,
       },
       {
-        id: "support",
-        label: "Texniki dəstək",
-        to: "/services/technical-support",
-        icon: Wrench,
+        id: "chatbots",
+        label: "24/7 çatbotlar qururuq",
+        to: "/services/chatbots",
+        icon: Bot,
         previewDescription:
-          "Sistemlərin stabil işləməsi və texniki problemlərin operativ həlli üçün dəstək veririk.",
+          "Sosial media və vebsaytlarda müştəriyə gecə-gündüz cavab verən ağıllı çatbotlar qururuq.",
+        previewImage: SERVICE_IMAGES.chatbots,
+      },
+      {
+        id: "brand",
+        label: "Brend görünüşünü yaradırıq",
+        to: "/services/brand-identity",
+        icon: Palette,
+        previewDescription:
+          "Logo, rəng, tipografiya və vizual üslubu biznesin xarakterinə uyğun premium şəkildə formalaşdırırıq.",
+        previewImage: SERVICE_IMAGES.brand,
       },
     ],
     [],
@@ -254,7 +271,12 @@ export default function Header(_props: { introReady: boolean }) {
   useEffect(() => {
     const root = document.documentElement;
     const previous = root.style.overflow;
-    root.style.overflow = mobileOpen ? "hidden" : "";
+
+    if (mobileOpen) {
+      root.style.overflow = "hidden";
+    } else {
+      root.style.overflow = previous;
+    }
 
     return () => {
       root.style.overflow = previous;
@@ -324,16 +346,7 @@ export default function Header(_props: { introReady: boolean }) {
       <style>{`
         :root {
           --nx-header-h: 56px;
-          --nx-mega-h: 286px;
-
-          --neo-bg: rgba(248, 249, 252, 0.955);
-          --neo-panel-bg: rgba(248, 249, 252, 0.968);
-          --neo-blur: blur(22px) saturate(1.02);
-          --neo-text: #0f172a;
-          --neo-muted: rgba(15, 23, 42, 0.58);
-          --neo-accent: #26368f;
-          --neo-accent-hover: #1f2f80;
-          --neo-accent-bright: #4459df;
+          --nx-mega-h: 306px;
         }
 
         .neoShell,
@@ -352,18 +365,18 @@ export default function Header(_props: { introReady: boolean }) {
             sans-serif;
         }
 
-        .neoShell a,
-        .neoShell a:hover,
-        .neoShell a:focus,
-        .neoShell a:active,
-        .neoMOv a,
-        .neoMOv a:hover,
-        .neoMOv a:focus,
-        .neoMOv a:active {
-          text-decoration: none !important;
-        }
-
         .neoShell {
+          --neo-bg: rgba(248, 249, 252, 0.955);
+          --neo-panel-bg: rgba(248, 249, 252, 0.968);
+          --neo-blur: blur(22px) saturate(1.02);
+          --neo-text: var(--nx-ink, #070a18);
+          --neo-muted: rgba(15, 23, 42, 0.58);
+          --neo-muted-strong: rgba(15, 23, 42, 0.72);
+          --neo-line: rgba(15, 23, 42, 0.055);
+          --neo-accent: var(--nx-blue-2, #26368f);
+          --neo-accent-hover: var(--nx-blue-hover, #1f2f80);
+          --neo-accent-bright: var(--nx-blue, #2447c6);
+
           position: fixed;
           top: 0;
           left: 0;
@@ -377,7 +390,7 @@ export default function Header(_props: { introReady: boolean }) {
           color: var(--neo-text);
           border: 0 !important;
           box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.6),
+            inset 0 1px 0 rgba(255, 255, 255, 0.66),
             0 6px 18px rgba(15, 23, 42, 0.018) !important;
           transition:
             height 160ms cubic-bezier(.2,.8,.2,1),
@@ -389,13 +402,8 @@ export default function Header(_props: { introReady: boolean }) {
           height: calc(var(--nx-header-h) + var(--nx-mega-h));
           background: var(--neo-panel-bg);
           box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.66),
+            inset 0 1px 0 rgba(255, 255, 255, 0.7),
             0 14px 34px rgba(15, 23, 42, 0.035) !important;
-        }
-
-        .neoShell::before {
-          display: none !important;
-          content: none !important;
         }
 
         .neoShell::after {
@@ -415,6 +423,17 @@ export default function Header(_props: { introReady: boolean }) {
           pointer-events: none;
         }
 
+        .neoShell a,
+        .neoShell a:hover,
+        .neoShell a:focus,
+        .neoShell a:active,
+        .neoMOv a,
+        .neoMOv a:hover,
+        .neoMOv a:focus,
+        .neoMOv a:active {
+          text-decoration: none !important;
+        }
+
         .neoHdr {
           height: var(--nx-header-h);
           background: transparent !important;
@@ -425,7 +444,7 @@ export default function Header(_props: { introReady: boolean }) {
         .neoInner {
           height: 100%;
           width: 100%;
-          max-width: 1460px;
+          max-width: var(--nx-container, 1460px);
           margin: 0 auto;
           padding: 0 clamp(18px, 4vw, 40px);
           display: flex;
@@ -497,14 +516,11 @@ export default function Header(_props: { introReady: boolean }) {
         }
 
         .neoTop:hover,
-        .neoTopLink:hover {
-          color: var(--neo-accent-bright);
-        }
-
+        .neoTopLink:hover,
         .neoTop.is-open,
         .neoTop.is-active,
         .neoTopLink.is-active {
-          color: var(--neo-text);
+          color: var(--neo-accent-bright);
         }
 
         .neoChev {
@@ -554,7 +570,7 @@ export default function Header(_props: { introReady: boolean }) {
           align-items: center;
           justify-content: center;
           gap: 8px;
-          color: rgba(15, 23, 42, 0.78);
+          color: var(--neo-muted-strong);
           font-size: 13.5px;
           font-weight: 560;
           letter-spacing: -0.012em;
@@ -587,6 +603,7 @@ export default function Header(_props: { introReady: boolean }) {
           background: rgba(255, 255, 255, 0.95);
           -webkit-backdrop-filter: blur(22px) saturate(1.04);
           backdrop-filter: blur(22px) saturate(1.04);
+          border: 1px solid rgba(15, 23, 42, 0.045);
           box-shadow:
             0 16px 34px rgba(15, 23, 42, 0.1),
             inset 0 1px 0 rgba(255,255,255,0.8);
@@ -704,7 +721,7 @@ export default function Header(_props: { introReady: boolean }) {
 
         .neoMegaInner {
           width: 100%;
-          max-width: 1460px;
+          max-width: var(--nx-container, 1460px);
           margin: 0 auto;
           padding: 20px clamp(18px, 4vw, 40px) 18px;
         }
@@ -720,18 +737,18 @@ export default function Header(_props: { introReady: boolean }) {
 
         .neoMegaLayout {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 372px;
+          grid-template-columns: minmax(0, 1fr) 390px;
           align-items: start;
           gap: 36px;
         }
 
         .neoMegaGrid {
-          max-width: 760px;
+          max-width: 820px;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          grid-template-rows: repeat(3, 40px);
+          grid-template-rows: repeat(3, 42px);
           grid-auto-flow: column;
-          gap: 18px 52px;
+          gap: 17px 50px;
         }
 
         .neoMegaGrid.is-small {
@@ -742,7 +759,7 @@ export default function Header(_props: { introReady: boolean }) {
         }
 
         .neoMegaItem {
-          min-height: 36px;
+          min-height: 38px;
           display: inline-flex;
           align-items: center;
           gap: 14px;
@@ -803,27 +820,30 @@ export default function Header(_props: { introReady: boolean }) {
 
         .neoMegaPreviewImage {
           width: 100%;
-          height: 142px;
+          height: 158px;
           display: block;
           object-fit: cover;
           object-position: center;
           border-radius: 18px;
           background: #eef2ff;
+          box-shadow:
+            0 18px 42px rgba(15, 23, 42, 0.085),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
         }
 
         .neoMegaPreviewText {
-          margin: 10px 0 0;
+          margin: 12px 0 0;
           color: rgba(15, 23, 42, 0.72);
           font-size: 13.5px;
-          line-height: 1.46;
+          line-height: 1.48;
           font-weight: 510;
           letter-spacing: -0.014em;
-          max-width: 372px;
+          max-width: 390px;
         }
 
         .neoMegaPreviewPlaceholder {
           width: 100%;
-          height: 142px;
+          height: 158px;
           border-radius: 18px;
           background:
             linear-gradient(135deg, rgba(68, 89, 223, 0.12), rgba(15, 23, 42, 0.04)),
@@ -996,7 +1016,7 @@ export default function Header(_props: { introReady: boolean }) {
 
           .neoMegaPreviewImage,
           .neoMegaPreviewPlaceholder {
-            height: 132px;
+            height: 140px;
           }
 
           .neoMegaPreviewText {

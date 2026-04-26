@@ -1,8 +1,11 @@
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { DEFAULT_LANG, type Lang } from "../i18n/lang";
 
-const HERO_BACKGROUND_URL =
-  "https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=2400&auto=format&fit=crop";
+const HERO_BACKGROUND_VIDEO_URL =
+  "https://res.cloudinary.com/dppoomunj/video/upload/v1777159382/9150545-hd_1920_1080_24fps_xw2ces.mov";
+
+const UNIFIED_SYSTEM_IMAGE_URL = "/image/neox-system-visual.png";
 
 const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
 
@@ -20,80 +23,112 @@ function withLang(lang: Lang, path: string) {
   return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 const heroPhrases = [
-  "ağıllı biznes sistemləri",
-  "premium veb saytlar",
-  "mesajlaşma axınları",
-  "Süni İntellekt cavabları",
-  "satış yönümlü sistemlər",
-  "avtomatlaşdırma qatları",
-  "müştəri idarəetmə axınları",
-  "analitika sistemləri",
+  "veb saytlar",
+  "brend görünüşü",
+  "kontent axınları",
+  "səsli assistantlar",
+  "biznes workflow-ları",
+  "24/7 çatbotlar",
+  "Süni İntellekt sistemləri",
+  "satış yönümlü axınlar",
 ];
 
 const stripItems = [
-  "NEOX CORE",
-  "VEB SAYT",
+  "VEB SAYTLAR",
+  "BREND GÖRÜNÜŞÜ",
+  "KONTENT AXINI",
+  "SƏSLİ ASSISTANT",
   "BİZNES WORKFLOW",
-  "MESAJLAŞMA",
+  "24/7 ÇATBOT",
+  "SÜNİ İNTELLEKT",
+  "SATIŞ AXINI",
+  "MÜŞTƏRİ CAVABLARI",
   "AVTOMATLAŞDIRMA",
-  "SÜNİ İNTELLEKT CAVABLARI",
-  "ANALİTİKA",
-  "SƏS QATI",
-  "OPERATOR YÖNLƏNDİRMƏSİ",
-  "BİZNES KONTEKSTİ",
 ];
 
 const serviceCards = [
   {
-    variant: "cover",
-    title: "Veb sistemi qurur",
-    text: "Brendə uyğun, sürətli və satış yönümlü veb səhifələri biznes axını ilə birlikdə hazırlayırıq.",
-    tag: "Veb sistem",
-    href: "/services/web-systems",
-    imageUrl: "",
+    title: "Veb saytlar hazırlayırıq",
+    text: "Brendinizə uyğun, sürətli, modern və satışa yönəlmiş veb saytlar hazırlayırıq.",
+    href: "/services/websites",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157607/ChatGPT_Image_Apr_26_2026_02_52_52_AM_k5ua6g.webp",
   },
   {
-    variant: "split",
-    title: "Mesajları idarə edir",
-    text: "Instagram, sayt, WhatsApp və digər kanallardan gələn sorğuları vahid sistemə gətiririk.",
-    tag: "Mesajlaşma",
-    href: "/services/messaging",
-    imageUrl: "",
+    title: "Biznes iş axınlarını avtomatlaşdırırıq",
+    text: "Sifariş, müraciət, qeydiyyat və komanda proseslərini ardıcıl avtomatik axına salırıq.",
+    href: "/services/workflow-automation",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157641/5d7f54df-d9ff-4af8-8816-961fdfd809a9_vquktq.webp",
   },
   {
-    variant: "stack",
-    title: "İş axınını avtomatlaşdırır",
-    text: "Cavab, yönləndirmə, lead izləmə və komanda proseslərini daha səliqəli hala salırıq.",
-    tag: "Workflow",
-    href: "/services/automation",
-    imageUrl: "",
+    title: "Səsli assistantlar qururuq",
+    text: "Zənglərə cavab verən, məlumat toplayan və müştərini düzgün istiqamətə yönləndirən səsli sistemlər qururuq.",
+    href: "/services/voice-assistants",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157688/f08b0651-fcd9-4134-b27e-681e2cc2af04_v6e5q8.webp",
+  },
+  {
+    title: "Kontent axınını qururuq",
+    text: "İdeyadan paylaşımadək kontent planı, çəkiliş, təsdiq və paylaşım prosesini sistemləşdiririk.",
+    href: "/services/content-flow",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157728/7980da92-7475-4408-9c82-3fa23b913176_cyoxq8.webp",
+  },
+  {
+    title: "24/7 çatbotlar qururuq",
+    text: "Sosial media və vebsaytlarda müştəriyə gecə-gündüz cavab verən ağıllı çatbotlar qururuq.",
+    href: "/services/chatbots",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157761/857c6bd2-374e-4ca1-85e3-3f62ea93a5a4_itzbj8.webp",
+  },
+  {
+    title: "Brend görünüşünü yaradırıq",
+    text: "Logo, rəng, tipografiya və vizual üslubu biznesin xarakterinə uyğun premium şəkildə formalaşdırırıq.",
+    href: "/services/brand-identity",
+    imageUrl:
+      "https://res.cloudinary.com/dppoomunj/image/upload/v1777157819/cdc46192-1199-4157-9005-df6655aec353_nl1lmz.webp",
   },
 ] as const;
 
 const processSteps = [
   {
     number: "01",
-    title: "Biznesi başa düşürük",
-    text: "Sahəni, xidmətləri, müştəri suallarını və hazırkı iş axınını xəritələyirik.",
+    title: "Tanışlıq & Analiz",
+    text: "Biznesinizi, hədəflərinizi və mövcud prosesləri anlayırıq.",
   },
   {
     number: "02",
-    title: "Sistemi dizayn edirik",
-    text: "Veb sayt, mesajlaşma, Süni İntellekt cavabları və avtomatlaşdırmanı vahid axına salırıq.",
+    title: "Strategiya & Plan",
+    text: "Uyğun yanaşmanı, sistem xəritəsini və icra planını hazırlayırıq.",
   },
   {
     number: "03",
-    title: "İşlək hala gətiririk",
-    text: "Sistemi qurur, test edir və real müştəri axınına uyğun optimallaşdırırıq.",
+    title: "İcra & Qurulum",
+    text: "Veb, kontent, satış və avtomatlaşdırma hissələrini vahid sistem kimi qururuq.",
   },
-];
+  {
+    number: "04",
+    title: "Test & Təqdimat",
+    text: "Nəticəni birlikdə yoxlayır, təkmilləşdirir və təqdim edirik.",
+  },
+  {
+    number: "05",
+    title: "Dəstək & Optimallaşdırma",
+    text: "Layihədən sonra sistemi izləyir, dəstəkləyir və inkişaf etdiririk.",
+  },
+] as const;
 
 function HeroLoopText() {
   return (
     <span className="neox-hero-loop" aria-live="polite">
       <span className="neox-hero-loop-sizer" aria-hidden="true">
-        ağıllı biznes sistemləri
+        Süni İntellekt sistemləri
       </span>
 
       {heroPhrases.map((phrase, index) => (
@@ -113,17 +148,14 @@ function SystemStrip() {
   const repeated = [...stripItems, ...stripItems, ...stripItems, ...stripItems];
 
   return (
-    <div className="relative z-10 h-[82px] shrink-0 overflow-hidden border-y border-slate-200 bg-[#f7f8fb]">
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-[#f7f8fb] to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-[#f7f8fb] to-transparent" />
+    <div className="neox-system-strip">
+      <div className="neox-system-strip-fade neox-system-strip-fade--left" />
+      <div className="neox-system-strip-fade neox-system-strip-fade--right" />
 
-      <div className="flex h-full items-center overflow-hidden">
-        <div className="neox-home-strip flex w-max items-center gap-16">
+      <div className="neox-system-strip-track-wrap">
+        <div className="neox-home-strip">
           {repeated.map((item, index) => (
-            <span
-              key={`${item}-${index}`}
-              className="neox-strip-item flex h-[82px] items-center whitespace-nowrap text-[13px] font-extrabold uppercase tracking-[0.17em]"
-            >
+            <span key={`${item}-${index}`} className="neox-strip-item">
               {item}
             </span>
           ))}
@@ -135,24 +167,97 @@ function SystemStrip() {
 
 function HomeHero() {
   const lang = useSafeLang();
+  const heroRef = useRef<HTMLElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    const video = videoRef.current;
+
+    if (!hero || !video) return;
+
+    let isHeroVisible = true;
+
+    const playVideo = () => {
+      if (document.visibilityState === "hidden") return;
+
+      const reduceMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      if (reduceMotion) {
+        video.pause();
+        return;
+      }
+
+      const playPromise = video.play();
+
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => undefined);
+      }
+    };
+
+    const pauseVideo = () => {
+      video.pause();
+    };
+
+    const syncVideo = () => {
+      if (document.visibilityState === "hidden" || !isHeroVisible) {
+        pauseVideo();
+        return;
+      }
+
+      playVideo();
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isHeroVisible = Boolean(
+          entry?.isIntersecting && entry.intersectionRatio > 0.18,
+        );
+        syncVideo();
+      },
+      {
+        threshold: [0, 0.18, 0.32, 0.6, 1],
+      },
+    );
+
+    observer.observe(hero);
+
+    document.addEventListener("visibilitychange", syncVideo);
+
+    syncVideo();
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", syncVideo);
+      pauseVideo();
+    };
+  }, []);
 
   return (
-    <section className="neox-home-hero relative overflow-hidden bg-white">
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div className="absolute inset-0">
-          <img
-            src={HERO_BACKGROUND_URL}
-            alt=""
-            className="neox-hero-bg h-full w-full object-cover object-[64%_center]"
+    <section ref={heroRef} className="neox-home-hero">
+      <div className="neox-home-hero-main">
+        <div className="neox-hero-media" aria-hidden="true">
+          <video
+            ref={videoRef}
+            className="neox-hero-video"
+            src={HERO_BACKGROUND_VIDEO_URL}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
           />
 
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,250,252,0.66)_0%,rgba(248,250,252,0.42)_34%,rgba(248,250,252,0.16)_66%,rgba(248,250,252,0.02)_100%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.06)_100%)]" />
+          <div className="neox-hero-overlay neox-hero-overlay--side" />
+          <div className="neox-hero-overlay neox-hero-overlay--top" />
+          <div className="neox-hero-overlay neox-hero-overlay--focus" />
         </div>
 
-        <div className="relative mx-auto flex w-full max-w-[1460px] items-center px-6 pb-8 pt-10 lg:px-10 lg:pb-10 lg:pt-12">
-          <div className="max-w-[960px]">
-            <h1 className="neox-hero-title text-[#070a18]">
+        <div className="nx-container neox-hero-container">
+          <div className="neox-hero-copy">
+            <h1 className="neox-hero-title">
               <span className="neox-hero-title-line">
                 <span>Biz</span>
                 <HeroLoopText />
@@ -160,13 +265,13 @@ function HomeHero() {
               <span className="neox-hero-title-line">qururuq.</span>
             </h1>
 
-            <p className="mt-7 max-w-[650px] text-[1.05rem] font-[540] leading-[1.78] tracking-[-0.018em] text-slate-700 md:text-[1.12rem]">
-              Veb sayt, mesajlaşma, avtomatlaşdırma və Süni İntellekt
-              cavablarını bir sistemdə birləşdiririk. Müştəri axını daha
-              səliqəli, sürətli və ölçülə bilən olur.
+            <p className="neox-hero-lead">
+              Veb sayt, brend görünüşü, kontent axını, zəng cavabları,
+              avtomatlaşdırma və Süni İntellekt sistemlərini biznesiniz üçün
+              işlək bir sistemə çeviririk.
             </p>
 
-            <div className="mt-9 flex flex-wrap items-center gap-4">
+            <div className="neox-hero-actions">
               <Link
                 to={withLang(lang, "/contact")}
                 className="nx-button nx-button--primary nx-button--lg"
@@ -190,161 +295,46 @@ function HomeHero() {
   );
 }
 
-function MediaSlot({
-  imageUrl,
-  className = "",
-}: {
-  imageUrl?: string;
-  className?: string;
-}) {
-  return (
-    <div className={`neox-card-media ${imageUrl ? "has-image" : "is-empty"} ${className}`}>
-      {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : null}
-    </div>
-  );
-}
-
 function ServiceCardsSection() {
   const lang = useSafeLang();
 
   return (
-    <section className="neox-card-section">
-      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
-        <div className="neox-card-section-head">
-          <div>
-            <div className="mb-5 text-[12px] font-[720] uppercase tracking-[0.2em] text-slate-400">
-              Sistemlər
-            </div>
+    <section className="nx-section nx-section--soft neox-card-section">
+      <div className="nx-container">
+        <div className="nx-section-head">
+          <h2 className="nx-section-title neox-balanced-section-title">
+            Biznesiniz üçün lazım olan əsas sistemləri qururuq.
+          </h2>
 
-            <h2 className="max-w-[720px] text-[3rem] font-[720] leading-[1.06] tracking-[-0.068em] text-slate-950 md:text-[3.4rem]">
-              Xidmətləri vizual, təmiz və kliklənən göstəririk.
-            </h2>
-          </div>
-
-          <p className="max-w-[560px] text-[1.04rem] font-[500] leading-8 text-slate-600 lg:justify-self-end">
-            Hər kartda şəkil və ya ikon yerləşdirmək üçün ayrıca sahə var.
-            Vizualı sonra öz dizaynına uyğun əlavə edirsən.
+          <p className="nx-section-lead">
+            Hər xidmət ayrıca istiqamətdir. Birlikdə işləyəndə isə veb,
+            kontent, satış, zəng və müştəri cavabları vahid biznes sisteminə
+            çevrilir.
           </p>
         </div>
 
         <div className="neox-card-grid">
-          {serviceCards.map((card) => {
-            if (card.variant === "cover") {
-              return (
-                <Link
-                  key={card.title}
-                  to={withLang(lang, card.href)}
-                  className="neox-system-card neox-system-card--cover"
-                >
-                  <MediaSlot imageUrl={card.imageUrl} className="neox-cover-media" />
-
-                  <div className="neox-cover-overlay" />
-
-                  <div className="neox-cover-content">
-                    <h3>{card.title}</h3>
-                    <p>{card.text}</p>
-                  </div>
-
-                  <div className="neox-cover-action">
-                    <span>Daha ətraflı</span>
-                  </div>
-                </Link>
-              );
-            }
-
-            if (card.variant === "split") {
-              return (
-                <Link
-                  key={card.title}
-                  to={withLang(lang, card.href)}
-                  className="neox-system-card neox-system-card--split"
-                >
-                  <div className="neox-split-visual">
-                    <MediaSlot imageUrl={card.imageUrl} />
-                  </div>
-
-                  <div className="neox-split-content">
-                    <div className="neox-card-tag">{card.tag}</div>
-                    <h3>{card.title}</h3>
-                    <p>{card.text}</p>
-                  </div>
-
-                  <div className="neox-split-action">
-                    <span>Daha ətraflı</span>
-                  </div>
-                </Link>
-              );
-            }
-
-            return (
-              <Link
-                key={card.title}
-                to={withLang(lang, card.href)}
-                className="neox-system-card neox-system-card--stack"
-              >
-                <div className="neox-stack-media-wrap">
-                  <MediaSlot imageUrl={card.imageUrl} />
-                </div>
-
-                <div className="neox-stack-panel">
-                  <div className="neox-card-tag">{card.tag}</div>
-                  <h3>{card.title}</h3>
-                  <p>{card.text}</p>
-
-                  <div className="neox-stack-footer">
-                    <span>Daha ətraflı</span>
-                    <span className="neox-stack-arrow">→</span>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ProcessSection() {
-  return (
-    <section className="bg-[#f7f8fb] py-24">
-      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
-        <div className="grid gap-10 lg:grid-cols-[0.86fr_1.14fr] lg:items-end">
-          <div>
-            <div className="mb-5 text-[12px] font-[720] uppercase tracking-[0.2em] text-slate-400">
-              Proses
-            </div>
-
-            <h2 className="max-w-[680px] text-[3.15rem] font-[720] leading-[1.06] tracking-[-0.068em] text-slate-950 md:text-[3.55rem]">
-              Sadə başlayırıq, sistemli böyüdürük.
-            </h2>
-          </div>
-
-          <p className="max-w-[660px] text-[1.08rem] font-[500] leading-9 text-slate-600 lg:justify-self-end">
-            Məqsəd çox ekran, çox panel və qarışıq quruluş deyil. Lazım olan iş
-            axınını tapırıq, onu təmiz interfeys və avtomatlaşdırma ilə işlək
-            hala gətiririk.
-          </p>
-        </div>
-
-        <div className="mt-14 grid gap-6 lg:grid-cols-3">
-          {processSteps.map((step) => (
-            <article
-              key={step.number}
-              className="rounded-[26px] border border-slate-200/90 bg-white p-8 shadow-sm"
+          {serviceCards.map((card) => (
+            <Link
+              key={card.title}
+              to={withLang(lang, card.href)}
+              className="neox-system-card"
             >
-              <div className="mb-7 inline-flex rounded-[16px] border border-slate-200 bg-white px-4 py-2 text-[14px] font-[680] text-slate-500">
-                {step.number}
+              <div className="neox-card-cover">
+                <img src={card.imageUrl} alt="" loading="lazy" decoding="async" />
               </div>
 
-              <h3 className="text-[1.28rem] font-[720] tracking-[-0.035em] text-slate-950">
-                {step.title}
-              </h3>
+              <div className="neox-card-overlay" />
 
-              <p className="mt-4 text-[1rem] font-[500] leading-8 text-slate-600">
-                {step.text}
-              </p>
-            </article>
+              <div className="neox-card-content">
+                <h3>{card.title}</h3>
+                <p>{card.text}</p>
+              </div>
+
+              <div className="neox-card-action">
+                <span>Daha ətraflı</span>
+              </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -352,53 +342,243 @@ function ProcessSection() {
   );
 }
 
-function FinalCta() {
-  const lang = useSafeLang();
+function UnifiedSystemSection() {
+  return (
+    <section className="nx-section neox-unified-section">
+      <div className="nx-container neox-unified-container">
+        <div className="neox-unified-layout">
+          <div className="neox-unified-visual" aria-hidden="true">
+            <div className="neox-unified-image-wrap">
+              <img
+                src={UNIFIED_SYSTEM_IMAGE_URL}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </div>
+
+          <div className="neox-unified-copy">
+            <h2 className="nx-section-title neox-balanced-section-title neox-unified-title">
+              Ayrı xidmətlər yox, <span>vahid sistem</span> qururuq.
+            </h2>
+
+            <p className="nx-section-lead neox-unified-lead">
+              Veb sayt, kontent, çatbot, satış və avtomatlaşdırma hissələri
+              bir-birinə bağlı işləyəndə biznes daha sürətli, daha aydın və
+              daha idarəolunan olur.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorksSection() {
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const movingRef = useRef<HTMLDivElement | null>(null);
+  const stepRefs = useRef<Array<HTMLElement | null>>([]);
+
+  const latestYRef = useRef(-1);
+  const activeIndexRef = useRef(-1);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const getProcessTop = () => {
+      const rawHeader = getComputedStyle(document.documentElement).getPropertyValue(
+        "--nx-header-h",
+      );
+      const cssHeader = Number.parseFloat(rawHeader);
+
+      const headerNode =
+        document.querySelector<HTMLElement>("[data-site-header]") ||
+        document.querySelector<HTMLElement>(".neox-header") ||
+        document.querySelector<HTMLElement>(".nx-header") ||
+        document.querySelector<HTMLElement>("header");
+
+      const measuredHeader = headerNode?.getBoundingClientRect().height;
+      const headerHeight = Number.isFinite(measuredHeader)
+        ? Number(measuredHeader)
+        : Number.isFinite(cssHeader)
+          ? cssHeader
+          : 56;
+
+      return Math.round(headerHeight + 72);
+    };
+
+    const getStepAnchors = () => {
+      const firstRow = stepRefs.current[0];
+      const firstTop = firstRow?.offsetTop ?? 0;
+
+      return processSteps.map((_, index) => {
+        const row = stepRefs.current[index];
+        if (!row) return index * 168;
+
+        const content = row.querySelector<HTMLElement>(
+          ".neox-process-row-content",
+        );
+
+        return row.offsetTop + (content?.offsetTop ?? 42) - firstTop;
+      });
+    };
+
+    const setActive = (nextActive: number) => {
+      if (nextActive !== activeIndexRef.current) {
+        activeIndexRef.current = nextActive;
+        setActiveIndex(nextActive);
+      }
+    };
+
+    const update = () => {
+      const section = sectionRef.current;
+      const track = trackRef.current;
+      const moving = movingRef.current;
+
+      if (!section || !track || !moving) return;
+
+      const anchors = getStepAnchors();
+      const firstAnchor = anchors[0] ?? 0;
+      const lastAnchor = anchors[anchors.length - 1] ?? firstAnchor;
+      const maxY = Math.max(0, lastAnchor - firstAnchor);
+
+      const scrollY = window.scrollY || window.pageYOffset;
+      const trackTop = scrollY + track.getBoundingClientRect().top;
+      const processTop = getProcessTop();
+
+      const start = trackTop + firstAnchor - processTop;
+      const rawY = scrollY - start;
+      const nextY = Math.round(clamp(rawY, 0, maxY));
+
+      const movingHeight = moving.offsetHeight || 260;
+      const lastRow = stepRefs.current[stepRefs.current.length - 1];
+
+      const trackHeight = Math.max(
+        maxY + movingHeight + 40,
+        lastRow ? lastRow.offsetTop + lastRow.offsetHeight : 840,
+      );
+
+      section.style.setProperty(
+        "--neox-process-copy-start",
+        `${Math.round(firstAnchor)}px`,
+      );
+      section.style.setProperty(
+        "--neox-process-copy-track-h",
+        `${Math.round(trackHeight)}px`,
+      );
+
+      if (Math.abs(latestYRef.current - nextY) > 0.5) {
+        latestYRef.current = nextY;
+        section.style.setProperty("--neox-process-copy-y", `${nextY}px`);
+      }
+
+      if (rawY < -32) {
+        setActive(-1);
+        return;
+      }
+
+      const revealLead = 112;
+      let nextActive = 0;
+
+      anchors.forEach((anchor, index) => {
+        const relative = anchor - firstAnchor;
+
+        if (nextY + revealLead >= relative) {
+          nextActive = index;
+        }
+      });
+
+      if (nextY >= maxY - 1) {
+        nextActive = processSteps.length - 1;
+      }
+
+      setActive(nextActive);
+    };
+
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(update);
+    };
+
+    requestUpdate();
+
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, []);
 
   return (
-    <section className="bg-white py-24">
-      <div className="mx-auto max-w-[1460px] px-6 lg:px-10">
-        <div className="rounded-[34px] border border-slate-200/90 bg-[#f8f9fc] p-8 shadow-[0_30px_100px_rgba(15,23,42,0.075)] md:p-12 lg:p-14">
-          <div className="grid gap-10 lg:grid-cols-[1fr_0.72fr] lg:items-center">
-            <div>
-              <div className="mb-5 inline-flex rounded-[14px] border border-slate-200 bg-white px-5 py-2 text-[13px] font-[680] text-slate-600">
-                Başlamaq üçün
-              </div>
-
-              <h2 className="max-w-[760px] text-[3rem] font-[720] leading-[1.06] tracking-[-0.068em] text-slate-950 md:text-[3.35rem]">
-                Biznesinizə uyğun sistemi birlikdə quraq.
+    <section
+      ref={sectionRef}
+      className="nx-section nx-section--white neox-process-section"
+      style={
+        {
+          "--neox-process-copy-y": "0px",
+          "--neox-process-copy-start": "0px",
+          "--neox-process-copy-track-h": "840px",
+        } as CSSProperties
+      }
+    >
+      <div className="nx-container neox-process-stage">
+        <div className="neox-process-editorial">
+          <div ref={trackRef} className="neox-process-copy-track">
+            <div ref={movingRef} className="neox-process-moving">
+              <h2 className="nx-section-title neox-balanced-section-title neox-process-title">
+                Necə <span>işləyirik?</span>
               </h2>
 
-              <p className="mt-6 max-w-[720px] text-[1.08rem] font-[500] leading-9 text-slate-600">
-                Bir neçə əsas məlumat kifayətdir: nə satırsınız, müştəri haradan
-                yazır və hazırda hansı işlər sizi yavaşladır.
+              <p className="nx-section-lead neox-process-lead">
+                İdeyanı sadə addımlarla işlək sistemə çeviririk. Hər mərhələ
+                əvvəlkini tamamlayır və nəticə qarışıq yox, idarə olunan olur.
               </p>
             </div>
+          </div>
 
-            <div className="rounded-[26px] border border-slate-200/90 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-4 rounded-[20px] border border-slate-100 bg-white px-5 py-5">
-                <div>
-                  <div className="text-[1.05rem] font-[720] text-slate-950">
-                    İlk addım
-                  </div>
+          <div className="neox-process-list-wrap">
+            <div className="neox-process-list">
+              {processSteps.map((step, index) => {
+                const isActive = index === activeIndex;
+                const isVisible = activeIndex >= index;
 
-                  <div className="mt-2 text-[14px] font-[500] leading-6 text-slate-500">
-                    Qısa danışıqla sistem xəritəsini və ilk icra istiqamətini
-                    müəyyən edirik.
-                  </div>
-                </div>
+                return (
+                  <article
+                    key={step.number}
+                    ref={(node) => {
+                      stepRefs.current[index] = node;
+                    }}
+                    className={[
+                      "neox-process-row",
+                      isActive ? "is-active" : "",
+                      isVisible ? "is-visible" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={
+                      {
+                        "--neox-row-delay": "0ms",
+                      } as CSSProperties
+                    }
+                  >
+                    <div className="neox-process-row-number">{step.number}</div>
 
-                <div className="shrink-0 rounded-[14px] border border-slate-200 px-4 py-2 text-[13px] font-[680] text-slate-500">
-                  15 dəq
-                </div>
-              </div>
+                    <div className="neox-process-row-divider" />
 
-              <Link
-                to={withLang(lang, "/contact")}
-                className="nx-button nx-button--primary nx-button--lg nx-button--full mt-5"
-              >
-                Əlaqə saxla
-              </Link>
+                    <div className="neox-process-row-content">
+                      <h3>{step.title}</h3>
+                      <p>{step.text}</p>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -411,6 +591,34 @@ export default function HomePage() {
   return (
     <>
       <style>{`
+        body:has(.neox-home-page) {
+          overflow-y: auto !important;
+          scrollbar-gutter: auto !important;
+        }
+
+        body:has(.neox-home-page) #root,
+        body:has(.neox-home-page) #root > *,
+        body:has(.neox-home-page) #root > * > *,
+        body:has(.neox-home-page) #root > * > * > *,
+        body:has(.neox-home-page) .nx-page,
+        body:has(.neox-home-page) .neox-home-page {
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          overflow-y: visible !important;
+        }
+
+        body:has(.neox-home-page) .nx-page::-webkit-scrollbar,
+        body:has(.neox-home-page) .neox-home-page::-webkit-scrollbar,
+        body:has(.neox-home-page) #root > *::-webkit-scrollbar,
+        body:has(.neox-home-page) #root > * > *::-webkit-scrollbar,
+        body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+
         @keyframes neoxHomeStrip {
           0% {
             transform: translateX(0);
@@ -441,28 +649,98 @@ export default function HomePage() {
         }
 
         .neox-home-page {
-          padding-top: var(--nx-header-h, 64px);
-          background: #fff;
+          display: block;
+          width: 100%;
+          overflow: visible !important;
         }
 
         .neox-home-hero {
-          height: calc(100vh - var(--nx-header-h, 64px));
-          height: calc(100svh - var(--nx-header-h, 64px));
+          height: calc(100vh - var(--nx-header-h, 56px));
+          height: calc(100svh - var(--nx-header-h, 56px));
           display: flex;
           flex-direction: column;
+          background: #ffffff;
+          overflow: hidden;
         }
 
-        .neox-hero-bg {
-          opacity: 0.98;
-          filter: saturate(1.02) contrast(1.01);
+        .neox-home-hero-main {
+          position: relative;
+          min-height: 0;
+          flex: 1;
+          overflow: hidden;
+        }
+
+        .neox-hero-media {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+
+        .neox-hero-video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: 62% center;
+          opacity: 1;
+          filter: saturate(0.96) contrast(1.02) brightness(1.04);
+          transform: scale(1.01);
+        }
+
+        .neox-hero-overlay {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+
+        .neox-hero-overlay--side {
+          background: linear-gradient(
+            90deg,
+            rgba(248, 250, 252, 0.82) 0%,
+            rgba(248, 250, 252, 0.64) 34%,
+            rgba(248, 250, 252, 0.28) 66%,
+            rgba(248, 250, 252, 0.06) 100%
+          );
+        }
+
+        .neox-hero-overlay--top {
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(255, 255, 255, 0) 42%,
+            rgba(255, 255, 255, 0.08) 100%
+          );
+        }
+
+        .neox-hero-overlay--focus {
+          background: radial-gradient(
+            760px 420px at 12% 50%,
+            rgba(255, 255, 255, 0.52),
+            transparent 68%
+          );
+        }
+
+        .neox-hero-container {
+          position: relative;
+          z-index: 1;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          padding-top: 40px;
+          padding-bottom: 40px;
+        }
+
+        .neox-hero-copy {
+          max-width: 960px;
         }
 
         .neox-hero-title {
+          margin: 0;
           max-width: 980px;
+          color: var(--nx-ink);
           font-size: clamp(2.85rem, 4.45vw, 5rem);
-          font-weight: 640;
+          font-weight: 520;
           line-height: 1.08;
-          letter-spacing: -0.058em;
+          letter-spacing: -0.06em;
           text-wrap: balance;
         }
 
@@ -481,7 +759,7 @@ export default function HomePage() {
           position: relative;
           display: inline-grid;
           white-space: nowrap;
-          color: #2447c6;
+          color: var(--nx-blue);
           vertical-align: baseline;
         }
 
@@ -494,12 +772,71 @@ export default function HomePage() {
         .neox-hero-loop-item {
           grid-area: 1 / 1;
           opacity: 0;
-          color: #2447c6;
+          color: var(--nx-blue);
           animation: neoxHeroPhrase 24s cubic-bezier(0.22, 1, 0.36, 1) infinite;
           will-change: opacity, transform;
         }
 
+        .neox-hero-lead {
+          margin: 28px 0 0;
+          max-width: 650px;
+          color: #334155;
+          font-size: 1.05rem;
+          font-weight: 430;
+          line-height: 1.78;
+          letter-spacing: -0.018em;
+        }
+
+        .neox-hero-actions {
+          margin-top: 36px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .neox-system-strip {
+          position: relative;
+          z-index: 2;
+          height: 82px;
+          flex: 0 0 auto;
+          overflow: hidden;
+          border-top: 1px solid rgba(15, 23, 42, 0.08);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          background: #f7f8fb;
+        }
+
+        .neox-system-strip-fade {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          z-index: 2;
+          width: 96px;
+          pointer-events: none;
+        }
+
+        .neox-system-strip-fade--left {
+          left: 0;
+          background: linear-gradient(90deg, #f7f8fb, transparent);
+        }
+
+        .neox-system-strip-fade--right {
+          right: 0;
+          background: linear-gradient(270deg, #f7f8fb, transparent);
+        }
+
+        .neox-system-strip-track-wrap {
+          height: 100%;
+          display: flex;
+          align-items: center;
+          overflow: hidden;
+        }
+
         .neox-home-strip {
+          width: max-content;
+          display: flex;
+          align-items: center;
+          gap: 64px;
           animation: neoxHomeStrip 38s linear infinite;
         }
 
@@ -508,169 +845,145 @@ export default function HomePage() {
         }
 
         .neox-strip-item {
-          color: #64748b;
+          height: 82px;
+          display: flex;
+          align-items: center;
+          white-space: nowrap;
+          color: var(--nx-muted);
+          font-size: 13px;
+          font-weight: 760;
+          line-height: 1;
+          letter-spacing: 0.17em;
+          text-transform: uppercase;
           transition: color 180ms ease;
         }
 
         .neox-strip-item:hover {
-          color: #2447c6;
+          color: var(--nx-blue);
+        }
+
+        .neox-balanced-section-title {
+          font-size: clamp(2.75rem, 4.45vw, 4.75rem);
+          font-weight: 520;
+          line-height: 1.08;
+          letter-spacing: -0.064em;
+        }
+
+        .neox-balanced-section-title span {
+          color: var(--nx-blue);
+          font-weight: inherit;
         }
 
         .neox-card-section {
-          padding: 86px 0 96px;
-          background:
-            radial-gradient(720px 280px at 14% 0%, rgba(68, 89, 223, 0.045), transparent 64%),
-            linear-gradient(180deg, #ffffff 0%, #f6f7fa 100%);
-        }
-
-        .neox-card-section-head {
-          display: grid;
-          grid-template-columns: minmax(0, 0.94fr) minmax(320px, 0.66fr);
-          gap: 36px;
-          align-items: end;
-          margin-bottom: 42px;
+          padding-top: 88px;
+          padding-bottom: 72px;
         }
 
         .neox-card-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 20px;
+          gap: 18px;
           align-items: stretch;
         }
 
         .neox-system-card {
           position: relative;
-          min-height: 390px;
+          min-height: 342px;
           overflow: hidden;
           display: flex;
           flex-direction: column;
-          border: 1px solid rgba(15, 23, 42, 0.095);
-          border-radius: 26px;
-          background: #ffffff;
-          color: #07111f;
-          box-shadow: 0 20px 58px rgba(15, 23, 42, 0.055);
+          justify-content: flex-end;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: var(--nx-radius-xl);
+          background: var(--nx-dark-2);
+          color: #ffffff;
+          box-shadow: var(--nx-shadow-card);
           isolation: isolate;
+          text-decoration: none;
           transition:
             border-color 180ms ease,
-            box-shadow 180ms ease,
-            background 180ms ease;
+            box-shadow 180ms ease;
         }
 
         .neox-system-card:hover {
-          border-color: rgba(68, 89, 223, 0.22);
-          box-shadow: 0 28px 78px rgba(15, 23, 42, 0.085);
+          border-color: rgba(255, 255, 255, 0.14);
+          box-shadow: var(--nx-shadow-card-hover);
+        }
+
+        .neox-card-cover {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background:
+            radial-gradient(
+              420px 270px at 74% 12%,
+              rgba(255, 255, 255, 0.07),
+              transparent 62%
+            ),
+            radial-gradient(
+              520px 340px at 8% 100%,
+              rgba(58, 84, 255, 0.16),
+              transparent 68%
+            ),
+            linear-gradient(135deg, #090f1d 0%, #0b1220 52%, #111827 100%);
+          transition:
+            transform 420ms var(--nx-ease),
+            filter 420ms var(--nx-ease);
+        }
+
+        .neox-card-cover img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center;
+        }
+
+        .neox-card-overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          background: linear-gradient(
+            180deg,
+            rgba(8, 13, 25, 0.06) 0%,
+            rgba(8, 13, 25, 0.28) 44%,
+            rgba(8, 13, 25, 0.9) 100%
+          );
+          transition: background 260ms ease;
+        }
+
+        .neox-card-content {
+          position: relative;
+          z-index: 3;
+          display: grid;
+          gap: 13px;
+          padding: 112px 26px 26px;
+          transition:
+            opacity 220ms ease,
+            filter 260ms ease,
+            transform 260ms var(--nx-ease);
         }
 
         .neox-system-card h3 {
           margin: 0;
           color: inherit;
-          font-size: clamp(1.55rem, 2.25vw, 2.08rem);
-          font-weight: 730;
-          line-height: 1.05;
-          letter-spacing: -0.058em;
+          font-size: clamp(1.38rem, 1.65vw, 1.72rem);
+          font-weight: 560;
+          line-height: 1.12;
+          letter-spacing: -0.05em;
           text-wrap: balance;
         }
 
         .neox-system-card p {
           margin: 0;
-          color: rgba(51, 65, 85, 0.78);
-          font-size: 15px;
-          font-weight: 500;
-          line-height: 1.72;
-          letter-spacing: -0.018em;
+          max-width: 94%;
+          color: rgba(255, 255, 255, 0.76);
+          font-size: 14.5px;
+          font-weight: 420;
+          line-height: 1.68;
+          letter-spacing: -0.016em;
         }
 
-        .neox-card-tag {
-          width: fit-content;
-          min-height: 30px;
-          display: inline-flex;
-          align-items: center;
-          padding: 0 11px;
-          border-radius: 10px;
-          border: 1px solid rgba(15, 23, 42, 0.09);
-          background: rgba(255, 255, 255, 0.86);
-          color: #26368f;
-          font-size: 12.5px;
-          font-weight: 680;
-          letter-spacing: -0.014em;
-        }
-
-        .neox-card-media {
-          position: relative;
-          overflow: hidden;
-          background:
-            linear-gradient(135deg, rgba(68, 89, 223, 0.07), rgba(255, 255, 255, 0.92)),
-            #f5f7fb;
-        }
-
-        .neox-card-media::before {
-          content: "";
-          position: absolute;
-          inset: 18px;
-          border: 1px dashed rgba(100, 116, 139, 0.22);
-          border-radius: inherit;
-          pointer-events: none;
-        }
-
-        .neox-card-media.has-image::before {
-          display: none;
-        }
-
-        .neox-card-media img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition:
-            transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
-            filter 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        .neox-system-card--cover {
-          justify-content: flex-end;
-          min-height: 420px;
-          background: #0b1220;
-          color: #ffffff;
-        }
-
-        .neox-cover-media {
-          position: absolute;
-          inset: 0;
-          z-index: 0;
-          border-radius: 0;
-          background:
-            linear-gradient(135deg, #0c1326 0%, #16204a 52%, #26368f 100%);
-        }
-
-        .neox-cover-media::before {
-          display: none;
-        }
-
-        .neox-cover-overlay {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          background:
-            linear-gradient(180deg, rgba(8, 13, 25, 0.12) 0%, rgba(8, 13, 25, 0.58) 54%, rgba(8, 13, 25, 0.9) 100%);
-          transition: background 260ms ease;
-        }
-
-        .neox-cover-content {
-          position: relative;
-          z-index: 3;
-          display: grid;
-          gap: 16px;
-          padding: 110px 30px 30px;
-          transition:
-            opacity 220ms ease,
-            filter 260ms ease,
-            transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        .neox-cover-content p {
-          color: rgba(255, 255, 255, 0.74);
-        }
-
-        .neox-cover-action {
+        .neox-card-action {
           position: absolute;
           inset: 0;
           z-index: 5;
@@ -678,173 +991,409 @@ export default function HomePage() {
           place-items: center;
           opacity: 0;
           pointer-events: none;
-          transform: translateY(8px) scale(0.98);
+          transform: translateY(7px) scale(0.985);
           transition:
             opacity 220ms ease,
-            transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            transform 280ms var(--nx-ease);
         }
 
-        .neox-cover-action span {
-          min-height: 50px;
+        .neox-card-action span {
+          min-height: 48px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           padding: 0 22px;
           border-radius: 14px;
           background: rgba(255, 255, 255, 0.94);
-          color: #07111f;
+          color: var(--nx-dark);
           font-size: 14px;
-          font-weight: 730;
+          font-weight: 620;
           letter-spacing: -0.018em;
           box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
         }
 
-        .neox-system-card--cover:hover .neox-cover-media img {
-          transform: scale(1.07);
-          filter: blur(7px) brightness(0.62);
+        .neox-system-card:hover .neox-card-cover {
+          transform: scale(1.04);
+          filter: blur(7px) brightness(0.64);
         }
 
-        .neox-system-card--cover:hover .neox-cover-overlay {
-          background: rgba(8, 13, 25, 0.62);
+        .neox-system-card:hover .neox-card-overlay {
+          background: linear-gradient(
+            180deg,
+            rgba(8, 13, 25, 0.48) 0%,
+            rgba(8, 13, 25, 0.72) 58%,
+            rgba(8, 13, 25, 0.92) 100%
+          );
         }
 
-        .neox-system-card--cover:hover .neox-cover-content {
-          opacity: 0.28;
+        .neox-system-card:hover .neox-card-content {
+          opacity: 0.25;
           filter: blur(3px);
           transform: scale(0.985);
         }
 
-        .neox-system-card--cover:hover .neox-cover-action {
+        .neox-system-card:hover .neox-card-action {
           opacity: 1;
           transform: translateY(0) scale(1);
         }
 
-        .neox-system-card--split {
-          display: grid;
-          grid-template-rows: minmax(170px, 0.86fr) auto auto;
-          background: #ffffff;
-        }
-
-        .neox-split-visual {
-          padding: 22px 22px 0;
-        }
-
-        .neox-split-visual .neox-card-media {
-          height: 180px;
-          border-radius: 20px;
-        }
-
-        .neox-split-content {
-          display: grid;
-          gap: 15px;
-          padding: 26px 30px 18px;
-        }
-
-        .neox-split-action {
-          min-height: 58px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-top: auto;
-          padding: 0 30px;
-          border-top: 1px solid rgba(15, 23, 42, 0.07);
-          color: #26368f;
-          font-size: 14px;
-          font-weight: 700;
-          letter-spacing: -0.016em;
-          transform: translateY(14px);
-          opacity: 0;
-          transition:
-            opacity 220ms ease,
-            transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-            background 180ms ease;
-        }
-
-        .neox-system-card--split:hover .neox-card-media img {
-          transform: scale(1.045);
-        }
-
-        .neox-system-card--split:hover .neox-split-action {
-          opacity: 1;
-          transform: translateY(0);
-          background: #f8f9fc;
-        }
-
-        .neox-system-card--stack {
-          padding: 18px;
-          background:
-            linear-gradient(180deg, #ffffff 0%, #f8f9fc 100%);
-        }
-
-        .neox-stack-media-wrap {
-          height: 190px;
-          border-radius: 22px;
+        .neox-unified-section {
+          position: relative;
           overflow: hidden;
+          padding-top: 118px;
+          padding-bottom: 118px;
+          background: #000000;
+          color: #ffffff;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        .neox-stack-media-wrap .neox-card-media {
+        .neox-unified-container {
+          position: relative;
+          z-index: 1;
+        }
+
+        .neox-unified-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.82fr);
+          gap: clamp(54px, 7vw, 118px);
+          align-items: center;
+        }
+
+        .neox-unified-visual {
+          min-width: 0;
+        }
+
+        .neox-unified-image-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 1.42 / 1;
+          overflow: hidden;
+          border-radius: 34px;
+          background: #000000;
+          box-shadow:
+            0 40px 120px rgba(0, 0, 0, 0.62),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        .neox-unified-image-wrap::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(
+              90deg,
+              rgba(0, 0, 0, 0.1) 0%,
+              rgba(0, 0, 0, 0) 44%,
+              rgba(0, 0, 0, 0.18) 100%
+            ),
+            radial-gradient(
+              620px 320px at 50% 0%,
+              rgba(255, 255, 255, 0.1),
+              transparent 62%
+            );
+        }
+
+        .neox-unified-image-wrap img {
           width: 100%;
           height: 100%;
-          border-radius: 22px;
+          display: block;
+          object-fit: cover;
+          object-position: center;
         }
 
-        .neox-stack-panel {
+        .neox-unified-copy {
+          width: min(100%, 610px);
+          justify-self: end;
+          text-align: left;
+        }
+
+        .neox-unified-title {
+          margin: 0;
+          max-width: 610px;
+          color: #ffffff;
+          font-size: clamp(3.05rem, 5vw, 5.45rem);
+          font-weight: 520;
+          line-height: 1.03;
+          letter-spacing: -0.074em;
+          text-wrap: balance;
+        }
+
+        .neox-unified-title span {
+          color: #2f7cff;
+          font-weight: inherit;
+        }
+
+        .neox-unified-lead {
+          margin: 30px 0 0;
+          max-width: 520px;
+          color: rgba(255, 255, 255, 0.68);
+          font-size: clamp(1rem, 1.12vw, 1.16rem);
+          font-weight: 390;
+          line-height: 1.78;
+          letter-spacing: -0.022em;
+        }
+
+        .neox-process-section {
           position: relative;
-          z-index: 2;
+          z-index: 0;
+          overflow: visible;
+          padding-top: 112px;
+          padding-bottom: 96px;
+          background:
+            radial-gradient(
+              900px 360px at 8% 16%,
+              rgba(68, 89, 223, 0.025),
+              transparent 64%
+            ),
+            linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
+        }
+
+        .neox-process-section::before {
+          content: "";
+          position: absolute;
+          left: -180px;
+          bottom: -180px;
+          width: 620px;
+          height: 420px;
+          border-radius: 999px;
+          border: 1px solid rgba(36, 71, 198, 0.035);
+          opacity: 0.8;
+          pointer-events: none;
+        }
+
+        .neox-process-stage {
+          position: relative;
+          z-index: 1;
+        }
+
+        .neox-process-editorial {
+          position: relative;
           display: grid;
-          gap: 15px;
-          margin-top: -28px;
-          padding: 26px 24px 22px;
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          border-radius: 22px;
-          background: rgba(255, 255, 255, 0.92);
-          box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          transition:
-            transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-            border-color 180ms ease,
-            box-shadow 180ms ease;
+          grid-template-columns: minmax(0, 0.8fr) minmax(560px, 1.02fr);
+          gap: clamp(64px, 8vw, 112px);
+          align-items: start;
         }
 
-        .neox-stack-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          margin-top: 6px;
-          color: #26368f;
-          font-size: 14px;
-          font-weight: 720;
-          letter-spacing: -0.016em;
+        .neox-process-copy-track {
+          position: relative;
+          min-width: 0;
+          min-height: var(--neox-process-copy-track-h, 840px);
+          overflow: visible;
         }
 
-        .neox-stack-arrow {
-          width: 34px;
-          height: 34px;
-          display: inline-flex;
+        .neox-process-moving {
+          position: absolute;
+          top: var(--neox-process-copy-start, 0px);
+          left: 0;
+          width: min(100%, 620px);
+          transform: translate3d(0, var(--neox-process-copy-y, 0px), 0);
+          transition: none;
+          will-change: transform;
+          backface-visibility: hidden;
+        }
+
+        .neox-process-title {
+          max-width: 620px;
+        }
+
+        .neox-process-lead {
+          margin-top: 26px;
+          max-width: 520px;
+          color: #425166;
+          font-size: clamp(1.1rem, 1.32vw, 1.34rem);
+          font-weight: 360;
+          line-height: 1.78;
+          letter-spacing: -0.026em;
+        }
+
+        .neox-process-list-wrap {
+          position: relative;
+          min-width: 0;
+          overflow: visible;
+        }
+
+        .neox-process-list {
+          display: grid;
+          padding-bottom: 0;
+        }
+
+        .neox-process-row {
+          position: relative;
+          display: grid;
+          grid-template-columns: 120px 1px minmax(0, 1fr);
+          gap: 40px;
           align-items: center;
-          justify-content: center;
-          border-radius: 12px;
-          background: rgba(68, 89, 223, 0.08);
+          min-height: 168px;
+          padding: 12px 0;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.075);
+          color: var(--nx-ink);
+          background: transparent;
+          box-shadow: none;
+          border-radius: 0;
+        }
+
+        .neox-process-row:first-child {
+          border-top: 1px solid rgba(15, 23, 42, 0.075);
+        }
+
+        .neox-process-row-number {
+          color: rgba(15, 23, 42, 0.22);
+          font-family: var(--nx-font-display);
+          font-size: clamp(4.2rem, 5.4vw, 5.8rem);
+          font-weight: 400;
+          line-height: 0.9;
+          letter-spacing: -0.06em;
+          opacity: 0;
+          filter: blur(7px);
+          transform: translateY(14px);
           transition:
-            transform 180ms ease,
+            opacity 240ms ease,
+            filter 280ms ease,
+            transform 280ms var(--nx-ease),
+            color 180ms ease;
+          transition-delay: 0ms;
+        }
+
+        .neox-process-row-divider {
+          width: 1px;
+          height: 76px;
+          background: linear-gradient(
+            180deg,
+            rgba(15, 23, 42, 0.035),
+            rgba(36, 71, 198, 0.18),
+            rgba(15, 23, 42, 0.035)
+          );
+          opacity: 0.58;
+          transform: scaleY(0.72);
+          transform-origin: center;
+          transition:
+            opacity 240ms ease,
+            transform 280ms var(--nx-ease),
             background 180ms ease;
         }
 
-        .neox-system-card--stack:hover .neox-card-media img {
-          transform: scale(1.045);
+        .neox-process-row-content {
+          min-width: 0;
+          opacity: 0;
+          filter: blur(7px);
+          transform: translateY(14px);
+          transition:
+            opacity 240ms ease,
+            filter 280ms ease,
+            transform 280ms var(--nx-ease);
+          transition-delay: 0ms;
         }
 
-        .neox-system-card--stack:hover .neox-stack-panel {
-          transform: translateY(-5px);
-          border-color: rgba(68, 89, 223, 0.18);
-          box-shadow: 0 24px 56px rgba(15, 23, 42, 0.085);
+        .neox-process-row.is-visible .neox-process-row-number,
+        .neox-process-row.is-visible .neox-process-row-content {
+          opacity: 0.62;
+          filter: blur(0);
+          transform: translateY(0);
         }
 
-        .neox-system-card--stack:hover .neox-stack-arrow {
-          transform: translateX(3px);
-          background: rgba(68, 89, 223, 0.12);
+        .neox-process-row.is-visible .neox-process-row-divider {
+          opacity: 0.76;
+          transform: scaleY(1);
+        }
+
+        .neox-process-row.is-active .neox-process-row-number,
+        .neox-process-row.is-active .neox-process-row-content {
+          opacity: 1;
+        }
+
+        .neox-process-row.is-active .neox-process-row-number {
+          color: var(--nx-blue);
+        }
+
+        .neox-process-row.is-active .neox-process-row-divider {
+          opacity: 1;
+          background: linear-gradient(
+            180deg,
+            rgba(36, 71, 198, 0.06),
+            rgba(36, 71, 198, 0.38),
+            rgba(36, 71, 198, 0.06)
+          );
+        }
+
+        .neox-process-row-content h3 {
+          margin: 0;
+          color: var(--nx-ink);
+          font-family: var(--nx-font-body);
+          font-size: clamp(1.38rem, 1.65vw, 1.72rem);
+          font-weight: 560;
+          line-height: 1.12;
+          letter-spacing: -0.05em;
+          text-wrap: balance;
+          transition: color 180ms ease;
+        }
+
+        .neox-process-row.is-active .neox-process-row-content h3 {
+          color: var(--nx-blue);
+        }
+
+        .neox-process-row-content p {
+          margin: 12px 0 0;
+          max-width: 620px;
+          color: #5a677c;
+          font-size: 14.5px;
+          font-weight: 420;
+          line-height: 1.68;
+          letter-spacing: -0.016em;
+        }
+
+        @media (max-width: 1180px) {
+          .neox-card-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .neox-unified-layout {
+            gap: 54px;
+          }
+
+          .neox-unified-title {
+            font-size: clamp(2.85rem, 5.8vw, 4.7rem);
+          }
+
+          .neox-process-section {
+            padding-top: 82px;
+            padding-bottom: 92px;
+          }
+
+          .neox-process-editorial {
+            grid-template-columns: 1fr;
+            gap: 54px;
+          }
+
+          .neox-process-copy-track {
+            min-height: auto;
+          }
+
+          .neox-process-moving {
+            position: relative;
+            top: auto;
+            left: auto;
+            transform: none !important;
+            transition: none;
+          }
+
+          .neox-process-title,
+          .neox-process-lead {
+            max-width: 760px;
+          }
+
+          .neox-process-row-number,
+          .neox-process-row-content {
+            opacity: 1;
+            filter: none;
+            transform: none;
+          }
+
+          .neox-process-row-divider {
+            opacity: 0.78;
+            transform: scaleY(1);
+          }
         }
 
         @media (max-width: 1100px) {
@@ -852,25 +1401,48 @@ export default function HomePage() {
             max-width: 860px;
             font-size: clamp(2.75rem, 6vw, 4.6rem);
           }
+        }
 
-          .neox-card-section-head {
-            grid-template-columns: 1fr;
-            gap: 18px;
+        @media (max-width: 980px) {
+          .neox-unified-section {
+            padding-top: 84px;
+            padding-bottom: 86px;
           }
 
-          .neox-card-grid {
+          .neox-unified-layout {
             grid-template-columns: 1fr;
+            gap: 42px;
           }
 
-          .neox-system-card {
-            min-height: 360px;
+          .neox-unified-copy {
+            width: 100%;
+            justify-self: start;
+            order: -1;
+          }
+
+          .neox-unified-title {
+            max-width: 760px;
+          }
+
+          .neox-unified-lead {
+            max-width: 640px;
+          }
+
+          .neox-unified-image-wrap {
+            border-radius: 28px;
           }
         }
 
         @media (max-width: 900px) {
           .neox-home-hero {
             height: auto;
-            min-height: calc(100svh - var(--nx-header-h, 64px));
+            min-height: calc(100svh - var(--nx-header-h, 60px));
+          }
+
+          .neox-hero-container {
+            min-height: calc(100svh - var(--nx-header-h, 60px) - 82px);
+            padding-top: 72px;
+            padding-bottom: 64px;
           }
 
           .neox-hero-title {
@@ -893,25 +1465,97 @@ export default function HomePage() {
           .neox-hero-loop-item {
             width: 100%;
           }
+
+          .neox-hero-lead {
+            font-size: 1rem;
+            line-height: 1.76;
+          }
+
+          .neox-card-section {
+            padding-top: 76px;
+            padding-bottom: 64px;
+          }
+
+          .neox-balanced-section-title {
+            font-size: clamp(2.45rem, 8vw, 4.1rem);
+            letter-spacing: -0.06em;
+          }
+
+          .neox-process-row {
+            grid-template-columns: 90px 1px minmax(0, 1fr);
+            gap: 28px;
+            min-height: 142px;
+          }
+
+          .neox-process-row-number {
+            font-size: 3.8rem;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .neox-card-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .neox-system-card {
+            min-height: 330px;
+          }
+
+          .neox-unified-title {
+            font-size: clamp(2.75rem, 11vw, 4rem);
+          }
+
+          .neox-unified-image-wrap {
+            aspect-ratio: 1.08 / 1;
+            border-radius: 24px;
+          }
         }
 
         @media (max-width: 640px) {
-          .neox-card-section {
-            padding: 70px 0 78px;
+          .neox-hero-container {
+            padding-top: 60px;
+          }
+
+          .neox-card-content {
+            padding-left: 24px;
+            padding-right: 24px;
           }
 
           .neox-system-card {
             border-radius: 22px;
           }
 
-          .neox-cover-content,
-          .neox-split-content {
-            padding-left: 24px;
-            padding-right: 24px;
+          .neox-unified-section {
+            padding-top: 72px;
+            padding-bottom: 74px;
           }
 
-          .neox-split-action {
-            padding-inline: 24px;
+          .neox-unified-lead {
+            font-size: 1rem;
+            line-height: 1.72;
+          }
+
+          .neox-process-row {
+            grid-template-columns: 1fr;
+            gap: 14px;
+            min-height: auto;
+            padding: 28px 0;
+          }
+
+          .neox-process-row-divider {
+            display: none;
+          }
+
+          .neox-process-row-number {
+            font-size: 3rem;
+          }
+
+          .neox-process-row-content h3 {
+            font-size: 1.55rem;
+          }
+
+          .neox-process-row-content p {
+            font-size: 0.98rem;
           }
         }
 
@@ -920,6 +1564,18 @@ export default function HomePage() {
             font-size: 2.85rem;
             line-height: 1.06;
             letter-spacing: -0.058em;
+          }
+
+          .neox-hero-actions {
+            gap: 12px;
+          }
+
+          .neox-balanced-section-title {
+            font-size: 2.85rem;
+          }
+
+          .neox-process-lead {
+            font-size: 1rem;
           }
         }
 
@@ -933,14 +1589,21 @@ export default function HomePage() {
             opacity: 1;
             transform: none;
           }
+
+          .neox-process-moving,
+          .neox-process-row-number,
+          .neox-process-row-divider,
+          .neox-process-row-content {
+            transition: none !important;
+          }
         }
       `}</style>
 
-      <main className="neox-home-page min-h-screen overflow-x-hidden font-sans text-slate-950 antialiased">
+      <main className="nx-page neox-home-page">
         <HomeHero />
         <ServiceCardsSection />
-        <ProcessSection />
-        <FinalCta />
+        <UnifiedSystemSection />
+        <HowItWorksSection />
       </main>
     </>
   );

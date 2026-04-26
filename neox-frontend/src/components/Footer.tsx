@@ -41,12 +41,14 @@ const footerGroups = [
     ],
   },
   {
-    title: "Həllər",
+    title: "Xidmətlər",
     links: [
-      { label: "Süni İntellekt çat sistemləri", to: "/services/chatbot-24-7" },
-      { label: "Biznes workflow", to: "/services/business-workflows" },
-      { label: "Premium veb sayt", to: "/services/websites" },
-      { label: "Sosial media axını", to: "/services/smm-automation" },
+      { label: "Veb saytlar", to: "/services/websites" },
+      { label: "Biznes workflow", to: "/services/workflow-automation" },
+      { label: "Səsli assistantlar", to: "/services/voice-assistants" },
+      { label: "24/7 çatbotlar", to: "/services/chatbots" },
+      { label: "Kontent axını", to: "/services/content-flow" },
+      { label: "Brend görünüşü", to: "/services/brand-identity" },
     ],
   },
   {
@@ -54,6 +56,7 @@ const footerGroups = [
     links: [
       { label: "Klinikalar", to: "/use-cases/healthcare" },
       { label: "Logistika", to: "/use-cases/logistics" },
+      { label: "Maliyyə", to: "/use-cases/finance" },
       { label: "Pərakəndə satış", to: "/use-cases/retail" },
       { label: "Hotellər", to: "/use-cases/hotels" },
     ],
@@ -78,21 +81,41 @@ export default function Footer() {
       <div className="nx-footer-inner">
         <div className="nx-footer-main">
           <div className="nx-footer-brand-col">
-            <Link to={withLang("/")} className="nx-footer-brand" aria-label="NEOX" data-wg-notranslate>
-              <img src={LOGO_SRC} alt="NEOX" loading="lazy" decoding="async" draggable={false} />
+            <Link
+              to={withLang("/")}
+              className="nx-footer-brand"
+              aria-label="NEOX"
+              data-wg-notranslate
+            >
+              <img
+                src={LOGO_SRC}
+                alt="NEOX"
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+              />
             </Link>
 
             <p className="nx-footer-copy">
-              Bizneslər üçün veb sayt, mesajlaşma və avtomatlaşdırma sistemlərini vahid axında qururuq.
+              Bizneslər üçün veb sayt, mesajlaşma, kontent, satış və
+              avtomatlaşdırma sistemlərini vahid axında qururuq.
             </p>
 
             <div className="nx-footer-contact">
-              <a href={`mailto:${email}`} className="nx-footer-contact-link" aria-label="Email göndər">
+              <a
+                href={`mailto:${email}`}
+                className="nx-footer-contact-link"
+                aria-label="Email göndər"
+              >
                 <Mail size={16} strokeWidth={1.85} aria-hidden="true" />
                 <span>{email}</span>
               </a>
 
-              <a href={`tel:${cleanPhone}`} className="nx-footer-contact-link" aria-label="Zəng et">
+              <a
+                href={`tel:${cleanPhone}`}
+                className="nx-footer-contact-link"
+                aria-label="Zəng et"
+              >
                 <Phone size={16} strokeWidth={1.85} aria-hidden="true" />
                 <span>{phone}</span>
               </a>
