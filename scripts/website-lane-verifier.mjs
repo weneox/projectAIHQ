@@ -42,7 +42,7 @@ export function buildWebsiteLaneHealthUrl(
   if (s(domain)) search.set("domain", s(domain));
 
   const query = search.toString();
-  return `${root}/health/website-lane${query ? `?${query}` : ""}`;
+  return `${root}/api/health/website-lane${query ? `?${query}` : ""}`;
 }
 
 export function buildWebsiteLaneHeaders({

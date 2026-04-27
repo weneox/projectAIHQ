@@ -19,7 +19,7 @@ test("website lane verifier builds a scoped health URL and internal headers", ()
 
   assert.equal(
     url,
-    "https://api.example.test/health/website-lane?tenantKey=acme&domain=acme.example"
+    "https://api.example.test/api/health/website-lane?tenantKey=acme&domain=acme.example"
   );
   assert.deepEqual(headers, {
     "x-internal-token": "token-1",
