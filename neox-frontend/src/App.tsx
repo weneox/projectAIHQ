@@ -194,23 +194,57 @@ export default function App() {
               path="services"
               element={<Navigate to="chatbot-24-7" replace />}
             />
+
             <Route
               path="services/chatbot-24-7"
               element={<ServiceChatbot247 />}
             />
+
+            <Route
+              path="services/chatbots"
+              element={<ServiceChatbot247 />}
+            />
+
             <Route
               path="services/business-workflows"
               element={<ServiceBusinessWorkflows />}
             />
+
+            <Route
+              path="services/workflow-automation"
+              element={<ServiceBusinessWorkflows />}
+            />
+
             <Route path="services/websites" element={<ServiceWebsites />} />
-            <Route path="services/mobile-apps" element={<ServiceMobileApps />} />
+
+            <Route
+              path="services/mobile-apps"
+              element={<ServiceMobileApps />}
+            />
+
             <Route
               path="services/smm-automation"
               element={<ServiceSmmAutomation />}
             />
+
+            <Route
+              path="services/content-flow"
+              element={<ServiceSmmAutomation />}
+            />
+
             <Route
               path="services/technical-support"
               element={<ServiceTechnicalSupport />}
+            />
+
+            <Route
+              path="services/voice-assistants"
+              element={<ServiceChatbot247 />}
+            />
+
+            <Route
+              path="services/brand-identity"
+              element={<ServiceWebsites />}
             />
 
             <Route path="use-cases" element={<UseCasesRedirect />} />

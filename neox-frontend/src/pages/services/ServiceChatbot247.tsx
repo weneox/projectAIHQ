@@ -1,419 +1,345 @@
-// src/pages/services/ServiceChatbot247.tsx
 import { Link, useParams } from "react-router-dom";
-import type { LucideIcon } from "lucide-react";
-import {
-  ArrowUpRight,
-  Bot,
-  CheckCircle2,
-  Clock3,
-  DatabaseZap,
-  FileText,
-  MessageSquareText,
-  MessagesSquare,
-  ShieldCheck,
-  Sparkles,
-  UserRoundCheck,
-  Workflow,
-} from "lucide-react";
+import { Helmet } from "@vuer-ai/react-helmet-async";
+import { ArrowUpRight, Sparkles } from "lucide-react";
 import { DEFAULT_LANG, LANGS, type Lang } from "../../i18n/lang";
 
-function isLang(value: string | undefined | null): value is Lang {
-  if (!value) return false;
-  return (LANGS as readonly string[]).includes(value);
-}
-
-function useLocalizedPath() {
-  const { lang: paramLang } = useParams<{ lang?: string }>();
-  const lang = isLang(paramLang) ? paramLang : DEFAULT_LANG;
-
-  return (path: string) => {
-    if (path === "/") return `/${lang}`;
-    return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
-  };
-}
-
-type ServiceItem = {
-  title: string;
-  desc: string;
-  icon: LucideIcon;
-};
-
-type Step = {
+type CapabilityItem = {
   number: string;
   title: string;
-  desc: string;
+  text: string;
 };
 
-const features: ServiceItem[] = [
-  {
-    title: "24/7 ilkin cavab",
-    desc: "Müştəri sualları gecə-gündüz qarşılanır, sadə və təkrar sorğular cavabsız qalmır.",
-    icon: Clock3,
-  },
-  {
-    title: "Biznes məlumatına bağlı cavab",
-    desc: "Sistem xidmətləriniz, qiymət məntiqiniz, FAQ-larınız və qaydalarınız əsasında cavab verir.",
-    icon: FileText,
-  },
-  {
-    title: "Operatora ötürmə",
-    desc: "Satışa yaxın, riskli və ya xüsusi insan müdaxiləsi tələb edən suallar komandaya yönləndirilir.",
-    icon: UserRoundCheck,
-  },
-  {
-    title: "Lead toplama",
-    desc: "Ad, telefon, maraqlandığı xidmət və sorğu tipi strukturlaşdırılmış formada saxlanılır.",
-    icon: DatabaseZap,
-  },
-];
+type FlowItem = {
+  number: string;
+  title: string;
+  text: string;
+};
 
-const channels: ServiceItem[] = [
-  {
-    title: "Sayt çat sistemi",
-    desc: "Vebsayt üzərindən gələn suallar üçün premium və sadə cavab axını.",
-    icon: MessageSquareText,
-  },
-  {
-    title: "Instagram DM",
-    desc: "Müştəri mesajları, FAQ, qiymət və operatora ötürmə üçün cavab sistemi.",
-    icon: MessagesSquare,
-  },
-  {
-    title: "WhatsApp yönləndirmə",
-    desc: "Müştərinin WhatsApp-a keçidi və qısa brif mesajı daha rahat hazırlanır.",
-    icon: Workflow,
-  },
-  {
-    title: "Daxili komanda axını",
-    desc: "Sistem cavablandıra bilməyəndə sorğu komanda üçün daha aydın görünür.",
-    icon: ShieldCheck,
-  },
-];
+type ChannelItem = {
+  number: string;
+  title: string;
+  text: string;
+};
 
-const steps: Step[] = [
+const capabilityItems: CapabilityItem[] = [
   {
     number: "01",
-    title: "Məlumat bazası hazırlanır",
-    desc: "Xidmətlər, FAQ, qiymət, iş saatı, ünvan və cavab qaydaları strukturlaşdırılır.",
+    title: "Müştərini qarşılayır",
+    text: "Saytda və sosial kanallarda gələn ilk mesaj cavabsız qalmır.",
   },
   {
     number: "02",
-    title: "Cavab məntiqi qurulur",
-    desc: "Hansı sual avtomatik cavablanır, hansı halda operatora ötürülür — qaydalar yazılır.",
+    title: "Sualı anlayır",
+    text: "Müştərinin qiymət, xidmət, görüş və ya dəstək istəyi ayırd edilir.",
   },
   {
     number: "03",
-    title: "Kanalda test edilir",
-    desc: "Sayt, Instagram və ya seçilmiş mesaj kanalında real suallarla test edilir.",
+    title: "Düzgün cavab verir",
+    text: "Cavablar biznesinizin təsdiqlənmiş məlumatına əsaslanır.",
   },
   {
     number: "04",
-    title: "İşə salınır və ölçülür",
-    desc: "Cavab keyfiyyəti, handoff halları və lead axını izlənərək optimallaşdırılır.",
+    title: "Operatora ötürür",
+    text: "Əmin olmadığı və ya insan müdaxiləsi lazım olan halları komandaya yönləndirir.",
   },
 ];
 
-const results = [
-  { value: "24/7", label: "müştəri suallarına ilkin cavab" },
-  { value: "↓", label: "təkrar manual cavablar" },
-  { value: "↑", label: "lead toplama səliqəsi" },
+const flowItems: FlowItem[] = [
+  {
+    number: "01",
+    title: "Mesaj gəlir",
+    text: "Müştəri sayt, Instagram və ya başqa kanal üzərindən sual verir.",
+  },
+  {
+    number: "02",
+    title: "Niyyət oxunur",
+    text: "Sualın satış, məlumat, support və ya operator istəyi olduğu müəyyən edilir.",
+  },
+  {
+    number: "03",
+    title: "Cavab seçilir",
+    text: "Sistem təsdiqlənmiş məlumatla cavab verir və ya sualı dəqiqləşdirir.",
+  },
+  {
+    number: "04",
+    title: "Nəticə saxlanır",
+    text: "Lead məlumatı və söhbət nəticəsi komanda üçün aydın formada qalır.",
+  },
 ];
 
-const rules = [
-  "Sistem yalnız təsdiqlənmiş biznes məlumatı ilə cavab verir.",
-  "Əmin olmadığı və riskli hallarda operatora ötürür.",
-  "Müştəri məlumatı strukturlaşdırılmış lead kimi qalır.",
-  "Cavab dili brendinizə və xidmət üslubunuza uyğun yazılır.",
+const channelItems: ChannelItem[] = [
+  {
+    number: "01",
+    title: "Website chat",
+    text: "Sayta gələn ziyarətçini qarşılayan və əlaqəyə aparan cavab axını.",
+  },
+  {
+    number: "02",
+    title: "Instagram DM",
+    text: "Sosial mesajlarda FAQ, qiymət və demo istəklərini idarə edən sistem.",
+  },
+  {
+    number: "03",
+    title: "WhatsApp keçidi",
+    text: "Müştərini boş linkə yox, düzgün kontekstlə davam edən söhbətə yönləndirir.",
+  },
+  {
+    number: "04",
+    title: "Operator davamı",
+    text: "Botun dayandığı yerdə insan operator söhbəti problemsiz davam etdirir.",
+  },
 ];
 
-function ItemCard({ item }: { item: ServiceItem }) {
-  const Icon = item.icon;
+const guardrailItems: CapabilityItem[] = [
+  {
+    number: "01",
+    title: "Uydurmur",
+    text: "Təsdiqlənməmiş məlumatı biznes həqiqəti kimi demir.",
+  },
+  {
+    number: "02",
+    title: "Dayanmağı bilir",
+    text: "Əmin olmadığı halda sualı dəqiqləşdirir və ya operatora ötürür.",
+  },
+  {
+    number: "03",
+    title: "Brendi qoruyur",
+    text: "Cavab dili biznesinizin tonu və təqdimatı ilə uyğun qalır.",
+  },
+  {
+    number: "04",
+    title: "Nəticəyə işləyir",
+    text: "Məqsəd sadəcə danışmaq yox, müştərini düzgün növbəti addıma aparmaqdır.",
+  },
+];
 
+function isLang(value: string | undefined | null): value is Lang {
+  return Boolean(value && (LANGS as readonly string[]).includes(value));
+}
+
+function useSafeLang(): Lang {
+  const { lang } = useParams<{ lang?: string }>();
+  return isLang(lang) ? lang : DEFAULT_LANG;
+}
+
+function withLang(lang: Lang, path: string) {
+  if (path === "/") return `/${lang}`;
+  return `/${lang}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function CapabilityCard({ item }: { item: CapabilityItem }) {
   return (
-    <article className="nx-card nx-card--quiet">
-      <div className="nx-stack-sm">
-        <div className="nx-row nx-row--top">
-          <span className="nx-badge nx-badge--soft nx-badge--plain">
-            <Icon size={16} strokeWidth={2} aria-hidden="true" />
-          </span>
-          <ArrowUpRight size={16} strokeWidth={1.9} className="nx-muted" aria-hidden="true" />
-        </div>
-
-        <div className="nx-stack-xs">
-          <h3 className="nx-h4">{item.title}</h3>
-          <p className="nx-copy-sm">{item.desc}</p>
-        </div>
-      </div>
+    <article className="neox-capability-card">
+      <span className="neox-capability-number">{item.number}</span>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
     </article>
   );
 }
 
-function StepCard({ step }: { step: Step }) {
+function FlowCard({ item }: { item: FlowItem }) {
   return (
-    <article className="nx-card nx-card--compact nx-card--quiet">
-      <div className="nx-stack-sm">
-        <span className="nx-badge nx-badge--plain">{step.number}</span>
-        <div className="nx-stack-xs">
-          <h3 className="nx-h4">{step.title}</h3>
-          <p className="nx-copy-sm">{step.desc}</p>
-        </div>
-      </div>
+    <article className="neox-capability-card">
+      <span className="neox-capability-number">{item.number}</span>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
     </article>
   );
 }
 
-function ChatbotPreview() {
+function ChannelCard({ item }: { item: ChannelItem }) {
   return (
-    <div className="nx-hero-panel">
-      <div className="nx-hero-panel-inner">
-        <div className="nx-stack-lg">
-          <div className="nx-row nx-row--top">
-            <div className="nx-stack-xs">
-              <span className="nx-badge nx-badge--soft">
-                <Bot size={15} strokeWidth={2} aria-hidden="true" />
-                Cavab sistemi
-              </span>
-              <h2 className="nx-h3">Müştəri sualı cavabsız qalmır.</h2>
-            </div>
-
-            <Sparkles size={20} strokeWidth={1.9} color="var(--nx-accent)" aria-hidden="true" />
-          </div>
-
-          <div className="nx-grid nx-grid--3">
-            {results.map((item) => (
-              <div key={item.label} className="nx-surface nx-surface--flat nx-surface-pad">
-                <div className="nx-metric">
-                  <span className="nx-metric-value">{item.value}</span>
-                  <span className="nx-metric-label">{item.label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="nx-surface nx-surface--flat nx-surface-pad">
-            <div className="nx-stack">
-              <div className="nx-row">
-                <div className="nx-stack-xs">
-                  <p className="nx-eyebrow">Müştəri</p>
-                  <p className="nx-h4">“Salam, qiymətlər necədir?”</p>
-                </div>
-                <span className="nx-badge nx-badge--soft">FAQ</span>
-              </div>
-
-              <hr className="nx-divider" />
-
-              <div className="nx-row">
-                <div className="nx-stack-xs">
-                  <p className="nx-eyebrow">NEOX sistemi</p>
-                  <p className="nx-copy-sm">
-                    Xidmətə uyğun cavab verir, maraq varsa əlaqə məlumatı toplayır və komandaya ötürür.
-                  </p>
-                </div>
-                <CheckCircle2 size={18} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
-              </div>
-            </div>
-          </div>
-
-          <p className="nx-copy-sm">
-            Məqsəd sadəcə “bot cavabı” deyil — müştəri sualını biznes axınına çevirməkdir.
-          </p>
-        </div>
-      </div>
-    </div>
+    <article className="neox-capability-card">
+      <span className="neox-capability-number">{item.number}</span>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
+    </article>
   );
 }
 
 export default function ServiceChatbot247() {
-  const withLang = useLocalizedPath();
+  const lang = useSafeLang();
 
   return (
-    <main className="nx-page">
-      <section className="nx-hero">
-        <div className="nx-container">
-          <div className="nx-hero-grid">
-            <div className="nx-hero-copy">
-              <p className="nx-kicker">NEOX / 24/7 Chatbot</p>
+    <>
+      <Helmet>
+        <title>24/7 Çatbotlar | NEOX</title>
+        <meta
+          name="description"
+          content="NEOX bizneslər üçün sayt, sosial media, lead toplama və operatora ötürmə məntiqi olan 24/7 cavab sistemi qurur."
+        />
+      </Helmet>
 
-              <div className="nx-stack">
-                <h1 className="nx-display">
-                  Biznesiniz üçün <span className="nx-gradient-text">24/7 Süni İntellekt cavab sistemi.</span>
-                </h1>
+      <main className="nx-page neox-home-extra">
+        <section className="nx-section nx-section--soft neox-card-section">
+          <div className="nx-container">
+            <div className="neox-home-section-head">
+              <p className="neox-extra-kicker">NEOX / 24/7 çatbotlar</p>
 
-                <p className="nx-lead nx-max-copy">
-                  Müştərilər saytınızda və sosial kanallarda sual verəndə cavab gecikməsin.
-                  Sistem FAQ, xidmət, qiymət, lead və operatora ötürmə məntiqi ilə işləyir.
-                </p>
-              </div>
+              <h1 className="neox-home-section-title">
+                Cavab sistemləri <span>qururuq.</span>
+              </h1>
 
-              <div className="nx-actions">
-                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
-                  Cavab sistemi quraq
-                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                </Link>
-
-                <Link to={withLang("/pricing")} className="nx-button">
-                  Qiymət məntiqi
-                </Link>
-              </div>
-
-              <div className="nx-chip-row">
-                <span className="nx-chip">FAQ cavabları</span>
-                <span className="nx-chip">Lead toplama</span>
-                <span className="nx-chip">Operator handoff</span>
-              </div>
-            </div>
-
-            <div className="nx-hero-visual">
-              <ChatbotPreview />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="nx-section nx-section--tight">
-        <div className="nx-container">
-          <div className="nx-stack-xl">
-            <div className="nx-row nx-row--top">
-              <div className="nx-stack-sm nx-max-copy">
-                <p className="nx-kicker">Nə edir?</p>
-                <h2 className="nx-title-sm">Sadə chatbot yox, biznesə bağlı cavab axını.</h2>
-              </div>
-
-              <p className="nx-copy nx-max-tight">
-                Cavab sistemi sizin xidmətlərə, qaydalara və müştəri niyyətinə görə işləyir.
-                Məqsəd komandanın təkrar cavab yükünü azaltmaqdır.
+              <p className="neox-extra-lead">
+                Sayt və sosial kanallarda gələn sualları cavabsız qoymayan,
+                məlumat toplayan və lazım olanda operatora ötürən sistem.
               </p>
             </div>
 
-            <div className="nx-grid nx-grid--4">
-              {features.map((item) => (
-                <ItemCard key={item.title} item={item} />
-              ))}
+            <div className="neox-build-actions">
+              <Link
+                to={withLang(lang, "/contact")}
+                className="nx-button nx-button--primary nx-button--lg"
+              >
+                Cavab sistemi quraq
+                <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
+              </Link>
+
+              <Link
+                to={withLang(lang, "/services/websites")}
+                className="nx-button nx-button--secondary nx-button--lg"
+              >
+                Website ilə birlikdə bax
+              </Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="nx-section">
-        <div className="nx-container">
-          <div className="nx-split nx-split--top">
-            <div className="nx-stack-lg">
-              <div className="nx-stack">
-                <p className="nx-kicker">Kanallar</p>
-                <h2 className="nx-title">Cavab sistemi müştərinin yazdığı yerdə işləməlidir.</h2>
-                <p className="nx-lead">
-                  Sayt, Instagram və digər mesajlaşma nöqtələri vahid cavab məntiqi ilə işləyə bilər.
-                  Hər kanalın dili fərqli olsa da sistemin əsası eyni qalır.
-                </p>
-              </div>
+        <section className="nx-section nx-section--white">
+          <div className="nx-container">
+            <div className="neox-home-section-head">
+              <p className="neox-extra-kicker">Nə edir?</p>
 
-              <div className="nx-actions">
-                <Link to={withLang("/services/websites")} className="nx-button">
-                  Vebsayt xidmətləri
-                </Link>
+              <h2 className="neox-home-section-title">
+                Sadə bot yox, <span>işləyən cavab axınıdır.</span>
+              </h2>
 
-                <Link to={withLang("/contact")} className="nx-button nx-button--primary">
-                  Kanalımı danışım
-                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                </Link>
-              </div>
-            </div>
-
-            <div className="nx-grid nx-grid--2">
-              {channels.map((item) => (
-                <ItemCard key={item.title} item={item} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="nx-section nx-section-divider">
-        <div className="nx-container">
-          <div className="nx-stack-xl">
-            <div className="nx-row nx-row--top">
-              <div className="nx-stack-sm nx-max-copy">
-                <p className="nx-kicker">Qurulum</p>
-                <h2 className="nx-title-sm">Cavab sistemi mərhələli şəkildə qurulur.</h2>
-              </div>
-
-              <p className="nx-copy nx-max-tight">
-                Əvvəl biznes məlumatı, sonra cavab qaydaları, sonra kanal testi və optimallaşdırma.
+              <p className="neox-extra-lead">
+                Sistem müştərini qarşılayır, sualın məqsədini anlayır və onu
+                düzgün növbəti addıma aparır.
               </p>
             </div>
 
-            <div className="nx-grid nx-grid--4">
-              {steps.map((step) => (
-                <StepCard key={step.number} step={step} />
+            <div className="neox-capability-grid">
+              {capabilityItems.map((item) => (
+                <CapabilityCard key={item.number} item={item} />
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="nx-section">
-        <div className="nx-container">
-          <div className="nx-surface nx-surface--raised nx-surface-pad">
-            <div className="nx-split">
-              <div className="nx-stack">
-                <span className="nx-badge nx-badge--soft">
-                  <ShieldCheck size={15} strokeWidth={2} aria-hidden="true" />
-                  Kontrollu davranış
-                </span>
+        <section className="nx-section nx-section--soft">
+          <div className="nx-container">
+            <div className="neox-home-section-head">
+              <p className="neox-extra-kicker">Axın</p>
 
-                <h2 className="nx-title-sm">Süni İntellekt cavabı sərhədsiz işləməməlidir.</h2>
+              <h2 className="neox-home-section-title">
+                Hər mesaj <span>idarə olunan xəttə</span> düşür.
+              </h2>
 
-                <p className="nx-lead">
-                  Sistemin nəyi cavablayacağı, nəyi cavablamayacağı və nə vaxt operatora ötürəcəyi əvvəlcədən qurulur.
-                  Bu, həm müştəri təcrübəsini, həm də biznes nəzarətini qoruyur.
+              <p className="neox-extra-lead">
+                Mesaj gələndən nəticə saxlanana qədər proses aydın, qısa və
+                nəzarətli formada işləyir.
+              </p>
+            </div>
+
+            <div className="neox-capability-grid">
+              {flowItems.map((item) => (
+                <FlowCard key={item.number} item={item} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="nx-section nx-section--white">
+          <div className="nx-container">
+            <div className="neox-home-section-head">
+              <p className="neox-extra-kicker">Kanallar</p>
+
+              <h2 className="neox-home-section-title">
+                Müştəri harada yazırsa, <span>sistem orada işləyir.</span>
+              </h2>
+
+              <p className="neox-extra-lead">
+                Website, Instagram, WhatsApp keçidi və operator davamı eyni
+                cavab məntiqinə bağlanır.
+              </p>
+            </div>
+
+            <div className="neox-capability-grid">
+              {channelItems.map((item) => (
+                <ChannelCard key={item.number} item={item} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="nx-section nx-section--soft">
+          <div className="nx-container">
+            <div className="neox-home-section-head">
+              <p className="neox-extra-kicker">Nəzarət</p>
+
+              <h2 className="neox-home-section-title">
+                Süni intellekt <span>sərhədlə</span> işləyir.
+              </h2>
+
+              <p className="neox-extra-lead">
+                Yaxşı cavab sistemi hər şeyi cavablamır. Harada dayanmalı
+                olduğunu bilir.
+              </p>
+            </div>
+
+            <div className="neox-capability-grid">
+              {guardrailItems.map((item) => (
+                <CapabilityCard key={item.number} item={item} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="neox-extra-section-three">
+          <div className="nx-container">
+            <div className="neox-build-band">
+              <div className="neox-build-content">
+                <p className="neox-extra-kicker">Başlayaq</p>
+
+                <h2 className="neox-build-title">
+                  Müştəri suallarını <span>cavab sisteminə</span> çevirək.
+                </h2>
+
+                <p className="neox-build-text">
+                  Xidmətlərinizi, ən çox verilən sualları və operator
+                  qaydalarını götürüb biznesinizə uyğun 24/7 cavab axını quraq.
                 </p>
+
+                <div className="neox-build-tags" aria-hidden="true">
+                  <span>Website chat</span>
+                  <span>Instagram DM</span>
+                  <span>Lead toplama</span>
+                  <span>Operator handoff</span>
+                </div>
               </div>
 
-              <div className="nx-grid">
-                {rules.map((rule) => (
-                  <div key={rule} className="nx-row">
-                    <span className="nx-list-item">{rule}</span>
-                    <CheckCircle2 size={18} strokeWidth={2} color="var(--nx-success)" aria-hidden="true" />
-                  </div>
-                ))}
+              <div className="neox-build-actions">
+                <Link
+                  to={withLang(lang, "/contact")}
+                  className="nx-button nx-button--primary nx-button--lg"
+                >
+                  Əlaqə saxla
+                  <Sparkles size={16} strokeWidth={2} aria-hidden="true" />
+                </Link>
+
+                <Link
+                  to={withLang(lang, "/services")}
+                  className="nx-button nx-button--secondary nx-button--lg"
+                >
+                  Xidmətlərə bax
+                </Link>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="nx-section nx-section--last nx-section-divider">
-        <div className="nx-container">
-          <div className="nx-surface nx-surface--raised nx-surface-pad">
-            <div className="nx-split">
-              <div className="nx-stack">
-                <span className="nx-badge nx-badge--soft">
-                  <Sparkles size={15} strokeWidth={2} aria-hidden="true" />
-                  Başlayaq
-                </span>
-
-                <h2 className="nx-title-sm">Müştəri suallarınızı cavab sisteminə çevirək.</h2>
-
-                <p className="nx-lead">
-                  Xidmətlərinizi, ən çox verilən sualları və operator qaydalarını göndərin,
-                  sizin üçün uyğun 24/7 cavab axınını quraq.
-                </p>
-              </div>
-
-              <div className="nx-actions">
-                <Link to={withLang("/contact")} className="nx-button nx-button--primary nx-button--full">
-                  Cavab sistemi quraq
-                  <ArrowUpRight size={16} strokeWidth={2} aria-hidden="true" />
-                </Link>
-
-                <Link to={withLang("/resources/faq")} className="nx-button nx-button--full">
-                  Suallara bax
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+        </section>
+      </main>
+    </>
   );
 }
