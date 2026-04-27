@@ -208,6 +208,60 @@ describe("useProductHome", () => {
     expect(result.current.primaryAction.path).toBe("/channels");
   });
 
+  it("keeps setup as the next action when both approved truth and channel are missing", async () => {
+    getSettingsTrustView.mockResolvedValue(
+      createTrustView({
+        summary: {
+          truth: {
+            latestVersionId: "",
+            readiness: {
+              status: "blocked",
+              reasonCode: "approved_truth_unavailable",
+            },
+          },
+          runtimeProjection: {
+            readiness: {
+              status: "blocked",
+            },
+            health: {
+              usable: false,
+              reasonCode: "approved_truth_unavailable",
+            },
+            authority: {
+              available: false,
+            },
+          },
+          reviewQueue: {
+            pending: 0,
+          },
+        },
+      })
+    );
+
+    getTelegramChannelStatus.mockResolvedValue(
+      createTelegramStatus({
+        connected: false,
+        state: "disconnected",
+        runtime: {
+          deliveryReady: false,
+        },
+      })
+    );
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.truthRuntime.truthReady).toBe(false);
+    expect(result.current.launchChannel.connected).toBe(false);
+    expect(result.current.primaryAction.path).toBe("/home?assistant=setup");
+    expect(result.current.nextStep?.id).toBe("truth");
+  });
+
   it("switches to setup-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
     getSettingsTrustView.mockResolvedValue(
       createTrustView({
@@ -348,6 +402,27 @@ describe("useProductHome", () => {
     expect(result.current.truthRuntime.ready).toBe(true);
     expect(result.current.assistant.launchPosture).toBe("normal_operation");
     expect(result.current.assistant.setupNeeded).toBe(false);
+    expect(result.current.primaryAction.path).toBe("/inbox");
+  });
+
+  it("does not mark launch ready when inbox state is unavailable", async () => {
+    listInboxThreads.mockRejectedValue(new Error("inbox unavailable"));
+    getOutboundSummary.mockRejectedValue(new Error("outbound unavailable"));
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.launchChannel.connected).toBe(true);
+    expect(result.current.truthRuntime.ready).toBe(true);
+    expect(result.current.inboxState.status).toBe("unavailable");
+    expect(result.current.launchReady).toBe(false);
+    expect(result.current.assistant.launchPosture).toBe("inbox_unavailable");
+    expect(result.current.nextStep?.id).toBe("inbox");
     expect(result.current.primaryAction.path).toBe("/inbox");
   });
 
@@ -630,7 +705,7 @@ describe("useProductHome", () => {
     expect(result.current.launchReady).toBe(false);
     expect(result.current.truthRuntime.truthReady).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("setup_needed");
-    expect(result.current.nextStep?.id).toBe("setup");
+    expect(result.current.nextStep?.id).toBe("truth");
   });
 
   it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {

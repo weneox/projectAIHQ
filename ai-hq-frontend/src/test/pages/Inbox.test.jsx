@@ -195,7 +195,7 @@ function buildConnectedMetaStatus() {
     },
     readiness: {
       status: "ready",
-      message: "Instagram DM automation is ready.",
+      message: "Instagram inbox is ready.",
       blockers: [],
     },
   };
@@ -328,7 +328,6 @@ describe("Inbox", () => {
       releaseHandoff: vi.fn(),
       setThreadStatus: vi.fn(),
       sendOperatorReply: vi.fn(),
-      openLeadDetail: vi.fn(),
     });
   });
 
@@ -376,7 +375,7 @@ describe("Inbox", () => {
 
     expect(
       await screen.findByText(
-        /a channel is live, but approved truth is not ready yet\. review truth before trusting autonomous replies\./i
+        /a channel is live, but approved truth is not ready yet\. approve truth before trusting live ai replies\./i
       )
     ).toBeInTheDocument();
   });

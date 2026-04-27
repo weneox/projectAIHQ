@@ -45,17 +45,17 @@ const EMPTY_READINESS_STATE = {
 const CONNECTOR_COPY = {
   website: {
     eyebrow: "Website",
-    title: "Widget + trusted origin",
-    summary: "Public website conversations.",
+    title: "Approved site chat",
+    summary: "Customer conversations from approved site origins.",
   },
   instagram: {
     eyebrow: "Instagram",
-    title: "DM automation",
-    summary: "Business account conversations.",
+    title: "Instagram inbox",
+    summary: "Customer DMs from the connected business account.",
   },
   telegram: {
     eyebrow: "Telegram",
-    title: "Bot conversations",
+    title: "Telegram chat",
     summary: "Private chat intake.",
   },
 };
@@ -166,7 +166,7 @@ function CompactHeader({
 
             {!truthReady ? (
               <span className="text-[11px] font-medium text-[rgba(180,83,9,0.96)]">
-                · Truth pending approval
+                / Truth pending approval
               </span>
             ) : null}
           </div>
@@ -176,7 +176,7 @@ function CompactHeader({
           </h1>
 
           <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
-            {availableCount} available · {connectedCount} connected
+            {availableCount} available / {connectedCount} connected
           </div>
         </div>
 
@@ -239,7 +239,6 @@ function ConnectorCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div className="relative mt-0.5 shrink-0">
-              <div className="absolute inset-0 rounded-full bg-[rgba(37,99,235,0.08)] blur-xl" />
               <div className="relative">
                 <ChannelIcon channel={channel} size="lg" />
               </div>
@@ -539,7 +538,7 @@ export default function ChannelCatalog() {
           <InlineNotice
             tone="warning"
             title="A channel is connected, but truth still needs approval."
-            description="Review truth before relying on autonomous replies."
+            description="Approve truth before relying on live AI replies."
             compact
           />
         ) : null}

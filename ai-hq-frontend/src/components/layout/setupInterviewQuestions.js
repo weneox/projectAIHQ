@@ -42,8 +42,7 @@ export const SETUP_INTERVIEW_QUESTIONS = [
     key: "hours",
     step: "hours",
     title: "Business hours",
-    prompt:
-      "İş və cavab saatları necədir? Chatbot və voice receptionist bunu necə deməlidir?",
+    prompt: "Is ve cavab saatlari necedir? AI assistant bunu nece demelidir?",
     placeholder:
       "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
     group: "business_truth",

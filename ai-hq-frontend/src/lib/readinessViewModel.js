@@ -619,7 +619,7 @@ export function buildChannelTruthLaunchReadiness({
         resolveCopy(
           copy,
           "deliveryBlockedSummary",
-          "Inspect the connected channel and fix delivery blockers before trusting live automation."
+          "Inspect the connected channel and fix delivery blockers before trusting live replies."
         ),
       action:
         normalizeOperationalAction(connectedChannel?.action).path

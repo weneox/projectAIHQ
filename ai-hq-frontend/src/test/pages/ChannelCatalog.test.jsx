@@ -194,7 +194,7 @@ function createMetaStatus(overrides = {}) {
     },
     readiness: {
       status: "ready",
-      message: "Instagram DM automation is ready.",
+      message: "Instagram inbox is ready.",
       blockers: [],
     },
     actions: {
@@ -298,9 +298,9 @@ describe("ChannelCatalog", () => {
   it("renders the real launch-channel mix after readiness loads", async () => {
     renderCatalog();
 
-    const instagramCard = await findChannelCard("DM automation");
-    const telegramCard = await findChannelCard("Bot conversations");
-    const websiteCard = await findChannelCard("Widget + trusted origin");
+    const instagramCard = await findChannelCard("Instagram inbox");
+    const telegramCard = await findChannelCard("Telegram chat");
+    const websiteCard = await findChannelCard("Approved site chat");
 
     expect(within(instagramCard).getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
 
@@ -334,7 +334,7 @@ describe("ChannelCatalog", () => {
   it("opens the Instagram drawer with live tenant status", async () => {
     renderCatalog();
 
-    const instagramCard = await findChannelCard("DM automation");
+    const instagramCard = await findChannelCard("Instagram inbox");
     fireEvent.click(
       within(instagramCard).getByRole("button", { name: /details/i })
     );
@@ -352,7 +352,7 @@ describe("ChannelCatalog", () => {
 
     renderCatalog();
 
-    await findChannelCard("DM automation");
+    await findChannelCard("Instagram inbox");
     await waitFor(() => {
       expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
     });
@@ -425,7 +425,7 @@ describe("ChannelCatalog", () => {
 
     const view = renderCatalog();
 
-    await findChannelCard("DM automation");
+    await findChannelCard("Instagram inbox");
     expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
 
     workspaceScope = {

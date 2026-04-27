@@ -800,7 +800,7 @@ function buildFallbackOutcomeItems(payloads = {}, domainStates = {}) {
         title: "Runtime still needs repair.",
         summary: compactSentence(
           domainStates.business_memory.summary,
-          "Truth or runtime still needs repair before live automation should be trusted."
+          "Truth or runtime still needs repair before live replies should be trusted."
         ),
         tone: "danger",
         label: "Repair required",

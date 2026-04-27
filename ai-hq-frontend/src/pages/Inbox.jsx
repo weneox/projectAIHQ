@@ -468,10 +468,8 @@ export default function Inbox() {
     releaseHandoff,
     setThreadStatus,
     sendOperatorReply,
-    openLeadDetail,
   } = useInboxData({
     operatorName,
-    navigate,
     tenantKey: workspace.tenantKey,
     requireTenantScope: true,
   });
@@ -587,7 +585,7 @@ export default function Inbox() {
             <InlineNotice
               tone="warning"
               title="Truth approval required"
-              description="A channel is live, but approved truth is not ready yet. Review truth before trusting autonomous replies."
+              description="A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies."
               compact
             />
           ) : null}
@@ -655,7 +653,6 @@ export default function Inbox() {
             selectedThread={selectedThread}
             surface={leadSurface}
             relatedLead={relatedLead}
-            openLeadDetail={openLeadDetail}
             operatorName={operatorName}
             tenantKey={workspace.tenantKey}
             wsState={wsState}

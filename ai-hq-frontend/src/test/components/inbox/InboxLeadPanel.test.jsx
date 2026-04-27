@@ -19,7 +19,6 @@ describe("InboxLeadPanel", () => {
           refresh: vi.fn(),
         }}
         relatedLead={null}
-        openLeadDetail={vi.fn()}
       />
     );
 

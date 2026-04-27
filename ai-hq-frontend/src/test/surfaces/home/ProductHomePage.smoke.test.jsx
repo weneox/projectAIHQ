@@ -12,16 +12,18 @@ function createHomeState(overrides = {}) {
     isFetching: false,
     refetch: vi.fn(),
     availabilityNote: null,
-    primaryAction: { label: "Open channels", path: "/channels?channel=telegram" },
-    secondaryAction: { label: "Open AI setup", path: "/home?assistant=setup" },
+    primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+    secondaryAction: null,
     launchReady: false,
-    nextStep: { id: "channel" },
+    nextStep: { id: "truth" },
     assistant: {
       hasApprovedSetupBaseline: false,
+      readyForApproval: false,
     },
     truthRuntime: {
       truthReady: false,
       ready: false,
+      summary: "Business truth still needs approval.",
     },
     inboxState: {
       status: "ready",
@@ -42,23 +44,30 @@ function createHomeState(overrides = {}) {
     },
     launchSteps: [
       {
-        id: "channel",
-        label: "Connect launch channel",
-        statusLabel: "Connect required",
+        id: "truth",
+        label: "Business truth",
+        statusLabel: "Setup required",
         tone: "danger",
-        summary: "Connect Telegram before the rest of the launch lane can move.",
-        detail: "Use Channels to connect the Telegram bot for this workspace.",
+        summary: "Approve the business facts the AI can safely use.",
+        action: { label: "Open setup", path: "/home?assistant=setup" },
+        complete: false,
+      },
+      {
+        id: "channel",
+        label: "Channel",
+        statusLabel: "Not connected",
+        tone: "warning",
+        summary: "Connect one live customer channel.",
         action: { label: "Open channels", path: "/channels?channel=telegram" },
         complete: false,
       },
       {
-        id: "setup",
-        label: "Create or continue setup draft",
-        statusLabel: "Start draft",
-        tone: "info",
-        summary: "Open the Home assistant after the launch channel is attached.",
-        detail: "Setup stays inside the floating assistant widget on Home.",
-        action: { label: "Open AI setup", path: "/home?assistant=setup" },
+        id: "inbox",
+        label: "Inbox",
+        statusLabel: "Waiting",
+        tone: "success",
+        summary: "Operate conversations here after truth and channel are ready.",
+        action: { label: "Open inbox", path: "/inbox" },
         complete: false,
       },
     ],
@@ -86,7 +95,7 @@ describe("ProductHomePage", () => {
     useProductHome.mockReturnValue(createHomeState());
   });
 
-  it("renders Home as the launch surface and routes the primary CTA into channels", () => {
+  it("renders Home as the launch surface and routes the primary CTA into setup", () => {
     render(
       <MemoryRouter>
         <ProductHomePage />
@@ -95,14 +104,15 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Connect a live channel.",
+        name: "Approve business truth.",
       })
     ).toBeInTheDocument();
-    expect(screen.getByText("What needs attention")).toBeInTheDocument();
+    expect(screen.getByText("Launch path")).toBeInTheDocument();
+    expect(screen.getByText(/Business truth, one live channel, then inbox/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Open setup" })[0]);
 
-    expect(navigate).toHaveBeenCalledWith("/channels?channel=telegram");
+    expect(navigate).toHaveBeenCalledWith("/home?assistant=setup");
   });
 
   it("keeps Home visible while the setup widget is requested from the query param", () => {
@@ -113,8 +123,68 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Connect a live channel." })
+      screen.getByRole("heading", { name: "Approve business truth." })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open AI setup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open setup" })).toBeInTheDocument();
+  });
+
+  it("routes the primary CTA into channels after truth and runtime are ready", () => {
+    useProductHome.mockReturnValue(
+      createHomeState({
+        primaryAction: { label: "Open channels", path: "/channels?channel=telegram" },
+        secondaryAction: { label: "Open truth", path: "/truth" },
+        nextStep: { id: "channel" },
+        truthRuntime: {
+          truthReady: true,
+          ready: true,
+          summary: "Approved business truth is backing runtime.",
+        },
+        launchSteps: [
+          {
+            id: "truth",
+            label: "Business truth",
+            statusLabel: "Ready",
+            tone: "success",
+            summary: "Runtime is using approved truth.",
+            action: { label: "Open truth", path: "/truth" },
+            complete: true,
+          },
+          {
+            id: "channel",
+            label: "Channel",
+            statusLabel: "Not connected",
+            tone: "warning",
+            summary: "Connect one live customer channel.",
+            action: { label: "Open channels", path: "/channels?channel=telegram" },
+            complete: false,
+          },
+          {
+            id: "inbox",
+            label: "Inbox",
+            statusLabel: "Waiting",
+            tone: "success",
+            summary: "Operate conversations here after truth and channel are ready.",
+            action: { label: "Open inbox", path: "/inbox" },
+            complete: false,
+          },
+        ],
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <ProductHomePage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Connect one live channel.",
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
+
+    expect(navigate).toHaveBeenCalledWith("/channels?channel=telegram");
   });
 });

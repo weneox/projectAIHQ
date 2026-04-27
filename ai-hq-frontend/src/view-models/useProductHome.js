@@ -761,7 +761,7 @@ function buildReasonHeadline(reasonCode = "") {
       return {
         title: "Runtime needs refresh.",
         summary:
-          "Approved truth exists, but the runtime projection is stale and should be refreshed before trusting automation.",
+          "Approved truth exists, but the runtime projection is stale and should be refreshed before trusting live replies.",
       };
     case "truth_version_drift":
       return {
@@ -798,11 +798,11 @@ function buildReasonHeadline(reasonCode = "") {
       return {
         title: "Connect a launch channel before going live.",
         summary:
-          "The setup lane is blocked until a launch channel is connected.",
+          "The launch lane is blocked until one live channel is connected.",
       };
     default:
       return {
-        title: "Live automation is still blocked.",
+        title: "Live replies are still blocked.",
         summary:
           "A required launch dependency still needs review or repair before the system should be trusted as live.",
       };
@@ -1061,58 +1061,71 @@ function buildAssistantState(setupAssistantSession) {
 
 function buildLaunchSteps({ launchChannel, truthRuntime, inboxState, assistant }) {
   const channelConnected = launchChannel.connected === true;
+  const channelReady = channelConnected && launchChannel.deliveryReady === true;
   const truthReady = truthRuntime.truthReady === true;
   const runtimeReady = truthRuntime.ready === true;
   const setupReadyForApproval = assistant.readyForApproval === true;
   const inboxReady = lower(inboxState.status) !== "unavailable";
+  const truthComplete = truthReady && runtimeReady;
+  const truthAction = truthReady
+    ? {
+        label: runtimeReady ? "Open truth" : "Review truth",
+        path: "/truth",
+      }
+    : normalizeAction(assistant.primaryAction, {
+        label: "Open setup",
+        path: SETUP_WIDGET_ROUTE,
+      });
+  const channelBlocked = channelConnected && !channelReady;
 
   return [
     {
+      id: "truth",
+      label: "Business truth",
+      complete: truthComplete,
+      summary: truthReady
+        ? truthRuntime.summary
+        : setupReadyForApproval
+          ? "Review and approve the setup draft before treating any channel as live."
+          : "Approve the business facts the AI can safely use.",
+      statusLabel: truthComplete
+        ? "Ready"
+        : truthReady
+          ? "Runtime review"
+          : setupReadyForApproval
+            ? "Review"
+            : "Setup required",
+      tone: truthComplete ? "success" : "danger",
+      action: truthAction,
+    },
+    {
       id: "channel",
-      label: "Launch channel",
-      complete: channelConnected && launchChannel.deliveryReady === true,
-      summary: launchChannel.summary,
-      statusLabel: launchChannel.statusLabel,
-      tone: channelConnected && launchChannel.deliveryReady ? "success" : "warning",
+      label: "Channel",
+      complete: channelReady,
+      summary: channelReady
+        ? launchChannel.summary
+        : channelBlocked
+          ? "A channel is connected, but delivery is still blocked."
+          : "Connect one live customer channel.",
+      statusLabel: channelReady
+        ? "Ready"
+        : channelBlocked
+          ? "Blocked"
+          : "Not connected",
+      tone: channelReady ? "success" : channelBlocked ? "danger" : "warning",
       action: launchChannel.action,
     },
     {
-      id: "setup",
-      label: "Setup flow",
-      complete: setupReadyForApproval || truthReady,
-      summary: setupReadyForApproval
-        ? "Business truth and conversation policy are ready for review."
-        : "Complete business truth first, then shape conversation policy.",
-      statusLabel: setupReadyForApproval ? "Ready" : "In progress",
-      tone: setupReadyForApproval ? "success" : "warning",
-      action: { label: "Open setup", path: SETUP_WIDGET_ROUTE },
-    },
-    {
-      id: "approval",
-      label: "Approved truth",
-      complete: truthReady && runtimeReady,
-      summary: runtimeReady
-        ? "Approved setup is live in runtime."
-        : truthRuntime.summary,
-      statusLabel: runtimeReady ? "Ready" : "Blocked",
-      tone: runtimeReady ? "success" : "danger",
-      action: {
-        label: runtimeReady ? "Open truth" : "Review truth",
-        path: "/truth",
-      },
-    },
-    {
-      id: "live",
-      label: "Inbox live",
-      complete:
-        channelConnected &&
-        launchChannel.deliveryReady === true &&
-        truthReady &&
-        runtimeReady &&
-        inboxReady,
-      summary: inboxState.summary,
-      statusLabel: inboxState.statusLabel,
-      tone: lower(inboxState.tone),
+      id: "inbox",
+      label: "Inbox",
+      complete: truthComplete && channelReady && inboxReady,
+      summary:
+        truthComplete && channelReady
+          ? inboxState.summary
+          : "Operate conversations here after truth and channel are ready.",
+      statusLabel:
+        truthComplete && channelReady ? inboxState.statusLabel : "Waiting",
+      tone: truthComplete && channelReady ? lower(inboxState.tone) : "neutral",
       action: inboxState.action,
     },
   ];
@@ -1135,51 +1148,57 @@ function buildAvailabilityNote(sourceStatus = {}) {
 }
 
 function buildPrimaryAction({ launchChannel, truthRuntime, assistant, inboxState }) {
-  if (!(launchChannel.connected === true)) {
+  const truthReady = truthRuntime.truthReady === true;
+  const runtimeReady = truthRuntime.ready === true;
+  const channelReady =
+    launchChannel.connected === true && launchChannel.deliveryReady === true;
+
+  if (!truthReady) {
+    return normalizeAction(assistant.primaryAction, {
+      label: "Open setup",
+      path: SETUP_WIDGET_ROUTE,
+    });
+  }
+
+  if (!runtimeReady) {
+    return { label: "Review truth", path: "/truth" };
+  }
+
+  if (!channelReady) {
     return launchChannel.action || { label: "Open channels", path: "/channels" };
   }
 
-  if (!(assistant.readyForApproval === true) && !(truthRuntime.truthReady === true)) {
-    return { label: "Open setup", path: SETUP_WIDGET_ROUTE };
-  }
-
-  if (!(truthRuntime.truthReady === true) || !(truthRuntime.ready === true)) {
-    return { label: "Open truth", path: "/truth" };
-  }
-
-  if (lower(inboxState.status) === "attention" || lower(inboxState.status) === "active") {
+  if (lower(inboxState.status) === "unavailable") {
     return { label: "Open inbox", path: "/inbox" };
   }
 
   return { label: "Open inbox", path: "/inbox" };
 }
 
-function buildSecondaryAction({ launchChannel, truthRuntime, assistant }) {
-  if (!(launchChannel.connected === true)) {
-    return { label: "Open setup", path: SETUP_WIDGET_ROUTE };
+function buildSecondaryAction({ launchChannel, truthRuntime }) {
+  const truthReady = truthRuntime.truthReady === true;
+  const runtimeReady = truthRuntime.ready === true;
+  const channelReady =
+    launchChannel.connected === true && launchChannel.deliveryReady === true;
+
+  if (!truthReady) {
+    return null;
   }
 
-  if (!(assistant.readyForApproval === true) && !(truthRuntime.truthReady === true)) {
-    return { label: "Open channels", path: "/channels" };
+  if (!runtimeReady || !channelReady) {
+    return { label: "Open truth", path: "/truth" };
   }
 
-  if (!(truthRuntime.truthReady === true) || !(truthRuntime.ready === true)) {
-    return { label: "Open setup", path: SETUP_WIDGET_ROUTE };
-  }
-
-  return { label: "Open channels", path: "/channels" };
+  return { label: "Open truth", path: "/truth" };
 }
 
 function deriveAssistantLaunchState({
   launchChannel,
   truthRuntime,
-  assistant,
   launchReady,
 }) {
   const truthReady = truthRuntime.truthReady === true;
   const runtimeReady = truthRuntime.ready === true;
-  const setupNeeded =
-    !(assistant.readyForApproval === true) && !(truthReady === true);
 
   if (launchReady) {
     return {
@@ -1188,7 +1207,7 @@ function deriveAssistantLaunchState({
     };
   }
 
-  if (setupNeeded) {
+  if (!truthReady) {
     return {
       launchPosture: "setup_needed",
       setupNeeded: true,
@@ -1210,7 +1229,7 @@ function deriveAssistantLaunchState({
   }
 
   return {
-    launchPosture: "",
+    launchPosture: "inbox_unavailable",
     setupNeeded: false,
   };
 }
@@ -1267,11 +1286,13 @@ export default function useProductHome() {
       sourceStatus,
     });
 
+    const inboxReady = lower(inboxState.status) !== "unavailable";
     const launchReady =
       launchChannel.connected === true &&
       launchChannel.deliveryReady === true &&
       truthRuntime.truthReady === true &&
-      truthRuntime.ready === true;
+      truthRuntime.ready === true &&
+      inboxReady;
 
     const launchSteps = buildLaunchSteps({
       launchChannel,
@@ -1295,12 +1316,10 @@ export default function useProductHome() {
     const secondaryAction = buildSecondaryAction({
       launchChannel,
       truthRuntime,
-      assistant,
     });
     const assistantLaunchState = deriveAssistantLaunchState({
       launchChannel,
       truthRuntime,
-      assistant,
       launchReady,
     });
 

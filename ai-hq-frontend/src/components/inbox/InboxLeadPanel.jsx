@@ -1,5 +1,4 @@
 import {
-  ArrowUpRight,
   Globe2,
   MessageSquareText,
   Radio,
@@ -258,7 +257,6 @@ export default function InboxLeadPanel({
   selectedThread,
   surface,
   relatedLead,
-  openLeadDetail,
   operatorName = "",
   wsState = "",
   onClose,
@@ -390,19 +388,7 @@ export default function InboxLeadPanel({
             </Section>
 
             {hasLead ? (
-              <Section
-                icon={ArrowUpRight}
-                title="Related lead"
-                action={
-                  <button
-                    type="button"
-                    onClick={() => openLeadDetail?.(relatedLead)}
-                    className="inline-flex items-center gap-2 rounded-soft border border-line bg-surface px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
-                  >
-                    Open
-                  </button>
-                }
-              >
+              <Section icon={UserRound} title="Related lead">
                 <div className="rounded-panel border border-line bg-surface px-4 py-4">
                   <div className="text-[15px] font-medium text-text">
                     {leadName(relatedLead) || "Lead"}

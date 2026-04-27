@@ -46,7 +46,6 @@ function s(value = "", fallback = "") {
 
 export function useInboxData({
   operatorName,
-  navigate,
   tenantKey = "",
   requireTenantScope = false,
 }) {
@@ -444,18 +443,6 @@ export function useInboxData({
     ]
   );
 
-  const openLeadDetail = useCallback(
-    (relatedLeadArg) => {
-      if (!relatedLeadArg?.id) return;
-      navigate("/leads", {
-        state: {
-          selectedLeadId: relatedLeadArg.id,
-        },
-      });
-    },
-    [navigate]
-  );
-
   return {
     threads,
     setThreads: (next) =>
@@ -512,6 +499,5 @@ export function useInboxData({
     releaseHandoff,
     setThreadStatus,
     sendOperatorReply,
-    openLeadDetail,
   };
 }

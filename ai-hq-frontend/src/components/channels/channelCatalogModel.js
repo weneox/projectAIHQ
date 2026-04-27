@@ -133,7 +133,7 @@ export const CHANNELS = [
     iconAlt: "Instagram",
     eyebrow: "DM-first / Instagram Business",
     summary:
-      "Connect one Instagram Business or Professional account per tenant and run inbound DM automation with tenant-specific runtime.",
+      "Connect one Instagram Business or Professional account per tenant and route inbound DMs through tenant-specific runtime.",
     capabilities: ["Direct messages", "Tenant-aware routing", "Reconnect flow"],
     aliases: [
       "instagram",
@@ -150,7 +150,7 @@ export const CHANNELS = [
       "The launch story is inbound customer conversations only. Comments and content publish stay out of the launch promise until they have matching permissions and operational proof.",
     highlights: [
       "One tenant, one Instagram Business connection, one truthful runtime state.",
-      "Inbound DM automation stays fail-closed when tokens or channel identifiers go missing.",
+      "Inbound AI replies stay fail-closed when tokens or channel identifiers go missing.",
       "Reconnect, disconnect, and deauthorize all map to explicit tenant channel state.",
     ],
     primaryActionLabel: "Open",
@@ -165,7 +165,7 @@ export const CHANNELS = [
     iconAlt: "WhatsApp",
     eyebrow: "Phase 2 / Not self-serve",
     summary:
-      "WhatsApp remains a future expansion surface. It is not part of the Instagram DM-first launch promise.",
+      "WhatsApp remains a future expansion surface. It is not part of the current live-channel promise.",
     capabilities: ["Planned channel", "Future onboarding", "Not in launch scope"],
     aliases: [
       "whatsapp",
@@ -181,7 +181,7 @@ export const CHANNELS = [
       "This connector is intentionally demoted from self-serve launch status so the product story stays honest.",
     highlights: [
       "Not available as a launch-ready self-serve connection.",
-      "Do not treat this as production-ready automation yet.",
+      "Do not treat this as production-ready live replies yet.",
       "Keep it as a planned expansion after DM-first launch stabilizes.",
     ],
     primaryActionLabel: "Details",
@@ -228,7 +228,7 @@ export const CHANNELS = [
     iconAlt: "Gmail",
     eyebrow: "Phase 2 / Not self-serve",
     summary:
-      "Gmail remains outside the current launch path while Instagram DM automation is being hardened.",
+      "Gmail remains outside the current launch path while the live-channel lane is being hardened.",
     capabilities: ["Planned intake", "Future support surface", "Not in launch scope"],
     aliases: [
       "gmail",
