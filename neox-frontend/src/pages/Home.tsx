@@ -49,19 +49,19 @@ const heroPhrases = [
   "veb saytlar",
   "brend görünüşü",
   "kontent axınları",
-  "səsli assistantlar",
-  "biznes workflow-ları",
+  "səsli assistentlər",
+  "biznes iş axınları",
   "24/7 çatbotlar",
-  "Süni İntellekt sistemləri",
-  "satış yönümlü axınlar",
+  "süni intellekt sistemləri",
+  "satış axınları",
 ];
 
 const stripItems = [
   "VEB SAYTLAR",
   "BREND GÖRÜNÜŞÜ",
   "KONTENT AXINI",
-  "SƏSLİ ASSISTANT",
-  "BİZNES WORKFLOW",
+  "SƏSLİ ASSİSTENT",
+  "BİZNES İŞ AXINI",
   "24/7 ÇATBOT",
   "SÜNİ İNTELLEKT",
   "SATIŞ AXINI",
@@ -83,7 +83,7 @@ const serviceCards = [
     imageUrl: BUSINESS_VISUAL_TWO,
   },
   {
-    title: "Səsli assistantlar qururuq",
+    title: "Səsli assistentlər qururuq",
     text: "Zənglərə cavab verən, məlumat toplayan və müştərini düzgün istiqamətə yönləndirən səsli sistemlər qururuq.",
     href: "/services/chatbot-24-7",
     imageUrl: VOICE_VISUAL,
@@ -96,7 +96,7 @@ const serviceCards = [
   },
   {
     title: "24/7 çatbotlar qururuq",
-    text: "Sosial media və vebsaytlarda müştəriyə gecə-gündüz cavab verən ağıllı çatbotlar qururuq.",
+    text: "Sosial media və veb saytlarda müştəriyə gecə-gündüz cavab verən ağıllı çatbotlar qururuq.",
     href: "/services/chatbot-24-7",
     imageUrl: CHATBOT_VISUAL,
   },
@@ -111,27 +111,27 @@ const serviceCards = [
 const processSteps = [
   {
     number: "01",
-    title: "Tanışlıq & Analiz",
+    title: "Tanışlıq və analiz",
     text: "Biznesinizi, hədəflərinizi və mövcud prosesləri anlayırıq.",
   },
   {
     number: "02",
-    title: "Strategiya & Plan",
+    title: "Strategiya və plan",
     text: "Uyğun yanaşmanı, sistem xəritəsini və icra planını hazırlayırıq.",
   },
   {
     number: "03",
-    title: "İcra & Qurulum",
+    title: "İcra və qurulum",
     text: "Veb, kontent, satış və avtomatlaşdırma hissələrini vahid sistem kimi qururuq.",
   },
   {
     number: "04",
-    title: "Test & Təqdimat",
+    title: "Yoxlama və təqdimat",
     text: "Nəticəni birlikdə yoxlayır, təkmilləşdirir və təqdim edirik.",
   },
   {
     number: "05",
-    title: "Dəstək & Optimallaşdırma",
+    title: "Dəstək və optimallaşdırma",
     text: "Layihədən sonra sistemi izləyir, dəstəkləyir və inkişaf etdiririk.",
   },
 ] as const;
@@ -150,8 +150,8 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-home-extra {
-    --home-section-title: clamp(2.05rem, 3vw, 3.15rem);
-    --home-section-title-mobile: clamp(2rem, 8vw, 2.75rem);
+    --home-section-title: clamp(2.18rem, 3.05vw, 3.32rem);
+    --home-section-title-mobile: clamp(2.05rem, 8vw, 2.82rem);
     --home-title-line: linear-gradient(
       90deg,
       transparent,
@@ -333,10 +333,10 @@ const HOME_INLINE_CSS = `
   .neox-gsap-title {
     margin: 0;
     color: var(--nx-ink);
-    font-size: clamp(2.4rem, 4.8vw, 5.35rem);
+    font-size: var(--home-section-title);
     font-weight: 530;
-    line-height: 0.98;
-    letter-spacing: -0.07em;
+    line-height: 1.04;
+    letter-spacing: -0.062em;
     text-wrap: balance;
   }
 
@@ -350,7 +350,7 @@ const HOME_INLINE_CSS = `
     display: block;
     width: 72px;
     height: 1px;
-    margin-top: 26px;
+    margin-top: 24px;
     background: var(--home-title-line);
     box-shadow:
       0 0 14px rgba(73, 100, 255, 0.2),
@@ -358,7 +358,7 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-gsap-lead {
-    margin: 26px 0 0;
+    margin: 24px 0 0;
     max-width: 520px;
     color: #506178;
     font-size: 1rem;
@@ -813,9 +813,9 @@ const HOME_INLINE_CSS = `
   }
 
   .neox-stack-panel--three .neox-stack-title {
-    font-size: clamp(1.68rem, 2.1vw, 2.38rem) !important;
-    line-height: 1.02;
-    letter-spacing: -0.06em;
+    font-size: clamp(2rem, 2.65vw, 3rem) !important;
+    line-height: 1.04;
+    letter-spacing: -0.058em;
   }
 
   .neox-stack-panel--three .neox-stack-title::after {
@@ -991,7 +991,7 @@ const HOME_INLINE_CSS = `
   .neox-extra-section-three {
     position: relative;
     overflow: hidden;
-    padding: 92px 0 !important;
+    padding: 92px 0 108px !important;
     background: #ffffff !important;
   }
 
@@ -999,19 +999,50 @@ const HOME_INLINE_CSS = `
     position: relative;
     overflow: hidden;
     display: grid;
-    grid-template-columns: minmax(0, 0.96fr) minmax(320px, 0.54fr);
-    gap: clamp(34px, 5vw, 74px);
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.52fr);
+    gap: clamp(34px, 5vw, 76px);
     align-items: center;
-    padding: clamp(34px, 5vw, 58px);
-    border-radius: 30px;
-    border: 1px solid rgba(15, 23, 42, 0.07) !important;
-    background: #ffffff !important;
-    background-image: none !important;
-    box-shadow: 0 22px 62px rgba(15, 23, 42, 0.055) !important;
+    padding: clamp(38px, 5vw, 66px);
+    border-radius: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background:
+      radial-gradient(620px 320px at 0% 0%, rgba(36, 71, 198, 0.34), transparent 64%),
+      radial-gradient(480px 260px at 100% 100%, rgba(19, 184, 255, 0.18), transparent 68%),
+      linear-gradient(135deg, #11141b 0%, #171b24 48%, #202530 100%) !important;
+    background-image:
+      radial-gradient(620px 320px at 0% 0%, rgba(36, 71, 198, 0.34), transparent 64%),
+      radial-gradient(480px 260px at 100% 100%, rgba(19, 184, 255, 0.18), transparent 68%),
+      linear-gradient(135deg, #11141b 0%, #171b24 48%, #202530 100%) !important;
+    box-shadow:
+      0 34px 90px rgba(15, 23, 42, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    isolation: isolate;
+  }
+
+  .neox-build-band::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    border-radius: inherit;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.075), transparent 42%),
+      radial-gradient(260px 120px at 18% 18%, rgba(255,255,255,0.08), transparent 72%);
+    pointer-events: none;
   }
 
   .neox-build-band::after {
-    display: none !important;
+    content: "";
+    position: absolute;
+    right: -90px;
+    top: -110px;
+    width: 260px;
+    height: 260px;
+    border-radius: 999px;
+    background: rgba(73, 100, 255, 0.2);
+    filter: blur(46px);
+    opacity: 0.72;
+    pointer-events: none;
   }
 
   .neox-build-content {
@@ -1019,45 +1050,152 @@ const HOME_INLINE_CSS = `
     z-index: 1;
   }
 
+  .neox-build-band .neox-extra-kicker {
+    color: #8fb3ff;
+  }
+
+  .neox-build-title {
+    max-width: 760px;
+    color: #f7f9ff !important;
+  }
+
+  .neox-build-title span {
+    color: #8fb3ff !important;
+  }
+
+  .neox-build-title::after {
+    background: linear-gradient(90deg, rgba(143, 179, 255, 0.7), rgba(19, 184, 255, 0.26), transparent) !important;
+    box-shadow: 0 0 26px rgba(73, 100, 255, 0.26) !important;
+  }
+
   .neox-build-text {
-    margin: 20px 0 0;
+    margin: 22px 0 0;
     max-width: 620px;
-    color: #5a677c;
-    font-size: 15.5px;
+    color: rgba(232, 238, 255, 0.72);
+    font-size: 16px;
     font-weight: 420;
     line-height: 1.78;
     letter-spacing: -0.016em;
   }
 
-  .neox-build-tags {
-    display: flex;
-    flex-wrap: wrap;
+  .neox-build-benefits {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
-    margin-top: 26px;
+    margin-top: 28px;
+    max-width: 690px;
   }
 
-  .neox-build-tags span {
-    min-height: 34px;
-    display: inline-flex;
-    align-items: center;
-    padding: 0 12px;
-    border-radius: 11px;
-    border: 1px solid rgba(15, 23, 42, 0.075);
-    background: rgba(255, 255, 255, 0.72);
-    color: var(--nx-muted);
+  .neox-build-benefit {
+    min-height: 88px;
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+  }
+
+  .neox-build-benefit strong {
+    display: block;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 680;
+    line-height: 1.16;
+    letter-spacing: -0.024em;
+  }
+
+  .neox-build-benefit span {
+    display: block;
+    margin-top: 8px;
+    color: rgba(232, 238, 255, 0.62);
     font-size: 12.5px;
-    font-weight: 620;
+    line-height: 1.42;
+    letter-spacing: -0.01em;
+  }
+
+  .neox-build-action-card {
+    position: relative;
+    z-index: 1;
+    padding: 22px;
+    border-radius: 26px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.055)),
+      rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 22px 54px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px);
+  }
+
+  .neox-build-action-card h3 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 1.28rem;
+    font-weight: 600;
+    line-height: 1.14;
+    letter-spacing: -0.045em;
+  }
+
+  .neox-build-checks {
+    display: grid;
+    gap: 10px;
+    margin: 20px 0 0;
+  }
+
+  .neox-build-check {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    color: rgba(232, 238, 255, 0.76);
+    font-size: 13.5px;
+    line-height: 1.42;
     letter-spacing: -0.012em;
+  }
+
+  .neox-build-check::before {
+    content: "";
+    width: 26px;
+    height: 26px;
+    border-radius: 10px;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(143, 179, 255, 0.28), rgba(36, 71, 198, 0.14));
+    border: 1px solid rgba(143, 179, 255, 0.24);
   }
 
   .neox-build-actions {
     position: relative;
     z-index: 1;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .neox-build-actions .nx-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .neox-build-actions .nx-button--primary {
+    background: #ffffff !important;
+    color: #11141b !important;
+    border-color: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  .neox-build-actions .nx-button--secondary {
+    background: rgba(255, 255, 255, 0.055) !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+  }
+
+  .neox-build-note {
+    margin: 14px 0 0;
+    color: rgba(232, 238, 255, 0.56);
+    font-size: 12.5px;
+    line-height: 1.5;
+    letter-spacing: -0.012em;
   }
 
   @media (max-width: 1180px) {
@@ -1094,8 +1232,8 @@ const HOME_INLINE_CSS = `
       grid-template-columns: 1fr;
     }
 
-    .neox-build-actions {
-      justify-content: flex-start;
+    .neox-build-action-card {
+      max-width: 560px;
     }
   }
 
@@ -1184,12 +1322,10 @@ const HOME_INLINE_CSS = `
     .neox-home-extra .neox-extra-title,
     .neox-home-extra .neox-build-title,
     .neox-home-extra .neox-process-title,
-    .neox-stack-title {
-      font-size: var(--home-section-title-mobile) !important;
-    }
-
+    .neox-stack-title,
     .neox-gsap-title {
-      font-size: clamp(2.45rem, 11vw, 4.2rem);
+      font-size: var(--home-section-title-mobile) !important;
+      line-height: 1.06;
     }
 
     .neox-stack-grid--metrics {
@@ -1211,16 +1347,21 @@ const HOME_INLINE_CSS = `
     }
 
     .neox-extra-section-three {
-      padding: 70px 0 !important;
+      padding: 70px 0 84px !important;
     }
 
-    .neox-build-actions {
-      display: grid;
-      width: 100%;
+    .neox-build-band {
+      padding: 28px;
+      border-radius: 26px;
     }
 
-    .neox-build-actions .nx-button {
-      width: 100%;
+    .neox-build-benefits {
+      grid-template-columns: 1fr;
+    }
+
+    .neox-build-action-card {
+      padding: 18px;
+      border-radius: 22px;
     }
   }
 `;
@@ -1229,7 +1370,7 @@ function HeroLoopText() {
   return (
     <span className="neox-hero-loop" aria-live="polite">
       <span className="neox-hero-loop-sizer" aria-hidden="true">
-        Süni İntellekt sistemləri
+        süni intellekt sistemləri
       </span>
 
       {heroPhrases.map((phrase, index) => (
@@ -1366,7 +1507,7 @@ function HomeHero() {
 
             <p className="neox-hero-lead">
               Veb sayt, brend görünüşü, kontent axını, zəng cavabları,
-              avtomatlaşdırma və Süni İntellekt sistemlərini biznesiniz üçün
+              avtomatlaşdırma və süni intellekt sistemlərini biznesiniz üçün
               işlək bir sistemə çeviririk.
             </p>
 
@@ -2002,7 +2143,7 @@ function InteractiveSystemSection() {
             </div>
 
             <div ref={miniLabelRef} className="neox-gsap-mini-label">
-              Scroll ilə davam et
+              Aşağı sürüşdür
             </div>
 
             <div
@@ -2053,8 +2194,8 @@ function InteractiveSystemSection() {
                     <span className="neox-stack-card-label">03 / Cavab</span>
                     <h3>Sistem cavabı və prosesi davam etdirir.</h3>
                     <p>
-                      AI və komanda birlikdə işləyir, biznes cavabsız və nizamsız
-                      görünmür.
+                      Süni intellekt və komanda birlikdə işləyir, biznes cavabsız
+                      və nizamsız görünmür.
                     </p>
                   </article>
                 </div>
@@ -2229,7 +2370,7 @@ function InteractiveSystemSection() {
                       <span className="neox-capability-number">03</span>
                       <h3>Cavab sistemləri</h3>
                       <p>
-                        Çatbot, səsli assistant və mesaj axınları müştərini düzgün
+                        Çatbot, səsli assistent və mesaj axınları müştərini düzgün
                         qarşılayır.
                       </p>
                     </article>
@@ -2261,42 +2402,73 @@ function BuildTogetherSection() {
       <div className="nx-container">
         <div className="neox-build-band">
           <div className="neox-build-content">
-            <p className="neox-extra-kicker">Başlayaq</p>
+            <p className="neox-extra-kicker">Yekun addım</p>
 
             <h2 className="neox-build-title">
-              Biznesiniz üçün <span>nədən başlamağın</span> daha doğru olduğunu
-              birlikdə seçək.
+              Biznesiniz üçün <span>düzgün başlanğıc</span> xəttini seçək.
             </h2>
 
             <p className="neox-build-text">
-              İlk danışıqda biznesinizi, müştəri axınınızı və hazırkı problemləri
-              anlayırıq. Sonra sizə uyğun sayt, AI, kontent və avtomatlaşdırma
-              xəritəsini qururuq.
+              Sayt, süni intellekt, kontent və avtomatlaşdırma içində haradan
+              başlamağın daha doğru olduğunu aydınlaşdırırıq və biznesiniz üçün
+              konkret yol xəritəsi qururuq.
             </p>
 
-            <div className="neox-build-tags" aria-hidden="true">
-              <span>Veb sayt</span>
-              <span>Brend görünüşü</span>
-              <span>AI sistemləri</span>
-              <span>Workflow</span>
+            <div className="neox-build-benefits" aria-hidden="true">
+              <div className="neox-build-benefit">
+                <strong>Başlanğıc planı</strong>
+                <span>Əvvəl nə qurulmalıdır, aydınlaşır.</span>
+              </div>
+
+              <div className="neox-build-benefit">
+                <strong>Sistem xəritəsi</strong>
+                <span>Sayt, cavab və proseslər bir xəttə düşür.</span>
+              </div>
+
+              <div className="neox-build-benefit">
+                <strong>Nəticəyə fokus</strong>
+                <span>Gözəl görünüş yox, işləyən sistem qurulur.</span>
+              </div>
             </div>
           </div>
 
-          <div className="neox-build-actions">
-            <Link
-              to={withLang(lang, "/contact")}
-              className="nx-button nx-button--primary nx-button--lg"
-            >
-              Əlaqə saxla
-            </Link>
+          <aside className="neox-build-action-card">
+            <h3>İlk danışıqda məqsəd sadədir.</h3>
 
-            <Link
-              to={withLang(lang, "/services")}
-              className="nx-button nx-button--secondary nx-button--lg"
-            >
-              Xidmətlərə bax
-            </Link>
-          </div>
+            <div className="neox-build-checks">
+              <div className="neox-build-check">
+                Mövcud vəziyyəti qısa analiz edirik.
+              </div>
+
+              <div className="neox-build-check">
+                Ən vacib başlanğıc nöqtəsini seçirik.
+              </div>
+
+              <div className="neox-build-check">
+                Növbəti addımı konkret plan kimi çıxarırıq.
+              </div>
+            </div>
+
+            <div className="neox-build-actions">
+              <Link
+                to={withLang(lang, "/contact")}
+                className="nx-button nx-button--primary nx-button--lg"
+              >
+                Əlaqə saxla
+              </Link>
+
+              <Link
+                to={withLang(lang, "/services")}
+                className="nx-button nx-button--secondary nx-button--lg"
+              >
+                Xidmətlərə bax
+              </Link>
+            </div>
+
+            <p className="neox-build-note">
+              Qısa danışıq. Aydın istiqamət. Satış yox, düzgün başlanğıc.
+            </p>
+          </aside>
         </div>
       </div>
     </section>
