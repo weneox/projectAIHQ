@@ -30,7 +30,7 @@ Use this when migrations are already applied and the old app version is still sc
 1. Roll the service images/processes back to the last known good release.
 2. Recheck:
    - `npm run check:operational-readiness`
-   - `npm run ops:postdeploy:verify`
+   - `npm run ops:postdeploy:verify` with `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` and `WEBSITE_LANE_TENANT_KEY` for production launch verification
 3. Confirm sidecars recover from intentionally unavailable mode.
 
 ## Schema-aware rollback
@@ -57,5 +57,6 @@ Do not hand-edit truth/runtime/review tables in production unless the incident c
 
 - AI HQ `/health` is not blocked
 - AI HQ `/api/health` is not blocked
+- website lane smoke passes for the real launch tenant
 - sidecar `/health` endpoints are not intentionally unavailable
 - setup/truth/runtime critical flows are passing smoke verification

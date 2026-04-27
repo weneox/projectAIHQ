@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildMissingWebsiteLaneTenantKeyResult,
   buildWebsiteLaneHeaders,
   buildWebsiteLaneHealthUrl,
   classifyWebsiteLaneHealth,
@@ -162,4 +163,35 @@ test("website lane verifier classifies blocked and unavailable website lanes fai
   assert.equal(unavailable.status, "not_configured");
   assert.equal(unavailable.reasonCode, "tenant_not_found");
   assert.equal(unavailable.handoffs.wordpress.ready, false);
+});
+
+test("website lane verifier warns when local smoke skips a missing tenant key", () => {
+  const result = buildMissingWebsiteLaneTenantKeyResult({
+    name: "website_lane_launch",
+    required: false,
+    strictEnv: "POSTDEPLOY_REQUIRE_WEBSITE_LANE",
+  });
+
+  assert.equal(result.name, "website_lane_launch");
+  assert.equal(result.skipped, true);
+  assert.equal(result.warning, true);
+  assert.equal(result.details.env, "WEBSITE_LANE_TENANT_KEY");
+  assert.equal(result.details.strictRequired, false);
+  assert.match(result.details.message, /local\/dev mode only/);
+});
+
+test("website lane verifier fails when strict production smoke misses tenant key", () => {
+  const result = buildMissingWebsiteLaneTenantKeyResult({
+    name: "website_lane_prod_spine",
+    required: true,
+    strictEnv: "PROD_SPINE_REQUIRE_WEBSITE_LANE",
+  });
+
+  assert.equal(result.name, "website_lane_prod_spine");
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 0);
+  assert.equal(result.details.env, "WEBSITE_LANE_TENANT_KEY");
+  assert.equal(result.details.strictRequired, true);
+  assert.equal(result.details.strictEnv, "PROD_SPINE_REQUIRE_WEBSITE_LANE");
+  assert.match(result.details.message, /real tenant website lane/);
 });

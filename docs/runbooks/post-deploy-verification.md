@@ -6,10 +6,13 @@ Run this immediately after a production deploy.
 
 - `AIHQ_BASE_URL`
 - `AIHQ_INTERNAL_TOKEN` for `/api/health`
+- `WEBSITE_LANE_TENANT_KEY` for production launch verification
+- optionally `WEBSITE_LANE_DOMAIN`
 - optionally `META_BOT_BASE_URL`
 - optionally `TWILIO_VOICE_BASE_URL`
 
 The verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
+In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
 
 ## Command
 
@@ -34,9 +37,18 @@ $env:POSTDEPLOY_STRICT_SIDECARS='1'
 npm run ops:postdeploy:verify
 ```
 
+If production launch readiness is being verified, require the real website lane tenant:
+
+```powershell
+$env:POSTDEPLOY_REQUIRE_WEBSITE_LANE='1'
+$env:WEBSITE_LANE_TENANT_KEY='REPLACE_WITH_REAL_TENANT_KEY'
+npm run ops:postdeploy:verify
+```
+
 ## Expected outcome
 
 - AI HQ is not blocked
+- website lane launch verification passes for a real tenant in production CI
 - sidecars are not intentionally unavailable
 - blocker reason codes are empty or expected for the environment
 - missing required verifier env fails the command instead of being reported as a passing skip
@@ -46,6 +58,7 @@ npm run ops:postdeploy:verify
 1. Save the failing output.
 2. Collect the health payloads from each service.
 3. Follow:
+   - [production-release-boundary.md](./production-release-boundary.md)
    - [environment-parity-verification.md](./environment-parity-verification.md)
    - [schema-migration-safety.md](./schema-migration-safety.md)
    - [production-rollback.md](./production-rollback.md)

@@ -62,6 +62,44 @@ export function buildWebsiteLaneHeaders({
   return headers;
 }
 
+export function buildMissingWebsiteLaneTenantKeyResult({
+  name = "website_lane_launch",
+  required = false,
+  strictEnv = "",
+} = {}) {
+  const strictEnvName = s(strictEnv);
+  const strictEnvMessage = strictEnvName
+    ? `${strictEnvName}=1`
+    : "a strict website lane flag is enabled";
+
+  const details = {
+    env: "WEBSITE_LANE_TENANT_KEY",
+    strictRequired: required,
+    strictEnv: strictEnvName,
+    reasonCode: "missing_required_env",
+    message: required
+      ? `WEBSITE_LANE_TENANT_KEY is required because ${strictEnvMessage}. Production launch verification must exercise a real tenant website lane.`
+      : "WEBSITE_LANE_TENANT_KEY is not configured, so website lane verification is skipped for local/dev mode only. Enable the strict website lane flag in production CI.",
+  };
+
+  if (required) {
+    return {
+      name,
+      ok: false,
+      status: 0,
+      details,
+    };
+  }
+
+  return {
+    name,
+    skipped: true,
+    warning: true,
+    reason: "WEBSITE_LANE_TENANT_KEY missing; website lane smoke not exercised",
+    details,
+  };
+}
+
 export function classifyWebsiteLaneHealth(json = {}) {
   const source = obj(json?.websiteLane || json?.lane || json);
   const handoffs = obj(source.handoffs);

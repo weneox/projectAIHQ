@@ -1,4 +1,5 @@
 import {
+  buildMissingWebsiteLaneTenantKeyResult,
   buildWebsiteLaneHeaders,
   buildWebsiteLaneHealthUrl,
   classifyWebsiteLaneHealth,
@@ -422,14 +423,15 @@ async function verifyWebsiteLane({
   tenantKey,
   domain,
   timeoutMs,
+  requireWebsiteLane,
 }) {
   if (!s(tenantKey)) {
     return [
-      {
+      buildMissingWebsiteLaneTenantKeyResult({
         name: "website_lane_launch",
-        skipped: true,
-        reason: "WEBSITE_LANE_TENANT_KEY missing",
-      },
+        required: requireWebsiteLane,
+        strictEnv: "POSTDEPLOY_REQUIRE_WEBSITE_LANE",
+      }),
     ];
   }
 
@@ -511,7 +513,12 @@ function renderSummary(results = []) {
 
   for (const result of results) {
     if (result.skipped) {
-      printLine("-", result.name, `skipped (${result.reason})`);
+      const details = result.details ? ` ${JSON.stringify(result.details)}` : "";
+      printLine(
+        result.warning ? "WARN" : "-",
+        result.name,
+        `skipped (${result.reason})${details}`
+      );
       continue;
     }
 
@@ -543,6 +550,10 @@ async function main() {
   const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
   const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
   const strictSidecars = bool(process.env.POSTDEPLOY_STRICT_SIDECARS, false);
+  const requireWebsiteLane = bool(
+    process.env.POSTDEPLOY_REQUIRE_WEBSITE_LANE,
+    false
+  );
   const failOnDegraded = bool(
     process.env.POSTDEPLOY_FAIL_ON_DEGRADED,
     true
@@ -554,8 +565,10 @@ async function main() {
     JSON.stringify({
       timeoutMs,
       strictSidecars,
+      requireWebsiteLane,
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
+      websiteLaneDomainConfigured: Boolean(websiteLaneDomain),
     })
   );
 
@@ -583,6 +596,7 @@ async function main() {
       tenantKey: websiteLaneTenantKey,
       domain: websiteLaneDomain,
       timeoutMs,
+      requireWebsiteLane,
     }))
   );
 
@@ -609,13 +623,14 @@ async function main() {
 
   printLine("#", "Post-deploy verification summary");
   const failed = renderSummary(results);
+  const warnings = results.filter((result) => result.warning).length;
 
   if (failed > 0) {
     printLine("!", "Verification failed", `failures=${failed}`);
     process.exit(1);
   }
 
-  printLine("OK", "Verification passed");
+  printLine("OK", "Verification passed", warnings ? `warnings=${warnings}` : "");
 }
 
 main().catch((error) => {

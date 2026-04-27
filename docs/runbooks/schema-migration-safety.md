@@ -15,7 +15,7 @@ Use this before every production AI HQ backend deploy that includes schema chang
 1. Deploy code that can tolerate both the old and new schema.
 2. Run `npm run migrate:ai-hq-backend`.
 3. Run `npm run check:operational-readiness`.
-4. Run `npm run ops:postdeploy:verify`.
+4. Run `npm run ops:postdeploy:verify` with `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` and `WEBSITE_LANE_TENANT_KEY` for production launch verification.
 5. Confirm `/health` and `/api/health` stay ready after workers settle.
 
 ## Stop conditions
@@ -45,7 +45,7 @@ Prefer roll-forward over ad hoc manual DB edits.
 - Fix the migration or follow-up code.
 - rerun `npm run migrate:ai-hq-backend`
 - rerun `npm run check:operational-readiness`
-- rerun `npm run ops:postdeploy:verify`
+- rerun `npm run ops:postdeploy:verify` with the production website lane tenant smoke enabled
 
 ## If rollback is required
 

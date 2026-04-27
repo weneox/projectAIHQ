@@ -186,7 +186,7 @@ export async function main() {
   printStatus(
     "shared-contracts",
     "fully_verifiable",
-    "npm run test -w shared-contracts && npm run build -w shared-contracts"
+    "npm run test -w shared-contracts && npm run build:shared-contracts"
   );
   printStatus("ai-hq-backend tests", "fully_verifiable", "npm run test -w ai-hq-backend");
   printStatus(
@@ -201,27 +201,32 @@ export async function main() {
   printStatus(
     "ai-hq-backend build",
     backend.errors.length === 0 ? "ready" : "blocked_by_environment",
-    "npm run build -w ai-hq-backend"
+    "npm run build:ai-hq-backend"
   );
   printStatus(
     "meta-bot-backend build",
     meta.errors.length === 0 ? "ready" : "blocked_by_environment",
-    "npm run build -w meta-bot-backend"
+    "npm run build:meta-bot-backend"
   );
   printStatus(
     "twilio-voice-backend build",
     twilio.errors.length === 0 ? "ready" : "blocked_by_environment",
-    "npm run build -w twilio-voice-backend"
+    "npm run build:twilio-voice-backend"
   );
   printStatus(
     "ai-hq-frontend build",
     frontend.errors.length === 0 ? "ready" : "blocked_by_environment",
-    "npm run build -w ai-hq-frontend"
+    "npm run build:ai-hq-frontend"
+  );
+  printStatus(
+    "neox-frontend build",
+    "ready",
+    "npm run build:neox-frontend"
   );
   printStatus(
     "post-deploy verification",
     "requires_live_services",
-    "AIHQ_BASE_URL required; AIHQ_INTERNAL_TOKEN required for /api/health; sidecar base URLs optional unless strict"
+    "AIHQ_BASE_URL and AIHQ_INTERNAL_TOKEN required; WEBSITE_LANE_TENANT_KEY required when website lane strict flags are enabled; sidecar base URLs optional unless strict"
   );
 
   printSection("Container Runtime Parity");

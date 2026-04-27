@@ -1,4 +1,5 @@
 import {
+  buildMissingWebsiteLaneTenantKeyResult,
   buildWebsiteLaneHeaders,
   buildWebsiteLaneHealthUrl,
   classifyWebsiteLaneHealth,
@@ -175,7 +176,12 @@ function renderSummary(results = []) {
 
   for (const result of results) {
     if (result.skipped) {
-      printLine("-", result.name, `skipped (${result.reason})`);
+      const details = result.details ? ` ${JSON.stringify(result.details)}` : "";
+      printLine(
+        result.warning ? "WARN" : "-",
+        result.name,
+        `skipped (${result.reason})${details}`
+      );
       continue;
     }
 
@@ -450,14 +456,15 @@ async function verifyWebsiteLane({
   tenantKey,
   domain,
   timeoutMs,
+  requireWebsiteLane,
 }) {
   if (!s(tenantKey)) {
     return [
-      {
+      buildMissingWebsiteLaneTenantKeyResult({
         name: "website_lane_prod_spine",
-        skipped: true,
-        reason: "WEBSITE_LANE_TENANT_KEY missing",
-      },
+        required: requireWebsiteLane,
+        strictEnv: "PROD_SPINE_REQUIRE_WEBSITE_LANE",
+      }),
     ];
   }
 
@@ -544,6 +551,7 @@ async function runAttempt({
   timeoutMs,
   strictSidecars,
   failOnDegraded,
+  requireWebsiteLane,
 }) {
   const results = [];
 
@@ -561,6 +569,7 @@ async function runAttempt({
       tenantKey: websiteLaneTenantKey,
       domain: websiteLaneDomain,
       timeoutMs,
+      requireWebsiteLane,
     }))
   );
 
@@ -599,6 +608,10 @@ async function main() {
   const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
   const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
+  const requireWebsiteLane = bool(
+    process.env.PROD_SPINE_REQUIRE_WEBSITE_LANE,
+    false
+  );
   const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, true);
 
   printLine(
@@ -609,8 +622,10 @@ async function main() {
       delayMs,
       timeoutMs,
       strictSidecars,
+      requireWebsiteLane,
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
+      websiteLaneDomainConfigured: Boolean(websiteLaneDomain),
     })
   );
 
@@ -642,12 +657,18 @@ async function main() {
       timeoutMs,
       strictSidecars,
       failOnDegraded,
+      requireWebsiteLane,
     });
 
     lastFailed = renderSummary(lastResults);
+    const warnings = lastResults.filter((result) => result.warning).length;
 
     if (lastFailed === 0) {
-      printLine("OK", "Prod spine smoke passed");
+      printLine(
+        "OK",
+        "Prod spine smoke passed",
+        warnings ? `warnings=${warnings}` : ""
+      );
       process.exit(0);
     }
 

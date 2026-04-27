@@ -25,7 +25,7 @@ For `npm run validate:env` at the repo root, the smallest practical local set is
 - `VITE_API_BASE=http://localhost:8080`
 - `VITE_WS_URL=ws://localhost:8080`
 - `VERIFY_TOKEN=...`
-- `META_APP_SECRET=...`
+- `META_WEBHOOK_APP_SECRET=...`
 - `CONTACT_EMAIL=ops@example.test`
 - `OPENAI_API_KEY=...`
 - `TWILIO_ACCOUNT_SID=...`

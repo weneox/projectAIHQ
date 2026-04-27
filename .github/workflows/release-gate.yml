@@ -317,7 +317,8 @@ jobs:
       - name: Run build gate
         run: npm run build:all
 
-  trigger-cloudflare-pages-deploy:
+  trigger-ai-hq-frontend-cloudflare-pages-deploy:
+    name: Trigger AI HQ frontend Cloudflare Pages deploy
     runs-on: ubuntu-latest
     needs:
       - workspace-startup-compat-node18
@@ -337,22 +338,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Trigger Cloudflare Pages production deploy
-        id: trigger_pages_deploy
+      - name: Trigger AI HQ frontend Cloudflare Pages production deploy
+        id: trigger_aihq_frontend_pages_deploy
         env:
-          CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+          CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
         run: |
-          curl --fail --silent --show-error --request POST "$CLOUDFLARE_PAGES_DEPLOY_HOOK"
+          if [ -z "$CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK" ]; then
+            echo "CLOUDFLARE_PAGES_DEPLOY_HOOK is missing for the AI HQ frontend Cloudflare Pages project." >&2
+            exit 1
+          fi
 
-      - name: Run mandatory post-deploy verification
+          curl --fail --silent --show-error --request POST "$CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK"
+
+      - name: Run mandatory AI HQ post-deploy verification
         id: postdeploy_verify
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
           META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
+          WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
+          WEBSITE_LANE_DOMAIN: ${{ secrets.WEBSITE_LANE_DOMAIN }}
           POSTDEPLOY_TIMEOUT_MS: "12000"
           POSTDEPLOY_STRICT_SIDECARS: "0"
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
           POSTDEPLOY_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: |
@@ -360,20 +369,27 @@ jobs:
             echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory post-deploy verification." >&2
             exit 1
           fi
+          if [ -z "$WEBSITE_LANE_TENANT_KEY" ]; then
+            echo "WEBSITE_LANE_TENANT_KEY is required because POSTDEPLOY_REQUIRE_WEBSITE_LANE=1 for production launch verification." >&2
+            exit 1
+          fi
 
           npm run ops:postdeploy:verify
 
-      - name: Run mandatory production prod-spine smoke
+      - name: Run mandatory AI HQ production prod-spine smoke
         id: prod_spine_smoke
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
           META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
+          WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
+          WEBSITE_LANE_DOMAIN: ${{ secrets.WEBSITE_LANE_DOMAIN }}
           PROD_SPINE_SMOKE_ATTEMPTS: "8"
           PROD_SPINE_SMOKE_DELAY_MS: "15000"
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "0"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: |
@@ -381,22 +397,31 @@ jobs:
             echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory prod spine smoke." >&2
             exit 1
           fi
+          if [ -z "$WEBSITE_LANE_TENANT_KEY" ]; then
+            echo "WEBSITE_LANE_TENANT_KEY is required because PROD_SPINE_REQUIRE_WEBSITE_LANE=1 for production launch verification." >&2
+            exit 1
+          fi
 
           npm run ops:prod-spine:smoke
 
-      - name: Summarize post-deploy verification references
+      - name: Summarize AI HQ frontend post-deploy verification references
         if: always()
         shell: bash
         run: |
           {
-            echo "## Post-deploy verification"
+            echo "## AI HQ frontend post-deploy verification"
             echo
             echo "| Item | Status |"
             echo "| --- | --- |"
-            echo "| Deploy hook trigger | \`${{ steps.trigger_pages_deploy.outcome }}\` |"
+            echo "| Cloudflare project | \`AI HQ frontend\` |"
+            echo "| Cloudflare build command | \`npm run build:ai-hq-frontend\` |"
+            echo "| Cloudflare output directory | \`ai-hq-frontend/dist\` |"
+            echo "| Deploy hook secret | \`CLOUDFLARE_PAGES_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_frontend_pages_deploy.outcome }}\` |"
             echo "| Post-deploy verify | \`${{ steps.postdeploy_verify.outcome }}\` |"
             echo "| Prod spine smoke step | \`${{ steps.prod_spine_smoke.outcome }}\` |"
             echo "| Strict sidecars | \`false\` |"
+            echo "| Strict website lane tenant smoke | \`true\` |"
             echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"
@@ -407,6 +432,7 @@ jobs:
             echo
             echo "Runbooks:"
             echo
+            echo "- \`docs/runbooks/production-release-boundary.md\`"
             echo "- \`docs/runbooks/environment-parity-verification.md\`"
             echo "- \`docs/runbooks/post-deploy-verification.md\`"
             echo "- \`docs/runbooks/schema-migration-safety.md\`"

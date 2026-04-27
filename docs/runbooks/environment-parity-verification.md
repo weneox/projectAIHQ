@@ -32,6 +32,7 @@ Notes:
 
 - `npm run test:aihq:db` will stay unavailable until `DATABASE_URL` is set.
 - workspace `build` commands still require each workspace's production-like env.
+- the repo-root `npm run build` intentionally fails closed; use explicit target scripts such as `npm run build:ai-hq-frontend`, `npm run build:neox-frontend`, or `npm run build:all`.
 
 ## Local verification with Docker
 
@@ -73,6 +74,8 @@ npm run test:backend:all
 npm run build:all
 ```
 
+Release Gate uses `npm run build:all`, not root `npm run build`.
+
 ## Production-like verification requirements
 
 Required for `ai-hq-backend` build / validate:
@@ -87,16 +90,16 @@ Required for `ai-hq-backend` build / validate:
 Conditional for workspace-wide `npm run validate:env` / `npm run build:all` when the shared environment also exports Meta channel secrets:
 
 - `META_APP_ID`
-- `META_APP_SECRET`
+- `META_CONNECT_APP_SECRET` or legacy `META_APP_SECRET`
 - `META_REDIRECT_URI`
 
 Reason:
-If `META_APP_SECRET` is present for `meta-bot-backend`, `ai-hq-backend` also sees that env var and will fail validation unless the backend Meta OAuth trio is complete.
+If legacy `META_APP_SECRET` is present for `meta-bot-backend`, `ai-hq-backend` also sees that env var and will fail validation unless the backend Meta OAuth trio is complete. Prefer `META_WEBHOOK_APP_SECRET` for Meta bot webhook verification and `META_CONNECT_APP_SECRET` for AI HQ Meta connect/reconnect.
 
 Required for `meta-bot-backend` build / validate:
 
 - `VERIFY_TOKEN`
-- `META_APP_SECRET`
+- `META_WEBHOOK_APP_SECRET`
 - `PUBLIC_BASE_URL`
 - `AIHQ_BASE_URL`
 - `AIHQ_INTERNAL_TOKEN`
@@ -119,6 +122,19 @@ Required for `ai-hq-frontend` production / CI build:
 
 - `VITE_API_BASE`
 - `VITE_WS_URL`
+
+Required for `neox-frontend` production / CI build:
+
+- no repo-level env validation currently runs for Neox; configure any Cloudflare project env needed by the Neox app in the separate Neox frontend Cloudflare Pages project.
+
+Required for production post-deploy launch-lane smoke:
+
+- `AIHQ_PROD_BASE_URL`
+- `AIHQ_PROD_INTERNAL_TOKEN`
+- `WEBSITE_LANE_TENANT_KEY`
+- optionally `WEBSITE_LANE_DOMAIN`
+- `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1`
+- `PROD_SPINE_REQUIRE_WEBSITE_LANE=1`
 
 ## Classification guide
 

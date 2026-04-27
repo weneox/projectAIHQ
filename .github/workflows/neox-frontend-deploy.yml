@@ -35,6 +35,8 @@ jobs:
 
       - name: Summarize Neox frontend deploy trigger
         if: always()
+        env:
+          CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
         shell: bash
         run: |
           {
@@ -42,6 +44,10 @@ jobs:
             echo
             echo "| Item | Value |"
             echo "| --- | --- |"
+            echo "| Cloudflare project | \`Neox frontend\` |"
+            echo "| Cloudflare build command | \`npm run build:neox-frontend\` |"
+            echo "| Cloudflare output directory | \`neox-frontend/dist\` |"
+            echo "| Deploy hook secret | \`CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK\` |"
             echo "| Source workflow | \`${{ github.event.workflow_run.name }}\` |"
             echo "| Source conclusion | \`${{ github.event.workflow_run.conclusion }}\` |"
             echo "| Branch | \`${{ github.event.workflow_run.head_branch }}\` |"
