@@ -100,7 +100,7 @@ html {
   font-synthesis-weight: none;
   text-rendering: geometricPrecision;
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
+  scroll-behavior: auto !important;
 }
 
 body {
@@ -174,10 +174,6 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
   *,
   *::before,
   *::after {
@@ -945,7 +941,28 @@ a {
 }
 
 /* =========================================================
-   NEOX — Home Page Extracted Styles
+   Lenis
+========================================================= */
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* =========================================================
+   NEOX — Home Page Base Styles
 ========================================================= */
 
 body:has(.neox-home-page) {
@@ -974,6 +991,18 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+}
+
+html:has(.neox-home-page),
+body:has(.neox-home-page),
+body:has(.neox-home-page) #root {
+  scroll-snap-type: none !important;
+}
+
+.neox-home-page,
+.neox-home-page * {
+  scroll-snap-align: none !important;
+  scroll-snap-stop: normal !important;
 }
 
 @keyframes neoxHomeStrip {
@@ -1010,6 +1039,25 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   width: 100%;
   overflow: visible !important;
 }
+
+.neox-home-extra {
+  --home-section-title: clamp(2.18rem, 3.05vw, 3.32rem);
+  --home-section-title-mobile: clamp(2.05rem, 8vw, 2.82rem);
+  --home-title-line: linear-gradient(
+    90deg,
+    transparent,
+    rgba(36, 71, 198, 0.16),
+    rgba(73, 100, 255, 0.72),
+    rgba(36, 71, 198, 0.16),
+    transparent
+  );
+
+  background: #ffffff;
+}
+
+/* =========================================================
+   Home Hero
+========================================================= */
 
 .neox-home-hero {
   height: calc(100vh - var(--nx-header-h, 56px));
@@ -1219,21 +1267,100 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   color: var(--nx-blue);
 }
 
-.neox-balanced-section-title {
-  font-size: clamp(2.75rem, 4.45vw, 4.75rem);
+/* =========================================================
+   Home Shared Titles
+========================================================= */
+
+.neox-balanced-section-title,
+.neox-home-section-title,
+.neox-home-extra .neox-extra-title,
+.neox-home-extra .neox-build-title,
+.neox-home-extra .neox-process-title,
+.neox-stack-title {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: var(--home-section-title, clamp(2.75rem, 4.45vw, 4.75rem));
   font-weight: 520;
   line-height: 1.08;
-  letter-spacing: -0.064em;
+  letter-spacing: -0.058em;
+  text-wrap: balance;
 }
 
-.neox-balanced-section-title span {
+.neox-home-section-title {
+  max-width: 720px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.neox-balanced-section-title span,
+.neox-home-section-title span,
+.neox-home-extra .neox-extra-title span,
+.neox-home-extra .neox-build-title span,
+.neox-home-extra .neox-process-title span,
+.neox-stack-title span {
   color: var(--nx-blue);
   font-weight: inherit;
 }
 
+.neox-home-section-title::after,
+.neox-home-extra .neox-extra-title::after,
+.neox-home-extra .neox-build-title::after,
+.neox-home-extra .neox-process-title::after,
+.neox-stack-title::after {
+  content: "";
+  display: block;
+  width: 68px;
+  height: 1px;
+  margin-top: 22px;
+  background: var(--home-title-line);
+  box-shadow:
+    0 0 14px rgba(73, 100, 255, 0.2),
+    0 0 32px rgba(73, 100, 255, 0.09);
+}
+
+.neox-home-section-title::after,
+.neox-capability-head .neox-extra-title::after,
+.neox-stack-title::after {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.neox-home-section-head {
+  max-width: 780px;
+  margin: 0 auto 42px;
+  text-align: center;
+}
+
+.neox-extra-kicker {
+  margin: 0 0 14px;
+  color: var(--nx-blue);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.neox-extra-lead {
+  margin: 22px 0 0;
+  max-width: 560px;
+  color: var(--nx-muted);
+  font-size: 15.5px;
+  font-weight: 430;
+  line-height: 1.82;
+  letter-spacing: -0.018em;
+}
+
+/* =========================================================
+   Home Cards Section
+========================================================= */
+
 .neox-card-section {
-  padding-top: 88px;
-  padding-bottom: 72px;
+  padding-top: 86px;
+  padding-bottom: 88px;
+  background: #ffffff;
+  border: 0;
+  box-shadow: none;
 }
 
 .neox-card-grid {
@@ -1395,7 +1522,7 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
 }
 
 /* =========================================================
-   Home Process Section
+   Home Process Section — Stable Text / No Shake
 ========================================================= */
 
 .neox-process-section {
@@ -1404,26 +1531,9 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   overflow: visible;
   padding-top: 112px;
   padding-bottom: 96px;
-  background:
-    radial-gradient(
-      900px 360px at 8% 16%,
-      rgba(68, 89, 223, 0.025),
-      transparent 64%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
-}
-
-.neox-process-section::before {
-  content: "";
-  position: absolute;
-  left: -180px;
-  bottom: -180px;
-  width: 620px;
-  height: 420px;
-  border-radius: 999px;
-  border: 1px solid rgba(36, 71, 198, 0.035);
-  opacity: 0.8;
-  pointer-events: none;
+  background: #ffffff;
+  border: 0;
+  box-shadow: none;
 }
 
 .neox-process-stage {
@@ -1448,13 +1558,19 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
 
 .neox-process-moving {
   position: absolute;
-  top: var(--neox-process-copy-start, 0px);
+  top: calc(
+    var(--neox-process-copy-start, 0px) + var(--neox-process-copy-y, 0px)
+  );
   left: 0;
   width: min(100%, 620px);
-  transform: translate3d(0, var(--neox-process-copy-y, 0px), 0);
-  transition: none;
-  will-change: transform;
-  backface-visibility: hidden;
+  transform: none !important;
+  transition: none !important;
+  will-change: auto;
+  backface-visibility: visible;
+  contain: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 
 .neox-process-title {
@@ -1509,14 +1625,11 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   line-height: 0.9;
   letter-spacing: -0.06em;
   opacity: 0;
-  filter: blur(7px);
   transform: translateY(14px);
   transition:
     opacity 240ms ease,
-    filter 280ms ease,
     transform 280ms var(--nx-ease),
     color 180ms ease;
-  transition-delay: 0ms;
 }
 
 .neox-process-row-divider {
@@ -1540,19 +1653,15 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
 .neox-process-row-content {
   min-width: 0;
   opacity: 0;
-  filter: blur(7px);
   transform: translateY(14px);
   transition:
     opacity 240ms ease,
-    filter 280ms ease,
     transform 280ms var(--nx-ease);
-  transition-delay: 0ms;
 }
 
 .neox-process-row.is-visible .neox-process-row-number,
 .neox-process-row.is-visible .neox-process-row-content {
   opacity: 0.62;
-  filter: blur(0);
   transform: translateY(0);
 }
 
@@ -1607,6 +1716,807 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
 }
 
 /* =========================================================
+   Home Interactive / Stack Section
+========================================================= */
+
+.neox-interactive-system-section {
+  position: relative;
+  background: #ffffff;
+  overflow: visible;
+  border: 0;
+  box-shadow: none;
+}
+
+.neox-interactive-sticky {
+  position: relative;
+  height: 100svh;
+  min-height: 720px;
+  overflow: hidden;
+  background: #ffffff;
+  isolation: isolate;
+}
+
+.neox-interactive-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.neox-interactive-stage {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  overflow: hidden;
+}
+
+.neox-interactive-inner {
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  position: relative;
+}
+
+.neox-gsap-text {
+  position: absolute;
+  width: min(560px, 42vw);
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.neox-gsap-text-one {
+  left: 58px;
+  top: clamp(74px, 13vh, 128px);
+}
+
+.neox-gsap-text-two {
+  right: 58px;
+  bottom: clamp(58px, 10vh, 96px);
+  opacity: 0;
+}
+
+.neox-gsap-kicker {
+  margin: 0 0 16px;
+  color: var(--nx-blue);
+  font-size: 11px;
+  font-weight: 780;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.neox-gsap-title {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: var(--home-section-title);
+  font-weight: 530;
+  line-height: 1.04;
+  letter-spacing: -0.062em;
+  text-wrap: balance;
+}
+
+.neox-gsap-title span {
+  color: var(--nx-blue);
+  font-weight: inherit;
+}
+
+.neox-gsap-title::after {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 1px;
+  margin-top: 24px;
+  background: var(--home-title-line);
+  box-shadow:
+    0 0 14px rgba(73, 100, 255, 0.2),
+    0 0 32px rgba(73, 100, 255, 0.09);
+}
+
+.neox-gsap-lead {
+  margin: 24px 0 0;
+  max-width: 520px;
+  color: #506178;
+  font-size: 1rem;
+  font-weight: 440;
+  line-height: 1.82;
+  letter-spacing: -0.018em;
+}
+
+.neox-gsap-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.neox-gsap-point {
+  min-height: 108px;
+  padding: 15px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.055);
+  backdrop-filter: blur(16px);
+}
+
+.neox-gsap-point span {
+  display: block;
+  width: 27px;
+  height: 27px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(36, 71, 198, 0.08);
+  color: var(--nx-blue);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 27px;
+  text-align: center;
+}
+
+.neox-gsap-point strong {
+  display: block;
+  color: var(--nx-ink);
+  font-size: 13.5px;
+  font-weight: 730;
+  line-height: 1.18;
+  letter-spacing: -0.022em;
+}
+
+.neox-gsap-point p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 12.6px;
+  font-weight: 430;
+  line-height: 1.44;
+  letter-spacing: -0.012em;
+}
+
+.neox-gsap-mini-label {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  color: #52627a;
+  font-size: 12px;
+  font-weight: 660;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.neox-stack-panel {
+  position: absolute;
+  top: var(--nx-header-h, 56px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: calc(100% - var(--nx-header-h, 56px));
+  overflow: hidden;
+  background: #ffffff;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow:
+    0 -22px 72px rgba(15, 23, 42, 0.075),
+    0 -1px 0 rgba(15, 23, 42, 0.035);
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  transform-origin: center top;
+  backface-visibility: hidden;
+  contain: paint;
+}
+
+.neox-stack-panel--one,
+.neox-stack-panel--two,
+.neox-stack-panel--three {
+  border-radius: 32px 32px 0 0;
+}
+
+.neox-stack-panel--one {
+  z-index: 10;
+}
+
+.neox-stack-panel--two {
+  z-index: 11;
+}
+
+.neox-stack-panel--three {
+  z-index: 12;
+}
+
+.neox-stack-panel--four {
+  z-index: 20;
+  border-radius: 0;
+  box-shadow:
+    0 -24px 80px rgba(15, 23, 42, 0.09),
+    0 -1px 0 rgba(15, 23, 42, 0.055);
+}
+
+.neox-stack-panel-inner {
+  width: min(100%, var(--nx-container));
+  height: 100%;
+  margin: 0 auto;
+  padding: clamp(16px, 2vw, 28px) 24px clamp(28px, 3.8vw, 52px);
+  overflow: hidden;
+}
+
+.neox-stack-panel--one .neox-stack-panel-inner,
+.neox-stack-panel--two .neox-stack-panel-inner,
+.neox-stack-panel--three .neox-stack-panel-inner {
+  padding-top: clamp(18px, 2.2vw, 32px);
+  padding-right: clamp(26px, 3.55vw, 62px);
+  padding-bottom: clamp(28px, 3.8vw, 52px);
+  padding-left: clamp(26px, 3.55vw, 62px);
+  overflow: hidden;
+  overflow: clip;
+}
+
+.neox-stack-panel--one .neox-stack-panel-inner,
+.neox-stack-panel--two .neox-stack-panel-inner {
+  max-width: 1420px;
+}
+
+.neox-stack-panel--one .neox-stack-panel-inner {
+  width: 100%;
+}
+
+.neox-stack-panel--three .neox-stack-panel-inner {
+  max-width: 1320px;
+  min-height: 0;
+  display: block;
+  will-change: auto;
+}
+
+.neox-stack-panel--four .neox-stack-panel-inner {
+  height: 100%;
+  max-width: var(--nx-container);
+  padding: clamp(70px, 8vw, 106px) 24px clamp(58px, 7vw, 88px);
+  display: flex;
+  align-items: center;
+}
+
+.neox-stack-panel-head {
+  max-width: 760px;
+  margin: 0 auto 32px;
+  text-align: center;
+}
+
+.neox-stack-panel--two .neox-stack-panel-head {
+  margin-bottom: 20px;
+}
+
+.neox-stack-lead {
+  margin: 20px auto 0;
+  max-width: 620px;
+  color: #5b6b82;
+  font-size: 15.5px;
+  font-weight: 430;
+  line-height: 1.78;
+  letter-spacing: -0.016em;
+}
+
+.neox-stack-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.neox-stack-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.neox-stack-grid--two {
+  grid-template-columns: 0.9fr 1.1fr;
+  align-items: stretch;
+}
+
+.neox-stack-grid--metrics {
+  grid-template-columns: 1.05fr repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.neox-stack-clean-card {
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+  padding: 26px;
+  border-radius: 26px;
+  border: 1px solid rgba(15, 23, 42, 0.075);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 249, 251, 0.98)),
+    #ffffff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.055);
+  will-change: transform, opacity;
+}
+
+.neox-stack-clean-card::before {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 26px;
+  width: 34px;
+  height: 34px;
+  border-radius: 13px;
+  background: rgba(36, 71, 198, 0.08);
+}
+
+.neox-stack-clean-card::after {
+  content: "";
+  position: absolute;
+  left: 43px;
+  top: 62px;
+  bottom: 26px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(36, 71, 198, 0.2), transparent);
+}
+
+.neox-stack-card-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  margin-top: 58px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: rgba(36, 71, 198, 0.07);
+  border: 1px solid rgba(36, 71, 198, 0.1);
+  color: var(--nx-blue);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.neox-stack-clean-card h3 {
+  margin: 20px 0 0;
+  color: var(--nx-ink);
+  font-size: 1.42rem;
+  font-weight: 560;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.neox-stack-clean-card p {
+  margin: 12px 0 0;
+  color: #607087;
+  font-size: 14px;
+  font-weight: 420;
+  line-height: 1.65;
+  letter-spacing: -0.012em;
+}
+
+.neox-stack-note {
+  min-height: 132px;
+  display: flex;
+  align-items: center;
+  padding: 26px;
+  border-radius: 22px;
+  background: #0e1420;
+  color: #ffffff;
+  will-change: transform, opacity;
+}
+
+.neox-stack-note strong {
+  display: block;
+  max-width: 430px;
+  font-size: 1.1rem;
+  font-weight: 560;
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+}
+
+.neox-stack-metric {
+  min-height: 132px;
+  padding: 22px;
+  border-radius: 22px;
+  background: #f8f9fb;
+  border: 1px solid rgba(15, 23, 42, 0.065);
+  will-change: transform, opacity;
+}
+
+.neox-stack-metric strong {
+  display: block;
+  color: var(--nx-ink);
+  font-size: 1.58rem;
+  font-weight: 620;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.neox-stack-metric span {
+  display: block;
+  margin-top: 12px;
+  color: #65758b;
+  font-size: 13.5px;
+  font-weight: 430;
+  line-height: 1.5;
+  letter-spacing: -0.012em;
+}
+
+.neox-stack-system-board {
+  min-height: 280px;
+  padding: 22px;
+  border-radius: 26px;
+  border: 1px solid rgba(15, 23, 42, 0.075);
+  background:
+    radial-gradient(420px 220px at 20% 14%, rgba(36, 71, 198, 0.06), transparent 68%),
+    linear-gradient(180deg, #ffffff, #f8f9fb);
+  box-shadow: 0 20px 56px rgba(15, 23, 42, 0.055);
+  will-change: transform, opacity;
+}
+
+.neox-stack-system-board-row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.neox-stack-system-board-row + .neox-stack-system-board-row {
+  margin-top: 10px;
+}
+
+.neox-stack-system-board-badge {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(36, 71, 198, 0.08);
+  color: var(--nx-blue);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.neox-stack-system-board-row h4 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: 0.96rem;
+  font-weight: 680;
+  line-height: 1.2;
+  letter-spacing: -0.028em;
+}
+
+.neox-stack-system-board-row p {
+  margin: 5px 0 0;
+  color: #607087;
+  font-size: 13px;
+  font-weight: 420;
+  line-height: 1.48;
+  letter-spacing: -0.012em;
+}
+
+.neox-stack-split-text {
+  padding: 2px 0 2px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.neox-stack-split-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.neox-stack-split-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 13px 15px 13px 12px;
+  border-radius: 17px;
+  background: #f8f9fb;
+  border: 1px solid rgba(15, 23, 42, 0.065);
+  will-change: transform, opacity;
+}
+
+.neox-stack-split-item-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  background: rgba(36, 71, 198, 0.08);
+  color: var(--nx-blue);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 38px;
+  text-align: center;
+}
+
+.neox-stack-split-item h4 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+}
+
+.neox-stack-split-item p {
+  margin: 6px 0 0;
+  color: #607087;
+  font-size: 13px;
+  font-weight: 420;
+  line-height: 1.48;
+  letter-spacing: -0.013em;
+}
+
+/* Panel Three Compact */
+
+.neox-stack-panel--three .neox-stack-grid--two {
+  width: 100%;
+  gap: clamp(14px, 1.8vw, 22px);
+  align-items: start;
+}
+
+.neox-stack-panel--three .neox-stack-title {
+  font-size: clamp(2rem, 2.65vw, 3rem) !important;
+  line-height: 1.04;
+  letter-spacing: -0.058em;
+}
+
+.neox-stack-panel--three .neox-stack-title::after {
+  width: 56px;
+  margin-top: 14px;
+}
+
+.neox-stack-panel--three .neox-extra-kicker {
+  margin-bottom: 9px;
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+}
+
+.neox-stack-panel--three .neox-stack-lead {
+  max-width: 520px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.neox-stack-panel--three .neox-stack-system-board {
+  min-height: auto;
+  padding: 14px;
+  border-radius: 24px;
+}
+
+.neox-stack-panel--three .neox-stack-system-board-row {
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px;
+  border-radius: 17px;
+}
+
+.neox-stack-panel--three .neox-stack-system-board-row + .neox-stack-system-board-row {
+  margin-top: 8px;
+}
+
+.neox-stack-panel--three .neox-stack-system-board-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  font-size: 11px;
+}
+
+.neox-stack-panel--three .neox-stack-system-board-row h4 {
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.neox-stack-panel--three .neox-stack-system-board-row p {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.36;
+}
+
+.neox-stack-panel--three .neox-stack-split-list {
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.neox-stack-panel--three .neox-stack-split-item {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 12px 9px 9px;
+  border-radius: 16px;
+}
+
+.neox-stack-panel--three .neox-stack-split-item-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  line-height: 34px;
+}
+
+.neox-stack-panel--three .neox-stack-split-item h4 {
+  font-size: 0.9rem;
+  line-height: 1.15;
+}
+
+.neox-stack-panel--three .neox-stack-split-item p {
+  margin-top: 4px;
+  font-size: 12.4px;
+  line-height: 1.34;
+}
+
+.neox-layer-measure-word {
+  color: inherit !important;
+}
+
+/* =========================================================
+   Home Capability Section
+========================================================= */
+
+.neox-capability-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.neox-capability-head {
+  max-width: 780px;
+  margin: 0 auto 38px;
+  text-align: center;
+}
+
+.neox-capability-head .neox-extra-title {
+  max-width: 760px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.neox-capability-head .neox-extra-lead {
+  max-width: 640px;
+  margin: 20px auto 0;
+  text-align: center;
+}
+
+.neox-capability-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid rgba(15, 23, 42, 0.075);
+  border-left: 1px solid rgba(15, 23, 42, 0.075);
+}
+
+.neox-capability-card {
+  min-height: 236px;
+  padding: 28px 24px;
+  border-right: 1px solid rgba(15, 23, 42, 0.075);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.075);
+  background: #ffffff;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.neox-capability-card:hover {
+  background: #ffffff;
+  box-shadow: inset 0 2px 0 rgba(36, 71, 198, 0.35);
+}
+
+.neox-capability-number {
+  display: block;
+  color: rgba(15, 23, 42, 0.26);
+  font-family: var(--nx-font-display);
+  font-size: 3.1rem;
+  font-weight: 400;
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+}
+
+.neox-capability-card:hover .neox-capability-number {
+  color: var(--nx-blue);
+}
+
+.neox-capability-card h3 {
+  margin: 34px 0 0;
+  color: var(--nx-ink);
+  font-size: 1.22rem;
+  font-weight: 560;
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.neox-capability-card p {
+  margin: 13px 0 0;
+  color: #5f6c80;
+  font-size: 14px;
+  font-weight: 420;
+  line-height: 1.68;
+  letter-spacing: -0.014em;
+}
+
+/* =========================================================
+   Home Build CTA Section
+========================================================= */
+
+.neox-extra-section-three {
+  position: relative;
+  overflow: hidden;
+  padding: 92px 0;
+  background: #ffffff;
+  border: 0;
+  box-shadow: none;
+}
+
+.neox-build-band {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 0.96fr) minmax(320px, 0.54fr);
+  gap: clamp(34px, 5vw, 74px);
+  align-items: center;
+  padding: clamp(34px, 5vw, 58px);
+  border-radius: 30px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  background: #ffffff;
+  box-shadow: 0 22px 62px rgba(15, 23, 42, 0.055);
+}
+
+.neox-build-content {
+  position: relative;
+  z-index: 1;
+}
+
+.neox-build-text {
+  margin: 20px 0 0;
+  max-width: 620px;
+  color: #5a677c;
+  font-size: 15.5px;
+  font-weight: 420;
+  line-height: 1.78;
+  letter-spacing: -0.016em;
+}
+
+.neox-build-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.neox-build-tags span {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.075);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--nx-muted);
+  font-size: 12.5px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+
+.neox-build-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* =========================================================
    Home Responsive
 ========================================================= */
 
@@ -1652,6 +2562,43 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   .neox-process-row-divider {
     opacity: 0.78;
     transform: scaleY(1);
+  }
+
+  .neox-gsap-text {
+    width: min(620px, 58vw);
+  }
+
+  .neox-stack-grid--three,
+  .neox-stack-grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-stack-grid--metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .neox-stack-note {
+    grid-column: 1 / -1;
+  }
+
+  .neox-stack-clean-card {
+    min-height: 220px;
+  }
+
+  .neox-stack-system-board {
+    min-height: 280px;
+  }
+
+  .neox-capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .neox-build-band {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-build-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -1718,6 +2665,127 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
 
   .neox-process-row-number {
     font-size: 3.8rem;
+  }
+
+  .neox-interactive-system-section {
+    height: auto;
+  }
+
+  .neox-interactive-sticky {
+    position: relative;
+    top: auto;
+    height: auto;
+    min-height: 0;
+    padding: 76px 0 0;
+    overflow: visible;
+  }
+
+  .neox-interactive-stage {
+    height: auto;
+    overflow: visible;
+  }
+
+  .neox-interactive-inner {
+    display: grid;
+    gap: 34px;
+    height: auto;
+  }
+
+  .neox-gsap-text {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    width: 100%;
+    padding-inline: 18px;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .neox-gsap-text-two {
+    display: none;
+  }
+
+  .neox-gsap-points {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+
+  .neox-gsap-mini-label {
+    display: none;
+  }
+
+  .neox-stack-panel {
+    position: relative;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100%;
+    height: auto !important;
+    transform: none !important;
+    border-radius: 30px 30px 0 0 !important;
+    opacity: 1 !important;
+    contain: none;
+  }
+
+  .neox-stack-panel--four {
+    border-radius: 0 !important;
+  }
+
+  .neox-stack-panel + .neox-stack-panel {
+    margin-top: -18px;
+  }
+
+  .neox-stack-panel-inner {
+    height: auto;
+    overflow: visible;
+    padding: 34px 18px 46px;
+    display: block;
+  }
+}
+
+@media (max-width: 760px) {
+  .neox-home-section-title,
+  .neox-home-extra .neox-extra-title,
+  .neox-home-extra .neox-build-title,
+  .neox-home-extra .neox-process-title,
+  .neox-stack-title,
+  .neox-gsap-title {
+    font-size: var(--home-section-title-mobile) !important;
+    line-height: 1.06;
+  }
+
+  .neox-stack-grid--metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-stack-clean-card,
+  .neox-stack-system-board {
+    min-height: 240px;
+    border-radius: 22px;
+  }
+
+  .neox-capability-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .neox-capability-card {
+    min-height: 210px;
+  }
+
+  .neox-extra-section-three {
+    padding: 70px 0;
+  }
+
+  .neox-build-actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .neox-build-actions .nx-button {
+    width: 100%;
   }
 }
 
@@ -1806,25 +2874,4 @@ body:has(.neox-home-page) #root > * > * > *::-webkit-scrollbar {
   .neox-process-row-content {
     transition: none !important;
   }
-}
-
-html {
-  scroll-behavior: auto !important;
-}
-
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-
-.lenis.lenis-stopped {
-  overflow: hidden;
 }

@@ -1,5 +1,4 @@
-// src/components/Layout.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "./Header";
 import Footer from "./Footer";
@@ -17,10 +16,12 @@ function getLangFromPath(pathname: string): Lang {
 
 function stripLang(pathname: string) {
   const seg = (pathname.split("/")[1] || "").toLowerCase();
+
   if ((LANGS as readonly string[]).includes(seg)) {
     const rest = pathname.replace(new RegExp(`^/${seg}`), "");
     return rest || "/";
   }
+
   return pathname || "/";
 }
 
@@ -83,32 +84,42 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
+  const previousPathRef = useRef<string | null>(null);
 
   useSeo(location.pathname);
 
-  const isAdminRoute = /^\/(az|en|tr|ru|es)\/admin(\/|$)/.test(location.pathname || "");
+  const isAdminRoute = /^\/(az|en|tr|ru|es)\/admin(\/|$)/.test(
+    location.pathname || "",
+  );
+
   const isHomeRoute = /^\/(az|en|tr|ru|es)\/?$/.test(location.pathname || "");
 
-  const [enterKey, setEnterKey] = useState(0);
-  const [entering, setEntering] = useState(false);
-
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const previousPath = previousPathRef.current;
+    const nextPath = location.pathname;
+
+    const previousRestPath = previousPath ? stripLang(previousPath) : null;
+    const nextRestPath = stripLang(nextPath);
+
+    const previousLang = previousPath ? getLangFromPath(previousPath) : null;
+    const nextLang = getLangFromPath(nextPath);
+
+    const isOnlyLanguageChange =
+      Boolean(previousPath) &&
+      previousRestPath === nextRestPath &&
+      previousLang !== nextLang;
+
+    previousPathRef.current = nextPath;
+
+    if (isOnlyLanguageChange) return;
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
 
     if (shellRef.current) {
       shellRef.current.scrollTop = 0;
     }
-
-    setEntering(false);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setEnterKey((key) => key + 1);
-        setEntering(true);
-      });
-    });
   }, [location.pathname]);
 
   return (
@@ -117,8 +128,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <main
         ref={mainRef}
-        key={(location.key || location.pathname) + ":" + enterKey}
-        className={`neox-main page-stage ${entering ? "is-entering" : ""}`}
+        className="neox-main"
         role="main"
         style={{ overflow: "visible", position: "relative" }}
       >

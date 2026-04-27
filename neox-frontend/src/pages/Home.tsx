@@ -25,6 +25,470 @@ const CHATBOT_VISUAL =
 const BRAND_VISUAL =
   "https://res.cloudinary.com/dppoomunj/image/upload/v1777157819/cdc46192-1199-4157-9005-df6655aec353_nl1lmz.webp";
 
+const WEBSITE_SHOWCASE_ONE =
+  "https://res.cloudinary.com/dppoomunj/image/upload/v1777264211/ChatGPT_Image_Apr_27_2026_08_25_30_AM_dq9sfl.webp";
+
+const WEBSITE_SHOWCASE_TWO =
+  "https://res.cloudinary.com/dppoomunj/image/upload/v1777264112/ChatGPT_Image_Apr_27_2026_08_25_13_AM_mnfm7d.webp";
+
+/**
+ * 3-cü atdığın link Cloudinary console linkidir, img src kimi işləmir.
+ * 3-cü public direct Cloudinary image URL olanda bunu dəyiş.
+ */
+const WEBSITE_SHOWCASE_THREE =
+  "https://res.cloudinary.com/dppoomunj/image/upload/v1777264211/ChatGPT_Image_Apr_27_2026_08_25_30_AM_dq9sfl.webp";
+
+const WEBSITE_ICON = "/image/vebsayticon.webp";
+const BRAND_ICON = "/image/brendicon.webp";
+const RESPONSE_ICON = "/image/cavab-sistemleri-icon.webp";
+const WORKFLOW_ICON = "/image/workflowicon.webp";
+
+const HOME_INLINE_STYLES = `
+  .neox-home-page .neox-capability-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid rgba(15, 23, 42, 0.075);
+    border-radius: 0;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: none !important;
+  }
+
+  .neox-home-page .neox-capability-card {
+    position: relative;
+    min-height: 292px;
+    padding: 30px 30px 28px;
+    overflow: hidden;
+    isolation: isolate;
+    border: 0;
+    border-right: 1px solid rgba(15, 23, 42, 0.075);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,250,252,0.68));
+    box-shadow: none !important;
+    transition:
+      background 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .neox-home-page .neox-capability-card:last-child {
+    border-right: 0;
+  }
+
+  .neox-home-page .neox-capability-card::before {
+    content: "";
+    position: absolute;
+    left: 30px;
+    top: 30px;
+    width: 26px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #2455e6, rgba(36, 85, 230, 0));
+    opacity: 0.42;
+    pointer-events: none;
+  }
+
+  .neox-home-page .neox-capability-card::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .neox-home-page .neox-capability-card:hover {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,1), rgba(247,249,252,0.84));
+  }
+
+  .neox-home-page .neox-capability-icon-wrap {
+    position: absolute;
+    right: 30px;
+    top: 30px;
+    z-index: 2;
+    width: 78px;
+    height: 78px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    margin: 0;
+    pointer-events: none;
+    user-select: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: none !important;
+  }
+
+  .neox-home-page .neox-capability-icon-wrap::before,
+  .neox-home-page .neox-capability-icon-wrap::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .neox-home-page .neox-capability-icon {
+    width: 72px !important;
+    height: 72px !important;
+    max-width: 72px !important;
+    max-height: 72px !important;
+    object-fit: contain;
+    display: block;
+    flex: 0 0 auto;
+    transform: translateZ(0);
+    filter: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .neox-home-page .neox-capability-card:hover .neox-capability-icon {
+    transform: translateY(-2px);
+    filter: none !important;
+    box-shadow: none !important;
+  }
+
+  .neox-home-page .neox-capability-fallback {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(37,99,235,0.14);
+    background: transparent;
+    box-shadow: none !important;
+    color: #2455e6;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+  }
+
+  .neox-home-page .neox-capability-number {
+    position: relative;
+    z-index: 2;
+    display: block;
+    margin: 98px 0 22px;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 42px;
+    line-height: 0.9;
+    letter-spacing: -0.07em;
+    color: rgba(15, 23, 42, 0.18);
+  }
+
+  .neox-home-page .neox-capability-card h3 {
+    position: relative;
+    z-index: 2;
+    margin: 0 0 13px;
+    max-width: 230px;
+    font-size: 21px;
+    line-height: 1.08;
+    letter-spacing: -0.045em;
+    color: #070a18;
+  }
+
+  .neox-home-page .neox-capability-card p {
+    position: relative;
+    z-index: 2;
+    margin: 0;
+    max-width: 238px;
+    font-size: 15px;
+    line-height: 1.62;
+    color: #66728a;
+  }
+
+  .neox-home-page .neox-gsap-text-one {
+    max-width: 470px;
+  }
+
+  .neox-home-page .neox-gsap-title {
+    margin-bottom: 0;
+  }
+
+  .neox-home-page .neox-visual-showcase {
+    position: absolute;
+    right: clamp(22px, 4.7vw, 82px);
+    top: 50%;
+    z-index: 7;
+    width: min(57vw, 900px);
+    height: min(62vh, 630px);
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .neox-home-page .neox-visual-showcase-shadow {
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    bottom: -36px;
+    z-index: 1;
+    height: 76px;
+    background: radial-gradient(ellipse at center, rgba(15,23,42,0.18), rgba(15,23,42,0));
+    filter: blur(18px);
+    opacity: 0.58;
+    pointer-events: none;
+  }
+
+  .neox-home-page .neox-visual-showcase-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    border-radius: 0;
+    background: #f8fafc;
+    box-shadow:
+      0 34px 90px rgba(15, 23, 42, 0.14),
+      0 10px 28px rgba(15, 23, 42, 0.08);
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  .neox-home-page .neox-visual-showcase-frame::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0)),
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(15,23,42,0.08));
+    pointer-events: none;
+  }
+
+  .neox-home-page .neox-visual-showcase-frame img {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    transform: translateZ(0);
+  }
+
+  .neox-home-page .neox-visual-showcase-frame--one {
+    z-index: 3;
+  }
+
+  .neox-home-page .neox-visual-showcase-frame--two {
+    z-index: 4;
+  }
+
+  .neox-home-page .neox-visual-showcase-frame--three {
+    z-index: 5;
+  }
+
+  .neox-home-page .neox-visual-showcase-progress {
+    position: absolute;
+    left: -34px;
+    top: 50%;
+    z-index: 9;
+    display: grid;
+    gap: 10px;
+    transform: translateY(-50%);
+  }
+
+  .neox-home-page .neox-visual-showcase-dot {
+    width: 5px;
+    height: 32px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.14);
+    overflow: hidden;
+  }
+
+  .neox-home-page .neox-visual-showcase-dot span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #0f172a;
+    transform: scaleY(0);
+    transform-origin: bottom center;
+  }
+
+  .neox-home-page .neox-visual-label-stack {
+    position: absolute;
+    right: 0;
+    bottom: -50px;
+    z-index: 10;
+    width: min(420px, 82%);
+    height: 28px;
+    pointer-events: none;
+  }
+
+  .neox-home-page .neox-visual-label {
+    position: absolute;
+    right: 0;
+    top: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  .neox-home-page .neox-visual-label::before {
+    content: "";
+    width: 32px;
+    height: 1px;
+    flex: 0 0 auto;
+    background: linear-gradient(90deg, rgba(36, 85, 230, 0), rgba(36, 85, 230, 0.72));
+  }
+
+  .neox-home-page .neox-visual-label span {
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 0.12em;
+    color: rgba(36, 85, 230, 0.72);
+  }
+
+  .neox-home-page .neox-visual-label strong {
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(15, 23, 42, 0.62);
+  }
+
+  @media (max-width: 1100px) {
+    .neox-home-page .neox-capability-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .neox-home-page .neox-capability-card:nth-child(2) {
+      border-right: 0;
+    }
+
+    .neox-home-page .neox-capability-card:nth-child(1),
+    .neox-home-page .neox-capability-card:nth-child(2) {
+      border-bottom: 1px solid rgba(15, 23, 42, 0.075);
+    }
+
+    .neox-home-page .neox-visual-showcase {
+      right: 26px;
+      width: 55vw;
+      height: min(56vh, 520px);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .neox-home-page .neox-capability-icon-wrap {
+      right: 24px;
+      top: 28px;
+      width: 70px;
+      height: 70px;
+    }
+
+    .neox-home-page .neox-capability-icon {
+      width: 64px !important;
+      height: 64px !important;
+      max-width: 64px !important;
+      max-height: 64px !important;
+    }
+
+    .neox-home-page .neox-capability-number {
+      margin-top: 90px;
+    }
+
+    .neox-home-page .neox-gsap-text-one {
+      max-width: 100%;
+    }
+
+    .neox-home-page .neox-visual-showcase {
+      position: relative;
+      inset: auto;
+      width: 100%;
+      height: 420px;
+      margin-top: 34px;
+      transform: none;
+      pointer-events: auto;
+    }
+
+    .neox-home-page .neox-visual-showcase-progress {
+      left: 18px;
+    }
+
+    .neox-home-page .neox-visual-label-stack {
+      bottom: -46px;
+      width: 92%;
+    }
+
+    .neox-home-page .neox-visual-label strong,
+    .neox-home-page .neox-visual-label span {
+      font-size: 11px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .neox-home-page .neox-capability-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .neox-home-page .neox-capability-card,
+    .neox-home-page .neox-capability-card:nth-child(2) {
+      min-height: 246px;
+      border-right: 0;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.075);
+      padding: 28px 24px 26px;
+    }
+
+    .neox-home-page .neox-capability-card:last-child {
+      border-bottom: 0;
+    }
+
+    .neox-home-page .neox-capability-card::before {
+      left: 24px;
+      top: 28px;
+    }
+
+    .neox-home-page .neox-capability-icon-wrap {
+      right: 24px;
+      top: 26px;
+      width: 64px;
+      height: 64px;
+    }
+
+    .neox-home-page .neox-capability-icon {
+      width: 58px !important;
+      height: 58px !important;
+      max-width: 58px !important;
+      max-height: 58px !important;
+    }
+
+    .neox-home-page .neox-capability-number {
+      margin-top: 82px;
+    }
+
+    .neox-home-page .neox-capability-card h3 {
+      font-size: 20px;
+    }
+
+    .neox-home-page .neox-visual-showcase {
+      height: 330px;
+    }
+
+    .neox-home-page .neox-visual-showcase-progress {
+      display: none;
+    }
+
+    .neox-home-page .neox-visual-label-stack {
+      left: 0;
+      right: auto;
+      bottom: -42px;
+      width: 100%;
+    }
+
+    .neox-home-page .neox-visual-label {
+      left: 0;
+      right: auto;
+      gap: 9px;
+    }
+
+    .neox-home-page .neox-visual-label::before {
+      width: 22px;
+    }
+
+    .neox-home-page .neox-visual-label strong,
+    .neox-home-page .neox-visual-label span {
+      font-size: 10px;
+      letter-spacing: 0.09em;
+    }
+  }
+`;
+
 const LANGS: Lang[] = ["az", "tr", "ru", "en", "es"];
 
 function isLang(value: string | undefined | null): value is Lang {
@@ -136,1235 +600,20 @@ const processSteps = [
   },
 ] as const;
 
-const HOME_INLINE_CSS = `
-  html,
-  body,
-  #root {
-    scroll-snap-type: none !important;
-  }
-
-  .neox-home-page,
-  .neox-home-page * {
-    scroll-snap-align: none !important;
-    scroll-snap-stop: normal !important;
-  }
-
-  .neox-home-extra {
-    --home-section-title: clamp(2.18rem, 3.05vw, 3.32rem);
-    --home-section-title-mobile: clamp(2.05rem, 8vw, 2.82rem);
-    --home-title-line: linear-gradient(
-      90deg,
-      transparent,
-      rgba(36, 71, 198, 0.16),
-      rgba(73, 100, 255, 0.72),
-      rgba(36, 71, 198, 0.16),
-      transparent
-    );
-    background: #ffffff;
-  }
-
-  .neox-home-page .neox-card-section,
-  .neox-home-page .neox-process-section,
-  .neox-home-page .neox-extra-section-three,
-  .neox-home-page .neox-interactive-system-section {
-    background: #ffffff !important;
-    border: 0 !important;
-    box-shadow: none !important;
-  }
-
-  .neox-home-page .neox-process-section::before,
-  .neox-home-page .neox-extra-section-three::before {
-    display: none !important;
-  }
-
-  .neox-home-section-head {
-    max-width: 780px;
-    margin: 0 auto 42px;
-    text-align: center;
-  }
-
-  .neox-home-section-title,
-  .neox-home-extra .neox-extra-title,
-  .neox-home-extra .neox-build-title,
-  .neox-home-extra .neox-process-title,
-  .neox-stack-title {
-    margin: 0;
-    color: var(--nx-ink);
-    font-size: var(--home-section-title) !important;
-    font-weight: 520;
-    line-height: 1.08;
-    letter-spacing: -0.058em;
-    text-wrap: balance;
-  }
-
-  .neox-home-section-title {
-    max-width: 720px;
-    margin-inline: auto;
-    text-align: center;
-  }
-
-  .neox-home-section-title span,
-  .neox-home-extra .neox-extra-title span,
-  .neox-home-extra .neox-build-title span,
-  .neox-home-extra .neox-process-title span,
-  .neox-stack-title span {
-    color: var(--nx-blue);
-    font-weight: inherit;
-  }
-
-  .neox-home-section-title::after,
-  .neox-home-extra .neox-extra-title::after,
-  .neox-home-extra .neox-build-title::after,
-  .neox-home-extra .neox-process-title::after,
-  .neox-stack-title::after {
-    content: "";
-    display: block;
-    width: 68px;
-    height: 1px;
-    margin-top: 22px;
-    background: var(--home-title-line);
-    box-shadow:
-      0 0 14px rgba(73, 100, 255, 0.2),
-      0 0 32px rgba(73, 100, 255, 0.09);
-  }
-
-  .neox-home-section-title::after,
-  .neox-capability-head .neox-extra-title::after,
-  .neox-stack-title::after {
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .neox-extra-kicker {
-    margin: 0 0 14px;
-    color: var(--nx-blue);
-    font-size: 11px;
-    font-weight: 760;
-    line-height: 1.2;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-
-  .neox-extra-lead {
-    margin: 22px 0 0;
-    max-width: 560px;
-    color: var(--nx-muted);
-    font-size: 15.5px;
-    font-weight: 430;
-    line-height: 1.82;
-    letter-spacing: -0.018em;
-  }
-
-  .neox-card-section {
-    padding-top: 86px !important;
-    padding-bottom: 88px !important;
-  }
-
-  .neox-interactive-system-section {
-    position: relative;
-    background: #ffffff;
-    overflow: visible;
-  }
-
-  .neox-interactive-sticky {
-    position: relative;
-    height: 100svh;
-    min-height: 720px;
-    overflow: hidden;
-    background: #ffffff;
-    isolation: isolate;
-  }
-
-  .neox-interactive-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    background: #ffffff;
-    pointer-events: none;
-  }
-
-  .neox-interactive-bg::before {
-    display: none !important;
-  }
-
-  .neox-interactive-stage {
-    position: relative;
-    z-index: 2;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .neox-interactive-inner {
-    width: 100%;
-    height: 100%;
-    margin: 0 auto;
-    position: relative;
-  }
-
-  .neox-gsap-text {
-    position: absolute;
-    width: min(560px, 42vw);
-    will-change: transform, opacity;
-    transform: translate3d(0, 0, 0);
-    backface-visibility: hidden;
-  }
-
-  .neox-gsap-text-one {
-    left: 58px;
-    top: clamp(74px, 13vh, 128px);
-  }
-
-  .neox-gsap-text-two {
-    right: 58px;
-    bottom: clamp(58px, 10vh, 96px);
-    opacity: 0;
-  }
-
-  .neox-gsap-kicker {
-    margin: 0 0 16px;
-    color: var(--nx-blue);
-    font-size: 11px;
-    font-weight: 780;
-    line-height: 1.2;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  .neox-gsap-title {
-    margin: 0;
-    color: var(--nx-ink);
-    font-size: var(--home-section-title);
-    font-weight: 530;
-    line-height: 1.04;
-    letter-spacing: -0.062em;
-    text-wrap: balance;
-  }
-
-  .neox-gsap-title span {
-    color: var(--nx-blue);
-    font-weight: inherit;
-  }
-
-  .neox-gsap-title::after {
-    content: "";
-    display: block;
-    width: 72px;
-    height: 1px;
-    margin-top: 24px;
-    background: var(--home-title-line);
-    box-shadow:
-      0 0 14px rgba(73, 100, 255, 0.2),
-      0 0 32px rgba(73, 100, 255, 0.09);
-  }
-
-  .neox-gsap-lead {
-    margin: 24px 0 0;
-    max-width: 520px;
-    color: #506178;
-    font-size: 1rem;
-    font-weight: 440;
-    line-height: 1.82;
-    letter-spacing: -0.018em;
-  }
-
-  .neox-gsap-points {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 30px;
-  }
-
-  .neox-gsap-point {
-    min-height: 108px;
-    padding: 15px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.86);
-    border: 1px solid rgba(15, 23, 42, 0.07);
-    box-shadow: 0 16px 44px rgba(15, 23, 42, 0.055);
-    backdrop-filter: blur(16px);
-  }
-
-  .neox-gsap-point span {
-    display: block;
-    width: 27px;
-    height: 27px;
-    margin-bottom: 12px;
-    border-radius: 10px;
-    background: rgba(36, 71, 198, 0.08);
-    color: var(--nx-blue);
-    font-size: 11px;
-    font-weight: 760;
-    line-height: 27px;
-    text-align: center;
-  }
-
-  .neox-gsap-point strong {
-    display: block;
-    color: var(--nx-ink);
-    font-size: 13.5px;
-    font-weight: 730;
-    line-height: 1.18;
-    letter-spacing: -0.022em;
-  }
-
-  .neox-gsap-point p {
-    margin: 7px 0 0;
-    color: #64748b;
-    font-size: 12.6px;
-    font-weight: 430;
-    line-height: 1.44;
-    letter-spacing: -0.012em;
-  }
-
-  .neox-gsap-mini-label {
-    position: absolute;
-    z-index: 3;
-    left: 50%;
-    bottom: 44px;
-    transform: translateX(-50%);
-    min-height: 38px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    border-radius: 13px;
-    background: rgba(255, 255, 255, 0.76);
-    border: 1px solid rgba(15, 23, 42, 0.07);
-    color: #52627a;
-    font-size: 12px;
-    font-weight: 660;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    backdrop-filter: blur(18px);
-    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
-  }
-
-  .neox-stack-panel {
-    position: absolute;
-    top: var(--nx-header-h, 56px);
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: calc(100% - var(--nx-header-h, 56px));
-    overflow: hidden;
-    background: #ffffff;
-    border-top: 1px solid rgba(15, 23, 42, 0.07);
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    box-shadow:
-      0 -22px 72px rgba(15, 23, 42, 0.075),
-      0 -1px 0 rgba(15, 23, 42, 0.035);
-    will-change: transform, opacity;
-    transform: translate3d(0, 0, 0);
-    transform-origin: center top;
-    backface-visibility: hidden;
-    contain: paint;
-  }
-
-  .neox-stack-panel--one {
-    border-radius: 32px 32px 0 0;
-    z-index: 10;
-  }
-
-  .neox-stack-panel--two {
-    border-radius: 32px 32px 0 0;
-    z-index: 11;
-  }
-
-  .neox-stack-panel--three {
-    border-radius: 32px 32px 0 0;
-    z-index: 12;
-  }
-
-  .neox-stack-panel--four {
-    border-radius: 0;
-    z-index: 20;
-    box-shadow:
-      0 -24px 80px rgba(15, 23, 42, 0.09),
-      0 -1px 0 rgba(15, 23, 42, 0.055);
-  }
-
-  .neox-stack-panel-inner {
-    width: min(100%, var(--nx-container));
-    height: 100%;
-    margin: 0 auto;
-    padding: clamp(16px, 2vw, 28px) 24px clamp(28px, 3.8vw, 52px);
-    overflow: hidden;
-  }
-
-  .neox-stack-panel--one .neox-stack-panel-inner {
-    max-width: 1420px;
-    width: 100%;
-    padding-top: clamp(18px, 2.2vw, 32px);
-    padding-right: clamp(26px, 3.55vw, 62px);
-    padding-bottom: clamp(28px, 3.8vw, 52px);
-    padding-left: clamp(26px, 3.55vw, 62px);
-    overflow: hidden;
-    overflow: clip;
-  }
-
-  .neox-stack-panel--two .neox-stack-panel-inner {
-    max-width: 1420px;
-    padding-top: clamp(18px, 2.2vw, 32px);
-    padding-right: clamp(26px, 3.55vw, 62px);
-    padding-bottom: clamp(28px, 3.8vw, 52px);
-    padding-left: clamp(26px, 3.55vw, 62px);
-    overflow: hidden;
-    overflow: clip;
-  }
-
-  .neox-stack-panel--three .neox-stack-panel-inner {
-    max-width: 1320px;
-    height: 100%;
-    min-height: 0;
-    padding-top: clamp(18px, 2.2vw, 32px);
-    padding-right: clamp(26px, 3.55vw, 62px);
-    padding-bottom: clamp(28px, 3.8vw, 52px);
-    padding-left: clamp(26px, 3.55vw, 62px);
-    display: block;
-    overflow: hidden;
-    overflow: clip;
-    will-change: auto;
-  }
-
-  .neox-stack-panel--four .neox-stack-panel-inner {
-    height: 100%;
-    max-width: var(--nx-container);
-    padding: clamp(70px, 8vw, 106px) 24px clamp(58px, 7vw, 88px);
-    display: flex;
-    align-items: center;
-  }
-
-  .neox-stack-panel-head {
-    max-width: 760px;
-    margin: 0 auto 32px;
-    text-align: center;
-  }
-
-  .neox-stack-panel--two .neox-stack-panel-head {
-    margin-bottom: 20px;
-  }
-
-  .neox-stack-lead {
-    margin: 20px auto 0;
-    max-width: 620px;
-    color: #5b6b82;
-    font-size: 15.5px;
-    font-weight: 430;
-    line-height: 1.78;
-    letter-spacing: -0.016em;
-  }
-
-  .neox-stack-grid {
-    display: grid;
-    gap: 18px;
-  }
-
-  .neox-stack-grid--three {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .neox-stack-grid--two {
-    grid-template-columns: 0.9fr 1.1fr;
-    align-items: stretch;
-  }
-
-  .neox-stack-grid--metrics {
-    grid-template-columns: 1.05fr repeat(3, minmax(0, 1fr));
-    align-items: stretch;
-  }
-
-  .neox-stack-clean-card {
-    position: relative;
-    min-height: 300px;
-    overflow: hidden;
-    padding: 26px;
-    border-radius: 26px;
-    border: 1px solid rgba(15, 23, 42, 0.075);
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,249,251,0.98)),
-      #ffffff;
-    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.055);
-    will-change: transform, opacity;
-  }
-
-  .neox-stack-clean-card::before {
-    content: "";
-    position: absolute;
-    left: 26px;
-    top: 26px;
-    width: 34px;
-    height: 34px;
-    border-radius: 13px;
-    background: rgba(36, 71, 198, 0.08);
-  }
-
-  .neox-stack-clean-card::after {
-    content: "";
-    position: absolute;
-    left: 43px;
-    top: 62px;
-    bottom: 26px;
-    width: 1px;
-    background: linear-gradient(180deg, rgba(36, 71, 198, 0.2), transparent);
-  }
-
-  .neox-stack-card-label {
-    display: inline-flex;
-    align-items: center;
-    min-height: 30px;
-    margin-top: 58px;
-    padding: 0 10px;
-    border-radius: 10px;
-    background: rgba(36, 71, 198, 0.07);
-    border: 1px solid rgba(36, 71, 198, 0.1);
-    color: var(--nx-blue);
-    font-size: 11px;
-    font-weight: 760;
-    line-height: 1;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .neox-stack-clean-card h3 {
-    margin: 20px 0 0;
-    color: var(--nx-ink);
-    font-size: 1.42rem;
-    font-weight: 560;
-    line-height: 1.1;
-    letter-spacing: -0.05em;
-    text-wrap: balance;
-  }
-
-  .neox-stack-clean-card p {
-    margin: 12px 0 0;
-    color: #607087;
-    font-size: 14px;
-    font-weight: 420;
-    line-height: 1.65;
-    letter-spacing: -0.012em;
-  }
-
-  .neox-stack-note {
-    min-height: 132px;
-    display: flex;
-    align-items: center;
-    padding: 26px;
-    border-radius: 22px;
-    background: #0e1420;
-    color: #ffffff;
-    will-change: transform, opacity;
-  }
-
-  .neox-stack-note strong {
-    display: block;
-    max-width: 430px;
-    font-size: 1.1rem;
-    font-weight: 560;
-    line-height: 1.25;
-    letter-spacing: -0.04em;
-  }
-
-  .neox-stack-metric {
-    min-height: 132px;
-    padding: 22px;
-    border-radius: 22px;
-    background: #f8f9fb;
-    border: 1px solid rgba(15, 23, 42, 0.065);
-    will-change: transform, opacity;
-  }
-
-  .neox-stack-metric strong {
-    display: block;
-    color: var(--nx-ink);
-    font-size: 1.58rem;
-    font-weight: 620;
-    line-height: 1;
-    letter-spacing: -0.05em;
-  }
-
-  .neox-stack-metric span {
-    display: block;
-    margin-top: 12px;
-    color: #65758b;
-    font-size: 13.5px;
-    font-weight: 430;
-    line-height: 1.5;
-    letter-spacing: -0.012em;
-  }
-
-  .neox-stack-system-board {
-    min-height: 280px;
-    padding: 22px;
-    border-radius: 26px;
-    border: 1px solid rgba(15, 23, 42, 0.075);
-    background:
-      radial-gradient(420px 220px at 20% 14%, rgba(36, 71, 198, 0.06), transparent 68%),
-      linear-gradient(180deg, #ffffff, #f8f9fb);
-    box-shadow: 0 20px 56px rgba(15, 23, 42, 0.055);
-    will-change: transform, opacity;
-  }
-
-  .neox-stack-system-board-row {
-    display: grid;
-    grid-template-columns: 46px minmax(0, 1fr);
-    gap: 14px;
-    align-items: center;
-    padding: 14px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.84);
-    border: 1px solid rgba(15, 23, 42, 0.06);
-  }
-
-  .neox-stack-system-board-row + .neox-stack-system-board-row {
-    margin-top: 10px;
-  }
-
-  .neox-stack-system-board-badge {
-    width: 46px;
-    height: 46px;
-    display: grid;
-    place-items: center;
-    border-radius: 16px;
-    background: rgba(36, 71, 198, 0.08);
-    color: var(--nx-blue);
-    font-size: 12px;
-    font-weight: 780;
-  }
-
-  .neox-stack-system-board-row h4 {
-    margin: 0;
-    color: var(--nx-ink);
-    font-size: 0.96rem;
-    font-weight: 680;
-    line-height: 1.2;
-    letter-spacing: -0.028em;
-  }
-
-  .neox-stack-system-board-row p {
-    margin: 5px 0 0;
-    color: #607087;
-    font-size: 13px;
-    font-weight: 420;
-    line-height: 1.48;
-    letter-spacing: -0.012em;
-  }
-
-  .neox-stack-split-text {
-    padding: 2px 0 2px 4px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .neox-stack-split-list {
-    display: grid;
-    gap: 9px;
-    margin-top: 18px;
-  }
-
-  .neox-stack-split-item {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 12px;
-    align-items: start;
-    padding: 13px 15px 13px 12px;
-    border-radius: 17px;
-    background: #f8f9fb;
-    border: 1px solid rgba(15, 23, 42, 0.065);
-    will-change: transform, opacity;
-  }
-
-  .neox-stack-split-item-badge {
-    width: 38px;
-    height: 38px;
-    border-radius: 13px;
-    background: rgba(36, 71, 198, 0.08);
-    color: var(--nx-blue);
-    font-size: 11px;
-    font-weight: 760;
-    line-height: 38px;
-    text-align: center;
-  }
-
-  .neox-stack-split-item h4 {
-    margin: 0;
-    color: var(--nx-ink);
-    font-size: 0.98rem;
-    font-weight: 650;
-    line-height: 1.18;
-    letter-spacing: -0.03em;
-  }
-
-  .neox-stack-split-item p {
-    margin: 6px 0 0;
-    color: #607087;
-    font-size: 13px;
-    font-weight: 420;
-    line-height: 1.48;
-    letter-spacing: -0.013em;
-  }
-
-  .neox-stack-panel--three .neox-stack-grid--two {
-    width: 100%;
-    gap: clamp(14px, 1.8vw, 22px);
-    align-items: start;
-  }
-
-  .neox-stack-panel--three .neox-stack-title {
-    font-size: clamp(2rem, 2.65vw, 3rem) !important;
-    line-height: 1.04;
-    letter-spacing: -0.058em;
-  }
-
-  .neox-stack-panel--three .neox-stack-title::after {
-    width: 56px;
-    margin-top: 14px;
-  }
-
-  .neox-stack-panel--three .neox-extra-kicker {
-    margin-bottom: 9px;
-    font-size: 10.5px;
-    letter-spacing: 0.15em;
-  }
-
-  .neox-stack-panel--three .neox-stack-lead {
-    max-width: 520px;
-    margin-top: 12px;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board {
-    min-height: auto;
-    padding: 14px;
-    border-radius: 24px;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board-row {
-    grid-template-columns: 40px minmax(0, 1fr);
-    gap: 12px;
-    padding: 11px;
-    border-radius: 17px;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board-row + .neox-stack-system-board-row {
-    margin-top: 8px;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board-badge {
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
-    font-size: 11px;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board-row h4 {
-    font-size: 0.92rem;
-    line-height: 1.15;
-  }
-
-  .neox-stack-panel--three .neox-stack-system-board-row p {
-    margin-top: 4px;
-    font-size: 12.5px;
-    line-height: 1.36;
-  }
-
-  .neox-stack-panel--three .neox-stack-split-list {
-    gap: 7px;
-    margin-top: 13px;
-  }
-
-  .neox-stack-panel--three .neox-stack-split-item {
-    grid-template-columns: 34px minmax(0, 1fr);
-    gap: 10px;
-    padding: 9px 12px 9px 9px;
-    border-radius: 16px;
-  }
-
-  .neox-stack-panel--three .neox-stack-split-item-badge {
-    width: 34px;
-    height: 34px;
-    border-radius: 12px;
-    font-size: 10.5px;
-    line-height: 34px;
-  }
-
-  .neox-stack-panel--three .neox-stack-split-item h4 {
-    font-size: 0.9rem;
-    line-height: 1.15;
-  }
-
-  .neox-stack-panel--three .neox-stack-split-item p {
-    margin-top: 4px;
-    font-size: 12.4px;
-    line-height: 1.34;
-  }
-
-  .neox-layer-measure-word {
-    color: inherit !important;
-  }
-
-  .neox-capability-inner {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-  }
-
-  .neox-capability-head {
-    max-width: 780px;
-    margin: 0 auto 38px;
-    text-align: center;
-  }
-
-  .neox-capability-head .neox-extra-title {
-    max-width: 760px;
-    margin-inline: auto;
-    text-align: center;
-  }
-
-  .neox-capability-head .neox-extra-lead {
-    max-width: 640px;
-    margin: 20px auto 0;
-    text-align: center;
-  }
-
-  .neox-capability-grid {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-top: 1px solid rgba(15, 23, 42, 0.075);
-    border-left: 1px solid rgba(15, 23, 42, 0.075);
-  }
-
-  .neox-capability-card {
-    min-height: 236px;
-    padding: 28px 24px;
-    border-right: 1px solid rgba(15, 23, 42, 0.075);
-    border-bottom: 1px solid rgba(15, 23, 42, 0.075);
-    background: #ffffff !important;
-    transition:
-      background-color 180ms ease,
-      box-shadow 180ms ease;
-  }
-
-  .neox-capability-card:hover {
-    background: #ffffff !important;
-    box-shadow: inset 0 2px 0 rgba(36, 71, 198, 0.35);
-  }
-
-  .neox-capability-number {
-    display: block;
-    color: rgba(15, 23, 42, 0.26);
-    font-family: var(--nx-font-display);
-    font-size: 3.1rem;
-    font-weight: 400;
-    line-height: 0.9;
-    letter-spacing: -0.055em;
-  }
-
-  .neox-capability-card:hover .neox-capability-number {
-    color: var(--nx-blue);
-  }
-
-  .neox-capability-card h3 {
-    margin: 34px 0 0;
-    color: var(--nx-ink);
-    font-size: 1.22rem;
-    font-weight: 560;
-    line-height: 1.12;
-    letter-spacing: -0.045em;
-    text-wrap: balance;
-  }
-
-  .neox-capability-card p {
-    margin: 13px 0 0;
-    color: #5f6c80;
-    font-size: 14px;
-    font-weight: 420;
-    line-height: 1.68;
-    letter-spacing: -0.014em;
-  }
-
-  .neox-extra-section-three {
-    position: relative;
-    overflow: hidden;
-    padding: 92px 0 108px !important;
-    background: #ffffff !important;
-  }
-
-  .neox-build-band {
-    position: relative;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.52fr);
-    gap: clamp(34px, 5vw, 76px);
-    align-items: center;
-    padding: clamp(38px, 5vw, 66px);
-    border-radius: 34px;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    background:
-      radial-gradient(620px 320px at 0% 0%, rgba(36, 71, 198, 0.34), transparent 64%),
-      radial-gradient(480px 260px at 100% 100%, rgba(19, 184, 255, 0.18), transparent 68%),
-      linear-gradient(135deg, #11141b 0%, #171b24 48%, #202530 100%) !important;
-    background-image:
-      radial-gradient(620px 320px at 0% 0%, rgba(36, 71, 198, 0.34), transparent 64%),
-      radial-gradient(480px 260px at 100% 100%, rgba(19, 184, 255, 0.18), transparent 68%),
-      linear-gradient(135deg, #11141b 0%, #171b24 48%, #202530 100%) !important;
-    box-shadow:
-      0 34px 90px rgba(15, 23, 42, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-    isolation: isolate;
-  }
-
-  .neox-build-band::before {
-    content: "";
-    position: absolute;
-    inset: 1px;
-    z-index: -1;
-    border-radius: inherit;
-    background:
-      linear-gradient(90deg, rgba(255,255,255,0.075), transparent 42%),
-      radial-gradient(260px 120px at 18% 18%, rgba(255,255,255,0.08), transparent 72%);
-    pointer-events: none;
-  }
-
-  .neox-build-band::after {
-    content: "";
-    position: absolute;
-    right: -90px;
-    top: -110px;
-    width: 260px;
-    height: 260px;
-    border-radius: 999px;
-    background: rgba(73, 100, 255, 0.2);
-    filter: blur(46px);
-    opacity: 0.72;
-    pointer-events: none;
-  }
-
-  .neox-build-content {
-    position: relative;
-    z-index: 1;
-  }
-
-  .neox-build-band .neox-extra-kicker {
-    color: #8fb3ff;
-  }
-
-  .neox-build-title {
-    max-width: 760px;
-    color: #f7f9ff !important;
-  }
-
-  .neox-build-title span {
-    color: #8fb3ff !important;
-  }
-
-  .neox-build-title::after {
-    background: linear-gradient(90deg, rgba(143, 179, 255, 0.7), rgba(19, 184, 255, 0.26), transparent) !important;
-    box-shadow: 0 0 26px rgba(73, 100, 255, 0.26) !important;
-  }
-
-  .neox-build-text {
-    margin: 22px 0 0;
-    max-width: 620px;
-    color: rgba(232, 238, 255, 0.72);
-    font-size: 16px;
-    font-weight: 420;
-    line-height: 1.78;
-    letter-spacing: -0.016em;
-  }
-
-  .neox-build-benefits {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 28px;
-    max-width: 690px;
-  }
-
-  .neox-build-benefit {
-    min-height: 88px;
-    padding: 16px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-  }
-
-  .neox-build-benefit strong {
-    display: block;
-    color: #ffffff;
-    font-size: 13.5px;
-    font-weight: 680;
-    line-height: 1.16;
-    letter-spacing: -0.024em;
-  }
-
-  .neox-build-benefit span {
-    display: block;
-    margin-top: 8px;
-    color: rgba(232, 238, 255, 0.62);
-    font-size: 12.5px;
-    line-height: 1.42;
-    letter-spacing: -0.01em;
-  }
-
-  .neox-build-action-card {
-    position: relative;
-    z-index: 1;
-    padding: 22px;
-    border-radius: 26px;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.055)),
-      rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 22px 54px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(18px);
-  }
-
-  .neox-build-action-card h3 {
-    margin: 0;
-    color: #ffffff;
-    font-size: 1.28rem;
-    font-weight: 600;
-    line-height: 1.14;
-    letter-spacing: -0.045em;
-  }
-
-  .neox-build-checks {
-    display: grid;
-    gap: 10px;
-    margin: 20px 0 0;
-  }
-
-  .neox-build-check {
-    display: grid;
-    grid-template-columns: 26px minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
-    color: rgba(232, 238, 255, 0.76);
-    font-size: 13.5px;
-    line-height: 1.42;
-    letter-spacing: -0.012em;
-  }
-
-  .neox-build-check::before {
-    content: "";
-    width: 26px;
-    height: 26px;
-    border-radius: 10px;
-    background:
-      radial-gradient(circle at 50% 50%, rgba(143, 179, 255, 0.28), rgba(36, 71, 198, 0.14));
-    border: 1px solid rgba(143, 179, 255, 0.24);
-  }
-
-  .neox-build-actions {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-top: 24px;
-  }
-
-  .neox-build-actions .nx-button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .neox-build-actions .nx-button--primary {
-    background: #ffffff !important;
-    color: #11141b !important;
-    border-color: rgba(255, 255, 255, 0.92) !important;
-    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.18) !important;
-  }
-
-  .neox-build-actions .nx-button--secondary {
-    background: rgba(255, 255, 255, 0.055) !important;
-    color: #ffffff !important;
-    border-color: rgba(255, 255, 255, 0.14) !important;
-  }
-
-  .neox-build-note {
-    margin: 14px 0 0;
-    color: rgba(232, 238, 255, 0.56);
-    font-size: 12.5px;
-    line-height: 1.5;
-    letter-spacing: -0.012em;
-  }
-
-  @media (max-width: 1180px) {
-    .neox-gsap-text {
-      width: min(620px, 58vw);
-    }
-
-    .neox-stack-grid--three,
-    .neox-stack-grid--two {
-      grid-template-columns: 1fr;
-    }
-
-    .neox-stack-grid--metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .neox-stack-note {
-      grid-column: 1 / -1;
-    }
-
-    .neox-stack-clean-card {
-      min-height: 220px;
-    }
-
-    .neox-stack-system-board {
-      min-height: 280px;
-    }
-
-    .neox-capability-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .neox-build-band {
-      grid-template-columns: 1fr;
-    }
-
-    .neox-build-action-card {
-      max-width: 560px;
-    }
-  }
-
-  @media (max-width: 900px) {
-    .neox-interactive-system-section {
-      height: auto;
-    }
-
-    .neox-interactive-sticky {
-      position: relative;
-      top: auto;
-      height: auto;
-      min-height: 0;
-      padding: 76px 0 0;
-      overflow: visible;
-    }
-
-    .neox-interactive-stage {
-      height: auto;
-      overflow: visible;
-    }
-
-    .neox-interactive-inner {
-      display: grid;
-      gap: 34px;
-      height: auto;
-    }
-
-    .neox-gsap-text {
-      position: relative;
-      left: auto;
-      right: auto;
-      top: auto;
-      bottom: auto;
-      width: 100%;
-      padding-inline: 18px;
-      transform: none !important;
-      opacity: 1 !important;
-    }
-
-    .neox-gsap-text-two {
-      display: none;
-    }
-
-    .neox-gsap-points {
-      grid-template-columns: 1fr;
-      max-width: 520px;
-    }
-
-    .neox-gsap-mini-label {
-      display: none;
-    }
-
-    .neox-stack-panel {
-      position: relative;
-      top: auto !important;
-      bottom: auto !important;
-      left: auto !important;
-      right: auto !important;
-      width: 100%;
-      height: auto !important;
-      transform: none !important;
-      border-radius: 30px 30px 0 0 !important;
-      opacity: 1 !important;
-      contain: none;
-    }
-
-    .neox-stack-panel--four {
-      border-radius: 0 !important;
-    }
-
-    .neox-stack-panel + .neox-stack-panel {
-      margin-top: -18px;
-    }
-
-    .neox-stack-panel-inner {
-      height: auto;
-      overflow: visible;
-      padding: 34px 18px 46px;
-      display: block;
-    }
-  }
-
-  @media (max-width: 760px) {
-    .neox-home-section-title,
-    .neox-home-extra .neox-extra-title,
-    .neox-home-extra .neox-build-title,
-    .neox-home-extra .neox-process-title,
-    .neox-stack-title,
-    .neox-gsap-title {
-      font-size: var(--home-section-title-mobile) !important;
-      line-height: 1.06;
-    }
-
-    .neox-stack-grid--metrics {
-      grid-template-columns: 1fr;
-    }
-
-    .neox-stack-clean-card,
-    .neox-stack-system-board {
-      min-height: 240px;
-      border-radius: 22px;
-    }
-
-    .neox-capability-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .neox-capability-card {
-      min-height: 210px;
-    }
-
-    .neox-extra-section-three {
-      padding: 70px 0 84px !important;
-    }
-
-    .neox-build-band {
-      padding: 28px;
-      border-radius: 26px;
-    }
-
-    .neox-build-benefits {
-      grid-template-columns: 1fr;
-    }
-
-    .neox-build-action-card {
-      padding: 18px;
-      border-radius: 22px;
-    }
-  }
-`;
+const showcaseLabels = [
+  {
+    number: "01",
+    label: "Website design system",
+  },
+  {
+    number: "02",
+    label: "Brand experience",
+  },
+  {
+    number: "03",
+    label: "Digital presentation",
+  },
+] as const;
 
 function HeroLoopText() {
   return (
@@ -1403,6 +652,37 @@ function SystemStrip() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CapabilityIcon({
+  src,
+  label,
+  fallback,
+}: {
+  src: string;
+  label: string;
+  fallback: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <div className="neox-capability-icon-wrap" aria-hidden="true">
+      {!failed ? (
+        <img
+          src={src}
+          alt=""
+          className="neox-capability-icon"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="neox-capability-fallback" title={label}>
+          {fallback}
+        </div>
+      )}
     </div>
   );
 }
@@ -1801,8 +1081,20 @@ function InteractiveSystemSection() {
   const bgRef = useRef<HTMLDivElement | null>(null);
 
   const textOneRef = useRef<HTMLDivElement | null>(null);
-  const textTwoRef = useRef<HTMLDivElement | null>(null);
   const miniLabelRef = useRef<HTMLDivElement | null>(null);
+  const showcaseRef = useRef<HTMLDivElement | null>(null);
+
+  const showcaseFrameOneRef = useRef<HTMLDivElement | null>(null);
+  const showcaseFrameTwoRef = useRef<HTMLDivElement | null>(null);
+  const showcaseFrameThreeRef = useRef<HTMLDivElement | null>(null);
+
+  const showcaseLabelOneRef = useRef<HTMLDivElement | null>(null);
+  const showcaseLabelTwoRef = useRef<HTMLDivElement | null>(null);
+  const showcaseLabelThreeRef = useRef<HTMLDivElement | null>(null);
+
+  const showcaseDotOneRef = useRef<HTMLSpanElement | null>(null);
+  const showcaseDotTwoRef = useRef<HTMLSpanElement | null>(null);
+  const showcaseDotThreeRef = useRef<HTMLSpanElement | null>(null);
 
   const panelOneRef = useRef<HTMLDivElement | null>(null);
   const panelTwoRef = useRef<HTMLDivElement | null>(null);
@@ -1824,8 +1116,20 @@ function InteractiveSystemSection() {
     const sticky = stickyRef.current;
     const bg = bgRef.current;
     const textOne = textOneRef.current;
-    const textTwo = textTwoRef.current;
     const miniLabel = miniLabelRef.current;
+    const showcase = showcaseRef.current;
+
+    const showcaseFrameOne = showcaseFrameOneRef.current;
+    const showcaseFrameTwo = showcaseFrameTwoRef.current;
+    const showcaseFrameThree = showcaseFrameThreeRef.current;
+
+    const showcaseLabelOne = showcaseLabelOneRef.current;
+    const showcaseLabelTwo = showcaseLabelTwoRef.current;
+    const showcaseLabelThree = showcaseLabelThreeRef.current;
+
+    const showcaseDotOne = showcaseDotOneRef.current;
+    const showcaseDotTwo = showcaseDotTwoRef.current;
+    const showcaseDotThree = showcaseDotThreeRef.current;
 
     const panelOne = panelOneRef.current;
     const panelTwo = panelTwoRef.current;
@@ -1845,8 +1149,17 @@ function InteractiveSystemSection() {
       !sticky ||
       !bg ||
       !textOne ||
-      !textTwo ||
       !miniLabel ||
+      !showcase ||
+      !showcaseFrameOne ||
+      !showcaseFrameTwo ||
+      !showcaseFrameThree ||
+      !showcaseLabelOne ||
+      !showcaseLabelTwo ||
+      !showcaseLabelThree ||
+      !showcaseDotOne ||
+      !showcaseDotTwo ||
+      !showcaseDotThree ||
       !panelOne ||
       !panelTwo ||
       !panelThree ||
@@ -1873,8 +1186,14 @@ function InteractiveSystemSection() {
       gsap.set(
         [
           textOne,
-          textTwo,
           miniLabel,
+          showcase,
+          showcaseFrameOne,
+          showcaseFrameTwo,
+          showcaseFrameThree,
+          showcaseLabelOne,
+          showcaseLabelTwo,
+          showcaseLabelThree,
           panelOne,
           panelTwo,
           panelThree,
@@ -1887,6 +1206,10 @@ function InteractiveSystemSection() {
         { clearProps: "all" },
       );
 
+      gsap.set([showcaseDotOne, showcaseDotTwo, showcaseDotThree], {
+        clearProps: "all",
+      });
+
       window.requestAnimationFrame(() => {
         ScrollTrigger.refresh();
       });
@@ -1897,14 +1220,6 @@ function InteractiveSystemSection() {
     let refreshFrame = 0;
 
     const ctx = gsap.context(() => {
-      const points = textTwo.querySelectorAll(".neox-gsap-point");
-      const panelOneItems = panelOne.querySelectorAll(".neox-stack-clean-card");
-      const panelTwoItems = panelTwo.querySelectorAll(
-        ".neox-stack-note, .neox-stack-metric",
-      );
-      const panelThreeItems = panelThree.querySelectorAll(
-        ".neox-stack-system-board, .neox-stack-split-item",
-      );
       const panelFourItems = panelFour.querySelectorAll(".neox-capability-card");
 
       const getLocalWordStopPx = (
@@ -1972,17 +1287,18 @@ function InteractiveSystemSection() {
         [
           bg,
           textOne,
-          textTwo,
           miniLabel,
+          showcase,
+          showcaseFrameOne,
+          showcaseFrameTwo,
+          showcaseFrameThree,
+          showcaseLabelOne,
+          showcaseLabelTwo,
+          showcaseLabelThree,
           innerOne,
           innerTwo,
           innerThree,
           innerFour,
-          points,
-          panelOneItems,
-          panelTwoItems,
-          panelThreeItems,
-          panelFourItems,
         ],
         {
           force3D: true,
@@ -1992,33 +1308,59 @@ function InteractiveSystemSection() {
 
       gsap.set(bg, { opacity: 1, scale: 1 });
       gsap.set(textOne, { opacity: 1, y: 0 });
-      gsap.set(textTwo, { opacity: 0, y: 44 });
       gsap.set(miniLabel, { opacity: 1, y: 0 });
-      gsap.set(points, { opacity: 0, y: 18 });
+      gsap.set(showcase, { opacity: 1, y: 0, scale: 1 });
+
+      gsap.set(showcaseFrameOne, {
+        autoAlpha: 1,
+        xPercent: 0,
+        yPercent: 0,
+        scale: 1,
+        rotate: 0,
+      });
+
+      gsap.set(showcaseFrameTwo, {
+        autoAlpha: 0,
+        xPercent: 5,
+        yPercent: 7,
+        scale: 0.965,
+        rotate: -0.35,
+      });
+
+      gsap.set(showcaseFrameThree, {
+        autoAlpha: 0,
+        xPercent: 7,
+        yPercent: 10,
+        scale: 0.94,
+        rotate: 0.35,
+      });
+
+      gsap.set(showcaseLabelOne, {
+        autoAlpha: 1,
+        y: 0,
+      });
+
+      gsap.set([showcaseLabelTwo, showcaseLabelThree], {
+        autoAlpha: 0,
+        y: 8,
+      });
+
+      gsap.set(showcaseDotOne, { scaleY: 1 });
+      gsap.set([showcaseDotTwo, showcaseDotThree], { scaleY: 0 });
 
       gsap.set(panelOne, { yPercent: 112, opacity: 1, zIndex: 10 });
       gsap.set(panelTwo, { yPercent: 112, opacity: 1, zIndex: 11 });
       gsap.set(panelThree, { yPercent: 112, opacity: 1, zIndex: 12 });
       gsap.set(panelFour, { yPercent: 108, opacity: 1, zIndex: 20 });
 
-      gsap.set([innerOne, innerTwo, innerFour], {
+      gsap.set([innerOne, innerTwo, innerThree, innerFour], {
         autoAlpha: 0,
         y: 18,
       });
 
-      gsap.set(innerThree, {
-        autoAlpha: 0,
-        y: 0,
-      });
-
-      gsap.set([panelOneItems, panelTwoItems, panelFourItems], {
+      gsap.set(panelFourItems, {
         autoAlpha: 0,
         y: 20,
-      });
-
-      gsap.set(panelThreeItems, {
-        autoAlpha: 0,
-        y: 0,
       });
 
       const tl = gsap.timeline({
@@ -2026,7 +1368,7 @@ function InteractiveSystemSection() {
         scrollTrigger: {
           trigger: section,
           start: "top top+=1",
-          end: () => `+=${Math.max(window.innerHeight * 5.65, 4550)}`,
+          end: () => `+=${Math.max(window.innerHeight * 5.85, 4850)}`,
           scrub: true,
           pin: sticky,
           pinSpacing: true,
@@ -2040,41 +1382,86 @@ function InteractiveSystemSection() {
 
       tl
         .to(bg, { scale: 0.985, opacity: 0.98, duration: 0.34 }, 0)
-        .to(textOne, { opacity: 0, y: -44, duration: 0.46 }, 0.28)
-        .to(miniLabel, { opacity: 0, y: 16, duration: 0.28 }, 0.32)
-        .to(textTwo, { opacity: 1, y: 0, duration: 0.48 }, 0.82)
-        .to(points, { opacity: 1, y: 0, stagger: 0.055, duration: 0.32 }, 1.05)
 
-        .to(panelOne, { yPercent: 0, duration: 1.18 }, 1.72)
-        .to(innerOne, { autoAlpha: 1, y: 0, duration: 0.24 }, 2.36)
+        .to(showcaseFrameOne, { scale: 0.985, xPercent: -2, duration: 0.7 }, 0.24)
         .to(
-          panelOneItems,
-          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.28 },
-          2.52,
+          showcaseFrameTwo,
+          {
+            autoAlpha: 1,
+            xPercent: 0,
+            yPercent: 0,
+            scale: 1,
+            rotate: 0,
+            duration: 0.7,
+          },
+          0.82,
         )
-
-        .to(panelTwo, { yPercent: PANEL_TWO_REST_Y, duration: 1.22 }, 3.12)
-        .to(innerTwo, { autoAlpha: 1, y: 0, duration: 0.24 }, 3.82)
         .to(
-          panelTwoItems,
-          { autoAlpha: 1, y: 0, stagger: 0.045, duration: 0.28 },
-          3.98,
+          showcaseFrameOne,
+          {
+            autoAlpha: 0,
+            xPercent: -5,
+            yPercent: -4,
+            scale: 1.025,
+            duration: 0.58,
+          },
+          0.96,
         )
+        .to(showcaseLabelOne, { autoAlpha: 0, y: -8, duration: 0.28 }, 0.78)
+        .to(showcaseLabelTwo, { autoAlpha: 1, y: 0, duration: 0.34 }, 0.92)
+        .to(showcaseDotOne, { scaleY: 0, duration: 0.34 }, 0.82)
+        .to(showcaseDotTwo, { scaleY: 1, duration: 0.42 }, 0.88)
 
-        .to(panelThree, { yPercent: PANEL_THREE_REST_Y, duration: 1.18 }, 4.68)
-        .to(innerThree, { autoAlpha: 1, duration: 0.22 }, 5.34)
+        .to(showcaseFrameTwo, { scale: 0.985, xPercent: -2, duration: 0.7 }, 1.8)
         .to(
-          panelThreeItems,
-          { autoAlpha: 1, stagger: 0.04, duration: 0.24 },
-          5.5,
+          showcaseFrameThree,
+          {
+            autoAlpha: 1,
+            xPercent: 0,
+            yPercent: 0,
+            scale: 1,
+            rotate: 0,
+            duration: 0.7,
+          },
+          2.28,
         )
+        .to(
+          showcaseFrameTwo,
+          {
+            autoAlpha: 0,
+            xPercent: -5,
+            yPercent: -4,
+            scale: 1.025,
+            duration: 0.58,
+          },
+          2.42,
+        )
+        .to(showcaseLabelTwo, { autoAlpha: 0, y: -8, duration: 0.28 }, 2.22)
+        .to(showcaseLabelThree, { autoAlpha: 1, y: 0, duration: 0.34 }, 2.36)
+        .to(showcaseDotTwo, { scaleY: 0, duration: 0.34 }, 2.28)
+        .to(showcaseDotThree, { scaleY: 1, duration: 0.42 }, 2.34)
 
-        .to(panelFour, { yPercent: 0, duration: 1.34 }, 6.28)
-        .to(innerFour, { autoAlpha: 1, y: 0, duration: 0.28 }, 7.02)
+        .to(showcaseFrameThree, { scale: 1.012, duration: 0.5 }, 3.08)
+        .to(miniLabel, { opacity: 0, y: 18, duration: 0.34 }, 3.14)
+
+        .to(panelOne, { yPercent: 0, duration: 1.08 }, 3.18)
+        .to(innerOne, { autoAlpha: 1, y: 0, duration: 0.26 }, 3.62)
+
+        .to(textOne, { opacity: 0, y: -42, duration: 0.34 }, 3.94)
+        .to(showcase, { opacity: 0, y: -34, scale: 0.975, duration: 0.34 }, 3.94)
+
+        .to(panelTwo, { yPercent: PANEL_TWO_REST_Y, duration: 1.18 }, 4.78)
+        .to(innerTwo, { autoAlpha: 1, y: 0, duration: 0.26 }, 5.34)
+
+        .to(panelThree, { yPercent: PANEL_THREE_REST_Y, duration: 1.14 }, 6.16)
+        .to(innerThree, { autoAlpha: 1, y: 0, duration: 0.26 }, 6.72)
+
+        .to(panelFour, { yPercent: 0, duration: 1.28 }, 7.48)
+        .to(innerFour, { autoAlpha: 1, y: 0, duration: 0.26 }, 8.12)
         .to(
           panelFourItems,
-          { autoAlpha: 1, y: 0, stagger: 0.04, duration: 0.28 },
-          7.22,
+          { autoAlpha: 1, y: 0, stagger: 0.04, duration: 0.26 },
+          8.34,
         );
     }, section);
 
@@ -2096,54 +1483,87 @@ function InteractiveSystemSection() {
         <div className="neox-interactive-stage">
           <div className="neox-interactive-inner">
             <div ref={textOneRef} className="neox-gsap-text neox-gsap-text-one">
-              <p className="neox-gsap-kicker">Görünən tərəf</p>
-
               <h2 className="neox-gsap-title">
                 Görünən tərəf <span>gözəl</span> olmalıdır.
               </h2>
-
-              <p className="neox-gsap-lead">
-                Müştərinin ilk gördüyü hissə sadə, təmiz və inandırıcı olmalıdır.
-                Sayt, vizual dil və təqdimat biznesin dəyərini ilk saniyədə
-                göstərir.
-              </p>
-            </div>
-
-            <div ref={textTwoRef} className="neox-gsap-text neox-gsap-text-two">
-              <p className="neox-gsap-kicker">İşləyən tərəf</p>
-
-              <h2 className="neox-gsap-title">
-                İşləyən tərəf isə <span>ağıllı</span> olmalıdır.
-              </h2>
-
-              <p className="neox-gsap-lead">
-                Gözəl görünüş tək başına kifayət deyil. Mesaj, zəng, forma,
-                cavab və daxili proseslər bir axında işləməlidir.
-              </p>
-
-              <div className="neox-gsap-points">
-                <div className="neox-gsap-point">
-                  <span>01</span>
-                  <strong>Cavab</strong>
-                  <p>Müştəri sualı düzgün istiqamətə düşür.</p>
-                </div>
-
-                <div className="neox-gsap-point">
-                  <span>02</span>
-                  <strong>Axın</strong>
-                  <p>Mesajlar, formalar və zənglər dağınıq qalmır.</p>
-                </div>
-
-                <div className="neox-gsap-point">
-                  <span>03</span>
-                  <strong>Nəzarət</strong>
-                  <p>Komanda prosesi bir yerdən görə bilir.</p>
-                </div>
-              </div>
             </div>
 
             <div ref={miniLabelRef} className="neox-gsap-mini-label">
               Aşağı sürüşdür
+            </div>
+
+            <div ref={showcaseRef} className="neox-visual-showcase" aria-hidden="true">
+              <div className="neox-visual-showcase-shadow" />
+
+              <div className="neox-visual-showcase-progress">
+                <div className="neox-visual-showcase-dot">
+                  <span ref={showcaseDotOneRef} />
+                </div>
+
+                <div className="neox-visual-showcase-dot">
+                  <span ref={showcaseDotTwoRef} />
+                </div>
+
+                <div className="neox-visual-showcase-dot">
+                  <span ref={showcaseDotThreeRef} />
+                </div>
+              </div>
+
+              <div
+                ref={showcaseFrameOneRef}
+                className="neox-visual-showcase-frame neox-visual-showcase-frame--one"
+              >
+                <img
+                  src={WEBSITE_SHOWCASE_ONE}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </div>
+
+              <div
+                ref={showcaseFrameTwoRef}
+                className="neox-visual-showcase-frame neox-visual-showcase-frame--two"
+              >
+                <img
+                  src={WEBSITE_SHOWCASE_TWO}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </div>
+
+              <div
+                ref={showcaseFrameThreeRef}
+                className="neox-visual-showcase-frame neox-visual-showcase-frame--three"
+              >
+                <img
+                  src={WEBSITE_SHOWCASE_THREE}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </div>
+
+              <div className="neox-visual-label-stack">
+                <div ref={showcaseLabelOneRef} className="neox-visual-label">
+                  <span>{showcaseLabels[0].number}</span>
+                  <strong>{showcaseLabels[0].label}</strong>
+                </div>
+
+                <div ref={showcaseLabelTwoRef} className="neox-visual-label">
+                  <span>{showcaseLabels[1].number}</span>
+                  <strong>{showcaseLabels[1].label}</strong>
+                </div>
+
+                <div ref={showcaseLabelThreeRef} className="neox-visual-label">
+                  <span>{showcaseLabels[2].number}</span>
+                  <strong>{showcaseLabels[2].label}</strong>
+                </div>
+              </div>
             </div>
 
             <div
@@ -2164,40 +1584,6 @@ function InteractiveSystemSection() {
                     </span>
                     , <span>proses davam edir.</span>
                   </h2>
-
-                  <p className="neox-stack-lead">
-                    Müştəri ilə ilk təmasdan cavaba, yönləndirməyə və daxili
-                    prosesə qədər hər şey bir-birinə bağlı işləyir.
-                  </p>
-                </div>
-
-                <div className="neox-stack-grid neox-stack-grid--three">
-                  <article className="neox-stack-clean-card">
-                    <span className="neox-stack-card-label">01 / Giriş</span>
-                    <h3>İlk təəssürat peşəkar olur.</h3>
-                    <p>
-                      Müştəri biznesinizi gördüyü anda nə etdiyinizi və niyə
-                      dəyərli olduğunuzu anlayır.
-                    </p>
-                  </article>
-
-                  <article className="neox-stack-clean-card">
-                    <span className="neox-stack-card-label">02 / Axın</span>
-                    <h3>Müraciətlər vahid sistemə düşür.</h3>
-                    <p>
-                      Forma, mesaj, zəng və digər müraciətlər dağınıq qalmır,
-                      düzgün axına yönlənir.
-                    </p>
-                  </article>
-
-                  <article className="neox-stack-clean-card">
-                    <span className="neox-stack-card-label">03 / Cavab</span>
-                    <h3>Sistem cavabı və prosesi davam etdirir.</h3>
-                    <p>
-                      Süni intellekt və komanda birlikdə işləyir, biznes cavabsız
-                      və nizamsız görünmür.
-                    </p>
-                  </article>
                 </div>
               </div>
             </div>
@@ -2220,35 +1606,6 @@ function InteractiveSystemSection() {
                     </span>{" "}
                     və idarə olunur.
                   </h2>
-
-                  <p className="neox-stack-lead">
-                    Sayt, mesajlaşma, zəng və daxili proseslər eyni biznes xəttinə
-                    bağlanır.
-                  </p>
-                </div>
-
-                <div className="neox-stack-grid neox-stack-grid--metrics">
-                  <div className="neox-stack-note">
-                    <strong>
-                      Sayt, mesajlaşma və daxili proseslər eyni biznes xəttinə
-                      bağlanır.
-                    </strong>
-                  </div>
-
-                  <div className="neox-stack-metric">
-                    <strong>24/7</strong>
-                    <span>Müştəri müraciəti cavabsız qalmır.</span>
-                  </div>
-
-                  <div className="neox-stack-metric">
-                    <strong>1 axın</strong>
-                    <span>Sayt, zəng və mesajlar vahid məntiqə düşür.</span>
-                  </div>
-
-                  <div className="neox-stack-metric">
-                    <strong>Nəzarət</strong>
-                    <span>Komanda prosesin harada olduğunu aydın görür.</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -2258,70 +1615,12 @@ function InteractiveSystemSection() {
               className="neox-stack-panel neox-stack-panel--three"
             >
               <div ref={innerThreeRef} className="neox-stack-panel-inner">
-                <div className="neox-stack-grid neox-stack-grid--two">
-                  <div className="neox-stack-system-board">
-                    <div className="neox-stack-system-board-row">
-                      <div className="neox-stack-system-board-badge">01</div>
-                      <div>
-                        <h4>Müştəri üçün aydın təcrübə</h4>
-                        <p>Sayt və cavab xətti daha aydın görünür.</p>
-                      </div>
-                    </div>
+                <div className="neox-stack-panel-head">
+                  <p className="neox-extra-kicker">Komanda + sistem</p>
 
-                    <div className="neox-stack-system-board-row">
-                      <div className="neox-stack-system-board-badge">02</div>
-                      <div>
-                        <h4>Komanda üçün rahat idarəetmə</h4>
-                        <p>Müraciətlər bir axında idarə olunur.</p>
-                      </div>
-                    </div>
-
-                    <div className="neox-stack-system-board-row">
-                      <div className="neox-stack-system-board-badge">03</div>
-                      <div>
-                        <h4>Biznes üçün daha güclü axın</h4>
-                        <p>Görünüş və işləyən sistem birlikdə nəticə verir.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="neox-stack-split-text">
-                    <p className="neox-extra-kicker">Komanda + sistem</p>
-
-                    <h2 className="neox-stack-title">
-                      Komanda və sistem <span>eyni xəttdə işləyir.</span>
-                    </h2>
-
-                    <p className="neox-stack-lead">
-                      Görünüş, cavab və nəzarət eyni sistemdə toplanır.
-                    </p>
-
-                    <div className="neox-stack-split-list">
-                      <div className="neox-stack-split-item">
-                        <div className="neox-stack-split-item-badge">01</div>
-                        <div>
-                          <h4>Görünüş</h4>
-                          <p>İlk təəssürat güclənir.</p>
-                        </div>
-                      </div>
-
-                      <div className="neox-stack-split-item">
-                        <div className="neox-stack-split-item-badge">02</div>
-                        <div>
-                          <h4>Cavab</h4>
-                          <p>Suallar cavabsız qalmır.</p>
-                        </div>
-                      </div>
-
-                      <div className="neox-stack-split-item">
-                        <div className="neox-stack-split-item-badge">03</div>
-                        <div>
-                          <h4>Proses</h4>
-                          <p>Komanda prosesi rahat izləyir.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <h2 className="neox-stack-title">
+                    Komanda və sistem <span>eyni xəttdə işləyir.</span>
+                  </h2>
                 </div>
               </div>
             </div>
@@ -2349,8 +1648,16 @@ function InteractiveSystemSection() {
 
                   <div className="neox-capability-grid">
                     <article className="neox-capability-card">
+                      <CapabilityIcon
+                        src={WEBSITE_ICON}
+                        label="Sayt və təqdimat"
+                        fallback="01"
+                      />
+
                       <span className="neox-capability-number">01</span>
+
                       <h3>Sayt və təqdimat</h3>
+
                       <p>
                         Biznesin nə etdiyini qısa, təmiz və inandırıcı formada
                         göstəririk.
@@ -2358,8 +1665,16 @@ function InteractiveSystemSection() {
                     </article>
 
                     <article className="neox-capability-card">
+                      <CapabilityIcon
+                        src={BRAND_ICON}
+                        label="Məzmun və vizual dil"
+                        fallback="02"
+                      />
+
                       <span className="neox-capability-number">02</span>
+
                       <h3>Məzmun və vizual dil</h3>
+
                       <p>
                         Brendin danışıq tərzi, görünüşü və kontent xətti vahid
                         qalır.
@@ -2367,17 +1682,33 @@ function InteractiveSystemSection() {
                     </article>
 
                     <article className="neox-capability-card">
+                      <CapabilityIcon
+                        src={RESPONSE_ICON}
+                        label="Cavab sistemləri"
+                        fallback="03"
+                      />
+
                       <span className="neox-capability-number">03</span>
+
                       <h3>Cavab sistemləri</h3>
+
                       <p>
-                        Çatbot, səsli assistent və mesaj axınları müştərini düzgün
-                        qarşılayır.
+                        Çatbot, səsli assistent və mesaj axınları müştərini
+                        düzgün qarşılayır.
                       </p>
                     </article>
 
                     <article className="neox-capability-card">
+                      <CapabilityIcon
+                        src={WORKFLOW_ICON}
+                        label="Avtomatlaşdırma"
+                        fallback="04"
+                      />
+
                       <span className="neox-capability-number">04</span>
+
                       <h3>Avtomatlaşdırma</h3>
+
                       <p>
                         Təkrar proseslər azalır, komanda daha vacib işlərə
                         fokuslanır.
@@ -2402,73 +1733,42 @@ function BuildTogetherSection() {
       <div className="nx-container">
         <div className="neox-build-band">
           <div className="neox-build-content">
-            <p className="neox-extra-kicker">Yekun addım</p>
+            <p className="neox-extra-kicker">Başlayaq</p>
 
             <h2 className="neox-build-title">
-              Biznesiniz üçün <span>düzgün başlanğıc</span> xəttini seçək.
+              Biznesiniz üçün <span>nədən başlamağın</span> daha doğru olduğunu
+              birlikdə seçək.
             </h2>
 
             <p className="neox-build-text">
-              Sayt, süni intellekt, kontent və avtomatlaşdırma içində haradan
-              başlamağın daha doğru olduğunu aydınlaşdırırıq və biznesiniz üçün
-              konkret yol xəritəsi qururuq.
+              İlk danışıqda biznesinizi, müştəri axınınızı və hazırkı problemləri
+              anlayırıq. Sonra sizə uyğun sayt, süni intellekt, kontent və
+              avtomatlaşdırma xəritəsini qururuq.
             </p>
 
-            <div className="neox-build-benefits" aria-hidden="true">
-              <div className="neox-build-benefit">
-                <strong>Başlanğıc planı</strong>
-                <span>Əvvəl nə qurulmalıdır, aydınlaşır.</span>
-              </div>
-
-              <div className="neox-build-benefit">
-                <strong>Sistem xəritəsi</strong>
-                <span>Sayt, cavab və proseslər bir xəttə düşür.</span>
-              </div>
-
-              <div className="neox-build-benefit">
-                <strong>Nəticəyə fokus</strong>
-                <span>Gözəl görünüş yox, işləyən sistem qurulur.</span>
-              </div>
+            <div className="neox-build-tags" aria-hidden="true">
+              <span>Veb sayt</span>
+              <span>Brend görünüşü</span>
+              <span>Süni intellekt</span>
+              <span>İş axını</span>
             </div>
           </div>
 
-          <aside className="neox-build-action-card">
-            <h3>İlk danışıqda məqsəd sadədir.</h3>
+          <div className="neox-build-actions">
+            <Link
+              to={withLang(lang, "/contact")}
+              className="nx-button nx-button--primary nx-button--lg"
+            >
+              Əlaqə saxla
+            </Link>
 
-            <div className="neox-build-checks">
-              <div className="neox-build-check">
-                Mövcud vəziyyəti qısa analiz edirik.
-              </div>
-
-              <div className="neox-build-check">
-                Ən vacib başlanğıc nöqtəsini seçirik.
-              </div>
-
-              <div className="neox-build-check">
-                Növbəti addımı konkret plan kimi çıxarırıq.
-              </div>
-            </div>
-
-            <div className="neox-build-actions">
-              <Link
-                to={withLang(lang, "/contact")}
-                className="nx-button nx-button--primary nx-button--lg"
-              >
-                Əlaqə saxla
-              </Link>
-
-              <Link
-                to={withLang(lang, "/services")}
-                className="nx-button nx-button--secondary nx-button--lg"
-              >
-                Xidmətlərə bax
-              </Link>
-            </div>
-
-            <p className="neox-build-note">
-              Qısa danışıq. Aydın istiqamət. Satış yox, düzgün başlanğıc.
-            </p>
-          </aside>
+            <Link
+              to={withLang(lang, "/services")}
+              className="nx-button nx-button--secondary nx-button--lg"
+            >
+              Xidmətlərə bax
+            </Link>
+          </div>
         </div>
       </div>
     </section>
@@ -2501,7 +1801,7 @@ export default function HomePage() {
 
   return (
     <main className="nx-page neox-home-page neox-home-extra">
-      <style>{HOME_INLINE_CSS}</style>
+      <style>{HOME_INLINE_STYLES}</style>
 
       <HomeHero />
       <ServiceCardsSection />
