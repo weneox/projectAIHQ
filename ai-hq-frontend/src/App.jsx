@@ -18,18 +18,31 @@ import {
   peekAppAuthContext,
 } from "./lib/appSession.js";
 
-const Inbox = lazy(() => import("./pages/Inbox.jsx"));
-const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
-const Welcome = lazy(() => import("./pages/Welcome.jsx"));
-const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
-const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
-const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
-const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
-const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
-const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
-const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
-const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
-const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
+const loadInbox = () => import("./pages/Inbox.jsx");
+const loadProductHomePage = () => import("./surfaces/home/ProductHomePage.jsx");
+const loadWelcome = () => import("./pages/Welcome.jsx");
+const loadVerifyEmail = () => import("./pages/Auth/VerifyEmailPage.jsx");
+const loadPublicWebsiteWidget = () => import("./pages/PublicWebsiteWidget.jsx");
+const loadTruthViewerPage = () => import("./pages/Truth/TruthViewerPage.jsx");
+const loadChannelCatalog = () => import("./pages/ChannelCatalog.jsx");
+const loadAdminLogin = () => import("./pages/AdminLogin.jsx");
+const loadAdminTenants = () => import("./pages/AdminTenants.jsx");
+const loadAdminTeam = () => import("./pages/AdminTeam.jsx");
+const loadAdminSecrets = () => import("./pages/AdminSecrets.jsx");
+const loadSelectWorkspace = () => import("./pages/SelectWorkspace.jsx");
+
+const Inbox = lazy(loadInbox);
+const ProductHomePage = lazy(loadProductHomePage);
+const Welcome = lazy(loadWelcome);
+const VerifyEmail = lazy(loadVerifyEmail);
+const PublicWebsiteWidget = lazy(loadPublicWebsiteWidget);
+const TruthViewerPage = lazy(loadTruthViewerPage);
+const ChannelCatalog = lazy(loadChannelCatalog);
+const AdminLogin = lazy(loadAdminLogin);
+const AdminTenants = lazy(loadAdminTenants);
+const AdminTeam = lazy(loadAdminTeam);
+const AdminSecrets = lazy(loadAdminSecrets);
+const SelectWorkspace = lazy(loadSelectWorkspace);
 
 const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "workspace",
@@ -42,19 +55,29 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "incidents",
 ];
 
-function RouteFallback() {
-  return (
-    <div className="mx-auto w-full max-w-shell-content px-1 py-2" aria-hidden="true">
-      <div className="space-y-3">
-        <div className="h-4 w-36 animate-pulse rounded-full bg-[rgba(15,23,42,0.055)]" />
-        <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
-      </div>
-    </div>
-  );
+function withSuspense(element) {
+  return <Suspense fallback={null}>{element}</Suspense>;
 }
 
-function withSuspense(element) {
-  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+function warmLaunchRoutes() {
+  const warm = () => {
+    Promise.allSettled([
+      loadProductHomePage(),
+      loadChannelCatalog(),
+      loadInbox(),
+      loadTruthViewerPage(),
+      loadWelcome(),
+    ]);
+  };
+
+  if (typeof window === "undefined") return;
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(warm, { timeout: 1800 });
+    return;
+  }
+
+  window.setTimeout(warm, 400);
 }
 
 function deriveGuestInitialState() {
@@ -154,6 +177,11 @@ function renderLegacyLaunchFreezeRedirects() {
 }
 
 export default function App() {
+  useEffect(() => {
+    if (import.meta.env.MODE === "test") return;
+    warmLaunchRoutes();
+  }, []);
+
   const rootEntryElement = (
     <UserRouteGuard>
       <AppEntryRedirect />
