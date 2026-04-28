@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+﻿import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
 import { getCurrentSetupAssistantSession } from "../api/setup.js";
@@ -1351,3 +1351,4 @@ export default function useProductHome() {
     tenantReady,
   ]);
 }
+

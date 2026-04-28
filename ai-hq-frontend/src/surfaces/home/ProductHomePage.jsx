@@ -1,5 +1,4 @@
-﻿import { useRef } from "react";
-import {
+﻿import {
   ArrowRight,
   CheckCircle2,
   Circle,
@@ -373,33 +372,9 @@ function ProductHomeLoadingSurface() {
   );
 }
 
-function hasRenderableHomeContent(home = {}) {
-  return Boolean(
-    arr(home?.launchSteps).length ||
-      s(home?.launchChannel?.status) ||
-      s(home?.inboxState?.status) ||
-      s(home?.truthRuntime?.status) ||
-      s(home?.truthRuntime?.statusLabel) ||
-      home?.truthRuntime?.truthReady === true ||
-      home?.truthRuntime?.ready === true ||
-      home?.assistant?.readyForApproval === true ||
-      home?.primaryAction ||
-      home?.secondaryAction
-  );
-}
 export default function ProductHomePage() {
   const navigate = useNavigate();
-  const sourceHome = useProductHome();
-  const latestRenderableHomeRef = useRef(null);
-
-  if (!sourceHome.loading && hasRenderableHomeContent(sourceHome)) {
-    latestRenderableHomeRef.current = sourceHome;
-  }
-
-  const home =
-    sourceHome.loading && latestRenderableHomeRef.current
-      ? latestRenderableHomeRef.current
-      : sourceHome;
+  const home = useProductHome();
 
   function navigateFromAction(action = null) {
     const nextAction = normalizeNavigationAction(action);
@@ -407,7 +382,7 @@ export default function ProductHomePage() {
     navigate(nextAction.path);
   }
 
-  if (sourceHome.loading && !hasRenderableHomeContent(home)) {
+  if (home.loading) {
     return <ProductHomeLoadingSurface />;
   }
 
@@ -539,6 +514,7 @@ export default function ProductHomePage() {
     </PageCanvas>
   );
 }
+
 
 
 
