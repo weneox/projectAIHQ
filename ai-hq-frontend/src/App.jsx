@@ -11,7 +11,7 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import AppBootSurface from "./components/loading/AppBootSurface.jsx";
+import Login from "./pages/Login.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 import {
   getAppAuthContext,
@@ -21,7 +21,6 @@ import {
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
 const Welcome = lazy(() => import("./pages/Welcome.jsx"));
-const Login = lazy(() => import("./pages/Login.jsx"));
 const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
 const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
@@ -68,27 +67,14 @@ function deriveGuestInitialState() {
 
   if (cachedAuth?.authenticated) {
     return {
-      loading: false,
       allowGuest: false,
-      unavailable: false,
-      fromCache: true,
-    };
-  }
-
-  if (cachedAuth?.resolved === true && !cachedAuth?.authenticated) {
-    return {
-      loading: false,
-      allowGuest: true,
-      unavailable: false,
-      fromCache: true,
+      redirectAuthenticated: true,
     };
   }
 
   return {
-    loading: true,
-    allowGuest: false,
-    unavailable: false,
-    fromCache: false,
+    allowGuest: true,
+    redirectAuthenticated: false,
   };
 }
 
@@ -105,37 +91,22 @@ function GuestRouteGuard({ children }) {
 
         if (auth?.authenticated) {
           setState({
-            loading: false,
             allowGuest: false,
-            unavailable: false,
-            fromCache: false,
-          });
-          return;
-        }
-
-        if (auth?.transientFailure || auth?.unavailable || auth?.resolved === false) {
-          setState({
-            loading: false,
-            allowGuest: false,
-            unavailable: true,
-            fromCache: false,
+            redirectAuthenticated: true,
           });
           return;
         }
 
         setState({
-          loading: false,
           allowGuest: true,
-          unavailable: false,
-          fromCache: false,
+          redirectAuthenticated: false,
         });
       } catch {
         if (!alive) return;
+
         setState({
-          loading: false,
-          allowGuest: false,
-          unavailable: true,
-          fromCache: false,
+          allowGuest: true,
+          redirectAuthenticated: false,
         });
       }
     }
@@ -147,25 +118,7 @@ function GuestRouteGuard({ children }) {
     };
   }, []);
 
-  if (state.loading) {
-    return (
-      <AppBootSurface
-        label="Checking account"
-        detail="Looking for an active session before we show this page."
-      />
-    );
-  }
-
-  if (state.unavailable) {
-    return (
-      <AppBootSurface
-        label="Authentication unavailable"
-        detail="We could not verify your session right now."
-      />
-    );
-  }
-
-  if (!state.allowGuest) {
+  if (state.redirectAuthenticated || !state.allowGuest) {
     return <Navigate to="/" replace />;
   }
 
@@ -217,7 +170,9 @@ export default function App() {
   );
 
   const loginEntryElement = (
-    <GuestRouteGuard>{withSuspense(<Login />)}</GuestRouteGuard>
+    <GuestRouteGuard>
+      <Login />
+    </GuestRouteGuard>
   );
 
   return (
