@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowRight,
   CheckCircle2,
   Circle,
@@ -55,6 +55,17 @@ function shortChannelLabel(channel = {}) {
 
 function channelHandle(channel = {}) {
   return s(channel.accountHandle);
+}
+
+function liveChannelPhrase(channel = {}) {
+  const provider = lower(channel.provider);
+  const readyCount = n(channel.readyCount);
+
+  if (!provider && readyCount > 1) {
+    return `${readyCount} launch channels are live`;
+  }
+
+  return `${shortChannelLabel(channel)} is live`;
 }
 
 function humanTruthState(home) {
@@ -187,7 +198,7 @@ function buildHeroCopy(home) {
       title: "Ready for inbox work.",
       summary:
         unread > 0
-          ? `${channelName} is live and ${pluralize(unread, "message")} ${
+          ? `${liveChannelPhrase(channel)} and ${pluralize(unread, "message")} ${
               unread === 1 ? "needs" : "need"
             } review.`
           : "Approved truth, one live channel, and inbox state are aligned.",
@@ -504,3 +515,4 @@ export default function ProductHomePage() {
     </PageCanvas>
   );
 }
+
