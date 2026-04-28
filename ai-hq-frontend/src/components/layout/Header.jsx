@@ -393,8 +393,6 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 }
 
 function NotificationsButton({ notifications }) {
-  const notificationsLoading =
-    notifications?.loading === true || notifications?.refreshing === true;
   const unread =
     typeof notifications?.unreadCount === "number"
       ? notifications.unreadCount
@@ -467,4 +465,5 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
+
 

@@ -186,7 +186,6 @@ function humanInboxState(home) {
 
 function buildHeroCopy(home) {
   const channel = home?.launchChannel || {};
-  const channelName = shortChannelLabel(channel);
   const truthReady = home?.truthRuntime?.truthReady === true;
   const runtimeReady = home?.truthRuntime?.ready === true;
   const channelReady = channel.connected === true && channel.deliveryReady === true;
@@ -515,4 +514,5 @@ export default function ProductHomePage() {
     </PageCanvas>
   );
 }
+
 
