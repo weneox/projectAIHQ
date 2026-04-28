@@ -43,20 +43,13 @@ const EMPTY_READINESS_STATE = {
 
 const CONNECTOR_COPY = {
   website: {
-    eyebrow: "Website",
-    title: "Approved site chat",
-    summary:
-      "Website chat is configured with approved origin and trusted runtime delivery.",
+    summary: "Live site chat is ready for visitors.",
   },
   instagram: {
-    eyebrow: "Instagram",
-    title: "Instagram inbox",
-    summary: "Instagram DM automation is ready.",
+    summary: "Instagram DMs are ready for automation.",
   },
   telegram: {
-    eyebrow: "Telegram",
-    title: "Telegram chat",
-    summary: "Telegram bot, webhook, and tenant runtime are ready for live delivery.",
+    summary: "Telegram bot delivery is ready.",
   },
 };
 
@@ -88,7 +81,7 @@ function normalizeStatus(runtime = null) {
 
   if (runtime?.connected === true) {
     return {
-      label: "Delivery blocked",
+      label: "Blocked",
       tone: "warning",
       connected: true,
       deliveryReady: false,
@@ -103,7 +96,7 @@ function normalizeStatus(runtime = null) {
     raw.includes("required")
   ) {
     return {
-      label: "Needs attention",
+      label: "Needs setup",
       tone: "warning",
       connected: false,
       deliveryReady: false,
@@ -113,7 +106,7 @@ function normalizeStatus(runtime = null) {
 
   if (raw.includes("connecting") || raw.includes("pending")) {
     return {
-      label: "Connecting",
+      label: "Pending",
       tone: "muted",
       connected: false,
       deliveryReady: false,
@@ -138,7 +131,7 @@ function resolvePrimaryAction(channel, runtime) {
   const status = normalizeStatus(runtime);
 
   if (status.connected && status.deliveryReady) {
-    return { label: "Open inbox", mode: "inbox" };
+    return { label: "Inbox", mode: "inbox" };
   }
 
   if (status.blocked) {
@@ -153,6 +146,7 @@ function statusToneClasses(tone) {
     return {
       dot: "bg-[rgba(22,163,74,0.96)]",
       text: "text-[rgba(22,163,74,0.96)]",
+      bg: "bg-[rgba(22,163,74,0.08)]",
     };
   }
 
@@ -160,12 +154,14 @@ function statusToneClasses(tone) {
     return {
       dot: "bg-[rgba(245,158,11,0.96)]",
       text: "text-[rgba(180,83,9,0.96)]",
+      bg: "bg-[rgba(245,158,11,0.1)]",
     };
   }
 
   return {
     dot: "bg-[rgba(148,163,184,0.96)]",
     text: "text-[rgba(100,116,139,0.96)]",
+    bg: "bg-[rgba(148,163,184,0.1)]",
   };
 }
 
@@ -182,23 +178,23 @@ function TopActionButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-11 items-center justify-center gap-2 px-5",
-        "rounded-[10px] text-[13px] font-semibold tracking-[-0.01em]",
+        "inline-flex h-10 items-center justify-center gap-2 px-4",
+        "rounded-[10px] text-[12.5px] font-semibold tracking-[-0.01em]",
         "transition-all duration-200 ease-out",
         primary
           ? [
               "bg-[rgb(var(--color-brand))] text-white",
-              "shadow-[0_16px_34px_-20px_rgba(46,96,255,0.65)]",
+              "shadow-[0_18px_34px_-22px_rgba(46,96,255,0.7)]",
               "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
-              "hover:shadow-[0_18px_36px_-18px_rgba(46,96,255,0.72)]",
+              "hover:shadow-[0_22px_40px_-22px_rgba(46,96,255,0.8)]",
             ].join(" ")
           : [
-              "bg-white text-[rgba(15,23,42,0.96)]",
-              "shadow-[0_16px_34px_-24px_rgba(15,23,42,0.24)]",
-              "hover:-translate-y-[1px] hover:shadow-[0_18px_36px_-22px_rgba(15,23,42,0.28)]",
+              "bg-white text-[rgba(15,23,42,0.94)]",
+              "shadow-[0_16px_34px_-26px_rgba(15,23,42,0.28)]",
+              "hover:-translate-y-[1px] hover:shadow-[0_20px_42px_-26px_rgba(15,23,42,0.32)]",
             ].join(" "),
         disabled
-          ? "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-[0_16px_34px_-24px_rgba(15,23,42,0.18)]"
+          ? "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-[0_16px_34px_-26px_rgba(15,23,42,0.18)]"
           : "",
       ].join(" ")}
     >
@@ -217,35 +213,35 @@ function CompactHeader({
   onOpenInbox,
 }) {
   return (
-    <section className="pb-4">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <section className="pb-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgba(100,116,139,0.92)]">
+          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-[rgba(100,116,139,0.88)]">
             Channels
           </div>
 
-          <h1 className="text-[22px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.98)] md:text-[24px]">
+          <h1 className="text-[24px] font-semibold tracking-[-0.035em] text-[rgba(15,23,42,0.98)]">
             Launch channels
           </h1>
 
-          <div className="mt-2 text-[13px] font-medium text-[rgba(100,116,139,0.96)]">
-            {availableCount} available / {readyCount} ready
+          <div className="mt-2 text-[12.5px] font-medium text-[rgba(100,116,139,0.94)]">
+            {readyCount}/{availableCount} ready
             {!truthReady ? (
               <span className="ml-2 text-[rgba(180,83,9,0.96)]">
-                / truth pending approval
+                · truth pending
               </span>
             ) : null}
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <TopActionButton onClick={onOpenTruth}>Open truth</TopActionButton>
 
           <TopActionButton
             primary
             disabled={!hasDeliveryReadyLaunchChannel}
             onClick={onOpenInbox}
-            icon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            icon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />}
           >
             Open inbox
           </TopActionButton>
@@ -265,41 +261,28 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   return (
     <article
       className={[
-        "group relative overflow-hidden rounded-[10px] bg-white",
-        "px-6 py-5",
-        "shadow-[0_14px_30px_-22px_rgba(15,23,42,0.18)]",
-        "transition-all duration-200 ease-out",
-        "hover:-translate-y-[2px] hover:shadow-[0_26px_48px_-24px_rgba(15,23,42,0.24)]",
+        "group relative min-h-[178px] overflow-hidden rounded-[14px] bg-white",
+        "px-5 py-5",
+        "shadow-[0_22px_52px_-34px_rgba(15,23,42,0.42)]",
+        "ring-1 ring-[rgba(15,23,42,0.045)]",
+        "transition-all duration-250 ease-out",
+        "hover:-translate-y-[4px]",
+        "hover:shadow-[0_30px_70px_-34px_rgba(15,23,42,0.5)]",
+        "hover:ring-[rgba(46,96,255,0.14)]",
       ].join(" ")}
     >
+      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(46,96,255,0.28)] to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
       <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
-          <div className="mt-0.5 shrink-0">
-            <ChannelIcon channel={channel} size="lg" />
-          </div>
-
-          <div className="min-w-0">
-            <div className="text-[14px] font-semibold leading-5 tracking-[-0.015em] text-[rgba(15,23,42,0.98)]">
-              {channel.name}
-            </div>
-
-            <div className="mt-1 text-[12px] font-medium leading-5 text-[rgba(100,116,139,0.96)]">
-              {copy.eyebrow}
-            </div>
-
-            <div className="mt-3 text-[13px] font-semibold leading-5 tracking-[-0.01em] text-[rgba(15,23,42,0.96)]">
-              {copy.title}
-            </div>
-
-            <div className="mt-1.5 max-w-[460px] text-[12.5px] font-medium leading-6 text-[rgba(100,116,139,0.96)]">
-              {summary}
-            </div>
-          </div>
+        <div className="shrink-0">
+          <ChannelIcon channel={channel} size="lg" />
         </div>
 
         <div
           className={[
-            "mt-1 inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold",
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1",
+            "text-[10.5px] font-semibold leading-none",
+            tone.bg,
             tone.text,
           ].join(" ")}
         >
@@ -308,31 +291,45 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
         </div>
       </div>
 
+      <div className="mt-4">
+        <h2 className="text-[17px] font-semibold leading-6 tracking-[-0.025em] text-[rgba(15,23,42,0.98)]">
+          {channel.name}
+        </h2>
+
+        <p className="mt-2 line-clamp-2 max-w-[260px] text-[12.5px] font-medium leading-5 text-[rgba(100,116,139,0.94)]">
+          {summary}
+        </p>
+      </div>
+
       <div className="mt-5 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => onInspect?.(channel.id)}
-          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[rgb(var(--color-brand))] transition-colors hover:text-[rgba(15,23,42,0.96)]"
+          className={[
+            "inline-flex items-center gap-1.5",
+            "text-[12px] font-semibold text-[rgb(var(--color-brand))]",
+            "transition-colors hover:text-[rgba(15,23,42,0.96)]",
+          ].join(" ")}
         >
           <span>Details</span>
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.2} />
         </button>
 
         <button
           type="button"
           onClick={() => onRunPrimaryAction?.(channel, action)}
           className={[
-            "inline-flex h-10 min-w-[128px] items-center justify-center gap-2 rounded-[9px]",
-            "bg-[rgb(var(--color-brand))] px-4",
-            "text-[12.5px] font-semibold tracking-[-0.01em] text-white",
-            "shadow-[0_14px_28px_-18px_rgba(46,96,255,0.62)]",
+            "inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px]",
+            "bg-[rgb(var(--color-brand))] px-3.5",
+            "text-[12px] font-semibold tracking-[-0.01em] text-white",
+            "shadow-[0_16px_30px_-18px_rgba(46,96,255,0.7)]",
             "transition-all duration-200 ease-out",
             "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
-            "hover:shadow-[0_18px_32px_-18px_rgba(46,96,255,0.72)]",
+            "hover:shadow-[0_20px_34px_-18px_rgba(46,96,255,0.82)]",
           ].join(" ")}
         >
           <span>{action.label}</span>
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
         </button>
       </div>
     </article>
@@ -555,7 +552,7 @@ export default function ChannelCatalog() {
 
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
-      <PageCanvas className="max-w-[1180px] py-2">
+      <PageCanvas className="max-w-[1240px] py-2">
         <LoadingSurface title="Loading channels" />
       </PageCanvas>
     );
@@ -563,7 +560,7 @@ export default function ChannelCatalog() {
 
   return (
     <>
-      <PageCanvas className="max-w-[1180px] py-2">
+      <PageCanvas className="max-w-[1240px] py-2">
         <div className="space-y-4">
           {s(effectiveReadinessState.error) ? (
             <InlineNotice
@@ -577,7 +574,7 @@ export default function ChannelCatalog() {
           {hasDeliveryReadyLaunchChannel && !truthReady ? (
             <InlineNotice
               tone="warning"
-              title="A channel is connected, but truth still needs approval."
+              title="Truth still needs approval."
               description="Approve truth before relying on live AI replies."
               compact
             />
@@ -592,7 +589,7 @@ export default function ChannelCatalog() {
             onOpenInbox={() => navigate("/inbox")}
           />
 
-          <div className="max-w-[760px] space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {launchChannels.map((channel) => (
               <ChannelCard
                 key={channel.id}
