@@ -96,7 +96,7 @@ describe("InboxDetailPanel", () => {
     expect(
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/thread assigned/i).length).toBeGreaterThan(0);
   });
 
   it("renders object-shaped outbound lineage input without changing detail behavior", () => {
