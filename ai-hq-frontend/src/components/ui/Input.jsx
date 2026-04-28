@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+﻿import { forwardRef } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 
@@ -6,55 +6,73 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-soft",
-        height: "h-[44px]",
-        input: "text-[14px]",
-        textareaWrap: "px-3.5 py-3.5",
-        textarea: "min-h-[132px] text-[14px] leading-6",
-        selectWrap: "px-3.5",
-        select: "h-[44px] pr-10 text-[14px]",
-        leftInset: "left-3.5",
+        shell: "rounded-[15px]",
+        height: "h-[46px]",
+        input: "text-[14.5px] font-medium tracking-[-0.012em]",
+        textareaWrap: "px-4 py-3.5",
+        textarea: "min-h-[136px] text-[14.5px] font-medium leading-6 tracking-[-0.012em]",
+        selectWrap: "px-4",
+        select: "h-[46px] pr-10 text-[14.5px] font-medium tracking-[-0.012em]",
+        leftInset: "left-4",
         rightInset: "right-3.5",
-        padLeftBase: "pl-3.5",
-        padLeftWithIcon: "pl-11",
-        padRightBase: "pr-3.5",
-        padRightWithSlot: "pr-11",
-        padRightWide: "pr-[84px]",
+        padLeftBase: "pl-4",
+        padLeftWithIcon: "pl-[46px]",
+        padRightBase: "pr-4",
+        padRightWithSlot: "pr-[46px]",
+        padRightWide: "pr-[88px]",
       };
 
     case "quiet":
       return {
-        shell: "rounded-soft",
-        height: "h-[38px]",
-        input: "text-[13px]",
-        textareaWrap: "px-3 py-3",
-        textarea: "min-h-[112px] text-[13px] leading-6",
-        selectWrap: "px-3",
-        select: "h-[38px] pr-9 text-[13px]",
-        leftInset: "left-3",
+        shell: "rounded-[13px]",
+        height: "h-[40px]",
+        input: "text-[13.5px] font-medium tracking-[-0.01em]",
+        textareaWrap: "px-3.5 py-3",
+        textarea: "min-h-[112px] text-[13.5px] font-medium leading-6 tracking-[-0.01em]",
+        selectWrap: "px-3.5",
+        select: "h-[40px] pr-9 text-[13.5px] font-medium tracking-[-0.01em]",
+        leftInset: "left-3.5",
         rightInset: "right-3",
-        padLeftBase: "pl-3",
-        padLeftWithIcon: "pl-9.5",
-        padRightBase: "pr-3",
-        padRightWithSlot: "pr-9.5",
-        padRightWide: "pr-[76px]",
+        padLeftBase: "pl-3.5",
+        padLeftWithIcon: "pl-[40px]",
+        padRightBase: "pr-3.5",
+        padRightWithSlot: "pr-[40px]",
+        padRightWide: "pr-[78px]",
+      };
+
+    case "large":
+      return {
+        shell: "rounded-[17px]",
+        height: "h-[54px]",
+        input: "text-[15.5px] font-medium tracking-[-0.015em]",
+        textareaWrap: "px-4 py-4",
+        textarea: "min-h-[148px] text-[15px] font-medium leading-7 tracking-[-0.012em]",
+        selectWrap: "px-4",
+        select: "h-[54px] pr-11 text-[15.5px] font-medium tracking-[-0.015em]",
+        leftInset: "left-4",
+        rightInset: "right-4",
+        padLeftBase: "pl-4",
+        padLeftWithIcon: "pl-[48px]",
+        padRightBase: "pr-4",
+        padRightWithSlot: "pr-[48px]",
+        padRightWide: "pr-[92px]",
       };
 
     default:
       return {
-        shell: "rounded-soft",
-        height: "h-[40px]",
-        input: "text-[14px]",
+        shell: "rounded-[14px]",
+        height: "h-[42px]",
+        input: "text-[14px] font-medium tracking-[-0.01em]",
         textareaWrap: "px-3.5 py-3.5",
-        textarea: "min-h-[120px] text-[14px] leading-6",
+        textarea: "min-h-[124px] text-[14px] font-medium leading-6 tracking-[-0.01em]",
         selectWrap: "px-3.5",
-        select: "h-[40px] pr-10 text-[14px]",
+        select: "h-[42px] pr-10 text-[14px] font-medium tracking-[-0.01em]",
         leftInset: "left-3.5",
         rightInset: "right-3.5",
         padLeftBase: "pl-3.5",
-        padLeftWithIcon: "pl-11",
+        padLeftWithIcon: "pl-[42px]",
         padRightBase: "pr-3.5",
-        padRightWithSlot: "pr-11",
+        padRightWithSlot: "pr-[42px]",
         padRightWide: "pr-[84px]",
       };
   }
@@ -62,22 +80,32 @@ function resolveAppearance(appearance = "default") {
 
 function surfaceClass({ disabled, readOnly, invalid }) {
   if (disabled) {
-    return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
+    return [
+      "border-[rgba(var(--color-line-soft),0.95)]",
+      "bg-surface-subtle text-text-subtle opacity-75",
+      "shadow-none",
+    ].join(" ");
   }
 
   if (invalid) {
-    return "border-[rgba(var(--color-danger),0.26)] bg-surface";
+    return [
+      "border-[rgba(var(--color-danger),0.42)] bg-surface",
+      "shadow-[0_0_0_4px_rgba(var(--color-danger),0.06)]",
+    ].join(" ");
   }
 
   if (readOnly) {
-    return "border-line-soft bg-surface-muted";
+    return [
+      "border-line-soft bg-surface-muted",
+      "shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
+    ].join(" ");
   }
 
   return [
     "border-line bg-surface",
-    "shadow-[0_1px_0_rgba(255,255,255,0.86)_inset]",
+    "shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_14px_32px_-30px_rgba(15,23,42,0.28)]",
     "hover:border-line-strong hover:bg-surface",
-    "focus-within:border-brand focus-within:shadow-[var(--focus-ring)]",
+    "focus-within:border-brand focus-within:shadow-[var(--focus-ring),0_18px_38px_-32px_rgba(46,96,255,0.42)]",
   ].join(" ");
 }
 
@@ -94,7 +122,8 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "ui-field-shell relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
+        "ui-field-shell relative w-full overflow-hidden border-[1.5px]",
+        "transition-[border-color,background-color,box-shadow] duration-base ease-premium",
         view.shell,
         surfaceClass({ disabled, readOnly, invalid }),
         className
@@ -113,6 +142,20 @@ function resolveInputPadding({ hasLeftIcon, hasRightSlot, hasWideRight, view }) 
       : hasRightSlot
         ? view.padRightWithSlot
         : view.padRightBase
+  );
+}
+
+function ControlIconSlot({ children, className }) {
+  return (
+    <span
+      className={cx(
+        "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium",
+        "group-focus-within:text-brand",
+        className
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -143,21 +186,14 @@ export function InputGroup({
 
   return (
     <FieldShell
-      className={className}
+      className={cx("group", className)}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
       appearance={appearance}
     >
       {leftIcon ? (
-        <span
-          className={cx(
-            "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle",
-            view.leftInset
-          )}
-        >
-          {leftIcon}
-        </span>
+        <ControlIconSlot className={view.leftInset}>{leftIcon}</ControlIconSlot>
       ) : null}
 
       <input
@@ -167,7 +203,9 @@ export function InputGroup({
         placeholder={placeholder}
         aria-invalid={invalid || undefined}
         className={cx(
-          "ui-field-control block w-full border-0 bg-transparent outline-none placeholder:text-text-subtle",
+          "ui-field-control block w-full border-0 bg-transparent text-text outline-none",
+          "placeholder:text-text-subtle placeholder:opacity-100",
+          "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
           disabled && "cursor-not-allowed",
           view.height,
           view.input,
@@ -193,10 +231,10 @@ export function InputGroup({
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text"
               aria-label="Clear"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" strokeWidth={2.1} />
             </button>
           ) : null}
 
@@ -226,21 +264,14 @@ const Input = forwardRef(function Input(
 
   return (
     <FieldShell
-      className={className}
+      className={cx("group", className)}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
       appearance={appearance}
     >
       {leftIcon ? (
-        <span
-          className={cx(
-            "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle",
-            view.leftInset
-          )}
-        >
-          {leftIcon}
-        </span>
+        <ControlIconSlot className={view.leftInset}>{leftIcon}</ControlIconSlot>
       ) : null}
 
       <input
@@ -249,7 +280,9 @@ const Input = forwardRef(function Input(
         readOnly={readOnly}
         aria-invalid={invalid || undefined}
         className={cx(
-          "ui-field-control block w-full border-0 bg-transparent outline-none placeholder:text-text-subtle",
+          "ui-field-control block w-full border-0 bg-transparent text-text outline-none",
+          "placeholder:text-text-subtle placeholder:opacity-100",
+          "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
           disabled && "cursor-not-allowed",
           view.height,
           view.input,
@@ -297,7 +330,7 @@ export const Textarea = forwardRef(function Textarea(
 
   return (
     <FieldShell
-      className={className}
+      className={cx("group", className)}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -311,7 +344,9 @@ export const Textarea = forwardRef(function Textarea(
           readOnly={readOnly}
           aria-invalid={invalid || undefined}
           className={cx(
-            "ui-field-control block w-full resize-y border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
+            "ui-field-control block w-full resize-y border-0 bg-transparent p-0 text-text outline-none",
+            "placeholder:text-text-subtle placeholder:opacity-100",
+            "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
             disabled && "cursor-not-allowed",
             view.textarea,
             textClassName
@@ -340,7 +375,7 @@ export const Select = forwardRef(function Select(
 
   return (
     <FieldShell
-      className={className}
+      className={cx("group", className)}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -353,6 +388,7 @@ export const Select = forwardRef(function Select(
           aria-invalid={invalid || undefined}
           className={cx(
             "ui-field-control w-full appearance-none border-0 bg-transparent p-0 text-text outline-none",
+            "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
             (disabled || readOnly) && "cursor-not-allowed",
             view.select,
             selectClassName
@@ -362,7 +398,10 @@ export const Select = forwardRef(function Select(
           {children}
         </select>
 
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
+        <ChevronDown
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium group-focus-within:text-brand"
+          strokeWidth={2.1}
+        />
       </div>
     </FieldShell>
   );

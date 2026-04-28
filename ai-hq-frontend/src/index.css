@@ -5,25 +5,25 @@
 :root {
   color-scheme: light;
 
-  --color-canvas: 246 247 249;
-  --color-canvas-muted: 240 242 245;
+  --color-canvas: 250 251 253;
+  --color-canvas-muted: 246 248 251;
 
   --color-surface: 255 255 255;
-  --color-surface-muted: 250 251 252;
-  --color-surface-subtle: 245 247 250;
-  --color-surface-inverse: 12 18 28;
+  --color-surface-muted: 249 250 252;
+  --color-surface-subtle: 244 247 251;
+  --color-surface-inverse: 10 15 25;
 
-  --color-text: 15 23 42;
-  --color-text-muted: 71 85 105;
-  --color-text-subtle: 100 116 139;
+  --color-text: 12 18 30;
+  --color-text-muted: 51 65 85;
+  --color-text-subtle: 92 105 123;
   --color-text-inverse: 248 250 252;
 
-  --color-line: 222 226 232;
-  --color-line-strong: 198 204 213;
-  --color-line-soft: 234 237 241;
+  --color-line: 214 221 232;
+  --color-line-strong: 185 196 211;
+  --color-line-soft: 230 235 242;
 
   --color-brand: 46 96 255;
-  --color-brand-strong: 27 74 221;
+  --color-brand-strong: 31 80 232;
   --color-brand-soft: 239 244 255;
 
   --color-info: 46 96 255;
@@ -50,29 +50,30 @@
 
   --font-display: var(--font-sans);
 
-  --radius-xs: 6px;
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
+  --radius-xs: 7px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-pill: 999px;
 
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-sm:
-    0 10px 24px -18px rgba(15, 23, 42, 0.16),
-    0 4px 10px -8px rgba(15, 23, 42, 0.08);
+    0 14px 32px -24px rgba(15, 23, 42, 0.24),
+    0 5px 14px -12px rgba(15, 23, 42, 0.1);
   --shadow-md:
-    0 18px 40px -24px rgba(15, 23, 42, 0.22),
-    0 8px 18px -12px rgba(15, 23, 42, 0.12);
+    0 24px 54px -34px rgba(15, 23, 42, 0.28),
+    0 10px 24px -18px rgba(15, 23, 42, 0.12);
   --shadow-lg:
-    0 28px 64px -32px rgba(15, 23, 42, 0.26),
-    0 12px 28px -18px rgba(15, 23, 42, 0.14);
+    0 34px 78px -42px rgba(15, 23, 42, 0.34),
+    0 16px 36px -22px rgba(15, 23, 42, 0.16);
 
   --focus-ring: 0 0 0 4px rgba(46, 96, 255, 0.12);
 
-  --control-sm: 36px;
-  --control-md: 40px;
-  --control-lg: 44px;
+  --control-sm: 38px;
+  --control-md: 42px;
+  --control-lg: 46px;
 
   --motion-fast: 120ms;
   --motion-base: 180ms;
@@ -105,6 +106,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 
 #root {
@@ -118,7 +120,7 @@ body {
 }
 
 ::selection {
-  background: rgba(46, 96, 255, 0.16);
+  background: rgba(46, 96, 255, 0.14);
   color: rgb(var(--color-text));
 }
 
@@ -145,8 +147,8 @@ h5,
 h6 {
   color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-weight: 650;
+  letter-spacing: -0.045em;
 }
 
 img,
@@ -169,13 +171,24 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
 textarea {
   resize: vertical;
+}
+
+input,
+textarea,
+select {
+  color: rgb(var(--color-text));
 }
 
 input::placeholder,
 textarea::placeholder {
   color: rgb(var(--color-text-subtle));
+  opacity: 1;
 }
 
 hr {
@@ -269,6 +282,18 @@ table {
   padding: 8px 10px !important;
 }
 
+.ant-skeleton.ant-skeleton-active .ant-skeleton-title,
+.ant-skeleton.ant-skeleton-active .ant-skeleton-paragraph > li {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(226, 232, 240, 0.55) 25%,
+      rgba(241, 245, 249, 0.9) 37%,
+      rgba(226, 232, 240, 0.55) 63%
+    ) !important;
+  background-size: 400% 100% !important;
+}
+
 .sonner-toast {
   border: 1px solid rgb(var(--color-line)) !important;
   border-radius: var(--radius-lg) !important;
@@ -288,7 +313,7 @@ table {
 .cmdk-group-heading {
   padding: 0 12px 6px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
   color: rgb(var(--color-text-subtle));
 }
 
@@ -352,7 +377,7 @@ table {
 
 @layer components {
   .app-surface {
-    border: 1px solid rgb(var(--color-line));
+    border: 1px solid rgb(var(--color-line-soft));
     border-radius: var(--radius-lg);
     background: rgb(var(--color-surface));
     box-shadow: var(--shadow-sm);
@@ -379,11 +404,12 @@ table {
   .app-input {
     height: var(--control-md);
     width: 100%;
-    border: 1px solid rgb(var(--color-line));
+    border: 1.5px solid rgb(var(--color-line));
     border-radius: var(--radius-md);
     background: rgb(var(--color-surface));
-    padding: 0 12px;
+    padding: 0 13px;
     color: rgb(var(--color-text));
+    font-weight: 500;
     transition:
       border-color var(--motion-base) var(--motion-premium),
       box-shadow var(--motion-base) var(--motion-premium),
@@ -570,17 +596,6 @@ table {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
 .ui-field-shell:has(input:-webkit-autofill),
 .ui-field-shell:has(textarea:-webkit-autofill),
 .ui-field-shell:has(select:-webkit-autofill) {
@@ -590,26 +605,28 @@ table {
 .ui-field-shell input:-webkit-autofill,
 .ui-field-shell input:-webkit-autofill:hover,
 .ui-field-shell input:-webkit-autofill:focus,
+.ui-field-shell input:-webkit-autofill:active,
 .ui-field-shell textarea:-webkit-autofill,
 .ui-field-shell textarea:-webkit-autofill:hover,
 .ui-field-shell textarea:-webkit-autofill:focus,
+.ui-field-shell textarea:-webkit-autofill:active,
 .ui-field-shell select:-webkit-autofill,
 .ui-field-shell select:-webkit-autofill:hover,
-.ui-field-shell select:-webkit-autofill:focus {
+.ui-field-shell select:-webkit-autofill:focus,
+.ui-field-shell select:-webkit-autofill:active {
   -webkit-text-fill-color: rgb(var(--color-text)) !important;
   caret-color: rgb(var(--color-text)) !important;
   -webkit-box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
   box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
-  background-color: transparent !important;
-  background-clip: padding-box !important;
+  background-color: rgb(var(--color-surface)) !important;
+  background-image: none !important;
+  background-clip: border-box !important;
   border-radius: inherit !important;
   transition:
     background-color 999999s ease-in-out 0s,
-    color 999999s ease-in-out 0s;
+    color 999999s ease-in-out 0s !important;
 }
 
-/* Global browser autofill reset.
-   Prevents Chrome/Edge from painting blue/yellow rectangles inside custom inputs. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -627,7 +644,9 @@ select:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
   box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
   background-color: rgb(var(--color-surface)) !important;
-  background-clip: padding-box !important;
+  background-image: none !important;
+  background-clip: border-box !important;
+  border-radius: inherit !important;
   transition:
     background-color 999999s ease-in-out 0s,
     color 999999s ease-in-out 0s !important;
@@ -642,5 +661,16 @@ select:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
   box-shadow: 0 0 0 1000px #ffffff inset !important;
   background-color: #ffffff !important;
+  background-image: none !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

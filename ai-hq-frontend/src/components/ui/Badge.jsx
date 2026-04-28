@@ -1,58 +1,56 @@
-import { cx } from "../../lib/cx.js";
+﻿import { cx } from "../../lib/cx.js";
 
 const TONES = {
   neutral: {
-    solid: "border-[rgba(var(--color-surface-inverse),0.08)] bg-[rgb(var(--color-surface-inverse))] text-white",
-    subtle:
-      "border-line-soft bg-surface-muted text-text-muted",
-    outline:
-      "border-line bg-surface text-text-muted",
-    soft:
-      "border-line-soft bg-surface-subtle text-text",
+    solid:
+      "border-[rgba(var(--color-surface-inverse),0.1)] bg-[rgb(var(--color-surface-inverse))] text-white",
+    subtle: "border-line-soft bg-surface-muted text-text-muted",
+    outline: "border-line bg-surface text-text-muted",
+    soft: "border-line-soft bg-surface-subtle text-text",
     dot: "bg-[rgb(var(--color-text-subtle))]",
   },
 
   success: {
-    solid: "border-[rgba(var(--color-success),0.18)] bg-success text-white",
+    solid: "border-[rgba(var(--color-success),0.22)] bg-success text-white",
     subtle:
-      "border-[rgba(var(--color-success),0.16)] bg-success-soft text-success",
+      "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success",
     outline:
-      "border-[rgba(var(--color-success),0.24)] bg-surface text-success",
+      "border-[rgba(var(--color-success),0.28)] bg-surface text-success",
     soft:
-      "border-[rgba(var(--color-success),0.12)] bg-[rgba(var(--color-success),0.08)] text-success",
+      "border-[rgba(var(--color-success),0.16)] bg-[rgba(var(--color-success),0.08)] text-success",
     dot: "bg-success",
   },
 
   warning: {
-    solid: "border-[rgba(var(--color-warning),0.18)] bg-warning text-white",
+    solid: "border-[rgba(var(--color-warning),0.22)] bg-warning text-white",
     subtle:
-      "border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning",
+      "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning",
     outline:
-      "border-[rgba(var(--color-warning),0.24)] bg-surface text-warning",
+      "border-[rgba(var(--color-warning),0.3)] bg-surface text-warning",
     soft:
-      "border-[rgba(var(--color-warning),0.12)] bg-[rgba(var(--color-warning),0.08)] text-warning",
+      "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.08)] text-warning",
     dot: "bg-warning",
   },
 
   danger: {
-    solid: "border-[rgba(var(--color-danger),0.18)] bg-danger text-white",
+    solid: "border-[rgba(var(--color-danger),0.22)] bg-danger text-white",
     subtle:
-      "border-[rgba(var(--color-danger),0.16)] bg-danger-soft text-danger",
+      "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger",
     outline:
-      "border-[rgba(var(--color-danger),0.24)] bg-surface text-danger",
+      "border-[rgba(var(--color-danger),0.3)] bg-surface text-danger",
     soft:
-      "border-[rgba(var(--color-danger),0.12)] bg-[rgba(var(--color-danger),0.08)] text-danger",
+      "border-[rgba(var(--color-danger),0.18)] bg-[rgba(var(--color-danger),0.08)] text-danger",
     dot: "bg-danger",
   },
 
   info: {
-    solid: "border-[rgba(var(--color-brand),0.16)] bg-brand text-white",
+    solid: "border-[rgba(var(--color-brand),0.2)] bg-brand text-white",
     subtle:
-      "border-[rgba(var(--color-brand),0.16)] bg-brand-soft text-brand",
+      "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand",
     outline:
-      "border-[rgba(var(--color-brand),0.24)] bg-surface text-brand",
+      "border-[rgba(var(--color-brand),0.28)] bg-surface text-brand",
     soft:
-      "border-[rgba(var(--color-brand),0.12)] bg-[rgba(var(--color-brand),0.07)] text-brand",
+      "border-[rgba(var(--color-brand),0.16)] bg-[rgba(var(--color-brand),0.075)] text-brand",
     dot: "bg-brand",
   },
 };
@@ -70,14 +68,14 @@ function tonePack(tone = "neutral") {
 
 function sizeClass(size = "sm") {
   if (size === "lg") {
-    return "min-h-[28px] px-3.5 text-[12px]";
+    return "min-h-[30px] px-3.5 text-[12.5px]";
   }
 
   if (size === "md") {
-    return "min-h-[24px] px-3 text-[11px]";
+    return "min-h-[26px] px-3 text-[11.5px]";
   }
 
-  return "min-h-[22px] px-2.5 text-[11px]";
+  return "min-h-[23px] px-2.5 text-[11px]";
 }
 
 export default function Badge({
@@ -93,7 +91,7 @@ export default function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-pill border font-semibold tracking-[-0.01em] whitespace-nowrap transition-colors",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] border font-bold tracking-[-0.012em] transition-colors duration-base ease-premium",
         sizeClass(size),
         palette[variant] || palette.subtle,
         className
@@ -102,7 +100,7 @@ export default function Badge({
       {dot ? (
         <span className={cx("h-1.5 w-1.5 rounded-full", palette.dot)} />
       ) : null}
-      <span>{children}</span>
+      <span className="leading-none">{children}</span>
     </span>
   );
 }

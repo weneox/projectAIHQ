@@ -1,4 +1,4 @@
-import { createElement } from "react";
+﻿import { createElement } from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
@@ -15,19 +15,19 @@ import Badge from "./Badge.jsx";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-[rgba(var(--color-brand),0.14)] bg-brand-soft",
+    container: "border-[rgba(var(--color-brand),0.18)] bg-brand-soft",
     icon: "text-brand",
   },
   success: {
-    container: "border-[rgba(var(--color-success),0.14)] bg-success-soft",
+    container: "border-[rgba(var(--color-success),0.18)] bg-success-soft",
     icon: "text-success",
   },
   warning: {
-    container: "border-[rgba(var(--color-warning),0.16)] bg-warning-soft",
+    container: "border-[rgba(var(--color-warning),0.2)] bg-warning-soft",
     icon: "text-warning",
   },
   danger: {
-    container: "border-[rgba(var(--color-danger),0.14)] bg-danger-soft",
+    container: "border-[rgba(var(--color-danger),0.18)] bg-danger-soft",
     icon: "text-danger",
   },
 };
@@ -44,12 +44,13 @@ function resolveNoticeIcon(tone = "info") {
 
 function skeletonWidths(rows) {
   return Array.from({ length: rows }, (_, index) =>
-    index === rows - 1 ? "70%" : "100%"
+    index === rows - 1 ? "72%" : "100%"
   );
 }
 
 function paddedClass(padded) {
   if (padded === false) return "p-0";
+  if (padded === "xs") return "p-3";
   if (padded === "sm") return "p-4";
   if (padded === "lg") return "p-6";
   if (padded === "xl") return "p-7";
@@ -66,7 +67,7 @@ function surfaceToneClass({ tone = "default", subdued = false }) {
   }
 
   if (tone === "brand-soft") {
-    return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft";
+    return "border-[rgba(var(--color-brand),0.16)] bg-brand-soft";
   }
 
   return "border-line-soft bg-surface";
@@ -74,19 +75,19 @@ function surfaceToneClass({ tone = "default", subdued = false }) {
 
 function metricToneClass(tone = "neutral") {
   if (tone === "brand" || tone === "accent" || tone === "info") {
-    return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft";
+    return "border-[rgba(var(--color-brand),0.16)] bg-brand-soft";
   }
 
   if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.16)] bg-warning-soft";
+    return "border-[rgba(var(--color-warning),0.2)] bg-warning-soft";
   }
 
   if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.14)] bg-danger-soft";
+    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft";
   }
 
   if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.14)] bg-success-soft";
+    return "border-[rgba(var(--color-success),0.18)] bg-success-soft";
   }
 
   return "border-line-soft bg-surface";
@@ -94,18 +95,18 @@ function metricToneClass(tone = "neutral") {
 
 function bannerToneClass(tone = "info") {
   if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.14)] bg-success-soft text-success";
+    return "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success";
   }
 
   if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.16)] bg-warning-soft text-warning";
+    return "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning";
   }
 
   if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.14)] bg-danger-soft text-danger";
+    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger";
   }
 
-  return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft text-brand";
+  return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand";
 }
 
 function launchBadgeVariant(tone = "neutral") {
@@ -144,23 +145,23 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-4 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
       <div className="max-w-[860px]">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="text-[1.8rem] font-semibold leading-[1.04] tracking-[-0.04em] text-text md:text-[2.05rem]">
+        <h1 className="text-[1.95rem] font-semibold leading-[1.02] tracking-[-0.055em] text-text md:text-[2.24rem]">
           {title}
         </h1>
 
         {description ? (
-          <p className="mt-2.5 text-[14px] leading-6 text-text-muted">
+          <p className="mt-2.5 max-w-[760px] text-[14.5px] font-medium leading-6 text-text-muted">
             {description}
           </p>
         ) : null}
@@ -191,17 +192,17 @@ export function SectionHeader({
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h2 className="text-[1.15rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.28rem]">
+        <h2 className="text-[1.22rem] font-semibold leading-tight tracking-[-0.04em] text-text md:text-[1.36rem]">
           {title}
         </h2>
 
         {description ? (
-          <p className="mt-1.5 text-[13px] leading-6 text-text-muted">
+          <p className="mt-1.5 text-[13.5px] font-medium leading-6 text-text-muted">
             {description}
           </p>
         ) : null}
@@ -232,7 +233,8 @@ export function Surface({
         paddedClass(padded),
         shadow === "sm" && "shadow-panel",
         shadow === "md" && "shadow-panel-strong",
-        shadow === "none" && "shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
+        shadow === "none" &&
+          "shadow-[0_1px_0_rgba(255,255,255,0.96)_inset]",
         className
       )}
     >
@@ -250,21 +252,25 @@ export function MetricCard({
 }) {
   return (
     <Card
-      className={cx("px-4 py-4", metricToneClass(tone), className)}
+      className={cx(
+        "px-4 py-4.5 shadow-[0_1px_0_rgba(255,255,255,0.94)_inset]",
+        metricToneClass(tone),
+        className
+      )}
       padded={false}
     >
       {label ? (
-        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+        <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-text-subtle">
           {label}
         </div>
       ) : null}
 
-      <div className="mt-2 text-[1.3rem] font-semibold leading-tight tracking-[-0.04em] text-text">
+      <div className="mt-2 text-[1.38rem] font-semibold leading-tight tracking-[-0.045em] text-text">
         {value}
       </div>
 
       {hint ? (
-        <div className="mt-1.5 text-[12px] leading-5 text-text-muted">
+        <div className="mt-1.5 text-[12.5px] font-medium leading-5 text-text-muted">
           {hint}
         </div>
       ) : null}
@@ -272,11 +278,7 @@ export function MetricCard({
   );
 }
 
-export function MetricGrid({
-  className,
-  children,
-  columns = 4,
-}) {
+export function MetricGrid({ className, children, columns = 4 }) {
   const columnsClass =
     columns === 2
       ? "md:grid-cols-2"
@@ -300,7 +302,7 @@ export function LaunchStatusBadge({
       size="md"
       dot={dot}
       className={cx(
-        "!min-h-[24px] !rounded-[10px] !px-2.5 !text-[11px] !font-semibold !tracking-[-0.01em]",
+        "!min-h-[25px] !rounded-[11px] !px-2.5 !text-[11.5px] !font-bold !tracking-[-0.012em]",
         className
       )}
     >
@@ -319,14 +321,14 @@ export function LaunchTextAction({
     <button
       type="button"
       className={cx(
-        "inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[rgba(100,116,139,0.96)] transition-colors",
-        "hover:text-[rgba(15,23,42,0.94)]",
+        "inline-flex items-center gap-1.5 text-[13px] font-semibold text-text-muted transition-colors duration-base ease-premium",
+        "hover:text-text",
         className
       )}
       {...props}
     >
       <span>{children}</span>
-      {icon ? <ArrowUpRight className="h-4 w-4 shrink-0" strokeWidth={2.05} /> : null}
+      {icon ? <ArrowUpRight className="h-4 w-4 shrink-0" strokeWidth={2.1} /> : null}
     </button>
   );
 }
@@ -347,11 +349,11 @@ export function LaunchPrimaryAction({
         showArrow ? <ArrowRight className="h-4 w-4" strokeWidth={2.15} /> : undefined
       }
       className={cx(
-        "!h-11 !rounded-[14px] !px-4 !text-[13px] !font-semibold",
+        "!h-11 !rounded-[15px] !px-4 !text-[13.5px] !font-semibold",
         quiet &&
-          "!border-[rgba(15,23,42,0.08)] !bg-white !text-[rgba(15,23,42,0.88)] hover:!bg-[rgba(248,250,252,0.96)]",
+          "!border-line !bg-white !text-text hover:!bg-surface-muted",
         !quiet &&
-          "!shadow-[0_18px_40px_-24px_rgba(46,96,255,0.48)] hover:!shadow-[0_22px_46px_-24px_rgba(46,96,255,0.52)]",
+          "!shadow-[0_18px_40px_-26px_rgba(46,96,255,0.72)] hover:!shadow-[0_22px_46px_-28px_rgba(46,96,255,0.82)]",
         className
       )}
       {...props}
@@ -370,12 +372,12 @@ export function LaunchCard({
   return (
     <div
       className={cx(
-        "relative overflow-hidden rounded-[24px] border bg-[rgba(255,255,255,0.88)] transition-all duration-200",
-        "shadow-[0_24px_60px_-46px_rgba(15,23,42,0.14)]",
+        "relative overflow-hidden rounded-[24px] border bg-white transition-[border-color,box-shadow,background-color] duration-base ease-premium",
+        "shadow-[0_24px_60px_-48px_rgba(15,23,42,0.22)]",
         compact ? "px-4 py-4" : "px-5 py-5",
         selected
-          ? "border-[rgba(37,99,235,0.12)] shadow-[0_28px_70px_-48px_rgba(37,99,235,0.18)]"
-          : "border-[rgba(15,23,42,0.06)] hover:border-[rgba(15,23,42,0.10)] hover:shadow-[0_28px_70px_-48px_rgba(15,23,42,0.16)]",
+          ? "border-[rgba(46,96,255,0.2)] shadow-[0_28px_70px_-50px_rgba(46,96,255,0.24)]"
+          : "border-line-soft hover:border-line hover:shadow-[0_30px_74px_-52px_rgba(15,23,42,0.26)]",
         className
       )}
     >
@@ -398,13 +400,13 @@ export function LaunchCardHeader({
 
         <div className="min-w-0">
           {title ? (
-            <div className="truncate text-[15px] font-semibold text-[rgba(15,23,42,0.96)]">
+            <div className="truncate text-[15px] font-semibold tracking-[-0.02em] text-text">
               {title}
             </div>
           ) : null}
 
           {eyebrow ? (
-            <div className="mt-1 truncate text-[12.5px] text-[rgba(100,116,139,0.96)]">
+            <div className="mt-1 truncate text-[12.5px] font-medium text-text-muted">
               {eyebrow}
             </div>
           ) : null}
@@ -425,7 +427,7 @@ export function LaunchCardBody({
   return (
     <div className={cx("mt-5", className)}>
       {title ? (
-        <div className="text-[13px] font-medium text-[rgba(15,23,42,0.94)]">
+        <div className="text-[13.5px] font-semibold tracking-[-0.015em] text-text">
           {title}
         </div>
       ) : null}
@@ -433,7 +435,7 @@ export function LaunchCardBody({
       {description ? (
         <div
           className={cx(
-            "text-[13px] leading-7 text-[rgba(100,116,139,0.96)]",
+            "text-[13.5px] font-medium leading-7 text-text-muted",
             title ? "mt-2" : ""
           )}
         >
@@ -446,16 +448,13 @@ export function LaunchCardBody({
   );
 }
 
-export function LaunchCardMeta({
-  children,
-  className,
-}) {
+export function LaunchCardMeta({ children, className }) {
   if (!children) return null;
 
   return (
     <div
       className={cx(
-        "mt-4 border-t border-[rgba(15,23,42,0.05)] pt-4 text-[12px] text-[rgba(100,116,139,0.96)]",
+        "mt-4 border-t border-line-soft pt-4 text-[12.5px] font-medium text-text-muted",
         className
       )}
     >
@@ -464,15 +463,11 @@ export function LaunchCardMeta({
   );
 }
 
-export function LaunchCardFooter({
-  leading,
-  trailing,
-  className,
-}) {
+export function LaunchCardFooter({ leading, trailing, className }) {
   return (
     <div
       className={cx(
-        "mt-5 flex items-center justify-between gap-3 border-t border-[rgba(15,23,42,0.05)] pt-4",
+        "mt-5 flex items-center justify-between gap-3 border-t border-line-soft pt-4",
         className
       )}
     >
@@ -494,7 +489,7 @@ export function StatusBanner({
   return (
     <div
       className={cx(
-        "rounded-panel border px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.84)_inset]",
+        "rounded-panel border px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
         bannerToneClass(tone),
         className
       )}
@@ -502,7 +497,7 @@ export function StatusBanner({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           {label ? (
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]">
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em]">
               {label}
             </div>
           ) : null}
@@ -510,7 +505,7 @@ export function StatusBanner({
           {title ? (
             <div
               className={cx(
-                "font-semibold tracking-[-0.02em] text-text",
+                "font-semibold tracking-[-0.025em] text-text",
                 label ? "mt-2 text-[15px]" : "text-[15px]"
               )}
             >
@@ -521,7 +516,7 @@ export function StatusBanner({
           {description ? (
             <div
               className={cx(
-                "text-[13px] leading-6 text-text-muted",
+                "text-[13.5px] font-medium leading-6 text-text-muted",
                 title ? "mt-1" : "mt-0"
               )}
             >
@@ -530,7 +525,7 @@ export function StatusBanner({
           ) : null}
 
           {detail ? (
-            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-subtle">
               {detail}
             </div>
           ) : null}
@@ -542,11 +537,7 @@ export function StatusBanner({
   );
 }
 
-export function PropertyList({
-  className,
-  children,
-  tone = "default",
-}) {
+export function PropertyList({ className, children, tone = "default" }) {
   return (
     <Surface
       className={className}
@@ -579,13 +570,13 @@ export function PropertyRow({
           : `${labelWidth} minmax(0,1fr)`,
       }}
     >
-      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-subtle">
         {label}
       </div>
 
       <div
         className={cx(
-          "min-w-0 text-[13px] leading-6 text-text",
+          "min-w-0 text-[13.5px] font-medium leading-6 text-text",
           align === "right" && "text-right",
           valueClassName
         )}
@@ -598,22 +589,17 @@ export function PropertyRow({
   );
 }
 
-export function FieldGroup({
-  label,
-  description,
-  children,
-  className,
-}) {
+export function FieldGroup({ label, description, children, className }) {
   return (
     <div className={cx("space-y-2", className)}>
       {label ? (
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-subtle">
           {label}
         </div>
       ) : null}
 
       {description ? (
-        <div className="text-[12px] leading-5 text-text-muted">
+        <div className="text-[12.5px] font-medium leading-5 text-text-muted">
           {description}
         </div>
       ) : null}
@@ -633,15 +619,15 @@ export function InlineNotice({
   icon: IconOverride,
 }) {
   const palette = resolveNoticeTone(tone);
-  const iconElement = createElement(
-    IconOverride || resolveNoticeIcon(tone),
-    { className: compact ? "h-4 w-4" : "h-[16px] w-[16px]" }
-  );
+  const iconElement = createElement(IconOverride || resolveNoticeIcon(tone), {
+    className: compact ? "h-4 w-4" : "h-[16px] w-[16px]",
+    strokeWidth: 2.1,
+  });
 
   return (
     <div
       className={cx(
-        "rounded-soft border shadow-[0_1px_0_rgba(255,255,255,0.84)_inset]",
+        "rounded-[14px] border shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
         palette.container,
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
         className
@@ -661,7 +647,7 @@ export function InlineNotice({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-[14px] font-semibold tracking-[-0.01em] text-text">
+            <div className="text-[14px] font-semibold tracking-[-0.015em] text-text">
               {title}
             </div>
           ) : null}
@@ -669,7 +655,7 @@ export function InlineNotice({
           {description ? (
             <div
               className={cx(
-                "text-[13px] text-text-muted",
+                "text-[13px] font-medium text-text-muted",
                 title ? "mt-1 leading-6" : "leading-5"
               )}
             >
@@ -688,7 +674,10 @@ export function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
-      className={cx("animate-pulse rounded-soft bg-surface-subtle", className)}
+      className={cx(
+        "animate-pulse rounded-[14px] bg-surface-subtle",
+        className
+      )}
     />
   );
 }
@@ -701,16 +690,18 @@ export function SectionLoading({
   compact = false,
 }) {
   return (
-    <Surface className={className} tone="muted">
+    <Surface className={className} tone="muted" shadow="sm">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-soft border border-line bg-surface text-text-subtle">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-[13px] border border-line bg-surface text-text-subtle shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
           <Spin size="small" />
         </span>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-semibold text-text">{title}</div>
+          <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
+            {title}
+          </div>
           {description ? (
-            <div className="text-[13px] leading-6 text-text-muted">
+            <div className="text-[13.5px] font-medium leading-6 text-text-muted">
               {description}
             </div>
           ) : null}
@@ -755,25 +746,20 @@ export function Section({
   );
 }
 
-export function EmptyState({
-  title,
-  description,
-  action,
-  className,
-}) {
+export function EmptyState({ title, description, action, className }) {
   return (
     <Surface className={cx("text-center", className)} tone="muted">
       <div className="mx-auto flex max-w-[420px] flex-col items-center gap-3 py-4">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-text-subtle">
-          <Info className="h-4 w-4" />
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-line bg-surface text-text-subtle">
+          <Info className="h-4 w-4" strokeWidth={2.1} />
         </span>
 
         <div>
-          <div className="text-[14px] font-semibold tracking-[-0.01em] text-text">
+          <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
             {title}
           </div>
           {description ? (
-            <div className="mt-1 text-[13px] leading-6 text-text-muted">
+            <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
               {description}
             </div>
           ) : null}
@@ -785,20 +771,15 @@ export function EmptyState({
   );
 }
 
-export function CompactState({
-  title,
-  description,
-  action,
-  className,
-}) {
+export function CompactState({ title, description, action, className }) {
   return (
     <Surface className={className} padded="sm" tone="muted">
       <div className="space-y-1.5">
-        <div className="text-[14px] font-medium tracking-[-0.01em] text-text">
+        <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
           {title}
         </div>
         {description ? (
-          <div className="text-[13px] leading-5 text-text-muted">
+          <div className="text-[13.5px] font-medium leading-5 text-text-muted">
             {description}
           </div>
         ) : null}
@@ -956,7 +937,7 @@ export function SlidingDetailOverlay({
         aria-label={closeLabel}
         onClick={() => onClose?.()}
         className={cx(
-          "absolute inset-0 transition-opacity duration-base ease-premium opacity-100",
+          "absolute inset-0 opacity-100 transition-opacity duration-base ease-premium",
           backdropClassName
         )}
       />
