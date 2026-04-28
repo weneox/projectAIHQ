@@ -294,7 +294,7 @@ function EmptyComposerDock() {
 function FloatingComposerSlot({ children }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
-      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.68)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-7">
+      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0)_0%,rgba(248,250,252,0.68)_28%,rgba(248,250,252,0.94)_68%,rgba(248,250,252,0.985)_100%)] pt-3">
         <div className="pointer-events-auto">{children}</div>
       </div>
     </div>
@@ -463,7 +463,7 @@ export default function InboxDetailPanel({
           <>
             <div
               ref={scrollViewportRef}
-              className="h-full overflow-y-auto pb-[128px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="h-full overflow-y-auto pb-[92px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {surface?.loading ? (
                 <InboxDetailSkeleton />
@@ -527,6 +527,7 @@ export default function InboxDetailPanel({
     </section>
   );
 }
+
 
 
 

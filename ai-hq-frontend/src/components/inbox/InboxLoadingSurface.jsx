@@ -83,17 +83,19 @@ export function InboxDetailSkeleton() {
   return (
     <div
       aria-label="Loading conversation messages"
-      className="flex min-h-full flex-col justify-end px-4 py-6 md:px-5 lg:px-6 xl:px-8"
+      className="flex min-h-full flex-col justify-end px-4 pb-3 pt-6 md:px-5 lg:px-6 xl:px-8"
     >
-      <div className="mt-auto w-full space-y-5">
+      <div className="mt-auto w-full space-y-2">
         <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
           <div className="flex max-w-full items-end gap-2">
             <Shimmer className="h-9 w-9 shrink-0 rounded-full bg-[#E8EEF7]" />
 
-            <div className="w-[min(360px,58vw)]">
-              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.05)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
-                <Shimmer className="h-4 w-[78%] rounded-[10px]" />
-                <Shimmer className="mt-3 h-4 w-[52%] rounded-[10px] opacity-70" />
+            <div className="w-[min(250px,52vw)]">
+              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.045)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+                <Shimmer className="h-4 w-[74%] rounded-[10px] bg-[#F0F3F8]" />
+                <div className="mt-[7px] flex justify-end">
+                  <Shimmer className="h-2.5 w-9 rounded-[8px] bg-[#F1F4F8]" />
+                </div>
               </div>
             </div>
           </div>
@@ -101,9 +103,12 @@ export function InboxDetailSkeleton() {
 
         <div className="flex w-full justify-end px-3 py-[5px] sm:px-5">
           <div className="w-[min(430px,68vw)]">
-            <div className="rounded-[20px] rounded-br-[8px] bg-[#3797F0]/18 px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
-              <Shimmer className="h-4 w-[88%] rounded-[10px] bg-white/45" />
-              <Shimmer className="mt-3 h-4 w-[66%] rounded-[10px] bg-white/35" />
+            <div className="rounded-[20px] rounded-br-[8px] bg-[#3797F0] px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+              <Shimmer className="h-4 w-[92%] rounded-[10px] bg-white/35" />
+              <Shimmer className="mt-3 h-4 w-[64%] rounded-[10px] bg-white/28" />
+              <div className="mt-[7px] flex justify-end">
+                <Shimmer className="h-2.5 w-9 rounded-[8px] bg-white/28" />
+              </div>
             </div>
           </div>
         </div>
@@ -112,11 +117,13 @@ export function InboxDetailSkeleton() {
           <div className="flex max-w-full items-end gap-2">
             <Shimmer className="h-9 w-9 shrink-0 rounded-full bg-[#E8EEF7]" />
 
-            <div className="w-[min(420px,64vw)]">
-              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.05)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
-                <Shimmer className="h-4 w-[92%] rounded-[10px]" />
-                <Shimmer className="mt-3 h-4 w-[82%] rounded-[10px] opacity-85" />
-                <Shimmer className="mt-3 h-4 w-[48%] rounded-[10px] opacity-65" />
+            <div className="w-[min(310px,58vw)]">
+              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.045)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+                <Shimmer className="h-4 w-[82%] rounded-[10px] bg-[#F0F3F8]" />
+                <Shimmer className="mt-3 h-4 w-[48%] rounded-[10px] bg-[#F0F3F8]" />
+                <div className="mt-[7px] flex justify-end">
+                  <Shimmer className="h-2.5 w-9 rounded-[8px] bg-[#F1F4F8]" />
+                </div>
               </div>
             </div>
           </div>
@@ -185,4 +192,5 @@ export function InboxLeadSkeleton() {
     </div>
   );
 }
+
 
