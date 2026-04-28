@@ -24,7 +24,12 @@ const GENERIC_WORKSPACE_NAMES = new Set([
 ]);
 
 const HEADER_HEIGHT = 52;
-const SHELL_CHROME_BG = "rgba(248,249,252,0.975)";
+
+const SHELL_CHROME_BG = "rgba(249,250,253,0.988)";
+const SHELL_CHROME_SURFACE =
+  "linear-gradient(180deg, rgba(255,255,255,0.985) 0%, rgba(249,250,253,0.99) 46%, rgba(245,247,251,0.988) 100%)";
+
+const SOFT_EASE = "cubic-bezier(0.22,1,0.36,1)";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -204,6 +209,41 @@ function WorkspaceGlyph({ className = "" }) {
   );
 }
 
+function HeaderChromeLayer() {
+  return (
+    <>
+      <div
+        className="absolute inset-0 backdrop-blur-xl"
+        style={{ background: SHELL_CHROME_SURFACE }}
+      />
+
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.5]"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.18) 46%, rgba(226,232,240,0.22) 100%)",
+        }}
+      />
+
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 right-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(15,23,42,0.025), rgba(15,23,42,0.086) 42%, rgba(15,23,42,0.038))",
+        }}
+      />
+
+      <div
+        className="pointer-events-none absolute bottom-px left-0 right-0 h-px opacity-75"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.86), rgba(255,255,255,0.38), rgba(255,255,255,0.72))",
+        }}
+      />
+    </>
+  );
+}
+
 function AskAiButton() {
   return (
     <button
@@ -215,11 +255,26 @@ function AskAiButton() {
           })
         );
       }}
-      className="inline-flex h-8 items-center gap-2 px-1 text-[12px] font-semibold tracking-[-0.02em] text-text-muted transition-colors duration-base ease-premium hover:text-text"
+      className="group relative inline-flex h-8 items-center gap-2 overflow-hidden rounded-[12px] px-2.5 text-[12px] font-semibold tracking-[-0.02em] text-text-muted hover:text-text"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(246,248,252,0.44) 100%)",
+        boxShadow:
+          "inset 0 0 0 1px rgba(15,23,42,0.045), inset 0 1px 0 rgba(255,255,255,0.72)",
+        transition: `color 190ms ${SOFT_EASE}, box-shadow 220ms ${SOFT_EASE}, background 220ms ${SOFT_EASE}`,
+      }}
       aria-label="Open Ask AI"
     >
-      <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.95} />
-      <span>Ask AI</span>
+      <span
+        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(241,245,251,0.62) 100%)",
+          transition: `opacity 210ms ${SOFT_EASE}`,
+        }}
+      />
+      <Sparkles className="relative z-[1] h-[17px] w-[17px]" strokeWidth={1.95} />
+      <span className="relative z-[1]">Ask AI</span>
     </button>
   );
 }
@@ -330,21 +385,42 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   const overlay = (
-    <div className="w-[262px] rounded-[18px] border border-white/80 bg-white p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)]">
+    <div
+      className="w-[270px] overflow-hidden rounded-[18px] p-2.5"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.985) 0%, rgba(249,250,253,0.99) 52%, rgba(245,247,251,0.988) 100%)",
+        border: "1px solid rgba(255,255,255,0.86)",
+        boxShadow:
+          "inset 0 0 0 1px rgba(15,23,42,0.055), inset 0 1px 0 rgba(255,255,255,0.92), 0 30px 82px -42px rgba(15,23,42,0.42)",
+        backdropFilter: "blur(22px)",
+      }}
+    >
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
-          <WorkspaceGlyph className="h-10 w-10 shrink-0 opacity-[0.96]" />
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px]"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(242,246,252,0.88) 100%)",
+              boxShadow:
+                "inset 0 0 0 1px rgba(15,23,42,0.055), inset 0 1px 0 rgba(255,255,255,0.95), 0 14px 28px -24px rgba(15,23,42,0.38)",
+            }}
+          >
+            <WorkspaceGlyph className="h-7 w-7 opacity-[0.96]" />
+          </div>
 
           <div className="min-w-0 flex-1">
             {workspaceResolving ? (
               <div className="h-3.5 w-28 rounded-full bg-[rgba(15,23,42,0.08)]" />
             ) : (
-              <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+              <div className="truncate text-[14px] font-semibold tracking-[-0.025em] text-text">
                 {displayName || "Workspace"}
               </div>
             )}
+
             {roleLabel ? (
-              <div className="truncate pt-0.5 text-[11px] text-text-subtle">
+              <div className="truncate pt-0.5 text-[11px] font-medium text-text-subtle">
                 {roleLabel}
               </div>
             ) : null}
@@ -352,7 +428,13 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         </div>
       </div>
 
-      <div className="mx-2 my-1 h-px bg-line-soft" />
+      <div
+        className="mx-2 my-1 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(15,23,42,0), rgba(15,23,42,0.075), rgba(255,255,255,0.82), rgba(15,23,42,0))",
+        }}
+      />
 
       <button
         type="button"
@@ -360,10 +442,21 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           setOpen(false);
           notifications?.setOpen?.(!notifications?.open);
         }}
-        className="flex h-10 w-full items-center justify-between rounded-[12px] px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-black/[0.035]"
+        className="group relative mt-1 flex h-10 w-full items-center justify-between overflow-hidden rounded-[12px] px-3 text-left text-[13px] font-semibold text-text"
+        style={{
+          transition: `color 190ms ${SOFT_EASE}, background 220ms ${SOFT_EASE}`,
+        }}
       >
-        <span>Notifications</span>
-        <span className="text-[12px] text-text-subtle">
+        <span
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(15,23,42,0.034), rgba(15,23,42,0.014), rgba(15,23,42,0))",
+            transition: `opacity 210ms ${SOFT_EASE}`,
+          }}
+        />
+        <span className="relative z-[1]">Notifications</span>
+        <span className="relative z-[1] text-[12px] font-semibold text-text-subtle">
           {notificationsLoading ? "…" : unread > 99 ? "99+" : unread}
         </span>
       </button>
@@ -371,9 +464,22 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-1 flex h-10 w-full items-center rounded-[12px] px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
+        className="group relative mt-1 flex h-10 w-full items-center overflow-hidden rounded-[12px] px-3 text-left text-[13px] font-semibold text-danger"
+        style={{
+          transition: `background 220ms ${SOFT_EASE}`,
+        }}
       >
-        {loggingOut ? "Signing out..." : "Sign out"}
+        <span
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(220,38,38,0.08), rgba(220,38,38,0.035), rgba(220,38,38,0))",
+            transition: `opacity 210ms ${SOFT_EASE}`,
+          }}
+        />
+        <span className="relative z-[1]">
+          {loggingOut ? "Signing out..." : "Sign out"}
+        </span>
       </button>
     </div>
   );
@@ -385,15 +491,35 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         aria-label={displayName || "Workspace"}
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-8 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
+        className="group relative flex h-9 items-center gap-2 overflow-hidden rounded-[14px] px-2.5 text-left text-text-muted hover:text-text"
+        style={{
+          background: open
+            ? "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,247,253,0.9) 100%)"
+            : "linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(246,248,252,0.52) 100%)",
+          boxShadow: open
+            ? "inset 0 0 0 1px rgba(37,99,235,0.13), inset 0 1px 0 rgba(255,255,255,0.95), 0 14px 30px -24px rgba(37,99,235,0.38)"
+            : "inset 0 0 0 1px rgba(15,23,42,0.052), inset 0 1px 0 rgba(255,255,255,0.84)",
+          transition: `color 190ms ${SOFT_EASE}, background 240ms ${SOFT_EASE}, box-shadow 240ms ${SOFT_EASE}`,
+        }}
       >
-        <WorkspaceGlyph className="h-5 w-5 shrink-0 opacity-[0.96]" />
+        <span
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(241,245,251,0.68) 100%)",
+            transition: `opacity 210ms ${SOFT_EASE}`,
+          }}
+        />
 
-        <div className="hidden min-w-0 text-left lg:block">
+        <div className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center">
+          <WorkspaceGlyph className="h-[20px] w-[20px] opacity-[0.98]" />
+        </div>
+
+        <div className="relative z-[1] hidden min-w-0 text-left lg:block">
           {workspaceResolving ? (
             <div className="h-3 w-24 rounded-full bg-[rgba(15,23,42,0.08)]" />
           ) : (
-            <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
+            <div className="max-w-[210px] truncate text-[13px] font-semibold tracking-[-0.025em] text-text">
               {displayName || "Workspace"}
             </div>
           )}
@@ -401,15 +527,18 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
         <ChevronDown
           className={cx(
-            "h-[15px] w-[15px] text-text-subtle transition-transform duration-base ease-premium",
+            "relative z-[1] h-[15px] w-[15px] text-text-subtle",
             open && "rotate-180"
           )}
           strokeWidth={2}
+          style={{
+            transition: `transform 260ms ${SOFT_EASE}, color 190ms ${SOFT_EASE}`,
+          }}
         />
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-[90]">
+        <div className="absolute right-0 top-[calc(100%+9px)] z-[90]">
           {overlay}
         </div>
       ) : null}
@@ -427,12 +556,27 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
+      className="group relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-[12px] text-text-muted hover:text-text"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(246,248,252,0.44) 100%)",
+        boxShadow:
+          "inset 0 0 0 1px rgba(15,23,42,0.045), inset 0 1px 0 rgba(255,255,255,0.72)",
+        transition: `color 190ms ${SOFT_EASE}, box-shadow 220ms ${SOFT_EASE}`,
+      }}
       aria-label="Open notifications"
     >
-      <Bell className="h-[18px] w-[18px]" strokeWidth={1.95} />
+      <span
+        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(241,245,251,0.62) 100%)",
+          transition: `opacity 210ms ${SOFT_EASE}`,
+        }}
+      />
+      <Bell className="relative z-[1] h-[18px] w-[18px]" strokeWidth={1.95} />
       {unread > 0 ? (
-        <span className="absolute right-[5px] top-[5px] h-[4px] w-[4px] rounded-full bg-brand" />
+        <span className="absolute right-[7px] top-[7px] z-[2] h-[4px] w-[4px] rounded-full bg-brand" />
       ) : null}
     </button>
   );
@@ -442,26 +586,44 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60]"
+        className="sticky top-0 z-[60] overflow-hidden"
         style={{
           height: HEADER_HEIGHT,
           background: SHELL_CHROME_BG,
-          boxShadow: "0 10px 24px -24px rgba(15,23,42,0.14)",
+          boxShadow:
+            "0 14px 34px -34px rgba(15,23,42,0.24), inset 0 -1px 0 rgba(15,23,42,0.055), inset 0 1px 0 rgba(255,255,255,0.78)",
         }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-5">
+        <HeaderChromeLayer />
+
+        <div className="relative z-[2] mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text md:hidden"
+              className="group relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-[12px] text-text-muted hover:text-text md:hidden"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(246,248,252,0.44) 100%)",
+                boxShadow:
+                  "inset 0 0 0 1px rgba(15,23,42,0.045), inset 0 1px 0 rgba(255,255,255,0.72)",
+                transition: `color 190ms ${SOFT_EASE}`,
+              }}
               aria-label="Open navigation"
             >
-              <Menu className="h-[18px] w-[18px]" strokeWidth={2} />
+              <span
+                className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(241,245,251,0.62) 100%)",
+                  transition: `opacity 210ms ${SOFT_EASE}`,
+                }}
+              />
+              <Menu className="relative z-[1] h-[18px] w-[18px]" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex items-center gap-2.5 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-2.5">
             <AskAiButton />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl

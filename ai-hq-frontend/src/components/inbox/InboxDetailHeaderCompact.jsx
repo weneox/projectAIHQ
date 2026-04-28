@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Dropdown, Switch, Tooltip } from "antd";
 import {
   Ban,
@@ -62,15 +63,17 @@ function HeaderAssetIcon({ src, alt = "" }) {
       src={src}
       alt={alt}
       draggable="false"
-      className="pointer-events-none h-[24px] w-[24px] select-none object-contain transition-none"
+      className="pointer-events-none h-[23px] w-[23px] select-none object-contain"
     />
   );
 }
 
-function HeaderActionButton({
+function HeaderIconButton({
   label,
   onClick,
   disabled = false,
+  active = false,
+  danger = false,
   children,
 }) {
   return (
@@ -80,7 +83,7 @@ function HeaderActionButton({
       mouseEnterDelay={0.06}
       overlayInnerStyle={tooltipStyle}
     >
-      <span className="inline-flex">
+      <span className="inline-flex h-[34px] w-[34px] items-center justify-center">
         <button
           type="button"
           onClick={onClick}
@@ -88,14 +91,18 @@ function HeaderActionButton({
           aria-label={label}
           title={label}
           className={cx(
-            "inline-flex h-9 w-9 items-center justify-center rounded-[11px]",
-            "border border-transparent bg-transparent text-[#718197]",
-            "shadow-none outline-none ring-0",
+            "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
+            "border border-transparent bg-transparent outline-none ring-0 shadow-none",
             "transition-opacity duration-150",
-            "hover:bg-transparent hover:opacity-75",
             "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
             "active:bg-transparent active:shadow-none active:ring-0",
-            "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            "hover:bg-transparent hover:opacity-70",
+            "disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent",
+            danger
+              ? "text-[#DC2626]"
+              : active
+                ? "text-[#2563EB]"
+                : "text-[#64748B]"
           )}
         >
           {children}
@@ -105,42 +112,143 @@ function HeaderActionButton({
   );
 }
 
-function MenuLabel({ icon: Icon, title, description, danger = false }) {
+function OverflowActionIcon({
+  label,
+  onClick,
+  onClose,
+  disabled = false,
+  active = false,
+  danger = false,
+  children,
+}) {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <span
-        className={cx(
-          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px]",
-          danger
-            ? "bg-[#FFF1F2] text-[#DC2626]"
-            : "bg-[linear-gradient(180deg,#F7FAFE_0%,#EEF4FA_100%)] text-[#506179]"
-        )}
-      >
-        <Icon className="h-[16px] w-[16px]" strokeWidth={2} />
-      </span>
+    <Tooltip
+      title={label}
+      placement="left"
+      mouseEnterDelay={0.06}
+      overlayInnerStyle={tooltipStyle}
+    >
+      <span className="inline-flex h-[34px] w-[34px] items-center justify-center">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
 
-      <span className="min-w-0">
-        <span
+            if (disabled) return;
+
+            onClick?.();
+            onClose?.();
+          }}
+          disabled={disabled}
+          aria-label={label}
+          title={label}
           className={cx(
-            "block text-[13px] font-semibold leading-5 tracking-[-0.01em]",
-            danger ? "text-[#B91C1C]" : "text-[#152033]"
+            "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
+            "border-0 bg-transparent outline-none ring-0 shadow-none",
+            "transition-opacity duration-150",
+            "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
+            "active:bg-transparent active:shadow-none active:ring-0",
+            "hover:bg-transparent hover:opacity-70",
+            "disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent",
+            danger
+              ? "text-[#DC2626]"
+              : active
+                ? "text-[#2563EB]"
+                : "text-[#64748B]"
           )}
         >
-          {title}
-        </span>
-
-        {description ? (
-          <span className="block max-w-[230px] truncate text-[12px] font-medium leading-5 text-[#7A8797]">
-            {description}
-          </span>
-        ) : null}
+          {children}
+        </button>
       </span>
+    </Tooltip>
+  );
+}
+
+function OverflowActions({
+  canMarkRead,
+  disabledMap = {},
+  onMarkRead,
+  onAssign,
+  onHandoff,
+  onResolve,
+  onCloseThread,
+  onClose,
+}) {
+  const handoffLocked = Boolean(disabledMap?.handoffLocked);
+
+  return (
+    <div className="flex flex-col items-center gap-[9px]">
+      <OverflowActionIcon
+        label={canMarkRead ? "Mark as read" : "No unread messages"}
+        onClick={onMarkRead}
+        onClose={onClose}
+        active={canMarkRead}
+        disabled={!canMarkRead || Boolean(disabledMap?.read)}
+      >
+        <MailOpen
+          className="pointer-events-none h-[19px] w-[19px]"
+          strokeWidth={2.1}
+        />
+      </OverflowActionIcon>
+
+      <OverflowActionIcon
+        label="Assign to me"
+        onClick={onAssign}
+        onClose={onClose}
+        disabled={Boolean(disabledMap?.assign)}
+      >
+        <UserCheck
+          className="pointer-events-none h-[19px] w-[19px]"
+          strokeWidth={2.1}
+        />
+      </OverflowActionIcon>
+
+      <OverflowActionIcon
+        label={handoffLocked ? "Handoff active" : "Activate handoff"}
+        onClick={onHandoff}
+        onClose={onClose}
+        active={handoffLocked}
+        disabled={Boolean(disabledMap?.handoff) || handoffLocked}
+      >
+        <ShieldCheck
+          className="pointer-events-none h-[19px] w-[19px]"
+          strokeWidth={2.1}
+        />
+      </OverflowActionIcon>
+
+      <OverflowActionIcon
+        label="Resolve conversation"
+        onClick={onResolve}
+        onClose={onClose}
+        disabled={Boolean(disabledMap?.resolved)}
+      >
+        <CheckCircle2
+          className="pointer-events-none h-[19px] w-[19px]"
+          strokeWidth={2.1}
+        />
+      </OverflowActionIcon>
+
+      <div className="my-[1px] h-px w-[22px] bg-[#E4EAF2]" />
+
+      <OverflowActionIcon
+        label="Close conversation"
+        onClick={onCloseThread}
+        onClose={onClose}
+        danger
+        disabled={Boolean(disabledMap?.closed)}
+      >
+        <Ban
+          className="pointer-events-none h-[19px] w-[19px]"
+          strokeWidth={2.1}
+        />
+      </OverflowActionIcon>
     </div>
   );
 }
 
 function OverflowMenu({
-  disabled,
+  disabled = false,
   canMarkRead,
   disabledMap,
   onMarkRead,
@@ -149,116 +257,35 @@ function OverflowMenu({
   onResolve,
   onCloseThread,
 }) {
-  const items = [
-    {
-      key: "mark-read",
-      disabled: disabled || !canMarkRead || Boolean(disabledMap?.read),
-      label: (
-        <MenuLabel
-          icon={MailOpen}
-          title="Mark as read"
-          description={canMarkRead ? "Clear unread state" : "No unread messages"}
-        />
-      ),
-    },
-    {
-      key: "assign",
-      disabled: disabled || Boolean(disabledMap?.assign),
-      label: (
-        <MenuLabel
-          icon={UserCheck}
-          title="Assign to me"
-          description="Take ownership"
-        />
-      ),
-    },
-    {
-      key: "handoff",
-      disabled:
-        disabled ||
-        Boolean(disabledMap?.handoff) ||
-        Boolean(disabledMap?.handoffLocked),
-      label: (
-        <MenuLabel
-          icon={ShieldCheck}
-          title={
-            disabledMap?.handoffLocked ? "Handoff active" : "Activate handoff"
-          }
-          description={
-            disabledMap?.handoffLocked
-              ? "Already operator controlled"
-              : "Move control to operator"
-          }
-        />
-      ),
-    },
-    {
-      key: "resolve",
-      disabled: disabled || Boolean(disabledMap?.resolved),
-      label: (
-        <MenuLabel
-          icon={CheckCircle2}
-          title="Resolve conversation"
-          description="Mark as handled"
-        />
-      ),
-    },
-    {
-      type: "divider",
-    },
-    {
-      key: "close",
-      danger: true,
-      disabled: disabled || Boolean(disabledMap?.closed),
-      label: (
-        <MenuLabel
-          icon={Ban}
-          title="Close conversation"
-          description="End this thread"
-          danger
-        />
-      ),
-    },
-  ];
-
-  function handleMenuClick({ key }) {
-    if (key === "mark-read") {
-      onMarkRead?.();
-      return;
-    }
-
-    if (key === "assign") {
-      onAssign?.();
-      return;
-    }
-
-    if (key === "handoff") {
-      onHandoff?.();
-      return;
-    }
-
-    if (key === "resolve") {
-      onResolve?.();
-      return;
-    }
-
-    if (key === "close") {
-      onCloseThread?.();
-    }
-  }
+  const [open, setOpen] = useState(false);
 
   return (
     <Dropdown
+      open={open}
+      onOpenChange={setOpen}
       trigger={["click"]}
       placement="bottomRight"
       disabled={disabled}
-      overlayClassName="inbox-detail-header-menu"
-      menu={{
-        items,
-        onClick: handleMenuClick,
-      }}
-      dropdownRender={(menu) => (
-        <div className="inbox-detail-header-menu-shell">{menu}</div>
+      overlayClassName="inbox-detail-header-overflow"
+      dropdownRender={() => (
+        <div
+          className="inbox-detail-header-overflow-shell"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <OverflowActions
+            canMarkRead={canMarkRead}
+            disabledMap={disabledMap}
+            onMarkRead={onMarkRead}
+            onAssign={onAssign}
+            onHandoff={onHandoff}
+            onResolve={onResolve}
+            onCloseThread={onCloseThread}
+            onClose={() => setOpen(false)}
+          />
+        </div>
       )}
     >
       <button
@@ -267,19 +294,19 @@ function OverflowMenu({
         title="More actions"
         disabled={disabled}
         className={cx(
-          "inline-flex h-9 w-9 items-center justify-center rounded-[11px]",
+          "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
           "border border-transparent bg-transparent text-[#64748B]",
-          "shadow-none outline-none ring-0",
+          "outline-none ring-0 shadow-none",
           "transition-opacity duration-150",
-          "hover:bg-transparent hover:opacity-75",
           "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
+          "hover:bg-transparent hover:opacity-70",
           "active:bg-transparent active:shadow-none active:ring-0",
-          "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          "disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         )}
       >
         <MoreHorizontal
-          className="pointer-events-none h-[22px] w-[22px] transition-none"
-          strokeWidth={2.15}
+          className="pointer-events-none h-[20px] w-[20px]"
+          strokeWidth={2.2}
         />
       </button>
     </Dropdown>
@@ -332,7 +359,6 @@ export default function InboxDetailHeaderCompact({
     (automationEnabled ? "AI on" : "AI off");
 
   const closeHandler = onCloseThread || onMarkClosed;
-
   const disableActions = !hasThread;
   const unread = Number(unreadCount || 0);
 
@@ -340,64 +366,6 @@ export default function InboxDetailHeaderCompact({
     <>
       <style>
         {`
-          .inbox-detail-header-menu {
-            padding: 0 !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu {
-            min-width: 286px !important;
-            padding: 8px !important;
-            border: 0 !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-            box-shadow: none !important;
-          }
-
-          .inbox-detail-header-menu-shell {
-            overflow: hidden;
-            border: 1px solid rgba(226, 232, 240, 0.92);
-            border-radius: 22px;
-            background:
-              linear-gradient(180deg, rgba(255,255,255,0.985) 0%, rgba(248,251,255,0.985) 100%);
-            box-shadow:
-              0 28px 72px -42px rgba(15, 23, 42, 0.55),
-              0 1px 0 rgba(255, 255, 255, 0.8) inset;
-            backdrop-filter: blur(18px);
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item {
-            margin: 0 !important;
-            padding: 11px 12px !important;
-            border-radius: 15px !important;
-            background: transparent !important;
-            color: inherit !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item:hover {
-            background: rgba(241, 245, 249, 0.82) !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item-disabled {
-            opacity: 0.48 !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item-disabled:hover {
-            background: transparent !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item-danger:hover {
-            background: rgba(254, 242, 242, 0.92) !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-title-content {
-            width: 100% !important;
-          }
-
-          .inbox-detail-header-menu .ant-dropdown-menu-item-divider {
-            margin: 8px 4px !important;
-            background: rgba(226, 232, 240, 0.86) !important;
-          }
-
           .inbox-detail-header-ai-switch.ant-switch {
             min-width: 40px !important;
             height: 22px !important;
@@ -431,52 +399,73 @@ export default function InboxDetailHeaderCompact({
           .inbox-detail-header-ai-switch.ant-switch-checked .ant-switch-handle {
             inset-inline-start: calc(100% - 20px) !important;
           }
+
+          .inbox-detail-header-overflow {
+            padding: 0 !important;
+          }
+
+          .inbox-detail-header-overflow-shell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            padding: 11px 10px;
+            border: 1px solid rgba(226, 232, 240, 0.92);
+            border-radius: 17px;
+            background: linear-gradient(
+              180deg,
+              rgba(255,255,255,0.988) 0%,
+              rgba(248,251,255,0.988) 100%
+            );
+            box-shadow:
+              0 22px 52px -36px rgba(15, 23, 42, 0.38),
+              0 1px 0 rgba(255, 255, 255, 0.86) inset;
+            backdrop-filter: blur(18px);
+          }
         `}
       </style>
 
-      <div className="flex min-h-[62px] items-center justify-between gap-4 border-b border-[#E4EAF2] bg-[rgba(255,255,255,0.9)] px-5 py-2 backdrop-blur-xl">
+      <div className="flex min-h-[58px] items-center justify-between gap-3 border-b border-[#E4EAF2] bg-[rgba(255,255,255,0.92)] px-4 py-2 backdrop-blur-xl">
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="min-w-0">
-              <div className="truncate text-[15px] font-bold leading-5 tracking-[-0.025em] text-[#0F172A]">
-                {displayName}
-              </div>
+          <div className="min-w-0">
+            <div className="truncate text-[14.5px] font-bold leading-5 tracking-[-0.025em] text-[#0F172A]">
+              {displayName}
+            </div>
 
-              <div className="mt-0.5 flex min-w-0 items-center gap-2">
-                {meta ? (
-                  <div className="truncate text-[11.5px] font-semibold leading-4 text-[#7C8A9A]">
-                    {meta}
-                  </div>
-                ) : (
-                  <div className="truncate text-[11.5px] font-semibold leading-4 text-[#9AA7B8]">
-                    {hasThread ? "Live conversation" : "Select a conversation"}
-                  </div>
-                )}
+            <div className="mt-[2px] flex min-w-0 items-center gap-2">
+              {meta ? (
+                <div className="truncate text-[11.5px] font-semibold leading-4 text-[#7C8A9A]">
+                  {meta}
+                </div>
+              ) : (
+                <div className="truncate text-[11.5px] font-semibold leading-4 text-[#9AA7B8]">
+                  {hasThread ? "Live conversation" : "Select a conversation"}
+                </div>
+              )}
 
-                {unread > 0 ? (
-                  <span className="inline-flex h-[19px] min-w-[19px] shrink-0 items-center justify-center rounded-[7px] bg-[#2563EB] px-1.5 text-[10px] font-bold leading-none text-white shadow-[0_12px_24px_-16px_rgba(37,99,235,0.55)]">
-                    {unread}
-                  </span>
-                ) : null}
+              {unread > 0 ? (
+                <span className="inline-flex h-[20px] min-w-[20px] shrink-0 items-center justify-center rounded-[7px] bg-[#2563EB] px-1.5 text-[10px] font-bold leading-none text-white shadow-[0_12px_24px_-16px_rgba(37,99,235,0.55)]">
+                  {unread}
+                </span>
+              ) : null}
 
-                {!launchChannelConnected ? (
-                  <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#B45309]">
-                    Channel offline
-                  </span>
-                ) : null}
-              </div>
+              {!launchChannelConnected ? (
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#B45309]">
+                  Channel offline
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-[10px]">
           <Tooltip
             title={automationLabel}
             placement="bottom"
             mouseEnterDelay={0.06}
             overlayInnerStyle={tooltipStyle}
           >
-            <span className="inline-flex h-9 items-center">
+            <span className="inline-flex h-[34px] w-[42px] items-center justify-center">
               <Switch
                 className="inbox-detail-header-ai-switch"
                 size="small"
@@ -497,23 +486,23 @@ export default function InboxDetailHeaderCompact({
             </span>
           </Tooltip>
 
-          <div className="mx-0.5 h-5 w-px bg-[#E3EAF3]" />
+          <div className="h-[18px] w-px bg-[#E3EAF3]" />
 
-          <HeaderActionButton
+          <HeaderIconButton
             label="Conversation details"
             onClick={onOpenDetails}
             disabled={disableActions || typeof onOpenDetails !== "function"}
           >
             <HeaderAssetIcon src={infoIcon} alt="" />
-          </HeaderActionButton>
+          </HeaderIconButton>
 
-          <HeaderActionButton
+          <HeaderIconButton
             label="Refresh"
             onClick={onRefresh}
             disabled={typeof onRefresh !== "function"}
           >
             <HeaderAssetIcon src={refreshIcon} alt="" />
-          </HeaderActionButton>
+          </HeaderIconButton>
 
           <OverflowMenu
             disabled={disableActions}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
@@ -118,8 +118,10 @@ function BubbleTime({ value, incoming }) {
   return (
     <span
       className={[
-        "ml-[7px] inline-block translate-y-[1px] select-none whitespace-nowrap align-baseline text-[11px] font-medium leading-none",
-        incoming ? "text-[#8D98A8]" : "text-white/82",
+        "ml-[7px] inline-block translate-y-[1px] select-none whitespace-nowrap align-baseline text-[11px] font-medium leading-none tracking-[-0.01em] antialiased",
+        incoming
+          ? "text-[#66758A] [text-shadow:0_1px_0_rgba(255,255,255,0.72)]"
+          : "text-white/86 [text-shadow:0_1px_0_rgba(0,68,145,0.16)]",
       ].join(" ")}
     >
       {value}
@@ -131,14 +133,26 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
   const hasText = Boolean(text);
 
   return (
-    <div className="max-w-full whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
+    <div
+      className={[
+        "max-w-full whitespace-pre-wrap break-words text-[15px] font-[450] leading-[1.45] tracking-[-0.012em] antialiased",
+        incoming
+          ? "text-[#142235] [text-shadow:0_1px_0_rgba(255,255,255,0.68)]"
+          : "text-white/96 [text-shadow:0_1px_0_rgba(0,68,145,0.18)]",
+      ].join(" ")}
+      style={{
+        textRendering: "geometricPrecision",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+      }}
+    >
       {hasText ? (
         text
       ) : (
         <span
           className={[
-            "text-[14px]",
-            incoming ? "text-[#94A3B8]" : "text-white/78",
+            "text-[14px] font-[450] tracking-[-0.01em]",
+            incoming ? "text-[#7A8799]" : "text-white/78",
           ].join(" ")}
         >
           (empty message)
@@ -150,21 +164,96 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
   );
 }
 
-function VectorTail({ side = "left", fill = "#FFFFFF" }) {
+function MaterialTail({ side = "left", incoming }) {
   const mirrored = side === "right";
+  const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const gradientId = `tailGradient_${rawId}`;
+  const sheenId = `tailSheen_${rawId}`;
+
+  const stops = incoming
+    ? [
+        { offset: "0%", color: "#F8FAFC" },
+        { offset: "58%", color: "#F1F5F9" },
+        { offset: "100%", color: "#E9EEF4" },
+      ]
+    : [
+        { offset: "0%", color: "#56B0FF" },
+        { offset: "52%", color: "#3797F0" },
+        { offset: "100%", color: "#2186E6" },
+      ];
 
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 18 18"
       className={[
-        "pointer-events-none absolute bottom-[2px] h-[18px] w-[18px]",
+        "pointer-events-none absolute bottom-[2px] z-[1] h-[18px] w-[18px] overflow-visible",
         mirrored ? "-right-[7px] scale-x-[-1]" : "-left-[7px]",
       ].join(" ")}
     >
+      <defs>
+        <linearGradient
+          id={gradientId}
+          x1="9"
+          y1="0"
+          x2="9"
+          y2="18"
+          gradientUnits="userSpaceOnUse"
+        >
+          {stops.map((stop) => (
+            <stop
+              key={`${stop.offset}-${stop.color}`}
+              offset={stop.offset}
+              stopColor={stop.color}
+            />
+          ))}
+        </linearGradient>
+
+        <linearGradient
+          id={sheenId}
+          x1="9"
+          y1="0"
+          x2="9"
+          y2="18"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop
+            offset="0%"
+            stopColor={
+              incoming
+                ? "rgba(255,255,255,0.92)"
+                : "rgba(255,255,255,0.34)"
+            }
+          />
+          <stop
+            offset="42%"
+            stopColor={
+              incoming
+                ? "rgba(255,255,255,0.28)"
+                : "rgba(255,255,255,0.12)"
+            }
+          />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </linearGradient>
+      </defs>
+
       <path
         d="M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z"
-        fill={fill}
+        fill={`url(#${gradientId})`}
+        stroke="transparent"
+        strokeWidth="0"
+        strokeLinejoin="round"
+        style={{
+          filter: incoming
+            ? "drop-shadow(0 10px 13px rgba(15,23,42,0.11))"
+            : "drop-shadow(0 10px 13px rgba(37,99,235,0.2))",
+        }}
+      />
+
+      <path
+        d="M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z"
+        fill={`url(#${sheenId})`}
+        opacity={incoming ? "0.72" : "0.52"}
       />
     </svg>
   );
@@ -172,20 +261,24 @@ function VectorTail({ side = "left", fill = "#FFFFFF" }) {
 
 function EliteBubble({ side = "left", text, sentAt }) {
   const incoming = side === "left";
-  const fill = incoming ? "#FFFFFF" : "#3797F0";
 
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
       <div className="relative inline-block max-w-full overflow-visible">
-        <VectorTail side={side} fill={fill} />
+        <MaterialTail side={side} incoming={incoming} />
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-[15px] py-[10px]",
-            "shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]",
+            "relative z-[2] inline-block max-w-full px-[15px] py-[10px]",
             incoming
-              ? "rounded-[20px] rounded-bl-[8px] bg-[#FFFFFF] text-[#0F172A]"
-              : "rounded-[20px] rounded-br-[8px] bg-[#3797F0] text-white",
+              ? [
+                  "rounded-[20px] rounded-bl-[8px] bg-[linear-gradient(180deg,#F8FAFC_0%,#F1F5F9_58%,#E9EEF4_100%)] text-[#142235]",
+                  "shadow-[0_20px_36px_-24px_rgba(15,23,42,0.20),0_8px_18px_-14px_rgba(15,23,42,0.12),0_2px_7px_-5px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(203,213,225,0.45)]",
+                ].join(" ")
+              : [
+                  "rounded-[20px] rounded-br-[8px] bg-[linear-gradient(180deg,#56B0FF_0%,#3797F0_52%,#2186E6_100%)] text-white",
+                  "shadow-[0_18px_38px_-24px_rgba(37,99,235,0.48),0_7px_18px_-13px_rgba(37,99,235,0.24),0_2px_7px_-5px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.32),inset_0_-1px_0_rgba(18,85,160,0.38)]",
+                ].join(" "),
           ].join(" ")}
         >
           <MessageTextWithTime

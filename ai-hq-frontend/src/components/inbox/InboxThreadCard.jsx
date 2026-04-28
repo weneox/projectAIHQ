@@ -265,17 +265,18 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "relative flex w-full items-start gap-3 px-5 py-4 text-left",
-        "transition-[background-color,border-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "group relative flex w-full items-start gap-3 px-5 py-4 text-left",
+        "transition-[background-color,color] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BBD3FF]",
         selected ? "bg-[#EDF3F9]" : "bg-white hover:bg-[#F7FAFC]",
       ].join(" ")}
     >
       <span
         aria-hidden="true"
         className={[
-          "absolute bottom-0 left-0 top-0 bg-[#2F80ED]",
-          "transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          selected ? "w-[4px] opacity-100" : "w-0 opacity-0",
+          "absolute bottom-0 left-0 top-0 w-[4px] origin-center bg-[#2F80ED]",
+          "transition-[opacity,transform] duration-260 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          selected ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0",
         ].join(" ")}
       />
 

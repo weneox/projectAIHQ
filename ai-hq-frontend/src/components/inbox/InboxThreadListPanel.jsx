@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Inbox, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  Globe2,
+  Inbox,
+  MessageCircle,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
+import Input from "../ui/Input.jsx";
+
+import checkmarkIcon from "../../assets/channels/checkmark.png";
+import globeLogo from "../../assets/channels/globe.png";
+import gmailLogo from "../../assets/channels/gmail.svg";
+import instagramLogo from "../../assets/channels/instagram.svg";
+import messengerLogo from "../../assets/channels/messenger.svg";
+import telegramLogo from "../../assets/channels/telegram.svg";
+import whatsappLogo from "../../assets/channels/whatsapp.svg";
 
 const TOP_TABS = [
   { label: "All", value: "all" },
   { label: "Assigned", value: "assigned" },
   { label: "Handoff", value: "handoff" },
 ];
+
+const PREMIUM_EASE = "ease-[cubic-bezier(0.16,1,0.3,1)]";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -24,9 +42,11 @@ function prettyChannelLabel(value = "") {
   if (!normalized) return "Unknown channel";
   if (normalized === "instagram") return "Instagram";
   if (normalized === "facebook") return "Facebook";
+  if (normalized === "messenger") return "Messenger";
   if (normalized === "whatsapp") return "WhatsApp";
   if (normalized === "telegram") return "Telegram";
   if (normalized === "email") return "Email";
+  if (normalized === "gmail") return "Gmail";
   if (normalized === "web") return "Website";
   if (normalized === "webchat") return "Web Chat";
   if (normalized === "website") return "Website";
@@ -67,16 +87,196 @@ function buildChannelOptions(threads = []) {
   ];
 }
 
+function channelMatches(thread = {}, selectedChannelValues = null) {
+  if (selectedChannelValues === null) return true;
+  if (!selectedChannelValues.length) return false;
+
+  const raw =
+    s(thread?.channel) ||
+    s(thread?.channel_type) ||
+    s(thread?.provider) ||
+    s(thread?.source_type);
+
+  return selectedChannelValues.includes(normalizeChannelValue(raw));
+}
+
+function getAllChannelValues(options = []) {
+  return options
+    .map((option) => option.value)
+    .filter((value) => value && value !== "all");
+}
+
+function isAllChannelSelection(selectedChannelValues, allChannelValues) {
+  if (selectedChannelValues === null) return true;
+  if (!allChannelValues.length) return true;
+  return selectedChannelValues.length >= allChannelValues.length;
+}
+
+function ChannelLogo({ value, selected = false }) {
+  const normalized = normalizeChannelValue(value);
+
+  const imgClassName = [
+    "block h-[22px] w-[22px] shrink-0 object-contain transition-[opacity,filter,transform] duration-300",
+    PREMIUM_EASE,
+    selected ? "opacity-100" : "opacity-90",
+  ].join(" ");
+
+  if (normalized === "all") {
+    return (
+      <img
+        src={checkmarkIcon}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={[
+          "block h-[18px] w-[18px] shrink-0 object-contain transition-[opacity,filter,transform] duration-300",
+          PREMIUM_EASE,
+          selected ? "opacity-100" : "opacity-35 grayscale",
+        ].join(" ")}
+      />
+    );
+  }
+
+  if (normalized === "instagram") {
+    return (
+      <img
+        src={instagramLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={imgClassName}
+      />
+    );
+  }
+
+  if (normalized === "telegram") {
+    return (
+      <img
+        src={telegramLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={imgClassName}
+      />
+    );
+  }
+
+  if (
+    normalized === "web" ||
+    normalized === "website" ||
+    normalized === "webchat"
+  ) {
+    return (
+      <img
+        src={globeLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className="block h-[23px] w-[23px] shrink-0 object-contain"
+      />
+    );
+  }
+
+  if (normalized === "facebook" || normalized === "messenger") {
+    return (
+      <img
+        src={messengerLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={imgClassName}
+      />
+    );
+  }
+
+  if (normalized === "whatsapp") {
+    return (
+      <img
+        src={whatsappLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={imgClassName}
+      />
+    );
+  }
+
+  if (normalized === "email" || normalized === "gmail") {
+    return (
+      <img
+        src={gmailLogo}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={imgClassName}
+      />
+    );
+  }
+
+  if (normalized === "voice") {
+    return (
+      <MessageCircle
+        className={[
+          "h-[21px] w-[21px] shrink-0 transition-colors duration-300",
+          selected ? "text-[#2563EB]" : "text-[#607086]",
+        ].join(" ")}
+        strokeWidth={2.05}
+      />
+    );
+  }
+
+  return (
+    <Globe2
+      className={[
+        "h-[21px] w-[21px] shrink-0 transition-colors duration-300",
+        selected ? "text-[#2563EB]" : "text-[#607086]",
+      ].join(" ")}
+      strokeWidth={2.05}
+    />
+  );
+}
+
+function SelectionMark({ selected }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px]",
+        "transition-[background-color,border-color,opacity,transform] duration-300",
+        PREMIUM_EASE,
+        selected
+          ? "border border-[#CFE0FF] bg-white opacity-100 shadow-[0_8px_18px_-14px_rgba(37,99,235,0.55)]"
+          : "border border-[#DDE6F1] bg-transparent opacity-55",
+      ].join(" ")}
+    >
+      {selected ? (
+        <img
+          src={checkmarkIcon}
+          alt=""
+          draggable="false"
+          className="h-[12px] w-[12px] object-contain"
+        />
+      ) : null}
+    </span>
+  );
+}
+
 function ChannelFilterMenu({
   open,
   anchorRef,
-  selectedValue,
+  selectedChannelValues,
   options,
   counts,
-  onSelect,
+  onToggleAll,
+  onToggleChannel,
   onClose,
 }) {
   const menuRef = useRef(null);
+  const allChannelValues = useMemo(() => getAllChannelValues(options), [options]);
+  const allSelected = isAllChannelSelection(
+    selectedChannelValues,
+    allChannelValues
+  );
 
   useEffect(() => {
     if (!open) return undefined;
@@ -101,41 +301,91 @@ function ChannelFilterMenu({
     };
   }, [open, anchorRef, onClose]);
 
-  if (!open) return null;
-
   return (
     <div
-      ref={menuRef}
-      className="absolute right-0 top-[calc(100%+10px)] z-30 min-w-[230px] overflow-hidden rounded-[18px] border border-[#DFE7F1] bg-white p-1.5 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.34),inset_0_1px_0_rgba(255,255,255,0.95)]"
+      className={[
+        "absolute right-0 top-[calc(100%+10px)] z-[180] w-[258px]",
+        "origin-top-right transition-[opacity,transform,visibility] duration-[280ms]",
+        PREMIUM_EASE,
+        open
+          ? "visible translate-y-0 scale-100 opacity-100"
+          : "invisible pointer-events-none -translate-y-2 scale-[0.965] opacity-0",
+      ].join(" ")}
     >
-      {options.map((option) => {
-        const active = selectedValue === option.value;
-        const count = Number(counts?.[option.value] ?? 0);
+      <div
+        ref={menuRef}
+        className={[
+          "overflow-hidden rounded-[20px] border border-[#D8E3F0]",
+          "bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(248,251,255,0.965)_100%)] p-2 backdrop-blur-xl",
+          "shadow-[0_34px_86px_-34px_rgba(15,23,42,0.34),0_18px_36px_-30px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.92)]",
+        ].join(" ")}
+      >
+        <div className="px-2 pb-2 pt-1">
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#9AA8B9]">
+            Channels
+          </div>
+        </div>
 
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => {
-              onSelect?.(option.value);
-              onClose?.();
-            }}
-            className={[
-              "flex w-full items-center justify-between gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors",
-              active
-                ? "bg-[#F1F6FF] text-[#1D5FD0]"
-                : "text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]",
-            ].join(" ")}
-          >
-            <span className="truncate text-[13px] font-semibold">
-              {option.label}
-            </span>
-            <span className="text-[11px] font-bold text-[#A2AEC0]">
-              {count}
-            </span>
-          </button>
-        );
-      })}
+        <div className="space-y-1">
+          {options.map((option, index) => {
+            const isAll = option.value === "all";
+            const selected = isAll
+              ? allSelected
+              : !allSelected &&
+                selectedChannelValues?.includes(option.value);
+
+            const count = Number(counts?.[option.value] ?? 0);
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  if (isAll) {
+                    onToggleAll?.();
+                    return;
+                  }
+
+                  onToggleChannel?.(option.value);
+                }}
+                style={{
+                  transitionDelay: open ? `${index * 24}ms` : "0ms",
+                }}
+                className={[
+                  "group flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left",
+                  "transition-[background-color,transform,opacity,box-shadow] duration-[300ms]",
+                  PREMIUM_EASE,
+                  open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
+                  selected
+                    ? "bg-[linear-gradient(180deg,#EEF5FF_0%,#EAF2FF_100%)] text-[#1E5FD1] shadow-[0_16px_34px_-30px_rgba(37,99,235,0.45)]"
+                    : "text-[#526174] hover:bg-[#F5F8FC] hover:text-[#0F172A]",
+                ].join(" ")}
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <ChannelLogo value={option.value} selected={selected} />
+
+                  <span className="block min-w-0 truncate text-[13px] font-bold leading-5">
+                    {option.label}
+                  </span>
+                </span>
+
+                <span className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={[
+                      "min-w-[14px] text-right text-[11px] font-bold transition-colors duration-300",
+                      selected ? "text-[#6389C4]" : "text-[#A2AFC0]",
+                    ].join(" ")}
+                  >
+                    {count}
+                  </span>
+
+                  <SelectionMark selected={selected} />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -155,14 +405,85 @@ function ToolbarIconButton({
       aria-expanded={expanded}
       title={label}
       className={[
-        "inline-flex h-11 w-11 items-center justify-center rounded-[14px] border transition-all duration-150",
+        "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
+        "border-0 bg-transparent transition-[background-color,color,transform,opacity] duration-300",
+        PREMIUM_EASE,
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
         active
-          ? "border-[#CFE0F7] bg-[linear-gradient(180deg,#F8FBFF_0%,#ECF4FF_100%)] text-[#2563EB] shadow-[0_18px_36px_-30px_rgba(37,99,235,0.38)]"
-          : "border-[#E3EAF3] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] text-[#64748B] shadow-[0_14px_30px_-28px_rgba(15,23,42,0.24)] hover:border-[#D6E0EC] hover:text-[#0F172A]",
+          ? "text-[#2563EB]"
+          : "text-[#64748B] hover:bg-[#F3F7FB] hover:text-[#0F172A]",
       ].join(" ")}
     >
-      <Icon className="h-[17px] w-[17px]" strokeWidth={2.2} />
+      <Icon className="h-[17px] w-[17px]" strokeWidth={2.25} />
     </button>
+  );
+}
+
+function SearchSurface({ open, value, inputRef, onChange, onClose }) {
+  return (
+    <div
+      aria-hidden={!open}
+      className={[
+        "absolute inset-0 min-w-0 origin-right",
+        "transition-[opacity,transform,filter] duration-[420ms]",
+        PREMIUM_EASE,
+        open
+          ? "pointer-events-auto translate-x-0 scale-x-100 scale-y-100 opacity-100 blur-0"
+          : "pointer-events-none translate-x-3 scale-x-[0.88] scale-y-[0.96] opacity-0 blur-[1px]",
+      ].join(" ")}
+    >
+      <Input
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder="Search conversations"
+        aria-label="Search conversations"
+        autoComplete="off"
+        appearance="quiet"
+        leftIcon={<Search className="h-[16px] w-[16px]" strokeWidth={2.15} />}
+        right={
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close search"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF]"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+          </button>
+        }
+        className={[
+          "h-10 min-w-0",
+          "transition-[box-shadow,transform] duration-[420ms]",
+          PREMIUM_EASE,
+          open
+            ? "shadow-[0_18px_44px_-36px_rgba(37,99,235,0.32)]"
+            : "shadow-none",
+        ].join(" ")}
+        inputClassName="!h-10 !text-[13.5px]"
+      />
+    </div>
+  );
+}
+
+function HeaderTitle({ hidden }) {
+  return (
+    <div
+      className={[
+        "absolute inset-0 flex min-w-0 items-center",
+        "transition-[opacity,transform,filter] duration-[360ms]",
+        PREMIUM_EASE,
+        hidden
+          ? "pointer-events-none -translate-x-2 opacity-0 blur-[1px]"
+          : "pointer-events-auto translate-x-0 opacity-100 blur-0",
+      ].join(" ")}
+    >
+      <h2
+        id="inbox-thread-list-title"
+        className="truncate text-[16px] font-bold tracking-[-0.02em] text-[#0F172A]"
+      >
+        All conversations
+      </h2>
+    </div>
   );
 }
 
@@ -173,15 +494,17 @@ function TopTabButton({ active, label, onClick }) {
       onClick={onClick}
       aria-pressed={active}
       className={[
-        "relative inline-flex h-9 items-center px-1 text-[12.5px] font-bold transition-colors",
+        "relative inline-flex h-10 items-center px-1 text-[12.5px] font-bold transition-colors",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
         active ? "text-[#2563EB]" : "text-[#64748B] hover:text-[#0F172A]",
       ].join(" ")}
     >
       {label}
+
       <span
         aria-hidden="true"
         className={[
-          "absolute -bottom-[9px] left-0 right-0 h-[2px] rounded-full transition-all",
+          "absolute bottom-[-1px] left-0 right-0 h-[2px] rounded-full transition-opacity duration-200",
           active ? "bg-[#2563EB] opacity-100" : "bg-transparent opacity-0",
         ].join(" ")}
       />
@@ -189,15 +512,19 @@ function TopTabButton({ active, label, onClick }) {
   );
 }
 
-function EmptyState({ hasSearch }) {
+function EmptyState({ hasSearch, hasChannelFilter }) {
   return (
     <div className="px-4 py-8">
       <div className="rounded-[22px] border border-[#E4EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-7 text-center shadow-[0_20px_46px_-42px_rgba(15,23,42,0.26)]">
         <div className="text-[14px] font-bold text-[#0F172A]">
-          {hasSearch ? "No matching conversations" : "No conversations yet"}
+          {hasSearch || hasChannelFilter
+            ? "No matching conversations"
+            : "No conversations yet"}
         </div>
         <div className="mt-2 text-[12.5px] font-medium leading-6 text-[#64748B]">
-          {hasSearch ? "Try a different keyword." : "New conversations will appear here."}
+          {hasSearch || hasChannelFilter
+            ? "Try another channel or keyword."
+            : "New conversations will appear here."}
         </div>
       </div>
     </div>
@@ -219,7 +546,8 @@ function DisconnectedRailState() {
         </div>
 
         <div className="mt-2 text-[12.5px] font-medium leading-6 text-[#64748B]">
-          Conversations will appear here after a launch channel is connected and messages start coming in.
+          Conversations will appear here after a launch channel is connected and
+          messages start coming in.
         </div>
       </div>
     </div>
@@ -233,7 +561,7 @@ export default function InboxThreadListPanel({
   launchChannelConnected = true,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
-  const [channelFilter, setChannelFilter] = useState("all");
+  const [selectedChannelValues, setSelectedChannelValues] = useState(null);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -290,19 +618,28 @@ export default function InboxThreadListPanel({
 
   const baseThreads = useMemo(
     () =>
-      Array.isArray(threadList?.filteredThreads) ? threadList.filteredThreads : [],
+      Array.isArray(threadList?.filteredThreads)
+        ? threadList.filteredThreads
+        : [],
     [threadList?.filteredThreads]
-  );
-
-  const selectedThread = useMemo(
-    () => baseThreads.find((thread) => s(thread?.id) === s(selectedThreadId)) || null,
-    [baseThreads, selectedThreadId]
   );
 
   const channelOptions = useMemo(
     () => buildChannelOptions(baseThreads),
     [baseThreads]
   );
+
+  const allChannelValues = useMemo(
+    () => getAllChannelValues(channelOptions),
+    [channelOptions]
+  );
+
+  const allChannelsSelected = isAllChannelSelection(
+    selectedChannelValues,
+    allChannelValues
+  );
+
+  const hasChannelFilter = !allChannelsSelected;
 
   const channelCounts = useMemo(() => {
     const counts = { all: baseThreads.length };
@@ -323,57 +660,50 @@ export default function InboxThreadListPanel({
   }, [baseThreads]);
 
   useEffect(() => {
-    const exists = channelOptions.some((option) => option.value === channelFilter);
-    if (!exists) setChannelFilter("all");
-  }, [channelOptions, channelFilter]);
+    if (selectedChannelValues === null) return;
+
+    const validValues = new Set(allChannelValues);
+    const nextValues = selectedChannelValues.filter((value) =>
+      validValues.has(value)
+    );
+
+    if (nextValues.length === allChannelValues.length && allChannelValues.length) {
+      setSelectedChannelValues(null);
+      return;
+    }
+
+    if (nextValues.length !== selectedChannelValues.length) {
+      setSelectedChannelValues(nextValues);
+    }
+  }, [allChannelValues, selectedChannelValues]);
 
   const filteredThreads = useMemo(() => {
-    const byChannel =
-      channelFilter === "all"
-        ? baseThreads
-        : baseThreads.filter((thread) => {
-            const raw =
-              s(thread?.channel) ||
-              s(thread?.channel_type) ||
-              s(thread?.provider) ||
-              s(thread?.source_type);
-
-            return normalizeChannelValue(raw) === channelFilter;
-          });
+    const byChannel = baseThreads.filter((thread) =>
+      channelMatches(thread, selectedChannelValues)
+    );
 
     const needle = String(localSearch || "").trim().toLowerCase();
-    const bySearch = !needle
-      ? byChannel
-      : byChannel.filter((thread) => {
-          const haystack = [
-            thread?.customer_name,
-            thread?.external_username,
-            thread?.external_user_id,
-            thread?.last_message_text,
-            thread?.assigned_to,
-            thread?.channel,
-            thread?.subject,
-            thread?.title,
-            thread?.conversation_title,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
+    if (!needle) return byChannel;
 
-          return haystack.includes(needle);
-        });
+    return byChannel.filter((thread) => {
+      const haystack = [
+        thread?.customer_name,
+        thread?.external_username,
+        thread?.external_user_id,
+        thread?.last_message_text,
+        thread?.assigned_to,
+        thread?.channel,
+        thread?.subject,
+        thread?.title,
+        thread?.conversation_title,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
 
-    if (!selectedThread) return bySearch;
-
-    const selectedId = s(selectedThread.id);
-    const alreadyVisible = bySearch.some((thread) => s(thread?.id) === selectedId);
-    if (alreadyVisible) return bySearch;
-
-    const hasActiveConstraint = channelFilter !== "all" || Boolean(needle);
-    if (!hasActiveConstraint) return bySearch;
-
-    return [selectedThread, ...bySearch];
-  }, [baseThreads, channelFilter, localSearch, selectedThread]);
+      return haystack.includes(needle);
+    });
+  }, [baseThreads, localSearch, selectedChannelValues]);
 
   function handleToggleFilterMenu() {
     setSearchOpen(false);
@@ -390,13 +720,51 @@ export default function InboxThreadListPanel({
     setSearchOpen(false);
   }
 
+  function handleToggleAllChannels() {
+    setSelectedChannelValues((current) => {
+      const currentlyAll = isAllChannelSelection(current, allChannelValues);
+      return currentlyAll ? [] : null;
+    });
+  }
+
+  function handleToggleChannel(value) {
+    const normalized = normalizeChannelValue(value);
+    if (!normalized || normalized === "all") return;
+
+    setSelectedChannelValues((current) => {
+      const currentlyAll = isAllChannelSelection(current, allChannelValues);
+
+      if (currentlyAll) {
+        return [normalized];
+      }
+
+      const currentSet = new Set(current || []);
+
+      if (currentSet.has(normalized)) {
+        currentSet.delete(normalized);
+      } else {
+        currentSet.add(normalized);
+      }
+
+      const nextValues = Array.from(currentSet).filter((item) =>
+        allChannelValues.includes(item)
+      );
+
+      if (nextValues.length === allChannelValues.length && allChannelValues.length) {
+        return null;
+      }
+
+      return nextValues;
+    });
+  }
+
   if (!launchChannelConnected) {
     return (
       <section
         aria-labelledby="inbox-thread-list-title"
-        className="flex h-full min-h-0 flex-col bg-transparent"
+        className="relative flex h-full min-h-0 flex-col bg-transparent"
       >
-        <div className="shrink-0 border-b border-[#E3E8F0] bg-[rgba(255,255,255,0.76)] px-4 py-5 backdrop-blur-xl">
+        <div className="shrink-0 border-b border-[#D6E1ED] bg-[rgba(255,255,255,0.78)] px-4 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)] backdrop-blur-xl">
           <h2
             id="inbox-thread-list-title"
             className="truncate text-[16px] font-bold tracking-[-0.02em] text-[#0F172A]"
@@ -415,26 +783,29 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-transparent"
+      className="relative isolate flex h-full min-h-0 flex-col bg-transparent"
     >
-      <div className="shrink-0 border-b border-[#E3E8F0] bg-[rgba(255,255,255,0.76)] backdrop-blur-xl">
+      <div className="relative z-40 shrink-0 overflow-visible bg-[rgba(255,255,255,0.82)] backdrop-blur-xl">
         <div className="px-4 pb-3 pt-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2
-                id="inbox-thread-list-title"
-                className="truncate text-[16px] font-bold tracking-[-0.02em] text-[#0F172A]"
-              >
-                All conversations
-              </h2>
+          <div className="flex h-10 items-center justify-between gap-3">
+            <div className="relative h-10 min-w-0 flex-1">
+              <HeaderTitle hidden={searchOpen} />
+
+              <SearchSurface
+                open={searchOpen}
+                value={localSearch}
+                inputRef={searchInputRef}
+                onChange={setLocalSearch}
+                onClose={handleCloseSearch}
+              />
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="relative" ref={filterAnchorRef}>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <div className="relative z-[180]" ref={filterAnchorRef}>
                 <ToolbarIconButton
                   icon={SlidersHorizontal}
                   label="Filter channels"
-                  active={channelFilter !== "all" || filterMenuOpen}
+                  active={hasChannelFilter || filterMenuOpen}
                   onClick={handleToggleFilterMenu}
                   expanded={filterMenuOpen}
                 />
@@ -442,24 +813,41 @@ export default function InboxThreadListPanel({
                 <ChannelFilterMenu
                   open={filterMenuOpen}
                   anchorRef={filterAnchorRef}
-                  selectedValue={channelFilter}
+                  selectedChannelValues={selectedChannelValues}
                   options={channelOptions}
                   counts={channelCounts}
-                  onSelect={setChannelFilter}
+                  onToggleAll={handleToggleAllChannels}
+                  onToggleChannel={handleToggleChannel}
                   onClose={() => setFilterMenuOpen(false)}
                 />
               </div>
 
-              <ToolbarIconButton
-                icon={Search}
-                label="Search conversations"
-                active={searchOpen || Boolean(localSearch.trim())}
-                onClick={handleOpenSearch}
-              />
+              <button
+                type="button"
+                onClick={searchOpen ? handleCloseSearch : handleOpenSearch}
+                aria-label={searchOpen ? "Close search" : "Search conversations"}
+                title={searchOpen ? "Close search" : "Search conversations"}
+                className={[
+                  "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
+                  "border-0 bg-transparent transition-[background-color,color,transform,opacity] duration-300",
+                  PREMIUM_EASE,
+                  searchOpen
+                    ? "pointer-events-none scale-95 opacity-0"
+                    : "pointer-events-auto scale-100 opacity-100",
+                  localSearch.trim()
+                    ? "text-[#2563EB]"
+                    : "text-[#64748B] hover:bg-[#F3F7FB] hover:text-[#0F172A]",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
+                ].join(" ")}
+              >
+                <Search className="h-[17px] w-[17px]" strokeWidth={2.25} />
+              </button>
             </div>
           </div>
+        </div>
 
-          <div className="mt-4 flex items-center gap-6 border-b border-[#E8EEF6] pb-2">
+        <div className="border-b border-[#D6E1ED] px-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)]">
+          <div className="flex h-10 items-center gap-7">
             {TOP_TABS.map((tab) => {
               const active = threadList?.filter === tab.value;
 
@@ -475,48 +863,8 @@ export default function InboxThreadListPanel({
           </div>
         </div>
 
-        <div
-          className={[
-            "overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            searchOpen
-              ? "max-h-[82px] translate-y-0 opacity-100"
-              : "pointer-events-none max-h-0 -translate-y-2 opacity-0",
-          ].join(" ")}
-          aria-hidden={!searchOpen}
-        >
-          <div className="border-t border-[#E8EEF6] px-4 py-3">
-            <div className="flex h-11 items-center gap-3 rounded-[15px] border border-[#DFE7F1] bg-white px-3 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.22)]">
-              <Search className="h-[16px] w-[16px] shrink-0 text-[#94A3B8]" />
-
-              <label className="sr-only" htmlFor="inbox-thread-search">
-                Search conversations
-              </label>
-
-              <input
-                ref={searchInputRef}
-                id="inbox-thread-search"
-                value={localSearch}
-                onChange={(event) => setLocalSearch(event.target.value)}
-                placeholder="Search conversations"
-                aria-label="Search conversations"
-                autoComplete="off"
-                className="block h-full w-full border-0 bg-transparent px-0 text-[14px] font-medium text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
-              />
-
-              <button
-                type="button"
-                onClick={handleCloseSearch}
-                aria-label="Close search"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[#64748B] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A]"
-              >
-                <X className="h-[16px] w-[16px]" />
-              </button>
-            </div>
-          </div>
-        </div>
-
         {threadList?.deepLinkNotice ? (
-          <div className="border-t border-[#E8EEF6] px-4 py-3">
+          <div className="border-b border-[#D6E1ED] px-4 py-3 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
             <p className="text-[12px] font-medium leading-5 text-[#B45309]">
               {threadList.deepLinkNotice}
             </p>
@@ -524,13 +872,16 @@ export default function InboxThreadListPanel({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white">
+      <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white">
         {threadList?.surface?.loading && !filteredThreads.length ? (
           <div className="px-4 py-4">
             <InboxThreadListSkeleton />
           </div>
         ) : !filteredThreads.length ? (
-          <EmptyState hasSearch={Boolean(localSearch.trim())} />
+          <EmptyState
+            hasSearch={Boolean(localSearch.trim())}
+            hasChannelFilter={hasChannelFilter}
+          />
         ) : (
           <div className="divide-y divide-[#E7EDF5]">
             {filteredThreads.map((thread) => (
