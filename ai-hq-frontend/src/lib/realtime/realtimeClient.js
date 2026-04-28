@@ -1,10 +1,73 @@
+import { isAppDesignModeEnabled } from "../designMode.js";
 import { createWsClient } from "../ws.js";
 
 function ignoreError() {
   return undefined;
 }
 
+function createDesignRealtimeClient() {
+  const eventListeners = new Set();
+  const statusListeners = new Set();
+  let lastStatus = { state: "off" };
+
+  function emitStatus(status) {
+    lastStatus = status || { state: "off" };
+
+    for (const listener of statusListeners) {
+      try {
+        listener(lastStatus);
+      } catch {
+        ignoreError();
+      }
+    }
+  }
+
+  return {
+    subscribe(listener) {
+      if (typeof listener !== "function") return () => {};
+      eventListeners.add(listener);
+
+      return () => {
+        eventListeners.delete(listener);
+      };
+    },
+
+    subscribeStatus(listener) {
+      if (typeof listener !== "function") return () => {};
+
+      statusListeners.add(listener);
+
+      try {
+        listener(lastStatus);
+      } catch {
+        ignoreError();
+      }
+
+      return () => {
+        statusListeners.delete(listener);
+      };
+    },
+
+    getStatus() {
+      return lastStatus;
+    },
+
+    canUseWs() {
+      return false;
+    },
+
+    send() {
+      emitStatus({ state: "off" });
+      return false;
+    },
+  };
+}
+
 function createRealtimeClient() {
+  if (isAppDesignModeEnabled()) {
+    return createDesignRealtimeClient();
+  }
+
   const eventListeners = new Set();
   const statusListeners = new Set();
   let client = null;
@@ -23,6 +86,7 @@ function createRealtimeClient() {
 
   function emitStatus(status) {
     lastStatus = status || { state: "idle" };
+
     for (const listener of statusListeners) {
       try {
         listener(lastStatus);
@@ -34,10 +98,12 @@ function createRealtimeClient() {
 
   function ensureClient() {
     if (client) return client;
+
     client = createWsClient({
       onEvent: emitEvent,
       onStatus: emitStatus,
     });
+
     return client;
   }
 
@@ -48,6 +114,7 @@ function createRealtimeClient() {
 
   function stop() {
     if (!client) return;
+
     try {
       client.stop();
     } catch {
@@ -57,6 +124,7 @@ function createRealtimeClient() {
 
   function retain() {
     refCount += 1;
+
     if (refCount === 1) {
       start();
     }
@@ -64,6 +132,7 @@ function createRealtimeClient() {
 
   function release() {
     refCount = Math.max(0, refCount - 1);
+
     if (refCount === 0) {
       stop();
     }
@@ -71,6 +140,7 @@ function createRealtimeClient() {
 
   function subscribe(listener) {
     if (typeof listener !== "function") return () => {};
+
     eventListeners.add(listener);
     retain();
 
@@ -82,12 +152,15 @@ function createRealtimeClient() {
 
   function subscribeStatus(listener) {
     if (typeof listener !== "function") return () => {};
+
     statusListeners.add(listener);
+
     try {
       listener(lastStatus);
     } catch {
       ignoreError();
     }
+
     retain();
 
     return () => {
@@ -99,12 +172,15 @@ function createRealtimeClient() {
   return {
     subscribe,
     subscribeStatus,
+
     getStatus() {
       return lastStatus;
     },
+
     canUseWs() {
       return ensureClient().canUseWs();
     },
+
     send(message) {
       return ensureClient().send(message);
     },

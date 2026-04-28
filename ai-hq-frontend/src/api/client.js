@@ -1,5 +1,9 @@
 // src/api/client.js
-// hardened API client with request timeout support
+
+import {
+  getDesignModeApiResponse,
+  shouldMockApiRequest,
+} from "../lib/designMode.js";
 
 const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
 const API_BASE = RAW ? RAW.replace(/\/+$/, "") : "";
@@ -40,6 +44,7 @@ function looksLikeHtmlDocument(value = "") {
 
 function isLoopbackHostname(value = "") {
   const host = s(value).toLowerCase();
+
   return (
     host === "localhost" ||
     host === "127.0.0.1" ||
@@ -87,6 +92,7 @@ export function getApiBase() {
 export function apiUrl(path) {
   const cleanPath = s(path);
   const base = getApiBase();
+
   if (!cleanPath) return base || "";
 
   if (isAbsoluteUrl(cleanPath)) {
@@ -178,6 +184,18 @@ export async function apiRequest(path, options = {}) {
     signal: externalSignal,
   } = options;
 
+  if (shouldMockApiRequest(path)) {
+    return getDesignModeApiResponse(path, {
+      method,
+      body,
+      headers: extraHeaders,
+      credentials,
+      allowStatuses,
+      rawBody,
+      timeoutMs,
+    });
+  }
+
   const url = apiUrl(path);
   const headers = {
     Accept: "application/json",
@@ -226,8 +244,9 @@ export async function apiRequest(path, options = {}) {
     }
 
     if (Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0) {
-      timeoutId = setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         didTimeout = true;
+
         try {
           controller.abort();
         } catch {
@@ -240,10 +259,11 @@ export async function apiRequest(path, options = {}) {
   }
 
   let response;
+
   try {
     response = await fetch(url, init);
   } catch (e) {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timeoutId) window.clearTimeout(timeoutId);
     if (cleanupExternalAbort) cleanupExternalAbort();
 
     if (didTimeout) {
@@ -263,7 +283,7 @@ export async function apiRequest(path, options = {}) {
     );
   }
 
-  if (timeoutId) clearTimeout(timeoutId);
+  if (timeoutId) window.clearTimeout(timeoutId);
   if (cleanupExternalAbort) cleanupExternalAbort();
 
   const payload = await readPayload(response);
