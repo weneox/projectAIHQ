@@ -43,13 +43,13 @@ const EMPTY_READINESS_STATE = {
 
 const CONNECTOR_COPY = {
   website: {
-    summary: "Website chat is configured and ready for live delivery.",
+    summary: "Website chat is configured in design mode.",
   },
   instagram: {
-    summary: "Instagram DM automation is ready.",
+    summary: "Instagram is available for design preview.",
   },
   telegram: {
-    summary: "Telegram bot and delivery are ready.",
+    summary: "Telegram is connected in design mode.",
   },
 };
 
@@ -81,7 +81,7 @@ function normalizeStatus(runtime = null) {
 
   if (runtime?.connected === true) {
     return {
-      label: "Blocked",
+      label: "Needs attention",
       tone: "warning",
       connected: true,
       deliveryReady: false,
@@ -106,7 +106,7 @@ function normalizeStatus(runtime = null) {
 
   if (raw.includes("connecting") || raw.includes("pending")) {
     return {
-      label: "Pending",
+      label: "Connecting",
       tone: "muted",
       connected: false,
       deliveryReady: false,
@@ -141,38 +141,31 @@ function resolvePrimaryAction(channel, runtime) {
   return { label: "Connect", mode: "details" };
 }
 
-function StatusBadge({ tone, label }) {
-  const classes =
-    tone === "success"
-      ? "bg-emerald-50 text-emerald-700"
-      : tone === "warning"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-slate-100 text-slate-600";
+function statusToneClasses(tone) {
+  if (tone === "success") {
+    return {
+      dot: "bg-[rgba(22,163,74,0.96)]",
+      text: "text-[rgba(22,163,74,0.96)]",
+      badge: "bg-[rgba(22,163,74,0.1)]",
+    };
+  }
 
-  return (
-    <div
-      className={[
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
-        "text-[11px] font-medium leading-none",
-        classes,
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "h-1.5 w-1.5 rounded-full",
-          tone === "success"
-            ? "bg-emerald-500"
-            : tone === "warning"
-              ? "bg-amber-500"
-              : "bg-slate-400",
-        ].join(" ")}
-      />
-      <span>{label}</span>
-    </div>
-  );
+  if (tone === "warning") {
+    return {
+      dot: "bg-[rgba(245,158,11,0.96)]",
+      text: "text-[rgba(180,83,9,0.96)]",
+      badge: "bg-[rgba(245,158,11,0.11)]",
+    };
+  }
+
+  return {
+    dot: "bg-[rgba(148,163,184,0.96)]",
+    text: "text-[rgba(100,116,139,0.96)]",
+    badge: "bg-[rgba(148,163,184,0.12)]",
+  };
 }
 
-function HeaderActionButton({
+function TopActionButton({
   children,
   primary = false,
   disabled = false,
@@ -185,12 +178,21 @@ function HeaderActionButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] px-4",
-        "text-[13px] font-medium transition-colors",
+        "inline-flex h-10 items-center justify-center gap-2 px-4",
+        "rounded-[11px] text-[13.5px] font-semibold tracking-[-0.01em]",
+        "transition-all duration-200 ease-out",
         primary
-          ? "bg-[rgb(var(--color-brand))] text-white hover:bg-[rgb(var(--color-brand-strong))]"
-          : "border border-[rgba(15,23,42,0.08)] bg-white text-slate-900 hover:bg-slate-50",
-        disabled ? "cursor-not-allowed opacity-50" : "",
+          ? [
+              "bg-[rgb(var(--color-brand))] text-white",
+              "shadow-[0_16px_34px_-20px_rgba(46,96,255,0.65)]",
+              "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
+            ].join(" ")
+          : [
+              "bg-white text-[rgba(15,23,42,0.96)]",
+              "ring-1 ring-[rgba(15,23,42,0.08)]",
+              "hover:-translate-y-[1px] hover:bg-[rgba(248,250,252,0.9)]",
+            ].join(" "),
+        disabled ? "cursor-not-allowed opacity-50 hover:translate-y-0" : "",
       ].join(" ")}
     >
       <span>{children}</span>
@@ -209,37 +211,37 @@ function CompactHeader({
 }) {
   return (
     <section className="pb-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[rgba(100,116,139,0.96)]">
             Channels
           </div>
 
-          <h1 className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
+          <h1 className="text-[23px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.98)]">
             Launch channels
           </h1>
 
-          <div className="mt-2 text-[13px] text-slate-500">
+          <div className="mt-2 text-[14px] font-semibold text-[rgba(100,116,139,0.96)]">
             {readyCount}/{availableCount} ready
             {!truthReady ? (
-              <span className="ml-2 text-amber-700">· truth pending</span>
+              <span className="ml-2 text-[rgba(180,83,9,0.96)]">
+                / truth pending approval
+              </span>
             ) : null}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <HeaderActionButton onClick={onOpenTruth}>
-            Open truth
-          </HeaderActionButton>
+        <div className="flex items-center gap-3">
+          <TopActionButton onClick={onOpenTruth}>Open truth</TopActionButton>
 
-          <HeaderActionButton
+          <TopActionButton
             primary
             disabled={!hasDeliveryReadyLaunchChannel}
             onClick={onOpenInbox}
             icon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
           >
             Open inbox
-          </HeaderActionButton>
+          </TopActionButton>
         </div>
       </div>
     </section>
@@ -250,37 +252,55 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
   const status = normalizeStatus(runtime);
   const action = resolvePrimaryAction(channel, runtime);
+  const tone = statusToneClasses(status.tone);
   const summary = s(runtime?.summary || copy.summary) || copy.summary;
 
   return (
-    <article className="rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
+    <article
+      className={[
+        "group relative overflow-hidden rounded-[15px] bg-white",
+        "border border-[rgba(15,23,42,0.07)]",
+        "px-4 py-4",
+        "shadow-[0_16px_34px_-28px_rgba(15,23,42,0.22)]",
+        "transition-all duration-200 ease-out",
+        "hover:-translate-y-[2px] hover:shadow-[0_24px_44px_-28px_rgba(15,23,42,0.26)]",
+      ].join(" ")}
+    >
+      <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="shrink-0">
-            <ChannelIcon channel={channel} size="lg" />
+            <ChannelIcon channel={channel} size="md" />
           </div>
 
           <div className="min-w-0">
-            <h2 className="truncate text-[16px] font-semibold tracking-[-0.02em] text-slate-950">
+            <div className="truncate text-[17px] font-semibold leading-6 tracking-[-0.025em] text-[rgba(15,23,42,0.98)]">
               {channel.name}
-            </h2>
+            </div>
           </div>
         </div>
 
-        <div className="shrink-0">
-          <StatusBadge tone={status.tone} label={status.label} />
+        <div
+          className={[
+            "inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1",
+            "text-[12.5px] font-semibold leading-none",
+            tone.badge,
+            tone.text,
+          ].join(" ")}
+        >
+          <span className={["h-1.5 w-1.5 rounded-full", tone.dot].join(" ")} />
+          <span>{status.label}</span>
         </div>
       </div>
 
-      <p className="mt-4 line-clamp-2 text-[13px] leading-6 text-slate-600">
+      <div className="mt-3 line-clamp-1 text-[14px] font-semibold leading-6 text-[rgba(71,85,105,0.98)]">
         {summary}
-      </p>
+      </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => onInspect?.(channel.id)}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[rgb(var(--color-brand))] transition-colors hover:text-slate-950"
+          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[rgb(var(--color-brand))] transition-colors hover:text-[rgba(15,23,42,0.96)]"
         >
           <span>Details</span>
           <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
@@ -289,7 +309,14 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
         <button
           type="button"
           onClick={() => onRunPrimaryAction?.(channel, action)}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[rgb(var(--color-brand))] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[rgb(var(--color-brand-strong))]"
+          className={[
+            "inline-flex h-9 min-w-[86px] items-center justify-center gap-2 rounded-[10px]",
+            "bg-[rgb(var(--color-brand))] px-3.5",
+            "text-[13.5px] font-semibold tracking-[-0.01em] text-white",
+            "shadow-[0_14px_28px_-18px_rgba(46,96,255,0.62)]",
+            "transition-all duration-200 ease-out",
+            "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
+          ].join(" ")}
         >
           <span>{action.label}</span>
           <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
@@ -427,9 +454,11 @@ export default function ChannelCatalog() {
 
   useEffect(() => {
     if (!selectedChannel) return undefined;
+
     const raf = window.requestAnimationFrame(() => {
       setDrawerOpen(true);
     });
+
     return () => window.cancelAnimationFrame(raf);
   }, [selectedChannel]);
 
@@ -515,7 +544,7 @@ export default function ChannelCatalog() {
 
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
-      <PageCanvas className="max-w-[1280px] py-2">
+      <PageCanvas className="max-w-[1520px] py-2">
         <LoadingSurface title="Loading channels" />
       </PageCanvas>
     );
@@ -523,7 +552,7 @@ export default function ChannelCatalog() {
 
   return (
     <>
-      <PageCanvas className="max-w-[1280px] py-2">
+      <PageCanvas className="max-w-[1520px] py-2">
         <div className="space-y-4">
           {s(effectiveReadinessState.error) ? (
             <InlineNotice
@@ -537,7 +566,7 @@ export default function ChannelCatalog() {
           {hasDeliveryReadyLaunchChannel && !truthReady ? (
             <InlineNotice
               tone="warning"
-              title="Truth still needs approval"
+              title="A channel is connected, but truth still needs approval."
               description="Approve truth before relying on live AI replies."
               compact
             />
@@ -552,7 +581,7 @@ export default function ChannelCatalog() {
             onOpenInbox={() => navigate("/inbox")}
           />
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             {launchChannels.map((channel) => (
               <ChannelCard
                 key={channel.id}
@@ -571,6 +600,9 @@ export default function ChannelCatalog() {
           open={drawerOpen}
           onClose={handleDrawerClose}
           closeLabel="Close connector details"
+          className="top-[64px]"
+          panelWidthClassName="max-w-[640px]"
+          backdropClassName="bg-white/35"
         >
           <ChannelDetailDrawer
             channel={drawerChannel}
