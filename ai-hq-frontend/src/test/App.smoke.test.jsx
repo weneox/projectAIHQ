@@ -1,13 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+﻿import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getAppAuthContextMock } = vi.hoisted(() => ({
+const { getAppAuthContextMock, peekAppAuthContextMock } = vi.hoisted(() => ({
   getAppAuthContextMock: vi.fn(),
+  peekAppAuthContextMock: vi.fn(),
 }));
 
 vi.mock("../lib/appSession.js", () => ({
   getAppAuthContext: getAppAuthContextMock,
+  peekAppAuthContext: peekAppAuthContextMock,
 }));
 
 vi.mock("../components/layout/Shell.jsx", () => ({
@@ -77,6 +79,8 @@ describe("App shell smoke", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
 
+    peekAppAuthContextMock.mockReturnValue(null);
+
     getAppAuthContextMock.mockResolvedValue({
       authenticated: false,
       resolved: true,
@@ -102,3 +106,4 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 });
+

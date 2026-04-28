@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+﻿import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -12,12 +12,11 @@ import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
 import AppBootSurface from "./components/loading/AppBootSurface.jsx";
-import {
-  LoadingSurface,
-  PageCanvas,
-} from "./components/ui/AppShellPrimitives.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
-import { getAppAuthContext } from "./lib/appSession.js";
+import {
+  getAppAuthContext,
+  peekAppAuthContext,
+} from "./lib/appSession.js";
 
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
@@ -46,13 +45,17 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
 
 function RouteFallback() {
   return (
-    <PageCanvas className="px-4 py-8 md:px-6 md:py-10">
-      <LoadingSurface
-        title="Loading page"
-        description="Preparing the next workspace surface."
-        className="mx-auto max-w-[720px]"
-      />
-    </PageCanvas>
+    <div className="mx-auto w-full max-w-shell-content px-1 py-2">
+      <div className="space-y-3">
+        <div className="h-4 w-36 animate-pulse rounded-full bg-[rgba(15,23,42,0.07)]" />
+        <div className="h-24 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
+          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
+          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -60,19 +63,44 @@ function withSuspense(element) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
 }
 
-function GuestRouteGuard({ children }) {
-  const [state, setState] = useState({
+function deriveGuestInitialState() {
+  const cachedAuth = peekAppAuthContext();
+
+  if (cachedAuth?.authenticated) {
+    return {
+      loading: false,
+      allowGuest: false,
+      unavailable: false,
+      fromCache: true,
+    };
+  }
+
+  if (cachedAuth?.resolved === true && !cachedAuth?.authenticated) {
+    return {
+      loading: false,
+      allowGuest: true,
+      unavailable: false,
+      fromCache: true,
+    };
+  }
+
+  return {
     loading: true,
     allowGuest: false,
     unavailable: false,
-  });
+    fromCache: false,
+  };
+}
+
+function GuestRouteGuard({ children }) {
+  const [state, setState] = useState(deriveGuestInitialState);
 
   useEffect(() => {
     let alive = true;
 
     async function run() {
       try {
-        const auth = await getAppAuthContext({ force: true });
+        const auth = await getAppAuthContext();
         if (!alive) return;
 
         if (auth?.authenticated) {
@@ -80,6 +108,7 @@ function GuestRouteGuard({ children }) {
             loading: false,
             allowGuest: false,
             unavailable: false,
+            fromCache: false,
           });
           return;
         }
@@ -89,6 +118,7 @@ function GuestRouteGuard({ children }) {
             loading: false,
             allowGuest: false,
             unavailable: true,
+            fromCache: false,
           });
           return;
         }
@@ -97,6 +127,7 @@ function GuestRouteGuard({ children }) {
           loading: false,
           allowGuest: true,
           unavailable: false,
+          fromCache: false,
         });
       } catch {
         if (!alive) return;
@@ -104,6 +135,7 @@ function GuestRouteGuard({ children }) {
           loading: false,
           allowGuest: false,
           unavailable: true,
+          fromCache: false,
         });
       }
     }
