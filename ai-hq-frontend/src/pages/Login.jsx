@@ -5,7 +5,6 @@ import {
   Building2,
   Eye,
   EyeOff,
-  Loader2,
   Lock,
   Mail,
   User2,
@@ -17,9 +16,6 @@ import {
   getAppSessionContext,
 } from "../lib/appSession.js";
 import { cx } from "../lib/cx.js";
-
-import Button from "../components/ui/Button.jsx";
-import Input from "../components/ui/Input.jsx";
 import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
@@ -125,6 +121,104 @@ function normalizeAccountChoices(error) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
+function AuthAutofillReset() {
+  return (
+    <style>{`
+      .auth-page input,
+      .auth-page input:hover,
+      .auth-page input:focus,
+      .auth-page input:active {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        box-shadow: none !important;
+        outline: none !important;
+      }
+
+      .auth-page input:-webkit-autofill,
+      .auth-page input:-webkit-autofill:hover,
+      .auth-page input:-webkit-autofill:focus,
+      .auth-page input:-webkit-autofill:active {
+        -webkit-text-fill-color: #0f172a !important;
+        caret-color: #0f172a !important;
+        -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+        box-shadow: 0 0 0 1000px #ffffff inset !important;
+        background-color: #ffffff !important;
+        background-image: none !important;
+        background-clip: border-box !important;
+        transition: background-color 999999s ease-in-out 0s !important;
+      }
+
+      .auth-page input::selection {
+        background: rgba(15, 23, 42, 0.08);
+        color: #0f172a;
+      }
+
+      .auth-page input::-ms-reveal,
+      .auth-page input::-ms-clear {
+        display: none;
+      }
+    `}</style>
+  );
+}
+
+function AuthField({
+  name,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+  leftIcon,
+  right = null,
+}) {
+  return (
+    <div className="group relative flex h-[58px] items-center rounded-[17px] bg-white p-[1.5px] shadow-[0_18px_46px_-40px_rgba(15,23,42,0.48)] transition-[box-shadow,transform] duration-200 ease-out focus-within:shadow-[0_0_0_4px_rgba(46,96,255,0.08),0_22px_52px_-42px_rgba(46,96,255,0.48)]">
+      <div className="absolute inset-0 rounded-[17px] bg-[#D4DBE7] transition-colors duration-200 ease-out group-hover:bg-[#C7D0DE] group-focus-within:bg-[#8EAAFF]" />
+
+      <div className="relative z-10 flex h-full w-full items-center rounded-[15.5px] bg-white px-4">
+        <div className="mr-3 flex h-5 w-5 shrink-0 items-center justify-center text-[#66758B] transition-colors duration-200 group-focus-within:text-[#2E60FF]">
+          {leftIcon}
+        </div>
+
+        <input
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          spellCheck={false}
+          className="h-full min-w-0 flex-1 appearance-none border-0 bg-white text-[15.5px] font-medium tracking-[-0.015em] text-[#0F172A] outline-none placeholder:text-[15.5px] placeholder:font-medium placeholder:text-[#778397] focus:border-0 focus:bg-white focus:outline-none focus:ring-0"
+        />
+
+        {right ? <div className="ml-2 shrink-0">{right}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function AuthSubmitButton({ disabled, loading, children, loadingLabel }) {
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className={cx(
+        "mt-1 flex h-[56px] w-full items-center justify-center gap-2 rounded-[16px] text-[15.5px] font-semibold tracking-[-0.018em] text-white transition-[background-color,box-shadow,opacity] duration-200 ease-out",
+        disabled
+          ? "cursor-not-allowed bg-[#A7BBFF] shadow-none"
+          : "bg-[#2E60FF] shadow-[0_18px_38px_-26px_rgba(46,96,255,0.92)] hover:bg-[#2456F2] hover:shadow-[0_20px_44px_-28px_rgba(46,96,255,1)] active:bg-[#214FE2]"
+      )}
+    >
+      <span className="pointer-events-none select-none leading-none">
+        {loading ? loadingLabel : children}
+      </span>
+      {!loading ? (
+        <ArrowRight className="pointer-events-none h-4 w-4 shrink-0" />
+      ) : null}
+    </button>
+  );
+}
+
 function WorkspaceChoiceCard({ account, selected, onSelect }) {
   const token = s(account?.selectionToken);
   const companyName =
@@ -136,17 +230,17 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
       type="button"
       onClick={() => onSelect(token)}
       className={cx(
-        "flex w-full items-center justify-between rounded-panel border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
+        "flex w-full items-center justify-between rounded-[15px] border px-4 py-3.5 text-left transition-[background-color,border-color] duration-200 ease-out",
         selected
-          ? "border-[rgba(var(--color-brand),0.22)] bg-brand-soft shadow-panel"
-          : "border-line-soft bg-surface hover:border-line hover:bg-surface-muted"
+          ? "border-[#B8C8FF] bg-[#F7F9FF]"
+          : "border-[#E0E5EE] bg-white hover:border-[#C7D0DE]"
       )}
     >
       <div className="min-w-0">
-        <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+        <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[#0F172A]">
           {companyName}
         </div>
-        <div className="mt-1 text-[12px] text-text-muted">
+        <div className="mt-1 text-[13px] font-medium text-[#66758B]">
           {s(account?.tenantKey)} · {role}
         </div>
       </div>
@@ -154,9 +248,7 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
       <span
         className={cx(
           "relative h-[18px] w-[18px] rounded-full border transition-colors",
-          selected
-            ? "border-brand bg-brand"
-            : "border-line-strong bg-surface"
+          selected ? "border-[#2E60FF] bg-[#2E60FF]" : "border-[#B4BECE] bg-white"
         )}
       >
         {selected ? (
@@ -242,7 +334,7 @@ export default function Login() {
     try {
       await getAppSessionContext({ force: true });
     } catch {
-      // Navigation should still continue; protected routes will verify again.
+      // Protected routes verify the session again if warmup fails.
     }
 
     navigate("/home", { replace: true });
@@ -257,7 +349,7 @@ export default function Login() {
     };
 
     if (!payload.companyName || !payload.email || !payload.password) {
-      setError("Enter your business name, email, and password.");
+      setError("Enter your workspace name, email, and password.");
       return;
     }
 
@@ -266,9 +358,7 @@ export default function Login() {
 
     navigate("/verify-email", {
       replace: true,
-      state: {
-        email: payload.email,
-      },
+      state: { email: payload.email },
     });
   }
 
@@ -294,7 +384,7 @@ export default function Login() {
         setError(
           getFriendlyError(
             submitError,
-            isSignupMode ? "Unable to create your account." : "Sign in failed."
+            isSignupMode ? "Unable to create your workspace." : "Sign in failed."
           )
         );
       }
@@ -308,85 +398,67 @@ export default function Login() {
     loading || !s(form.companyName) || !s(form.email) || !s(form.password);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-canvas text-text">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-8%] top-[-12%] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.14)_0%,rgba(46,96,255,0.04)_48%,rgba(46,96,255,0)_72%)] blur-3xl" />
-        <div className="absolute right-[-10%] top-[10%] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.08)_0%,rgba(15,23,42,0.02)_50%,rgba(15,23,42,0)_74%)] blur-3xl" />
-        <div className="absolute bottom-[-14%] left-[24%] h-[280px] w-[280px] rounded-full bg-[radial-gradient(circle,rgba(21,128,61,0.06)_0%,rgba(21,128,61,0.02)_54%,rgba(21,128,61,0)_76%)] blur-3xl" />
-      </div>
+    <div className="auth-page min-h-screen bg-white text-[#0F172A]">
+      <AuthAutofillReset />
 
-      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-[560px] flex-col justify-center px-6 py-10">
-        <div>
-          <h1 className="text-[2.65rem] font-semibold leading-[0.92] tracking-[-0.065em] text-text md:text-[3rem]">
+      <main className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col justify-center px-6 py-10">
+        <section className="w-full">
+          <h1 className="text-center text-[46px] font-semibold leading-[0.95] tracking-[-0.075em] text-[#0B1220] md:text-[54px]">
             {isSignupMode ? "Create workspace" : "Sign in"}
           </h1>
 
-          <p className="mt-3 text-[15px] leading-7 text-text-muted">
-            {isSignupMode
-              ? "Use your business details to open a new workspace."
-              : activeTenantKey
-                ? `Use your ${activeTenantKey} workspace email and password.`
-                : "Use your workspace email and password."}
-          </p>
-        </div>
-
-        <div className="mt-8">
-          <form className="space-y-4" onSubmit={onSubmit}>
+          <form className="mt-10 space-y-4" onSubmit={onSubmit}>
             {isSignupMode ? (
               <>
-                <Input
+                <AuthField
                   name="fullName"
                   value={form.fullName}
                   onChange={onChange}
                   placeholder="Full name"
-                  autoComplete="name"
-                  leftIcon={<User2 className="h-4 w-4" />}
-                  appearance="product"
+                  autoComplete="off"
+                  leftIcon={<User2 className="h-4 w-4" strokeWidth={2} />}
                 />
 
-                <Input
+                <AuthField
                   name="companyName"
                   value={form.companyName}
                   onChange={onChange}
                   placeholder="Workspace name"
-                  autoComplete="organization"
-                  leftIcon={<Building2 className="h-4 w-4" />}
-                  appearance="product"
+                  autoComplete="off"
+                  leftIcon={<Building2 className="h-4 w-4" strokeWidth={2} />}
                 />
               </>
             ) : null}
 
-            <Input
+            <AuthField
               name="email"
               type="email"
               value={form.email}
               onChange={onChange}
               placeholder="Email address"
-              autoComplete="email"
-              leftIcon={<Mail className="h-4 w-4" />}
-              appearance="product"
+              autoComplete="off"
+              leftIcon={<Mail className="h-4 w-4" strokeWidth={2} />}
             />
 
-            <Input
+            <AuthField
               name="password"
               type={showPassword ? "text" : "password"}
               value={form.password}
               onChange={onChange}
               placeholder="Password"
-              autoComplete={isSignupMode ? "new-password" : "current-password"}
-              leftIcon={<Lock className="h-4 w-4" />}
-              appearance="product"
+              autoComplete="off"
+              leftIcon={<Lock className="h-4 w-4" strokeWidth={2} />}
               right={
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] text-[#66758B] transition-colors hover:bg-[#F5F7FA] hover:text-[#0F172A]"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-4 w-4" strokeWidth={2} />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" strokeWidth={2} />
                   )}
                 </button>
               }
@@ -402,12 +474,12 @@ export default function Login() {
             ) : null}
 
             {accountChoices.length ? (
-              <div className="space-y-3 rounded-panel border border-line-soft bg-surface/74 p-4 backdrop-blur">
+              <div className="space-y-3 rounded-[16px] border border-[#E0E5EE] bg-white p-4">
                 <div>
-                  <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+                  <div className="text-[14px] font-semibold tracking-[-0.02em] text-[#0F172A]">
                     Choose workspace
                   </div>
-                  <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                  <div className="mt-1 text-[13px] font-medium leading-5 text-[#66758B]">
                     We found more than one workspace for this email.
                   </div>
                 </div>
@@ -428,50 +500,33 @@ export default function Login() {
               </div>
             ) : null}
 
-            <Button
-              type="submit"
-              size="lg"
-              fullWidth
+            <AuthSubmitButton
               disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
-              rightIcon={
-                loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )
+              loading={loading}
+              loadingLabel={
+                isSignupMode ? "Creating workspace..." : "Signing in..."
               }
-              className="h-12 text-[14px]"
             >
-              {loading
-                ? isSignupMode
-                  ? "Creating workspace..."
-                  : "Signing in..."
-                : isSignupMode
-                  ? "Create workspace"
-                  : accountChoices.length
-                    ? "Open selected workspace"
-                    : "Sign in"}
-            </Button>
-
-            <div className="pt-1 text-center text-[14px] text-text-muted">
               {isSignupMode
-                ? "Already have an account?"
-                : "Don’t have an account?"}{" "}
+                ? "Create workspace"
+                : accountChoices.length
+                  ? "Open selected workspace"
+                  : "Sign in"}
+            </AuthSubmitButton>
+
+            <div className="pt-2 text-center text-[16px] font-medium tracking-[-0.018em] text-[#5F6D82]">
+              {isSignupMode ? "Already have an account?" : "New workspace?"}{" "}
               <button
                 type="button"
-                className="font-semibold text-text underline underline-offset-2 transition-colors hover:text-brand"
+                className="font-semibold text-[#0F172A] underline underline-offset-[3px] transition-colors hover:text-[#2E60FF]"
                 onClick={() => navigate(isSignupMode ? "/login" : "/signup")}
               >
                 {isSignupMode ? "Sign in" : "Create one"}
               </button>
             </div>
-
           </form>
-        </div>
+        </section>
       </main>
     </div>
   );
 }
-
-
-
