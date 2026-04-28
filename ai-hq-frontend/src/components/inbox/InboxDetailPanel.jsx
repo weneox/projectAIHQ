@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef } from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
@@ -190,6 +190,7 @@ function isRenderableConversationMessage(message = {}) {
   if (isControlLikeMessageType(storageType)) return false;
   if (isControlLikeMessageType(originalType)) return false;
   if (["system", "decision"].includes(senderType)) return false;
+
   if (
     ["decision", "decision_engine", "decision-event", "system"].includes(source)
   ) {
@@ -364,45 +365,6 @@ function ConversationLoadingState() {
   );
 }
 
-function useSoftThreadTransition(threadId) {
-  const [ready, setReady] = useState(true);
-
-  useEffect(() => {
-    setReady(false);
-
-    let timeoutId = null;
-    let frameId = null;
-
-    const enter = () => {
-      timeoutId = window.setTimeout(() => {
-        setReady(true);
-      }, 45);
-    };
-
-    if (
-      typeof window !== "undefined" &&
-      typeof window.requestAnimationFrame === "function"
-    ) {
-      frameId = window.requestAnimationFrame(enter);
-    } else if (typeof window !== "undefined") {
-      timeoutId = window.setTimeout(() => setReady(true), 45);
-    } else {
-      setReady(true);
-    }
-
-    return () => {
-      if (frameId && typeof window.cancelAnimationFrame === "function") {
-        window.cancelAnimationFrame(frameId);
-      }
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [threadId]);
-
-  return ready;
-}
-
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -424,8 +386,6 @@ export default function InboxDetailPanel({
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const currentThreadId = s(selectedThread?.id);
-
-  const contentReady = useSoftThreadTransition(currentThreadId);
 
   const scrollViewportRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
@@ -465,6 +425,7 @@ export default function InboxDetailPanel({
     function updateStickState() {
       const distanceFromBottom =
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+
       shouldStickToBottomRef.current = distanceFromBottom <= 120;
     }
 
@@ -502,10 +463,6 @@ export default function InboxDetailPanel({
 
   const conversationTitle = resolveConversationTitle(selectedThread);
   const conversationMetaItems = formatConversationMeta(selectedThread);
-
-  const softContentClass = contentReady
-    ? "translate-y-0 opacity-100"
-    : "translate-y-[6px] opacity-0";
 
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">
@@ -557,12 +514,7 @@ export default function InboxDetailPanel({
               ref={scrollViewportRef}
               className="h-full overflow-y-auto pb-[92px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              <div
-                className={[
-                  "min-h-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  softContentClass,
-                ].join(" ")}
-              >
+              <div className="min-h-full">
                 {surface?.loading ? (
                   <ConversationLoadingState />
                 ) : !hasThread ? (

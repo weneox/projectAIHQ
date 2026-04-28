@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   Globe2,
   Inbox,
   MessageCircle,
@@ -12,7 +13,6 @@ import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
 import Input from "../ui/Input.jsx";
 
-import checkmarkIcon from "../../assets/channels/checkmark.png";
 import globeLogo from "../../assets/channels/globe.png";
 import gmailLogo from "../../assets/channels/gmail.svg";
 import instagramLogo from "../../assets/channels/instagram.svg";
@@ -112,29 +112,64 @@ function isAllChannelSelection(selectedChannelValues, allChannelValues) {
   return selectedChannelValues.length >= allChannelValues.length;
 }
 
+function SelectionMark({ selected }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        "relative flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[7px] border",
+        "transition-[background-color,border-color,box-shadow,color] duration-[220ms]",
+        PREMIUM_EASE,
+        selected
+          ? "border-[#1FA361] bg-[#1FA361] text-white shadow-[0_12px_26px_-18px_rgba(31,163,97,0.7)]"
+          : "border-[#D9E3EE] bg-white text-transparent shadow-[0_8px_18px_-18px_rgba(15,23,42,0.18)] group-hover:border-[#C8D5E4]",
+      ].join(" ")}
+    >
+      <Check
+        className={[
+          "h-[12px] w-[12px] transition-opacity duration-[180ms]",
+          selected ? "opacity-100" : "opacity-0",
+        ].join(" ")}
+        strokeWidth={3}
+      />
+    </span>
+  );
+}
+
+function AllChannelsLeadMark({ selected }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        "relative flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full",
+        "transition-[background-color,box-shadow,color] duration-[220ms]",
+        PREMIUM_EASE,
+        selected
+          ? "bg-[#1FA361] text-white shadow-[0_12px_26px_-18px_rgba(31,163,97,0.68)]"
+          : "bg-[#EAF1F7] text-[#8DA0B3]",
+      ].join(" ")}
+    >
+      <Check
+        className={[
+          "h-[11px] w-[11px] transition-opacity duration-[180ms]",
+          selected ? "opacity-100" : "opacity-80",
+        ].join(" ")}
+        strokeWidth={3.1}
+      />
+    </span>
+  );
+}
+
 function ChannelLogo({ value, selected = false }) {
   const normalized = normalizeChannelValue(value);
 
   const imgClassName = [
-    "block h-[22px] w-[22px] shrink-0 object-contain transition-[opacity,filter,transform] duration-300",
-    PREMIUM_EASE,
+    "block h-[22px] w-[22px] shrink-0 object-contain transition-opacity duration-[220ms]",
     selected ? "opacity-100" : "opacity-90",
   ].join(" ");
 
   if (normalized === "all") {
-    return (
-      <img
-        src={checkmarkIcon}
-        alt=""
-        aria-hidden="true"
-        draggable="false"
-        className={[
-          "block h-[18px] w-[18px] shrink-0 object-contain transition-[opacity,filter,transform] duration-300",
-          PREMIUM_EASE,
-          selected ? "opacity-100" : "opacity-35 grayscale",
-        ].join(" ")}
-      />
-    );
+    return <AllChannelsLeadMark selected={selected} />;
   }
 
   if (normalized === "instagram") {
@@ -217,7 +252,7 @@ function ChannelLogo({ value, selected = false }) {
     return (
       <MessageCircle
         className={[
-          "h-[21px] w-[21px] shrink-0 transition-colors duration-300",
+          "h-[21px] w-[21px] shrink-0 transition-colors duration-[220ms]",
           selected ? "text-[#2563EB]" : "text-[#607086]",
         ].join(" ")}
         strokeWidth={2.05}
@@ -228,36 +263,11 @@ function ChannelLogo({ value, selected = false }) {
   return (
     <Globe2
       className={[
-        "h-[21px] w-[21px] shrink-0 transition-colors duration-300",
+        "h-[21px] w-[21px] shrink-0 transition-colors duration-[220ms]",
         selected ? "text-[#2563EB]" : "text-[#607086]",
       ].join(" ")}
       strokeWidth={2.05}
     />
-  );
-}
-
-function SelectionMark({ selected }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={[
-        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px]",
-        "transition-[background-color,border-color,opacity,transform] duration-300",
-        PREMIUM_EASE,
-        selected
-          ? "border border-[#CFE0FF] bg-white opacity-100 shadow-[0_8px_18px_-14px_rgba(37,99,235,0.55)]"
-          : "border border-[#DDE6F1] bg-transparent opacity-55",
-      ].join(" ")}
-    >
-      {selected ? (
-        <img
-          src={checkmarkIcon}
-          alt=""
-          draggable="false"
-          className="h-[12px] w-[12px] object-contain"
-        />
-      ) : null}
-    </span>
   );
 }
 
@@ -272,7 +282,9 @@ function ChannelFilterMenu({
   onClose,
 }) {
   const menuRef = useRef(null);
+
   const allChannelValues = useMemo(() => getAllChannelValues(options), [options]);
+
   const allSelected = isAllChannelSelection(
     selectedChannelValues,
     allChannelValues
@@ -304,12 +316,12 @@ function ChannelFilterMenu({
   return (
     <div
       className={[
-        "absolute right-0 top-[calc(100%+10px)] z-[180] w-[258px]",
-        "origin-top-right transition-[opacity,transform,visibility] duration-[280ms]",
+        "absolute right-0 top-[calc(100%+10px)] z-[180] w-[268px]",
+        "origin-top-right transition-[opacity,transform,visibility,filter] duration-[220ms]",
         PREMIUM_EASE,
         open
-          ? "visible translate-y-0 scale-100 opacity-100"
-          : "invisible pointer-events-none -translate-y-2 scale-[0.965] opacity-0",
+          ? "visible translate-y-0 scale-100 opacity-100 blur-0"
+          : "invisible pointer-events-none -translate-y-1 scale-[0.985] opacity-0 blur-[1px]",
       ].join(" ")}
     >
       <div
@@ -320,14 +332,19 @@ function ChannelFilterMenu({
           "shadow-[0_34px_86px_-34px_rgba(15,23,42,0.34),0_18px_36px_-30px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.92)]",
         ].join(" ")}
       >
-        <div className="px-2 pb-2 pt-1">
+        <div
+          className={[
+            "px-2 pb-2 pt-1 transition-opacity duration-[160ms]",
+            open ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+        >
           <div className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#9AA8B9]">
             Channels
           </div>
         </div>
 
         <div className="space-y-1">
-          {options.map((option, index) => {
+          {options.map((option) => {
             const isAll = option.value === "all";
             const selected = isAll
               ? allSelected
@@ -348,14 +365,11 @@ function ChannelFilterMenu({
 
                   onToggleChannel?.(option.value);
                 }}
-                style={{
-                  transitionDelay: open ? `${index * 24}ms` : "0ms",
-                }}
                 className={[
                   "group flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left",
-                  "transition-[background-color,transform,opacity,box-shadow] duration-[300ms]",
+                  "transition-[background-color,box-shadow,color,opacity] duration-[190ms]",
                   PREMIUM_EASE,
-                  open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
+                  open ? "opacity-100" : "opacity-0",
                   selected
                     ? "bg-[linear-gradient(180deg,#EEF5FF_0%,#EAF2FF_100%)] text-[#1E5FD1] shadow-[0_16px_34px_-30px_rgba(37,99,235,0.45)]"
                     : "text-[#526174] hover:bg-[#F5F8FC] hover:text-[#0F172A]",
@@ -369,10 +383,10 @@ function ChannelFilterMenu({
                   </span>
                 </span>
 
-                <span className="flex shrink-0 items-center gap-2">
+                <span className="flex shrink-0 items-center gap-3">
                   <span
                     className={[
-                      "min-w-[14px] text-right text-[11px] font-bold transition-colors duration-300",
+                      "min-w-[14px] text-right text-[11px] font-bold transition-colors duration-[180ms]",
                       selected ? "text-[#6389C4]" : "text-[#A2AFC0]",
                     ].join(" ")}
                   >
@@ -406,7 +420,7 @@ function ToolbarIconButton({
       title={label}
       className={[
         "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
-        "border-0 bg-transparent transition-[background-color,color,transform,opacity] duration-300",
+        "border-0 bg-transparent transition-[background-color,color,opacity] duration-300",
         PREMIUM_EASE,
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
         active
@@ -487,28 +501,81 @@ function HeaderTitle({ hidden }) {
   );
 }
 
-function TopTabButton({ active, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={[
-        "relative inline-flex h-10 items-center px-1 text-[12.5px] font-bold transition-colors",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
-        active ? "text-[#2563EB]" : "text-[#64748B] hover:text-[#0F172A]",
-      ].join(" ")}
-    >
-      {label}
+function TopTabs({ activeValue, onChange }) {
+  const wrapRef = useRef(null);
+  const tabRefs = useRef({});
+  const [indicator, setIndicator] = useState({
+    left: 0,
+    width: 0,
+    ready: false,
+  });
 
-      <span
-        aria-hidden="true"
-        className={[
-          "absolute bottom-[-1px] left-0 right-0 h-[2px] rounded-full transition-opacity duration-200",
-          active ? "bg-[#2563EB] opacity-100" : "bg-transparent opacity-0",
-        ].join(" ")}
-      />
-    </button>
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const activeNode = tabRefs.current?.[activeValue];
+
+    if (!wrap || !activeNode) return undefined;
+
+    function measure() {
+      const wrapRect = wrap.getBoundingClientRect();
+      const nodeRect = activeNode.getBoundingClientRect();
+
+      setIndicator({
+        left: nodeRect.left - wrapRect.left,
+        width: nodeRect.width,
+        ready: true,
+      });
+    }
+
+    measure();
+
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [activeValue]);
+
+  return (
+    <div className="border-b border-[#D6E1ED] px-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)]">
+      <div ref={wrapRef} className="relative flex h-10 items-center gap-7">
+        <span
+          aria-hidden="true"
+          className={[
+            "absolute bottom-[-1px] h-[2px] rounded-full bg-[#2563EB]",
+            "transition-[left,width,opacity] duration-[300ms]",
+            PREMIUM_EASE,
+            indicator.ready ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+          style={{
+            left: indicator.left,
+            width: indicator.width,
+          }}
+        />
+
+        {TOP_TABS.map((tab) => {
+          const active = activeValue === tab.value;
+
+          return (
+            <button
+              key={tab.value}
+              ref={(node) => {
+                if (node) tabRefs.current[tab.value] = node;
+              }}
+              type="button"
+              onClick={() => onChange?.(tab.value)}
+              aria-pressed={active}
+              className={[
+                "relative inline-flex h-10 items-center px-1 text-[12.5px] font-bold",
+                "transition-colors duration-[240ms]",
+                PREMIUM_EASE,
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
+                active ? "text-[#2563EB]" : "text-[#64748B] hover:text-[#0F172A]",
+              ].join(" ")}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -829,11 +896,11 @@ export default function InboxThreadListPanel({
                 title={searchOpen ? "Close search" : "Search conversations"}
                 className={[
                   "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
-                  "border-0 bg-transparent transition-[background-color,color,transform,opacity] duration-300",
+                  "border-0 bg-transparent transition-[background-color,color,opacity] duration-300",
                   PREMIUM_EASE,
                   searchOpen
-                    ? "pointer-events-none scale-95 opacity-0"
-                    : "pointer-events-auto scale-100 opacity-100",
+                    ? "pointer-events-none opacity-0"
+                    : "pointer-events-auto opacity-100",
                   localSearch.trim()
                     ? "text-[#2563EB]"
                     : "text-[#64748B] hover:bg-[#F3F7FB] hover:text-[#0F172A]",
@@ -846,22 +913,10 @@ export default function InboxThreadListPanel({
           </div>
         </div>
 
-        <div className="border-b border-[#D6E1ED] px-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)]">
-          <div className="flex h-10 items-center gap-7">
-            {TOP_TABS.map((tab) => {
-              const active = threadList?.filter === tab.value;
-
-              return (
-                <TopTabButton
-                  key={tab.value}
-                  active={active}
-                  label={tab.label}
-                  onClick={() => threadList?.setFilter?.(tab.value)}
-                />
-              );
-            })}
-          </div>
-        </div>
+        <TopTabs
+          activeValue={threadList?.filter || "all"}
+          onChange={threadList?.setFilter}
+        />
 
         {threadList?.deepLinkNotice ? (
           <div className="border-b border-[#D6E1ED] px-4 py-3 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">

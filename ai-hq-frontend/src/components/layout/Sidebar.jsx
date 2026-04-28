@@ -33,23 +33,43 @@ function formatBadgeCount(count) {
   return count > 99 ? "99+" : String(count);
 }
 
-function SidebarImageIcon({ src, collapsed = false, isActive = false }) {
+function SidebarImageIcon({ src, isActive = false }) {
   return (
-    <img
-      src={src}
-      alt=""
-      aria-hidden="true"
-      draggable="false"
-      className={cx(
-        "relative z-[2] select-none object-contain",
-        collapsed ? "h-[22px] w-[22px]" : "h-[21px] w-[21px]",
-        isActive ? "opacity-100" : "opacity-[0.84] group-hover:opacity-100"
-      )}
-      style={{
-        filter: isActive ? "saturate(1.04)" : "saturate(0.96)",
-        transition: `opacity 190ms ${SOFT_EASE}, filter 220ms ${SOFT_EASE}`,
-      }}
-    />
+    <span className="relative z-[2] flex h-6 w-6 shrink-0 items-center justify-center">
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={cx(
+          "block h-[21px] w-[21px] select-none object-contain",
+          isActive ? "opacity-100" : "opacity-[0.84] group-hover:opacity-100"
+        )}
+        style={{
+          filter: isActive ? "saturate(1.04)" : "saturate(0.96)",
+          transition: `opacity 190ms ${SOFT_EASE}, filter 220ms ${SOFT_EASE}`,
+        }}
+      />
+    </span>
+  );
+}
+
+function SidebarVectorIcon({ Icon, isActive = false }) {
+  if (!Icon) return null;
+
+  return (
+    <span className="relative z-[2] flex h-6 w-6 shrink-0 items-center justify-center">
+      <Icon
+        className={cx(
+          "block h-[21px] w-[21px] shrink-0",
+          isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
+        )}
+        strokeWidth={1.95}
+        style={{
+          transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
+        }}
+      />
+    </span>
   );
 }
 
@@ -69,12 +89,16 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
     >
       {({ isActive }) => (
         <div
-          className={cx(
-            "group relative flex items-center overflow-hidden",
-            collapsed ? "h-11 justify-center" : "h-10 gap-3 px-4"
-          )}
+          className="group relative grid h-10 items-center overflow-hidden px-[17px]"
           style={{
-            transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
+            gridTemplateColumns: collapsed ? "24px 0px" : "24px minmax(0,1fr)",
+            columnGap: collapsed ? "0px" : "12px",
+            transition: `
+              grid-template-columns 380ms ${SOFT_EASE},
+              column-gap 380ms ${SOFT_EASE},
+              color 190ms ${SOFT_EASE},
+              opacity 190ms ${SOFT_EASE}
+            `,
           }}
         >
           <span
@@ -110,34 +134,20 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           />
 
           {item.iconType === "image" && item.iconSrc ? (
-            <SidebarImageIcon
-              src={item.iconSrc}
-              collapsed={collapsed}
-              isActive={isActive}
-            />
-          ) : Icon ? (
-            <Icon
-              className={cx(
-                "relative z-[2] shrink-0",
-                collapsed ? "h-[22px] w-[22px]" : "h-[21px] w-[21px]",
-                isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
-              )}
-              strokeWidth={1.95}
-              style={{
-                transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
-              }}
-            />
-          ) : null}
+            <SidebarImageIcon src={item.iconSrc} isActive={isActive} />
+          ) : (
+            <SidebarVectorIcon Icon={Icon} isActive={isActive} />
+          )}
 
           <div
-            className={cx(
-              "relative z-[2] min-w-0 overflow-hidden",
-              collapsed
-                ? "max-w-0 translate-x-1 opacity-0"
-                : "max-w-[138px] opacity-100"
-            )}
+            className="relative z-[2] min-w-0 overflow-hidden"
             style={{
-              transition: `max-width 360ms ${SOFT_EASE}, opacity 230ms ${SOFT_EASE}, transform 360ms ${SOFT_EASE}`,
+              opacity: collapsed ? 0 : 1,
+              transform: collapsed ? "translateX(-2px)" : "translateX(0)",
+              transition: `
+                opacity 230ms ${SOFT_EASE},
+                transform 360ms ${SOFT_EASE}
+              `,
             }}
           >
             <div className="flex min-w-0 items-center gap-2">
@@ -195,8 +205,8 @@ function CollapseControl({ collapsed = false, onToggle }) {
       aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cx(
-        "group relative inline-flex items-center text-text-subtle hover:text-text",
-        collapsed ? "h-9 w-9 justify-center" : "h-9 gap-2 px-1"
+        "group relative inline-flex h-9 items-center text-text-subtle hover:text-text",
+        collapsed ? "w-9 justify-center" : "gap-2 px-1"
       )}
       style={{
         transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
@@ -219,8 +229,8 @@ function CollapseControl({ collapsed = false, onToggle }) {
   );
 }
 
-function SidebarBrandSpace({ collapsed = false }) {
-  return <div className={cx("shrink-0", collapsed ? "h-[76px]" : "h-[92px]")} />;
+function SidebarBrandSpace() {
+  return <div className="h-[92px] shrink-0" />;
 }
 
 function SidebarChromeLayer() {
@@ -291,7 +301,7 @@ function SidebarContent({
           </button>
         </div>
       ) : (
-        <SidebarBrandSpace collapsed={collapsed} />
+        <SidebarBrandSpace />
       )}
 
       <div className="sidebar-scroll flex-1 overflow-y-auto px-0 pb-4 pt-0">
