@@ -43,13 +43,13 @@ const EMPTY_READINESS_STATE = {
 
 const CONNECTOR_COPY = {
   website: {
-    summary: "Live site chat is ready for visitors.",
+    summary: "Website chat is configured and ready for live delivery.",
   },
   instagram: {
-    summary: "Instagram DMs are ready for automation.",
+    summary: "Instagram DM automation is ready.",
   },
   telegram: {
-    summary: "Telegram bot delivery is ready.",
+    summary: "Telegram bot and delivery are ready.",
   },
 };
 
@@ -96,7 +96,7 @@ function normalizeStatus(runtime = null) {
     raw.includes("required")
   ) {
     return {
-      label: "Needs setup",
+      label: "Needs attention",
       tone: "warning",
       connected: false,
       deliveryReady: false,
@@ -141,31 +141,38 @@ function resolvePrimaryAction(channel, runtime) {
   return { label: "Connect", mode: "details" };
 }
 
-function statusToneClasses(tone) {
-  if (tone === "success") {
-    return {
-      dot: "bg-[rgba(22,163,74,0.96)]",
-      text: "text-[rgba(22,163,74,0.96)]",
-      bg: "bg-[rgba(22,163,74,0.08)]",
-    };
-  }
+function StatusBadge({ tone, label }) {
+  const classes =
+    tone === "success"
+      ? "bg-emerald-50 text-emerald-700"
+      : tone === "warning"
+        ? "bg-amber-50 text-amber-700"
+        : "bg-slate-100 text-slate-600";
 
-  if (tone === "warning") {
-    return {
-      dot: "bg-[rgba(245,158,11,0.96)]",
-      text: "text-[rgba(180,83,9,0.96)]",
-      bg: "bg-[rgba(245,158,11,0.1)]",
-    };
-  }
-
-  return {
-    dot: "bg-[rgba(148,163,184,0.96)]",
-    text: "text-[rgba(100,116,139,0.96)]",
-    bg: "bg-[rgba(148,163,184,0.1)]",
-  };
+  return (
+    <div
+      className={[
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
+        "text-[11px] font-medium leading-none",
+        classes,
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "h-1.5 w-1.5 rounded-full",
+          tone === "success"
+            ? "bg-emerald-500"
+            : tone === "warning"
+              ? "bg-amber-500"
+              : "bg-slate-400",
+        ].join(" ")}
+      />
+      <span>{label}</span>
+    </div>
+  );
 }
 
-function TopActionButton({
+function HeaderActionButton({
   children,
   primary = false,
   disabled = false,
@@ -178,24 +185,12 @@ function TopActionButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex h-10 items-center justify-center gap-2 px-4",
-        "rounded-[10px] text-[12.5px] font-semibold tracking-[-0.01em]",
-        "transition-all duration-200 ease-out",
+        "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] px-4",
+        "text-[13px] font-medium transition-colors",
         primary
-          ? [
-              "bg-[rgb(var(--color-brand))] text-white",
-              "shadow-[0_18px_34px_-22px_rgba(46,96,255,0.7)]",
-              "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
-              "hover:shadow-[0_22px_40px_-22px_rgba(46,96,255,0.8)]",
-            ].join(" ")
-          : [
-              "bg-white text-[rgba(15,23,42,0.94)]",
-              "shadow-[0_16px_34px_-26px_rgba(15,23,42,0.28)]",
-              "hover:-translate-y-[1px] hover:shadow-[0_20px_42px_-26px_rgba(15,23,42,0.32)]",
-            ].join(" "),
-        disabled
-          ? "cursor-not-allowed opacity-50 hover:translate-y-0 hover:shadow-[0_16px_34px_-26px_rgba(15,23,42,0.18)]"
-          : "",
+          ? "bg-[rgb(var(--color-brand))] text-white hover:bg-[rgb(var(--color-brand-strong))]"
+          : "border border-[rgba(15,23,42,0.08)] bg-white text-slate-900 hover:bg-slate-50",
+        disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
     >
       <span>{children}</span>
@@ -213,38 +208,38 @@ function CompactHeader({
   onOpenInbox,
 }) {
   return (
-    <section className="pb-5">
+    <section className="pb-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-[rgba(100,116,139,0.88)]">
+        <div className="min-w-0">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             Channels
           </div>
 
-          <h1 className="text-[24px] font-semibold tracking-[-0.035em] text-[rgba(15,23,42,0.98)]">
+          <h1 className="text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
             Launch channels
           </h1>
 
-          <div className="mt-2 text-[12.5px] font-medium text-[rgba(100,116,139,0.94)]">
+          <div className="mt-2 text-[13px] text-slate-500">
             {readyCount}/{availableCount} ready
             {!truthReady ? (
-              <span className="ml-2 text-[rgba(180,83,9,0.96)]">
-                · truth pending
-              </span>
+              <span className="ml-2 text-amber-700">· truth pending</span>
             ) : null}
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <TopActionButton onClick={onOpenTruth}>Open truth</TopActionButton>
+        <div className="flex items-center gap-2">
+          <HeaderActionButton onClick={onOpenTruth}>
+            Open truth
+          </HeaderActionButton>
 
-          <TopActionButton
+          <HeaderActionButton
             primary
             disabled={!hasDeliveryReadyLaunchChannel}
             onClick={onOpenInbox}
-            icon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />}
+            icon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
           >
             Open inbox
-          </TopActionButton>
+          </HeaderActionButton>
         </div>
       </div>
     </section>
@@ -255,81 +250,49 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
   const status = normalizeStatus(runtime);
   const action = resolvePrimaryAction(channel, runtime);
-  const tone = statusToneClasses(status.tone);
   const summary = s(runtime?.summary || copy.summary) || copy.summary;
 
   return (
-    <article
-      className={[
-        "group relative min-h-[178px] overflow-hidden rounded-[14px] bg-white",
-        "px-5 py-5",
-        "shadow-[0_22px_52px_-34px_rgba(15,23,42,0.42)]",
-        "ring-1 ring-[rgba(15,23,42,0.045)]",
-        "transition-all duration-250 ease-out",
-        "hover:-translate-y-[4px]",
-        "hover:shadow-[0_30px_70px_-34px_rgba(15,23,42,0.5)]",
-        "hover:ring-[rgba(46,96,255,0.14)]",
-      ].join(" ")}
-    >
-      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(46,96,255,0.28)] to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+    <article className="rounded-[16px] border border-[rgba(15,23,42,0.08)] bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="shrink-0">
+            <ChannelIcon channel={channel} size="lg" />
+          </div>
 
-      <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-[16px] font-semibold tracking-[-0.02em] text-slate-950">
+              {channel.name}
+            </h2>
+          </div>
+        </div>
+
         <div className="shrink-0">
-          <ChannelIcon channel={channel} size="lg" />
-        </div>
-
-        <div
-          className={[
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1",
-            "text-[10.5px] font-semibold leading-none",
-            tone.bg,
-            tone.text,
-          ].join(" ")}
-        >
-          <span className={["h-1.5 w-1.5 rounded-full", tone.dot].join(" ")} />
-          <span>{status.label}</span>
+          <StatusBadge tone={status.tone} label={status.label} />
         </div>
       </div>
 
-      <div className="mt-4">
-        <h2 className="text-[17px] font-semibold leading-6 tracking-[-0.025em] text-[rgba(15,23,42,0.98)]">
-          {channel.name}
-        </h2>
+      <p className="mt-4 line-clamp-2 text-[13px] leading-6 text-slate-600">
+        {summary}
+      </p>
 
-        <p className="mt-2 line-clamp-2 max-w-[260px] text-[12.5px] font-medium leading-5 text-[rgba(100,116,139,0.94)]">
-          {summary}
-        </p>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between gap-3">
+      <div className="mt-4 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => onInspect?.(channel.id)}
-          className={[
-            "inline-flex items-center gap-1.5",
-            "text-[12px] font-semibold text-[rgb(var(--color-brand))]",
-            "transition-colors hover:text-[rgba(15,23,42,0.96)]",
-          ].join(" ")}
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[rgb(var(--color-brand))] transition-colors hover:text-slate-950"
         >
           <span>Details</span>
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
         </button>
 
         <button
           type="button"
           onClick={() => onRunPrimaryAction?.(channel, action)}
-          className={[
-            "inline-flex h-9 items-center justify-center gap-1.5 rounded-[9px]",
-            "bg-[rgb(var(--color-brand))] px-3.5",
-            "text-[12px] font-semibold tracking-[-0.01em] text-white",
-            "shadow-[0_16px_30px_-18px_rgba(46,96,255,0.7)]",
-            "transition-all duration-200 ease-out",
-            "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
-            "hover:shadow-[0_20px_34px_-18px_rgba(46,96,255,0.82)]",
-          ].join(" ")}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[rgb(var(--color-brand))] px-4 text-[13px] font-medium text-white transition-colors hover:bg-[rgb(var(--color-brand-strong))]"
         >
           <span>{action.label}</span>
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
         </button>
       </div>
     </article>
@@ -552,7 +515,7 @@ export default function ChannelCatalog() {
 
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
-      <PageCanvas className="max-w-[1240px] py-2">
+      <PageCanvas className="max-w-[1280px] py-2">
         <LoadingSurface title="Loading channels" />
       </PageCanvas>
     );
@@ -560,7 +523,7 @@ export default function ChannelCatalog() {
 
   return (
     <>
-      <PageCanvas className="max-w-[1240px] py-2">
+      <PageCanvas className="max-w-[1280px] py-2">
         <div className="space-y-4">
           {s(effectiveReadinessState.error) ? (
             <InlineNotice
@@ -574,7 +537,7 @@ export default function ChannelCatalog() {
           {hasDeliveryReadyLaunchChannel && !truthReady ? (
             <InlineNotice
               tone="warning"
-              title="Truth still needs approval."
+              title="Truth still needs approval"
               description="Approve truth before relying on live AI replies."
               compact
             />
@@ -589,7 +552,7 @@ export default function ChannelCatalog() {
             onOpenInbox={() => navigate("/inbox")}
           />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             {launchChannels.map((channel) => (
               <ChannelCard
                 key={channel.id}
