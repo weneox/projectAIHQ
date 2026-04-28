@@ -1,6 +1,5 @@
-﻿import { Dropdown } from "antd";
-import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+﻿import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { logoutUser } from "../../api/auth.js";
 import customerIcon from "../../assets/channels/customer.png";
 import {
@@ -228,6 +227,7 @@ function AskAiButton() {
 function WorkspaceControl({ notifications, workspaceMeta }) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const menuRef = useRef(null);
   const [session, setSession] = useState({
     actorName: "",
     userName: "",
@@ -263,6 +263,30 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointerDown(event) {
+      if (!menuRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -306,7 +330,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[262px] rounded-[18px] border border-white/80 bg-white/97 p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)] backdrop-blur-xl">
+    <div className="w-[262px] rounded-[18px] border border-white/80 bg-white/97 p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)] backdrop-blur-xl">
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
           <WorkspaceGlyph className="h-9 w-9 shrink-0 opacity-[0.96]" />
@@ -465,5 +489,6 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
+
 
 

@@ -450,6 +450,7 @@ export default function Inbox() {
     threads,
     setThreads,
     messages,
+    messagesThreadId,
     setMessages,
     selectedThread,
     setSelectedThread,
@@ -541,6 +542,15 @@ export default function Inbox() {
   const detailOpen =
     Boolean(selectedThread?.id) && detailThreadId === selectedThread?.id;
 
+  const selectedThreadId = s(selectedThread?.id);
+  const messagesInSync =
+    !selectedThreadId || s(messagesThreadId) === selectedThreadId;
+  const visibleThreadMessages = messagesInSync ? messages : [];
+  const detailPanelSurface = {
+    ...detailSurface,
+    loading: detailSurface.loading || Boolean(selectedThreadId && !messagesInSync),
+  };
+
   useEffect(() => {
     function onKeyDown(event) {
       if (event.key === "Escape") setDetailThreadId("");
@@ -619,9 +629,9 @@ export default function Inbox() {
           <div className="min-h-0 overflow-hidden bg-transparent">
             <InboxDetailPanel
               selectedThread={selectedThread}
-              messages={messages}
+              messages={visibleThreadMessages}
               outboundAttempts={threadAttemptSurface.attempts}
-              surface={detailSurface}
+              surface={detailPanelSurface}
               actionState={actionState}
               markRead={markRead}
               assignThread={assignThread}
@@ -676,6 +686,7 @@ export default function Inbox() {
     </div>
   );
 }
+
 
 
 

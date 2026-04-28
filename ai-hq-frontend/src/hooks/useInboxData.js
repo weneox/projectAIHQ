@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
 import { getLeadByThreadId } from "../api/leads.js";
 import { useActionState } from "./useActionState.js";
@@ -54,6 +54,8 @@ export function useInboxData({
   const requestScopePrefix = tenantScope ? `tenant:${tenantScope}:` : "";
   const actionState = useActionState();
   const [messages, setMessages] = useState([]);
+  const [messagesThreadId, setMessagesThreadId] = useState("");
+  const messagesRequestSeqRef = useRef(0);
   const [selectedThread, setSelectedThread] = useState(null);
   const [relatedLead, setRelatedLead] = useState(null);
 
@@ -90,6 +92,8 @@ export function useInboxData({
       dbDisabled: false,
     });
     setMessages([]);
+    setMessagesThreadId("");
+    messagesRequestSeqRef.current += 1;
     setSelectedThread(null);
     setRelatedLead(null);
     setThreadDetailError("");
@@ -190,26 +194,47 @@ export function useInboxData({
   }, [requestScopePrefix, requireTenantScope, setData, tenantScope]);
 
   const loadMessages = useCallback(async (threadId) => {
-    if (!threadId) {
+    const safeThreadId = s(threadId);
+    const requestSeq = messagesRequestSeqRef.current + 1;
+    messagesRequestSeqRef.current = requestSeq;
+
+    if (!safeThreadId) {
+      setMessagesThreadId("");
       setMessages([]);
+      setLoadingMessages(false);
       return;
     }
-    if (requireTenantScope && !tenantScope) return;
+
+    if (requireTenantScope && !tenantScope) {
+      setMessagesThreadId("");
+      setMessages([]);
+      setLoadingMessages(false);
+      return;
+    }
+
+    setMessagesThreadId(safeThreadId);
+    setMessages([]);
+    setLoadingMessages(true);
+    setMessagesError("");
 
     try {
-      setLoadingMessages(true);
-      setMessagesError("");
       const j = await withSharedInboxRequest(
-        `${requestScopePrefix}threads:messages:${threadId}`,
-        () =>
-          apiGet(`/api/inbox/threads/${threadId}/messages?limit=200`)
+        `${requestScopePrefix}threads:messages:${safeThreadId}`,
+        () => apiGet(`/api/inbox/threads/${safeThreadId}/messages?limit=200`)
       );
+
+      if (messagesRequestSeqRef.current !== requestSeq) return;
+
       setMessages(Array.isArray(j?.messages) ? j.messages : []);
     } catch (e) {
+      if (messagesRequestSeqRef.current !== requestSeq) return;
+
       setMessages([]);
       setMessagesError(String(e?.message || e || "Failed to load messages"));
     } finally {
-      setLoadingMessages(false);
+      if (messagesRequestSeqRef.current === requestSeq) {
+        setLoadingMessages(false);
+      }
     }
   }, [requestScopePrefix, requireTenantScope, tenantScope]);
 
@@ -452,6 +477,7 @@ export function useInboxData({
         dbDisabled: Boolean(prev?.dbDisabled),
       })),
     messages,
+    messagesThreadId,
     setMessages,
     selectedThread,
     setSelectedThread,
@@ -501,3 +527,4 @@ export function useInboxData({
     sendOperatorReply,
   };
 }
+

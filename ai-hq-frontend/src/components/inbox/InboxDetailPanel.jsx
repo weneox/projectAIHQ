@@ -465,7 +465,7 @@ export default function InboxDetailPanel({
               ref={scrollViewportRef}
               className="h-full overflow-y-auto pb-[300px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {surface?.loading && !hasThread ? (
+              {surface?.loading ? (
                 <InboxDetailSkeleton />
               ) : !hasThread ? (
                 <EmptyConversationState />
@@ -527,4 +527,5 @@ export default function InboxDetailPanel({
     </section>
   );
 }
+
 
