@@ -556,8 +556,11 @@ export default function Inbox() {
     [readinessState.meta, readinessState.telegram, readinessState.website]
   );
 
-  const hasConnectedLaunchChannel = useMemo(
-    () => launchChannels.some((item) => item?.connected === true),
+  const hasDeliveryReadyLaunchChannel = useMemo(
+    () =>
+      launchChannels.some(
+        (item) => item?.connected === true && item?.deliveryReady === true
+      ),
     [launchChannels]
   );
 
@@ -566,7 +569,7 @@ export default function Inbox() {
     [readinessState.truth]
   );
 
-  const showTruthApprovalNotice = hasConnectedLaunchChannel && !truthReady;
+  const showTruthApprovalNotice = hasDeliveryReadyLaunchChannel && !truthReady;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
@@ -609,7 +612,7 @@ export default function Inbox() {
               threadList={threadList}
               selectedThreadId={selectedThread?.id || ""}
               searchQuery=""
-              launchChannelConnected={hasConnectedLaunchChannel}
+              launchChannelConnected={hasDeliveryReadyLaunchChannel}
             />
           </div>
 
@@ -631,7 +634,7 @@ export default function Inbox() {
               }}
               automationControl={inboxAutomationControl}
               onToggleAutomation={handleToggleInboxAutonomy}
-              launchChannelConnected={hasConnectedLaunchChannel}
+              launchChannelConnected={hasDeliveryReadyLaunchChannel}
               onOpenChannels={() => navigate("/channels")}
               composer={
                 <InboxComposer
@@ -673,4 +676,6 @@ export default function Inbox() {
     </div>
   );
 }
+
+
 

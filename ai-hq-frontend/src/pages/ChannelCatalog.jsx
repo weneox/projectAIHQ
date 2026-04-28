@@ -76,13 +76,25 @@ function buildRuntimeMeta(channel, readinessState) {
 function normalizeStatus(runtime = null) {
   const raw = s(runtime?.statusLabel).toLowerCase();
 
-  if (runtime?.connected === true) {
+  if (runtime?.connected === true && runtime?.deliveryReady === true) {
     return {
       label: "Connected",
       textClass: "text-[rgba(22,163,74,0.96)]",
       dotClass: "bg-[rgba(22,163,74,0.96)]",
       connected: true,
+      deliveryReady: true,
       blocked: false,
+    };
+  }
+
+  if (runtime?.connected === true) {
+    return {
+      label: "Delivery blocked",
+      textClass: "text-[rgba(180,83,9,0.96)]",
+      dotClass: "bg-[rgba(245,158,11,0.96)]",
+      connected: true,
+      deliveryReady: false,
+      blocked: true,
     };
   }
 
@@ -97,6 +109,7 @@ function normalizeStatus(runtime = null) {
       textClass: "text-[rgba(180,83,9,0.96)]",
       dotClass: "bg-[rgba(245,158,11,0.96)]",
       connected: false,
+      deliveryReady: false,
       blocked: true,
     };
   }
@@ -107,6 +120,7 @@ function normalizeStatus(runtime = null) {
       textClass: "text-[rgba(180,83,9,0.96)]",
       dotClass: "bg-[rgba(245,158,11,0.96)]",
       connected: false,
+      deliveryReady: false,
       blocked: false,
     };
   }
@@ -127,7 +141,7 @@ function resolveTruthReady(truth = null) {
 function resolveChannelPrimaryAction(channel, runtime) {
   const status = normalizeStatus(runtime);
 
-  if (status.connected) {
+  if (status.connected && status.deliveryReady) {
     return {
       label: "Open inbox",
       mode: "inbox",
@@ -149,9 +163,9 @@ function resolveChannelPrimaryAction(channel, runtime) {
 
 function CompactHeader({
   truthReady,
-  connectedCount,
+  readyCount,
   availableCount,
-  hasConnectedLaunchChannel,
+  hasDeliveryReadyLaunchChannel,
   onOpenTruth,
   onOpenInbox,
 }) {
@@ -176,7 +190,7 @@ function CompactHeader({
           </h1>
 
           <div className="mt-2 text-[13px] leading-6 text-[rgba(100,116,139,0.96)]">
-            {availableCount} available / {connectedCount} connected
+            {availableCount} available / {readyCount} ready
           </div>
         </div>
 
@@ -196,7 +210,7 @@ function CompactHeader({
             size="sm"
             onClick={onOpenInbox}
             rightIcon={<ArrowRight className="h-4 w-4" />}
-            disabled={!hasConnectedLaunchChannel}
+            disabled={!hasDeliveryReadyLaunchChannel}
             className="!h-10 !rounded-[12px] !px-3.5"
           >
             Open inbox
@@ -445,7 +459,7 @@ export default function ChannelCatalog() {
 
   const launchChannels = useMemo(() => resolveLaunchChannels(), []);
 
-  const connectedCount = useMemo(() => {
+  const readyCount = useMemo(() => {
     const items = [
       effectiveReadinessState.website,
       effectiveReadinessState.meta,
@@ -453,7 +467,8 @@ export default function ChannelCatalog() {
     ];
 
     return items.reduce(
-      (sum, item) => (item?.connected === true ? sum + 1 : sum),
+      (sum, item) =>
+        item?.connected === true && item?.deliveryReady === true ? sum + 1 : sum,
       0
     );
   }, [
@@ -462,7 +477,7 @@ export default function ChannelCatalog() {
     effectiveReadinessState.telegram,
   ]);
 
-  const hasConnectedLaunchChannel = connectedCount > 0;
+  const hasDeliveryReadyLaunchChannel = readyCount > 0;
   const truthReady = resolveTruthReady(effectiveReadinessState.truth);
 
   function updateSelectedChannel(channelId = "") {
@@ -534,7 +549,7 @@ export default function ChannelCatalog() {
           />
         ) : null}
 
-        {hasConnectedLaunchChannel && !truthReady ? (
+        {hasDeliveryReadyLaunchChannel && !truthReady ? (
           <InlineNotice
             tone="warning"
             title="A channel is connected, but truth still needs approval."
@@ -545,9 +560,9 @@ export default function ChannelCatalog() {
 
         <CompactHeader
           truthReady={truthReady}
-          connectedCount={connectedCount}
+          readyCount={readyCount}
           availableCount={launchChannels.length}
-          hasConnectedLaunchChannel={hasConnectedLaunchChannel}
+          hasDeliveryReadyLaunchChannel={hasDeliveryReadyLaunchChannel}
           onOpenTruth={() => navigate("/truth")}
           onOpenInbox={() => navigate("/inbox")}
         />
@@ -582,4 +597,5 @@ export default function ChannelCatalog() {
     </>
   );
 }
+
 
