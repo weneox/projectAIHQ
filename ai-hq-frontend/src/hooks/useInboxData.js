@@ -136,6 +136,8 @@ export function useInboxData({
         } else {
           setSelectedThread(null);
           setMessages([]);
+          setMessagesThreadId("");
+          messagesRequestSeqRef.current += 1;
           setRelatedLead(null);
           setThreadDetailError("");
           setMessagesError("");
@@ -527,4 +529,5 @@ export function useInboxData({
     sendOperatorReply,
   };
 }
+
 

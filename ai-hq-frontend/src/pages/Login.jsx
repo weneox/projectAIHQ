@@ -147,7 +147,7 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
           {companyName}
         </div>
         <div className="mt-1 text-[12px] text-text-muted">
-          {s(account?.tenantKey)} Â· {role}
+          {s(account?.tenantKey)} · {role}
         </div>
       </div>
 
@@ -456,7 +456,7 @@ export default function Login() {
             <div className="pt-1 text-center text-[14px] text-text-muted">
               {isSignupMode
                 ? "Already have an account?"
-                : "Donâ€™t have an account?"}{" "}
+                : "Don’t have an account?"}{" "}
               <button
                 type="button"
                 className="font-semibold text-text underline underline-offset-2 transition-colors hover:text-brand"
@@ -472,5 +472,6 @@ export default function Login() {
     </div>
   );
 }
+
 
 

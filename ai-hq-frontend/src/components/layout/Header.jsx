@@ -379,17 +379,12 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   return (
-    <Dropdown
-      trigger={["click"]}
-      open={open}
-      onOpenChange={setOpen}
-      placement="bottomRight"
-      dropdownRender={() => overlay}
-    >
+    <div ref={menuRef} className="relative">
       <button
         type="button"
         aria-label={displayName || "Workspace"}
         aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
         className="flex h-8 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
       >
         <WorkspaceGlyph className="h-[17px] w-[17px] shrink-0 opacity-[0.96]" />
@@ -412,7 +407,13 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           strokeWidth={2}
         />
       </button>
-    </Dropdown>
+
+      {open ? (
+        <div className="absolute right-0 top-[calc(100%+8px)] z-[90]">
+          {overlay}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -489,6 +490,3 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
-
-
-
