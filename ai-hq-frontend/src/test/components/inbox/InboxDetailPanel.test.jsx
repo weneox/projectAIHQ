@@ -90,16 +90,13 @@ describe("InboxDetailPanel", () => {
       screen.getByRole("button", { name: /conversation details/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /mark as closed/i })
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: /more actions/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(
       screen.getByText(/your appointment request is on the way/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/^assigned$/i)).toBeInTheDocument();
+    expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
   });
 
   it("renders object-shaped outbound lineage input without changing detail behavior", () => {

@@ -8,11 +8,11 @@ function renderComposer(props = {}) {
     value: "",
     onChange: vi.fn(),
     onSend: vi.fn(),
+    onVoice: vi.fn(),
     disabled: false,
     sending: false,
-    showReturnToAi: false,
-    onReturnToAi: vi.fn(),
     submitLabel: "Send",
+    voiceLabel: "Voice message",
   };
 
   const merged = { ...baseProps, ...props };
@@ -95,18 +95,19 @@ describe("InboxComposer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("shows return to AI when enabled", () => {
-    const onReturnToAi = vi.fn();
+  it("shows voice action when the composer is empty", () => {
+    const onVoice = vi.fn();
 
     renderComposer({
-      showReturnToAi: true,
-      onReturnToAi,
+      value: "",
+      onVoice,
+      voiceLabel: "Voice message",
     });
 
-    const button = screen.getByRole("button", { name: /return to ai/i });
+    const button = screen.getByRole("button", { name: /voice message/i });
     expect(button).toBeInTheDocument();
 
     fireEvent.click(button);
-    expect(onReturnToAi).toHaveBeenCalledTimes(1);
+    expect(onVoice).toHaveBeenCalledTimes(1);
   });
 });

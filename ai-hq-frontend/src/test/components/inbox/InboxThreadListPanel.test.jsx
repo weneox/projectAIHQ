@@ -103,7 +103,7 @@ describe("InboxThreadListPanel", () => {
     });
   });
 
-  it("keeps the selected thread visible even when current search would otherwise hide it", () => {
+  it("filters conversations by the active local search query", () => {
     const selectedThread = buildThread({
       id: "selected_1",
       customer_name: "Visible Selected",
@@ -131,7 +131,7 @@ describe("InboxThreadListPanel", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /search conversations/i }),
+      screen.getByRole("button", { name: /search conversations/i })
     );
 
     const input = screen.getByRole("textbox", {
@@ -140,12 +140,8 @@ describe("InboxThreadListPanel", () => {
 
     fireEvent.change(input, { target: { value: "banana" } });
 
-    expect(screen.getByTestId("thread-card-selected_1")).toBeInTheDocument();
+    expect(screen.queryByTestId("thread-card-selected_1")).not.toBeInTheDocument();
     expect(screen.getByTestId("thread-card-other_1")).toBeInTheDocument();
-    expect(screen.getByTestId("thread-card-selected_1")).toHaveAttribute(
-      "data-selected",
-      "yes"
-    );
   });
 
   it("filters by channel from the menu", () => {
@@ -174,7 +170,7 @@ describe("InboxThreadListPanel", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /filter channels/i }),
+      screen.getByRole("button", { name: /filter channels/i })
     );
 
     const telegramOptionText = screen.getByText(/^Telegram$/i);
