@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -31,6 +31,7 @@ import {
 } from "../lib/readinessViewModel.js";
 import {
   InlineNotice,
+  LoadingSurface,
   SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
 
@@ -567,6 +568,15 @@ export default function Inbox() {
 
   const showTruthApprovalNotice = hasConnectedLaunchChannel && !truthReady;
   const surfaceNotice = buildSurfaceNotice(surface);
+  const inboxInitializing = !workspace.ready || readinessState.loading;
+
+  if (inboxInitializing) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
+        <LoadingSurface title="Loading inbox" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
@@ -663,3 +673,4 @@ export default function Inbox() {
     </div>
   );
 }
+
