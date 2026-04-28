@@ -370,4 +370,4 @@ function InboxComposer({
   );
 }
 
-export default memo(InboxComposer);
+export default memo(InboxComposer);   
