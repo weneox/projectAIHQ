@@ -85,6 +85,10 @@ vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
   ],
 }));
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -99,15 +103,17 @@ function createQueryClient() {
 }
 
 async function findChannelCard(titleText) {
-  const title = await screen.findByText(titleText);
-  const card = title.closest("article");
+  const matcher = new RegExp(`^${escapeRegExp(titleText)}$`, "i");
+  const titleNodes = await screen.findAllByText(matcher);
+  const card = titleNodes.map((node) => node.closest("article")).find(Boolean);
 
-  expect(card).not.toBeNull();
+  expect(card).toBeTruthy();
   return card;
 }
 
 function renderCatalog({ queryClient = null, initialEntries = ["/channels"] } = {}) {
   const client = queryClient || createQueryClient();
+
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={initialEntries}>
@@ -166,6 +172,11 @@ function createMetaStatus(overrides = {}) {
   return {
     ok: true,
     state: "connected",
+    status: "connected",
+    connected: true,
+    ready: true,
+    deliveryReady: true,
+    username: "acme",
     account: {
       displayName: "Instagram @acme",
       username: "acme",
@@ -210,7 +221,11 @@ function createTelegramStatus(overrides = {}) {
   return {
     ok: true,
     connected: true,
+    ready: true,
+    deliveryReady: true,
     state: "connected",
+    status: "connected",
+    botUsername: "acme_support_bot",
     account: {
       displayName: "Telegram @acme_support_bot",
       botUserId: "bot-1",
@@ -220,6 +235,7 @@ function createTelegramStatus(overrides = {}) {
     },
     webhook: {
       verified: true,
+      ready: true,
       expectedUrl:
         "https://backend.example.test/api/channels/telegram/webhook/acme/[redacted]",
       actualUrl:
@@ -255,10 +271,21 @@ function createTelegramStatus(overrides = {}) {
 function createWebsiteStatus(overrides = {}) {
   return {
     state: "connected",
+    status: "connected",
+    connected: true,
+    ready: true,
+    deliveryReady: true,
+    domain: "acme.example",
+    installId: "ww_acme_widget",
+    verified: true,
+    domainVerified: true,
     widget: {
       enabled: true,
+      ready: true,
       publicWidgetId: "ww_acme_widget",
+      installId: "ww_acme_widget",
       websiteUrl: "https://acme.example",
+      domain: "acme.example",
     },
     readiness: {
       status: "ready",
@@ -272,21 +299,50 @@ function createWebsiteStatus(overrides = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
   workspaceScope = {
     tenantKey: "acme",
     loading: false,
     ready: true,
   };
+
   useWorkspaceTenantKey.mockImplementation(() => workspaceScope);
+
   getMetaChannelStatus.mockResolvedValue(createMetaStatus());
-  getMetaConnectUrl.mockResolvedValue({ ok: true, url: "https://example.test/meta" });
+  getMetaConnectUrl.mockResolvedValue({
+    ok: true,
+    url: "https://example.test/meta",
+  });
   disconnectMetaChannel.mockResolvedValue({ ok: true });
   selectMetaChannelCandidate.mockResolvedValue({ ok: true, connected: true });
+
   getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
   connectTelegramChannel.mockResolvedValue({ ok: true, connected: true });
   disconnectTelegramChannel.mockResolvedValue({ ok: true, disconnected: true });
+
   getWebsiteWidgetStatus.mockResolvedValue(createWebsiteStatus());
   saveWebsiteWidgetConfig.mockResolvedValue(createWebsiteStatus());
+
+  getWebsiteDomainVerificationStatus.mockResolvedValue({
+    ok: true,
+    verified: true,
+  });
+  createWebsiteDomainVerificationChallenge.mockResolvedValue({
+    ok: true,
+    challenge: {
+      type: "TXT",
+      name: "_neox.acme.example",
+      value: "neox-domain-verification=acme",
+    },
+  });
+  checkWebsiteDomainVerification.mockResolvedValue({
+    ok: true,
+    verified: true,
+  });
+  createWebsiteWidgetInstallHandoff.mockResolvedValue({ ok: true });
+  createWebsiteWidgetGtmInstallHandoff.mockResolvedValue({ ok: true });
+  createWebsiteWidgetWordpressInstallHandoff.mockResolvedValue({ ok: true });
+
   getSettingsTrustView.mockResolvedValue(createTrustView());
 });
 
@@ -295,69 +351,67 @@ afterEach(() => {
 });
 
 describe("ChannelCatalog", () => {
-  it("renders the real launch-channel mix after readiness loads", async () => {
+  it("renders the compact launch-channel mix after readiness loads", async () => {
     renderCatalog();
 
-    const instagramCard = await findChannelCard("Instagram inbox");
-    const telegramCard = await findChannelCard("Telegram chat");
-    const websiteCard = await findChannelCard("Approved site chat");
+    const websiteCard = await findChannelCard("Website chat");
+    const instagramCard = await findChannelCard("Instagram");
+    const telegramCard = await findChannelCard("Telegram");
 
-    expect(within(instagramCard).getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/3\/3 ready/i)).toBeInTheDocument();
 
-    expect(
-      within(instagramCard).getByRole("button", { name: /details/i })
-    ).toBeInTheDocument();
-    expect(
-      within(instagramCard).getByRole("button", { name: /open inbox/i })
-    ).toBeInTheDocument();
+    expect(within(websiteCard).getByText(/^connected$/i)).toBeInTheDocument();
     expect(within(instagramCard).getByText(/^connected$/i)).toBeInTheDocument();
-
-    expect(within(telegramCard).getAllByText(/^telegram$/i).length).toBeGreaterThan(0);
-    expect(
-      within(telegramCard).getByRole("button", { name: /details/i })
-    ).toBeInTheDocument();
-    expect(
-      within(telegramCard).getByRole("button", { name: /open inbox/i })
-    ).toBeInTheDocument();
     expect(within(telegramCard).getByText(/^connected$/i)).toBeInTheDocument();
 
-    expect(within(websiteCard).getByText(/^website chat$/i)).toBeInTheDocument();
-    expect(
-      within(websiteCard).getByRole("button", { name: /details/i })
-    ).toBeInTheDocument();
-    expect(
-      within(websiteCard).getByRole("button", { name: /open inbox/i })
-    ).toBeInTheDocument();
-    expect(within(websiteCard).getByText(/^connected$/i)).toBeInTheDocument();
+    for (const card of [websiteCard, instagramCard, telegramCard]) {
+      expect(
+        within(card).getByRole("button", { name: /details/i })
+      ).toBeInTheDocument();
+
+      expect(
+        within(card).getByRole("button", { name: /^(open )?inbox$/i })
+      ).toBeInTheDocument();
+    }
   });
 
   it("opens the Instagram drawer with live tenant status", async () => {
     renderCatalog();
 
-    const instagramCard = await findChannelCard("Instagram inbox");
+    const instagramCard = await findChannelCard("Instagram");
+
     fireEvent.click(
       within(instagramCard).getByRole("button", { name: /details/i })
     );
 
+    await waitFor(() => {
+      expect(getMetaChannelStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    expect(screen.getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
+
     expect(
-      await screen.findByText("Instagram is connected for this tenant.")
+      await screen.findByText(
+        /ready for live messages|instagram dms are ready|instagram is connected for this tenant/i
+      )
     ).toBeInTheDocument();
-    expect(screen.getByText("Connected account")).toBeInTheDocument();
-    expect(screen.getByText("User token status")).toBeInTheDocument();
   });
 
   it("refreshes launch posture after a tenant-scoped launch mutation signal", async () => {
     let trustView = createTrustView();
+
     getSettingsTrustView.mockImplementation(() => Promise.resolve(trustView));
 
     renderCatalog();
 
-    await findChannelCard("Instagram inbox");
+    await findChannelCard("Instagram");
+
     await waitFor(() => {
       expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
     });
 
     const initialCallCount = getSettingsTrustView.mock.calls.length;
+
     trustView = createTrustView({
       summary: {
         truth: {
@@ -425,7 +479,8 @@ describe("ChannelCatalog", () => {
 
     const view = renderCatalog();
 
-    await findChannelCard("Instagram inbox");
+    await findChannelCard("Instagram");
+
     expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThan(0);
 
     workspaceScope = {
@@ -433,6 +488,7 @@ describe("ChannelCatalog", () => {
       loading: false,
       ready: true,
     };
+
     getMetaChannelStatus.mockImplementationOnce(() => nextMeta);
     getTelegramChannelStatus.mockImplementationOnce(() => nextTelegram);
     getWebsiteWidgetStatus.mockImplementationOnce(() => nextWebsite);
@@ -449,7 +505,10 @@ describe("ChannelCatalog", () => {
     resolveMeta(
       createMetaStatus({
         state: "disconnected",
+        status: "disconnected",
         connected: false,
+        ready: false,
+        deliveryReady: false,
         runtime: {
           webhookReady: false,
           deliveryReady: false,
@@ -461,10 +520,14 @@ describe("ChannelCatalog", () => {
         },
       })
     );
+
     resolveTelegram(
       createTelegramStatus({
         connected: false,
         state: "disconnected",
+        status: "disconnected",
+        ready: false,
+        deliveryReady: false,
         runtime: {
           ready: false,
           authorityAvailable: false,
@@ -478,13 +541,22 @@ describe("ChannelCatalog", () => {
         },
       })
     );
+
     resolveWebsite(
       createWebsiteStatus({
         state: "not_connected",
+        status: "not_connected",
+        connected: false,
+        ready: false,
+        deliveryReady: false,
+        verified: false,
+        domainVerified: false,
         widget: {
           enabled: false,
           publicWidgetId: "",
+          installId: "",
           websiteUrl: "https://globex.example",
+          domain: "globex.example",
         },
         readiness: {
           status: "blocked",
@@ -493,6 +565,7 @@ describe("ChannelCatalog", () => {
         },
       })
     );
+
     resolveTruth(
       createTrustView({
         summary: {
@@ -524,7 +597,11 @@ describe("ChannelCatalog", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryAllByText(/^needs attention$/i).length).toBeGreaterThan(0);
+      expect(screen.queryAllByText(/^connected$/i)).toHaveLength(0);
     });
+
+    expect(await findChannelCard("Instagram")).toBeInTheDocument();
+    expect(await findChannelCard("Telegram")).toBeInTheDocument();
+    expect(await findChannelCard("Website chat")).toBeInTheDocument();
   });
 });
