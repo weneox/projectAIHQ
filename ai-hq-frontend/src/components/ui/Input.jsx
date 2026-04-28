@@ -6,13 +6,14 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[15px]",
-        height: "h-[46px]",
-        input: "text-[14.5px] font-medium tracking-[-0.012em]",
+        outer: "ui-radius-control-outer",
+        inner: "ui-radius-control-inner",
+        height: "h-[48px]",
+        input: "text-[14.5px] font-semibold tracking-[-0.012em]",
         textareaWrap: "px-4 py-3.5",
-        textarea: "min-h-[136px] text-[14.5px] font-medium leading-6 tracking-[-0.012em]",
+        textarea: "min-h-[136px] text-[14.5px] font-semibold leading-6 tracking-[-0.012em]",
         selectWrap: "px-4",
-        select: "h-[46px] pr-10 text-[14.5px] font-medium tracking-[-0.012em]",
+        select: "h-[48px] pr-10 text-[14.5px] font-semibold tracking-[-0.012em]",
         leftInset: "left-4",
         rightInset: "right-3.5",
         padLeftBase: "pl-4",
@@ -24,13 +25,14 @@ function resolveAppearance(appearance = "default") {
 
     case "quiet":
       return {
-        shell: "rounded-[13px]",
-        height: "h-[40px]",
-        input: "text-[13.5px] font-medium tracking-[-0.01em]",
+        outer: "ui-radius-control-outer",
+        inner: "ui-radius-control-inner",
+        height: "h-[42px]",
+        input: "text-[13.5px] font-semibold tracking-[-0.01em]",
         textareaWrap: "px-3.5 py-3",
-        textarea: "min-h-[112px] text-[13.5px] font-medium leading-6 tracking-[-0.01em]",
+        textarea: "min-h-[112px] text-[13.5px] font-semibold leading-6 tracking-[-0.01em]",
         selectWrap: "px-3.5",
-        select: "h-[40px] pr-9 text-[13.5px] font-medium tracking-[-0.01em]",
+        select: "h-[42px] pr-9 text-[13.5px] font-semibold tracking-[-0.01em]",
         leftInset: "left-3.5",
         rightInset: "right-3",
         padLeftBase: "pl-3.5",
@@ -42,13 +44,14 @@ function resolveAppearance(appearance = "default") {
 
     case "large":
       return {
-        shell: "rounded-[17px]",
+        outer: "ui-radius-control-outer",
+        inner: "ui-radius-control-inner",
         height: "h-[54px]",
-        input: "text-[15.5px] font-medium tracking-[-0.015em]",
+        input: "text-[15.5px] font-semibold tracking-[-0.015em]",
         textareaWrap: "px-4 py-4",
-        textarea: "min-h-[148px] text-[15px] font-medium leading-7 tracking-[-0.012em]",
+        textarea: "min-h-[148px] text-[15px] font-semibold leading-7 tracking-[-0.012em]",
         selectWrap: "px-4",
-        select: "h-[54px] pr-11 text-[15.5px] font-medium tracking-[-0.015em]",
+        select: "h-[54px] pr-11 text-[15.5px] font-semibold tracking-[-0.015em]",
         leftInset: "left-4",
         rightInset: "right-4",
         padLeftBase: "pl-4",
@@ -60,13 +63,14 @@ function resolveAppearance(appearance = "default") {
 
     default:
       return {
-        shell: "rounded-[14px]",
-        height: "h-[42px]",
-        input: "text-[14px] font-medium tracking-[-0.01em]",
+        outer: "ui-radius-control-outer",
+        inner: "ui-radius-control-inner",
+        height: "h-[46px]",
+        input: "text-[14px] font-semibold tracking-[-0.01em]",
         textareaWrap: "px-3.5 py-3.5",
-        textarea: "min-h-[124px] text-[14px] font-medium leading-6 tracking-[-0.01em]",
+        textarea: "min-h-[124px] text-[14px] font-semibold leading-6 tracking-[-0.01em]",
         selectWrap: "px-3.5",
-        select: "h-[42px] pr-10 text-[14px] font-medium tracking-[-0.01em]",
+        select: "h-[46px] pr-10 text-[14px] font-semibold tracking-[-0.01em]",
         leftInset: "left-3.5",
         rightInset: "right-3.5",
         padLeftBase: "pl-3.5",
@@ -78,35 +82,37 @@ function resolveAppearance(appearance = "default") {
   }
 }
 
-function surfaceClass({ disabled, readOnly, invalid }) {
-  if (disabled) {
-    return [
-      "border-[rgba(var(--color-line-soft),0.95)]",
-      "bg-surface-subtle text-text-subtle opacity-75",
-      "shadow-none",
-    ].join(" ");
-  }
+function borderLayerClass({ disabled, readOnly, invalid }) {
+  if (disabled) return "bg-line-soft";
+  if (invalid) return "bg-[rgba(var(--color-danger),0.42)]";
+  if (readOnly) return "bg-line-soft";
 
+  return [
+    "bg-[rgb(var(--color-line))]",
+    "group-hover/field:bg-[rgb(var(--color-line-strong))]",
+    "group-focus-within/field:bg-[rgba(var(--color-brand),0.72)]",
+  ].join(" ");
+}
+
+function outerShadowClass({ disabled, readOnly, invalid }) {
+  if (disabled) return "shadow-none opacity-75";
   if (invalid) {
-    return [
-      "border-[rgba(var(--color-danger),0.42)] bg-surface",
-      "shadow-[0_0_0_4px_rgba(var(--color-danger),0.06)]",
-    ].join(" ");
+    return "shadow-[0_0_0_3px_rgba(var(--color-danger),0.06),0_18px_40px_-38px_rgba(15,23,42,0.24)]";
   }
-
   if (readOnly) {
-    return [
-      "border-line-soft bg-surface-muted",
-      "shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
-    ].join(" ");
+    return "shadow-[0_1px_0_rgba(255,255,255,0.94)_inset]";
   }
 
   return [
-    "border-line bg-surface",
-    "shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_14px_32px_-30px_rgba(15,23,42,0.28)]",
-    "hover:border-line-strong hover:bg-surface",
-    "focus-within:border-brand focus-within:shadow-[var(--focus-ring),0_18px_38px_-32px_rgba(46,96,255,0.42)]",
+    "shadow-[0_12px_30px_-28px_rgba(15,23,42,0.24)]",
+    "focus-within:shadow-[0_0_0_3px_rgba(46,96,255,0.06),0_18px_38px_-30px_rgba(46,96,255,0.20)]",
   ].join(" ");
+}
+
+function innerSurfaceClass({ disabled, readOnly }) {
+  if (disabled) return "bg-surface-subtle";
+  if (readOnly) return "bg-surface-muted";
+  return "bg-surface";
 }
 
 function FieldShell({
@@ -122,14 +128,31 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "ui-field-shell relative w-full overflow-hidden border-[1.5px]",
-        "transition-[border-color,background-color,box-shadow] duration-base ease-premium",
-        view.shell,
-        surfaceClass({ disabled, readOnly, invalid }),
+        "ui-field-shell group/field relative w-full overflow-hidden bg-white p-[1.5px]",
+        "transition-[box-shadow,opacity] duration-base ease-premium",
+        view.outer,
+        outerShadowClass({ disabled, readOnly, invalid }),
         className
       )}
     >
-      {children}
+      <div
+        aria-hidden="true"
+        className={cx(
+          "absolute inset-0 transition-colors duration-base ease-premium",
+          view.outer,
+          borderLayerClass({ disabled, readOnly, invalid })
+        )}
+      />
+
+      <div
+        className={cx(
+          "relative z-[1] h-full w-full overflow-hidden",
+          view.inner,
+          innerSurfaceClass({ disabled, readOnly })
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -149,8 +172,8 @@ function ControlIconSlot({ children, className }) {
   return (
     <span
       className={cx(
-        "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium",
-        "group-focus-within:text-brand",
+        "pointer-events-none absolute top-1/2 z-[2] -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium",
+        "group-focus-within/field:text-brand",
         className
       )}
     >
@@ -186,7 +209,7 @@ export function InputGroup({
 
   return (
     <FieldShell
-      className={cx("group", className)}
+      className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -202,9 +225,10 @@ export function InputGroup({
         readOnly={readOnly}
         placeholder={placeholder}
         aria-invalid={invalid || undefined}
+        spellCheck={false}
         className={cx(
           "ui-field-control block w-full border-0 bg-transparent text-text outline-none",
-          "placeholder:text-text-subtle placeholder:opacity-100",
+          "placeholder:text-text-subtle placeholder:opacity-100 placeholder:font-medium",
           "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
           disabled && "cursor-not-allowed",
           view.height,
@@ -223,7 +247,7 @@ export function InputGroup({
       {hasRightSlot ? (
         <div
           className={cx(
-            "absolute top-1/2 z-[1] flex -translate-y-1/2 items-center gap-1.5",
+            "absolute top-1/2 z-[2] flex -translate-y-1/2 items-center gap-1.5",
             view.rightInset
           )}
         >
@@ -231,7 +255,7 @@ export function InputGroup({
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text"
               aria-label="Clear"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2.1} />
@@ -264,7 +288,7 @@ const Input = forwardRef(function Input(
 
   return (
     <FieldShell
-      className={cx("group", className)}
+      className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -279,9 +303,10 @@ const Input = forwardRef(function Input(
         disabled={disabled}
         readOnly={readOnly}
         aria-invalid={invalid || undefined}
+        spellCheck={false}
         className={cx(
           "ui-field-control block w-full border-0 bg-transparent text-text outline-none",
-          "placeholder:text-text-subtle placeholder:opacity-100",
+          "placeholder:text-text-subtle placeholder:opacity-100 placeholder:font-medium",
           "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
           disabled && "cursor-not-allowed",
           view.height,
@@ -300,7 +325,7 @@ const Input = forwardRef(function Input(
       {right ? (
         <div
           className={cx(
-            "absolute top-1/2 z-[1] -translate-y-1/2",
+            "absolute top-1/2 z-[2] -translate-y-1/2",
             view.rightInset
           )}
         >
@@ -330,7 +355,7 @@ export const Textarea = forwardRef(function Textarea(
 
   return (
     <FieldShell
-      className={cx("group", className)}
+      className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -343,9 +368,10 @@ export const Textarea = forwardRef(function Textarea(
           disabled={disabled}
           readOnly={readOnly}
           aria-invalid={invalid || undefined}
+          spellCheck={false}
           className={cx(
             "ui-field-control block w-full resize-y border-0 bg-transparent p-0 text-text outline-none",
-            "placeholder:text-text-subtle placeholder:opacity-100",
+            "placeholder:text-text-subtle placeholder:opacity-100 placeholder:font-medium",
             "focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0",
             disabled && "cursor-not-allowed",
             view.textarea,
@@ -375,7 +401,7 @@ export const Select = forwardRef(function Select(
 
   return (
     <FieldShell
-      className={cx("group", className)}
+      className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
@@ -399,7 +425,7 @@ export const Select = forwardRef(function Select(
         </select>
 
         <ChevronDown
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium group-focus-within:text-brand"
+          className="pointer-events-none absolute right-3 top-1/2 z-[2] h-4 w-4 -translate-y-1/2 text-text-subtle transition-colors duration-base ease-premium group-focus-within/field:text-brand"
           strokeWidth={2.1}
         />
       </div>

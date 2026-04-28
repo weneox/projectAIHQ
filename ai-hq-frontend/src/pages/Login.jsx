@@ -411,9 +411,8 @@ export default function Login() {
               size="hero"
               fullWidth
               disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
-              isLoading={loading}
+              loading={loading}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
-              className="!h-[54px] !rounded-[17px] !text-[15.5px]"
             >
               {isSignupMode
                 ? loading
@@ -444,3 +443,4 @@ export default function Login() {
     </div>
   );
 }
+

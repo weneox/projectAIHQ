@@ -674,3 +674,95 @@ select:-webkit-autofill:active {
     scroll-behavior: auto !important;
   }
 }
+
+:root {
+  --ui-radius-control-outer: 12px;
+  --ui-radius-control-inner: 10.5px;
+  --ui-radius-button: 12px;
+  --ui-radius-badge: 10px;
+}
+
+.ui-radius-control-outer {
+  border-radius: var(--ui-radius-control-outer);
+}
+
+.ui-radius-control-inner {
+  border-radius: var(--ui-radius-control-inner);
+}
+
+.ui-radius-button {
+  border-radius: var(--ui-radius-button);
+}
+
+.ui-radius-badge {
+  border-radius: var(--ui-radius-badge);
+}
+
+.ui-field-shell,
+.ui-field-control {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ui-field-control,
+.ui-field-control:focus,
+.ui-field-control:focus-visible,
+.ui-field-control:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input.ui-field-control::-ms-reveal,
+input.ui-field-control::-ms-clear {
+  display: none;
+}
+
+input.ui-field-control:-webkit-autofill,
+input.ui-field-control:-webkit-autofill:hover,
+input.ui-field-control:-webkit-autofill:focus,
+textarea.ui-field-control:-webkit-autofill,
+textarea.ui-field-control:-webkit-autofill:hover,
+textarea.ui-field-control:-webkit-autofill:focus,
+select.ui-field-control:-webkit-autofill,
+select.ui-field-control:-webkit-autofill:hover,
+select.ui-field-control:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: rgb(var(--color-text)) !important;
+  transition: background-color 999999s ease-in-out 0s;
+  caret-color: rgb(var(--color-text));
+}
+
+button,
+[role="button"] {
+  outline: none;
+}
+
+button:focus,
+button:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible {
+  outline: none;
+}
+
+:root {
+  --ui-radius-control-outer: 12px;
+  --ui-radius-control-inner: 10.5px;
+  --ui-radius-button: 12px;
+  --ui-radius-badge: 10px;
+}
+
+.ui-radius-control-outer {
+  border-radius: var(--ui-radius-control-outer);
+}
+
+.ui-radius-control-inner {
+  border-radius: var(--ui-radius-control-inner);
+}
+
+.ui-radius-button {
+  border-radius: var(--ui-radius-button);
+}
+
+.ui-radius-badge {
+  border-radius: var(--ui-radius-badge);
+}
