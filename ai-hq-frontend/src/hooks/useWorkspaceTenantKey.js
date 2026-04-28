@@ -27,53 +27,28 @@ export function buildWorkspaceScopedQueryKey(baseKey, tenantKey) {
 }
 
 export function useWorkspaceTenantKey({ enabled = true } = {}) {
-  const designTenantKey = isAppDesignModeEnabled() ? getDesignTenantKey() : "";
+  const designTenantKey = normalizeTenantKey(
+    isAppDesignModeEnabled() ? getDesignTenantKey() : ""
+  );
+
+  const cachedTenantKey = normalizeTenantKey(getCachedWorkspaceTenantKey());
+  const immediateTenantKey = normalizeTenantKey(
+    designTenantKey || cachedTenantKey
+  );
 
   const [sessionState, setSessionState] = useState(() => ({
-    fetched: Boolean(designTenantKey),
-    tenantKey: designTenantKey,
+    fetched: Boolean(immediateTenantKey),
+    tenantKey: immediateTenantKey,
   }));
 
-  const cachedTenantKey = getCachedWorkspaceTenantKey();
-
   const tenantKey = enabled
-    ? normalizeTenantKey(cachedTenantKey || sessionState.tenantKey || designTenantKey)
+    ? normalizeTenantKey(immediateTenantKey || sessionState.tenantKey)
     : "";
 
   const loading = enabled && !tenantKey && !sessionState.fetched;
 
   useEffect(() => {
-    if (!enabled) return undefined;
-
-    if (designTenantKey) {
-      setSessionState((current) => {
-        if (current.fetched && current.tenantKey === designTenantKey) {
-          return current;
-        }
-
-        return {
-          fetched: true,
-          tenantKey: designTenantKey,
-        };
-      });
-
-      return undefined;
-    }
-
-    if (cachedTenantKey) {
-      setSessionState((current) => {
-        if (current.fetched && current.tenantKey === cachedTenantKey) {
-          return current;
-        }
-
-        return {
-          fetched: true,
-          tenantKey: cachedTenantKey,
-        };
-      });
-
-      return undefined;
-    }
+    if (!enabled || immediateTenantKey) return undefined;
 
     let alive = true;
 
@@ -98,7 +73,7 @@ export function useWorkspaceTenantKey({ enabled = true } = {}) {
     return () => {
       alive = false;
     };
-  }, [enabled, cachedTenantKey, designTenantKey]);
+  }, [enabled, immediateTenantKey]);
 
   return {
     tenantKey,

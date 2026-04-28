@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -40,6 +40,15 @@ const ACCENT_OPTIONS = [
   { label: "Cyan", value: "#0ea5e9", preview: "#0ea5e9" },
   { label: "Green", value: "#16a34a", preview: "#16a34a" },
 ];
+
+function scheduleAsyncState(callback) {
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(callback);
+    return;
+  }
+
+  Promise.resolve().then(callback);
+}
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -216,6 +225,22 @@ function toneClass(tone = "neutral") {
   return "text-text-muted";
 }
 
+function toneSurfaceClass(tone = "neutral") {
+  if (tone === "success") {
+    return "border-success/20 bg-success/5 text-success";
+  }
+
+  if (tone === "warning") {
+    return "border-warning/20 bg-warning/5 text-warning";
+  }
+
+  if (tone === "danger") {
+    return "border-danger/20 bg-danger/5 text-danger";
+  }
+
+  return "border-line bg-surface-subtle text-text-muted";
+}
+
 function ActionButton({
   children,
   icon = null,
@@ -374,13 +399,23 @@ export default function WebsiteWidgetDetailDrawer({
   });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
 
-    setActivePanel("overview");
-    setStatusMessage("");
-    setCopyFeedback("");
-    setVerificationMessage("");
-    setHandoffMessage("");
+    let alive = true;
+
+    scheduleAsyncState(() => {
+      if (!alive) return;
+
+      setActivePanel("overview");
+      setStatusMessage("");
+      setCopyFeedback("");
+      setVerificationMessage("");
+      setHandoffMessage("");
+    });
+
+    return () => {
+      alive = false;
+    };
   }, [open, channel?.id]);
 
   const handoffMutation = useMutation({
@@ -630,18 +665,14 @@ export default function WebsiteWidgetDetailDrawer({
     gtmHandoffMutation.isPending ||
     wordpressHandoffMutation.isPending;
 
-  const posture = useMemo(
-    () =>
-      buildPosture({
-        widget,
-        install,
-        launchReadiness,
-        handoffs: launchHandoffs,
-        verificationSurface,
-        readiness,
-      }),
-    [widget, install, launchReadiness, launchHandoffs, verificationSurface, readiness]
-  );
+  const posture = buildPosture({
+    widget,
+    install,
+    launchReadiness,
+    handoffs: launchHandoffs,
+    verificationSurface,
+    readiness,
+  });
 
   const PostureIcon = posture.icon;
 
@@ -953,8 +984,18 @@ export default function WebsiteWidgetDetailDrawer({
                 {channel?.name || "Website chat"}
               </h2>
 
-              <div className="mt-2 inline-flex items-center gap-2 text-[12px] font-semibold leading-none text-success">
-                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              <div
+                className={cx(
+                  "mt-2 inline-flex items-center gap-2 text-[12px] font-semibold leading-none",
+                  widget.enabled === true ? "text-success" : "text-text-muted"
+                )}
+              >
+                <span
+                  className={cx(
+                    "h-1.5 w-1.5 rounded-full",
+                    widget.enabled === true ? "bg-success" : "bg-text-subtle"
+                  )}
+                />
                 <span>{widget.enabled === true ? "Connected" : "Disabled"}</span>
               </div>
             </div>
@@ -986,6 +1027,10 @@ export default function WebsiteWidgetDetailDrawer({
             />
           ) : null}
 
+          {statusQuery.isLoading || workspace.loading ? (
+            <InlineNotice tone="info" description="Loading website channel state." compact />
+          ) : null}
+
           {blockers.map((item, index) => (
             <InlineNotice
               key={`${s(item.reasonCode)}-${index}`}
@@ -1012,82 +1057,116 @@ export default function WebsiteWidgetDetailDrawer({
                     <div className="mt-1 text-[14px] font-semibold leading-6 text-text-muted">
                       {posture.summary}
                     </div>
+
+                    <div className="mt-4 inline-flex items-center rounded-[10px] border border-line bg-surface-subtle px-3 py-2 text-[12px] font-semibold text-text-muted">
+                      Next: {posture.next}
+                    </div>
                   </div>
-
-                  <div className={cx("shrink-0 text-[12px] font-semibold", toneClass(posture.tone))}>
-                    {posture.next}
-                  </div>
-                </div>
-
-                <div className="mt-6 border-y border-line-soft">
-                  <LedgerLine
-                    label="Widget"
-                    value={
-                      widget.enabled === true
-                        ? compactValue(widget.publicWidgetId || "Enabled")
-                        : "Disabled"
-                    }
-                    tone={widget.enabled === true ? "success" : "warning"}
-                  />
-
-                  <LedgerLine
-                    label="Domain"
-                    value={compactValue(
-                      verificationSurface.domain ||
-                        verificationSurface.candidateDomain ||
-                        "Not set"
-                    )}
-                    tone={verified ? "success" : productionInstallBlocked ? "warning" : "neutral"}
-                  />
-
-                  <LedgerLine label="Install" value={installState} tone={installTone} />
                 </div>
               </section>
 
-              <section className="border-y border-line-soft">
-                <UtilityButton
-                  icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
-                  title="Copy snippet"
-                  description={
-                    snippetAvailable
-                      ? "Use it on your website."
-                      : "Save or verify before snippet is available."
+              <section className="rounded-[16px] border border-line bg-surface p-4 shadow-soft">
+                <SectionHeading
+                  eyebrow="Channel"
+                  title="Website widget"
+                  description="Runtime, install and verification posture."
+                  right={
+                    <span
+                      className={cx(
+                        "inline-flex h-8 items-center rounded-[9px] border px-3 text-[12px] font-semibold",
+                        toneSurfaceClass(installTone)
+                      )}
+                    >
+                      {installState}
+                    </span>
                   }
-                  disabled={!snippetAvailable}
-                  onClick={handleCopySnippet}
                 />
 
-                <UtilityButton
-                  icon={<Globe2 className="h-4 w-4" strokeWidth={2.1} />}
-                  title="Verify domain"
-                  description={verified ? "Domain is already verified." : "DNS TXT ownership check."}
-                  onClick={() => setActivePanel("verify")}
+                <div className="mt-4 rounded-[12px] border border-line-soft bg-surface-subtle px-4">
+                  <LedgerLine
+                    label="Widget ID"
+                    value={compactValue(widget.publicWidgetId)}
+                    tone={s(widget.publicWidgetId) ? "neutral" : "warning"}
+                  />
+                  <LedgerLine
+                    label="Status"
+                    value={widget.enabled === true ? "Enabled" : "Disabled"}
+                    tone={widget.enabled === true ? "success" : "warning"}
+                  />
+                  <LedgerLine
+                    label="Domain"
+                    value={compactValue(verificationTargetDomain || suggestedVerificationDomain)}
+                  />
+                  <LedgerLine
+                    label="Verification"
+                    value={verificationStateLabel(verificationSurface.state)}
+                    tone={verified ? "success" : "warning"}
+                  />
+                  <LedgerLine
+                    label="Updated"
+                    value={formatTimestamp(widget.updatedAt || payload.updatedAt)}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-[16px] border border-line bg-surface p-4 shadow-soft">
+                <SectionHeading
+                  eyebrow="Actions"
+                  title="Operate"
+                  description="Prepare install packages or review settings."
                 />
 
-                <UtilityButton
-                  icon={<Code2 className="h-4 w-4" strokeWidth={2.1} />}
-                  title="Install package"
-                  description="Developer, GTM or WordPress package."
-                  onClick={() => setActivePanel("install")}
-                />
+                <div className="mt-3 overflow-hidden rounded-[12px] border border-line-soft bg-surface">
+                  <UtilityButton
+                    icon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
+                    title="Widget settings"
+                    description="Title, color, allowed domains and prompts."
+                    disabled={!saveAllowed}
+                    onClick={() => setActivePanel("settings")}
+                  />
 
-                <UtilityButton
-                  icon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
-                  title="Change settings"
-                  description="Edit title, color, domains and prompts."
-                  onClick={() => setActivePanel("settings")}
-                />
+                  <UtilityButton
+                    icon={<ShieldAlert className="h-4 w-4" strokeWidth={2.1} />}
+                    title="Domain verification"
+                    description={
+                      verified
+                        ? "Domain is verified."
+                        : "Create or check the DNS TXT challenge."
+                    }
+                    disabled={!saveAllowed}
+                    onClick={() => setActivePanel("verify")}
+                  />
+
+                  <UtilityButton
+                    icon={<Package className="h-4 w-4" strokeWidth={2.1} />}
+                    title="Install package"
+                    description="Snippet, developer, GTM or WordPress package."
+                    onClick={() => setActivePanel("install")}
+                  />
+                </div>
               </section>
             </>
           ) : null}
 
           {activePanel === "settings" ? (
-            <section>
+            <section className="rounded-[16px] border border-line bg-surface p-4 shadow-soft">
               <SectionHeading
                 eyebrow="Settings"
-                title="Change widget"
-                description="Only edit what visitors actually see."
-                right={
+                title="Widget configuration"
+                description="Control the public widget experience."
+              />
+
+              <div className="mt-5 space-y-5">
+                <div className="flex items-center justify-between gap-4 rounded-[12px] border border-line-soft bg-surface-subtle px-4 py-3">
+                  <div>
+                    <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+                      Enable widget
+                    </div>
+                    <div className="mt-0.5 text-[12.5px] font-semibold text-text-muted">
+                      Public chat launcher can be installed when enabled.
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     disabled={!saveAllowed}
@@ -1098,307 +1177,348 @@ export default function WebsiteWidgetDetailDrawer({
                       }))
                     }
                     className={cx(
-                      "inline-flex h-9 min-w-[108px] items-center justify-center rounded-[10px] border px-3",
-                      "text-[12px] font-semibold uppercase tracking-[0.08em] transition-all duration-200",
+                      "relative h-7 w-12 rounded-full border transition-colors duration-200",
                       form.enabled
-                        ? "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
-                        : "border-line bg-surface-subtle text-text-muted",
+                        ? "border-brand/20 bg-brand"
+                        : "border-line bg-surface",
                       !saveAllowed && "cursor-not-allowed opacity-50"
                     )}
+                    aria-pressed={form.enabled}
                   >
-                    {form.enabled ? "Enabled" : "Disabled"}
+                    <span
+                      className={cx(
+                        "absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform duration-200",
+                        form.enabled ? "translate-x-[22px]" : "translate-x-1"
+                      )}
+                    />
                   </button>
-                }
-              />
+                </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <div>
                   <FieldLabel>Title</FieldLabel>
                   <Input
                     value={form.title}
+                    placeholder="Ask us anything"
+                    disabled={!saveAllowed}
                     onChange={(event) =>
                       updateForm((current) => ({
                         ...current,
                         title: event.target.value,
                       }))
                     }
-                    readOnly={!saveAllowed}
-                    appearance="quiet"
-                    placeholder="NEOX Website Chat"
                   />
                 </div>
 
                 <div>
-                  <FieldLabel>Greeting</FieldLabel>
+                  <FieldLabel>Subtitle</FieldLabel>
                   <Input
                     value={form.subtitle}
+                    placeholder="We usually reply fast."
+                    disabled={!saveAllowed}
                     onChange={(event) =>
                       updateForm((current) => ({
                         ...current,
                         subtitle: event.target.value,
                       }))
                     }
-                    readOnly={!saveAllowed}
-                    appearance="quiet"
-                    placeholder="How can we help?"
                   />
                 </div>
-              </div>
 
-              <div className="mt-5">
-                <FieldLabel>Accent</FieldLabel>
+                <div>
+                  <FieldLabel>Accent color</FieldLabel>
+                  <div className="grid grid-cols-4 gap-2">
+                    {ACCENT_OPTIONS.map((option) => {
+                      const selected = s(form.accentColor) === option.value;
 
-                <div className="grid grid-cols-4 gap-2">
-                  {ACCENT_OPTIONS.map((option) => {
-                    const active =
-                      s(form.accentColor).toLowerCase() ===
-                      s(option.value).toLowerCase();
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={!saveAllowed}
-                        onClick={() =>
-                          updateForm((current) => ({
-                            ...current,
-                            accentColor: option.value,
-                          }))
-                        }
-                        className={cx(
-                          "flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[12px] font-semibold transition-all",
-                          active
-                            ? "border-brand bg-brand-soft text-brand"
-                            : "border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
-                          !saveAllowed && "cursor-not-allowed opacity-50"
-                        )}
-                      >
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: option.preview }}
-                        />
-                        <span>{option.label}</span>
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={!saveAllowed}
+                          onClick={() =>
+                            updateForm((current) => ({
+                              ...current,
+                              accentColor: option.value,
+                            }))
+                          }
+                          className={cx(
+                            "flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[12px] font-semibold transition-all duration-200",
+                            selected
+                              ? "border-brand bg-brand/5 text-text"
+                              : "border-line bg-surface text-text-muted hover:bg-surface-subtle",
+                            !saveAllowed && "cursor-not-allowed opacity-50"
+                          )}
+                        >
+                          <span
+                            className="h-3 w-3 rounded-full"
+                            style={{ background: option.preview }}
+                          />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-5">
-                <FieldLabel>Trusted domains</FieldLabel>
-                <Textarea
-                  value={form.allowedDomains}
-                  onChange={(event) =>
-                    updateForm((current) => ({
-                      ...current,
-                      allowedDomains: event.target.value,
-                    }))
-                  }
-                  readOnly={!saveAllowed}
-                  rows={2}
-                  appearance="quiet"
-                  placeholder="example.com"
-                  textClassName="!min-h-[64px] resize-none"
-                />
-              </div>
+                <div>
+                  <FieldLabel>Allowed origins</FieldLabel>
+                  <Textarea
+                    rows={3}
+                    value={form.allowedOrigins}
+                    placeholder="https://example.com"
+                    disabled={!saveAllowed}
+                    onChange={(event) =>
+                      updateForm((current) => ({
+                        ...current,
+                        allowedOrigins: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
 
-              <div className="mt-5">
-                <FieldLabel>Quick prompts</FieldLabel>
-                <Textarea
-                  value={form.initialPrompts}
-                  onChange={(event) =>
-                    updateForm((current) => ({
-                      ...current,
-                      initialPrompts: event.target.value,
-                    }))
-                  }
-                  readOnly={!saveAllowed}
-                  rows={2}
-                  appearance="quiet"
-                  placeholder="What services do you offer?"
-                  textClassName="!min-h-[64px] resize-none"
-                />
+                <div>
+                  <FieldLabel>Allowed domains</FieldLabel>
+                  <Textarea
+                    rows={3}
+                    value={form.allowedDomains}
+                    placeholder="example.com"
+                    disabled={!saveAllowed}
+                    onChange={(event) =>
+                      updateForm((current) => ({
+                        ...current,
+                        allowedDomains: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Initial prompts</FieldLabel>
+                  <Textarea
+                    rows={4}
+                    value={form.initialPrompts}
+                    placeholder="How can I book?\nWhat services do you offer?"
+                    disabled={!saveAllowed}
+                    onChange={(event) =>
+                      updateForm((current) => ({
+                        ...current,
+                        initialPrompts: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
             </section>
           ) : null}
 
           {activePanel === "verify" ? (
-            <section>
+            <section className="rounded-[16px] border border-line bg-surface p-4 shadow-soft">
               <SectionHeading
                 eyebrow="Verification"
-                title="Domain gate"
-                description="One domain. One TXT challenge. Then verify."
+                title="Domain ownership"
+                description="Verify DNS before public production install."
+                right={
+                  <span
+                    className={cx(
+                      "inline-flex h-8 items-center rounded-[9px] border px-3 text-[12px] font-semibold",
+                      verified
+                        ? "border-success/20 bg-success/5 text-success"
+                        : "border-warning/20 bg-warning/5 text-warning"
+                    )}
+                  >
+                    {verificationStateLabel(verificationSurface.state)}
+                  </span>
+                }
               />
 
-              <div className="mt-6">
-                <FieldLabel>Domain</FieldLabel>
-                <Input
-                  value={verificationInputValue}
-                  onChange={(event) => setVerificationInput(event.target.value)}
-                  readOnly={!saveAllowed}
-                  appearance="quiet"
-                  placeholder={s(verificationSurface.candidateDomain, "example.com")}
+              <div className="mt-5 space-y-5">
+                <Feedback
+                  success={verificationMessage}
+                  error={verificationError}
+                  info={verificationSurface.message}
                 />
-              </div>
 
-              <div className="mt-5 border-y border-line-soft">
-                <LedgerLine
-                  label="State"
-                  value={verificationStateLabel(verificationSurface.state)}
-                  tone={verified ? "success" : "warning"}
-                />
-                <LedgerLine
-                  label="TXT host"
-                  value={s(verificationChallenge.name, "Create a challenge first.")}
-                />
-                <LedgerLine
-                  label="Last check"
-                  value={formatTimestamp(verificationSurface.lastCheckedAt)}
-                />
-                <LedgerLine
-                  label="Verified at"
-                  value={formatTimestamp(verificationSurface.verifiedAt)}
-                />
-              </div>
-
-              <div className="mt-5">
-                <FieldLabel>TXT value</FieldLabel>
-                <Textarea
-                  value={s(verificationChallenge.value)}
-                  readOnly
-                  rows={2}
-                  appearance="quiet"
-                  placeholder="Create a challenge to generate the TXT value."
-                  textClassName="!min-h-[68px] resize-none"
-                />
-              </div>
-
-              <div className="mt-5">
-                <Feedback success={verificationMessage} error={verificationError} />
-              </div>
-
-              {verificationCandidateDomains.length > 1 ? (
-                <div className="mt-4 text-[12px] font-semibold leading-5 text-text-muted">
-                  Candidates: {verificationCandidateDomains.join(", ")}
+                <div>
+                  <FieldLabel>Domain</FieldLabel>
+                  <Input
+                    value={verificationInputValue}
+                    placeholder="example.com"
+                    disabled={!saveAllowed || verificationBusy}
+                    onChange={(event) => setVerificationInput(event.target.value)}
+                  />
                 </div>
-              ) : null}
+
+                {verificationCandidateDomains.length ? (
+                  <div className="rounded-[12px] border border-line-soft bg-surface-subtle p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+                      Suggested domains
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {verificationCandidateDomains.map((domain) => (
+                        <button
+                          key={domain}
+                          type="button"
+                          disabled={!saveAllowed || verificationBusy}
+                          onClick={() => setVerificationInput(domain)}
+                          className="rounded-[9px] border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-text-muted transition-colors hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {domain}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-[12px] border border-line-soft bg-surface-subtle px-4">
+                  <LedgerLine
+                    label="State"
+                    value={verificationStateLabel(verificationSurface.state)}
+                    tone={verified ? "success" : "warning"}
+                  />
+                  <LedgerLine
+                    label="Domain"
+                    value={verificationSurface.domain || verificationTargetDomain}
+                  />
+                  <LedgerLine
+                    label="Record"
+                    value={verificationChallenge.recordType || "TXT"}
+                  />
+                  <LedgerLine
+                    label="Name"
+                    value={compactValue(
+                      verificationChallenge.name || verificationChallenge.host,
+                      42
+                    )}
+                  />
+                  <LedgerLine
+                    label="Value"
+                    value={compactValue(
+                      verificationChallenge.value || verificationChallenge.txtValue,
+                      42
+                    )}
+                  />
+                  <LedgerLine
+                    label="Checked"
+                    value={formatTimestamp(
+                      verificationSurface.checkedAt || verificationSurface.updatedAt
+                    )}
+                  />
+                </div>
+              </div>
             </section>
           ) : null}
 
           {activePanel === "install" ? (
-            <section>
+            <section className="rounded-[16px] border border-line bg-surface p-4 shadow-soft">
               <SectionHeading
                 eyebrow="Install"
-                title="Go live"
-                description="Copy snippet first. Use packages only if needed."
+                title="Website install package"
+                description="Copy the snippet or prepare a platform-specific package."
+                right={
+                  <span
+                    className={cx(
+                      "inline-flex h-8 items-center rounded-[9px] border px-3 text-[12px] font-semibold",
+                      toneSurfaceClass(installTone)
+                    )}
+                  >
+                    {installState}
+                  </span>
+                }
               />
 
-              {productionInstallBlocked ? (
-                <div className="mt-5">
-                  <InlineNotice
-                    tone="warning"
-                    title="Install blocked"
-                    description={s(
-                      installBlockMessage,
-                      "Verify the domain before public install."
-                    )}
-                    compact
+              <div className="mt-5 space-y-5">
+                <Feedback
+                  success={handoffMessage}
+                  error={handoffError}
+                  info={handoffWarning || installBlockMessage || installHandoffMessage}
+                />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <ActionButton
+                    icon={<Code2 className="h-4 w-4" strokeWidth={2.1} />}
+                    onClick={handlePrepareDeveloperInstall}
+                    disabled={!developerHandoffReady || statusQuery.isLoading || handoffBusy}
+                    className="w-full"
+                  >
+                    Developer
+                  </ActionButton>
+
+                  <ActionButton
+                    icon={<Globe2 className="h-4 w-4" strokeWidth={2.1} />}
+                    onClick={handlePrepareGtmInstall}
+                    disabled={!gtmHandoffReady || statusQuery.isLoading || handoffBusy}
+                    className="w-full"
+                  >
+                    GTM
+                  </ActionButton>
+
+                  <ActionButton
+                    icon={<Package className="h-4 w-4" strokeWidth={2.1} />}
+                    onClick={handlePrepareWordpressInstall}
+                    disabled={
+                      !wordpressHandoffReady || statusQuery.isLoading || handoffBusy
+                    }
+                    className="w-full"
+                  >
+                    WordPress
+                  </ActionButton>
+                </div>
+
+                <div className="rounded-[12px] border border-line-soft bg-surface-subtle p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+                      {packageAvailable ? "Package" : "Snippet"}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={packageAvailable ? !s(handoffSurface.packageText) : !snippetAvailable}
+                      onClick={
+                        packageAvailable ? handleCopyHandoffPackage : handleCopySnippet
+                      }
+                      className="inline-flex h-8 items-center gap-2 rounded-[9px] border border-line bg-surface px-3 text-[12px] font-semibold text-text-muted transition-colors hover:bg-surface hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <Copy className="h-3.5 w-3.5" strokeWidth={2.1} />
+                      Copy
+                    </button>
+                  </div>
+
+                  <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap break-words rounded-[10px] border border-line bg-surface p-3 text-[11.5px] font-semibold leading-5 text-text-muted">
+                    {packageAvailable
+                      ? handoffSurface.packageText
+                      : s(install.embedSnippet) || "Install snippet is not available yet."}
+                  </pre>
+                </div>
+
+                <div className="rounded-[12px] border border-line-soft bg-surface-subtle px-4">
+                  <LedgerLine
+                    label="Type"
+                    value={s(handoffSurface.packageType) || "Snippet"}
+                  />
+                  <LedgerLine
+                    label="Ready"
+                    value={productionInstallReady ? "Yes" : "No"}
+                    tone={productionInstallReady ? "success" : "warning"}
+                  />
+                  <LedgerLine
+                    label="Mode"
+                    value={handoffTestingOnly ? "Testing only" : "Production"}
+                    tone={handoffTestingOnly ? "warning" : "success"}
+                  />
+                  <LedgerLine
+                    label="Domain"
+                    value={verificationTargetDomain || suggestedVerificationDomain}
                   />
                 </div>
-              ) : null}
-
-              <div className="mt-5 border-y border-line-soft">
-                <LedgerLine
-                  label="Widget ID"
-                  value={s(widget.publicWidgetId, "Generated after save")}
-                />
-                <LedgerLine
-                  label="Script"
-                  value={s(install.scriptUrl, "Not available")}
-                />
-                <LedgerLine
-                  label="API base"
-                  value={s(install.apiBase, "Not available")}
-                />
               </div>
-
-              <div className="mt-5">
-                <FieldLabel>Snippet</FieldLabel>
-                <Textarea
-                  value={s(install.embedSnippet)}
-                  readOnly
-                  rows={4}
-                  appearance="quiet"
-                  placeholder={
-                    productionInstallBlocked
-                      ? "Verify domain ownership to unlock the production snippet."
-                      : "Save widget settings to generate the snippet."
-                  }
-                  textClassName="!min-h-[104px] resize-none font-mono !text-[12.5px]"
-                />
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <ActionButton
-                  icon={<Package className="h-4 w-4" strokeWidth={2.1} />}
-                  onClick={handlePrepareDeveloperInstall}
-                  disabled={!developerHandoffReady || statusQuery.isLoading || handoffBusy}
-                >
-                  Developer
-                </ActionButton>
-
-                <ActionButton
-                  onClick={handlePrepareGtmInstall}
-                  disabled={!gtmHandoffReady || statusQuery.isLoading || handoffBusy}
-                >
-                  GTM
-                </ActionButton>
-
-                <ActionButton
-                  onClick={handlePrepareWordpressInstall}
-                  disabled={!wordpressHandoffReady || statusQuery.isLoading || handoffBusy}
-                >
-                  WordPress
-                </ActionButton>
-              </div>
-
-              <div className="mt-5">
-                <Feedback success={handoffMessage} error={handoffError} />
-              </div>
-
-              {handoffWarning ? (
-                <div className="mt-5">
-                  <InlineNotice tone="warning" description={handoffWarning} compact />
-                </div>
-              ) : null}
-
-              {installHandoffMessage && !packageAvailable ? (
-                <div className="mt-5 text-[12.5px] font-semibold leading-5 text-text-muted">
-                  {installHandoffMessage}
-                </div>
-              ) : null}
-
-              {packageAvailable ? (
-                <div className="mt-5">
-                  <FieldLabel>Package</FieldLabel>
-                  <Textarea
-                    value={s(handoffSurface.packageText)}
-                    readOnly
-                    rows={4}
-                    appearance="quiet"
-                    textClassName="!min-h-[104px] resize-none font-mono !text-[12.5px]"
-                  />
-                </div>
-              ) : null}
             </section>
           ) : null}
         </div>
       </div>
 
-      <footer className="relative z-20 shrink-0 border-t border-line-soft bg-surface px-7 py-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
-          {renderFooter()}
-        </div>
+      <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-line-soft bg-surface px-7 py-4">
+        {renderFooter()}
       </footer>
     </aside>
   );
