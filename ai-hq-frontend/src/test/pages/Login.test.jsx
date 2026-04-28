@@ -51,17 +51,20 @@ describe("Login auth entry", () => {
     expect(screen.getByPlaceholderText(/email address/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/^password$/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^gmail$/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^outlook$/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^apple$/i })
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: /^sign in$/i })
     ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^gmail$/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^outlook$/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^apple$/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /forgot your password/i })
+    ).not.toBeInTheDocument();
   });
 
   it("shows workspace selection after an ambiguous login and continues with the chosen account", async () => {

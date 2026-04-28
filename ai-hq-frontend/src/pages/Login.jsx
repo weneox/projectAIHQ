@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Building2,
@@ -14,9 +14,6 @@ import {
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
 import { clearAppSessionContext } from "../lib/appSession.js";
 import { cx } from "../lib/cx.js";
-
-import GmailIconAsset from "../assets/channels/gmail.svg";
-import AppleIconAsset from "../assets/channels/apple.svg";
 
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
@@ -125,44 +122,6 @@ function normalizeAccountChoices(error) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
-function OutlookIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path
-        fill="#0A64D0"
-        d="M3 5.25A2.25 2.25 0 0 1 5.25 3h7.5A2.25 2.25 0 0 1 15 5.25v13.5A2.25 2.25 0 0 1 12.75 21h-7.5A2.25 2.25 0 0 1 3 18.75V5.25Z"
-      />
-      <path
-        fill="#1274E7"
-        d="M14.25 7H20a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-5.75V7Z"
-      />
-      <path fill="#1490FF" d="M14.25 8.2 20.7 12l-6.45 3.8V8.2Z" />
-      <path
-        fill="#fff"
-        d="M8.88 8.22c2.24 0 3.87 1.54 3.87 3.79 0 2.31-1.57 3.77-3.89 3.77-2.23 0-3.82-1.5-3.82-3.75 0-2.33 1.62-3.81 3.84-3.81Zm.02 1.54c-1.14 0-1.9.88-1.9 2.28 0 1.39.77 2.27 1.9 2.27 1.15 0 1.91-.88 1.91-2.29 0-1.37-.79-2.26-1.91-2.26Z"
-      />
-    </svg>
-  );
-}
-
-function SocialButton({ icon, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-soft border border-line bg-surface px-4 text-[13px] font-semibold tracking-[-0.01em] text-text",
-        "transition-[background-color,border-color,color,box-shadow,transform] duration-base ease-premium",
-        "shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
-        "hover:border-line-strong hover:bg-surface-muted"
-      )}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
 function WorkspaceChoiceCard({ account, selected, onSelect }) {
   const token = s(account?.selectionToken);
   const companyName =
@@ -202,31 +161,6 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
         ) : null}
       </span>
     </button>
-  );
-}
-
-function LegalFooter() {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2 text-[12px] text-text-subtle">
-      <Link
-        to="/privacy"
-        className="font-medium transition-colors hover:text-text"
-      >
-        Privacy
-      </Link>
-      <Link
-        to="/terms"
-        className="font-medium transition-colors hover:text-text"
-      >
-        Terms
-      </Link>
-      <Link
-        to="/contact"
-        className="font-medium transition-colors hover:text-text"
-      >
-        Contact
-      </Link>
-    </div>
   );
 }
 
@@ -359,10 +293,6 @@ export default function Login() {
     }
   }
 
-  function onSocialAuth(provider) {
-    setError(`${provider} sign-in is not enabled yet.`);
-  }
-
   const isLoginDisabled = loading || !s(form.email) || !s(form.password);
   const isSignupDisabled =
     loading || !s(form.companyName) || !s(form.email) || !s(form.password);
@@ -391,39 +321,7 @@ export default function Login() {
         </div>
 
         <div className="mt-8">
-          {!isSignupMode ? (
-            <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <SocialButton
-                  icon={<img src={GmailIconAsset} alt="" className="h-5 w-5" />}
-                  label="Gmail"
-                  onClick={() => onSocialAuth("Gmail")}
-                />
-
-                <SocialButton
-                  icon={<OutlookIcon />}
-                  label="Outlook"
-                  onClick={() => onSocialAuth("Outlook")}
-                />
-
-                <SocialButton
-                  icon={<img src={AppleIconAsset} alt="" className="h-5 w-5" />}
-                  label="Apple"
-                  onClick={() => onSocialAuth("Apple")}
-                />
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="h-px flex-1 bg-line-soft" />
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-                  Or continue with email
-                </div>
-                <div className="h-px flex-1 bg-line-soft" />
-              </div>
-            </div>
-          ) : null}
-
-          <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit}>
             {isSignupMode ? (
               <>
                 <Input
@@ -483,20 +381,6 @@ export default function Login() {
                 </button>
               }
             />
-
-            {!isSignupMode ? (
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  className="text-[13px] font-medium tracking-[-0.01em] text-text-muted transition-colors hover:text-text"
-                  onClick={() =>
-                    setError("Password recovery is not enabled yet.")
-                  }
-                >
-                  Forgot your password?
-                </button>
-              </div>
-            ) : null}
 
             {error ? (
               <InlineNotice
@@ -572,7 +456,6 @@ export default function Login() {
               </button>
             </div>
 
-            <LegalFooter />
           </form>
         </div>
       </main>

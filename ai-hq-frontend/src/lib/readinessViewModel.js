@@ -271,10 +271,7 @@ export function buildTruthOperationalState(
     detail: truthVersionId
       ? `Truth version ${truthVersionId} is the current approved source of runtime authority.`
       : "Approved truth is available.",
-    action: normalizeOperationalAction({
-      label: "Open truth",
-      path: truthPath,
-    }),
+    action: null,
     reasonCode: "",
     readiness: runtimeReadiness,
   };

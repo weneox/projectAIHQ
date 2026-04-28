@@ -274,7 +274,7 @@ function EmptyComposerDock() {
           <textarea
             disabled
             rows={1}
-            placeholder="Mesaj yazın..."
+            placeholder="Write a reply..."
             className="min-h-[30px] flex-1 resize-none bg-transparent px-0 py-2 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
           />
 

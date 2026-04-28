@@ -202,10 +202,7 @@ function buildSnapshotOperationalState(data = {}) {
     detail: text(approval.version)
       ? `Truth version ${approval.version} is currently approved.`
       : "Approved truth is available.",
-    action: {
-      label: "Open truth",
-      path: "/truth",
-    },
+    action: null,
   };
 }
 

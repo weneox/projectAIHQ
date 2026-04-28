@@ -21,7 +21,7 @@ export default function InboxComposer({
   onSend,
   disabled = false,
   sending = false,
-  placeholder = "Mesaj yazın...",
+  placeholder = "Write a reply...",
   showReturnToAi = false,
   onReturnToAi,
   onPickAttachment,

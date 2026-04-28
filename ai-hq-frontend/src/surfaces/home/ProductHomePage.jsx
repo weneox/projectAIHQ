@@ -187,7 +187,9 @@ function buildHeroCopy(home) {
       title: "Ready for inbox work.",
       summary:
         unread > 0
-          ? `${channelName} is live and ${pluralize(unread, "message")} need review.`
+          ? `${channelName} is live and ${pluralize(unread, "message")} ${
+              unread === 1 ? "needs" : "need"
+            } review.`
           : "Approved truth, one live channel, and inbox state are aligned.",
     };
   }

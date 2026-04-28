@@ -11,69 +11,69 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-const DEFAULT_COMPOSER_PLACEHOLDER = "Mesaj yazın";
+const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
 const TYPING_BUBBLE_DELAY_MS = 320;
 
 const LOCALIZED_QUESTION_COPY = {
   company: {
-    body: "Başlayaq. Biznesinizin adını yazın. Sayt varsa onu da əlavə edə bilərsiniz.",
-    placeholder: "Biznes adını yazın",
+    body: "Start with the business name. Add the website if there is one.",
+    placeholder: "Business name",
   },
   description: {
-    body: "Bu biznes nə edir? Qısa, amma dəqiq yazın.",
-    placeholder: "Biznesinizi qısa təsvir edin",
+    body: "What does this business do? Keep it short and specific.",
+    placeholder: "Short business description",
   },
   services: {
-    body: "Əsas xidmətləri yazın. Vergüllə və ya sətir-sətir yaza bilərsiniz.",
-    placeholder: "Əsas xidmətləri yazın",
+    body: "List the main services. Commas or one per line both work.",
+    placeholder: "Main services",
   },
   contacts: {
-    body: "Müştəri əsasən sizinlə necə əlaqə saxlamalıdır? Telefon, WhatsApp, email və ya link yazın.",
-    placeholder: "Əlaqə yollarını yazın",
+    body: "How should customers contact you? Add phone, WhatsApp, email, or links.",
+    placeholder: "Customer contact details",
   },
   hours: {
-    body: "İş saatlarını yazın. Məsələn: həftə içi 09:00–18:00, şənbə 10:00–15:00.",
-    placeholder: "İş saatlarını yazın",
+    body: "Add operating hours. Example: weekdays 09:00-18:00, Saturday 10:00-15:00.",
+    placeholder: "Operating hours",
   },
   pricing: {
-    body: "Qiymətlə bağlı əsas həqiqəti yazın. Dəqiq qiymət, başlanğıc qiymət, yoxsa əvvəlcə consultation/quote?",
-    placeholder: "Qiymət məntiqini yazın",
+    body: "Add the key pricing truth: exact price, starting price, consultation, or quote first.",
+    placeholder: "Pricing guidance",
   },
   handoff: {
-    body: "Hansı hallarda AI mütləq insana yönləndirməlidir?",
-    placeholder: "Handoff halları",
+    body: "When must AI hand off to a person?",
+    placeholder: "Handoff rules",
   },
   greeting_behavior: {
-    body: "AI ilk salamı necə versin? İstəsən nümunə cümlə də yaza bilərsən.",
-    placeholder: "Məsələn: qısa və professional salam",
+    body: "How should AI greet customers? You can include a sample line.",
+    placeholder: "Example: brief professional greeting",
   },
   closing_behavior: {
-    body: "Söhbəti necə bağlasın? Növbəti addım təklifi olsun, yoxsa daha qısa bitsin?",
-    placeholder: "Məsələn: isti bağlama + növbəti addım",
+    body: "How should it close a conversation? Offer a next step or keep it brief?",
+    placeholder: "Example: warm close with next step",
   },
   tone_behavior: {
-    body: "Ümumilikdə necə danışsın: professional, isti, premium, yoxsa daha düz və qısa?",
-    placeholder: "Məsələn: professional və arxayın, qısa cavablar",
+    body: "Overall tone: professional, warm, premium, direct, or brief?",
+    placeholder: "Example: professional and calm, short answers",
   },
   pricing_behavior: {
-    body: "Qiymət soruşulanda AI necə cavab versin?",
-    placeholder: "Məsələn: cavab + pricing page",
+    body: "How should AI answer pricing questions?",
+    placeholder: "Example: answer plus pricing page",
   },
   location_behavior: {
-    body: "Ünvan soruşulanda AI necə cavab versin?",
-    placeholder: "Məsələn: mətn + xəritə",
+    body: "How should AI answer location questions?",
+    placeholder: "Example: address plus map link",
   },
   booking_behavior: {
-    body: "Booking üçün AI əsasən hara yönləndirsin?",
-    placeholder: "Məsələn: WhatsApp / booking page",
+    body: "Where should AI send customers for booking?",
+    placeholder: "Example: WhatsApp or booking page",
   },
   contact_behavior: {
-    body: "Əlaqə istəyəndə hansı kanal önə çıxsın?",
-    placeholder: "Məsələn: WhatsApp first",
+    body: "Which contact channel should AI prioritize?",
+    placeholder: "Example: WhatsApp first",
   },
   handoff_behavior: {
-    body: "İnsana keçid lazım olanda AI necə davransın?",
-    placeholder: "Məsələn: əvvəlcə qısa səbəb soruş",
+    body: "How should AI behave when a human handoff is needed?",
+    placeholder: "Example: ask one short reason first",
   },
 };
 
@@ -632,12 +632,12 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
         </div>
 
         <div className="mt-4 text-[21px] font-semibold tracking-[-0.045em] text-text">
-          Gəlin bunu professional quraq.
+          Set up the launch lane.
         </div>
 
         <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
-          Əvvəl business truth toplanır. Sonra chatbotun greeting, closing, tone
-          və response behavior hissəsi formalaşır. Yekunda isə review və launch.
+          First approve the business truth. Then define reply behavior and review
+          the draft before live replies.
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -1128,10 +1128,10 @@ export default function SetupAssistantSections({
           Setup flow
         </div>
         <div className="mt-2 text-[19px] font-semibold tracking-[-0.04em] text-text">
-          Business truth → Conversation policy → Review & launch
+          Business truth, policy, review
         </div>
         <div className="mt-1 text-[13px] leading-6 text-text-subtle">
-          Əvvəl AI-nın nəyi doğru bilməli olduğunu qururuq, sonra necə danışacağını.
+          Define what AI can safely use, then how it should speak.
         </div>
       </div>
 
@@ -1225,8 +1225,8 @@ export default function SetupAssistantSections({
               <div className="flex justify-start">
                 <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
                   <div className="text-[13px] leading-6 text-text-muted">
-                    Draft görünüşü hələ gizlidir. Əvvəl business truth və conversation
-                    policy hissələrini tamamlayırıq, sonra review mərhələsində tam draft açılır.
+                    Draft preview is hidden for now. Complete business truth and
+                    conversation policy, then review the full draft before launch.
                   </div>
                 </div>
               </div>
