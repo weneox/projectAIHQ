@@ -1,4 +1,4 @@
-import { StateSkeletonBlock } from "../ui/AppShellPrimitives.jsx";
+﻿import { StateSkeletonBlock } from "../ui/AppShellPrimitives.jsx";
 
 function Shimmer({ className = "" }) {
   return <StateSkeletonBlock className={className} />;
@@ -82,91 +82,32 @@ export function InboxThreadListSkeleton() {
 export function InboxDetailSkeleton() {
   return (
     <div
-      aria-label="Loading conversation detail"
-      className="flex min-h-full flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]"
+      aria-label="Loading conversation messages"
+      className="flex min-h-full flex-col justify-end px-4 py-6 md:px-5 lg:px-6 xl:px-8"
     >
-      <div className="shrink-0 border-b border-[rgba(15,23,42,0.06)] px-6 py-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <Shimmer className="h-14 w-14 rounded-full" />
-            <div className="min-w-0">
-              <Shimmer className="h-5 w-40 rounded-[10px]" />
-              <div className="mt-2 flex gap-2">
-                <Shimmer className="h-3.5 w-16 rounded-[10px] opacity-80" />
-                <Shimmer className="h-3.5 w-24 rounded-[10px] opacity-70" />
-                <Shimmer className="h-3.5 w-20 rounded-[10px] opacity-70" />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <Shimmer className="h-10 w-32 rounded-[16px]" />
-            <Shimmer className="h-10 w-20 rounded-[14px]" />
-            <Shimmer className="h-10 w-28 rounded-[14px]" />
-            <Shimmer className="h-10 w-10 rounded-[14px]" />
-            <Shimmer className="h-10 w-10 rounded-[14px]" />
-          </div>
+      <div className="mt-auto w-full space-y-6">
+        <div className="flex items-end gap-3">
+          <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
+          <SkeletonCard className="max-w-[58%] px-5 py-4">
+            <Shimmer className="h-4 w-[86%] rounded-[10px]" />
+            <Shimmer className="mt-3 h-4 w-[68%] rounded-[10px] opacity-75" />
+          </SkeletonCard>
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 px-6 py-6">
-        <div className="mx-auto flex h-full w-full max-w-[920px] flex-col justify-end space-y-4">
-          <div className="flex flex-col items-start">
-            <Shimmer className="mb-2 h-3.5 w-24 rounded-[10px] opacity-70" />
-            <SkeletonCard className="w-full max-w-[76%] px-5 py-4">
-              <Shimmer className="h-4 w-[88%] rounded-[10px]" />
-              <Shimmer className="mt-3 h-4 w-full rounded-[10px] opacity-90" />
-              <Shimmer className="mt-3 h-4 w-[72%] rounded-[10px] opacity-75" />
-            </SkeletonCard>
-          </div>
-
-          <div className="flex flex-col items-end">
-            <Shimmer className="mb-2 h-3.5 w-24 rounded-[10px] opacity-70" />
-            <div className="w-full max-w-[76%]">
-              <SkeletonCard className="px-5 py-4">
-                <Shimmer className="h-4 w-[82%] rounded-[10px]" />
-                <Shimmer className="mt-3 h-4 w-full rounded-[10px] opacity-90" />
-                <Shimmer className="mt-3 h-4 w-[64%] rounded-[10px] opacity-75" />
-              </SkeletonCard>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-start">
-            <Shimmer className="mb-2 h-3.5 w-24 rounded-[10px] opacity-70" />
-            <SkeletonCard className="w-full max-w-[62%] px-5 py-4">
-              <Shimmer className="h-4 w-full rounded-[10px]" />
-              <Shimmer className="mt-3 h-4 w-[68%] rounded-[10px] opacity-75" />
-            </SkeletonCard>
-          </div>
+        <div className="flex justify-end">
+          <SkeletonCard className="w-full max-w-[48%] px-5 py-4">
+            <Shimmer className="h-4 w-full rounded-[10px]" />
+            <Shimmer className="mt-3 h-4 w-[72%] rounded-[10px] opacity-75" />
+          </SkeletonCard>
         </div>
-      </div>
 
-      <div className="shrink-0 px-6 pb-6">
-        <div className="mx-auto w-full max-w-[960px]">
-          <div className="mb-2 flex items-center justify-between gap-3 px-1">
-            <div className="flex items-center gap-2">
-              <Shimmer className="h-9 w-24 rounded-[12px]" />
-              <Shimmer className="h-10 w-10 rounded-[12px]" />
-              <Shimmer className="h-10 w-10 rounded-[12px]" />
-            </div>
-
-            <Shimmer className="h-9 w-28 rounded-[12px]" />
-          </div>
-
-          <div className="rounded-[24px] border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.84)] px-4 py-3 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.18)]">
-            <div className="flex items-end gap-3">
-              <Shimmer className="mb-1 h-10 w-10 rounded-[12px]" />
-              <div className="min-w-0 flex-1">
-                <Shimmer className="h-[60px] w-full rounded-[16px]" />
-              </div>
-              <Shimmer className="mb-1 h-12 w-24 rounded-[15px]" />
-            </div>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between px-1">
-            <Shimmer className="h-3.5 w-44 rounded-[10px] opacity-70" />
-            <Shimmer className="h-3.5 w-32 rounded-[10px] opacity-70" />
-          </div>
+        <div className="flex items-end gap-3">
+          <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
+          <SkeletonCard className="max-w-[64%] px-5 py-4">
+            <Shimmer className="h-4 w-[92%] rounded-[10px]" />
+            <Shimmer className="mt-3 h-4 w-full rounded-[10px] opacity-90" />
+            <Shimmer className="mt-3 h-4 w-[54%] rounded-[10px] opacity-70" />
+          </SkeletonCard>
         </div>
       </div>
     </div>

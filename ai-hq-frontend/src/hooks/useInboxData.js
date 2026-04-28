@@ -56,6 +56,8 @@ export function useInboxData({
   const [messages, setMessages] = useState([]);
   const [messagesThreadId, setMessagesThreadId] = useState("");
   const messagesRequestSeqRef = useRef(0);
+  const threadDetailRequestSeqRef = useRef(0);
+  const leadRequestSeqRef = useRef(0);
   const [selectedThread, setSelectedThread] = useState(null);
   const [relatedLead, setRelatedLead] = useState(null);
 
@@ -94,6 +96,8 @@ export function useInboxData({
     setMessages([]);
     setMessagesThreadId("");
     messagesRequestSeqRef.current += 1;
+    threadDetailRequestSeqRef.current += 1;
+    leadRequestSeqRef.current += 1;
     setSelectedThread(null);
     setRelatedLead(null);
     setThreadDetailError("");
@@ -138,6 +142,8 @@ export function useInboxData({
           setMessages([]);
           setMessagesThreadId("");
           messagesRequestSeqRef.current += 1;
+    threadDetailRequestSeqRef.current += 1;
+    leadRequestSeqRef.current += 1;
           setRelatedLead(null);
           setThreadDetailError("");
           setMessagesError("");
@@ -169,29 +175,45 @@ export function useInboxData({
   );
 
   const loadThreadDetail = useCallback(async (threadId) => {
-    if (!threadId) return;
+    const safeThreadId = s(threadId);
+    const requestSeq = threadDetailRequestSeqRef.current + 1;
+    threadDetailRequestSeqRef.current = requestSeq;
+
+    if (!safeThreadId) return;
     if (requireTenantScope && !tenantScope) return;
 
     try {
       setLoadingThreadDetail(true);
       setThreadDetailError("");
+
       const j = await withSharedInboxRequest(
-        `${requestScopePrefix}threads:detail:${threadId}`,
-        () =>
-          apiGet(`/api/inbox/threads/${threadId}`)
+        `${requestScopePrefix}threads:detail:${safeThreadId}`,
+        () => apiGet(`/api/inbox/threads/${safeThreadId}`)
       );
+
+      if (threadDetailRequestSeqRef.current !== requestSeq) return;
+
       if (j?.thread) {
-        setSelectedThread(j.thread);
+        setSelectedThread((current) => {
+          if (s(current?.id) && s(current?.id) !== safeThreadId) return current;
+          return j.thread;
+        });
+
         setData((prev) => ({
           ...prev,
-          threads: (Array.isArray(prev?.threads) ? prev.threads : []).map((t) => (t.id === threadId ? { ...t, ...j.thread } : t)),
+          threads: (Array.isArray(prev?.threads) ? prev.threads : []).map((t) =>
+            t.id === safeThreadId ? { ...t, ...j.thread } : t
+          ),
           dbDisabled: Boolean(prev?.dbDisabled),
         }));
       }
     } catch (e) {
+      if (threadDetailRequestSeqRef.current !== requestSeq) return;
       setThreadDetailError(String(e?.message || e || "Failed to load thread detail"));
     } finally {
-      setLoadingThreadDetail(false);
+      if (threadDetailRequestSeqRef.current === requestSeq) {
+        setLoadingThreadDetail(false);
+      }
     }
   }, [requestScopePrefix, requireTenantScope, setData, tenantScope]);
 
@@ -241,26 +263,38 @@ export function useInboxData({
   }, [requestScopePrefix, requireTenantScope, tenantScope]);
 
   const loadRelatedLead = useCallback(async (threadId) => {
-    if (!threadId) {
+    const safeThreadId = s(threadId);
+    const requestSeq = leadRequestSeqRef.current + 1;
+    leadRequestSeqRef.current = requestSeq;
+
+    if (!safeThreadId) {
       setRelatedLead(null);
       return;
     }
+
     if (requireTenantScope && !tenantScope) return;
 
     try {
       setLoadingLead(true);
       setLeadError("");
+
       const j = await withSharedInboxRequest(
-        `${requestScopePrefix}threads:lead:${threadId}`,
-        () =>
-          getLeadByThreadId(threadId)
+        `${requestScopePrefix}threads:lead:${safeThreadId}`,
+        () => getLeadByThreadId(safeThreadId)
       );
+
+      if (leadRequestSeqRef.current !== requestSeq) return;
+
       setRelatedLead(j?.lead || null);
     } catch (e) {
+      if (leadRequestSeqRef.current !== requestSeq) return;
+
       setRelatedLead(null);
       setLeadError(String(e?.message || e || "Failed to load related lead"));
     } finally {
-      setLoadingLead(false);
+      if (leadRequestSeqRef.current === requestSeq) {
+        setLoadingLead(false);
+      }
     }
   }, [requestScopePrefix, requireTenantScope, tenantScope]);
 
@@ -529,5 +563,6 @@ export function useInboxData({
     sendOperatorReply,
   };
 }
+
 
 

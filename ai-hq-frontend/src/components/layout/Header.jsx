@@ -330,7 +330,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   const overlay = (
-    <div className="w-[262px] rounded-[18px] border border-white/80 bg-white/97 p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)] backdrop-blur-xl">
+    <div className="w-[262px] rounded-[18px] border border-white/80 bg-white p-2.5 shadow-[0_26px_70px_-36px_rgba(15,23,42,0.3)]">
       <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
           <WorkspaceGlyph className="h-9 w-9 shrink-0 opacity-[0.96]" />
@@ -442,7 +442,7 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60] backdrop-blur-xl"
+        className="sticky top-0 z-[60]"
         style={{
           height: HEADER_HEIGHT,
           background: SHELL_CHROME_BG,
@@ -490,3 +490,4 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
+
