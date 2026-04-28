@@ -286,6 +286,8 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     }
   }
 
+  const notificationsLoading =
+    notifications?.loading === true || notifications?.refreshing === true;
   const unread =
     typeof notifications?.unreadCount === "number"
       ? notifications.unreadCount
@@ -338,7 +340,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       >
         <span>Notifications</span>
         <span className="text-[12px] text-text-subtle">
-          {unread > 99 ? "99+" : unread}
+          {notificationsLoading ? "…" : unread > 99 ? "99+" : unread}
         </span>
       </button>
 
@@ -391,6 +393,8 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 }
 
 function NotificationsButton({ notifications }) {
+  const notificationsLoading =
+    notifications?.loading === true || notifications?.refreshing === true;
   const unread =
     typeof notifications?.unreadCount === "number"
       ? notifications.unreadCount
@@ -463,3 +467,4 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
+

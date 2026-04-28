@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LoaderCircle,
   MessageSquareText,
@@ -434,10 +434,12 @@ export default function PublicWebsiteWidget() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-[18px] font-semibold tracking-[-0.03em]">
-                {s(widget.title) || "Website chat"}
+                {loading ? "Preparing chat" : s(widget.title) || "Website chat"}
               </div>
               <div className="mt-1 text-[13px] leading-5 text-slate-500">
-                {s(widget.subtitle) || "Ask a question or leave a message for the team."}
+                {loading
+                  ? "Checking this website chat installation."
+                  : s(widget.subtitle) || "Ask a question or leave a message for the team."}
               </div>
             </div>
 
@@ -447,7 +449,7 @@ export default function PublicWebsiteWidget() {
                 statusTone(s(statusView.mode)),
               ].join(" ")}
             >
-              {statusLabel(s(statusView.mode))}
+              {loading ? "Loading" : statusLabel(s(statusView.mode))}
             </span>
           </div>
 

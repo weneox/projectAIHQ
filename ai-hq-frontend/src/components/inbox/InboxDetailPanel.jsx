@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+﻿import { useEffect, useMemo, useRef } from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
@@ -260,14 +260,14 @@ function EmptyComposerDock() {
               disabled
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
             >
-              ☺
+              â˜º
             </button>
             <button
               type="button"
               disabled
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
             >
-              ⎋
+              âŽ‹
             </button>
           </div>
 
@@ -283,7 +283,7 @@ function EmptyComposerDock() {
             disabled
             className="inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#E6ECF5] bg-[#EEF3FA] text-[#A0AEC0]"
           >
-            →
+            â†’
           </button>
         </div>
       </div>
@@ -527,3 +527,4 @@ export default function InboxDetailPanel({
     </section>
   );
 }
+
