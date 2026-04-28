@@ -1,10 +1,24 @@
-﻿import { useEffect, useMemo, useRef } from "react";
+﻿import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
+
+const INITIAL_MESSAGE_WINDOW = 80;
+const MESSAGE_WINDOW_STEP = 60;
+const REVEAL_OLDER_THRESHOLD_PX = 180;
+
+const MemoInboxMessageBubble = memo(InboxMessageBubble);
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -365,7 +379,7 @@ function ConversationLoadingState() {
   );
 }
 
-export default function InboxDetailPanel({
+function InboxDetailPanel({
   selectedThread,
   messages,
   outboundAttempts,
@@ -390,6 +404,12 @@ export default function InboxDetailPanel({
   const scrollViewportRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
   const lastThreadIdRef = useRef("");
+  const lastWindowThreadIdRef = useRef("");
+  const pendingPrependScrollRef = useRef(null);
+
+  const [messageWindowLimit, setMessageWindowLimit] = useState(
+    INITIAL_MESSAGE_WINDOW
+  );
 
   const visibleMessages = useMemo(
     () =>
@@ -398,6 +418,58 @@ export default function InboxDetailPanel({
         : [],
     [messages]
   );
+
+  useEffect(() => {
+    if (lastWindowThreadIdRef.current === currentThreadId) return;
+
+    lastWindowThreadIdRef.current = currentThreadId;
+    pendingPrependScrollRef.current = null;
+    setMessageWindowLimit(INITIAL_MESSAGE_WINDOW);
+  }, [currentThreadId]);
+
+  const renderedMessages = useMemo(() => {
+    if (visibleMessages.length <= messageWindowLimit) return visibleMessages;
+    return visibleMessages.slice(visibleMessages.length - messageWindowLimit);
+  }, [messageWindowLimit, visibleMessages]);
+
+  const hiddenOlderMessageCount = Math.max(
+    0,
+    visibleMessages.length - renderedMessages.length
+  );
+
+  const canRevealOlderMessages = hiddenOlderMessageCount > 0;
+
+  const revealOlderMessages = useCallback(() => {
+    if (!canRevealOlderMessages) return;
+
+    const viewport = scrollViewportRef.current;
+
+    pendingPrependScrollRef.current = viewport
+      ? {
+          scrollHeight: viewport.scrollHeight,
+          scrollTop: viewport.scrollTop,
+        }
+      : null;
+
+    setMessageWindowLimit((current) =>
+      Math.min(visibleMessages.length, current + MESSAGE_WINDOW_STEP)
+    );
+  }, [canRevealOlderMessages, visibleMessages.length]);
+
+  useLayoutEffect(() => {
+    const pending = pendingPrependScrollRef.current;
+    if (!pending) return;
+
+    const viewport = scrollViewportRef.current;
+    pendingPrependScrollRef.current = null;
+
+    if (!viewport) return;
+
+    const nextScrollHeight = viewport.scrollHeight;
+    const delta = Math.max(0, nextScrollHeight - pending.scrollHeight);
+
+    viewport.scrollTop = pending.scrollTop + delta;
+  }, [renderedMessages.length]);
 
   useEffect(() => {
     if (!hasThread) {
@@ -427,6 +499,13 @@ export default function InboxDetailPanel({
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
 
       shouldStickToBottomRef.current = distanceFromBottom <= 120;
+
+      if (
+        viewport.scrollTop <= REVEAL_OLDER_THRESHOLD_PX &&
+        canRevealOlderMessages
+      ) {
+        revealOlderMessages();
+      }
     }
 
     updateStickState();
@@ -435,7 +514,7 @@ export default function InboxDetailPanel({
     return () => {
       viewport.removeEventListener("scroll", updateStickState);
     };
-  }, [currentThreadId]);
+  }, [canRevealOlderMessages, currentThreadId, revealOlderMessages]);
 
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
@@ -547,8 +626,8 @@ export default function InboxDetailPanel({
                       </div>
                     ) : (
                       <div className="mt-auto w-full space-y-6">
-                        {visibleMessages.map((message) => (
-                          <InboxMessageBubble
+                        {renderedMessages.map((message) => (
+                          <MemoInboxMessageBubble
                             key={message.id}
                             m={message}
                             thread={selectedThread}
@@ -578,3 +657,5 @@ export default function InboxDetailPanel({
     </section>
   );
 }
+
+export default memo(InboxDetailPanel);
