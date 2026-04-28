@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
@@ -639,10 +638,6 @@ export default function Shell() {
   const topWarningVisible = Boolean(shellStats?.message) && !warningDismissed;
   const topOffset = topWarningVisible ? GLOBAL_ALERT_HEIGHT : 0;
 
-  const pageTransition = {
-    duration: 0.22,
-    ease: [0.22, 1, 0.36, 1],
-  };
 
   return (
     <div
@@ -694,17 +689,7 @@ export default function Shell() {
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white">
               <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6">
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={`${location.pathname}${location.search}`}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={pageTransition}
-                  >
-                    <Outlet />
-                  </motion.div>
-                </AnimatePresence>
+                <Outlet />
               </div>
             </div>
           )}
@@ -718,3 +703,4 @@ export default function Shell() {
     </div>
   );
 }
+
