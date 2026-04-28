@@ -1,4 +1,4 @@
-import { Dropdown } from "antd";
+﻿import { Dropdown } from "antd";
 import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { logoutUser } from "../../api/auth.js";
@@ -233,6 +233,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     userName: "",
     workspaceName: "",
     role: "",
+    resolved: false,
   });
 
   useEffect(() => {
@@ -247,9 +248,16 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           userName: resolveSessionUserName(context),
           workspaceName: resolveSessionWorkspaceName(context),
           role: resolveSessionRole(context),
+          resolved: true,
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!alive) return;
+        setSession((prev) => ({
+          ...prev,
+          resolved: true,
+        }));
+      });
 
     return () => {
       alive = false;
@@ -285,8 +293,9 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
   const displayName =
     pickFirstWorkspaceName(workspaceMeta?.workspaceName, session.workspaceName) ||
-    pickFirstText(session.actorName, session.userName) ||
-    "Workspace";
+    pickFirstText(session.actorName, session.userName);
+
+  const workspaceResolving = !displayName && !session.resolved;
 
   const roleLabel = pickFirstText(
     workspaceMeta?.userName,
@@ -301,9 +310,13 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           <WorkspaceGlyph className="h-9 w-9 shrink-0 opacity-[0.96]" />
 
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
-              {displayName}
-            </div>
+            {workspaceResolving ? (
+              <div className="h-3.5 w-28 rounded-full bg-[rgba(15,23,42,0.08)]" />
+            ) : (
+              <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+                {displayName || "Workspace"}
+              </div>
+            )}
             {roleLabel ? (
               <div className="truncate pt-0.5 text-[11px] text-text-subtle">
                 {roleLabel}
@@ -349,16 +362,20 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     >
       <button
         type="button"
-        aria-label={displayName}
+        aria-label={displayName || "Workspace"}
         aria-expanded={open}
         className="flex h-8 items-center gap-2 px-1 text-left text-text-muted transition-colors duration-base ease-premium hover:text-text"
       >
         <WorkspaceGlyph className="h-[17px] w-[17px] shrink-0 opacity-[0.96]" />
 
         <div className="hidden min-w-0 text-left lg:block">
-          <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
-            {displayName}
-          </div>
+          {workspaceResolving ? (
+            <div className="h-3 w-24 rounded-full bg-[rgba(15,23,42,0.08)]" />
+          ) : (
+            <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
+              {displayName || "Workspace"}
+            </div>
+          )}
         </div>
 
         <ChevronDown
