@@ -68,7 +68,19 @@ function isInboundMessage(message = {}) {
 
   if (direction === "inbound") return true;
   if (direction === "outbound") return false;
+
   return senderType === "customer" || senderType === "user";
+}
+
+function getMessageClientMutationId(message = {}) {
+  const meta = obj(message?.meta);
+
+  return s(
+    message?.clientMutationId ||
+      message?.client_mutation_id ||
+      meta?.clientMutationId ||
+      meta?.client_mutation_id
+  );
 }
 
 function mergeIfChanged(current, patch) {
@@ -88,6 +100,39 @@ function mergeIfChanged(current, patch) {
   }
 
   return changed ? next : current;
+}
+
+function upsertRealtimeMessage(messages, nextMessage) {
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  const nextId = s(nextMessage?.id);
+  const nextClientMutationId = getMessageClientMutationId(nextMessage);
+
+  let replaced = false;
+
+  const nextMessages = safeMessages.map((message) => {
+    const sameId = nextId && s(message?.id) === nextId;
+    const sameClientMutationId =
+      nextClientMutationId &&
+      getMessageClientMutationId(message) === nextClientMutationId;
+
+    if (!sameId && !sameClientMutationId) return message;
+
+    replaced = true;
+
+    return {
+      ...message,
+      ...nextMessage,
+      meta: {
+        ...obj(message?.meta),
+        ...obj(nextMessage?.meta),
+        optimistic: false,
+      },
+    };
+  });
+
+  if (replaced) return nextMessages;
+
+  return [...safeMessages, nextMessage];
 }
 
 function buildThreadPatchFromMessage({
@@ -120,6 +165,12 @@ function buildThreadPatchFromMessage({
   if (messageTime) {
     patch.last_message_at = messageTime;
     patch.updated_at = messageTime;
+
+    if (inbound) {
+      patch.last_inbound_at = messageTime;
+    } else {
+      patch.last_outbound_at = messageTime;
+    }
   }
 
   if (inbound && !selected) {
@@ -166,6 +217,7 @@ function patchThreadList({
   }
 
   const currentThread = safeThreads[index];
+
   const patch = buildThreadPatchFromMessage({
     currentThread,
     payloadThread,
@@ -191,6 +243,7 @@ function patchSelectedThread({
   message = null,
 }) {
   const safeThreadId = s(threadId);
+
   if (!selectedThread || s(selectedThread?.id) !== safeThreadId) {
     return selectedThread;
   }
@@ -204,6 +257,7 @@ function patchSelectedThread({
   });
 
   if (!patch) return selectedThread;
+
   return mergeIfChanged(selectedThread, patch);
 }
 
@@ -214,14 +268,10 @@ export function useInboxRealtime({
   setSelectedThread,
   setMessages,
   loadThreads,
-  loadThreadDetail,
-  loadRelatedLead,
   setRelatedLead,
 }) {
   const selectedThreadRef = useRef(selectedThread);
   const loadThreadsRef = useRef(loadThreads);
-  const loadThreadDetailRef = useRef(loadThreadDetail);
-  const loadRelatedLeadRef = useRef(loadRelatedLead);
   const threadRefreshTimerRef = useRef(null);
   const threadRefreshPreferredIdRef = useRef("");
 
@@ -231,13 +281,12 @@ export function useInboxRealtime({
 
   useEffect(() => {
     loadThreadsRef.current = loadThreads;
-    loadThreadDetailRef.current = loadThreadDetail;
-    loadRelatedLeadRef.current = loadRelatedLead;
-  }, [loadThreads, loadThreadDetail, loadRelatedLead]);
+  }, [loadThreads]);
 
   useEffect(() => {
     function scheduleThreadRefresh(preferredThreadId = "") {
       const safePreferredId = s(preferredThreadId);
+
       if (safePreferredId) {
         threadRefreshPreferredIdRef.current = safePreferredId;
       }
@@ -328,11 +377,7 @@ export function useInboxRealtime({
         const selected = s(currentSelectedThread?.id) === threadId;
 
         if (selected) {
-          setMessages((prev) => {
-            const safePrev = Array.isArray(prev) ? prev : [];
-            if (safePrev.some((item) => item.id === message.id)) return safePrev;
-            return [...safePrev, message];
-          });
+          setMessages((prev) => upsertRealtimeMessage(prev, message));
         }
 
         setThreads((prev) =>
@@ -372,13 +417,7 @@ export function useInboxRealtime({
         const selected = s(currentSelectedThread?.id) === threadId;
 
         if (selected) {
-          setMessages((prev) =>
-            Array.isArray(prev)
-              ? prev.map((item) =>
-                  item.id === message.id ? mergeIfChanged(item, message) : item
-                )
-              : prev
-          );
+          setMessages((prev) => upsertRealtimeMessage(prev, message));
         }
 
         setThreads((prev) =>
