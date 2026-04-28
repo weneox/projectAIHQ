@@ -1,6 +1,8 @@
-import { useState } from "react";
-
 function noop() {}
+
+function s(value = "") {
+  return String(value ?? "").trim();
+}
 
 export function useInboxComposerSurface({
   selectedThread,
@@ -9,53 +11,34 @@ export function useInboxComposerSurface({
   sendOperatorReply,
   releaseHandoff,
 }) {
-  const selectedThreadId = String(selectedThread?.id || "").trim();
-  const [composerState, setComposerState] = useState({
-    threadId: "",
-    text: "",
-  });
+  const selectedThreadId = s(selectedThread?.id);
 
-  const replyText =
-    composerState.threadId === selectedThreadId ? composerState.text : "";
+  async function handleSend(nextText = "") {
+    if (!selectedThreadId) return false;
 
-  function setReplyText(nextValue) {
-    const threadId = selectedThreadId;
-
-    setComposerState((prev) => {
-      const previousText = prev.threadId === threadId ? prev.text : "";
-      const resolvedText =
-        typeof nextValue === "function" ? nextValue(previousText) : nextValue;
-
-      return {
-        threadId,
-        text: String(resolvedText ?? ""),
-      };
-    });
-  }
-
-  async function handleSend() {
-    if (!selectedThreadId) return;
-
-    const trimmed = replyText.trim();
-    if (!trimmed) return;
+    const trimmed = s(nextText);
+    if (!trimmed) return false;
 
     const ok = await sendOperatorReply(selectedThreadId, trimmed);
-    if (ok !== false) {
-      setComposerState({
-        threadId: selectedThreadId,
-        text: "",
-      });
-    }
+    return ok !== false;
   }
 
   function handleRelease() {
-    if (!selectedThreadId) return;
+    if (!selectedThreadId) return null;
     return releaseHandoff(selectedThreadId);
   }
 
   return {
-    replyText,
-    setReplyText,
+    /**
+     * Intentionally undefined.
+     *
+     * The draft text now lives inside InboxComposer, not in Inbox.jsx.
+     * This prevents every keystroke from rerendering the whole Inbox page,
+     * thread list, detail panel, and all message bubbles.
+     */
+    replyText: undefined,
+    setReplyText: undefined,
+
     composerSurface: {
       loading: false,
       error: "",
@@ -67,6 +50,7 @@ export function useInboxComposerSurface({
       refresh: noop,
       clearSaveState: surface?.clearSaveState || noop,
     },
+
     actionState,
     handleSend,
     handleRelease,

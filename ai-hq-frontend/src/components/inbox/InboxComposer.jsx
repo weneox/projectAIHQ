@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Paperclip, Plus, SendHorizonal, Smile } from "lucide-react";
 
 function s(value) {
   return String(value ?? "");
+}
+
+function trim(value) {
+  return String(value ?? "").trim();
 }
 
 function call(fn, ...args) {
@@ -17,14 +21,14 @@ function isActionPending(actionState, key) {
   }
 }
 
-export default function InboxComposer({
+function InboxComposer({
   embedded = false,
   selectedThread,
   surface = null,
   actionState = null,
   replyText,
   setReplyText,
-  value = "",
+  value,
   onChange,
   onSubmit,
   onSend,
@@ -42,10 +46,27 @@ export default function InboxComposer({
 }) {
   const textareaRef = useRef(null);
 
+  const selectedThreadId = trim(selectedThread?.id);
   const hasSelectedThreadProp = selectedThread !== undefined;
-  const hasThread = !hasSelectedThreadProp || Boolean(selectedThread?.id);
+  const hasThread = !hasSelectedThreadProp || Boolean(selectedThreadId);
 
-  const normalizedValue = s(replyText ?? value);
+  const controlled =
+    replyText !== undefined ||
+    value !== undefined ||
+    typeof setReplyText === "function" ||
+    typeof onChange === "function";
+
+  const [localDraft, setLocalDraft] = useState({
+    threadId: selectedThreadId,
+    text: "",
+  });
+
+  const normalizedValue = controlled
+    ? s(replyText ?? value)
+    : localDraft.threadId === selectedThreadId
+      ? localDraft.text
+      : "";
+
   const hasText = normalizedValue.trim().length > 0;
 
   const surfaceSaving = Boolean(surface?.saving);
@@ -88,26 +109,59 @@ export default function InboxComposer({
 
     if (typeof onChange === "function") {
       onChange(nextValue);
+      return;
     }
+
+    setLocalDraft({
+      threadId: selectedThreadId,
+      text: String(nextValue ?? ""),
+    });
+  }
+
+  function clearLocalDraftAfterSend() {
+    if (controlled) return;
+
+    setLocalDraft((current) => {
+      if (current.threadId !== selectedThreadId) return current;
+
+      return {
+        threadId: selectedThreadId,
+        text: "",
+      };
+    });
   }
 
   function handleTextareaChange(event) {
     emitChange(event.target.value);
   }
 
-  function handleSubmit() {
-    if (!canSend) return;
+  async function handleSubmit() {
+    if (!canSend) return false;
 
     const nextText = normalizedValue.trim();
 
     if (typeof onSubmit === "function") {
-      onSubmit(nextText);
-      return;
+      const result = await onSubmit(nextText);
+
+      if (result !== false) {
+        clearLocalDraftAfterSend();
+      }
+
+      return result;
     }
 
     if (typeof onSend === "function") {
-      onSend(nextText);
+      const result = await onSend(nextText);
+
+      if (result !== false) {
+        clearLocalDraftAfterSend();
+      }
+
+      return result;
     }
+
+    clearLocalDraftAfterSend();
+    return true;
   }
 
   function handleVoice() {
@@ -125,7 +179,7 @@ export default function InboxComposer({
 
   function handlePrimaryAction() {
     if (hasText) {
-      handleSubmit();
+      void handleSubmit();
       return;
     }
 
@@ -137,7 +191,7 @@ export default function InboxComposer({
     if (event.shiftKey) return;
 
     event.preventDefault();
-    handleSubmit();
+    void handleSubmit();
   }
 
   const actionDisabled = hasText ? !canSend : !canVoice;
@@ -272,8 +326,8 @@ export default function InboxComposer({
                 actionDisabled
                   ? "opacity-0"
                   : hasText
-                  ? "opacity-100"
-                  : "opacity-70",
+                    ? "opacity-100"
+                    : "opacity-70",
               ].join(" ")}
               style={{
                 background: hasText
@@ -315,3 +369,5 @@ export default function InboxComposer({
     </div>
   );
 }
+
+export default memo(InboxComposer);
