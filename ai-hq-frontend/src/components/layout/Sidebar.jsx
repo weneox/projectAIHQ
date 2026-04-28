@@ -20,11 +20,7 @@ function formatBadgeCount(count) {
   return count > 99 ? "99+" : String(count);
 }
 
-function SidebarImageIcon({
-  src,
-  collapsed = false,
-  isActive = false,
-}) {
+function SidebarImageIcon({ src, collapsed = false, isActive = false }) {
   return (
     <img
       src={src}
@@ -33,8 +29,8 @@ function SidebarImageIcon({
       draggable="false"
       className={cx(
         "select-none object-contain transition-all duration-base ease-premium",
-        collapsed ? "h-[19px] w-[19px]" : "h-[18px] w-[18px]",
-        isActive ? "opacity-100" : "opacity-[0.86] group-hover:opacity-100"
+        collapsed ? "h-[22px] w-[22px]" : "h-[21px] w-[21px]",
+        isActive ? "opacity-100" : "opacity-[0.88] group-hover:opacity-100"
       )}
     />
   );
@@ -78,7 +74,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
             <Icon
               className={cx(
                 "relative z-[1] shrink-0 transition-colors duration-base ease-premium",
-                collapsed ? "h-[19px] w-[19px]" : "h-[18px] w-[18px]",
+                collapsed ? "h-[22px] w-[22px]" : "h-[21px] w-[21px]",
                 isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
               )}
               strokeWidth={1.95}
@@ -134,7 +130,7 @@ function CollapseControl({ collapsed = false, onToggle }) {
         collapsed ? "h-8 w-8 justify-center" : "h-8 gap-2 px-1"
       )}
     >
-      <Icon className="h-[14px] w-[14px]" strokeWidth={1.95} />
+      <Icon className="h-[17px] w-[17px]" strokeWidth={1.95} />
       <span
         className={cx(
           "overflow-hidden text-[11px] font-medium tracking-[-0.01em] transition-all duration-slow ease-premium",
@@ -169,7 +165,7 @@ function SidebarContent({
             aria-label="Close navigation"
             className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
           >
-            <X className="h-[15px] w-[15px]" strokeWidth={1.95} />
+            <X className="h-[18px] w-[18px]" strokeWidth={1.95} />
           </button>
         </div>
       ) : (

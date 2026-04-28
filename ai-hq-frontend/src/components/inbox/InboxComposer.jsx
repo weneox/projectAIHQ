@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import {
+  CornerDownLeft,
   Paperclip,
   Plus,
   SendHorizonal,
@@ -14,7 +15,21 @@ function call(fn, ...args) {
   if (typeof fn === "function") fn(...args);
 }
 
+function isActionPending(actionState, key) {
+  try {
+    return Boolean(actionState?.isActionPending?.(key));
+  } catch {
+    return false;
+  }
+}
+
 export default function InboxComposer({
+  embedded = false,
+  selectedThread,
+  surface = null,
+  actionState = null,
+  replyText,
+  setReplyText,
   value = "",
   onChange,
   onSubmit,
@@ -24,6 +39,7 @@ export default function InboxComposer({
   placeholder = "Write a reply...",
   showReturnToAi = false,
   onReturnToAi,
+  onReleaseHandoff,
   onPickAttachment,
   onPickEmoji,
   onPickMore,
@@ -31,10 +47,27 @@ export default function InboxComposer({
   submitLabel = "Send",
 }) {
   const textareaRef = useRef(null);
-  const normalizedValue = s(value);
+  const hasSelectedThreadProp = selectedThread !== undefined;
+  const hasThread = !hasSelectedThreadProp || Boolean(selectedThread?.id);
+
+  const normalizedValue = s(replyText ?? value);
+
+  const surfaceSaving = Boolean(surface?.saving);
+  const pendingReply = isActionPending(actionState, "reply");
+  const isSending = Boolean(sending || surfaceSaving || pendingReply);
+  const unavailable = Boolean(surface?.unavailable || surface?.availability === "unavailable");
+  const ready = surface?.ready === false ? false : true;
+
+  const resolvedDisabled = Boolean(
+    disabled || isSending || unavailable || !ready || !hasThread
+  );
+
   const canSend = useMemo(() => {
-    return !disabled && !sending && normalizedValue.trim().length > 0;
-  }, [disabled, sending, normalizedValue]);
+    return !resolvedDisabled && normalizedValue.trim().length > 0;
+  }, [resolvedDisabled, normalizedValue]);
+
+  const showReleaseToAi =
+    showReturnToAi || Boolean(selectedThread?.handoff_active);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -42,17 +75,17 @@ export default function InboxComposer({
 
     el.style.height = "0px";
     const nextHeight = Math.min(el.scrollHeight, 132);
-    el.style.height = `${Math.max(nextHeight, 26)}px`;
+    el.style.height = `${Math.max(nextHeight, 28)}px`;
   }, [normalizedValue]);
 
   function emitChange(nextValue) {
-    if (typeof onChange === "function") {
-      onChange(nextValue);
+    if (typeof setReplyText === "function") {
+      setReplyText(nextValue);
       return;
     }
 
-    if (typeof onChange?.target === "function") {
-      onChange.target({ target: { value: nextValue } });
+    if (typeof onChange === "function") {
+      onChange(nextValue);
     }
   }
 
@@ -63,13 +96,15 @@ export default function InboxComposer({
   function handleSubmit() {
     if (!canSend) return;
 
+    const nextText = normalizedValue.trim();
+
     if (typeof onSubmit === "function") {
-      onSubmit(normalizedValue);
+      onSubmit(nextText);
       return;
     }
 
     if (typeof onSend === "function") {
-      onSend(normalizedValue);
+      onSend(nextText);
     }
   }
 
@@ -81,28 +116,40 @@ export default function InboxComposer({
     handleSubmit();
   }
 
+  function handleReleaseToAi() {
+    if (typeof onReturnToAi === "function") {
+      onReturnToAi();
+      return;
+    }
+
+    if (typeof onReleaseHandoff === "function") {
+      onReleaseHandoff();
+    }
+  }
+
   return (
-    <div
-      className={[
-        "w-full",
-        className,
-      ].join(" ")}
-    >
+    <div className={["w-full", className].join(" ")}>
       <div
         className={[
-          "flex items-end gap-3 rounded-[28px] border border-[#E7EDF5] bg-white",
-          "px-4 py-3",
-          "shadow-[0_16px_40px_-30px_rgba(15,23,42,0.18)]",
+          "relative flex items-end gap-3 overflow-hidden rounded-[24px] border border-[#DDE6F1]",
+          "bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-3",
+          "shadow-[0_28px_70px_-52px_rgba(15,23,42,0.34),inset_0_1px_0_rgba(255,255,255,0.98)]",
+          embedded ? "" : "",
         ].join(" ")}
       >
-        <div className="flex items-center gap-1">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-white"
+        />
+
+        <div className="flex items-center gap-1 self-center">
           <button
             type="button"
             onClick={() => call(onPickMore)}
-            disabled={disabled || sending}
+            disabled={resolvedDisabled}
             title="More"
             aria-label="More"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#64748B] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Plus className="h-[18px] w-[18px]" strokeWidth={2.1} />
           </button>
@@ -110,10 +157,10 @@ export default function InboxComposer({
           <button
             type="button"
             onClick={() => call(onPickEmoji)}
-            disabled={disabled || sending}
+            disabled={resolvedDisabled}
             title="Emoji"
             aria-label="Emoji"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#64748B] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Smile className="h-[17px] w-[17px]" strokeWidth={2} />
           </button>
@@ -121,10 +168,10 @@ export default function InboxComposer({
           <button
             type="button"
             onClick={() => call(onPickAttachment)}
-            disabled={disabled || sending}
+            disabled={resolvedDisabled}
             title="Attach"
             aria-label="Attach"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#64748B] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Paperclip className="h-[17px] w-[17px]" strokeWidth={2} />
           </button>
@@ -136,12 +183,12 @@ export default function InboxComposer({
             value={normalizedValue}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
-            disabled={disabled || sending}
+            disabled={resolvedDisabled}
             placeholder={placeholder}
             rows={1}
             className={[
               "block w-full resize-none overflow-y-auto bg-transparent",
-              "border-0 p-0 text-[15px] leading-[26px] text-[#0F172A] outline-none",
+              "border-0 p-0 text-[15px] font-medium leading-[28px] text-[#0F172A] outline-none",
               "placeholder:text-[#94A3B8]",
               "disabled:cursor-not-allowed disabled:text-[#94A3B8]",
             ].join(" ")}
@@ -149,13 +196,14 @@ export default function InboxComposer({
         </div>
 
         <div className="flex items-center gap-2 self-center pl-1">
-          {showReturnToAi ? (
+          {showReleaseToAi ? (
             <button
               type="button"
-              onClick={() => call(onReturnToAi)}
-              disabled={disabled || sending}
-              className="hidden whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-[#64748B] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45 sm:inline-flex"
+              onClick={handleReleaseToAi}
+              disabled={resolvedDisabled && !isSending}
+              className="hidden h-10 items-center gap-1.5 rounded-[13px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-bold text-[#64748B] transition-colors hover:border-[#D8E2EE] hover:bg-[#F8FAFC] hover:text-[#0F172A] disabled:cursor-not-allowed disabled:opacity-45 sm:inline-flex"
             >
+              <CornerDownLeft className="h-3.5 w-3.5" />
               Return to AI
             </button>
           ) : null}
@@ -167,15 +215,20 @@ export default function InboxComposer({
             title={submitLabel}
             aria-label={submitLabel}
             className={[
-              "inline-flex h-11 w-11 items-center justify-center rounded-full",
-              "border border-[#D7E6FB] bg-[#EEF5FF] text-[#5B86C5]",
+              "inline-flex h-11 w-11 items-center justify-center rounded-[15px] border",
               "transition-all duration-150",
               canSend
-                ? "hover:border-[#C6DCF8] hover:bg-[#E5F0FF] hover:text-[#3E6FAF]"
-                : "cursor-not-allowed opacity-50",
+                ? [
+                    "border-[#1676DE]",
+                    "bg-[linear-gradient(135deg,#3BA6FF_0%,#147FEA_58%,#075FCC_100%)]",
+                    "text-white",
+                    "shadow-[0_18px_36px_-24px_rgba(37,99,235,0.56),inset_0_1px_0_rgba(255,255,255,0.26)]",
+                    "hover:translate-y-[-1px]",
+                  ].join(" ")
+                : "cursor-not-allowed border-[#DFE7F1] bg-[#F1F5F9] text-[#94A3B8]",
             ].join(" ")}
           >
-            <SendHorizonal className="h-[17px] w-[17px]" strokeWidth={2.1} />
+            <SendHorizonal className="h-[17px] w-[17px]" strokeWidth={2.2} />
           </button>
         </div>
       </div>

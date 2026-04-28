@@ -112,18 +112,53 @@ function InboundAvatar({ title, avatarUrl }) {
   );
 }
 
-function BubbleTime({ value, incoming }) {
+function BubbleTime({ value, incoming, className = "" }) {
   if (!value) return null;
 
   return (
     <span
       className={[
         "select-none whitespace-nowrap text-[11px] font-medium leading-none",
-        incoming ? "text-[#95A0AF]" : "text-white/80",
+        incoming ? "text-[#8D98A8]" : "text-white/82",
+        className,
       ].join(" ")}
     >
       {value}
     </span>
+  );
+}
+
+function MessageTextWithTime({ text, sentAt, incoming }) {
+  const hasText = Boolean(text);
+
+  return (
+    <div className="relative whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
+      {hasText ? (
+        text
+      ) : (
+        <span
+          className={[
+            "text-[14px]",
+            incoming ? "text-[#94A3B8]" : "text-white/78",
+          ].join(" ")}
+        >
+          (empty message)
+        </span>
+      )}
+
+      {sentAt ? (
+        <span
+          aria-hidden="true"
+          className="inline-block h-[1px] w-[54px]"
+        />
+      ) : null}
+
+      <BubbleTime
+        value={sentAt}
+        incoming={incoming}
+        className="absolute bottom-[3px] right-0"
+      />
+    </div>
   );
 }
 
@@ -158,39 +193,18 @@ function EliteBubble({ side = "left", text, sentAt }) {
 
         <div
           className={[
-            "relative z-[1] inline-block max-w-full px-[15px] pb-[8px] pt-[10px]",
+            "relative z-[1] inline-block max-w-full px-[15px] py-[10px]",
             "shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]",
             incoming
               ? "rounded-[20px] rounded-bl-[8px] bg-[#FFFFFF] text-[#0F172A]"
               : "rounded-[20px] rounded-br-[8px] bg-[#3797F0] text-white",
           ].join(" ")}
         >
-          {text ? (
-            <>
-              <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
-                {text}
-              </div>
-
-              <div className="mt-[5px] flex justify-end pl-6">
-                <BubbleTime value={sentAt} incoming={incoming} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div
-                className={[
-                  "text-[14px]",
-                  incoming ? "text-[#94A3B8]" : "text-white/78",
-                ].join(" ")}
-              >
-                (empty message)
-              </div>
-
-              <div className="mt-[5px] flex justify-end pl-6">
-                <BubbleTime value={sentAt} incoming={incoming} />
-              </div>
-            </>
-          )}
+          <MessageTextWithTime
+            text={text}
+            sentAt={sentAt}
+            incoming={incoming}
+          />
         </div>
       </div>
     </div>

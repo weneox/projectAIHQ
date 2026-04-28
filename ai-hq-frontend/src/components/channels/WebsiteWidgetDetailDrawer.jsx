@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Code2,
   Copy,
   Globe2,
+  Package,
   RefreshCw,
   Save,
   Settings2,
@@ -32,6 +33,13 @@ import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import Input, { Textarea } from "../ui/Input.jsx";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import ChannelIcon from "./ChannelIcon.jsx";
+
+const ACCENT_OPTIONS = [
+  { label: "Blue", value: "#2e60ff", preview: "#2e60ff" },
+  { label: "Navy", value: "#0f172a", preview: "#0f172a" },
+  { label: "Cyan", value: "#0ea5e9", preview: "#0ea5e9" },
+  { label: "Green", value: "#16a34a", preview: "#16a34a" },
+];
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -98,6 +106,12 @@ function verificationStateLabel(state = "") {
   return "Unverified";
 }
 
+function compactValue(value, max = 30) {
+  const text = s(value, "Not set");
+  if (text.length <= max) return text;
+  return `${text.slice(0, 17)}…${text.slice(-8)}`;
+}
+
 function buildPosture({
   widget = {},
   install = {},
@@ -127,8 +141,8 @@ function buildPosture({
     return {
       tone: "warning",
       title: "Widget is off",
-      summary: "Enable it and save once.",
-      next: "Save required",
+      summary: "Turn it on when you are ready.",
+      next: "Change settings",
       icon: ShieldAlert,
     };
   }
@@ -137,8 +151,8 @@ function buildPosture({
     return {
       tone: "warning",
       title: "Widget ID missing",
-      summary: "Save once to generate the public install ID.",
-      next: "Save required",
+      summary: "Save settings once to create the public widget ID.",
+      next: "Save settings",
       icon: ShieldAlert,
     };
   }
@@ -146,12 +160,12 @@ function buildPosture({
   if (productionBlocked) {
     return {
       tone: verificationState === "failed" ? "danger" : "warning",
-      title: "Domain verification needed",
+      title: "Domain needs verification",
       summary: firstText(
         developerHandoff.blockingMessage,
         launchReadiness.message,
         verificationSurface.message,
-        "Verify DNS TXT ownership before public install."
+        "Verify DNS ownership before public install."
       ),
       next: "Verify domain",
       icon: ShieldAlert,
@@ -162,7 +176,7 @@ function buildPosture({
     return {
       tone: "success",
       title: "Ready to install",
-      summary: "Snippet and install packages are available.",
+      summary: "The widget is configured. Copy the snippet when you need it.",
       next: "Copy snippet",
       icon: CheckCircle2,
     };
@@ -193,12 +207,6 @@ function buildPosture({
     next: "Review setup",
     icon: ShieldAlert,
   };
-}
-
-function compactValue(value, max = 28) {
-  const text = s(value, "Not set");
-  if (text.length <= max) return text;
-  return `${text.slice(0, 16)}…${text.slice(-8)}`;
 }
 
 function toneClass(tone = "neutral") {
@@ -238,54 +246,55 @@ function ActionButton({
   );
 }
 
-function TextNavButton({ active, icon, children, onClick }) {
+function UtilityButton({
+  icon,
+  title,
+  description,
+  disabled = false,
+  onClick,
+}) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cx(
-        "relative inline-flex h-11 items-center gap-2 border-b-2 px-1",
-        "text-[13px] font-semibold tracking-[-0.01em] transition-colors",
-        active
-          ? "border-brand text-brand"
-          : "border-transparent text-text-muted hover:text-text"
+        "group grid grid-cols-[34px_minmax(0,1fr)] items-center gap-3 border-b border-line-soft py-4 text-left last:border-b-0",
+        "transition-colors duration-200 hover:bg-surface-subtle/55",
+        disabled && "cursor-not-allowed opacity-45 hover:bg-transparent"
       )}
     >
-      {icon}
-      <span>{children}</span>
+      <span className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-line bg-surface text-text-muted transition-colors group-hover:text-text">
+        {icon}
+      </span>
+
+      <span className="min-w-0">
+        <span className="block truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-[12.5px] font-semibold text-text-muted">
+          {description}
+        </span>
+      </span>
     </button>
   );
 }
 
-function LedgerCell({ label, value, tone = "neutral" }) {
+function LedgerLine({ label, value, tone = "neutral" }) {
   return (
-    <div className="min-w-0 border-r border-line-soft px-4 last:border-r-0">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center border-b border-line-soft py-3 last:border-b-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
         {label}
       </div>
 
       <div
+        title={s(value)}
         className={cx(
-          "mt-1 truncate text-[14px] font-semibold tracking-[-0.015em]",
+          "min-w-0 truncate text-[14px] font-semibold tracking-[-0.015em]",
           toneClass(tone)
         )}
-        title={s(value)}
       >
         {value || "Not set"}
-      </div>
-    </div>
-  );
-}
-
-function KeyValueLine({ label, value }) {
-  return (
-    <div className="grid grid-cols-[126px_minmax(0,1fr)] items-center border-b border-line-soft py-3 last:border-b-0">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-        {label}
-      </div>
-
-      <div className="min-w-0 truncate text-[13.5px] font-semibold tracking-[-0.01em] text-text">
-        {value || "Not available"}
       </div>
     </div>
   );
@@ -341,7 +350,7 @@ export default function WebsiteWidgetDetailDrawer({
   const queryClient = useQueryClient();
   const workspace = useWorkspaceTenantKey({ enabled: open });
 
-  const [activeMode, setActiveMode] = useState("status");
+  const [activePanel, setActivePanel] = useState("overview");
   const [draftForm, setDraftForm] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
@@ -364,13 +373,23 @@ export default function WebsiteWidgetDetailDrawer({
     refetchOnWindowFocus: false,
   });
 
+  useEffect(() => {
+    if (!open) return;
+
+    setActivePanel("overview");
+    setStatusMessage("");
+    setCopyFeedback("");
+    setVerificationMessage("");
+    setHandoffMessage("");
+  }, [open, channel?.id]);
+
   const handoffMutation = useMutation({
     mutationFn: createWebsiteWidgetInstallHandoff,
     onSuccess(nextPayload) {
       setHandoffPackage(obj(nextPayload));
       setHandoffMessage("Developer package prepared.");
       setCopyFeedback("");
-      setActiveMode("install");
+      setActivePanel("install");
     },
   });
 
@@ -380,7 +399,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(obj(nextPayload));
       setHandoffMessage("GTM package prepared.");
       setCopyFeedback("");
-      setActiveMode("install");
+      setActivePanel("install");
     },
   });
 
@@ -390,7 +409,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(obj(nextPayload));
       setHandoffMessage("WordPress package prepared.");
       setCopyFeedback("");
-      setActiveMode("install");
+      setActivePanel("install");
     },
   });
 
@@ -405,6 +424,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationOverride(null);
       setHandoffMessage("");
       setHandoffPackage(null);
+      setActivePanel("overview");
 
       handoffMutation.reset();
       gtmHandoffMutation.reset();
@@ -431,6 +451,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationMessage("Verification status refreshed.");
       setHandoffMessage("");
       setHandoffPackage(null);
+      setActivePanel("verify");
 
       handoffMutation.reset();
       gtmHandoffMutation.reset();
@@ -452,7 +473,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationMessage("TXT challenge created.");
       setHandoffMessage("");
       setHandoffPackage(null);
-      setActiveMode("verify");
+      setActivePanel("verify");
 
       handoffMutation.reset();
       gtmHandoffMutation.reset();
@@ -478,7 +499,7 @@ export default function WebsiteWidgetDetailDrawer({
       );
       setHandoffMessage("");
       setHandoffPackage(null);
-      setActiveMode("verify");
+      setActivePanel("verify");
 
       handoffMutation.reset();
       gtmHandoffMutation.reset();
@@ -561,9 +582,6 @@ export default function WebsiteWidgetDetailDrawer({
     saveAllowed &&
     (launchWordpressHandoff.ready === true ||
       install.wordpressHandoffReady === true);
-
-  const anyHandoffReady =
-    developerHandoffReady || gtmHandoffReady || wordpressHandoffReady;
 
   const installHandoffMessage = firstText(
     launchDeveloperHandoff.message,
@@ -677,10 +695,11 @@ export default function WebsiteWidgetDetailDrawer({
         await navigator.clipboard.writeText(text);
         setCopyFeedback(successMessage);
         setStatusMessage("");
+        setActivePanel("overview");
         return;
       }
     } catch {
-      // Clipboard can fail in restricted test/browser contexts.
+      // Clipboard can fail in restricted browser contexts.
     }
 
     setCopyFeedback("Copy is unavailable in this browser context.");
@@ -788,6 +807,137 @@ export default function WebsiteWidgetDetailDrawer({
     onClose?.();
   }
 
+  function renderFooter() {
+    if (activePanel === "settings") {
+      return (
+        <>
+          <ActionButton
+            primary
+            icon={<Save className="h-4 w-4" strokeWidth={2.1} />}
+            onClick={handleSave}
+            disabled={!saveAllowed || saveMutation.isPending}
+            className="w-full"
+          >
+            {saveMutation.isPending ? "Saving" : "Save changes"}
+          </ActionButton>
+
+          <ActionButton onClick={() => setActivePanel("overview")}>
+            Cancel
+          </ActionButton>
+
+          <ActionButton
+            icon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            onClick={handleRefresh}
+            disabled={statusQuery.isFetching}
+          >
+            Refresh
+          </ActionButton>
+        </>
+      );
+    }
+
+    if (activePanel === "verify") {
+      return (
+        <>
+          <ActionButton
+            primary
+            onClick={handleVerifyNow}
+            disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+            className="w-full"
+          >
+            Verify
+          </ActionButton>
+
+          <ActionButton
+            onClick={handleCreateChallenge}
+            disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+          >
+            Create TXT
+          </ActionButton>
+
+          <ActionButton
+            icon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            onClick={handleRefreshVerification}
+            disabled={statusQuery.isLoading || verificationBusy}
+          >
+            Refresh
+          </ActionButton>
+        </>
+      );
+    }
+
+    if (activePanel === "install") {
+      return (
+        <>
+          {packageAvailable ? (
+            <ActionButton
+              primary
+              icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
+              onClick={handleCopyHandoffPackage}
+              className="w-full"
+            >
+              Copy package
+            </ActionButton>
+          ) : (
+            <ActionButton
+              primary
+              icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
+              onClick={handleCopySnippet}
+              disabled={!snippetAvailable}
+              className="w-full"
+            >
+              Copy snippet
+            </ActionButton>
+          )}
+
+          <ActionButton
+            onClick={handlePrepareDeveloperInstall}
+            disabled={!developerHandoffReady || statusQuery.isLoading || handoffBusy}
+          >
+            Package
+          </ActionButton>
+
+          <ActionButton
+            icon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            onClick={handleRefresh}
+            disabled={statusQuery.isFetching}
+          >
+            Refresh
+          </ActionButton>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <ActionButton
+          primary
+          icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
+          onClick={handleCopySnippet}
+          disabled={!snippetAvailable}
+          className="w-full"
+        >
+          Copy snippet
+        </ActionButton>
+
+        <ActionButton
+          icon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
+          onClick={() => setActivePanel("settings")}
+        >
+          Change
+        </ActionButton>
+
+        <ActionButton
+          icon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+          onClick={handleRefresh}
+          disabled={statusQuery.isFetching}
+        >
+          Refresh
+        </ActionButton>
+      </>
+    );
+  }
+
   return (
     <aside
       aria-hidden={!open}
@@ -821,82 +971,8 @@ export default function WebsiteWidgetDetailDrawer({
         </div>
       </header>
 
-      <div className="shrink-0 border-b border-line-soft bg-surface px-7 py-5">
-        <div className="flex items-start gap-4">
-          <div className={cx("pt-0.5", toneClass(posture.tone))}>
-            <PostureIcon className="h-5 w-5" strokeWidth={2.1} />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-4">
-              <div className="truncate text-[19px] font-semibold leading-6 tracking-[-0.04em] text-text">
-                {posture.title}
-              </div>
-
-              <div className={cx("shrink-0 text-[12px] font-semibold", toneClass(posture.tone))}>
-                {posture.next}
-              </div>
-            </div>
-
-            <div className="mt-1 text-[13px] font-semibold leading-5 text-text-muted">
-              {posture.summary}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid grid-cols-3 overflow-hidden border-y border-line-soft py-4">
-          <LedgerCell
-            label="Widget"
-            value={
-              widget.enabled === true
-                ? compactValue(widget.publicWidgetId || "Enabled")
-                : "Disabled"
-            }
-            tone={widget.enabled === true ? "success" : "warning"}
-          />
-
-          <LedgerCell
-            label="Domain"
-            value={compactValue(
-              verificationSurface.domain ||
-                verificationSurface.candidateDomain ||
-                "Not set"
-            )}
-            tone={verified ? "success" : productionInstallBlocked ? "warning" : "neutral"}
-          />
-
-          <LedgerCell label="Install" value={installState} tone={installTone} />
-        </div>
-
-        <div className="mt-2 flex items-center gap-7">
-          <TextNavButton
-            active={activeMode === "status"}
-            onClick={() => setActiveMode("status")}
-            icon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Surface
-          </TextNavButton>
-
-          <TextNavButton
-            active={activeMode === "verify"}
-            onClick={() => setActiveMode("verify")}
-            icon={<Globe2 className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Verify
-          </TextNavButton>
-
-          <TextNavButton
-            active={activeMode === "install"}
-            onClick={() => setActiveMode("install")}
-            icon={<Code2 className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Install
-          </TextNavButton>
-        </div>
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
-        <div className="space-y-5">
+        <div className="space-y-6">
           <Feedback success={statusMessage} error={actionError} info={copyFeedback} />
 
           {!saveAllowed ? (
@@ -920,12 +996,97 @@ export default function WebsiteWidgetDetailDrawer({
             />
           ))}
 
-          {activeMode === "status" ? (
+          {activePanel === "overview" ? (
+            <>
+              <section>
+                <div className="flex items-start gap-4">
+                  <div className={cx("pt-0.5", toneClass(posture.tone))}>
+                    <PostureIcon className="h-5 w-5" strokeWidth={2.1} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[22px] font-semibold leading-7 tracking-[-0.045em] text-text">
+                      {posture.title}
+                    </div>
+
+                    <div className="mt-1 text-[14px] font-semibold leading-6 text-text-muted">
+                      {posture.summary}
+                    </div>
+                  </div>
+
+                  <div className={cx("shrink-0 text-[12px] font-semibold", toneClass(posture.tone))}>
+                    {posture.next}
+                  </div>
+                </div>
+
+                <div className="mt-6 border-y border-line-soft">
+                  <LedgerLine
+                    label="Widget"
+                    value={
+                      widget.enabled === true
+                        ? compactValue(widget.publicWidgetId || "Enabled")
+                        : "Disabled"
+                    }
+                    tone={widget.enabled === true ? "success" : "warning"}
+                  />
+
+                  <LedgerLine
+                    label="Domain"
+                    value={compactValue(
+                      verificationSurface.domain ||
+                        verificationSurface.candidateDomain ||
+                        "Not set"
+                    )}
+                    tone={verified ? "success" : productionInstallBlocked ? "warning" : "neutral"}
+                  />
+
+                  <LedgerLine label="Install" value={installState} tone={installTone} />
+                </div>
+              </section>
+
+              <section className="border-y border-line-soft">
+                <UtilityButton
+                  icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
+                  title="Copy snippet"
+                  description={
+                    snippetAvailable
+                      ? "Use it on your website."
+                      : "Save or verify before snippet is available."
+                  }
+                  disabled={!snippetAvailable}
+                  onClick={handleCopySnippet}
+                />
+
+                <UtilityButton
+                  icon={<Globe2 className="h-4 w-4" strokeWidth={2.1} />}
+                  title="Verify domain"
+                  description={verified ? "Domain is already verified." : "DNS TXT ownership check."}
+                  onClick={() => setActivePanel("verify")}
+                />
+
+                <UtilityButton
+                  icon={<Code2 className="h-4 w-4" strokeWidth={2.1} />}
+                  title="Install package"
+                  description="Developer, GTM or WordPress package."
+                  onClick={() => setActivePanel("install")}
+                />
+
+                <UtilityButton
+                  icon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
+                  title="Change settings"
+                  description="Edit title, color, domains and prompts."
+                  onClick={() => setActivePanel("settings")}
+                />
+              </section>
+            </>
+          ) : null}
+
+          {activePanel === "settings" ? (
             <section>
               <SectionHeading
                 eyebrow="Settings"
-                title="Public surface"
-                description="Only the public widget controls. No install data here."
+                title="Change widget"
+                description="Only edit what visitors actually see."
                 right={
                   <button
                     type="button"
@@ -968,58 +1129,77 @@ export default function WebsiteWidgetDetailDrawer({
                 </div>
 
                 <div>
-                  <FieldLabel>Accent</FieldLabel>
+                  <FieldLabel>Greeting</FieldLabel>
                   <Input
-                    value={form.accentColor}
+                    value={form.subtitle}
                     onChange={(event) =>
                       updateForm((current) => ({
                         ...current,
-                        accentColor: event.target.value,
+                        subtitle: event.target.value,
                       }))
                     }
                     readOnly={!saveAllowed}
                     appearance="quiet"
-                    placeholder="#0f172a"
+                    placeholder="How can we help?"
                   />
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <div>
-                  <FieldLabel>Allowed origins</FieldLabel>
-                  <Textarea
-                    value={form.allowedOrigins}
-                    onChange={(event) =>
-                      updateForm((current) => ({
-                        ...current,
-                        allowedOrigins: event.target.value,
-                      }))
-                    }
-                    readOnly={!saveAllowed}
-                    rows={3}
-                    appearance="quiet"
-                    placeholder="https://www.example.com"
-                    textClassName="!min-h-[82px]"
-                  />
-                </div>
+              <div className="mt-5">
+                <FieldLabel>Accent</FieldLabel>
 
-                <div>
-                  <FieldLabel>Allowed domains</FieldLabel>
-                  <Textarea
-                    value={form.allowedDomains}
-                    onChange={(event) =>
-                      updateForm((current) => ({
-                        ...current,
-                        allowedDomains: event.target.value,
-                      }))
-                    }
-                    readOnly={!saveAllowed}
-                    rows={3}
-                    appearance="quiet"
-                    placeholder="example.com"
-                    textClassName="!min-h-[82px]"
-                  />
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_OPTIONS.map((option) => {
+                    const active =
+                      s(form.accentColor).toLowerCase() ===
+                      s(option.value).toLowerCase();
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={!saveAllowed}
+                        onClick={() =>
+                          updateForm((current) => ({
+                            ...current,
+                            accentColor: option.value,
+                          }))
+                        }
+                        className={cx(
+                          "flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[12px] font-semibold transition-all",
+                          active
+                            ? "border-brand bg-brand-soft text-brand"
+                            : "border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
+                          !saveAllowed && "cursor-not-allowed opacity-50"
+                        )}
+                      >
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: option.preview }}
+                        />
+                        <span>{option.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
+
+              <div className="mt-5">
+                <FieldLabel>Trusted domains</FieldLabel>
+                <Textarea
+                  value={form.allowedDomains}
+                  onChange={(event) =>
+                    updateForm((current) => ({
+                      ...current,
+                      allowedDomains: event.target.value,
+                    }))
+                  }
+                  readOnly={!saveAllowed}
+                  rows={2}
+                  appearance="quiet"
+                  placeholder="example.com"
+                  textClassName="!min-h-[64px] resize-none"
+                />
               </div>
 
               <div className="mt-5">
@@ -1033,16 +1213,16 @@ export default function WebsiteWidgetDetailDrawer({
                     }))
                   }
                   readOnly={!saveAllowed}
-                  rows={3}
+                  rows={2}
                   appearance="quiet"
                   placeholder="What services do you offer?"
-                  textClassName="!min-h-[82px]"
+                  textClassName="!min-h-[64px] resize-none"
                 />
               </div>
             </section>
           ) : null}
 
-          {activeMode === "verify" ? (
+          {activePanel === "verify" ? (
             <section>
               <SectionHeading
                 eyebrow="Verification"
@@ -1062,19 +1242,20 @@ export default function WebsiteWidgetDetailDrawer({
               </div>
 
               <div className="mt-5 border-y border-line-soft">
-                <KeyValueLine
+                <LedgerLine
                   label="State"
                   value={verificationStateLabel(verificationSurface.state)}
+                  tone={verified ? "success" : "warning"}
                 />
-                <KeyValueLine
+                <LedgerLine
                   label="TXT host"
                   value={s(verificationChallenge.name, "Create a challenge first.")}
                 />
-                <KeyValueLine
+                <LedgerLine
                   label="Last check"
                   value={formatTimestamp(verificationSurface.lastCheckedAt)}
                 />
-                <KeyValueLine
+                <LedgerLine
                   label="Verified at"
                   value={formatTimestamp(verificationSurface.verifiedAt)}
                 />
@@ -1085,35 +1266,11 @@ export default function WebsiteWidgetDetailDrawer({
                 <Textarea
                   value={s(verificationChallenge.value)}
                   readOnly
-                  rows={3}
+                  rows={2}
                   appearance="quiet"
                   placeholder="Create a challenge to generate the TXT value."
-                  textClassName="!min-h-[86px]"
+                  textClassName="!min-h-[68px] resize-none"
                 />
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <ActionButton
-                  onClick={handleCreateChallenge}
-                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
-                >
-                  Create TXT
-                </ActionButton>
-
-                <ActionButton
-                  primary
-                  onClick={handleVerifyNow}
-                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
-                >
-                  Verify
-                </ActionButton>
-
-                <ActionButton
-                  onClick={handleRefreshVerification}
-                  disabled={statusQuery.isLoading || verificationBusy}
-                >
-                  Refresh
-                </ActionButton>
               </div>
 
               <div className="mt-5">
@@ -1128,12 +1285,12 @@ export default function WebsiteWidgetDetailDrawer({
             </section>
           ) : null}
 
-          {activeMode === "install" ? (
+          {activePanel === "install" ? (
             <section>
               <SectionHeading
                 eyebrow="Install"
                 title="Go live"
-                description="Copy snippet first. Packages only if needed."
+                description="Copy snippet first. Use packages only if needed."
               />
 
               {productionInstallBlocked ? (
@@ -1150,26 +1307,16 @@ export default function WebsiteWidgetDetailDrawer({
                 </div>
               ) : null}
 
-              {!anyHandoffReady ? (
-                <div className="mt-5">
-                  <InlineNotice
-                    tone={productionInstallBlocked ? "warning" : "info"}
-                    description={installHandoffMessage}
-                    compact
-                  />
-                </div>
-              ) : null}
-
               <div className="mt-5 border-y border-line-soft">
-                <KeyValueLine
+                <LedgerLine
                   label="Widget ID"
                   value={s(widget.publicWidgetId, "Generated after save")}
                 />
-                <KeyValueLine
+                <LedgerLine
                   label="Script"
                   value={s(install.scriptUrl, "Not available")}
                 />
-                <KeyValueLine
+                <LedgerLine
                   label="API base"
                   value={s(install.apiBase, "Not available")}
                 />
@@ -1187,12 +1334,13 @@ export default function WebsiteWidgetDetailDrawer({
                       ? "Verify domain ownership to unlock the production snippet."
                       : "Save widget settings to generate the snippet."
                   }
-                  textClassName="!min-h-[104px] font-mono !text-[12.5px]"
+                  textClassName="!min-h-[104px] resize-none font-mono !text-[12.5px]"
                 />
               </div>
 
               <div className="mt-5 grid grid-cols-3 gap-3">
                 <ActionButton
+                  icon={<Package className="h-4 w-4" strokeWidth={2.1} />}
                   onClick={handlePrepareDeveloperInstall}
                   disabled={!developerHandoffReady || statusQuery.isLoading || handoffBusy}
                 >
@@ -1224,6 +1372,12 @@ export default function WebsiteWidgetDetailDrawer({
                 </div>
               ) : null}
 
+              {installHandoffMessage && !packageAvailable ? (
+                <div className="mt-5 text-[12.5px] font-semibold leading-5 text-text-muted">
+                  {installHandoffMessage}
+                </div>
+              ) : null}
+
               {packageAvailable ? (
                 <div className="mt-5">
                   <FieldLabel>Package</FieldLabel>
@@ -1232,7 +1386,7 @@ export default function WebsiteWidgetDetailDrawer({
                     readOnly
                     rows={4}
                     appearance="quiet"
-                    textClassName="!min-h-[104px] font-mono !text-[12.5px]"
+                    textClassName="!min-h-[104px] resize-none font-mono !text-[12.5px]"
                   />
                 </div>
               ) : null}
@@ -1243,40 +1397,7 @@ export default function WebsiteWidgetDetailDrawer({
 
       <footer className="relative z-20 shrink-0 border-t border-line-soft bg-surface px-7 py-4">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
-          <ActionButton
-            primary
-            icon={<Save className="h-4 w-4" strokeWidth={2.1} />}
-            onClick={handleSave}
-            disabled={!saveAllowed || saveMutation.isPending}
-            className="w-full"
-          >
-            {saveMutation.isPending ? "Saving" : "Save"}
-          </ActionButton>
-
-          {activeMode === "install" && packageAvailable ? (
-            <ActionButton
-              icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
-              onClick={handleCopyHandoffPackage}
-            >
-              Copy package
-            </ActionButton>
-          ) : (
-            <ActionButton
-              icon={<Copy className="h-4 w-4" strokeWidth={2.1} />}
-              onClick={handleCopySnippet}
-              disabled={!snippetAvailable}
-            >
-              Copy snippet
-            </ActionButton>
-          )}
-
-          <ActionButton
-            icon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-            onClick={handleRefresh}
-            disabled={statusQuery.isFetching}
-          >
-            Refresh
-          </ActionButton>
+          {renderFooter()}
         </div>
       </footer>
     </aside>

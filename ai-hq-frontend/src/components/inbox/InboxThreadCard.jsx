@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Clock3, Instagram, Send } from "lucide-react";
+import { useState } from "react";
+import { Clock3, Globe2, MessageCircle, Send } from "lucide-react";
 
 import instagramLogo from "../../assets/channels/instagram.svg";
 import telegramLogo from "../../assets/channels/telegram.svg";
@@ -66,17 +66,9 @@ function resolveSafeDisplayName(thread = {}) {
     thread.channel || thread.channel_type || thread.provider || thread.source_type
   );
 
-  if (displayName && !isPlaceholderDisplayName(displayName)) {
-    return displayName;
-  }
-
-  if (customerName && !looksLikeNumericIdentity(customerName)) {
-    return customerName;
-  }
-
-  if (externalUsername) {
-    return externalUsername;
-  }
+  if (displayName && !isPlaceholderDisplayName(displayName)) return displayName;
+  if (customerName && !looksLikeNumericIdentity(customerName)) return customerName;
+  if (externalUsername) return externalUsername;
 
   if (externalUserId) {
     if (channel === "instagram") return "Instagram User";
@@ -122,6 +114,7 @@ function resolveChannelLabel(thread = {}) {
 
   if (normalized === "webchat") return "Web Chat";
   if (normalized === "web") return "Website";
+  if (normalized === "website") return "Website";
   if (normalized === "whatsapp") return "WhatsApp";
   if (normalized === "telegram") return "Telegram";
   if (normalized === "instagram") return "Instagram";
@@ -165,11 +158,10 @@ function formatRelativeTime(value = "") {
 
 function resolveAvatarTone(seed = "") {
   const tones = [
-    "bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(219,234,254,0.96))] text-[rgba(37,99,235,0.96)] ring-[rgba(37,99,235,0.10)]",
-    "bg-[linear-gradient(180deg,rgba(245,243,255,0.96),rgba(237,233,254,0.96))] text-[rgba(109,40,217,0.96)] ring-[rgba(109,40,217,0.10)]",
-    "bg-[linear-gradient(180deg,rgba(236,253,245,0.96),rgba(209,250,229,0.96))] text-[rgba(5,150,105,0.96)] ring-[rgba(5,150,105,0.10)]",
-    "bg-[linear-gradient(180deg,rgba(255,247,237,0.96),rgba(254,215,170,0.96))] text-[rgba(194,65,12,0.96)] ring-[rgba(194,65,12,0.10)]",
-    "bg-[linear-gradient(180deg,rgba(254,242,242,0.96),rgba(254,226,226,0.96))] text-[rgba(220,38,38,0.96)] ring-[rgba(220,38,38,0.10)]",
+    "border-[#D7E0EA] bg-[#EEF4FA] text-[#235B98]",
+    "border-[#DCE4EC] bg-[#F3F6F9] text-[#475569]",
+    "border-[#D9E6DF] bg-[#EEF7F2] text-[#0F766E]",
+    "border-[#E6DDD3] bg-[#F8F1EA] text-[#9A5A19]",
   ];
 
   const score = String(seed || "")
@@ -182,16 +174,16 @@ function resolveAvatarTone(seed = "") {
 function resolveMeta(thread = {}) {
   if (thread?.handoff_active) {
     return {
-      label: "Handoff",
-      tone: "bg-[rgba(255,247,237,0.96)] text-[rgba(180,83,9,0.96)]",
+      label: "HANDOFF",
+      tone: "text-[#C46A10]",
     };
   }
 
   const channel = resolveChannelLabel(thread);
   if (channel) {
     return {
-      label: channel,
-      tone: "bg-[rgba(248,250,252,0.96)] text-[rgba(71,85,105,0.96)]",
+      label: channel.toUpperCase(),
+      tone: "text-[#66788A]",
     };
   }
 
@@ -201,12 +193,12 @@ function resolveMeta(thread = {}) {
   };
 }
 
-function ChannelBadge({ channel }) {
+function ChannelMark({ channel }) {
   const normalized = lower(channel);
 
   if (normalized === "instagram") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+      <span className="absolute -bottom-1 -right-1 inline-flex h-[20px] w-[20px] items-center justify-center overflow-hidden rounded-[6px] border border-white bg-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
         <img
           src={instagramLogo}
           alt="Instagram"
@@ -219,7 +211,7 @@ function ChannelBadge({ channel }) {
 
   if (normalized === "telegram") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
+      <span className="absolute -bottom-1 -right-1 inline-flex h-[20px] w-[20px] items-center justify-center overflow-hidden rounded-[6px] border border-white bg-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
         <img
           src={telegramLogo}
           alt="Telegram"
@@ -232,20 +224,28 @@ function ChannelBadge({ channel }) {
 
   if (normalized === "facebook" || normalized === "messenger") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[rgba(37,99,235,0.98)] text-white shadow-[0_8px_18px_-12px_rgba(0,0,0,0.45)]">
-        <Send className="h-2.5 w-2.5" strokeWidth={2.2} />
+      <span className="absolute -bottom-1 -right-1 inline-flex h-[20px] w-[20px] items-center justify-center rounded-[6px] border border-white bg-[#2563EB] text-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+        <Send className="h-2.5 w-2.5" strokeWidth={2.4} />
       </span>
     );
   }
 
-  return null;
+  if (normalized === "web" || normalized === "website" || normalized === "webchat") {
+    return (
+      <span className="absolute -bottom-1 -right-1 inline-flex h-[20px] w-[20px] items-center justify-center rounded-[6px] border border-white bg-[#E9EEF5] text-[#475569] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+        <Globe2 className="h-3 w-3" strokeWidth={2.2} />
+      </span>
+    );
+  }
+
+  return (
+    <span className="absolute -bottom-1 -right-1 inline-flex h-[20px] w-[20px] items-center justify-center rounded-[6px] border border-white bg-[#E9EEF5] text-[#64748B] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+      <MessageCircle className="h-3 w-3" strokeWidth={2.2} />
+    </span>
+  );
 }
 
-export default function InboxThreadCard({
-  thread,
-  selected = false,
-  onOpen,
-}) {
+export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const name = resolveSafeDisplayName(thread);
   const preview = resolvePreview(thread);
   const unreadCount = Number(thread?.unread_count || 0);
@@ -254,8 +254,9 @@ export default function InboxThreadCard({
   );
   const meta = resolveMeta(thread);
   const avatarUrl = resolveAvatarUrl(thread);
+  const channelKey = resolveChannelKey(thread);
+
   const avatarKey = `${s(thread?.id)}:${avatarUrl}`;
-  const channelKey = useMemo(() => resolveChannelKey(thread), [thread]);
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;
 
@@ -264,16 +265,25 @@ export default function InboxThreadCard({
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "group flex w-full items-start gap-3 rounded-[16px] px-3.5 py-3 text-left transition-all duration-200",
-        selected
-          ? "bg-[rgba(239,246,255,0.90)] ring-1 ring-[rgba(37,99,235,0.10)]"
-          : "bg-transparent hover:bg-[rgba(248,250,252,0.82)]",
+        "relative flex w-full items-start gap-3 px-5 py-4 text-left",
+        "transition-[background-color,border-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        selected ? "bg-[#EDF3F9]" : "bg-white hover:bg-[#F7FAFC]",
       ].join(" ")}
     >
-      <div className="relative">
+      <span
+        aria-hidden="true"
+        className={[
+          "absolute bottom-0 left-0 top-0 bg-[#2F80ED]",
+          "transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          selected ? "w-[4px] opacity-100" : "w-0 opacity-0",
+        ].join(" ")}
+      />
+
+      <div className="relative mt-0.5 shrink-0">
         <div
           className={[
-            "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12px] font-semibold ring-1",
+            "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border text-[12px] font-bold",
+            "transition-[background-color,border-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
             resolveAvatarTone(name),
           ].join(" ")}
         >
@@ -292,47 +302,46 @@ export default function InboxThreadCard({
           )}
         </div>
 
-        <ChannelBadge channel={channelKey} />
+        <ChannelMark channel={channelKey} />
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold leading-5 text-[rgba(15,23,42,0.96)]">
+            <div className="truncate text-[14px] font-bold leading-5 tracking-[-0.015em] text-[#0F172A] transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
               {name}
             </div>
 
             {meta.label ? (
-              <div className="mt-1">
-                <span
-                  className={[
-                    "inline-flex rounded-[10px] px-2 py-1 text-[10.5px] font-semibold",
-                    meta.tone,
-                  ].join(" ")}
-                >
-                  {meta.label}
-                </span>
+              <div
+                className={[
+                  "mt-1 text-[11px] font-bold tracking-[0.16em]",
+                  "transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  meta.tone,
+                ].join(" ")}
+              >
+                {meta.label}
               </div>
             ) : null}
           </div>
 
           <div className="flex shrink-0 items-center gap-2 pl-2">
             {timeLabel ? (
-              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[rgba(148,163,184,0.96)]">
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#91A0B2] transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                 <Clock3 className="h-3 w-3 shrink-0" />
                 <span>{timeLabel}</span>
               </span>
             ) : null}
 
             {unreadCount > 0 ? (
-              <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[rgba(37,99,235,0.98)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+              <span className="inline-flex min-w-[22px] items-center justify-center rounded-[8px] bg-[#2563EB] px-1.5 py-[5px] text-[10px] font-bold leading-none text-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                 {unreadCount}
               </span>
             ) : null}
           </div>
         </div>
 
-        <div className="mt-2 line-clamp-2 text-[12.5px] leading-5 text-[rgba(71,85,105,0.96)]">
+        <div className="mt-2 line-clamp-2 pr-2 text-[13px] font-medium leading-5 text-[#4F6174] transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
           {preview}
         </div>
       </div>

@@ -1,10 +1,9 @@
-﻿import { useEffect, useMemo, useRef } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
-import { InboxDetailSkeleton } from "./InboxLoadingSurface.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
 function s(v, d = "") {
@@ -63,17 +62,9 @@ function resolveConversationTitle(thread) {
       thread?.source_type
   );
 
-  if (displayName && !isPlaceholderDisplayName(displayName)) {
-    return displayName;
-  }
-
-  if (customerName && !looksLikeNumericIdentity(customerName)) {
-    return customerName;
-  }
-
-  if (externalUsername) {
-    return externalUsername;
-  }
+  if (displayName && !isPlaceholderDisplayName(displayName)) return displayName;
+  if (customerName && !looksLikeNumericIdentity(customerName)) return customerName;
+  if (externalUsername) return externalUsername;
 
   if (channel === "instagram" && externalUserId) return "Instagram User";
   if (channel === "telegram" && externalUserId) return "Telegram User";
@@ -232,7 +223,7 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
         <button
           type="button"
           onClick={onOpenChannels}
-          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[14px] bg-[#2563EB] px-5 text-[14px] font-semibold text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.62)] transition-all hover:-translate-y-[1px]"
+          className="mt-8 inline-flex h-12 items-center gap-2 rounded-[14px] bg-[#2563EB] px-5 text-[14px] font-semibold text-white shadow-[0_22px_45px_-24px_rgba(37,99,235,0.62)] transition-colors hover:bg-[#1D5FD0]"
         >
           <span>Open channels</span>
           <ArrowRight className="h-4 w-4" />
@@ -244,7 +235,7 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
 
 function EmptyComposerDock() {
   return (
-    <div className="w-full px-4 pb-4 md:px-6 md:pb-6">
+    <div className="w-full px-4 pb-4 md:px-5 md:pb-6">
       <div className="w-full rounded-[30px] border border-[#E7ECF3] bg-white px-5 py-4 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.16)]">
         <div className="flex items-end gap-4">
           <div className="flex shrink-0 items-center gap-1">
@@ -260,14 +251,14 @@ function EmptyComposerDock() {
               disabled
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
             >
-              â˜º
+              ☺
             </button>
             <button
               type="button"
               disabled
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
             >
-              âŽ‹
+              ⎋
             </button>
           </div>
 
@@ -283,7 +274,7 @@ function EmptyComposerDock() {
             disabled
             className="inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#E6ECF5] bg-[#EEF3FA] text-[#A0AEC0]"
           >
-            â†’
+            →
           </button>
         </div>
       </div>
@@ -317,6 +308,101 @@ function EmptyConversationState() {
   );
 }
 
+function ConversationLoadingState() {
+  return (
+    <div className="flex min-h-full items-center justify-center px-6 py-10">
+      <style>
+        {`
+          @keyframes inbox-detail-loading-sweep {
+            0% {
+              transform: translateX(-165%);
+              opacity: 0;
+            }
+            12% {
+              opacity: 0.5;
+            }
+            48% {
+              transform: translateX(0%);
+              opacity: 1;
+            }
+            88% {
+              opacity: 0.55;
+            }
+            100% {
+              transform: translateX(165%);
+              opacity: 0;
+            }
+          }
+
+          @keyframes inbox-detail-loading-track-breathe {
+            0%, 100% {
+              opacity: 0.72;
+            }
+            50% {
+              opacity: 1;
+            }
+          }
+        `}
+      </style>
+
+      <div
+        className="relative h-10 w-[220px]"
+        role="status"
+        aria-label="Loading conversation"
+      >
+        <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-[#DCE6F2]" />
+
+        <div
+          className="absolute left-1/2 top-1/2 h-[2px] w-[94px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(37,99,235,0)_0%,rgba(37,99,235,0.18)_18%,rgba(37,99,235,0.98)_50%,rgba(37,99,235,0.18)_82%,rgba(37,99,235,0)_100%)] shadow-[0_0_18px_rgba(37,99,235,0.18)]"
+          style={{
+            animation:
+              "inbox-detail-loading-sweep 1.8s cubic-bezier(0.22,1,0.36,1) infinite, inbox-detail-loading-track-breathe 1.8s ease-in-out infinite",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function useSoftThreadTransition(threadId) {
+  const [ready, setReady] = useState(true);
+
+  useEffect(() => {
+    setReady(false);
+
+    let timeoutId = null;
+    let frameId = null;
+
+    const enter = () => {
+      timeoutId = window.setTimeout(() => {
+        setReady(true);
+      }, 45);
+    };
+
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
+      frameId = window.requestAnimationFrame(enter);
+    } else if (typeof window !== "undefined") {
+      timeoutId = window.setTimeout(() => setReady(true), 45);
+    } else {
+      setReady(true);
+    }
+
+    return () => {
+      if (frameId && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [threadId]);
+
+  return ready;
+}
+
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -338,6 +424,8 @@ export default function InboxDetailPanel({
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const currentThreadId = s(selectedThread?.id);
+
+  const contentReady = useSoftThreadTransition(currentThreadId);
 
   const scrollViewportRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
@@ -415,6 +503,10 @@ export default function InboxDetailPanel({
   const conversationTitle = resolveConversationTitle(selectedThread);
   const conversationMetaItems = formatConversationMeta(selectedThread);
 
+  const softContentClass = contentReady
+    ? "translate-y-0 opacity-100"
+    : "translate-y-[6px] opacity-0";
+
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">
       <InboxDetailHeaderCompact
@@ -465,56 +557,63 @@ export default function InboxDetailPanel({
               ref={scrollViewportRef}
               className="h-full overflow-y-auto pb-[92px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {surface?.loading ? (
-                <InboxDetailSkeleton />
-              ) : !hasThread ? (
-                <EmptyConversationState />
-              ) : (
-                <div
-                  className="flex min-h-full w-full flex-col px-4 py-6 md:px-5 lg:px-6 xl:px-8"
-                  style={{ "--inbox-surface": "#F8FAFC" }}
-                >
-                  {showSurfaceBanner ? (
-                    <div className="mb-4 w-full">
-                      <SurfaceBanner
-                        surface={surface}
-                        unavailableMessage="Conversation detail is temporarily unavailable."
-                        refreshLabel="Refresh conversation"
-                      />
-                    </div>
-                  ) : null}
+              <div
+                className={[
+                  "min-h-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  softContentClass,
+                ].join(" ")}
+              >
+                {surface?.loading ? (
+                  <ConversationLoadingState />
+                ) : !hasThread ? (
+                  <EmptyConversationState />
+                ) : (
+                  <div
+                    className="flex min-h-full w-full flex-col py-6 pl-0 pr-4 sm:pl-1 sm:pr-5 md:pl-1 md:pr-6 lg:pl-2 lg:pr-7 xl:pl-2 xl:pr-8"
+                    style={{ "--inbox-surface": "#F8FAFC" }}
+                  >
+                    {showSurfaceBanner ? (
+                      <div className="mb-4 w-full">
+                        <SurfaceBanner
+                          surface={surface}
+                          unavailableMessage="Conversation detail is temporarily unavailable."
+                          refreshLabel="Refresh conversation"
+                        />
+                      </div>
+                    ) : null}
 
-                  {!visibleMessages.length ? (
-                    <div className="flex min-h-[320px] items-center justify-center">
-                      <div className="w-full max-w-[520px] rounded-[26px] border border-[#E6EAF0] bg-white px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
-                        <div className="text-[18px] font-semibold text-[#0F172A]">
-                          No messages yet
-                        </div>
-                        <div className="mt-2 text-[14px] leading-7 text-[#64748B]">
-                          This conversation has no visible message history yet.
+                    {!visibleMessages.length ? (
+                      <div className="flex min-h-[320px] items-center justify-center">
+                        <div className="w-full max-w-[520px] rounded-[26px] border border-[#E6EAF0] bg-white px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.16)]">
+                          <div className="text-[18px] font-semibold text-[#0F172A]">
+                            No messages yet
+                          </div>
+                          <div className="mt-2 text-[14px] leading-7 text-[#64748B]">
+                            This conversation has no visible message history yet.
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="mt-auto w-full space-y-6">
-                      {visibleMessages.map((message) => (
-                        <InboxMessageBubble
-                          key={message.id}
-                          m={message}
-                          thread={selectedThread}
-                          attemptsByCorrelation={attemptsByCorrelation}
-                          enableInspect={false}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                    ) : (
+                      <div className="mt-auto w-full space-y-6">
+                        {visibleMessages.map((message) => (
+                          <InboxMessageBubble
+                            key={message.id}
+                            m={message}
+                            thread={selectedThread}
+                            attemptsByCorrelation={attemptsByCorrelation}
+                            enableInspect={false}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <FloatingComposerSlot>
               {hasThread && composer ? (
-                <div className="w-full px-4 pb-4 md:px-6 md:pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
+                <div className="w-full px-4 pb-4 md:px-5 md:pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
                   {composer}
                 </div>
               ) : (
@@ -527,7 +626,3 @@ export default function InboxDetailPanel({
     </section>
   );
 }
-
-
-
-

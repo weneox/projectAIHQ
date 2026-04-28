@@ -66,14 +66,6 @@ function buildSurfaceNotice(surface = {}) {
     };
   }
 
-  if (s(surface?.saveSuccess)) {
-    return {
-      tone: "success",
-      title: "Updated",
-      description: s(surface.saveSuccess),
-    };
-  }
-
   return null;
 }
 
@@ -521,6 +513,7 @@ export default function Inbox() {
 
   useEffect(() => {
     if (!requestedThreadId) return;
+
     setSearchParams(
       (prev) => {
         if (prev.get("threadId") === requestedThreadId) return prev;
@@ -546,9 +539,14 @@ export default function Inbox() {
   const messagesInSync =
     !selectedThreadId || s(messagesThreadId) === selectedThreadId;
   const visibleThreadMessages = messagesInSync ? messages : [];
+  const hasVisibleMessages =
+    Array.isArray(visibleThreadMessages) && visibleThreadMessages.length > 0;
+
   const detailPanelSurface = {
     ...detailSurface,
-    loading: detailSurface.loading || Boolean(selectedThreadId && !messagesInSync),
+    loading:
+      Boolean(selectedThreadId && !messagesInSync) ||
+      Boolean(detailSurface.loading && !hasVisibleMessages),
   };
 
   useEffect(() => {
@@ -557,6 +555,7 @@ export default function Inbox() {
     }
 
     if (!detailOpen) return undefined;
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailOpen]);
@@ -686,7 +685,3 @@ export default function Inbox() {
     </div>
   );
 }
-
-
-
-

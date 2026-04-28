@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw, X } from "lucide-react";
+import checkmarkIcon from "../../assets/channels/checkmark.png";
 
 const OVERLAY_ROOT_ID = "surface-banner-root";
 const EXIT_MS = 220;
@@ -13,28 +14,81 @@ function ensureOverlayRoot() {
   if (typeof document === "undefined") return null;
 
   let root = document.getElementById(OVERLAY_ROOT_ID);
-  if (root) return root;
 
-  root = document.createElement("div");
-  root.id = OVERLAY_ROOT_ID;
+  if (!root) {
+    root = document.createElement("div");
+    root.id = OVERLAY_ROOT_ID;
+    document.body.appendChild(root);
+  }
+
   root.className =
-    "pointer-events-none fixed inset-x-0 top-0 z-[160] flex flex-col items-center gap-2.5 px-3 pt-3 sm:px-4 sm:pt-4";
-  document.body.appendChild(root);
+    "pointer-events-none fixed inset-x-0 top-0 z-[160] flex flex-col items-center gap-2 px-3 pt-0 sm:px-4";
+
   return root;
 }
 
-function toneClasses(tone = "neutral") {
-  if (tone === "success") return "border-success/25 bg-surface/95 text-text shadow-xs";
-  if (tone === "warn") return "border-warning/30 bg-surface/95 text-text shadow-xs";
-  if (tone === "danger") return "border-danger/25 bg-surface/95 text-text shadow-xs";
-  return "border-line bg-surface/95 text-text shadow-xs";
-}
+function toneMaterial(tone = "neutral") {
+  if (tone === "success") {
+    return {
+      shell:
+        "border-[#1E7347] bg-[#23904F] text-white shadow-[0_16px_34px_-24px_rgba(11,55,31,0.44)]",
+      top: "bg-[#47BE79]",
+      bottom: "bg-[#19663F]",
+      side: "bg-white/10",
+      sideDark: "bg-black/8",
+      glow:
+        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
+      closeHover: "hover:bg-white/10",
+      button:
+        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+    };
+  }
 
-function toneDotClasses(tone = "neutral") {
-  if (tone === "success") return "bg-success";
-  if (tone === "warn") return "bg-warning";
-  if (tone === "danger") return "bg-danger";
-  return "bg-text-subtle";
+  if (tone === "warn") {
+    return {
+      shell:
+        "border-[#A66512] bg-[#C57A19] text-white shadow-[0_16px_34px_-24px_rgba(82,48,8,0.42)]",
+      top: "bg-[#EDAB4D]",
+      bottom: "bg-[#8F570E]",
+      side: "bg-white/10",
+      sideDark: "bg-black/8",
+      glow:
+        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
+      closeHover: "hover:bg-white/10",
+      button:
+        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+    };
+  }
+
+  if (tone === "danger") {
+    return {
+      shell:
+        "border-[#962342] bg-[#B72B4E] text-white shadow-[0_16px_34px_-24px_rgba(78,14,31,0.42)]",
+      top: "bg-[#D95B79]",
+      bottom: "bg-[#7A1631]",
+      side: "bg-white/10",
+      sideDark: "bg-black/8",
+      glow:
+        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
+      closeHover: "hover:bg-white/10",
+      button:
+        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+    };
+  }
+
+  return {
+    shell:
+      "border-[#243244] bg-[#111B2D] text-white shadow-[0_16px_34px_-24px_rgba(15,23,42,0.42)]",
+    top: "bg-[#41536E]",
+    bottom: "bg-[#0C1422]",
+    side: "bg-white/10",
+    sideDark: "bg-black/8",
+    glow:
+      "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.10),rgba(255,255,255,0)_56%)]",
+    closeHover: "hover:bg-white/10",
+    button:
+      "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+  };
 }
 
 function compactUnavailableMessage(message) {
@@ -92,7 +146,12 @@ function compactDisplayMessage(message) {
 
   const exactMap = new Map([
     ["Saved cleanly.", "Saved"],
-    ["Thread assigned.", "Assigned"],
+    ["Thread marked as read.", "Thread marked as read"],
+    ["Thread assigned.", "Thread assigned"],
+    ["Handoff activated.", "Handoff activated"],
+    ["Handoff released.", "Handoff released"],
+    ["Thread resolved.", "Thread resolved"],
+    ["Thread closed.", "Thread closed"],
     [
       "Retry accepted. Waiting for outbound attempt status to move.",
       "Retry queued",
@@ -105,12 +164,16 @@ function compactDisplayMessage(message) {
   ]);
 
   if (exactMap.has(value)) return exactMap.get(value);
-  if (/temporarily unavailable/i.test(value)) return compactUnavailableMessage(value);
+  if (/temporarily unavailable/i.test(value)) {
+    return compactUnavailableMessage(value);
+  }
+
   return value.split(".")[0].trim() || value;
 }
 
 function buildAction(surface, refreshLabel) {
   if (!surface?.refresh) return null;
+
   return {
     onClick: surface.refresh,
     label: refreshLabel || "Refresh",
@@ -123,6 +186,7 @@ function pushItem(items, nextItem) {
 
   const displayMessage = compactDisplayMessage(nextItem.message);
   const signature = `${nextItem.key}:${displayMessage}:${nextItem.message}`;
+
   if (items.some((item) => item.signature === signature)) return;
 
   items.push({
@@ -133,9 +197,33 @@ function pushItem(items, nextItem) {
   });
 }
 
+function NotificationLeading({ tone }) {
+  if (tone === "success") {
+    return (
+      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
+        <span className="absolute inset-0 rounded-full bg-white/12" />
+        <img
+          src={checkmarkIcon}
+          alt=""
+          aria-hidden="true"
+          className="relative h-5 w-5 object-contain"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
+      <span className="absolute inset-0 rounded-full bg-white/10" />
+      <span className="relative h-2.5 w-2.5 rounded-full bg-white/90" />
+    </span>
+  );
+}
+
 function NotificationCard({ item, onRemove }) {
   const [visible, setVisible] = useState(false);
   const closedRef = useRef(false);
+  const material = toneMaterial(item.tone);
 
   const handleClose = useCallback(() => {
     if (closedRef.current) return;
@@ -160,23 +248,30 @@ function NotificationCard({ item, onRemove }) {
   return (
     <div
       role={item.tone === "danger" || item.tone === "warn" ? "alert" : "status"}
-      aria-live={item.tone === "danger" || item.tone === "warn" ? "assertive" : "polite"}
+      aria-live={
+        item.tone === "danger" || item.tone === "warn" ? "assertive" : "polite"
+      }
       className={[
-        "pointer-events-auto relative w-full max-w-[min(560px,calc(100vw-1.5rem))] overflow-hidden rounded-panel border backdrop-blur-sm transition duration-base ease-out",
-        toneClasses(item.tone),
-        visible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0",
+        "pointer-events-auto relative w-full max-w-[500px] overflow-hidden border transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "rounded-b-[9px] rounded-t-none",
+        material.shell,
+        visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0",
       ].join(" ")}
     >
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <span
-          aria-hidden="true"
-          className={["h-2.5 w-2.5 shrink-0 rounded-full", toneDotClasses(item.tone)].join(" ")}
-        />
+      <div className={["pointer-events-none absolute inset-0", material.glow].join(" ")} />
+      <div className={["pointer-events-none absolute inset-x-0 top-0 h-px", material.top].join(" ")} />
+      <div className={["pointer-events-none absolute inset-x-0 bottom-0 h-px", material.bottom].join(" ")} />
+      <div className={["pointer-events-none absolute inset-y-0 left-0 w-px", material.side].join(" ")} />
+      <div className={["pointer-events-none absolute inset-y-0 right-0 w-px", material.sideDark].join(" ")} />
+
+      <div className="relative flex min-h-[52px] items-center gap-3 px-4 py-3 sm:px-4.5">
+        <NotificationLeading tone={item.tone} />
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium leading-5">
+          <div className="truncate text-[14px] font-semibold leading-5 tracking-[-0.01em]">
             {item.displayMessage}
           </div>
+
           {item.displayMessage !== item.fullMessage ? (
             <span className="sr-only">{item.fullMessage}</span>
           ) : null}
@@ -188,7 +283,10 @@ function NotificationCard({ item, onRemove }) {
               type="button"
               onClick={item.action.onClick}
               disabled={item.action.disabled}
-              className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-[12px] font-medium text-text-muted transition duration-fast hover:border-line-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+              className={[
+                "inline-flex h-8 items-center gap-1.5 rounded-[7px] border px-3 text-[12px] font-semibold transition duration-150 disabled:cursor-not-allowed",
+                material.button,
+              ].join(" ")}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               <span>{item.action.label || "Refresh"}</span>
@@ -199,9 +297,12 @@ function NotificationCard({ item, onRemove }) {
             type="button"
             onClick={handleClose}
             aria-label={`Dismiss ${item.displayMessage}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-subtle transition duration-fast hover:bg-surface-subtle hover:text-text"
+            className={[
+              "inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-white/82 transition duration-150 hover:text-white",
+              material.closeHover,
+            ].join(" ")}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" strokeWidth={2.15} />
           </button>
         </div>
       </div>
@@ -228,7 +329,8 @@ export default function SurfaceBanner({
     const next = [];
     const refreshAction = buildAction(surface, refreshLabel);
     const unavailable =
-      !!surface?.unavailable || s(surface?.availability).toLowerCase() === "unavailable";
+      !!surface?.unavailable ||
+      s(surface?.availability).toLowerCase() === "unavailable";
     const sharedFeedback = surface?.feedback || null;
 
     pushItem(next, {

@@ -29,6 +29,7 @@ import {
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
+import globeIcon from "../assets/channels/globe.png";
 
 const EMPTY_READINESS_STATE = {
   tenantKey: "",
@@ -185,14 +186,14 @@ function TopActionButton({
           ? [
               "bg-[rgb(var(--color-brand))] text-white",
               "shadow-[0_16px_34px_-20px_rgba(46,96,255,0.65)]",
-              "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
+              "hover:bg-[rgb(var(--color-brand-strong))]",
             ].join(" ")
           : [
               "bg-white text-[rgba(15,23,42,0.96)]",
               "ring-1 ring-[rgba(15,23,42,0.08)]",
-              "hover:-translate-y-[1px] hover:bg-[rgba(248,250,252,0.9)]",
+              "hover:bg-[rgba(248,250,252,0.9)]",
             ].join(" "),
-        disabled ? "cursor-not-allowed opacity-50 hover:translate-y-0" : "",
+        disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
     >
       <span>{children}</span>
@@ -248,6 +249,29 @@ function CompactHeader({
   );
 }
 
+function ChannelVisual({ channel }) {
+  if (channel.id === "website") {
+    return (
+      <div className="flex h-[98px] w-[98px] items-center justify-center">
+        <img
+          src={globeIcon}
+          alt="Website"
+          className="h-[72px] w-[72px] translate-y-[2px] object-contain select-none transform-gpu"
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[98px] w-[98px] items-center justify-center">
+      <div className="scale-[2.3] translate-y-[2px] transform-gpu">
+        <ChannelIcon channel={channel} size="md" />
+      </div>
+    </div>
+  );
+}
+
 function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
   const status = normalizeStatus(runtime);
@@ -258,30 +282,27 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   return (
     <article
       className={[
-        "group relative overflow-hidden rounded-[15px] bg-white",
-        "border border-[rgba(15,23,42,0.07)]",
-        "px-4 py-4",
-        "shadow-[0_16px_34px_-28px_rgba(15,23,42,0.22)]",
-        "transition-all duration-200 ease-out",
-        "hover:-translate-y-[2px] hover:shadow-[0_24px_44px_-28px_rgba(15,23,42,0.26)]",
+        "group relative rounded-[16px] p-[1.25px]",
+        "bg-[linear-gradient(135deg,rgba(15,23,42,0.18),rgba(15,23,42,0.045)_42%,rgba(37,99,235,0.22)_100%)]",
+        "shadow-[0_20px_46px_-34px_rgba(15,23,42,0.42)]",
+        "transition-[box-shadow,background] duration-200 ease-out",
+        "hover:bg-[linear-gradient(135deg,rgba(15,23,42,0.22),rgba(37,99,235,0.12)_44%,rgba(37,99,235,0.32)_100%)]",
+        "hover:shadow-[0_30px_64px_-40px_rgba(15,23,42,0.48)]",
       ].join(" ")}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="shrink-0">
-            <ChannelIcon channel={channel} size="md" />
-          </div>
-
-          <div className="min-w-0">
-            <div className="truncate text-[17px] font-semibold leading-6 tracking-[-0.025em] text-[rgba(15,23,42,0.98)]">
-              {channel.name}
-            </div>
-          </div>
-        </div>
+      <div
+        className={[
+          "relative flex min-h-[184px] flex-col overflow-hidden rounded-[14.75px] bg-white",
+          "px-5 py-5",
+          "shadow-[inset_0_1px_0_rgba(255,255,255,0.96),inset_0_-1px_0_rgba(15,23,42,0.025)]",
+        ].join(" ")}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.98),transparent)]" />
+        <div className="pointer-events-none absolute inset-x-5 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.08),transparent)]" />
 
         <div
           className={[
-            "inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1",
+            "absolute right-5 top-5 inline-flex items-center gap-2 rounded-[8px] px-2.5 py-1",
             "text-[12.5px] font-semibold leading-none",
             tone.badge,
             tone.text,
@@ -290,37 +311,55 @@ function ChannelCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
           <span className={["h-1.5 w-1.5 rounded-full", tone.dot].join(" ")} />
           <span>{status.label}</span>
         </div>
-      </div>
 
-      <div className="mt-3 line-clamp-1 text-[14px] font-semibold leading-6 text-[rgba(71,85,105,0.98)]">
-        {summary}
-      </div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="grid grid-cols-[108px_minmax(0,1fr)] items-center gap-4 pr-[122px]">
+            <ChannelVisual channel={channel} />
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => onInspect?.(channel.id)}
-          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[rgb(var(--color-brand))] transition-colors hover:text-[rgba(15,23,42,0.96)]"
-        >
-          <span>Details</span>
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
-        </button>
+            <div className="flex min-h-[98px] min-w-0 flex-col justify-center pt-[5px]">
+              <h2 className="truncate text-[18px] font-semibold leading-[1.12] tracking-[-0.03em] text-[rgba(15,23,42,0.98)]">
+                {channel.name}
+              </h2>
 
-        <button
-          type="button"
-          onClick={() => onRunPrimaryAction?.(channel, action)}
-          className={[
-            "inline-flex h-9 min-w-[86px] items-center justify-center gap-2 rounded-[10px]",
-            "bg-[rgb(var(--color-brand))] px-3.5",
-            "text-[13.5px] font-semibold tracking-[-0.01em] text-white",
-            "shadow-[0_14px_28px_-18px_rgba(46,96,255,0.62)]",
-            "transition-all duration-200 ease-out",
-            "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
-          ].join(" ")}
-        >
-          <span>{action.label}</span>
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
-        </button>
+              <p className="mt-[6px] line-clamp-2 max-w-[290px] text-[14px] font-semibold leading-[1.46] text-[rgba(71,85,105,0.98)]">
+                {summary}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-auto flex items-center justify-between pt-4">
+            <button
+              type="button"
+              onClick={() => onInspect?.(channel.id)}
+              className={[
+                "inline-flex h-9 items-center gap-1.5",
+                "text-[14px] font-semibold text-[rgb(var(--color-brand))]",
+                "transition-colors duration-200 ease-out",
+                "hover:text-[rgba(15,23,42,0.96)]",
+              ].join(" ")}
+            >
+              <span>Details</span>
+              <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onRunPrimaryAction?.(channel, action)}
+              className={[
+                "inline-flex h-9 min-w-[92px] items-center justify-center gap-2 rounded-[10px]",
+                "bg-[rgb(var(--color-brand))] px-3.5",
+                "text-[13.5px] font-semibold tracking-[-0.01em] text-white",
+                "shadow-[0_14px_28px_-18px_rgba(46,96,255,0.62)]",
+                "transition-[background,box-shadow] duration-200 ease-out",
+                "hover:bg-[rgb(var(--color-brand-strong))]",
+                "hover:shadow-[0_16px_30px_-18px_rgba(46,96,255,0.72)]",
+              ].join(" ")}
+            >
+              <span>{action.label}</span>
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+            </button>
+          </div>
+        </div>
       </div>
     </article>
   );
@@ -600,9 +639,10 @@ export default function ChannelCatalog() {
           open={drawerOpen}
           onClose={handleDrawerClose}
           closeLabel="Close connector details"
-          className="top-[64px]"
+          className="top-[56px]"
           panelWidthClassName="max-w-[640px]"
-          backdropClassName="bg-white/35"
+          backdropClassName="bg-transparent"
+          panelClassName="bg-white shadow-[0_24px_80px_-38px_rgba(15,23,42,0.35)]"
         >
           <ChannelDetailDrawer
             channel={drawerChannel}
