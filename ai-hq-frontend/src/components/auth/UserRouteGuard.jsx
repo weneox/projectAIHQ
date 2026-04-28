@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import {
   isLocalWorkspaceEntryEnabled,
@@ -19,23 +19,12 @@ function hasCachedAuthenticatedSession() {
 }
 
 function deriveInitialGuardState({ localWorkspaceEntry = false } = {}) {
-  if (localWorkspaceEntry) {
+  if (localWorkspaceEntry || hasCachedAuthenticatedSession()) {
     return {
       loading: false,
       ok: true,
       redirectTo: "",
       failed: false,
-      fromCache: true,
-    };
-  }
-
-  if (hasCachedAuthenticatedSession()) {
-    return {
-      loading: false,
-      ok: true,
-      redirectTo: "",
-      failed: false,
-      fromCache: true,
     };
   }
 
@@ -44,7 +33,6 @@ function deriveInitialGuardState({ localWorkspaceEntry = false } = {}) {
     ok: false,
     redirectTo: "",
     failed: false,
-    fromCache: false,
   };
 }
 
@@ -55,7 +43,6 @@ function deriveResolvedGuardState(auth = {}) {
       ok: false,
       redirectTo: "",
       failed: true,
-      fromCache: false,
     };
   }
 
@@ -65,7 +52,6 @@ function deriveResolvedGuardState(auth = {}) {
       ok: false,
       redirectTo: "",
       failed: false,
-      fromCache: false,
     };
   }
 
@@ -74,7 +60,6 @@ function deriveResolvedGuardState(auth = {}) {
     ok: true,
     redirectTo: "",
     failed: false,
-    fromCache: false,
   };
 }
 
@@ -83,12 +68,9 @@ export default function UserRouteGuard({ children }) {
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
   const onWorkspaceSelection = isWorkspaceSelectionPath(location.pathname);
 
-  const initialState = useMemo(
-    () => deriveInitialGuardState({ localWorkspaceEntry }),
-    [localWorkspaceEntry]
+  const [state, setState] = useState(() =>
+    deriveInitialGuardState({ localWorkspaceEntry })
   );
-
-  const [state, setState] = useState(initialState);
 
   useEffect(() => {
     let alive = true;
@@ -100,7 +82,6 @@ export default function UserRouteGuard({ children }) {
           ok: true,
           redirectTo: "",
           failed: false,
-          fromCache: true,
         });
         return;
       }
@@ -117,7 +98,6 @@ export default function UserRouteGuard({ children }) {
             ok: true,
             redirectTo: "",
             failed: false,
-            fromCache: false,
           });
           return;
         }
@@ -132,7 +112,6 @@ export default function UserRouteGuard({ children }) {
             ok: true,
             redirectTo: "",
             failed: false,
-            fromCache: true,
           });
           return;
         }
@@ -142,7 +121,6 @@ export default function UserRouteGuard({ children }) {
           ok: false,
           redirectTo: "",
           failed: true,
-          fromCache: false,
         });
       }
     }
@@ -155,12 +133,7 @@ export default function UserRouteGuard({ children }) {
   }, [localWorkspaceEntry, onWorkspaceSelection]);
 
   if (state.loading) {
-    return (
-      <AppBootSurface
-        label="Preparing workspace"
-        detail="Syncing operator context"
-      />
-    );
+    return null;
   }
 
   if (state.failed) {

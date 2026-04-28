@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -12,7 +12,10 @@ import {
 } from "lucide-react";
 
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
-import { clearAppSessionContext } from "../lib/appSession.js";
+import {
+  clearAppSessionContext,
+  getAppSessionContext,
+} from "../lib/appSession.js";
 import { cx } from "../lib/cx.js";
 
 import Button from "../components/ui/Button.jsx";
@@ -144,7 +147,7 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
           {companyName}
         </div>
         <div className="mt-1 text-[12px] text-text-muted">
-          {s(account?.tenantKey)} · {role}
+          {s(account?.tenantKey)} Â· {role}
         </div>
       </div>
 
@@ -235,7 +238,14 @@ export default function Login() {
     }
 
     clearAppSessionContext();
-    navigate("/", { replace: true });
+
+    try {
+      await getAppSessionContext({ force: true });
+    } catch {
+      // Navigation should still continue; protected routes will verify again.
+    }
+
+    navigate("/home", { replace: true });
   }
 
   async function handleSignup() {
@@ -446,7 +456,7 @@ export default function Login() {
             <div className="pt-1 text-center text-[14px] text-text-muted">
               {isSignupMode
                 ? "Already have an account?"
-                : "Don’t have an account?"}{" "}
+                : "Donâ€™t have an account?"}{" "}
               <button
                 type="button"
                 className="font-semibold text-text underline underline-offset-2 transition-colors hover:text-brand"
@@ -462,3 +472,5 @@ export default function Login() {
     </div>
   );
 }
+
+

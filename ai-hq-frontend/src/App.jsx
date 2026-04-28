@@ -44,15 +44,10 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
 
 function RouteFallback() {
   return (
-    <div className="mx-auto w-full max-w-shell-content px-1 py-2">
+    <div className="mx-auto w-full max-w-shell-content px-1 py-2" aria-hidden="true">
       <div className="space-y-3">
-        <div className="h-4 w-36 animate-pulse rounded-full bg-[rgba(15,23,42,0.07)]" />
-        <div className="h-24 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
-          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
-          <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
-        </div>
+        <div className="h-4 w-36 animate-pulse rounded-full bg-[rgba(15,23,42,0.055)]" />
+        <div className="h-20 animate-pulse rounded-panel border border-line-soft bg-surface-subtle" />
       </div>
     </div>
   );

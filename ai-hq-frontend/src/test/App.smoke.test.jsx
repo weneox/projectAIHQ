@@ -81,6 +81,8 @@ describe("App shell smoke", () => {
 
     peekAppAuthContextMock.mockReturnValue(null);
 
+    peekAppAuthContextMock.mockReturnValue(null);
+
     getAppAuthContextMock.mockResolvedValue({
       authenticated: false,
       resolved: true,
@@ -106,4 +108,5 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 });
+
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { getAdminAuthMe } from "../../api/adminAuth.js";
 
@@ -30,13 +30,7 @@ export default function AdminRouteGuard({ children }) {
   }, [location.pathname]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#02050c] px-4 py-10 text-white">
-        <div className="mx-auto max-w-md rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-          Admin auth yoxlanılır...
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (!authed) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
 import {
@@ -191,9 +191,7 @@ export default function OperatorRouteGuard({
   }, [allowedRoles, localWorkspaceEntry]);
 
   if (state.loading) {
-    return (
-      <AppBootSurface label="Preparing workspace" detail="Loading operator access" />
-    );
+    return null;
   }
 
   if (state.unavailable) {
