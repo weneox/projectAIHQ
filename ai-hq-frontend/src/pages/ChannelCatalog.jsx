@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
@@ -514,7 +514,7 @@ export default function ChannelCatalog() {
     }, 320);
   }
 
-  if (!workspace.ready && effectiveReadinessState.loading) {
+  if (!workspace.ready || effectiveReadinessState.loading) {
     return (
       <PageCanvas className="max-w-[1220px] py-2">
         <LoadingSurface title="Loading channels" />
@@ -582,3 +582,4 @@ export default function ChannelCatalog() {
     </>
   );
 }
+
