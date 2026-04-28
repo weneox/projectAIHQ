@@ -85,35 +85,46 @@ export function InboxDetailSkeleton() {
       aria-label="Loading conversation messages"
       className="flex min-h-full flex-col justify-end px-4 py-6 md:px-5 lg:px-6 xl:px-8"
     >
-      <div className="mt-auto w-full space-y-6">
-        <div className="flex items-end gap-3">
-          <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
-          <SkeletonCard className="max-w-[58%] px-5 py-4">
-            <Shimmer className="h-4 w-[86%] rounded-[10px]" />
-            <Shimmer className="mt-3 h-4 w-[68%] rounded-[10px] opacity-75" />
-          </SkeletonCard>
+      <div className="mt-auto w-full space-y-5">
+        <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
+          <div className="flex max-w-full items-end gap-2">
+            <Shimmer className="h-9 w-9 shrink-0 rounded-full bg-[#E8EEF7]" />
+
+            <div className="w-[min(360px,58vw)]">
+              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.05)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+                <Shimmer className="h-4 w-[78%] rounded-[10px]" />
+                <Shimmer className="mt-3 h-4 w-[52%] rounded-[10px] opacity-70" />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-end">
-          <SkeletonCard className="w-full max-w-[48%] px-5 py-4">
-            <Shimmer className="h-4 w-full rounded-[10px]" />
-            <Shimmer className="mt-3 h-4 w-[72%] rounded-[10px] opacity-75" />
-          </SkeletonCard>
+        <div className="flex w-full justify-end px-3 py-[5px] sm:px-5">
+          <div className="w-[min(430px,68vw)]">
+            <div className="rounded-[20px] rounded-br-[8px] bg-[#3797F0]/18 px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+              <Shimmer className="h-4 w-[88%] rounded-[10px] bg-white/45" />
+              <Shimmer className="mt-3 h-4 w-[66%] rounded-[10px] bg-white/35" />
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-end gap-3">
-          <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
-          <SkeletonCard className="max-w-[64%] px-5 py-4">
-            <Shimmer className="h-4 w-[92%] rounded-[10px]" />
-            <Shimmer className="mt-3 h-4 w-full rounded-[10px] opacity-90" />
-            <Shimmer className="mt-3 h-4 w-[54%] rounded-[10px] opacity-70" />
-          </SkeletonCard>
+        <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
+          <div className="flex max-w-full items-end gap-2">
+            <Shimmer className="h-9 w-9 shrink-0 rounded-full bg-[#E8EEF7]" />
+
+            <div className="w-[min(420px,64vw)]">
+              <div className="rounded-[20px] rounded-bl-[8px] border border-[rgba(15,23,42,0.05)] bg-white px-[15px] pb-[12px] pt-[12px] shadow-[0_10px_26px_-22px_rgba(15,23,42,0.16)]">
+                <Shimmer className="h-4 w-[92%] rounded-[10px]" />
+                <Shimmer className="mt-3 h-4 w-[82%] rounded-[10px] opacity-85" />
+                <Shimmer className="mt-3 h-4 w-[48%] rounded-[10px] opacity-65" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
 export function InboxLeadSkeleton() {
   return (
     <div
@@ -174,3 +185,4 @@ export function InboxLeadSkeleton() {
     </div>
   );
 }
+

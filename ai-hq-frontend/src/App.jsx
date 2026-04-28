@@ -12,37 +12,24 @@ import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
 import Login from "./pages/Login.jsx";
+import Inbox from "./pages/Inbox.jsx";
+import ProductHomePage from "./surfaces/home/ProductHomePage.jsx";
+import Welcome from "./pages/Welcome.jsx";
+import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
+import ChannelCatalog from "./pages/ChannelCatalog.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 import {
   getAppAuthContext,
   peekAppAuthContext,
 } from "./lib/appSession.js";
 
-const loadInbox = () => import("./pages/Inbox.jsx");
-const loadProductHomePage = () => import("./surfaces/home/ProductHomePage.jsx");
-const loadWelcome = () => import("./pages/Welcome.jsx");
-const loadVerifyEmail = () => import("./pages/Auth/VerifyEmailPage.jsx");
-const loadPublicWebsiteWidget = () => import("./pages/PublicWebsiteWidget.jsx");
-const loadTruthViewerPage = () => import("./pages/Truth/TruthViewerPage.jsx");
-const loadChannelCatalog = () => import("./pages/ChannelCatalog.jsx");
-const loadAdminLogin = () => import("./pages/AdminLogin.jsx");
-const loadAdminTenants = () => import("./pages/AdminTenants.jsx");
-const loadAdminTeam = () => import("./pages/AdminTeam.jsx");
-const loadAdminSecrets = () => import("./pages/AdminSecrets.jsx");
-const loadSelectWorkspace = () => import("./pages/SelectWorkspace.jsx");
-
-const Inbox = lazy(loadInbox);
-const ProductHomePage = lazy(loadProductHomePage);
-const Welcome = lazy(loadWelcome);
-const VerifyEmail = lazy(loadVerifyEmail);
-const PublicWebsiteWidget = lazy(loadPublicWebsiteWidget);
-const TruthViewerPage = lazy(loadTruthViewerPage);
-const ChannelCatalog = lazy(loadChannelCatalog);
-const AdminLogin = lazy(loadAdminLogin);
-const AdminTenants = lazy(loadAdminTenants);
-const AdminTeam = lazy(loadAdminTeam);
-const AdminSecrets = lazy(loadAdminSecrets);
-const SelectWorkspace = lazy(loadSelectWorkspace);
+const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
+const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
+const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
+const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
+const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
+const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
 
 const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "workspace",
@@ -57,27 +44,6 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
 
 function withSuspense(element) {
   return <Suspense fallback={null}>{element}</Suspense>;
-}
-
-function warmLaunchRoutes() {
-  const warm = () => {
-    Promise.allSettled([
-      loadProductHomePage(),
-      loadChannelCatalog(),
-      loadInbox(),
-      loadTruthViewerPage(),
-      loadWelcome(),
-    ]);
-  };
-
-  if (typeof window === "undefined") return;
-
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(warm, { timeout: 1800 });
-    return;
-  }
-
-  window.setTimeout(warm, 400);
 }
 
 function deriveGuestInitialState() {
@@ -177,11 +143,6 @@ function renderLegacyLaunchFreezeRedirects() {
 }
 
 export default function App() {
-  useEffect(() => {
-    if (import.meta.env.MODE === "test") return;
-    warmLaunchRoutes();
-  }, []);
-
   const rootEntryElement = (
     <UserRouteGuard>
       <AppEntryRedirect />
@@ -236,7 +197,7 @@ export default function App() {
             </UserRouteGuard>
           }
         >
-          <Route path="home" element={withSuspense(<ProductHomePage />)} />
+          <Route path="home" element={<ProductHomePage />} />
 
           <Route
             path="setup"
@@ -247,9 +208,9 @@ export default function App() {
             element={<Navigate to="/home?assistant=setup" replace />}
           />
 
-          <Route path="welcome" element={withSuspense(<Welcome />)} />
-          <Route path="inbox" element={withSuspense(<Inbox />)} />
-          <Route path="channels" element={withSuspense(<ChannelCatalog />)} />
+          <Route path="welcome" element={<Welcome />} />
+          <Route path="inbox" element={<Inbox />} />
+          <Route path="channels" element={<ChannelCatalog />} />
 
           <Route
             path="truth"
@@ -258,7 +219,7 @@ export default function App() {
                 title="Operator access required"
                 description="Truth remains the governed review surface behind the launch lane and should stay aligned with setup approval and runtime health."
               >
-                {withSuspense(<TruthViewerPage />)}
+                <TruthViewerPage />
               </OperatorRouteGuard>
             }
           />
