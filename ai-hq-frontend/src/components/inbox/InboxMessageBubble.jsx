@@ -112,15 +112,14 @@ function InboundAvatar({ title, avatarUrl }) {
   );
 }
 
-function BubbleTime({ value, incoming, className = "" }) {
+function BubbleTime({ value, incoming }) {
   if (!value) return null;
 
   return (
     <span
       className={[
-        "select-none whitespace-nowrap text-[11px] font-medium leading-none",
+        "ml-[7px] inline-block translate-y-[1px] select-none whitespace-nowrap align-baseline text-[11px] font-medium leading-none",
         incoming ? "text-[#8D98A8]" : "text-white/82",
-        className,
       ].join(" ")}
     >
       {value}
@@ -132,7 +131,7 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
   const hasText = Boolean(text);
 
   return (
-    <div className="relative whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
+    <div className="max-w-full whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
       {hasText ? (
         text
       ) : (
@@ -146,18 +145,7 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
         </span>
       )}
 
-      {sentAt ? (
-        <span
-          aria-hidden="true"
-          className="inline-block h-[1px] w-[54px]"
-        />
-      ) : null}
-
-      <BubbleTime
-        value={sentAt}
-        incoming={incoming}
-        className="absolute bottom-[3px] right-0"
-      />
+      <BubbleTime value={sentAt} incoming={incoming} />
     </div>
   );
 }
