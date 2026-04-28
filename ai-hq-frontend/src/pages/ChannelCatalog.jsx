@@ -170,7 +170,7 @@ function CompactHeader({
   onOpenInbox,
 }) {
   return (
-    <section className="border-b border-[rgba(15,23,42,0.06)] pb-4">
+    <section className="pb-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
@@ -200,7 +200,7 @@ function CompactHeader({
             size="sm"
             variant="secondary"
             onClick={onOpenTruth}
-            className="!h-10 !rounded-[12px] !px-3.5"
+            className="!h-10 !rounded-[8px] !px-4"
           >
             Open truth
           </Button>
@@ -211,13 +211,35 @@ function CompactHeader({
             onClick={onOpenInbox}
             rightIcon={<ArrowRight className="h-4 w-4" />}
             disabled={!hasDeliveryReadyLaunchChannel}
-            className="!h-10 !rounded-[12px] !px-3.5"
+            className="!h-10 !rounded-[8px] !px-4"
           >
             Open inbox
           </Button>
         </div>
       </div>
     </section>
+  );
+}
+
+function CardPrimaryButton({ children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex h-9 min-w-[118px] items-center justify-center gap-2 rounded-[8px]",
+        "bg-[rgb(var(--color-brand))] px-4",
+        "text-[12.5px] font-semibold tracking-[-0.015em] text-white",
+        "shadow-[0_16px_30px_-22px_rgba(46,96,255,0.62)]",
+        "transition-[background-color,box-shadow,transform] duration-200 ease-out",
+        "hover:-translate-y-[1px] hover:bg-[rgb(var(--color-brand-strong))]",
+        "hover:shadow-[0_20px_36px_-22px_rgba(46,96,255,0.72)]",
+        "active:translate-y-0",
+      ].join(" ")}
+    >
+      <span>{children}</span>
+      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+    </button>
   );
 }
 
@@ -238,32 +260,30 @@ function ConnectorCard({
   return (
     <article
       className={[
-        "group relative overflow-hidden rounded-[18px]",
-        "border border-[rgba(15,23,42,0.05)]",
-        "bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]",
-        "px-5 py-4",
-        "shadow-[0_20px_50px_-34px_rgba(15,23,42,0.14)]",
-        "transition-all duration-200",
-        "hover:-translate-y-[1px] hover:border-[rgba(15,23,42,0.08)] hover:shadow-[0_28px_64px_-36px_rgba(15,23,42,0.18)]",
+        "group relative min-h-[198px] overflow-hidden rounded-[10px]",
+        "bg-white px-5 py-5",
+        "shadow-[0_22px_55px_-46px_rgba(15,23,42,0.42)]",
+        "ring-1 ring-white",
+        "transition-[box-shadow,transform] duration-200 ease-out",
+        "hover:-translate-y-[2px]",
+        "hover:shadow-[0_34px_82px_-48px_rgba(15,23,42,0.34)]",
       ].join(" ")}
     >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-16 bg-[linear-gradient(180deg,rgba(255,255,255,0.68),rgba(255,255,255,0))]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white" />
 
       <div className="relative z-[1] flex h-full flex-col">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="relative mt-0.5 shrink-0">
-              <div className="relative">
-                <ChannelIcon channel={channel} size="lg" />
-              </div>
+            <div className="shrink-0 rounded-[9px] bg-white shadow-[0_12px_26px_-22px_rgba(15,23,42,0.22)] ring-1 ring-[rgba(15,23,42,0.04)]">
+              <ChannelIcon channel={channel} size="lg" />
             </div>
 
-            <div className="min-w-0">
-              <div className="truncate text-[15px] font-semibold tracking-[-0.015em] text-[rgba(15,23,42,0.96)]">
+            <div className="min-w-0 pt-0.5">
+              <div className="truncate text-[15px] font-semibold tracking-[-0.018em] text-[rgba(15,23,42,0.96)]">
                 {channel.name}
               </div>
 
-              <div className="mt-0.5 truncate text-[12px] text-[rgba(100,116,139,0.96)]">
+              <div className="mt-0.5 truncate text-[12.5px] font-medium text-[rgba(100,116,139,0.96)]">
                 {copy.eyebrow}
               </div>
             </div>
@@ -271,7 +291,7 @@ function ConnectorCard({
 
           <div
             className={[
-              "inline-flex items-center gap-1.5 text-[11px] font-medium",
+              "mt-0.5 inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold",
               status.textClass,
             ].join(" ")}
           >
@@ -280,35 +300,31 @@ function ConnectorCard({
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="text-[13.5px] font-semibold text-[rgba(15,23,42,0.94)]">
+        <div className="mt-5 h-px bg-[rgba(15,23,42,0.06)]" />
+
+        <div className="mt-4">
+          <div className="text-[13.5px] font-semibold tracking-[-0.01em] text-[rgba(15,23,42,0.94)]">
             {copy.title}
           </div>
 
-          <div className="mt-1.5 text-[12.5px] leading-6 text-[rgba(100,116,139,0.96)]">
+          <div className="mt-1.5 line-clamp-2 text-[12.5px] font-medium leading-6 text-[rgba(100,116,139,0.96)]">
             {statusSummary}
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
           <button
             type="button"
             onClick={() => onInspect?.(channel.id)}
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[rgba(100,116,139,0.96)] transition-colors hover:text-[rgba(15,23,42,0.94)]"
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[rgba(37,99,235,0.96)] transition-colors hover:text-[rgba(15,23,42,0.94)]"
           >
             <span>Details</span>
-            <ArrowUpRight className="h-3.5 w-3.5" />
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
           </button>
 
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onRunPrimaryAction?.(channel, action)}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-            className="!h-10 !rounded-[12px] !px-4 !text-[12.5px] !font-semibold"
-          >
+          <CardPrimaryButton onClick={() => onRunPrimaryAction?.(channel, action)}>
             {action.label}
-          </Button>
+          </CardPrimaryButton>
         </div>
       </div>
     </article>
@@ -597,5 +613,3 @@ export default function ChannelCatalog() {
     </>
   );
 }
-
-
