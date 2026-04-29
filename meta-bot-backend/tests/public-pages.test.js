@@ -4,6 +4,7 @@ import crypto from "crypto";
 import express from "express";
 
 process.env.META_APP_SECRET = "meta-secret";
+process.env.META_WEBHOOK_APP_SECRET = "meta-secret";
 
 const { registerPublicPages } = await import("../src/routes/publicPages.js");
 
