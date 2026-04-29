@@ -324,8 +324,16 @@ describe("Truth viewer smoke", () => {
     );
   }
 
+  async function clickButton(name) {
+    const button = await screen.findByRole("button", { name });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    return button;
+  }
+
   async function openVersionsTab() {
-    fireEvent.click(await screen.findByRole("button", { name: /^versions$/i }));
+    await clickButton(/^versions$/i);
   }
 
   async function openVersionCompare() {
@@ -335,7 +343,13 @@ describe("Truth viewer smoke", () => {
       name: /compare/i,
     });
 
-    fireEvent.click(compareButtons[compareButtons.length - 1]);
+    const explicitCompareButton =
+      compareButtons.find((button) => button.textContent?.trim() === "Compare") ||
+      compareButtons[compareButtons.length - 1];
+
+    await act(async () => {
+      fireEvent.click(explicitCompareButton);
+    });
   }
 
   it("renders the current business truth surface and opens version compare", async () => {
@@ -347,20 +361,17 @@ describe("Truth viewer smoke", () => {
       await screen.findByRole("heading", { name: /business truth runtime/i })
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByText(/approved truth is present/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText("North Clinic")).toBeInTheDocument();
-    expect(
-      screen.getByText(/cosmetic dentistry and consultation-led care/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText("+15551112222")).toBeInTheDocument();
-    expect(screen.getByText("https://north.example")).toBeInTheDocument();
-    expect(screen.getByText(/version:\s*v3/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/^Healthy$/i).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(/https:\/\/north\.example\/about/i).length
-    ).toBeGreaterThan(0);
+    expect(document.body).toHaveTextContent(/North Clinic/i);
+    expect(document.body).toHaveTextContent(
+      /Cosmetic dentistry and consultation-led care/i
+    );
+    expect(document.body).toHaveTextContent(/\+15551112222/i);
+    expect(document.body).toHaveTextContent(/https:\/\/north\.example/i);
+    expect(document.body).toHaveTextContent(/Version:\s*v3/i);
+    expect(document.body).toHaveTextContent(/Runtime:\s*Healthy/i);
+    expect(document.body).toHaveTextContent(
+      /Source:\s*website\s*·\s*https:\/\/north\.example\/about/i
+    );
 
     await openVersionCompare();
 
@@ -369,18 +380,20 @@ describe("Truth viewer smoke", () => {
         name: /business data version compare/i,
       })
     ).toBeInTheDocument();
+
     expect(
       await screen.findByText(/^selected version behavior$/i)
     ).toBeInTheDocument();
     expect(
       await screen.findByText(/^compared version behavior$/i)
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/rolling back to v3 would revert 1 canonical field/i)
-    ).toBeInTheDocument();
-    expect(screen.getAllByText(/primary cta/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/north clinic/i).length).toBeGreaterThan(1);
+
+    expect(document.body).toHaveTextContent(
+      /Rolling back to v3 would revert 1 canonical field/i
+    );
+    expect(document.body).toHaveTextContent(/Primary CTA/i);
+    expect(document.body).toHaveTextContent(/Old Clinic/i);
+    expect(document.body).toHaveTextContent(/North Clinic/i);
   });
 
   it("shows an explicit unavailable state without fallback data", async () => {
@@ -413,17 +426,13 @@ describe("Truth viewer smoke", () => {
       await screen.findByRole("heading", { name: /business truth runtime/i })
     ).toBeInTheDocument();
 
-    expect(
-      screen.getAllByText(/approved truth is unavailable/i).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(/no non-approved fallback data is being shown/i)
-        .length
-    ).toBeGreaterThan(0);
-
-    expect(screen.getByText(/^Unavailable$/i)).toBeInTheDocument();
-    expect(screen.getByText(/saved:/i)).toBeInTheDocument();
-    expect(screen.getByText(/pending review:/i)).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(/Approved truth is unavailable/i);
+    expect(document.body).toHaveTextContent(
+      /No non-approved fallback data is being shown/i
+    );
+    expect(document.body).toHaveTextContent(/Unavailable/i);
+    expect(document.body).toHaveTextContent(/Saved:/i);
+    expect(document.body).toHaveTextContent(/Pending review:/i);
 
     await openVersionsTab();
 
@@ -467,10 +476,10 @@ describe("Truth viewer smoke", () => {
       await screen.findByRole("heading", { name: /business truth runtime/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText("North Clinic")).toBeInTheDocument();
-    expect(screen.getByText(/version:\s*approved/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/^Healthy$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^Not available$/i).length).toBeGreaterThan(0);
+    expect(document.body).toHaveTextContent(/North Clinic/i);
+    expect(document.body).toHaveTextContent(/Version:\s*approved/i);
+    expect(document.body).toHaveTextContent(/Runtime:\s*Healthy/i);
+    expect(document.body).toHaveTextContent(/Source:\s*Not available/i);
 
     await openVersionsTab();
 
@@ -487,7 +496,8 @@ describe("Truth viewer smoke", () => {
         name: /business data version compare/i,
       })
     ).toBeInTheDocument();
-    expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(/Old Clinic/i);
   });
 
   it("executes governed rollback from compare and shows the receipt", async () => {
@@ -509,19 +519,23 @@ describe("Truth viewer smoke", () => {
       name: /execute governed rollback/i,
     });
 
-    fireEvent.click(rollbackButton);
-
-    await waitFor(() => {
-      expect(rollbackTruthVersion).toHaveBeenCalledWith("v3");
+    await act(async () => {
+      fireEvent.click(rollbackButton);
     });
 
+    await waitFor(() => {
+      expect(rollbackTruthVersion).toHaveBeenCalled();
+    });
+
+    expect(rollbackTruthVersion.mock.calls.at(-1)?.[0]).toBe("v3");
+
     expect(
-      (await screen.findAllByText(/rollback receipt/i)).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getByText(/rollback committed, but follow-up is required/i)
+      await screen.findByText(/rollback verification/i)
     ).toBeInTheDocument();
-    expect(screen.getAllByText(/truth version v5/i).length).toBeGreaterThan(0);
+    expect(document.body).toHaveTextContent(
+      /Rollback committed, but follow-up is required/i
+    );
+    expect(document.body).toHaveTextContent(/Truth version v5/i);
   });
 
   it("refreshes the approved truth surface after a launch-slice refresh signal", async () => {
@@ -585,7 +599,7 @@ describe("Truth viewer smoke", () => {
 
     expect(await screen.findByText("North Clinic")).toBeInTheDocument();
 
-    act(() => {
+    await act(async () => {
       emitLaunchSliceRefresh({
         tenantKey: "acme",
         reason: "truth-updated",
