@@ -418,13 +418,6 @@ export default function Inbox() {
 
     let alive = true;
 
-    setResolvedReadinessState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-      error: "",
-    }));
-
     loadInboxLaunchReadinessState(workspace.tenantKey).then(
       (readinessState) => {
         if (!alive) return;
@@ -441,12 +434,6 @@ export default function Inbox() {
     if (!workspace.ready) return undefined;
 
     let alive = true;
-
-    setResolvedTrustState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-    }));
 
     loadInboxTrustState(workspace.tenantKey).then((trustState) => {
       if (!alive) return;
