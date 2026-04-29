@@ -371,10 +371,6 @@ jobs:
             echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory post-deploy verification." >&2
             exit 1
           fi
-          if [ -z "$AIHQ_USER_SESSION_COOKIE" ] && [ -z "$AIHQ_USER_SESSION_TOKEN" ]; then
-            echo "AIHQ_PROD_USER_SESSION_COOKIE or AIHQ_PROD_USER_SESSION_TOKEN is required for app-authenticated launch posture verification." >&2
-            exit 1
-          fi
           if [ -z "$WEBSITE_LANE_TENANT_KEY" ]; then
             echo "WEBSITE_LANE_TENANT_KEY is required because POSTDEPLOY_REQUIRE_WEBSITE_LANE=1 for production launch verification." >&2
             exit 1
@@ -403,10 +399,6 @@ jobs:
         run: |
           if [ -z "$AIHQ_BASE_URL" ] || [ -z "$AIHQ_INTERNAL_TOKEN" ]; then
             echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory prod spine smoke." >&2
-            exit 1
-          fi
-          if [ -z "$AIHQ_USER_SESSION_COOKIE" ] && [ -z "$AIHQ_USER_SESSION_TOKEN" ]; then
-            echo "AIHQ_PROD_USER_SESSION_COOKIE or AIHQ_PROD_USER_SESSION_TOKEN is required for app-authenticated launch posture verification." >&2
             exit 1
           fi
           if [ -z "$WEBSITE_LANE_TENANT_KEY" ]; then

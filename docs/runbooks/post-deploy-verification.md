@@ -6,14 +6,16 @@ Run this immediately after a production deploy.
 
 - `AIHQ_BASE_URL`
 - `AIHQ_INTERNAL_TOKEN` for internal health/smoke headers
-- `AIHQ_USER_SESSION_COOKIE` for the app-authenticated `/api/launch/posture` smoke, or `AIHQ_USER_SESSION_TOKEN` containing the raw `aihq_user` token
+- optionally `AIHQ_LAUNCH_POSTURE_TENANT_KEY`; defaults to `WEBSITE_LANE_TENANT_KEY` for the internal launch posture smoke
+- optionally `AIHQ_USER_SESSION_COOKIE` for an additional app-authenticated `/api/launch/posture` smoke, or `AIHQ_USER_SESSION_TOKEN` containing the raw `aihq_user` token
 - `WEBSITE_LANE_TENANT_KEY` for production launch verification
 - optionally `WEBSITE_LANE_DOMAIN`
 - optionally `META_BOT_BASE_URL`
 - optionally `TWILIO_VOICE_BASE_URL`
 
 The verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
-The launch posture smoke fails closed if the app session cookie/token is missing, invalid, or cannot read `GET /api/launch/posture`.
+The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with `AIHQ_INTERNAL_TOKEN`, so CI does not depend on expiring browser user sessions.
+If an app session cookie/token is supplied, the verifier also checks `GET /api/launch/posture` as an optional app-route verification.
 In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
 
 ## Command
@@ -27,7 +29,8 @@ npm run ops:postdeploy:verify
 
 - AI HQ root health
 - AI HQ API health
-- AI HQ launch posture contract at `GET /api/launch/posture`
+- AI HQ launch posture contract at `GET /api/internal/launch/posture`
+- optional app-authenticated launch posture contract at `GET /api/launch/posture` when a user session cookie/token is configured
 - Meta sidecar health if `META_BOT_BASE_URL` is provided
 - Twilio sidecar health if `TWILIO_VOICE_BASE_URL` is provided
 

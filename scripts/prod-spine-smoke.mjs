@@ -9,6 +9,7 @@ import {
   buildLaunchPostureUrl,
   classifyLaunchPosture,
   resolveLaunchPostureSessionCookie,
+  resolveLaunchPostureTenantKey,
 } from "./launch-posture-verifier.mjs";
 
 function s(value, fallback = "") {
@@ -460,61 +461,125 @@ async function verifyLaunchPosture({
   baseUrl,
   internalToken,
   sessionCookie,
+  tenantKey,
   timeoutMs,
 }) {
-  const url = buildLaunchPostureUrl(baseUrl);
-  const response = await fetchJson(
-    url,
-    buildLaunchPostureHeaders({ internalToken, sessionCookie }),
+  const results = [];
+  const internalUrl = buildLaunchPostureUrl(baseUrl, {
+    internal: true,
+    tenantKey,
+  });
+  const internalResponse = await fetchJson(
+    internalUrl,
+    buildLaunchPostureHeaders({ internalToken, internal: true }),
     timeoutMs
   );
 
-  if (!response.ok) {
-    return [
+  if (!internalResponse.ok) {
+    results.push(
       buildResult(
         "aihq_launch_posture",
         false,
         {
-          url,
-          httpStatus: response.status,
-          sessionCookieConfigured: Boolean(s(sessionCookie)),
+          url: internalUrl,
+          routeMode: "internal",
+          tenantKey: s(tenantKey),
+          httpStatus: internalResponse.status,
           internalTokenConfigured: Boolean(s(internalToken)),
           reasonCode: s(
-            response.json?.reasonCode ||
-              response.json?.reason ||
-              response.json?.error ||
-              response.error ||
+            internalResponse.json?.reasonCode ||
+              internalResponse.json?.reason ||
+              internalResponse.json?.error ||
+              internalResponse.error ||
               "launch_posture_unavailable"
           ),
           message: s(
-            response.json?.message ||
-              response.json?.reason ||
-              response.json?.error ||
-              response.error ||
-              "Launch posture endpoint is unavailable or unauthorized for smoke credentials."
+            internalResponse.json?.message ||
+              internalResponse.json?.reason ||
+              internalResponse.json?.error ||
+              internalResponse.error ||
+              "Internal launch posture endpoint is unavailable or unauthorized for smoke credentials."
           ),
         },
-        response.status
-      ),
-    ];
+        internalResponse.status
+      )
+    );
+  } else {
+    const posture = classifyLaunchPosture(internalResponse.json || {});
+    results.push(
+      buildResult(
+        "aihq_launch_posture",
+        posture.ok,
+        {
+          url: internalUrl,
+          routeMode: "internal",
+          tenantKey: s(tenantKey),
+          httpStatus: internalResponse.status,
+          internalTokenConfigured: Boolean(s(internalToken)),
+          ...posture.details,
+        },
+        internalResponse.status
+      )
+    );
   }
 
-  const posture = classifyLaunchPosture(response.json || {});
+  if (!s(sessionCookie)) return results;
 
-  return [
+  const appUrl = buildLaunchPostureUrl(baseUrl, { internal: false });
+  const appResponse = await fetchJson(
+    appUrl,
+    buildLaunchPostureHeaders({ sessionCookie, internal: false }),
+    timeoutMs
+  );
+
+  if (!appResponse.ok) {
+    results.push(
+      buildResult(
+        "aihq_launch_posture_app",
+        false,
+        {
+          url: appUrl,
+          routeMode: "app",
+          httpStatus: appResponse.status,
+          sessionCookieConfigured: true,
+          reasonCode: s(
+            appResponse.json?.reasonCode ||
+              appResponse.json?.reason ||
+              appResponse.json?.error ||
+              appResponse.error ||
+              "launch_posture_app_unavailable"
+          ),
+          message: s(
+            appResponse.json?.message ||
+              appResponse.json?.reason ||
+              appResponse.json?.error ||
+              appResponse.error ||
+              "App launch posture endpoint is unavailable or unauthorized for smoke credentials."
+          ),
+        },
+        appResponse.status
+      )
+    );
+    return results;
+  }
+
+  const appPosture = classifyLaunchPosture(appResponse.json || {});
+  results.push(
     buildResult(
-      "aihq_launch_posture",
-      posture.ok,
+      "aihq_launch_posture_app",
+      appPosture.ok,
       {
-        url,
-        httpStatus: response.status,
-        sessionCookieConfigured: Boolean(s(sessionCookie)),
-        internalTokenConfigured: Boolean(s(internalToken)),
-        ...posture.details,
+        url: appUrl,
+        routeMode: "app",
+        httpStatus: appResponse.status,
+        sessionCookieConfigured: true,
+        ...appPosture.details,
       },
-      response.status
-    ),
-  ];
+      appResponse.status
+    )
+  );
+
+  return results;
 }
 
 async function verifyWebsiteLane({
@@ -616,6 +681,7 @@ async function runAttempt({
   websiteLaneTenantKey,
   websiteLaneDomain,
   launchPostureSessionCookie,
+  launchPostureTenantKey,
   timeoutMs,
   strictSidecars,
   failOnDegraded,
@@ -635,6 +701,7 @@ async function runAttempt({
       baseUrl: aihqBaseUrl,
       internalToken,
       sessionCookie: launchPostureSessionCookie,
+      tenantKey: launchPostureTenantKey,
       timeoutMs,
     }))
   );
@@ -684,6 +751,7 @@ async function main() {
   const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
   const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
   const launchPostureSessionCookie = resolveLaunchPostureSessionCookie();
+  const launchPostureTenantKey = resolveLaunchPostureTenantKey();
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
   const requireWebsiteLane = bool(
     process.env.PROD_SPINE_REQUIRE_WEBSITE_LANE,
@@ -703,6 +771,7 @@ async function main() {
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
       websiteLaneDomainConfigured: Boolean(websiteLaneDomain),
+      launchPostureTenantKeyConfigured: Boolean(launchPostureTenantKey),
       launchPostureSessionCookieConfigured: Boolean(launchPostureSessionCookie),
     })
   );
@@ -733,6 +802,7 @@ async function main() {
       websiteLaneTenantKey,
       websiteLaneDomain,
       launchPostureSessionCookie,
+      launchPostureTenantKey,
       timeoutMs,
       strictSidecars,
       failOnDegraded,

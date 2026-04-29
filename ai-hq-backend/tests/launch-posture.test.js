@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { cfg } from "../src/config.js";
 import { apiRouter } from "../src/routes/api/index.js";
 import { buildLaunchPosture } from "../src/services/launch/posture.js";
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
@@ -280,6 +281,128 @@ test("launch posture route requires authenticated user session", async () => {
 
   assert.equal(result.res.statusCode, 401);
   assert.equal(result.res.body?.error, "Unauthorized");
+});
+
+test("app launch posture route remains app-authenticated even with internal token", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const router = apiRouter({
+      db: null,
+      wsHub: { broadcast() {} },
+      audit: null,
+      dbDisabled: true,
+    });
+
+    const result = await invokeRouter(router, "get", "/launch/posture", {
+      headers: {
+        host: "api.example.test",
+        "x-internal-token": "internal-secret",
+        "x-internal-audience": "aihq-backend.launch-posture",
+      },
+      protocol: "https",
+    });
+
+    assert.equal(result.res.statusCode, 401);
+    assert.equal(result.res.body?.error, "Unauthorized");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("internal launch posture route rejects missing and wrong internal token", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const router = apiRouter({
+      db: null,
+      wsHub: { broadcast() {} },
+      audit: null,
+      dbDisabled: true,
+    });
+
+    const missing = await invokeRouter(
+      router,
+      "get",
+      "/internal/launch/posture",
+      {
+        headers: {
+          host: "api.example.test",
+          "x-internal-audience": "aihq-backend.launch-posture",
+        },
+        query: { tenantKey: "acme" },
+        protocol: "https",
+      }
+    );
+
+    const wrong = await invokeRouter(
+      router,
+      "get",
+      "/internal/launch/posture",
+      {
+        headers: {
+          host: "api.example.test",
+          "x-internal-token": "wrong-secret",
+          "x-internal-audience": "aihq-backend.launch-posture",
+        },
+        query: { tenantKey: "acme" },
+        protocol: "https",
+      }
+    );
+
+    assert.equal(missing.res.statusCode, 401);
+    assert.equal(missing.res.body?.reason, "invalid internal token");
+    assert.equal(wrong.res.statusCode, 401);
+    assert.equal(wrong.res.body?.reason, "invalid internal token");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("internal launch posture route returns launch posture contract with valid internal token", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const router = apiRouter({
+      db: null,
+      wsHub: { broadcast() {} },
+      audit: null,
+      dbDisabled: true,
+    });
+
+    const result = await invokeRouter(
+      router,
+      "get",
+      "/internal/launch/posture",
+      {
+        headers: {
+          host: "api.example.test",
+          "x-internal-token": "internal-secret",
+          "x-internal-audience": "aihq-backend.launch-posture",
+        },
+        query: { tenantKey: "acme" },
+        protocol: "https",
+      }
+    );
+
+    assert.equal(result.res.statusCode, 200);
+    assert.equal(result.res.body?.ok, true);
+    assert.equal(result.res.body?.version, "launch_posture_v1");
+    assert.equal(result.res.body?.scope?.id, "aihq_launch_v1_narrow");
+    assert.equal(result.res.body?.tenant?.tenantKey, "acme");
+    assert.equal(typeof result.res.body?.overall?.launchReady, "boolean");
+    assert.ok(result.res.body?.channels?.website);
+    assert.ok(result.res.body?.channels?.instagram);
+    assert.ok(result.res.body?.channels?.telegram);
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
 });
 
 test("launch posture blocks when approved truth is unavailable", async () => {

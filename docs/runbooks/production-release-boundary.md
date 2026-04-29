@@ -34,7 +34,8 @@ GitHub Actions stores production secrets under these names and maps them into th
 
 - `AIHQ_PROD_BASE_URL` -> `AIHQ_BASE_URL`
 - `AIHQ_PROD_INTERNAL_TOKEN` -> `AIHQ_INTERNAL_TOKEN`
-- `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_USER_SESSION_TOKEN`, for authenticated launch posture verification
+- `AIHQ_LAUNCH_POSTURE_TENANT_KEY` optional; if omitted, the smoke scripts use `WEBSITE_LANE_TENANT_KEY` for internal launch posture verification
+- `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_USER_SESSION_TOKEN`, for optional app-route launch posture verification
 - `CLOUDFLARE_PAGES_DEPLOY_HOOK` for AI HQ frontend only
 - `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` for Neox frontend only
 - `WEBSITE_LANE_TENANT_KEY`
@@ -51,4 +52,4 @@ Optional sidecar smoke env:
 
 ## Launch confidence rule
 
-A green deploy hook and green generic health checks are not enough for launch confidence. Production launch readiness requires the app-authenticated launch posture smoke plus a real tenant website-lane smoke with `WEBSITE_LANE_TENANT_KEY` and strict website-lane flags enabled. Generic launch posture smoke checks the contract and allowed narrow surfaces only; it does not require `overall.launchReady === true` because a tenant may legitimately be blocked pending setup.
+A green deploy hook and green generic health checks are not enough for launch confidence. Production launch readiness requires the internal read-only launch posture smoke plus a real tenant website-lane smoke with `WEBSITE_LANE_TENANT_KEY` and strict website-lane flags enabled. Generic launch posture smoke checks the contract and allowed narrow surfaces only; it does not require `overall.launchReady === true` because a tenant may legitimately be blocked pending setup. The app-authenticated `/api/launch/posture` route remains guarded by a real user session and can be checked optionally when a current smoke session is available.

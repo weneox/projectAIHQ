@@ -30,7 +30,7 @@ import { chatRoutes } from "./chat/index.js";
 import { debateRoutes } from "./debate/index.js";
 import { debugRoutes } from "./debug/index.js";
 import { leadsRoutes } from "./leads/index.js";
-import { launchRoutes } from "./launch/index.js";
+import { launchInternalRoutes, launchRoutes } from "./launch/index.js";
 import { commentsRoutes } from "./comments/index.js";
 import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
@@ -141,6 +141,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use("/", healthRoutes({ db }));
   r.use("/", inboxInternalRoutes({ db, wsHub }));
   r.use("/", voiceInternalRoutes({ db, wsHub }));
+  r.use("/", launchInternalRoutes({ db }));
   r.use("/", channelConnectPublicRoutes({ db, wsHub }));
   r.use("/", websiteWidgetRoutes({ db, wsHub }));
 

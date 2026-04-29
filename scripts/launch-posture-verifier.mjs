@@ -51,9 +51,30 @@ const PHASE_TWO_SURFACES = [
   "whatsapp",
 ];
 
-export function buildLaunchPostureUrl(baseUrl = "") {
+export function buildLaunchPostureUrl(
+  baseUrl = "",
+  { internal = true, tenantKey = "", tenantId = "" } = {}
+) {
   const root = normalizeBaseUrl(baseUrl);
-  return root ? `${root}/api/launch/posture` : "";
+  if (!root) return "";
+
+  const path = internal
+    ? "/api/internal/launch/posture"
+    : "/api/launch/posture";
+  const search = new URLSearchParams();
+  if (internal && s(tenantKey)) search.set("tenantKey", s(tenantKey));
+  if (internal && s(tenantId)) search.set("tenantId", s(tenantId));
+  const query = search.toString();
+
+  return `${root}${path}${query ? `?${query}` : ""}`;
+}
+
+export function resolveLaunchPostureTenantKey(env = process.env) {
+  return s(
+    env.AIHQ_LAUNCH_POSTURE_TENANT_KEY ||
+      env.LAUNCH_POSTURE_TENANT_KEY ||
+      env.WEBSITE_LANE_TENANT_KEY
+  );
 }
 
 export function resolveLaunchPostureSessionCookie(env = process.env) {
@@ -76,16 +97,17 @@ export function buildLaunchPostureHeaders({
   internalToken = "",
   sessionCookie = "",
   audience = "aihq-backend.launch-posture",
+  internal = true,
 } = {}) {
   const headers = {
     accept: "application/json",
   };
 
-  if (s(internalToken)) {
+  if (internal && s(internalToken)) {
     headers["x-internal-token"] = s(internalToken);
   }
 
-  if (s(audience)) {
+  if (internal && s(audience)) {
     headers["x-internal-audience"] = s(audience);
   }
 
@@ -215,4 +237,3 @@ export function classifyLaunchPosture(posture = {}) {
     },
   };
 }
-
