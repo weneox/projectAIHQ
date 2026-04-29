@@ -15,6 +15,15 @@ function arr(v, d = []) {
   return Array.isArray(v) ? v : d;
 }
 
+function hasObjectValue(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).length
+  );
+}
+
 function titleize(value = "") {
   return s(value)
     .replace(/[_-]+/g, " ")
@@ -551,7 +560,11 @@ export default function TruthVersionComparePanel({
     : [];
   const versionDiff = detail?.versionDiff || {};
   const rollbackPreview = detail?.rollbackPreview || {};
-  const rollbackAction = detail?.rollbackAction || rollbackPreview?.action || {};
+  const rollbackAction = hasObjectValue(detail?.rollbackAction)
+    ? detail.rollbackAction
+    : hasObjectValue(rollbackPreview?.action)
+      ? rollbackPreview.action
+      : {};
   const rollbackReceipt =
     rollbackSurface?.rollbackReceipt || detail?.rollbackReceipt || null;
 

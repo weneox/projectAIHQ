@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
-  Circle,
   Globe,
   History,
   Mail,
@@ -44,7 +43,8 @@ import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
 import { cx } from "../../lib/cx.js";
 
 function text(value, fallback = "") {
-  return String(value ?? fallback).trim();
+  const next = String(value ?? "").trim();
+  return next || fallback;
 }
 
 function lower(value, fallback = "") {
@@ -1320,15 +1320,26 @@ export default function TruthViewerPage() {
         />
       ) : null}
 
-      {arr(viewState.data.notices).map((notice, index) => (
-        <InlineNotice
-          key={`${text(notice?.title || notice?.message)}-${index}`}
-          tone={lower(notice?.tone || notice?.type) || "info"}
-          title={text(notice?.title)}
-          description={text(notice?.message || notice?.description)}
-          compact
-        />
-      ))}
+      {arr(viewState.data.notices).map((notice, index) => {
+        const noticeObject =
+          notice && typeof notice === "object" && !Array.isArray(notice)
+            ? notice
+            : {
+                tone: "warning",
+                title: "",
+                message: String(notice || ""),
+              };
+
+        return (
+          <InlineNotice
+            key={`${text(noticeObject?.title || noticeObject?.message)}-${index}`}
+            tone={lower(noticeObject?.tone || noticeObject?.type) || "info"}
+            title={text(noticeObject?.title)}
+            description={text(noticeObject?.message || noticeObject?.description)}
+            compact
+          />
+        );
+      })}
 
       <section className="border-b border-line-soft pb-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
