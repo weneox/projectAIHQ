@@ -143,7 +143,10 @@ describe("launch api", () => {
     const result = await getLaunchPosture();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/launch/posture");
+    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    expect(new URL(calledUrl, "https://app.example.test").pathname).toBe(
+      "/api/launch/posture"
+    );
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       method: "GET",
       credentials: "include",
