@@ -1,6 +1,7 @@
 import { resolveTenantKey } from "../../../../tenancy/index.js";
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { normalizeThread } from "../shared.js";
+import { getOutboundAttemptsSummary } from "./outboundAttempts.js";
 
 const THREAD_SELECT = `
   t.id,
@@ -188,4 +189,52 @@ export async function getThreadById(db, threadId, tenantKey = "") {
 
   const row = await fetchThreadRow(db, where, values);
   return normalizeThread(row || null);
+}
+
+export async function getInboxPressureSummary(
+  db,
+  tenantKey = "",
+  { outboundSummaryLoader = getOutboundAttemptsSummary } = {}
+) {
+  if (!isDbReady(db)) {
+    throw new Error("database unavailable");
+  }
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const [threadResult, outboundSummary] = await Promise.all([
+    db.query(
+      `
+      select
+        coalesce(sum(greatest(coalesce(unread_count, 0), 0)), 0)::int as unread_count,
+        count(*) filter (where lower(coalesce(status, '')) = 'open')::int as open_count,
+        count(*) filter (where coalesce(handoff_active, false) = true)::int as handoff_count,
+        count(*) filter (
+          where lower(coalesce(status, '')) = 'open'
+            and nullif(btrim(coalesce(assigned_to, '')), '') is not null
+        )::int as assigned_open_count
+      from inbox_threads
+      where tenant_key = $1::text
+      `,
+      [resolvedTenantKey]
+    ),
+    outboundSummaryLoader(db, resolvedTenantKey),
+  ]);
+
+  const row = threadResult.rows?.[0] || {};
+  const outbound = outboundSummary || {};
+  const queued = Number(outbound.queued || 0);
+  const sending = Number(outbound.sending || 0);
+  const failed = Number(outbound.failed || 0);
+  const retrying = Number(outbound.retrying || 0);
+
+  return {
+    tenantKey: resolvedTenantKey,
+    unreadCount: Number(row.unread_count || 0),
+    openCount: Number(row.open_count || 0),
+    handoffCount: Number(row.handoff_count || 0),
+    assignedOpenCount: Number(row.assigned_open_count || 0),
+    pendingOutboundCount: queued + sending + failed + retrying,
+    failedOutboundCount: failed,
+    retryingOutboundCount: retrying,
+  };
 }

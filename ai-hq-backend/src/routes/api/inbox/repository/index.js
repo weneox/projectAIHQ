@@ -12,7 +12,11 @@ export {
   updateOutboundMessageProviderId,
   updateOutboundMessageDeliveryFailure,
 } from "./messages.js";
-export { refreshThread, getThreadById } from "./threads.js";
+export {
+  refreshThread,
+  getThreadById,
+  getInboxPressureSummary,
+} from "./threads.js";
 export {
   createOutboundAttempt,
   getOutboundAttemptById,

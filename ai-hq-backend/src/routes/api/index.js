@@ -30,6 +30,7 @@ import { chatRoutes } from "./chat/index.js";
 import { debateRoutes } from "./debate/index.js";
 import { debugRoutes } from "./debug/index.js";
 import { leadsRoutes } from "./leads/index.js";
+import { launchRoutes } from "./launch/index.js";
 import { commentsRoutes } from "./comments/index.js";
 import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
@@ -152,6 +153,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use(createRequireOperationalDbMiddleware({ db }));
 
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
+  r.use("/", launchRoutes({ db }));
 
   r.use("/", modeRoutes({ db, wsHub }));
   r.use("/", agentsRoutes());
