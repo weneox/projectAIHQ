@@ -890,7 +890,7 @@ export function SlidingDetailOverlay({
     <div
       className={cx(
         absolute ? "absolute inset-0" : "fixed inset-0",
-        "z-[120] overflow-hidden",
+        "z-[180] overflow-visible",
         className
       )}
     >
@@ -904,10 +904,10 @@ export function SlidingDetailOverlay({
         )}
       />
 
-      <div className="absolute inset-y-0 right-0 flex w-full justify-end">
+      <div className="absolute inset-y-0 right-0 flex w-full justify-end overflow-visible">
         <div
           className={cx(
-            "h-full w-full transform-gpu translate-x-0 transition-transform duration-base ease-premium",
+            "h-full w-full min-w-0 transform-gpu translate-x-0 overflow-visible transition-transform duration-base ease-premium",
             "animate-[shellFadeIn_var(--motion-fast)_var(--motion-premium)_both]",
             panelWidthClassName,
             panelClassName

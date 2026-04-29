@@ -380,7 +380,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
   );
 
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative z-[520]">
       <button
         type="button"
         aria-label={displayName || "Workspace"}
@@ -421,7 +421,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+9px)] z-[90] w-[270px] overflow-hidden rounded-[18px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(249,250,253,0.99)_52%,rgba(245,247,251,0.988)_100%)] p-2.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.92),0_30px_82px_-42px_rgba(15,23,42,0.42)]">
+        <div className="absolute right-0 top-[calc(100%+9px)] z-[700] w-[270px] overflow-hidden rounded-[18px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(249,250,253,0.99)_52%,rgba(245,247,251,0.988)_100%)] p-2.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.92),0_30px_82px_-42px_rgba(15,23,42,0.42)]">
           <div className="px-2 py-2.5">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-[linear-gradient(180deg,rgba(255,255,255,0.94)_0%,rgba(242,246,252,0.88)_100%)] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_-24px_rgba(15,23,42,0.38)]">
@@ -501,7 +501,7 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60] overflow-hidden"
+        className="sticky top-0 z-[260] overflow-visible"
         style={{
           height: HEADER_HEIGHT,
           background: SHELL_CHROME_BG,

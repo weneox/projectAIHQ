@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Check,
   CheckCircle2,
   ExternalLink,
   RefreshCw,
@@ -43,6 +42,12 @@ function s(value, fallback = "") {
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
 function isInstagramChannel(channel = {}) {
@@ -166,6 +171,7 @@ function badgeToneFromStatus(status) {
   if (meta?.tone === "warning") return "warning";
   if (meta?.tone === "danger") return "danger";
   if (meta?.tone === "info") return "brand";
+
   return "neutral";
 }
 
@@ -174,6 +180,7 @@ function dotClass(tone = "neutral") {
   if (tone === "warning") return "bg-warning";
   if (tone === "danger") return "bg-danger";
   if (tone === "brand" || tone === "info") return "bg-brand";
+
   return "bg-[rgb(var(--color-text-soft))]";
 }
 
@@ -189,7 +196,13 @@ function DrawerStatus({ status }) {
   );
 }
 
-function SectionCard({ eyebrow, title, description, children, tone = "neutral" }) {
+function SectionCard({
+  eyebrow,
+  title,
+  description,
+  children,
+  tone = "neutral",
+}) {
   return (
     <Card padded="md" tone={tone}>
       {eyebrow ? (
@@ -210,7 +223,11 @@ function SectionCard({ eyebrow, title, description, children, tone = "neutral" }
         </div>
       ) : null}
 
-      {children ? <div className={title || description || eyebrow ? "mt-4" : ""}>{children}</div> : null}
+      {children ? (
+        <div className={title || description || eyebrow ? "mt-4" : ""}>
+          {children}
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -218,7 +235,9 @@ function SectionCard({ eyebrow, title, description, children, tone = "neutral" }
 function FeedbackBanner({ tone = "success", children }) {
   return (
     <InlineNotice
-      tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : "success"}
+      tone={
+        tone === "danger" ? "danger" : tone === "warning" ? "warning" : "success"
+      }
       description={children}
       compact
     />
@@ -249,9 +268,15 @@ function RuntimeRow({ ready, label, description }) {
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           {ready ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={2.1} />
+            <CheckCircle2
+              className="h-4 w-4 shrink-0 text-success"
+              strokeWidth={2.1}
+            />
           ) : (
-            <ShieldAlert className="h-4 w-4 shrink-0 text-warning" strokeWidth={2.1} />
+            <ShieldAlert
+              className="h-4 w-4 shrink-0 text-warning"
+              strokeWidth={2.1}
+            />
           )}
 
           <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
@@ -298,6 +323,7 @@ function PendingSelectionPanel({
   onSelect,
 }) {
   const candidates = arr(pendingSelection?.candidates);
+
   if (pendingSelection?.required !== true || !candidates.length) return null;
 
   return (
@@ -325,9 +351,18 @@ function PendingSelectionPanel({
                   </div>
 
                   <div className="mt-3">
-                    <DataRow label="Page" value={s(candidate?.pageName, "Not available")} />
-                    <DataRow label="Handle" value={s(candidate?.igUsername, "Not available")} />
-                    <DataRow label="Instagram user id" value={s(candidate?.igUserId, "Not available")} />
+                    <DataRow
+                      label="Page"
+                      value={s(candidate?.pageName, "Not available")}
+                    />
+                    <DataRow
+                      label="Handle"
+                      value={s(candidate?.igUsername, "Not available")}
+                    />
+                    <DataRow
+                      label="Instagram user id"
+                      value={s(candidate?.igUserId, "Not available")}
+                    />
                   </div>
                 </div>
 
@@ -622,6 +657,28 @@ function StandardChannelDetailDrawer({
     });
   }
 
+  function handleRefresh() {
+    if (isInstagram) {
+      metaStatusQuery.refetch();
+      return;
+    }
+
+    if (isTelegram) {
+      telegramStatusQuery.refetch();
+    }
+  }
+
+  function handleDisconnect() {
+    if (isInstagram) {
+      disconnectMutation.mutate();
+      return;
+    }
+
+    if (isTelegram) {
+      telegramDisconnectMutation.mutate();
+    }
+  }
+
   const feedback = {
     connected: searchParams.get("meta_connected") === "1",
     selection: searchParams.get("meta_selection") === "1",
@@ -648,8 +705,12 @@ function StandardChannelDetailDrawer({
 
   const instagramCopy = buildInstagramStateCopy(metaStatusQuery.data || {});
   const telegramCopy = buildTelegramStateCopy(telegramStatusQuery.data || {});
+  const telegramData = obj(telegramStatusQuery.data);
+  const telegramAccount = obj(telegramData.account);
+  const telegramWebhook = obj(telegramData.webhook);
+  const telegramRuntime = obj(telegramData.runtime);
   const blockers = isTelegram
-    ? arr(telegramStatusQuery.data?.readiness?.blockers)
+    ? arr(telegramData?.readiness?.blockers)
     : arr(metaStatusQuery.data?.readiness?.blockers);
   const reviewScopes = arr(metaStatusQuery.data?.review?.requestedScopes);
   const reviewExcludedScopes = arr(metaStatusQuery.data?.review?.excludedScopes);
@@ -665,12 +726,11 @@ function StandardChannelDetailDrawer({
     metaStatusQuery.data?.actions?.reconnectAvailable === true &&
     metaStatusQuery.data?.actions?.reconnectRecommended === true;
 
-  const telegramRequiresTokenInput =
-    s(telegramStatusQuery.data?.state) !== "connected";
+  const telegramRequiresTokenInput = s(telegramData?.state) !== "connected";
 
   const telegramConnectAllowed =
-    telegramStatusQuery.data?.actions?.connectAvailable !== false ||
-    telegramStatusQuery.data?.actions?.reconnectAvailable === true;
+    telegramData?.actions?.connectAvailable !== false ||
+    telegramData?.actions?.reconnectAvailable === true;
 
   const activeStatusQuery = isInstagram
     ? metaStatusQuery
@@ -683,29 +743,35 @@ function StandardChannelDetailDrawer({
     telegramDisconnectMutation.isPending ||
     telegramStatusQuery.isFetching;
 
-  const primaryLabel = useMemo(() => {
-    if (isTelegram) {
-      if (s(telegramStatusQuery.data?.state) === "connected") return "Open inbox";
-      if (s(telegramStatusQuery.data?.state) === "error") return "Reconnect Telegram";
-      if (s(telegramStatusQuery.data?.state) === "disconnected") return "Reconnect Telegram";
-      if (s(telegramStatusQuery.data?.state) === "connecting") return "Complete Telegram setup";
-      return "Connect Telegram";
+  let primaryLabel = "Phase 2";
+  if (isTelegram) {
+    if (s(telegramData?.state) === "connected") {
+      primaryLabel = "Open inbox";
+    } else if (
+      s(telegramData?.state) === "error" ||
+      s(telegramData?.state) === "disconnected"
+    ) {
+      primaryLabel = "Reconnect Telegram";
+    } else if (s(telegramData?.state) === "connecting") {
+      primaryLabel = "Complete Telegram setup";
+    } else {
+      primaryLabel = "Connect Telegram";
     }
-
-    if (!isInstagram) return "Phase 2";
-    if (pendingSelectionRequired) return "Choose account below";
-    if (s(metaStatusQuery.data?.state) === "connected") return "Open inbox";
-    if (s(metaStatusQuery.data?.state) === "reconnect_required") return "Reconnect Instagram";
-    if (s(metaStatusQuery.data?.state) === "deauthorized") return "Reconnect Instagram";
-    if (s(metaStatusQuery.data?.state) === "disconnected") return "Reconnect Instagram";
-    return "Connect Instagram";
-  }, [
-    isInstagram,
-    isTelegram,
-    metaStatusQuery.data,
-    pendingSelectionRequired,
-    telegramStatusQuery.data,
-  ]);
+  } else if (isInstagram) {
+    if (pendingSelectionRequired) {
+      primaryLabel = "Choose account below";
+    } else if (s(metaStatusQuery.data?.state) === "connected") {
+      primaryLabel = "Open inbox";
+    } else if (
+      ["reconnect_required", "deauthorized", "disconnected"].includes(
+        s(metaStatusQuery.data?.state)
+      )
+    ) {
+      primaryLabel = "Reconnect Instagram";
+    } else {
+      primaryLabel = "Connect Instagram";
+    }
+  }
 
   const primaryDisabled =
     (isInstagram && pendingSelectionRequired) ||
@@ -715,12 +781,16 @@ function StandardChannelDetailDrawer({
       telegramRequiresTokenInput &&
       (!s(telegramBotToken) || !telegramConnectAllowed));
 
+  const disconnectAvailable =
+    (isInstagram && metaStatusQuery.data?.actions?.disconnectAvailable !== false) ||
+    (isTelegram && telegramData?.actions?.disconnectAvailable === true);
+
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full w-full flex-col border-l border-line-soft bg-surface shadow-panel"
+      className="flex h-full min-h-0 w-full flex-col overflow-visible border-l border-line-soft bg-surface shadow-panel"
     >
-      <header className="shrink-0 border-b border-line-soft bg-surface px-6 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+      <header className="relative z-20 shrink-0 border-b border-line-soft bg-surface px-6 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2">
           <div className="row-span-2 shrink-0 pt-0.5">
             <ChannelIcon channel={channel} size="lg" />
@@ -738,7 +808,7 @@ function StandardChannelDetailDrawer({
             size="icon"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="row-span-2 !h-9 !w-9"
+            className="row-span-2 !h-9 !w-9 !min-w-9 shrink-0 justify-self-end overflow-visible"
           >
             <X className="h-4 w-4" strokeWidth={2.2} />
           </Button>
@@ -763,14 +833,21 @@ function StandardChannelDetailDrawer({
             </FeedbackBanner>
           ) : null}
 
-          {pendingSelectionRequired || (feedback.selection && metaStatusQuery.isLoading) ? (
+          {pendingSelectionRequired ||
+          (feedback.selection && metaStatusQuery.isLoading) ? (
             <FeedbackBanner tone="warning">
               Meta found more than one eligible Instagram Business or Professional asset. Choose the correct account below before this tenant becomes connected.
             </FeedbackBanner>
           ) : null}
 
-          {feedback.error ? <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner> : null}
-          {metaActionError ? <FeedbackBanner tone="danger">{metaActionError}</FeedbackBanner> : null}
+          {feedback.error ? (
+            <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner>
+          ) : null}
+
+          {metaActionError ? (
+            <FeedbackBanner tone="danger">{metaActionError}</FeedbackBanner>
+          ) : null}
+
           {isTelegram && telegramActionError ? (
             <FeedbackBanner tone="danger">{telegramActionError}</FeedbackBanner>
           ) : null}
@@ -828,28 +905,46 @@ function StandardChannelDetailDrawer({
                 <div className="mt-4 text-[12.5px] font-medium leading-6 text-text-muted">
                   {metaStatusQuery.isLoading
                     ? "Loading tenant runtime state..."
-                    : s(metaStatusQuery.data?.readiness?.message, "Runtime state unavailable.")}
+                    : s(
+                        metaStatusQuery.data?.readiness?.message,
+                        "Runtime state unavailable."
+                      )}
                 </div>
               </SectionCard>
 
               <SectionCard eyebrow="Connected account" title="Instagram account">
                 <DataRow
                   label="Display"
-                  value={s(metaStatusQuery.data?.account?.displayName, "Not connected")}
+                  value={s(
+                    metaStatusQuery.data?.account?.displayName,
+                    "Not connected"
+                  )}
                 />
                 <DataRow
                   label="Instagram handle"
-                  value={s(metaStatusQuery.data?.account?.username, "Not available")}
+                  value={s(
+                    metaStatusQuery.data?.account?.username,
+                    "Not available"
+                  )}
                 />
                 <DataRow
                   label="Instagram user id"
-                  value={s(metaStatusQuery.data?.account?.igUserId, "Not available")}
+                  value={s(
+                    metaStatusQuery.data?.account?.igUserId,
+                    "Not available"
+                  )}
                 />
                 <DataRow
                   label="Meta app user id"
-                  value={s(metaStatusQuery.data?.account?.metaUserId, "Not available")}
+                  value={s(
+                    metaStatusQuery.data?.account?.metaUserId,
+                    "Not available"
+                  )}
                 />
-                <DataRow label="User token status" value={buildUserTokenStatusCopy(userToken)} />
+                <DataRow
+                  label="User token status"
+                  value={buildUserTokenStatusCopy(userToken)}
+                />
                 <DataRow
                   label="Token expires"
                   value={s(
@@ -943,63 +1038,90 @@ function StandardChannelDetailDrawer({
 
               <SectionCard eyebrow="Runtime" title="Live runtime checks">
                 <RuntimeRow
-                  ready={telegramStatusQuery.data?.account?.verified === true}
+                  ready={telegramAccount.verified === true || telegramData.ready === true}
                   label="Bot authentication"
                   description="Stored tenant bot token still validates against Telegram."
                 />
+
                 <RuntimeRow
-                  ready={telegramStatusQuery.data?.webhook?.verified === true}
+                  ready={telegramWebhook.ready === true || telegramWebhook.verified === true}
                   label="Webhook intake"
                   description="Telegram is pointed at the tenant-bound webhook route with secret verification enabled."
                 />
+
                 <RuntimeRow
-                  ready={telegramStatusQuery.data?.runtime?.deliveryReady === true}
-                  label="AI reply delivery"
-                  description="Outbound replies are allowed only when runtime and webhook state are ready."
+                  ready={telegramRuntime.deliveryReady === true}
+                  label="Reply delivery"
+                  description="Outbound replies can use the tenant bot token and current runtime authority."
                 />
 
                 <div className="mt-4 text-[12.5px] font-medium leading-6 text-text-muted">
                   {telegramStatusQuery.isLoading
                     ? "Loading Telegram runtime state..."
                     : s(
-                        telegramStatusQuery.data?.readiness?.message,
+                        telegramData?.readiness?.message,
                         "Telegram runtime state unavailable."
                       )}
                 </div>
               </SectionCard>
 
-              <SectionCard eyebrow="Bot account" title="Telegram bot">
+              <SectionCard eyebrow="Connected bot" title="Telegram bot">
                 <DataRow
-                  label="Bot username"
+                  label="Display"
+                  value={s(telegramAccount.displayName, "Not connected")}
+                />
+                <DataRow
+                  label="Username"
                   value={s(
-                    telegramStatusQuery.data?.account?.username ||
-                      telegramStatusQuery.data?.bot?.username,
+                    telegramAccount.botUsername || telegramData.botUsername,
                     "Not available"
                   )}
                 />
                 <DataRow
-                  label="Bot id"
+                  label="Bot user id"
+                  value={s(telegramAccount.botUserId, "Not available")}
+                />
+                <DataRow
+                  label="Token"
+                  value={s(telegramAccount.botTokenMasked, "Not available")}
+                />
+                <DataRow
+                  label="Connected at"
+                  value={s(telegramData.lifecycle?.connectedAt, "Not available")}
+                />
+                <DataRow
+                  label="Last verified"
                   value={s(
-                    telegramStatusQuery.data?.account?.botId ||
-                      telegramStatusQuery.data?.bot?.id,
+                    telegramData.lifecycle?.lastVerifiedAt,
                     "Not available"
                   )}
                 />
+              </SectionCard>
+
+              <SectionCard eyebrow="Webhook" title="Tenant webhook">
                 <DataRow
-                  label="Webhook"
-                  value={s(
-                    telegramStatusQuery.data?.webhook?.url ||
-                      telegramStatusQuery.data?.webhookUrl,
-                    "Not available"
-                  )}
+                  label="Expected URL"
+                  value={s(telegramWebhook.expectedUrl, "Not available")}
                 />
                 <DataRow
-                  label="Last checked"
-                  value={s(
-                    telegramStatusQuery.data?.checkedAt ||
-                      telegramStatusQuery.data?.updatedAt,
-                    "Not available"
-                  )}
+                  label="Actual URL"
+                  value={s(telegramWebhook.actualUrl, "Not available")}
+                />
+                <DataRow
+                  label="Secret header"
+                  value={
+                    telegramWebhook.secretHeaderConfigured === true
+                      ? "Configured"
+                      : "Not configured"
+                  }
+                />
+                <DataRow
+                  label="Pending updates"
+                  value={String(telegramWebhook.pendingUpdateCount ?? 0)}
+                />
+                <DataRow
+                  label="Last error"
+                  value={s(telegramWebhook.lastErrorMessage, "None")}
                 />
               </SectionCard>
 
@@ -1007,16 +1129,17 @@ function StandardChannelDetailDrawer({
             </>
           ) : (
             <SectionCard
-              eyebrow="Coming next"
-              title={channel?.detailSummary || "Connector detail"}
-              description={channel?.detailNote || "This channel is not active in the current launch lane."}
+              eyebrow="Phase 2"
+              title="This channel is not active yet."
+              description="This connector is planned, but it is not part of the current launch lane."
+              tone="warning"
             />
           )}
         </div>
       </div>
 
       <footer className="shrink-0 border-t border-line-soft bg-surface px-6 py-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] [&>button]:min-w-0 sm:[&>button:first-child]:!w-full sm:[&>button]:!w-auto">
           <Button
             type="button"
             fullWidth
@@ -1027,51 +1150,39 @@ function StandardChannelDetailDrawer({
             {primaryLabel}
           </Button>
 
-          {isInstagram && s(metaStatusQuery.data?.state) === "connected" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={activeStatusQuery?.isFetching}
+            onClick={handleRefresh}
+            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            Refresh
+          </Button>
+
+          {showReconnectButton ? (
             <Button
               type="button"
-              variant={showReconnectButton ? "primary" : "secondary"}
-              loading={connectMutation.isPending}
+              variant="secondary"
+              disabled={connectMutation.isPending}
               onClick={() => connectMutation.mutate()}
-              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
             >
               Reconnect
             </Button>
-          ) : null}
-
-          {isInstagram && s(metaStatusQuery.data?.state) === "connected" ? (
+          ) : disconnectAvailable ? (
             <Button
               type="button"
               variant="secondary"
-              loading={disconnectMutation.isPending}
-              disabled={disconnectMutation.isPending}
-              onClick={() => disconnectMutation.mutate()}
+              loading={
+                disconnectMutation.isPending || telegramDisconnectMutation.isPending
+              }
+              disabled={
+                disconnectMutation.isPending ||
+                telegramDisconnectMutation.isPending
+              }
+              onClick={handleDisconnect}
             >
               Disconnect
-            </Button>
-          ) : null}
-
-          {isTelegram && s(telegramStatusQuery.data?.state) === "connected" ? (
-            <Button
-              type="button"
-              variant="secondary"
-              loading={telegramDisconnectMutation.isPending}
-              disabled={telegramDisconnectMutation.isPending}
-              onClick={() => telegramDisconnectMutation.mutate()}
-            >
-              Disconnect
-            </Button>
-          ) : null}
-
-          {activeStatusQuery ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={activeStatusQuery.isFetching}
-              onClick={() => activeStatusQuery.refetch()}
-              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Refresh
             </Button>
           ) : null}
         </div>
