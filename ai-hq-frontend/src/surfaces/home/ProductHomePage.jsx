@@ -1,15 +1,16 @@
 ﻿import {
   ArrowRight,
   CheckCircle2,
-  Circle,
-  LockKeyhole,
-  Radio,
+  CircleAlert,
+  Inbox,
+  MessageCircle,
+  PlugZap,
+  ShieldCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
-import Badge from "../../components/ui/Badge.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -45,212 +46,227 @@ function unreadCount(home) {
 }
 
 function openConversationCount(home) {
-  return Math.max(1, n(home?.inboxState?.counts?.openCount));
+  return Math.max(0, n(home?.inboxState?.counts?.openCount));
 }
 
-function shortChannelLabel(channel = {}) {
-  const provider = lower(channel.provider);
-
-  if (provider === "telegram") return "Telegram";
-  if (provider === "meta") return "Instagram";
-  if (provider === "website" || provider === "webchat") return "Website chat";
-
-  return s(channel.channelLabel, "Live channel");
+function handoffCount(home) {
+  return n(home?.inboxState?.counts?.handoffCount);
 }
 
-function channelHandle(channel = {}) {
-  return s(channel.accountHandle);
+function outboundPendingCount(home) {
+  return n(home?.inboxState?.counts?.outboundPending);
 }
 
-function liveChannelPhrase(channel = {}) {
-  const provider = lower(channel.provider);
-  const readyCount = n(channel.readyCount);
-
-  if (!provider && readyCount > 1) {
-    return `${readyCount} launch channels are live`;
-  }
-
-  return `${shortChannelLabel(channel)} is live`;
-}
-
-function humanTruthState(home) {
-  const truthReady = home?.truthRuntime?.truthReady === true;
-  const runtimeReady = home?.truthRuntime?.ready === true;
-  const readyForApproval = home?.assistant?.readyForApproval === true;
-
-  if (truthReady && runtimeReady) {
-    return {
-      label: "Business truth",
-      value: "Approved",
-      hint: "Runtime is using approved truth",
-      tone: "success",
-    };
-  }
-
-  if (truthReady) {
-    return {
-      label: "Business truth",
-      value: "Runtime review",
-      hint: compactSentence(
-        home?.truthRuntime?.summary,
-        "Approved truth exists, but runtime needs review."
-      ),
-      tone: "danger",
-    };
-  }
-
-  if (readyForApproval) {
-    return {
-      label: "Business truth",
-      value: "Review draft",
-      hint: "Approve setup before live replies",
-      tone: "warning",
-    };
-  }
-
-  return {
-    label: "Business truth",
-    value: "Not approved",
-    hint: "Define the facts AI can use",
-    tone: "danger",
-  };
-}
-
-function humanChannelState(home) {
+function readyChannelCount(home) {
   const channel = home?.launchChannel || {};
-  const connected = channel.connected === true;
-  const deliveryReady = channel.deliveryReady === true;
-  const label = shortChannelLabel(channel);
-  const handle = channelHandle(channel);
 
-  if (connected && deliveryReady) {
-    return {
-      label: "Channel",
-      value: label,
-      hint: handle ? `${label} ${handle}` : "Ready for live delivery",
-      tone: "success",
-    };
-  }
+  if (n(channel.readyCount) > 0) return n(channel.readyCount);
+  if (channel.connected === true && channel.deliveryReady === true) return 1;
 
-  if (connected) {
-    return {
-      label: "Channel",
-      value: label,
-      hint: "Connected, but delivery is blocked",
-      tone: "danger",
-    };
-  }
-
-  return {
-    label: "Channel",
-    value: "Not connected",
-    hint: "Choose one live channel",
-    tone: "warning",
-  };
+  return 0;
 }
 
-function humanInboxState(home) {
-  const status = lower(home?.inboxState?.status);
-  const unread = unreadCount(home);
-  const openCount = openConversationCount(home);
-
-  if (status === "unavailable") {
-    return {
-      label: "Inbox",
-      value: "Unavailable",
-      hint: "Inbox state could not load",
-      tone: "danger",
-    };
+function availableChannelCount(home) {
+  const states = arr(home?.launchChannel?.providerStates);
+  if (states.length) {
+    return states.filter((item) => item?.available !== false).length;
   }
+
+  return 3;
+}
+
+function businessInfoReady(home) {
+  return (
+    home?.truthRuntime?.truthReady === true &&
+    home?.truthRuntime?.ready === true
+  );
+}
+
+function channelReady(home) {
+  return (
+    home?.launchChannel?.connected === true &&
+    home?.launchChannel?.deliveryReady === true
+  );
+}
+
+function inboxUnavailable(home) {
+  return lower(home?.inboxState?.status) === "unavailable";
+}
+
+function buildPageCopy(home) {
+  const unread = unreadCount(home);
+  const open = openConversationCount(home);
+  const channels = readyChannelCount(home);
 
   if (unread > 0) {
     return {
-      label: "Inbox",
-      value: `${unread} unread`,
-      hint: `${pluralize(openCount, "open conversation")} waiting`,
+      eyebrow: "Customer work",
+      title: `${pluralize(unread, "customer message")} waiting`,
+      summary: `${pluralize(Math.max(open, 1), "conversation")} need a reply. Business info is ready and ${pluralize(channels || 1, "channel")} can receive messages.`,
+      primaryLabel: "Reply now",
+      primaryPath: "/inbox",
       tone: "warning",
     };
   }
 
-  if (status === "active") {
+  if (!businessInfoReady(home)) {
     return {
-      label: "Inbox",
-      value: "Active",
-      hint: "Conversation work is present",
-      tone: "brand",
+      eyebrow: "Setup needed",
+      title: "Approve your business info",
+      summary:
+        "AI should not answer customers until your business details are reviewed and approved.",
+      primaryLabel: "Review business info",
+      primaryPath: "/truth",
+      tone: "warning",
+    };
+  }
+
+  if (!channelReady(home)) {
+    return {
+      eyebrow: "Setup needed",
+      title: "Connect a customer channel",
+      summary:
+        "Choose where customers can message you first: website chat, Instagram, or Telegram.",
+      primaryLabel: "Connect channel",
+      primaryPath: "/channels",
+      tone: "warning",
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      eyebrow: "Needs check",
+      title: "Inbox could not be loaded",
+      summary:
+        "Business info and channels look ready, but customer activity could not be checked.",
+      primaryLabel: "Open inbox",
+      primaryPath: "/inbox",
+      tone: "danger",
     };
   }
 
   return {
-    label: "Inbox",
-    value: "Ready",
-    hint: "No unread pressure",
+    eyebrow: "All clear",
+    title: "No customer work waiting",
+    summary:
+      channels > 0
+        ? `${pluralize(channels, "channel")} live. Inbox is clear right now.`
+        : "Workspace is calm right now.",
+    primaryLabel: "Open inbox",
+    primaryPath: "/inbox",
     tone: "success",
   };
 }
 
-function buildHeroCopy(home) {
-  const channel = home?.launchChannel || {};
-  const truthReady = home?.truthRuntime?.truthReady === true;
-  const runtimeReady = home?.truthRuntime?.ready === true;
-  const channelReady =
-    channel.connected === true && channel.deliveryReady === true;
-  const inboxUnavailable = lower(home?.inboxState?.status) === "unavailable";
+function buildMainActions(home) {
   const unread = unreadCount(home);
+  const open = openConversationCount(home);
+  const pendingOutbound = outboundPendingCount(home);
 
-  if (home?.launchReady) {
-    return {
-      title: "Ready for inbox work.",
-      summary:
-        unread > 0
-          ? `${liveChannelPhrase(channel)} and ${pluralize(unread, "message")} ${
-              unread === 1 ? "needs" : "need"
-            } review.`
-          : "Approved truth, one live channel, and inbox state are aligned.",
-    };
+  const actions = [];
+
+  if (unread > 0) {
+    actions.push({
+      id: "reply",
+      title: `Reply to ${pluralize(unread, "customer message")}`,
+      detail: `${pluralize(Math.max(open, 1), "conversation")} waiting in the inbox.`,
+      path: "/inbox",
+      label: "Open inbox",
+      tone: "warning",
+      icon: MessageCircle,
+    });
   }
 
-  if (!truthReady) {
-    return {
-      title: "Approve business truth.",
-      summary:
-        "Define the facts AI can use before any channel is treated as live.",
-    };
+  if (pendingOutbound > 0) {
+    actions.push({
+      id: "outbound",
+      title: `Check ${pluralize(pendingOutbound, "outbound reply")}`,
+      detail: "Some replies may need retry or delivery review.",
+      path: "/inbox",
+      label: "Review replies",
+      tone: "warning",
+      icon: Inbox,
+    });
   }
 
-  if (!runtimeReady) {
-    return {
-      title: "Review truth runtime.",
-      summary: "Approved truth exists, but runtime is not ready for live replies.",
-    };
+  if (!businessInfoReady(home)) {
+    actions.push({
+      id: "business",
+      title: "Review business info",
+      detail: "Approve the facts AI is allowed to use with customers.",
+      path: "/truth",
+      label: "Review info",
+      tone: "warning",
+      icon: ShieldCheck,
+    });
   }
 
-  if (!channelReady) {
-    return {
-      title: "Connect one live channel.",
-      summary: "Choose website chat, Instagram, or Telegram for the launch lane.",
-    };
+  if (!channelReady(home)) {
+    actions.push({
+      id: "channel",
+      title: "Connect one customer channel",
+      detail: "Website chat, Instagram, or Telegram can become your first live channel.",
+      path: "/channels",
+      label: "Open channels",
+      tone: "warning",
+      icon: PlugZap,
+    });
   }
 
-  if (inboxUnavailable) {
-    return {
-      title: "Inbox needs a check.",
-      summary: "Truth and channel are ready, but inbox state is unavailable.",
-    };
+  if (!actions.length) {
+    actions.push({
+      id: "clear",
+      title: "Nothing urgent right now",
+      detail: "Customer messages are clear. You can open the inbox or review setup anytime.",
+      path: "/inbox",
+      label: "Open inbox",
+      tone: "success",
+      icon: CheckCircle2,
+    });
   }
 
-  return {
-    title: "Finish the launch check.",
-    summary: "Only the inbox handoff remains before live operation.",
-  };
+  return actions.slice(0, 3);
 }
 
-function buildMetaLine(home) {
-  const truth = humanTruthState(home);
-  const channel = humanChannelState(home);
-  const inbox = humanInboxState(home);
+function buildSafetyChecks(home) {
+  const unread = unreadCount(home);
+  const channels = readyChannelCount(home);
+  const total = availableChannelCount(home);
 
-  return [truth.value, channel.value, inbox.value].filter(Boolean);
+  return [
+    {
+      id: "business",
+      label: "Business info",
+      value: businessInfoReady(home) ? "Ready" : "Needs review",
+      detail: businessInfoReady(home)
+        ? "AI can use approved business details."
+        : "Approve the business details AI should use.",
+      tone: businessInfoReady(home) ? "success" : "warning",
+      path: "/truth",
+    },
+    {
+      id: "channels",
+      label: "Customer channels",
+      value: channels > 0 ? `${channels}/${total} live` : "Not live",
+      detail:
+        channels > 0
+          ? `${pluralize(channels, "channel")} can receive messages.`
+          : "Connect at least one customer channel.",
+      tone: channels > 0 ? "success" : "warning",
+      path: "/channels",
+    },
+    {
+      id: "inbox",
+      label: "Inbox",
+      value: unread > 0 ? `${unread} waiting` : "Clear",
+      detail:
+        unread > 0
+          ? `${pluralize(unread, "message")} need review.`
+          : "No urgent message work right now.",
+      tone: unread > 0 ? "warning" : "success",
+      path: "/inbox",
+    },
+  ];
 }
 
 function toneTextClass(tone = "neutral") {
@@ -259,173 +275,155 @@ function toneTextClass(tone = "neutral") {
   if (tone === "danger") return "text-danger";
   if (tone === "brand" || tone === "info") return "text-brand";
 
-  return "text-text-subtle";
+  return "text-text-muted";
 }
 
-function badgeTone(tone = "neutral") {
-  if (tone === "success") return "success";
-  if (tone === "warning") return "warning";
-  if (tone === "danger") return "danger";
-  if (tone === "brand" || tone === "info") return "brand";
+function toneBgClass(tone = "neutral") {
+  if (tone === "success") {
+    return "border-[rgba(var(--color-success),0.22)] bg-success-soft text-success";
+  }
 
-  return "neutral";
+  if (tone === "warning") {
+    return "border-[rgba(var(--color-warning),0.24)] bg-warning-soft text-warning";
+  }
+
+  if (tone === "danger") {
+    return "border-[rgba(var(--color-danger),0.22)] bg-danger-soft text-danger";
+  }
+
+  if (tone === "brand" || tone === "info") {
+    return "border-[rgba(var(--color-brand),0.22)] bg-brand-soft text-brand";
+  }
+
+  return "border-line-soft bg-surface-muted text-text-muted";
+}
+
+function toneDotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+
+  return "bg-[rgb(var(--color-text-soft))]";
 }
 
 function StatusDot({ tone = "neutral" }) {
-  const className =
-    tone === "success"
-      ? "bg-success"
-      : tone === "warning"
-        ? "bg-warning"
-        : tone === "danger"
-          ? "bg-danger"
-          : tone === "brand" || tone === "info"
-            ? "bg-brand"
-            : "bg-[rgb(var(--color-text-soft))]";
-
-  return <span className={cx("h-1.5 w-1.5 rounded-full", className)} />;
+  return <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />;
 }
 
-function StatusStripItem({ item, last = false }) {
+function MiniStatus({ tone = "neutral", children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold">
+      <StatusDot tone={tone} />
+      <span className={toneTextClass(tone)}>{children}</span>
+    </span>
+  );
+}
+
+function Metric({ label, value, detail, tone = "neutral", last = false }) {
   return (
     <div
       className={cx(
-        "min-w-0 px-4 py-4",
-        !last && "border-b border-line-soft md:border-b-0 md:border-r"
+        "min-w-0 px-4 py-3",
+        !last && "border-b border-line-soft sm:border-b-0 sm:border-r"
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
-          {item.label}
-        </div>
-
-        <Badge tone={badgeTone(item.tone)} size="sm">
-          <StatusDot tone={item.tone} />
-          {item.tone === "success"
-            ? "Ready"
-            : item.tone === "warning"
-              ? "Review"
-              : item.tone === "danger"
-                ? "Blocked"
-                : "Active"}
-        </Badge>
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {label}
       </div>
 
       <div
         className={cx(
-          "mt-3 text-[18px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
-          toneTextClass(item.tone)
+          "mt-1 text-[20px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
+          toneTextClass(tone)
         )}
       >
-        {item.value}
+        {value}
       </div>
 
-      <div className="mt-1.5 text-[13px] font-medium leading-5 text-text-muted">
-        {item.hint}
+      <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+        {detail}
       </div>
     </div>
   );
 }
 
-function stepTone(step = {}) {
-  if (step.complete) return "success";
-
-  const tone = lower(step.tone || step.status);
-
-  if (tone === "warn" || tone === "warning" || tone === "attention") {
-    return "warning";
-  }
-
-  if (tone === "danger" || tone === "blocked" || tone === "error") {
-    return "danger";
-  }
-
-  if (tone === "info" || tone === "pending" || tone === "connecting") {
-    return "brand";
-  }
-
-  return "neutral";
-}
-
-function stepStatus(step = {}) {
-  if (step.complete) return "Ready";
-  return s(step.statusLabel, "Waiting");
-}
-
-function StepLeading({ step, active = false }) {
-  if (step.complete) {
-    return <CheckCircle2 className="h-4 w-4 text-success" strokeWidth={2.1} />;
-  }
-
-  if (active) {
-    return <Radio className="h-4 w-4 text-brand" strokeWidth={2.1} />;
-  }
-
-  if (stepTone(step) === "danger") {
-    return <LockKeyhole className="h-4 w-4 text-danger" strokeWidth={2.1} />;
-  }
-
-  return <Circle className="h-4 w-4 text-text-subtle" strokeWidth={2.1} />;
-}
-
-function StepRow({ step, active = false, last = false, onNavigate }) {
-  const action = normalizeNavigationAction(step.action);
-  const clickable = Boolean(action?.path);
-  const tone = stepTone(step);
+function ActionItem({ item, index, last = false, onNavigate }) {
+  const Icon = item.icon || ArrowRight;
 
   return (
     <button
       type="button"
-      onClick={() => {
-        if (clickable) onNavigate(action);
-      }}
-      disabled={!clickable}
+      onClick={() => onNavigate(item.path)}
       className={cx(
-        "group grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-4 px-4 py-4 text-left",
-        "transition-[background-color,color] duration-base ease-premium",
+        "group grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-start gap-3 px-4 py-4 text-left",
         !last && "border-b border-line-soft",
-        active && "bg-surface-subtle",
-        clickable ? "hover:bg-surface-subtle" : "cursor-default"
+        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
       )}
     >
-      <div className="flex items-start justify-center pt-[3px]">
-        <span
-          className={cx(
-            "inline-flex h-8 w-8 items-center justify-center rounded-[11px] border bg-surface shadow-[var(--shadow-inset-top)]",
-            active
-              ? "border-[rgba(var(--color-brand),0.18)]"
-              : "border-line-soft"
-          )}
-        >
-          <StepLeading step={step} active={active} />
+      <span
+        className={cx(
+          "inline-flex h-10 w-10 items-center justify-center rounded-[13px] border shadow-[var(--shadow-inset-top)]",
+          toneBgClass(item.tone)
+        )}
+      >
+        <Icon className="h-4.5 w-4.5" strokeWidth={2.05} />
+      </span>
+
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {item.title}
+          </span>
+
+          {index === 0 ? (
+            <MiniStatus tone={item.tone}>
+              {item.tone === "success" ? "Clear" : "Needs attention"}
+            </MiniStatus>
+          ) : null}
         </span>
-      </div>
 
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-            {s(step.label, "Step")}
-          </div>
+        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
+          {item.detail}
+        </span>
+      </span>
 
-          <Badge tone={badgeTone(tone)} size="sm">
-            <StatusDot tone={tone} />
-            {stepStatus(step)}
-          </Badge>
-        </div>
+      <span className="mt-1.5 inline-flex items-center gap-2 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+        {item.label}
+        <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+      </span>
+    </button>
+  );
+}
 
-        <div className="mt-1.5 text-[14px] font-medium leading-6 text-text-muted">
-          {compactSentence(step.summary || step.detail, "Needs review.")}
-        </div>
-      </div>
+function CheckItem({ item, last = false, onNavigate }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item.path)}
+      className={cx(
+        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left",
+        !last && "border-b border-line-soft",
+        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
+      )}
+    >
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            {item.label}
+          </span>
+          <MiniStatus tone={item.tone}>{item.value}</MiniStatus>
+        </span>
 
-      <div className="flex items-start justify-end pt-[9px]">
-        {clickable ? (
-          <ArrowRight
-            className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
-            strokeWidth={2.1}
-          />
-        ) : null}
-      </div>
+        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
+          {item.detail}
+        </span>
+      </span>
+
+      <ArrowRight
+        className="h-4 w-4 shrink-0 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+        strokeWidth={2.1}
+      />
     </button>
   );
 }
@@ -442,44 +440,43 @@ export default function ProductHomePage() {
   const navigate = useNavigate();
   const home = useProductHome();
 
-  function navigateFromAction(action = null) {
-    const nextAction = normalizeNavigationAction(action);
-    if (!nextAction?.path) return;
+  function go(path) {
+    if (path) navigate(path);
+  }
 
-    navigate(nextAction.path);
+  function goFromAction(action = null) {
+    const next = normalizeNavigationAction(action);
+    if (next?.path) navigate(next.path);
   }
 
   if (home.loading) {
     return <ProductHomeLoadingSurface />;
   }
 
-  const hero = buildHeroCopy(home);
-  const metaParts = buildMetaLine(home);
+  const page = buildPageCopy(home);
+  const actions = buildMainActions(home);
+  const checks = buildSafetyChecks(home);
 
-  const primaryAction = normalizeNavigationAction(
-    home.primaryAction || home.assistant?.primaryAction
-  );
+  const unread = unreadCount(home);
+  const open = openConversationCount(home);
+  const owned = handoffCount(home);
+  const pendingOutbound = outboundPendingCount(home);
+  const channels = readyChannelCount(home);
+  const totalChannels = availableChannelCount(home);
 
-  let secondaryAction = normalizeNavigationAction(
-    home.secondaryAction || home.assistant?.secondaryAction
-  );
+  const primaryAction =
+    normalizeNavigationAction(home.primaryAction || home.assistant?.primaryAction) ||
+    {
+      label: page.primaryLabel,
+      path: page.primaryPath,
+    };
 
-  if (
-    primaryAction?.path &&
-    secondaryAction?.path &&
-    primaryAction.path === secondaryAction.path
-  ) {
-    secondaryAction = null;
-  }
-
-  const stripItems = [
-    humanTruthState(home),
-    humanChannelState(home),
-    humanInboxState(home),
-  ];
-
-  const steps = arr(home.launchSteps);
-  const activeStepId = s(home?.nextStep?.id);
+  const secondaryAction =
+    normalizeNavigationAction(home.secondaryAction || home.assistant?.secondaryAction) ||
+    {
+      label: "Review setup",
+      path: "/channels",
+    };
 
   return (
     <PageCanvas className="space-y-4">
@@ -494,95 +491,196 @@ export default function ProductHomePage() {
 
       <section className="border-b border-line-soft pb-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 max-w-[780px]">
+          <div className="min-w-0 max-w-[820px]">
             <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
-              AI HQ v1
+              Home
             </div>
 
-            <h1 className="mt-3 font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
-              {hero.title}
+            <h1 className="mt-3 font-display text-[34px] font-semibold leading-[1.01] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
+              {page.title}
             </h1>
 
-            <p className="mt-3 max-w-[680px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
-              {hero.summary}
+            <p className="mt-3 max-w-[720px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
+              {page.summary}
             </p>
 
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-medium leading-5 text-text-subtle">
-              {metaParts.map((item, index) => (
-                <span
-                  key={`${item}-${index}`}
-                  className="inline-flex items-center gap-3"
-                >
-                  {index > 0 ? <span className="text-line-strong">/</span> : null}
-                  <span>{item}</span>
-                </span>
-              ))}
+              <span>{businessInfoReady(home) ? "Business info ready" : "Business info needs review"}</span>
+              <span className="text-line-strong">/</span>
+              <span>{channels} live channel{channels === 1 ? "" : "s"}</span>
+              <span className="text-line-strong">/</span>
+              <span>{unread} message{unread === 1 ? "" : "s"} waiting</span>
             </div>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            {primaryAction?.path ? (
-              <Button
-                type="button"
-                size="md"
-                className="min-w-[148px] justify-center"
-                onClick={() => navigateFromAction(primaryAction)}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                {primaryAction.label}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              size="md"
+              className="min-w-[148px] justify-center"
+              onClick={() => goFromAction(primaryAction)}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              {primaryAction.label || page.primaryLabel}
+            </Button>
 
-            {secondaryAction?.path ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                className="min-w-[132px] justify-center"
-                onClick={() => navigateFromAction(secondaryAction)}
-              >
-                {secondaryAction.label}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="min-w-[132px] justify-center"
+              onClick={() => goFromAction(secondaryAction)}
+            >
+              {secondaryAction.label || "Review setup"}
+            </Button>
           </div>
         </div>
       </section>
 
       <Card padded={false} clip>
-        <div className="grid md:grid-cols-3">
-          {stripItems.map((item, index) => (
-            <StatusStripItem
-              key={item.label}
-              item={item}
-              last={index === stripItems.length - 1}
-            />
-          ))}
+        <div className="grid sm:grid-cols-4">
+          <Metric
+            label="Waiting"
+            value={String(unread)}
+            detail="Customer messages"
+            tone={unread > 0 ? "warning" : "success"}
+          />
+
+          <Metric
+            label="Open"
+            value={String(open)}
+            detail="Conversations"
+            tone={open > 0 ? "brand" : "success"}
+          />
+
+          <Metric
+            label="Channels"
+            value={`${channels}/${totalChannels}`}
+            detail="Live for customers"
+            tone={channels > 0 ? "success" : "warning"}
+          />
+
+          <Metric
+            label="Owned"
+            value={String(owned || pendingOutbound)}
+            detail={pendingOutbound > 0 ? "Replies pending" : "Operator handoff"}
+            tone={pendingOutbound > 0 ? "warning" : owned > 0 ? "brand" : "success"}
+            last
+          />
+        </div>
+
+        <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                  What to do now
+                </div>
+                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  Next action
+                </div>
+              </div>
+
+              <MiniStatus tone={page.tone}>
+                {page.tone === "success" ? "Clear" : page.tone === "danger" ? "Blocked" : "Needs attention"}
+              </MiniStatus>
+            </div>
+
+            <div className="border-t border-line-soft">
+              {actions.map((item, index) => (
+                <ActionItem
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  last={index === actions.length - 1}
+                  onNavigate={go}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="min-w-0 border-t border-line-soft xl:border-l xl:border-t-0">
+            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                  Can AI help?
+                </div>
+                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  Safety check
+                </div>
+              </div>
+
+              {businessInfoReady(home) && channelReady(home) ? (
+                <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={2.05} />
+              ) : (
+                <CircleAlert className="h-5 w-5 text-warning" strokeWidth={2.05} />
+              )}
+            </div>
+
+            <div className="border-t border-line-soft">
+              {checks.map((item, index) => (
+                <CheckItem
+                  key={item.id}
+                  item={item}
+                  last={index === checks.length - 1}
+                  onNavigate={go}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 
-      <section className="space-y-3">
-        <div>
-          <div className="text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Launch path
+      <Card
+        padded="sm"
+        tone={businessInfoReady(home) && channelReady(home) ? "success" : "warning"}
+      >
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
+              {businessInfoReady(home) && channelReady(home) ? (
+                <ShieldCheck className="h-4 w-4 text-success" strokeWidth={2.1} />
+              ) : (
+                <CircleAlert className="h-4 w-4 text-warning" strokeWidth={2.1} />
+              )}
+            </span>
+
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                {businessInfoReady(home) && channelReady(home)
+                  ? "AI can safely support customer messages."
+                  : "Finish setup before relying on AI replies."}
+              </div>
+
+              <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+                {businessInfoReady(home) && channelReady(home)
+                  ? "Business info is approved and at least one customer channel is live."
+                  : "AI stays cautious until business info and a live channel are ready."}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-1 text-[14px] font-medium leading-6 text-text-muted">
-            Business truth, one live channel, then inbox.
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate("/truth")}
+            >
+              Business info
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate("/channels")}
+            >
+              Channels
+            </Button>
           </div>
         </div>
-
-        <Card padded={false} clip>
-          {steps.map((step, index) => (
-            <StepRow
-              key={step.id}
-              step={step}
-              active={s(step.id) === activeStepId}
-              last={index === steps.length - 1}
-              onNavigate={navigateFromAction}
-            />
-          ))}
-        </Card>
-      </section>
+      </Card>
     </PageCanvas>
   );
 }
