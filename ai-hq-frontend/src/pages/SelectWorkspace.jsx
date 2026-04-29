@@ -4,6 +4,7 @@ import {
   AlertCircle,
   ArrowRight,
   BriefcaseBusiness,
+  Check,
   CheckCircle2,
   Loader2,
   RefreshCcw,
@@ -17,13 +18,10 @@ import {
   hasMultipleWorkspaceChoices,
 } from "../lib/appEntry.js";
 import Button from "../components/ui/Button.jsx";
-import {
-  AuthFrame,
-  AuthPanel,
-  InlineNotice,
-  MetricCard,
-  Surface,
-} from "../components/ui/AppShellPrimitives.jsx";
+import Card from "../components/ui/Card.jsx";
+import Badge from "../components/ui/Badge.jsx";
+import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../lib/cx.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -52,55 +50,142 @@ function getWorkspaceStatusLabel(choice = {}) {
   return "Select";
 }
 
+function getWorkspaceStatusTone(choice = {}) {
+  if (choice.active) return "brand";
+  if (choice.workspaceReady) return "success";
+  if (choice.setupRequired) return "warning";
+  return "neutral";
+}
+
+function dotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function StatCard({ label, value, tone = "neutral", hint = "" }) {
+  return (
+    <Card padded="sm" tone={tone}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {label}
+      </div>
+
+      <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+        {value}
+      </div>
+
+      {hint ? (
+        <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+          {hint}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function SelectionMark({ selected = false }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        "inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[8px] border",
+        "transition-[background-color,border-color,color] duration-base ease-premium",
+        selected
+          ? "border-brand bg-brand text-white"
+          : "border-line bg-surface text-transparent"
+      )}
+    >
+      <Check
+        className={cx(
+          "h-[13px] w-[13px] transition-opacity duration-base ease-premium",
+          selected ? "opacity-100" : "opacity-0"
+        )}
+        strokeWidth={3}
+      />
+    </span>
+  );
+}
+
 function WorkspaceCard({ choice, busy = false, onSelect }) {
-  const active = !!choice.active;
+  const active = Boolean(choice.active);
   const status = getWorkspaceStatusLabel(choice);
+  const tone = getWorkspaceStatusTone(choice);
+  const name = formatWorkspaceName(choice);
+  const tenantKey = s(choice.tenantKey);
+  const role = s(choice.role || "member");
 
   return (
     <button
       type="button"
       disabled={busy}
       onClick={() => onSelect(choice)}
-      className={[
-        "group w-full rounded-[28px] border px-5 py-5 text-left transition-all duration-200",
-        active
-          ? "border-brand/20 bg-brand-soft shadow-[0_18px_40px_-30px_rgba(37,99,235,0.28)]"
-          : "border-line bg-surface hover:-translate-y-0.5 hover:border-line-strong hover:shadow-panel",
-        busy ? "cursor-not-allowed opacity-70" : "",
-      ].join(" ")}
+      className="block w-full text-left"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-[18px] border border-line bg-white text-brand">
-            <BriefcaseBusiness className="h-4 w-4" />
+      <Card
+        padded="md"
+        interactive={!busy}
+        tone={tone}
+        className={cx(
+          "h-full",
+          active && "bg-brand-soft/55",
+          busy && "cursor-not-allowed opacity-70"
+        )}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-line-soft bg-surface text-brand shadow-[var(--shadow-inset-top)]">
+              <BriefcaseBusiness className="h-5 w-5" strokeWidth={2.05} />
+            </span>
+
+            <div className="mt-4 truncate text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+              {name}
+            </div>
+
+            <div className="mt-1 truncate text-[13px] font-medium leading-6 text-text-muted">
+              {tenantKey ? `${tenantKey} · ${role}` : role}
+            </div>
           </div>
 
-          <div className="mt-4 text-[18px] font-semibold tracking-[-0.03em] text-text">
-            {formatWorkspaceName(choice)}
-          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge tone={tone} size="sm">
+              <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
+              {status}
+            </Badge>
 
-          <div className="mt-1 text-[13px] leading-6 text-text-muted">
-            {s(choice.tenantKey)} · {s(choice.role || "member")}
+            <SelectionMark selected={active} />
           </div>
         </div>
 
-        <div className="shrink-0 rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-          {status}
-        </div>
-      </div>
+        <div className="mt-5 rounded-[15px] border border-line-soft bg-surface-muted px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+                Destination
+              </div>
 
-      <div className="mt-5 flex items-center justify-between rounded-[20px] border border-line-soft bg-surface-muted px-4 py-3">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Destination
+              <div className="mt-1 text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+                Product home
+              </div>
+            </div>
+
+            <div className="inline-flex shrink-0 items-center gap-2 text-[13px] font-semibold text-brand">
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                  <span>Opening</span>
+                </>
+              ) : (
+                <>
+                  <span>Open</span>
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+                </>
+              )}
+            </div>
           </div>
-          <div className="mt-1 text-sm text-text">Product home</div>
         </div>
-        <div className="inline-flex items-center gap-2 text-sm font-medium text-brand">
-          <span>{busy ? "Opening..." : "Open"}</span>
-          <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-        </div>
-      </div>
+      </Card>
     </button>
   );
 }
@@ -121,12 +206,19 @@ export default function SelectWorkspace() {
         if (Number(right.active) !== Number(left.active)) {
           return Number(right.active) - Number(left.active);
         }
+
         if (Number(right.workspaceReady) !== Number(left.workspaceReady)) {
           return Number(right.workspaceReady) - Number(left.workspaceReady);
         }
+
         return formatWorkspaceName(left).localeCompare(formatWorkspaceName(right));
       });
   }, [choices]);
+
+  const readyCount = useMemo(
+    () => sortedChoices.filter((item) => item.workspaceReady).length,
+    [sortedChoices]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -155,6 +247,7 @@ export default function SelectWorkspace() {
         setChoices(nextChoices);
       } catch (loadError) {
         if (!alive) return;
+
         setError(
           s(loadError?.message || "We could not load your businesses right now.")
         );
@@ -213,8 +306,10 @@ export default function SelectWorkspace() {
     try {
       setSwitchingMembershipId(membershipId);
       setError("");
+
       await switchWorkspaceUser({ switchToken: choice.switchToken });
       clearAppSessionContext();
+
       navigate(PRODUCT_HOME_ROUTE, { replace: true });
     } catch (switchError) {
       setError(
@@ -226,100 +321,131 @@ export default function SelectWorkspace() {
   }
 
   return (
-    <AuthFrame
-      aside={
-        <Surface className="flex w-full flex-col justify-between rounded-[32px] border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(239,244,255,0.94))] p-8">
-          <div>
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-line bg-brand-soft text-brand">
-              <CheckCircle2 className="h-5 w-5" />
+    <div className="auth-page min-h-screen bg-white text-text">
+      <main className="mx-auto flex min-h-screen w-full max-w-[980px] flex-col justify-center px-6 py-10">
+        <section className="w-full">
+          <div className="flex flex-col gap-5 border-b border-line-soft pb-6 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0 max-w-[680px]">
+              <Badge tone="brand" size="sm">
+                Business selector
+              </Badge>
+
+              <h1 className="mt-4 font-display text-[40px] font-semibold leading-[0.98] tracking-[var(--tracking-tight-xl)] text-text md:text-[52px]">
+                Choose the business you want to open.
+              </h1>
+
+              <p className="mt-4 max-w-[640px] text-[15px] font-medium leading-7 text-text-muted">
+                {s(viewer?.fullName || viewer?.email)
+                  ? `${s(viewer?.fullName || viewer?.email)}, select the business you want to continue with.`
+                  : "Select the business you want to continue with."}
+              </p>
             </div>
-            <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-text-subtle">
-              Workspace selection
+
+            <div className="grid w-full gap-3 sm:grid-cols-2 md:w-[360px]">
+              <StatCard
+                label="Businesses"
+                value={sortedChoices.length}
+                hint="Available to this account"
+              />
+
+              <StatCard
+                label="Ready now"
+                value={readyCount}
+                tone="brand"
+                hint="Can open immediately"
+              />
             </div>
-            <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.05em] text-text">
-              Step into the right business without leaving the product language.
-            </h2>
-            <p className="mt-3 text-[15px] leading-7 text-text-muted">
-              Use the same calm light system to choose where you want to work, then land directly inside the product shell.
-            </p>
           </div>
 
-          <div className="grid gap-3">
-            <MetricCard label="Businesses" value={sortedChoices.length} />
-            <MetricCard
-              label="Ready now"
-              value={sortedChoices.filter((item) => item.workspaceReady).length}
-              tone="brand"
-            />
-          </div>
-        </Surface>
-      }
-    >
-      <AuthPanel className="max-w-[860px]">
-        <div className="flex flex-col gap-4 border-b border-line-soft pb-6 md:flex-row md:items-end md:justify-between">
-          <div className="min-w-0">
-            <div className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-              Business selector
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 text-[13px] font-medium leading-6 text-text-muted">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-line-soft bg-surface text-brand shadow-[var(--shadow-inset-top)]">
+                <CheckCircle2 className="h-4 w-4" strokeWidth={2.05} />
+              </span>
+              <span>Opening a workspace lands directly inside the product shell.</span>
             </div>
-            <h1 className="mt-4 text-[2.35rem] font-semibold tracking-[-0.05em] text-text">
-              Choose the business you want to open.
-            </h1>
-            <p className="mt-2 max-w-2xl text-[15px] leading-7 text-text-muted">
-              {s(viewer?.fullName || viewer?.email)
-                ? `${s(viewer?.fullName || viewer?.email)}, select the business you want to continue with.`
-                : "Select the business you want to continue with."}
-            </p>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading}
+              leftIcon={
+                loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                ) : (
+                  <RefreshCcw className="h-4 w-4" strokeWidth={2.1} />
+                )
+              }
+            >
+              Refresh
+            </Button>
           </div>
 
-          <Button
-            variant="secondary"
-            onClick={handleRefresh}
-            disabled={loading}
-            leftIcon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-          >
-            Refresh
-          </Button>
-        </div>
+          {error ? (
+            <div className="mt-5">
+              <InlineNotice
+                tone="danger"
+                title="Workspace selection failed"
+                description={error}
+                compact
+              />
+            </div>
+          ) : null}
 
-        {error ? (
-          <div className="mt-5">
-            <InlineNotice
-              tone="danger"
-              title="Workspace selection failed"
-              description={error}
-              icon={AlertCircle}
-            />
-          </div>
-        ) : null}
+          <div className="mt-6">
+            {loading ? (
+              <Card padded="lg">
+                <div className="flex min-h-[260px] items-center justify-center">
+                  <div className="inline-flex items-center gap-3 rounded-[14px] border border-line-soft bg-surface-muted px-4 py-3 text-[14px] font-medium text-text-muted">
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                    Loading your businesses...
+                  </div>
+                </div>
+              </Card>
+            ) : sortedChoices.length ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {sortedChoices.map((choice) => {
+                  const busy =
+                    switchingMembershipId &&
+                    switchingMembershipId === s(choice.membershipId);
 
-        <div className="mt-6">
-          {loading ? (
-            <div className="flex min-h-[320px] items-center justify-center">
-              <div className="inline-flex items-center gap-3 rounded-full border border-line bg-surface px-4 py-2 text-sm text-text-muted">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading your businesses...
+                  return (
+                    <WorkspaceCard
+                      key={
+                        s(choice.membershipId) ||
+                        `${s(choice.tenantKey)}-${s(choice.role)}`
+                      }
+                      choice={choice}
+                      busy={busy}
+                      onSelect={handleSelect}
+                    />
+                  );
+                })}
               </div>
-            </div>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {sortedChoices.map((choice) => {
-                const busy =
-                  switchingMembershipId &&
-                  switchingMembershipId === s(choice.membershipId);
+            ) : (
+              <Card padded="lg" tone="warning">
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] border border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning shadow-[var(--shadow-inset-top)]">
+                    <AlertCircle className="h-5 w-5" strokeWidth={2.05} />
+                  </span>
 
-                return (
-                  <WorkspaceCard
-                    key={s(choice.membershipId) || `${s(choice.tenantKey)}-${s(choice.role)}`}
-                    choice={choice}
-                    busy={busy}
-                    onSelect={handleSelect}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </AuthPanel>
-    </AuthFrame>
+                  <div>
+                    <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                      No workspace choices found
+                    </div>
+
+                    <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
+                      Refresh your session or sign in again to continue.
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

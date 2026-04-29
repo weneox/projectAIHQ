@@ -1,28 +1,32 @@
-import { cx } from "../../lib/cx.js";
-import {
-  LaunchPrimaryAction,
-  LaunchStatusBadge,
-  LaunchTextAction,
-} from "../ui/AppShellPrimitives.jsx";
+import Badge from "../ui/Badge.jsx";
+import Button from "../ui/Button.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 
 const STATUS_TONES = {
   success: "success",
-  info: "info",
+  info: "brand",
   warning: "warning",
   neutral: "neutral",
+  danger: "danger",
 };
+
+function dotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
 
 export function ChannelStatus({ status, className }) {
   const meta = getChannelStatusMeta(status);
+  const tone = STATUS_TONES[meta.tone] || "neutral";
 
   return (
-    <LaunchStatusBadge
-      tone={STATUS_TONES[meta.tone] || "neutral"}
-      className={className}
-    >
+    <Badge tone={tone} size="sm" className={className}>
+      <span className={["h-1.5 w-1.5 rounded-full", dotClass(tone)].join(" ")} />
       {meta.label}
-    </LaunchStatusBadge>
+    </Badge>
   );
 }
 
@@ -30,24 +34,24 @@ export function ChannelActionButton({
   children,
   className,
   quiet = false,
-  showArrow = true,
+  showArrow: _showArrow = true,
   type = "button",
   ariaLabel,
   fullWidth = false,
   ...props
 }) {
   return (
-    <LaunchPrimaryAction
+    <Button
       type={type}
       aria-label={ariaLabel}
-      quiet={quiet}
-      showArrow={showArrow}
+      variant={quiet ? "secondary" : "primary"}
+      size="sm"
       fullWidth={fullWidth}
       className={className}
       {...props}
     >
       {children}
-    </LaunchPrimaryAction>
+    </Button>
   );
 }
 
@@ -57,9 +61,15 @@ export function ChannelInspectButton({
   ...props
 }) {
   return (
-    <LaunchTextAction className={className} {...props}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className={className}
+      {...props}
+    >
       {children}
-    </LaunchTextAction>
+    </Button>
   );
 }
 
@@ -71,10 +81,12 @@ export function ChannelCapabilityLine({ capabilities = [], className }) {
   return (
     <div
       title={label}
-      className={cx(
-        "truncate text-[12px] text-[rgba(100,116,139,0.96)]",
-        className
-      )}
+      className={[
+        "truncate text-[12.5px] font-medium leading-5 text-text-muted",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {label}
     </div>

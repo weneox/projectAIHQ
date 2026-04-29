@@ -1,62 +1,37 @@
 ﻿import { cx } from "../../lib/cx.js";
 
-function paddingClass(padded = "md") {
-  if (padded === false) return "p-0";
-  if (padded === "xs") return "p-3";
-  if (padded === "sm") return "p-4";
-  if (padded === "lg") return "p-6";
-  if (padded === "xl") return "p-7";
-  return "p-5";
+function paddedClass(padded = "md") {
+  if (padded === false) return "ui-card--padded-none";
+  if (padded === "xs") return "ui-card--padded-xs";
+  if (padded === "sm") return "ui-card--padded-sm";
+  if (padded === "lg") return "ui-card--padded-lg";
+  if (padded === "xl") return "ui-card--padded-xl";
+  return "ui-card--padded-md";
+}
+
+function variantClass(variant = "surface") {
+  if (variant === "plain") return "ui-card--plain";
+  if (variant === "subtle") return "ui-card--subtle";
+  if (variant === "elevated") return "ui-card--elevated";
+  return "ui-card--surface";
 }
 
 function toneClass(tone = "neutral") {
   if (tone === "info" || tone === "brand" || tone === "accent") {
-    return "border-[rgba(var(--color-brand),0.18)]";
+    return "ui-card--tone-brand";
   }
 
-  if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.2)]";
-  }
+  if (tone === "success") return "ui-card--tone-success";
+  if (tone === "warn" || tone === "warning") return "ui-card--tone-warning";
+  if (tone === "danger") return "ui-card--tone-danger";
 
-  if (tone === "warn" || tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.22)]";
-  }
-
-  if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.2)]";
-  }
-
-  return "border-line-soft";
-}
-
-function variantClass(variant = "surface") {
-  switch (variant) {
-    case "plain":
-      return "border-transparent bg-transparent shadow-none";
-
-    case "subtle":
-      return [
-        "bg-surface-muted",
-        "shadow-[0_1px_0_rgba(255,255,255,0.86)_inset]",
-      ].join(" ");
-
-    case "elevated":
-      return [
-        "bg-surface",
-        "shadow-[0_28px_68px_-50px_rgba(15,23,42,0.28),0_1px_0_rgba(255,255,255,0.96)_inset]",
-      ].join(" ");
-
-    case "surface":
-    default:
-      return [
-        "bg-surface",
-        "shadow-[0_1px_0_rgba(255,255,255,0.96)_inset,0_18px_46px_-40px_rgba(15,23,42,0.26)]",
-      ].join(" ");
-  }
+  return "";
 }
 
 export default function Card({
   className,
+  outerClassName,
+  innerClassName,
   children,
   variant = "surface",
   interactive = false,
@@ -67,17 +42,24 @@ export default function Card({
   return (
     <div
       className={cx(
-        "min-w-0 rounded-panel border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
-        clip ? "overflow-hidden" : "overflow-visible",
-        paddingClass(padded),
-        toneClass(tone),
+        "ui-card",
         variantClass(variant),
-        interactive &&
-          "cursor-pointer hover:border-line hover:shadow-[0_24px_60px_-46px_rgba(15,23,42,0.3),0_1px_0_rgba(255,255,255,0.96)_inset]",
-        className
+        toneClass(tone),
+        interactive && "ui-card--interactive",
+        outerClassName
       )}
     >
-      {children}
+      <div
+        className={cx(
+          "ui-card__inner",
+          clip ? "ui-card__inner--clip" : "ui-card__inner--open",
+          paddedClass(padded),
+          className,
+          innerClassName
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }

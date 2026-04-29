@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
@@ -119,9 +119,7 @@ function BubbleTime({ value, incoming }) {
     <span
       className={[
         "ml-[7px] inline-block translate-y-[1px] select-none whitespace-nowrap align-baseline text-[11px] font-medium leading-none tracking-[-0.01em] antialiased",
-        incoming
-          ? "text-[#66758A] [text-shadow:0_1px_0_rgba(255,255,255,0.72)]"
-          : "text-white/86 [text-shadow:0_1px_0_rgba(0,68,145,0.16)]",
+        incoming ? "text-[#66758A]" : "text-white/86",
       ].join(" ")}
     >
       {value}
@@ -136,15 +134,8 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
     <div
       className={[
         "max-w-full whitespace-pre-wrap break-words text-[15px] font-[450] leading-[1.45] tracking-[-0.012em] antialiased",
-        incoming
-          ? "text-[#142235] [text-shadow:0_1px_0_rgba(255,255,255,0.68)]"
-          : "text-white/96 [text-shadow:0_1px_0_rgba(0,68,145,0.18)]",
+        incoming ? "text-[#142235]" : "text-white/96",
       ].join(" ")}
-      style={{
-        textRendering: "geometricPrecision",
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
-      }}
     >
       {hasText ? (
         text
@@ -164,98 +155,42 @@ function MessageTextWithTime({ text, sentAt, incoming }) {
   );
 }
 
-function MaterialTail({ side = "left", incoming }) {
+function MaterialTailLite({ side = "left", incoming }) {
   const mirrored = side === "right";
-  const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const gradientId = `tailGradient_${rawId}`;
-  const sheenId = `tailSheen_${rawId}`;
-
-  const stops = incoming
-    ? [
-        { offset: "0%", color: "#F8FAFC" },
-        { offset: "58%", color: "#F1F5F9" },
-        { offset: "100%", color: "#E9EEF4" },
-      ]
-    : [
-        { offset: "0%", color: "#56B0FF" },
-        { offset: "52%", color: "#3797F0" },
-        { offset: "100%", color: "#2186E6" },
-      ];
 
   return (
-    <svg
+    <span
       aria-hidden="true"
-      viewBox="0 0 18 18"
       className={[
-        "pointer-events-none absolute bottom-[2px] z-[1] h-[18px] w-[18px] overflow-visible",
+        "pointer-events-none absolute bottom-[2px] z-[1] h-[18px] w-[18px] overflow-hidden",
         mirrored ? "-right-[7px] scale-x-[-1]" : "-left-[7px]",
       ].join(" ")}
     >
-      <defs>
-        <linearGradient
-          id={gradientId}
-          x1="9"
-          y1="0"
-          x2="9"
-          y2="18"
-          gradientUnits="userSpaceOnUse"
-        >
-          {stops.map((stop) => (
-            <stop
-              key={`${stop.offset}-${stop.color}`}
-              offset={stop.offset}
-              stopColor={stop.color}
-            />
-          ))}
-        </linearGradient>
-
-        <linearGradient
-          id={sheenId}
-          x1="9"
-          y1="0"
-          x2="9"
-          y2="18"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop
-            offset="0%"
-            stopColor={
-              incoming
-                ? "rgba(255,255,255,0.92)"
-                : "rgba(255,255,255,0.34)"
-            }
-          />
-          <stop
-            offset="42%"
-            stopColor={
-              incoming
-                ? "rgba(255,255,255,0.28)"
-                : "rgba(255,255,255,0.12)"
-            }
-          />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </linearGradient>
-      </defs>
-
-      <path
-        d="M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z"
-        fill={`url(#${gradientId})`}
-        stroke="transparent"
-        strokeWidth="0"
-        strokeLinejoin="round"
+      <span
+        className={[
+          "absolute inset-0 block",
+          incoming
+            ? "bg-[linear-gradient(180deg,#F8FAFC_0%,#F1F5F9_58%,#E9EEF4_100%)]"
+            : "bg-[linear-gradient(180deg,#56B0FF_0%,#3797F0_52%,#2186E6_100%)]",
+        ].join(" ")}
         style={{
-          filter: incoming
-            ? "drop-shadow(0 10px 13px rgba(15,23,42,0.11))"
-            : "drop-shadow(0 10px 13px rgba(37,99,235,0.2))",
+          clipPath:
+            "path('M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z')",
         }}
       />
-
-      <path
-        d="M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z"
-        fill={`url(#${sheenId})`}
-        opacity={incoming ? "0.72" : "0.52"}
+      <span
+        className={[
+          "absolute inset-0 block",
+          incoming
+            ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.28)_42%,rgba(255,255,255,0)_100%)] opacity-[0.72]"
+            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.34)_0%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0)_100%)] opacity-[0.52]",
+        ].join(" ")}
+        style={{
+          clipPath:
+            "path('M18 0C11.8 1.8 8.4 5.4 7 9.8C6 13 3.8 15.7 0 18H18V0Z')",
+        }}
       />
-    </svg>
+    </span>
   );
 }
 
@@ -265,7 +200,7 @@ function EliteBubble({ side = "left", text, sentAt }) {
   return (
     <div className={incoming ? "flex justify-start" : "flex justify-end"}>
       <div className="relative inline-block max-w-full overflow-visible">
-        <MaterialTail side={side} incoming={incoming} />
+        <MaterialTailLite side={side} incoming={incoming} />
 
         <div
           className={[

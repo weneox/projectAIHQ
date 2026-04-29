@@ -45,6 +45,7 @@ function InboxComposer({
   voiceLabel = "Voice message",
 }) {
   const textareaRef = useRef(null);
+  const autosizeRafRef = useRef(0);
 
   const selectedThreadId = trim(selectedThread?.id);
   const hasSelectedThreadProp = selectedThread !== undefined;
@@ -93,12 +94,30 @@ function InboxComposer({
 
   useEffect(() => {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) return undefined;
 
-    el.style.height = "0px";
+    if (autosizeRafRef.current) {
+      window.cancelAnimationFrame(autosizeRafRef.current);
+    }
 
-    const nextHeight = Math.min(el.scrollHeight, 132);
-    el.style.height = `${Math.max(nextHeight, 28)}px`;
+    autosizeRafRef.current = window.requestAnimationFrame(() => {
+      autosizeRafRef.current = 0;
+
+      const target = textareaRef.current;
+      if (!target) return;
+
+      target.style.height = "0px";
+
+      const nextHeight = Math.min(target.scrollHeight, 132);
+      target.style.height = `${Math.max(nextHeight, 28)}px`;
+    });
+
+    return () => {
+      if (autosizeRafRef.current) {
+        window.cancelAnimationFrame(autosizeRafRef.current);
+        autosizeRafRef.current = 0;
+      }
+    };
   }, [normalizedValue]);
 
   function emitChange(nextValue) {
@@ -200,7 +219,7 @@ function InboxComposer({
   const utilityButtonClass = [
     "group relative inline-flex h-10 w-9 items-center justify-center",
     "text-[#617086]",
-    "transition-[color,opacity,filter] duration-200 ease-out",
+    "transition-[color,opacity] duration-200 ease-out",
     "hover:text-[#18375D]",
     "active:opacity-80",
     "disabled:cursor-not-allowed disabled:opacity-35",
@@ -218,7 +237,7 @@ function InboxComposer({
           "shadow-[0_18px_44px_-38px_rgba(15,23,42,0.36),0_7px_18px_-18px_rgba(15,23,42,0.16),inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.08)]",
           "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
           "focus-within:border-[#BDD2E8]",
-          "focus-within:shadow-[0_20px_48px_-40px_rgba(15,23,42,0.40),0_8px_22px_-20px_rgba(37,99,235,0.16),inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.08)]",
+          "focus-within:shadow-[0_20px_48px_-40px_rgba(15,23,42,0.40),0_8px_22px_-20px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.08)]",
           embedded ? "" : "",
         ]
           .filter(Boolean)
@@ -309,7 +328,7 @@ function InboxComposer({
             className={[
               "relative inline-flex h-10 w-10 shrink-0 items-center justify-center self-center",
               "border-0 bg-transparent p-0 shadow-none outline-none ring-0",
-              "transition-[opacity,color,filter] duration-[260ms] ease-out",
+              "transition-[opacity,color] duration-[260ms] ease-out",
               "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
               actionDisabled
                 ? "cursor-not-allowed opacity-35"
@@ -319,31 +338,10 @@ function InboxComposer({
               .join(" ")}
           >
             <span
-              aria-hidden="true"
-              className={[
-                "pointer-events-none absolute inset-[-10px]",
-                "transition-opacity duration-[260ms] ease-out",
-                actionDisabled
-                  ? "opacity-0"
-                  : hasText
-                    ? "opacity-100"
-                    : "opacity-70",
-              ].join(" ")}
-              style={{
-                background: hasText
-                  ? "radial-gradient(circle at 50% 50%, rgba(22,133,232,0.16) 0%, rgba(22,133,232,0.07) 34%, rgba(22,133,232,0) 72%)"
-                  : "radial-gradient(circle at 50% 50%, rgba(20,119,230,0.10) 0%, rgba(20,119,230,0.04) 34%, rgba(20,119,230,0) 72%)",
-                filter: "blur(8px)",
-              }}
-            />
-
-            <span
               className={[
                 "absolute inset-0 flex items-center justify-center",
-                "transition-[opacity,filter,color] duration-[260ms] ease-out",
-                hasText
-                  ? "opacity-0 blur-[1px] text-[#1477E6]"
-                  : "opacity-100 blur-0 text-[#1477E6]",
+                "transition-[opacity,color] duration-[260ms] ease-out",
+                hasText ? "opacity-0 text-[#1477E6]" : "opacity-100 text-[#1477E6]",
               ].join(" ")}
             >
               <Mic className="h-[24px] w-[24px]" strokeWidth={2.15} />
@@ -352,10 +350,8 @@ function InboxComposer({
             <span
               className={[
                 "absolute inset-0 flex items-center justify-center",
-                "transition-[opacity,filter,color] duration-[260ms] ease-out",
-                hasText
-                  ? "opacity-100 blur-0 text-[#1685E8]"
-                  : "opacity-0 blur-[1px] text-[#1685E8]",
+                "transition-[opacity,color] duration-[260ms] ease-out",
+                hasText ? "opacity-100 text-[#1685E8]" : "opacity-0 text-[#1685E8]",
               ].join(" ")}
             >
               <SendHorizonal
@@ -370,4 +366,4 @@ function InboxComposer({
   );
 }
 
-export default memo(InboxComposer);   
+export default memo(InboxComposer);

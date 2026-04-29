@@ -13,9 +13,18 @@ import {
 } from "../../lib/inbox-ui.js";
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
+import Card from "../ui/Card.jsx";
+import Badge from "../ui/Badge.jsx";
+import Button from "../ui/Button.jsx";
+import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
+import { cx } from "../../lib/cx.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function initialsFromName(value = "") {
@@ -34,11 +43,10 @@ function initialsFromName(value = "") {
 
 function avatarTone(seed = "") {
   const tones = [
-    "bg-amber-100 text-amber-700",
-    "bg-rose-100 text-rose-700",
-    "bg-sky-100 text-sky-700",
-    "bg-violet-100 text-violet-700",
-    "bg-emerald-100 text-emerald-700",
+    "border-[rgba(var(--color-line),0.9)] bg-[linear-gradient(180deg,#F8FBFF_0%,#E8F1FA_100%)] text-[#235B98]",
+    "border-[rgba(var(--color-line),0.9)] bg-[linear-gradient(180deg,#FFFFFF_0%,#EEF3F8_100%)] text-[#43566E]",
+    "border-[rgba(var(--color-success),0.16)] bg-[linear-gradient(180deg,#F8FFFB_0%,#E8F6EF_100%)] text-success",
+    "border-[rgba(var(--color-warning),0.16)] bg-[linear-gradient(180deg,#FFFDF9_0%,#F5EBDD_100%)] text-warning",
   ];
 
   const score = String(seed || "")
@@ -80,6 +88,7 @@ function prettyThreadSource(value = "") {
   const normalized = s(value).toLowerCase();
   if (!normalized) return "conversation";
   if (["web", "website", "webchat"].includes(normalized)) return "Website chat";
+
   return normalized
     .split(/[_\-\s]+/)
     .filter(Boolean)
@@ -110,42 +119,43 @@ function resolveWebsiteContext(selectedThread = {}) {
   };
 }
 
-function obj(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function toneForStatus(value = "") {
+  const normalized = s(value).toLowerCase();
+
+  if (normalized.includes("handoff")) return "warning";
+  if (normalized.includes("active")) return "success";
+  if (normalized.includes("resolved") || normalized.includes("closed")) {
+    return "neutral";
+  }
+
+  return "success";
 }
 
-function Tag({ children, tone = "default" }) {
-  const tones = {
-    default: "border-line bg-surface-subtle text-text-muted",
-    muted: "border-line bg-surface text-text-muted",
-    success: "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success",
-    brand: "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand",
-    warning: "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning",
-  };
-
+function Tag({ children, tone = "neutral" }) {
   return (
-    <span
-      className={[
-        "inline-flex items-center rounded-pill border px-2.5 py-1 text-[11px] font-medium",
-        tones[tone] || tones.default,
-      ].join(" ")}
+    <Badge
+      tone={tone}
+      size="sm"
+      className="!min-h-[25px] !rounded-[10px] !px-2.5 !text-[11px]"
     >
       {children}
-    </span>
+    </Badge>
   );
 }
 
 function InfoRow({ label, value, valueTone = "default" }) {
   return (
-    <div className="grid grid-cols-[90px_minmax(0,1fr)] gap-4 py-3">
-      <div className="text-[11px] uppercase tracking-[0.08em] text-text-subtle">
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-4 border-b border-line-soft py-3 last:border-b-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
         {label}
       </div>
+
       <div
-        className={[
-          "min-w-0 text-right text-[13px]",
-          valueTone === "strong" ? "font-medium text-text" : "text-text-muted",
-        ].join(" ")}
+        title={s(value)}
+        className={cx(
+          "min-w-0 truncate text-right text-[13px] font-medium tracking-[var(--tracking-tight-xs)]",
+          valueTone === "strong" ? "text-text" : "text-text-muted"
+        )}
       >
         {value || "--"}
       </div>
@@ -157,8 +167,8 @@ function Section({ icon: Icon, title, children, action = null }) {
   return (
     <section className="border-t border-line-soft px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[14px] font-medium text-text">
-          {Icon ? <Icon className="h-4 w-4 text-text-subtle" /> : null}
+        <div className="flex items-center gap-2 text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+          {Icon ? <Icon className="h-4 w-4 text-text-subtle" strokeWidth={2.05} /> : null}
           <span>{title}</span>
         </div>
 
@@ -179,14 +189,39 @@ function AvatarStack({ people = [] }) {
         <div
           key={`${name}-${index}`}
           title={name}
-          className={[
-            "-ml-2 first:ml-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold",
-            avatarTone(name),
-          ].join(" ")}
+          className={cx(
+            "-ml-2 first:ml-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-[0_12px_24px_-18px_rgba(15,23,42,0.24)]",
+            avatarTone(name)
+          )}
         >
           {initialsFromName(name)}
         </div>
       ))}
+    </div>
+  );
+}
+
+function IdentityAvatar({ name, avatarUrl }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className="h-16 w-16 rounded-[20px] border border-line-soft object-cover shadow-[0_18px_36px_-28px_rgba(15,23,42,0.28)]"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cx(
+        "flex h-16 w-16 items-center justify-center rounded-[20px] border text-[20px] font-semibold shadow-[0_18px_36px_-28px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+        avatarTone(name)
+      )}
+    >
+      {initialsFromName(name)}
     </div>
   );
 }
@@ -203,53 +238,54 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
 
   return (
     <div className="px-4 py-4">
-      <div className="rounded-panel border border-line bg-surface p-4">
+      <Card padded="md">
         <div className="flex flex-col items-center text-center">
-          {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={name}
-              className="h-16 w-16 rounded-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div
-              className={[
-                "flex h-16 w-16 items-center justify-center rounded-full text-[20px] font-semibold",
-                avatarTone(name),
-              ].join(" ")}
-            >
-              {initialsFromName(name)}
-            </div>
-          )}
+          <IdentityAvatar name={name} avatarUrl={avatarUrl} />
 
-          <div className="mt-3 text-[16px] font-semibold text-text">{name}</div>
+          <div className="mt-3 max-w-full truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {name}
+          </div>
 
           {handle ? (
-            <div className="mt-1 text-[13px] text-text-muted">
+            <div className="mt-1 max-w-full truncate text-[13px] font-medium text-text-muted">
               @{handle.replace(/^@/, "")}
             </div>
           ) : null}
 
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <Tag tone="muted">{sourceLabel || "conversation"}</Tag>
+            <Tag tone="neutral">{sourceLabel || "conversation"}</Tag>
             <Tag tone="brand">{stage || "context"}</Tag>
-            <Tag tone={selectedThread?.handoff_active ? "warning" : "success"}>
-              {statusLabel}
-            </Tag>
+            <Tag tone={toneForStatus(statusLabel)}>{statusLabel}</Tag>
           </div>
         </div>
 
         <div className="mt-4 border-t border-line-soft pt-2">
           <InfoRow label="Owner" value={owner} valueTone="strong" />
-          <div className="border-t border-line-soft" />
           <InfoRow
             label="Realtime"
             value={wsState ? `Realtime ${wsState}` : "Connected"}
           />
         </div>
-      </div>
+      </Card>
     </div>
+  );
+}
+
+function InfoCard({ children }) {
+  return (
+    <Card padded={false}>
+      <div className="px-4">{children}</div>
+    </Card>
+  );
+}
+
+function TextCard({ children }) {
+  return (
+    <Card padded="sm">
+      <div className="text-[13px] font-medium leading-6 tracking-[var(--tracking-tight-xs)] text-text-muted">
+        {children}
+      </div>
+    </Card>
   );
 }
 
@@ -288,32 +324,38 @@ export default function InboxLeadPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="border-b border-line-soft bg-surface px-4 py-4">
+      <div className="border-b border-line-soft bg-surface px-4 py-4 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[15px] font-semibold text-text">
+            <h2 className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
               Conversation details
             </h2>
-            <div className="mt-0.5 text-[12px] text-text-muted">
+            <div className="mt-0.5 text-[12px] font-medium text-text-muted">
               Profile, routing, and recent context
             </div>
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon"
             onClick={onClose}
             aria-label="Close details"
-            className="flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
+            className="!h-9 !w-9"
           >
-            <X className="h-4 w-4" />
-          </button>
+            <X className="h-4 w-4" strokeWidth={2.2} />
+          </Button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {!hasThread ? (
-          <div className="px-4 py-6 text-[13px] text-text-muted">
-            Select a conversation to load details.
+          <div className="px-4 py-6">
+            <InlineNotice
+              tone="info"
+              description="Select a conversation to load details."
+              compact
+            />
           </div>
         ) : surface?.loading && !hasLead ? (
           <InboxLeadSkeleton />
@@ -337,60 +379,57 @@ export default function InboxLeadPanel({
             ) : null}
 
             <Section icon={Radio} title="Routing">
-              <div className="rounded-panel border border-line bg-surface px-4">
+              <InfoCard>
                 <InfoRow label="Source" value={sourceLabel || "--"} />
-                <div className="border-t border-line-soft" />
                 <InfoRow
                   label="Status"
                   value={prettyStatus(selectedThread, relatedLead)}
                   valueTone="strong"
                 />
-                <div className="border-t border-line-soft" />
                 <InfoRow label="Assigned" value={owner} valueTone="strong" />
-              </div>
+              </InfoCard>
             </Section>
 
             {websiteContext.visible ? (
               <Section icon={Globe2} title="Website context">
-                <div className="rounded-panel border border-line bg-surface px-4">
+                <InfoCard>
                   <InfoRow label="Page" value={websiteContext.title || "--"} />
-                  <div className="border-t border-line-soft" />
                   <InfoRow label="URL" value={websiteContext.url || "--"} />
-                  <div className="border-t border-line-soft" />
-                  <InfoRow label="Referrer" value={websiteContext.referrer || "--"} />
-                </div>
+                  <InfoRow
+                    label="Referrer"
+                    value={websiteContext.referrer || "--"}
+                  />
+                </InfoCard>
               </Section>
             ) : null}
 
             <Section
               icon={UserRound}
               title="People"
-              action={
-                people.length ? <Tag tone="muted">{people.length}</Tag> : null
-              }
+              action={people.length ? <Tag tone="neutral">{people.length}</Tag> : null}
             >
-              <div className="rounded-panel border border-line bg-surface px-4 py-4">
+              <Card padded="sm">
                 <div className="flex items-center justify-between gap-4">
                   <AvatarStack people={people} />
 
                   <div className="min-w-0 text-right">
-                    <div className="truncate text-[13px] font-medium text-text">
+                    <div className="truncate text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
                       {resolveDisplayName(selectedThread, relatedLead)}
                     </div>
-                    <div className="mt-1 truncate text-[12px] text-text-muted">
+                    <div className="mt-1 truncate text-[12px] font-medium text-text-muted">
                       {resolveHandle(selectedThread, relatedLead)
                         ? `@${resolveHandle(selectedThread, relatedLead).replace(/^@/, "")}`
                         : "--"}
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             </Section>
 
             {hasLead ? (
               <Section icon={UserRound} title="Related lead">
-                <div className="rounded-panel border border-line bg-surface px-4 py-4">
-                  <div className="text-[15px] font-medium text-text">
+                <Card padded="sm">
+                  <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
                     {leadName(relatedLead) || "Lead"}
                   </div>
 
@@ -402,17 +441,15 @@ export default function InboxLeadPanel({
                       <Tag tone="success">{s(relatedLead.status)}</Tag>
                     ) : null}
                     {leadHandle(relatedLead) ? (
-                      <Tag tone="muted">{leadHandle(relatedLead)}</Tag>
+                      <Tag tone="neutral">{leadHandle(relatedLead)}</Tag>
                     ) : null}
                   </div>
-                </div>
+                </Card>
               </Section>
             ) : null}
 
             <Section icon={MessageSquareText} title="Latest message">
-              <div className="rounded-panel border border-line bg-surface px-4 py-4">
-                <div className="text-[13px] leading-6 text-text-muted">{preview}</div>
-              </div>
+              <TextCard>{preview}</TextCard>
             </Section>
           </>
         )}

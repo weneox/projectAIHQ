@@ -1,11 +1,10 @@
-import { MailCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, MailCheck, ShieldCheck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+
 import Button from "../../components/ui/Button.jsx";
-import {
-  AuthFrame,
-  AuthPanel,
-  Surface,
-} from "../../components/ui/AppShellPrimitives.jsx";
+import Card from "../../components/ui/Card.jsx";
+import Badge from "../../components/ui/Badge.jsx";
+import { InlineNotice } from "../../components/ui/AppShellPrimitives.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -17,62 +16,84 @@ export default function VerifyEmailPage() {
   const email = s(location.state?.email);
 
   return (
-    <AuthFrame
-      aside={
-        <Surface className="flex w-full flex-col justify-between rounded-[32px] border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(239,244,255,0.94))] p-8">
-          <div>
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-line bg-brand-soft text-brand">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-text-subtle">
-              Verification
-            </div>
-            <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.05em] text-text">
-              One last trust step before the workspace opens.
-            </h2>
-            <p className="mt-3 text-[15px] leading-7 text-text-muted">
-              Verify your email, then continue directly into the same product system used across onboarding, operations, and admin.
-            </p>
+    <div className="auth-page min-h-screen bg-white text-text">
+      <main className="mx-auto flex min-h-screen w-full max-w-[760px] flex-col justify-center px-6 py-10">
+        <section className="w-full">
+          <div className="flex justify-center">
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand shadow-[var(--shadow-inset-top)]">
+              <MailCheck className="h-6 w-6" strokeWidth={2.05} />
+            </span>
           </div>
-        </Surface>
-      }
-    >
-      <AuthPanel className="max-w-[640px]">
-        <div className="inline-flex h-14 w-14 items-center justify-center rounded-[20px] border border-line bg-brand-soft text-brand">
-          <MailCheck className="h-6 w-6" />
-        </div>
 
-        <div className="mt-6 inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-          Verify email
-        </div>
+          <div className="mt-6 flex justify-center">
+            <Badge tone="brand" size="sm">
+              Verify email
+            </Badge>
+          </div>
 
-        <h1 className="mt-4 text-[2.5rem] font-semibold tracking-[-0.055em] text-text">
-          Check your inbox.
-        </h1>
+          <h1 className="mt-4 text-center font-display text-[46px] font-semibold leading-[0.95] tracking-[var(--tracking-tight-xl)] text-text md:text-[54px]">
+            Check your inbox.
+          </h1>
 
-        <p className="mt-4 max-w-[40rem] text-[15px] leading-7 text-text-muted">
-          {email
-            ? `We sent a verification link to ${email}. Open that email, verify your account, then continue to sign in.`
-            : "We sent you a verification email. Open that email, verify your account, then continue to sign in."}
-        </p>
+          <p className="mx-auto mt-5 max-w-[560px] text-center text-[15px] font-medium leading-7 text-text-muted">
+            {email
+              ? `We sent a verification link to ${email}. Open that email, verify your account, then continue to sign in.`
+              : "We sent you a verification email. Open that email, verify your account, then continue to sign in."}
+          </p>
 
-        <div className="mt-6 rounded-[22px] border border-line bg-surface-muted px-5 py-4 text-sm leading-6 text-text-muted">
-          If you do not see the email, check spam first, then try signing up again with the correct address.
-        </div>
+          <div className="mx-auto mt-7 max-w-[560px]">
+            <Card padded="sm" tone="brand">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-[rgba(var(--color-brand),0.16)] bg-brand-soft text-brand shadow-[var(--shadow-inset-top)]">
+                  <ShieldCheck className="h-4 w-4" strokeWidth={2.05} />
+                </span>
 
-        <div className="mt-8 flex flex-wrap gap-3 border-t border-line-soft pt-5">
-          <Button size="hero" onClick={() => navigate("/login", { replace: true })}>
-            Continue to sign in
-          </Button>
-          <Button
-            size="hero"
-            variant="secondary"
-            onClick={() => navigate("/signup", { replace: true })}
-          >
-            Use a different email
-          </Button>
-        </div>
-      </AuthPanel>
-    </AuthFrame>
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                    One last trust step
+                  </div>
+
+                  <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
+                    If you do not see the email, check spam first, then try signing up again with the correct address.
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {!email ? (
+            <div className="mx-auto mt-4 max-w-[560px]">
+              <InlineNotice
+                tone="info"
+                description="No email address was passed to this page, but you can still continue to sign in after verification."
+                compact
+              />
+            </div>
+          ) : null}
+
+          <div className="mx-auto mt-8 flex max-w-[560px] flex-col gap-3 border-t border-line-soft pt-5 sm:flex-row">
+            <Button
+              type="button"
+              size="hero"
+              fullWidth
+              onClick={() => navigate("/login", { replace: true })}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
+            >
+              Continue to sign in
+            </Button>
+
+            <Button
+              type="button"
+              size="hero"
+              variant="secondary"
+              fullWidth
+              onClick={() => navigate("/signup", { replace: true })}
+            >
+              Use a different email
+            </Button>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

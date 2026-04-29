@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Building2, User2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
+import Card from "../components/ui/Card.jsx";
+import Badge from "../components/ui/Badge.jsx";
 import {
-  AuthFrame,
-  AuthPanel,
+  InlineNotice,
   LoadingSurface,
-  MetricCard,
+  PageCanvas,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { saveBusinessProfile } from "../api/setup.js";
 import {
@@ -32,12 +34,38 @@ function ignoreError() {
 function WelcomeField({ icon: Icon, label, value, onChange, placeholder }) {
   return (
     <label className="block">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text">
-        <Icon className="h-4 w-4 text-text-subtle" />
+      <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        <Icon className="h-4 w-4 text-text-subtle" strokeWidth={2.05} />
         {label}
       </div>
-      <Input value={value} onChange={onChange} placeholder={placeholder} appearance="product" />
+
+      <Input
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        appearance="quiet"
+      />
     </label>
+  );
+}
+
+function StepCard({ label, value, hint, tone = "neutral" }) {
+  return (
+    <Card padded="sm" tone={tone}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {label}
+      </div>
+
+      <div className="mt-2 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+        {value}
+      </div>
+
+      {hint ? (
+        <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+          {hint}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
@@ -83,6 +111,7 @@ export default function Welcome() {
     }
 
     load();
+
     return () => {
       alive = false;
     };
@@ -93,6 +122,7 @@ export default function Welcome() {
       ...current,
       [key]: value,
     }));
+
     if (error) setError("");
   }
 
@@ -138,81 +168,96 @@ export default function Welcome() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[720px] px-4 py-5 md:px-6 md:py-7 xl:px-0">
+      <PageCanvas className="max-w-[920px]">
         <LoadingSurface
           title="Preparing welcome"
           description="Loading the workspace identity step."
         />
-      </div>
+      </PageCanvas>
     );
   }
 
   return (
-    <AuthFrame
-      aside={
-        <div className="grid w-full gap-3 self-center">
-          <MetricCard label="Step" value="Identity" tone="brand" hint="One small pass." />
-          <MetricCard label="Next" value="Launch lane" hint="Then straight into the product." />
-        </div>
-      }
-    >
-      <AuthPanel className="max-w-[760px]">
-        <div className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-          Welcome
-        </div>
-        <h1 className="mt-4 text-[2.35rem] font-semibold tracking-[-0.05em] text-text">
-          A quick identity pass.
-        </h1>
-        <p className="mt-2 text-[15px] leading-7 text-text-muted">
-          Just the essentials, then into the launch lane.
-        </p>
+    <PageCanvas className="max-w-[1040px] space-y-5">
+      <section className="border-b border-line-soft pb-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0 max-w-[760px]">
+            <Badge tone="brand" size="sm">
+              Welcome
+            </Badge>
 
-        <div className="mt-8">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <WelcomeField
-                icon={User2}
-                label="First name"
-                value={form.firstName}
-                onChange={(event) => patchField("firstName", event.target.value)}
-                placeholder="First name"
-              />
-              <WelcomeField
-                icon={User2}
-                label="Last name"
-                value={form.lastName}
-                onChange={(event) => patchField("lastName", event.target.value)}
-                placeholder="Last name"
-              />
-            </div>
+            <h1 className="mt-4 font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
+              A quick identity pass.
+            </h1>
 
+            <p className="mt-3 max-w-[620px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
+              Just the essentials, then into the launch lane.
+            </p>
+          </div>
+
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[420px]">
+            <StepCard
+              label="Step"
+              value="Identity"
+              tone="brand"
+              hint="One small pass."
+            />
+            <StepCard
+              label="Next"
+              value="Launch lane"
+              hint="Then straight into the product."
+            />
+          </div>
+        </div>
+      </section>
+
+      <Card padded="lg" className="max-w-[760px]">
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="grid gap-4 md:grid-cols-2">
             <WelcomeField
-              icon={Building2}
-              label="Company"
-              value={form.companyName}
-              onChange={(event) => patchField("companyName", event.target.value)}
-              placeholder="Company name"
+              icon={User2}
+              label="First name"
+              value={form.firstName}
+              onChange={(event) => patchField("firstName", event.target.value)}
+              placeholder="First name"
             />
 
-            {error ? (
-              <div className="rounded-soft border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
-                {error}
-              </div>
-            ) : null}
+            <WelcomeField
+              icon={User2}
+              label="Last name"
+              value={form.lastName}
+              onChange={(event) => patchField("lastName", event.target.value)}
+              placeholder="Last name"
+            />
+          </div>
 
-            <div className="flex items-center justify-end border-t border-line-soft pt-5">
-              <Button
-                type="submit"
-                size="hero"
-                disabled={saving}
-                rightIcon={!saving ? <ArrowRight className="h-4 w-4" /> : undefined}
-              >
-                {saving ? "Continuing..." : "Enter workspace"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </AuthPanel>
-    </AuthFrame>
+          <WelcomeField
+            icon={Building2}
+            label="Company"
+            value={form.companyName}
+            onChange={(event) => patchField("companyName", event.target.value)}
+            placeholder="Company name"
+          />
+
+          {error ? (
+            <InlineNotice tone="danger" description={error} compact />
+          ) : null}
+
+          <div className="flex items-center justify-end border-t border-line-soft pt-5">
+            <Button
+              type="submit"
+              size="md"
+              disabled={saving}
+              loading={saving}
+              rightIcon={
+                !saving ? <ArrowRight className="h-4 w-4" strokeWidth={2.1} /> : undefined
+              }
+            >
+              {saving ? "Continuing..." : "Enter workspace"}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </PageCanvas>
   );
 }

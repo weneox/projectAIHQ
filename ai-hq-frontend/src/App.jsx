@@ -17,7 +17,10 @@ import ProductHomePage from "./surfaces/home/ProductHomePage.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
 import ChannelCatalog from "./pages/ChannelCatalog.jsx";
-import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
+import {
+  INTERNAL_ONLY_APP_ROUTES,
+  isLocalWorkspaceEntryEnabled,
+} from "./lib/appEntry.js";
 import {
   getAppAuthContext,
   peekAppAuthContext,
@@ -46,7 +49,14 @@ function withSuspense(element) {
   return <Suspense fallback={null}>{element}</Suspense>;
 }
 
-function deriveGuestInitialState() {
+function deriveGuestInitialState({ localWorkspaceEntry = false } = {}) {
+  if (localWorkspaceEntry) {
+    return {
+      allowGuest: true,
+      redirectAuthenticated: false,
+    };
+  }
+
   const cachedAuth = peekAppAuthContext();
 
   if (cachedAuth?.authenticated) {
@@ -63,9 +73,15 @@ function deriveGuestInitialState() {
 }
 
 function GuestRouteGuard({ children }) {
-  const [state, setState] = useState(deriveGuestInitialState);
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+
+  const [state, setState] = useState(() =>
+    deriveGuestInitialState({ localWorkspaceEntry })
+  );
 
   useEffect(() => {
+    if (localWorkspaceEntry) return undefined;
+
     let alive = true;
 
     async function run() {
@@ -100,9 +116,9 @@ function GuestRouteGuard({ children }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [localWorkspaceEntry]);
 
-  if (state.redirectAuthenticated || !state.allowGuest) {
+  if (!localWorkspaceEntry && (state.redirectAuthenticated || !state.allowGuest)) {
     return <Navigate to="/" replace />;
   }
 

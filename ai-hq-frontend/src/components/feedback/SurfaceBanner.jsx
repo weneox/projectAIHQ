@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { RefreshCw, X } from "lucide-react";
-import checkmarkIcon from "../../assets/channels/checkmark.png";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  RefreshCw,
+  X,
+} from "lucide-react";
+
+import { cx } from "../../lib/cx.js";
 
 const OVERLAY_ROOT_ID = "surface-banner-root";
 const EXIT_MS = 220;
@@ -31,63 +38,63 @@ function toneMaterial(tone = "neutral") {
   if (tone === "success") {
     return {
       shell:
-        "border-[#1E7347] bg-[#23904F] text-white shadow-[0_16px_34px_-24px_rgba(11,55,31,0.44)]",
-      top: "bg-[#47BE79]",
-      bottom: "bg-[#19663F]",
-      side: "bg-white/10",
-      sideDark: "bg-black/8",
-      glow:
-        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
-      closeHover: "hover:bg-white/10",
+        "border-[rgba(var(--color-success),0.24)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(247,253,249)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+      iconWrap:
+        "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success",
+      accent: "bg-success",
+      close:
+        "text-text-subtle hover:bg-surface-subtle hover:text-text",
       button:
-        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+        "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success hover:bg-[rgba(var(--color-success),0.12)] disabled:opacity-50",
+      role: "status",
+      live: "polite",
     };
   }
 
   if (tone === "warn") {
     return {
       shell:
-        "border-[#A66512] bg-[#C57A19] text-white shadow-[0_16px_34px_-24px_rgba(82,48,8,0.42)]",
-      top: "bg-[#EDAB4D]",
-      bottom: "bg-[#8F570E]",
-      side: "bg-white/10",
-      sideDark: "bg-black/8",
-      glow:
-        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
-      closeHover: "hover:bg-white/10",
+        "border-[rgba(var(--color-warning),0.28)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(255,251,245)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+      iconWrap:
+        "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning",
+      accent: "bg-warning",
+      close:
+        "text-text-subtle hover:bg-surface-subtle hover:text-text",
       button:
-        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+        "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning hover:bg-[rgba(var(--color-warning),0.12)] disabled:opacity-50",
+      role: "alert",
+      live: "assertive",
     };
   }
 
   if (tone === "danger") {
     return {
       shell:
-        "border-[#962342] bg-[#B72B4E] text-white shadow-[0_16px_34px_-24px_rgba(78,14,31,0.42)]",
-      top: "bg-[#D95B79]",
-      bottom: "bg-[#7A1631]",
-      side: "bg-white/10",
-      sideDark: "bg-black/8",
-      glow:
-        "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.12),rgba(255,255,255,0)_56%)]",
-      closeHover: "hover:bg-white/10",
+        "border-[rgba(var(--color-danger),0.24)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(253,246,249)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+      iconWrap:
+        "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger",
+      accent: "bg-danger",
+      close:
+        "text-text-subtle hover:bg-surface-subtle hover:text-text",
       button:
-        "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+        "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger hover:bg-[rgba(var(--color-danger),0.12)] disabled:opacity-50",
+      role: "alert",
+      live: "assertive",
     };
   }
 
   return {
     shell:
-      "border-[#243244] bg-[#111B2D] text-white shadow-[0_16px_34px_-24px_rgba(15,23,42,0.42)]",
-    top: "bg-[#41536E]",
-    bottom: "bg-[#0C1422]",
-    side: "bg-white/10",
-    sideDark: "bg-black/8",
-    glow:
-      "bg-[radial-gradient(circle_at_28%_0%,rgba(255,255,255,0.10),rgba(255,255,255,0)_56%)]",
-    closeHover: "hover:bg-white/10",
+      "border-line-soft bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(248,250,252)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+    iconWrap:
+      "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand",
+    accent: "bg-brand",
+    close:
+      "text-text-subtle hover:bg-surface-subtle hover:text-text",
     button:
-      "border-white/18 bg-white/10 text-white hover:bg-white/14 disabled:opacity-50",
+      "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand hover:bg-[rgba(var(--color-brand),0.12)] disabled:opacity-50",
+    role: "status",
+    live: "polite",
   };
 }
 
@@ -164,6 +171,7 @@ function compactDisplayMessage(message) {
   ]);
 
   if (exactMap.has(value)) return exactMap.get(value);
+
   if (/temporarily unavailable/i.test(value)) {
     return compactUnavailableMessage(value);
   }
@@ -197,25 +205,23 @@ function pushItem(items, nextItem) {
   });
 }
 
-function NotificationLeading({ tone }) {
-  if (tone === "success") {
-    return (
-      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
-        <span className="absolute inset-0 rounded-full bg-white/12" />
-        <img
-          src={checkmarkIcon}
-          alt=""
-          aria-hidden="true"
-          className="relative h-5 w-5 object-contain"
-        />
-      </span>
-    );
-  }
+function NotificationIcon({ tone }) {
+  const material = toneMaterial(tone);
+  const Icon =
+    tone === "success"
+      ? CheckCircle2
+      : tone === "danger" || tone === "warn"
+        ? AlertTriangle
+        : Info;
 
   return (
-    <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
-      <span className="absolute inset-0 rounded-full bg-white/10" />
-      <span className="relative h-2.5 w-2.5 rounded-full bg-white/90" />
+    <span
+      className={cx(
+        "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border shadow-[var(--shadow-inset-top)]",
+        material.iconWrap
+      )}
+    >
+      <Icon className="h-4 w-4" strokeWidth={2.15} />
     </span>
   );
 }
@@ -227,8 +233,10 @@ function NotificationCard({ item, onRemove }) {
 
   const handleClose = useCallback(() => {
     if (closedRef.current) return;
+
     closedRef.current = true;
     setVisible(false);
+
     window.setTimeout(() => onRemove?.(), EXIT_MS);
   }, [onRemove]);
 
@@ -239,6 +247,7 @@ function NotificationCard({ item, onRemove }) {
 
   useEffect(() => {
     if (!item.autoDismissMs) return undefined;
+
     const timeoutId = window.setTimeout(handleClose, item.autoDismissMs);
     return () => window.clearTimeout(timeoutId);
   }, [handleClose, item.autoDismissMs]);
@@ -247,28 +256,26 @@ function NotificationCard({ item, onRemove }) {
 
   return (
     <div
-      role={item.tone === "danger" || item.tone === "warn" ? "alert" : "status"}
-      aria-live={
-        item.tone === "danger" || item.tone === "warn" ? "assertive" : "polite"
-      }
-      className={[
-        "pointer-events-auto relative w-full max-w-[500px] overflow-hidden border transition-all duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-        "rounded-b-[9px] rounded-t-none",
+      role={material.role}
+      aria-live={material.live}
+      className={cx(
+        "pointer-events-auto relative w-full max-w-[520px] overflow-hidden border",
+        "rounded-b-[14px] rounded-t-none",
+        "transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
         material.shell,
-        visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0",
-      ].join(" ")}
+        visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0"
+      )}
     >
-      <div className={["pointer-events-none absolute inset-0", material.glow].join(" ")} />
-      <div className={["pointer-events-none absolute inset-x-0 top-0 h-px", material.top].join(" ")} />
-      <div className={["pointer-events-none absolute inset-x-0 bottom-0 h-px", material.bottom].join(" ")} />
-      <div className={["pointer-events-none absolute inset-y-0 left-0 w-px", material.side].join(" ")} />
-      <div className={["pointer-events-none absolute inset-y-0 right-0 w-px", material.sideDark].join(" ")} />
+      <div
+        aria-hidden="true"
+        className={cx("pointer-events-none absolute left-0 top-0 h-full w-[3px]", material.accent)}
+      />
 
-      <div className="relative flex min-h-[52px] items-center gap-3 px-4 py-3 sm:px-4.5">
-        <NotificationLeading tone={item.tone} />
+      <div className="relative flex min-h-[56px] items-center gap-3 px-4 py-3 sm:px-4.5">
+        <NotificationIcon tone={item.tone} />
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold leading-5 tracking-[-0.01em]">
+          <div className="truncate text-[14px] font-semibold leading-5 tracking-[var(--tracking-tight-sm)] text-text">
             {item.displayMessage}
           </div>
 
@@ -283,12 +290,14 @@ function NotificationCard({ item, onRemove }) {
               type="button"
               onClick={item.action.onClick}
               disabled={item.action.disabled}
-              className={[
-                "inline-flex h-8 items-center gap-1.5 rounded-[7px] border px-3 text-[12px] font-semibold transition duration-150 disabled:cursor-not-allowed",
-                material.button,
-              ].join(" ")}
+              className={cx(
+                "inline-flex h-8 items-center gap-1.5 rounded-[9px] border px-3",
+                "text-[12px] font-semibold transition-[background-color,color,border-color,opacity] duration-base ease-premium",
+                "disabled:cursor-not-allowed",
+                material.button
+              )}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.1} />
               <span>{item.action.label || "Refresh"}</span>
             </button>
           ) : null}
@@ -297,10 +306,11 @@ function NotificationCard({ item, onRemove }) {
             type="button"
             onClick={handleClose}
             aria-label={`Dismiss ${item.displayMessage}`}
-            className={[
-              "inline-flex h-8 w-8 items-center justify-center rounded-[7px] text-white/82 transition duration-150 hover:text-white",
-              material.closeHover,
-            ].join(" ")}
+            className={cx(
+              "inline-flex h-8 w-8 items-center justify-center rounded-[9px]",
+              "transition-[background-color,color] duration-base ease-premium",
+              material.close
+            )}
           >
             <X className="h-4 w-4" strokeWidth={2.15} />
           </button>

@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Check,
   Globe2,
@@ -12,6 +18,7 @@ import {
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
 import Input from "../ui/Input.jsx";
+import { cx } from "../../lib/cx.js";
 
 import globeLogo from "../../assets/channels/globe.png";
 import gmailLogo from "../../assets/channels/gmail.svg";
@@ -25,8 +32,6 @@ const TOP_TABS = [
   { label: "Assigned", value: "assigned" },
   { label: "Handoff", value: "handoff" },
 ];
-
-const PREMIUM_EASE = "ease-[cubic-bezier(0.16,1,0.3,1)]";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -116,20 +121,19 @@ function SelectionMark({ selected }) {
   return (
     <span
       aria-hidden="true"
-      className={[
+      className={cx(
         "relative flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[7px] border",
-        "transition-[background-color,border-color,box-shadow,color] duration-[220ms]",
-        PREMIUM_EASE,
+        "transition-[background-color,border-color,color] duration-base ease-premium",
         selected
-          ? "border-[#1FA361] bg-[#1FA361] text-white shadow-[0_12px_26px_-18px_rgba(31,163,97,0.7)]"
-          : "border-[#D9E3EE] bg-white text-transparent shadow-[0_8px_18px_-18px_rgba(15,23,42,0.18)] group-hover:border-[#C8D5E4]",
-      ].join(" ")}
+          ? "border-success bg-success text-white"
+          : "border-line bg-surface text-transparent group-hover:border-line-strong"
+      )}
     >
       <Check
-        className={[
-          "h-[12px] w-[12px] transition-opacity duration-[180ms]",
-          selected ? "opacity-100" : "opacity-0",
-        ].join(" ")}
+        className={cx(
+          "h-[12px] w-[12px] transition-opacity duration-base ease-premium",
+          selected ? "opacity-100" : "opacity-0"
+        )}
         strokeWidth={3}
       />
     </span>
@@ -140,20 +144,17 @@ function AllChannelsLeadMark({ selected }) {
   return (
     <span
       aria-hidden="true"
-      className={[
+      className={cx(
         "relative flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full",
-        "transition-[background-color,box-shadow,color] duration-[220ms]",
-        PREMIUM_EASE,
-        selected
-          ? "bg-[#1FA361] text-white shadow-[0_12px_26px_-18px_rgba(31,163,97,0.68)]"
-          : "bg-[#EAF1F7] text-[#8DA0B3]",
-      ].join(" ")}
+        "transition-[background-color,color] duration-base ease-premium",
+        selected ? "bg-success text-white" : "bg-surface-subtle text-text-subtle"
+      )}
     >
       <Check
-        className={[
-          "h-[11px] w-[11px] transition-opacity duration-[180ms]",
-          selected ? "opacity-100" : "opacity-80",
-        ].join(" ")}
+        className={cx(
+          "h-[11px] w-[11px] transition-opacity duration-base ease-premium",
+          selected ? "opacity-100" : "opacity-80"
+        )}
         strokeWidth={3.1}
       />
     </span>
@@ -163,10 +164,10 @@ function AllChannelsLeadMark({ selected }) {
 function ChannelLogo({ value, selected = false }) {
   const normalized = normalizeChannelValue(value);
 
-  const imgClassName = [
-    "block h-[22px] w-[22px] shrink-0 object-contain transition-opacity duration-[220ms]",
-    selected ? "opacity-100" : "opacity-90",
-  ].join(" ");
+  const imgClassName = cx(
+    "block h-[22px] w-[22px] shrink-0 object-contain transition-opacity duration-base ease-premium",
+    selected ? "opacity-100" : "opacity-90"
+  );
 
   if (normalized === "all") {
     return <AllChannelsLeadMark selected={selected} />;
@@ -251,10 +252,10 @@ function ChannelLogo({ value, selected = false }) {
   if (normalized === "voice") {
     return (
       <MessageCircle
-        className={[
-          "h-[21px] w-[21px] shrink-0 transition-colors duration-[220ms]",
-          selected ? "text-[#2563EB]" : "text-[#607086]",
-        ].join(" ")}
+        className={cx(
+          "h-[21px] w-[21px] shrink-0 transition-colors duration-base ease-premium",
+          selected ? "text-brand" : "text-text-muted"
+        )}
         strokeWidth={2.05}
       />
     );
@@ -262,10 +263,10 @@ function ChannelLogo({ value, selected = false }) {
 
   return (
     <Globe2
-      className={[
-        "h-[21px] w-[21px] shrink-0 transition-colors duration-[220ms]",
-        selected ? "text-[#2563EB]" : "text-[#607086]",
-      ].join(" ")}
+      className={cx(
+        "h-[21px] w-[21px] shrink-0 transition-colors duration-base ease-premium",
+        selected ? "text-brand" : "text-text-muted"
+      )}
       strokeWidth={2.05}
     />
   );
@@ -315,30 +316,23 @@ function ChannelFilterMenu({
 
   return (
     <div
-      className={[
-        "absolute right-0 top-[calc(100%+10px)] z-[180] w-[268px]",
-        "origin-top-right transition-[opacity,transform,visibility,filter] duration-[220ms]",
-        PREMIUM_EASE,
+      className={cx(
+        "absolute right-0 top-[calc(100%+10px)] z-[180] w-[268px] origin-top-right",
+        "transition-[opacity,transform,visibility] duration-base ease-premium",
         open
-          ? "visible translate-y-0 scale-100 opacity-100 blur-0"
-          : "invisible pointer-events-none -translate-y-1 scale-[0.985] opacity-0 blur-[1px]",
-      ].join(" ")}
+          ? "visible translate-y-0 scale-100 opacity-100"
+          : "invisible pointer-events-none -translate-y-1 scale-[0.985] opacity-0"
+      )}
     >
       <div
         ref={menuRef}
-        className={[
-          "overflow-hidden rounded-[20px] border border-[#D8E3F0]",
-          "bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(248,251,255,0.965)_100%)] p-2 backdrop-blur-xl",
-          "shadow-[0_34px_86px_-34px_rgba(15,23,42,0.34),0_18px_36px_-30px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.92)]",
-        ].join(" ")}
+        className={cx(
+          "overflow-hidden rounded-[20px] border border-line bg-surface p-2",
+          "shadow-[0_34px_86px_-44px_rgba(15,23,42,0.34),inset_0_1px_0_rgba(255,255,255,0.92)]"
+        )}
       >
-        <div
-          className={[
-            "px-2 pb-2 pt-1 transition-opacity duration-[160ms]",
-            open ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-        >
-          <div className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#9AA8B9]">
+        <div className="px-2 pb-2 pt-1">
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
             Channels
           </div>
         </div>
@@ -348,8 +342,7 @@ function ChannelFilterMenu({
             const isAll = option.value === "all";
             const selected = isAll
               ? allSelected
-              : !allSelected &&
-                selectedChannelValues?.includes(option.value);
+              : !allSelected && selectedChannelValues?.includes(option.value);
 
             const count = Number(counts?.[option.value] ?? 0);
 
@@ -365,30 +358,28 @@ function ChannelFilterMenu({
 
                   onToggleChannel?.(option.value);
                 }}
-                className={[
+                className={cx(
                   "group flex w-full items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 text-left",
-                  "transition-[background-color,box-shadow,color,opacity] duration-[190ms]",
-                  PREMIUM_EASE,
-                  open ? "opacity-100" : "opacity-0",
+                  "transition-[background-color,color] duration-base ease-premium",
                   selected
-                    ? "bg-[linear-gradient(180deg,#EEF5FF_0%,#EAF2FF_100%)] text-[#1E5FD1] shadow-[0_16px_34px_-30px_rgba(37,99,235,0.45)]"
-                    : "text-[#526174] hover:bg-[#F5F8FC] hover:text-[#0F172A]",
-                ].join(" ")}
+                    ? "bg-brand-soft text-brand"
+                    : "text-text-muted hover:bg-surface-subtle hover:text-text"
+                )}
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <ChannelLogo value={option.value} selected={selected} />
 
-                  <span className="block min-w-0 truncate text-[13px] font-bold leading-5">
+                  <span className="block min-w-0 truncate text-[13px] font-semibold leading-5">
                     {option.label}
                   </span>
                 </span>
 
                 <span className="flex shrink-0 items-center gap-3">
                   <span
-                    className={[
-                      "min-w-[14px] text-right text-[11px] font-bold transition-colors duration-[180ms]",
-                      selected ? "text-[#6389C4]" : "text-[#A2AFC0]",
-                    ].join(" ")}
+                    className={cx(
+                      "min-w-[14px] text-right text-[11px] font-semibold transition-colors duration-base ease-premium",
+                      selected ? "text-brand" : "text-text-subtle"
+                    )}
                   >
                     {count}
                   </span>
@@ -418,15 +409,14 @@ function ToolbarIconButton({
       aria-label={label}
       aria-expanded={expanded}
       title={label}
-      className={[
+      className={cx(
         "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
-        "border-0 bg-transparent transition-[background-color,color,opacity] duration-300",
-        PREMIUM_EASE,
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
+        "border-0 bg-transparent transition-[background-color,color,opacity] duration-base ease-premium",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)] focus-visible:ring-offset-2",
         active
-          ? "text-[#2563EB]"
-          : "text-[#64748B] hover:bg-[#F3F7FB] hover:text-[#0F172A]",
-      ].join(" ")}
+          ? "text-brand"
+          : "text-text-muted hover:bg-surface-subtle hover:text-text"
+      )}
     >
       <Icon className="h-[17px] w-[17px]" strokeWidth={2.25} />
     </button>
@@ -437,14 +427,13 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
   return (
     <div
       aria-hidden={!open}
-      className={[
+      className={cx(
         "absolute inset-0 min-w-0 origin-right",
-        "transition-[opacity,transform,filter] duration-[420ms]",
-        PREMIUM_EASE,
+        "transition-[opacity,transform] duration-slow ease-premium",
         open
-          ? "pointer-events-auto translate-x-0 scale-x-100 scale-y-100 opacity-100 blur-0"
-          : "pointer-events-none translate-x-3 scale-x-[0.88] scale-y-[0.96] opacity-0 blur-[1px]",
-      ].join(" ")}
+          ? "pointer-events-auto translate-x-0 scale-x-100 opacity-100"
+          : "pointer-events-none translate-x-3 scale-x-[0.9] opacity-0"
+      )}
     >
       <Input
         ref={inputRef}
@@ -460,19 +449,12 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Close search"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)]"
           >
             <X className="h-3.5 w-3.5" strokeWidth={2.2} />
           </button>
         }
-        className={[
-          "h-10 min-w-0",
-          "transition-[box-shadow,transform] duration-[420ms]",
-          PREMIUM_EASE,
-          open
-            ? "shadow-[0_18px_44px_-36px_rgba(37,99,235,0.32)]"
-            : "shadow-none",
-        ].join(" ")}
+        className="h-10 min-w-0 shadow-none"
         inputClassName="!h-10 !text-[13.5px]"
       />
     </div>
@@ -482,18 +464,17 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
 function HeaderTitle({ hidden }) {
   return (
     <div
-      className={[
+      className={cx(
         "absolute inset-0 flex min-w-0 items-center",
-        "transition-[opacity,transform,filter] duration-[360ms]",
-        PREMIUM_EASE,
+        "transition-[opacity,transform] duration-slow ease-premium",
         hidden
-          ? "pointer-events-none -translate-x-2 opacity-0 blur-[1px]"
-          : "pointer-events-auto translate-x-0 opacity-100 blur-0",
-      ].join(" ")}
+          ? "pointer-events-none -translate-x-2 opacity-0"
+          : "pointer-events-auto translate-x-0 opacity-100"
+      )}
     >
       <h2
         id="inbox-thread-list-title"
-        className="truncate text-[16px] font-bold tracking-[-0.02em] text-[#0F172A]"
+        className="truncate text-[16px] font-semibold tracking-[var(--tracking-tight-lg)] text-text"
       >
         All conversations
       </h2>
@@ -502,73 +483,26 @@ function HeaderTitle({ hidden }) {
 }
 
 function TopTabs({ activeValue, onChange }) {
-  const wrapRef = useRef(null);
-  const tabRefs = useRef({});
-  const [indicator, setIndicator] = useState({
-    left: 0,
-    width: 0,
-    ready: false,
-  });
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current;
-    const activeNode = tabRefs.current?.[activeValue];
-
-    if (!wrap || !activeNode) return undefined;
-
-    function measure() {
-      const wrapRect = wrap.getBoundingClientRect();
-      const nodeRect = activeNode.getBoundingClientRect();
-
-      setIndicator({
-        left: nodeRect.left - wrapRect.left,
-        width: nodeRect.width,
-        ready: true,
-      });
-    }
-
-    measure();
-
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [activeValue]);
-
   return (
-    <div className="border-b border-[#D6E1ED] px-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)]">
-      <div ref={wrapRef} className="relative flex h-10 items-center gap-7">
-        <span
-          aria-hidden="true"
-          className={[
-            "absolute bottom-[-1px] h-[2px] rounded-full bg-[#2563EB]",
-            "transition-[left,width,opacity] duration-[300ms]",
-            PREMIUM_EASE,
-            indicator.ready ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-          style={{
-            left: indicator.left,
-            width: indicator.width,
-          }}
-        />
-
+    <div className="border-b border-line-soft px-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+      <div className="relative flex h-10 items-center gap-7">
         {TOP_TABS.map((tab) => {
           const active = activeValue === tab.value;
 
           return (
             <button
               key={tab.value}
-              ref={(node) => {
-                if (node) tabRefs.current[tab.value] = node;
-              }}
               type="button"
               onClick={() => onChange?.(tab.value)}
               aria-pressed={active}
-              className={[
-                "relative inline-flex h-10 items-center px-1 text-[12.5px] font-bold",
-                "transition-colors duration-[240ms]",
-                PREMIUM_EASE,
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
-                active ? "text-[#2563EB]" : "text-[#64748B] hover:text-[#0F172A]",
-              ].join(" ")}
+              className={cx(
+                "relative inline-flex h-10 items-center border-b-2 px-1 text-[12.5px] font-semibold",
+                "transition-[border-color,color] duration-base ease-premium",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)] focus-visible:ring-offset-2",
+                active
+                  ? "border-brand text-brand"
+                  : "border-transparent text-text-muted hover:text-text"
+              )}
             >
               {tab.label}
             </button>
@@ -582,13 +516,13 @@ function TopTabs({ activeValue, onChange }) {
 function EmptyState({ hasSearch, hasChannelFilter }) {
   return (
     <div className="px-4 py-8">
-      <div className="rounded-[22px] border border-[#E4EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-7 text-center shadow-[0_20px_46px_-42px_rgba(15,23,42,0.26)]">
-        <div className="text-[14px] font-bold text-[#0F172A]">
+      <div className="rounded-[22px] border border-line-soft bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-7 text-center shadow-[0_20px_46px_-42px_rgba(15,23,42,0.22)]">
+        <div className="text-[14px] font-semibold text-text">
           {hasSearch || hasChannelFilter
             ? "No matching conversations"
             : "No conversations yet"}
         </div>
-        <div className="mt-2 text-[12.5px] font-medium leading-6 text-[#64748B]">
+        <div className="mt-2 text-[12.5px] font-medium leading-6 text-text-muted">
           {hasSearch || hasChannelFilter
             ? "Try another channel or keyword."
             : "New conversations will appear here."}
@@ -603,16 +537,16 @@ function DisconnectedRailState() {
     <div className="flex h-full min-h-0 items-center justify-center px-6 py-10">
       <div className="max-w-[270px] text-center">
         <div className="mb-5 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-[#E0E7F0] bg-[linear-gradient(180deg,#FFFFFF_0%,#F4F7FB_100%)] shadow-[0_24px_50px_-42px_rgba(15,23,42,0.28)]">
-            <Inbox className="h-8 w-8 text-[#94A3B8]" strokeWidth={1.8} />
+          <div className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-line-soft bg-[linear-gradient(180deg,#FFFFFF_0%,#F4F7FB_100%)] shadow-[0_24px_50px_-42px_rgba(15,23,42,0.24)]">
+            <Inbox className="h-8 w-8 text-text-subtle" strokeWidth={1.8} />
           </div>
         </div>
 
-        <div className="text-[15px] font-bold text-[#0F172A]">
+        <div className="text-[15px] font-semibold text-text">
           No live conversations yet
         </div>
 
-        <div className="mt-2 text-[12.5px] font-medium leading-6 text-[#64748B]">
+        <div className="mt-2 text-[12.5px] font-medium leading-6 text-text-muted">
           Conversations will appear here after a launch channel is connected and
           messages start coming in.
         </div>
@@ -628,6 +562,7 @@ export default function InboxThreadListPanel({
   launchChannelConnected = true,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const deferredSearch = useDeferredValue(localSearch);
   const [selectedChannelValues, setSelectedChannelValues] = useState(null);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -744,16 +679,10 @@ export default function InboxThreadListPanel({
     }
   }, [allChannelValues, selectedChannelValues]);
 
-  const filteredThreads = useMemo(() => {
-    const byChannel = baseThreads.filter((thread) =>
-      channelMatches(thread, selectedChannelValues)
-    );
-
-    const needle = String(localSearch || "").trim().toLowerCase();
-    if (!needle) return byChannel;
-
-    return byChannel.filter((thread) => {
-      const haystack = [
+  const searchableThreads = useMemo(() => {
+    return baseThreads.map((thread) => ({
+      thread,
+      searchText: [
         thread?.customer_name,
         thread?.external_username,
         thread?.external_user_id,
@@ -766,11 +695,18 @@ export default function InboxThreadListPanel({
       ]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase();
+        .toLowerCase(),
+    }));
+  }, [baseThreads]);
 
-      return haystack.includes(needle);
-    });
-  }, [baseThreads, localSearch, selectedChannelValues]);
+  const filteredThreads = useMemo(() => {
+    const needle = String(deferredSearch || "").trim().toLowerCase();
+
+    return searchableThreads
+      .filter(({ thread }) => channelMatches(thread, selectedChannelValues))
+      .filter(({ searchText }) => !needle || searchText.includes(needle))
+      .map(({ thread }) => thread);
+  }, [deferredSearch, searchableThreads, selectedChannelValues]);
 
   function handleToggleFilterMenu() {
     setSearchOpen(false);
@@ -831,10 +767,10 @@ export default function InboxThreadListPanel({
         aria-labelledby="inbox-thread-list-title"
         className="relative flex h-full min-h-0 flex-col bg-transparent"
       >
-        <div className="shrink-0 border-b border-[#D6E1ED] bg-[rgba(255,255,255,0.78)] px-4 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.035)] backdrop-blur-xl">
+        <div className="shrink-0 border-b border-line-soft bg-surface/90 px-4 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
           <h2
             id="inbox-thread-list-title"
-            className="truncate text-[16px] font-bold tracking-[-0.02em] text-[#0F172A]"
+            className="truncate text-[16px] font-semibold tracking-[var(--tracking-tight-lg)] text-text"
           >
             All conversations
           </h2>
@@ -852,7 +788,7 @@ export default function InboxThreadListPanel({
       aria-labelledby="inbox-thread-list-title"
       className="relative isolate flex h-full min-h-0 flex-col bg-transparent"
     >
-      <div className="relative z-40 shrink-0 overflow-visible bg-[rgba(255,255,255,0.82)] backdrop-blur-xl">
+      <div className="relative z-40 shrink-0 overflow-visible bg-surface/92">
         <div className="px-4 pb-3 pt-5">
           <div className="flex h-10 items-center justify-between gap-3">
             <div className="relative h-10 min-w-0 flex-1">
@@ -894,18 +830,17 @@ export default function InboxThreadListPanel({
                 onClick={searchOpen ? handleCloseSearch : handleOpenSearch}
                 aria-label={searchOpen ? "Close search" : "Search conversations"}
                 title={searchOpen ? "Close search" : "Search conversations"}
-                className={[
+                className={cx(
                   "inline-flex h-9 w-9 items-center justify-center rounded-[10px]",
-                  "border-0 bg-transparent transition-[background-color,color,opacity] duration-300",
-                  PREMIUM_EASE,
+                  "border-0 bg-transparent transition-[background-color,color,opacity] duration-base ease-premium",
                   searchOpen
                     ? "pointer-events-none opacity-0"
                     : "pointer-events-auto opacity-100",
                   localSearch.trim()
-                    ? "text-[#2563EB]"
-                    : "text-[#64748B] hover:bg-[#F3F7FB] hover:text-[#0F172A]",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#BBD3FF] focus-visible:ring-offset-2",
-                ].join(" ")}
+                    ? "text-brand"
+                    : "text-text-muted hover:bg-surface-subtle hover:text-text",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)] focus-visible:ring-offset-2"
+                )}
               >
                 <Search className="h-[17px] w-[17px]" strokeWidth={2.25} />
               </button>
@@ -919,8 +854,8 @@ export default function InboxThreadListPanel({
         />
 
         {threadList?.deepLinkNotice ? (
-          <div className="border-b border-[#D6E1ED] px-4 py-3 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
-            <p className="text-[12px] font-medium leading-5 text-[#B45309]">
+          <div className="border-b border-line-soft px-4 py-3 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+            <p className="text-[12px] font-medium leading-5 text-warning">
               {threadList.deepLinkNotice}
             </p>
           </div>
@@ -928,26 +863,24 @@ export default function InboxThreadListPanel({
       </div>
 
       <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white">
-        {threadList?.surface?.loading && !filteredThreads.length ? (
-          <div className="px-4 py-4">
-            <InboxThreadListSkeleton />
-          </div>
-        ) : !filteredThreads.length ? (
-          <EmptyState
-            hasSearch={Boolean(localSearch.trim())}
-            hasChannelFilter={hasChannelFilter}
-          />
-        ) : (
-          <div className="divide-y divide-[#E7EDF5]">
+        {threadList?.surface?.loading ? (
+          <InboxThreadListSkeleton />
+        ) : filteredThreads.length ? (
+          <div className="divide-y divide-line-soft">
             {filteredThreads.map((thread) => (
               <InboxThreadCard
                 key={thread.id}
                 thread={thread}
-                selected={selectedThreadId === thread.id}
+                selected={s(thread.id) === s(selectedThreadId)}
                 onOpen={threadList?.openThread}
               />
             ))}
           </div>
+        ) : (
+          <EmptyState
+            hasSearch={Boolean(String(localSearch || "").trim())}
+            hasChannelFilter={hasChannelFilter}
+          />
         )}
       </div>
     </section>

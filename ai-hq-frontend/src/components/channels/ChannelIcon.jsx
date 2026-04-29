@@ -16,17 +16,17 @@ const SIZE_MAP = {
     component: "h-6 w-6",
     stackWrap: "h-10 w-10",
     stackPrimary: "h-6 w-6",
-    stackSecondary: "h-4.5 w-4.5",
+    stackSecondary: "h-[18px] w-[18px]",
     stackTertiary: "h-4 w-4",
   },
   lg: {
     wrap: "h-12 w-12",
-    icon: "h-10 w-10",
-    component: "h-7 w-7",
+    icon: "h-11 w-11",
+    component: "h-8 w-8",
     stackWrap: "h-12 w-12",
-    stackPrimary: "h-7 w-7",
+    stackPrimary: "h-8 w-8",
     stackSecondary: "h-5 w-5",
-    stackTertiary: "h-4.5 w-4.5",
+    stackTertiary: "h-[18px] w-[18px]",
   },
 };
 
@@ -37,7 +37,13 @@ function cleanClassName(className = "") {
 function RenderIcon({ item, className }) {
   if (item.iconComponent) {
     const Icon = item.iconComponent;
-    return <Icon className={cleanClassName(className)} strokeWidth={1.9} />;
+
+    return (
+      <Icon
+        className={cleanClassName(className)}
+        strokeWidth={1.95}
+      />
+    );
   }
 
   return (
@@ -47,11 +53,12 @@ function RenderIcon({ item, className }) {
       className={cx("object-contain", className)}
       loading="lazy"
       decoding="async"
+      draggable="false"
     />
   );
 }
 
-function StackedChannelIcon({ channel, view }) {
+function StackedChannelIcon({ channel, view, className = "" }) {
   const stack = Array.isArray(channel.iconStack)
     ? channel.iconStack.slice(0, 3)
     : [];
@@ -66,22 +73,24 @@ function StackedChannelIcon({ channel, view }) {
     <span
       className={cx(
         "relative inline-flex shrink-0 items-center justify-center",
-        view.stackWrap
+        "text-text",
+        view.stackWrap,
+        className
       )}
       aria-hidden="true"
     >
-      <span className="relative z-[2] inline-flex items-center justify-center text-[rgba(15,23,42,0.92)]">
+      <span className="relative z-[2] inline-flex items-center justify-center">
         <RenderIcon item={primary} className={view.stackPrimary} />
       </span>
 
       {secondary ? (
-        <span className="absolute bottom-0 right-0 z-[3] inline-flex translate-x-[6%] translate-y-[6%] items-center justify-center text-[rgba(15,23,42,0.82)]">
+        <span className="absolute bottom-[1px] right-[1px] z-[3] inline-flex items-center justify-center">
           <RenderIcon item={secondary} className={view.stackSecondary} />
         </span>
       ) : null}
 
       {tertiary ? (
-        <span className="absolute left-0 top-0 z-[1] inline-flex -translate-x-[4%] -translate-y-[4%] items-center justify-center text-[rgba(15,23,42,0.70)]">
+        <span className="absolute left-[1px] top-[1px] z-[1] inline-flex items-center justify-center opacity-80">
           <RenderIcon item={tertiary} className={view.stackTertiary} />
         </span>
       ) : null}
@@ -94,19 +103,28 @@ export default function ChannelIcon({
   size = "md",
   className = "",
 }) {
+  const safeChannel = channel || {};
   const view = SIZE_MAP[size] || SIZE_MAP.md;
+
   const hasStack =
-    Array.isArray(channel.iconStack) && channel.iconStack.length > 0;
-  const SingleIcon = channel.iconComponent;
+    Array.isArray(safeChannel.iconStack) && safeChannel.iconStack.length > 0;
+
+  const SingleIcon = safeChannel.iconComponent;
 
   if (hasStack) {
-    return <StackedChannelIcon channel={channel} view={view} />;
+    return (
+      <StackedChannelIcon
+        channel={safeChannel}
+        view={view}
+        className={className}
+      />
+    );
   }
 
   return (
     <span
       className={cx(
-        "relative inline-flex shrink-0 items-center justify-center text-[rgba(15,23,42,0.92)]",
+        "relative inline-flex shrink-0 items-center justify-center text-text",
         view.wrap
       )}
       aria-hidden="true"
@@ -114,15 +132,16 @@ export default function ChannelIcon({
       {SingleIcon ? (
         <SingleIcon
           className={cleanClassName(cx(view.component, className))}
-          strokeWidth={1.9}
+          strokeWidth={1.95}
         />
       ) : (
         <img
-          src={channel.icon}
-          alt={channel.iconAlt || ""}
+          src={safeChannel.icon}
+          alt={safeChannel.iconAlt || ""}
           className={cx("object-contain", view.icon, className)}
           loading="lazy"
           decoding="async"
+          draggable="false"
         />
       )}
     </span>

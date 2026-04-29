@@ -8,6 +8,7 @@ import {
   Info,
   LockKeyhole,
 } from "lucide-react";
+
 import { cx } from "../../lib/cx.js";
 import Card from "./Card.jsx";
 import Button from "./Button.jsx";
@@ -48,49 +49,33 @@ function skeletonWidths(rows) {
   );
 }
 
-function paddedClass(padded) {
-  if (padded === false) return "p-0";
-  if (padded === "xs") return "p-3";
-  if (padded === "sm") return "p-4";
-  if (padded === "lg") return "p-6";
-  if (padded === "xl") return "p-7";
-  return "p-5";
+function resolveSurfaceVariant({ tone = "default", subdued = false }) {
+  if (subdued || tone === "muted") return "subtle";
+  if (tone === "subtle") return "subtle";
+  if (tone === "brand-soft") return "surface";
+  return "surface";
 }
 
-function surfaceToneClass({ tone = "default", subdued = false }) {
-  if (subdued || tone === "muted") {
-    return "border-line-soft bg-surface-muted";
+function resolveSurfaceTone({ tone = "default" }) {
+  if (tone === "brand-soft") return "brand";
+  if (
+    tone === "info" ||
+    tone === "success" ||
+    tone === "warning" ||
+    tone === "danger"
+  ) {
+    return tone;
   }
 
-  if (tone === "subtle") {
-    return "border-line-soft bg-surface-subtle";
-  }
-
-  if (tone === "brand-soft") {
-    return "border-[rgba(var(--color-brand),0.16)] bg-brand-soft";
-  }
-
-  return "border-line-soft bg-surface";
+  return "neutral";
 }
 
-function metricToneClass(tone = "neutral") {
-  if (tone === "brand" || tone === "accent" || tone === "info") {
-    return "border-[rgba(var(--color-brand),0.16)] bg-brand-soft";
-  }
-
-  if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.2)] bg-warning-soft";
-  }
-
-  if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft";
-  }
-
-  if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.18)] bg-success-soft";
-  }
-
-  return "border-line-soft bg-surface";
+function metricTone(tone = "neutral") {
+  if (tone === "brand" || tone === "accent" || tone === "info") return "brand";
+  if (tone === "warning") return "warning";
+  if (tone === "danger") return "danger";
+  if (tone === "success") return "success";
+  return "neutral";
 }
 
 function bannerToneClass(tone = "info") {
@@ -107,19 +92,6 @@ function bannerToneClass(tone = "info") {
   }
 
   return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand";
-}
-
-function launchBadgeVariant(tone = "neutral") {
-  if (
-    tone === "success" ||
-    tone === "warning" ||
-    tone === "danger" ||
-    tone === "info"
-  ) {
-    return "soft";
-  }
-
-  return "subtle";
 }
 
 export function PageCanvas({ className, children }) {
@@ -151,17 +123,17 @@ export function PageHeader({
     >
       <div className="max-w-[860px]">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-subtle">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="text-[1.95rem] font-semibold leading-[1.02] tracking-[-0.055em] text-text md:text-[2.24rem]">
+        <h1 className="font-display text-[1.95rem] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[2.24rem]">
           {title}
         </h1>
 
         {description ? (
-          <p className="mt-2.5 max-w-[760px] text-[14.5px] font-medium leading-6 text-text-muted">
+          <p className="mt-2.5 max-w-[760px] text-[14.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
             {description}
           </p>
         ) : null}
@@ -192,17 +164,17 @@ export function SectionHeader({
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-text-subtle">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h2 className="text-[1.22rem] font-semibold leading-tight tracking-[-0.04em] text-text md:text-[1.36rem]">
+        <h2 className="font-display text-[1.22rem] font-semibold leading-tight tracking-[var(--tracking-tight-lg)] text-text md:text-[1.36rem]">
           {title}
         </h2>
 
         {description ? (
-          <p className="mt-1.5 text-[13.5px] font-medium leading-6 text-text-muted">
+          <p className="mt-1.5 text-[13.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
             {description}
           </p>
         ) : null}
@@ -225,21 +197,22 @@ export function Surface({
   tone = "default",
   shadow = "none",
 }) {
+  const variant = resolveSurfaceVariant({ tone, subdued });
+  const resolvedTone = resolveSurfaceTone({ tone });
+
   return (
-    <div
-      className={cx(
-        "rounded-panel border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
-        surfaceToneClass({ tone, subdued }),
-        paddedClass(padded),
-        shadow === "sm" && "shadow-panel",
-        shadow === "md" && "shadow-panel-strong",
-        shadow === "none" &&
-          "shadow-[0_1px_0_rgba(255,255,255,0.96)_inset]",
-        className
+    <Card
+      variant={variant}
+      tone={resolvedTone}
+      padded={padded}
+      className={className}
+      outerClassName={cx(
+        shadow === "md" && "ui-card--elevated",
+        shadow === "none" && ""
       )}
     >
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -252,20 +225,17 @@ export function MetricCard({
 }) {
   return (
     <Card
-      className={cx(
-        "px-4 py-4.5 shadow-[0_1px_0_rgba(255,255,255,0.94)_inset]",
-        metricToneClass(tone),
-        className
-      )}
-      padded={false}
+      tone={metricTone(tone)}
+      padded="sm"
+      className={cx("px-4 py-4.5", className)}
     >
       {label ? (
-        <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-text-subtle">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
           {label}
         </div>
       ) : null}
 
-      <div className="mt-2 text-[1.38rem] font-semibold leading-tight tracking-[-0.045em] text-text">
+      <div className="mt-2 text-[1.38rem] font-semibold leading-tight tracking-[var(--tracking-tight-lg)] text-text">
         {value}
       </div>
 
@@ -295,17 +265,24 @@ export function LaunchStatusBadge({
   dot = true,
   className,
 }) {
+  const dotClass =
+    tone === "success"
+      ? "bg-success"
+      : tone === "warning"
+        ? "bg-warning"
+        : tone === "danger"
+          ? "bg-danger"
+          : tone === "info" || tone === "brand"
+            ? "bg-brand"
+            : "bg-[rgb(var(--color-text-soft))]";
+
   return (
     <Badge
       tone={tone}
-      variant={launchBadgeVariant(tone)}
-      size="md"
-      dot={dot}
-      className={cx(
-        "!min-h-[25px] !rounded-[11px] !px-2.5 !text-[11.5px] !font-bold !tracking-[-0.012em]",
-        className
-      )}
+      size="sm"
+      className={cx("!min-h-[25px] !px-2.5 !text-[11.5px]", className)}
     >
+      {dot ? <span className={cx("h-1.5 w-1.5 rounded-full", dotClass)} /> : null}
       {children}
     </Badge>
   );
@@ -321,7 +298,7 @@ export function LaunchTextAction({
     <button
       type="button"
       className={cx(
-        "inline-flex items-center gap-1.5 text-[13px] font-semibold text-text-muted transition-colors duration-base ease-premium",
+        "inline-flex items-center gap-1.5 text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text-muted transition-colors duration-base ease-premium",
         "hover:text-text",
         className
       )}
@@ -348,14 +325,7 @@ export function LaunchPrimaryAction({
       rightIcon={
         showArrow ? <ArrowRight className="h-4 w-4" strokeWidth={2.15} /> : undefined
       }
-      className={cx(
-        "!h-11 !rounded-[15px] !px-4 !text-[13.5px] !font-semibold",
-        quiet &&
-          "!border-line !bg-white !text-text hover:!bg-surface-muted",
-        !quiet &&
-          "!shadow-[0_18px_40px_-26px_rgba(46,96,255,0.72)] hover:!shadow-[0_22px_46px_-28px_rgba(46,96,255,0.82)]",
-        className
-      )}
+      className={cx(className)}
       {...props}
     >
       {children}
@@ -370,19 +340,14 @@ export function LaunchCard({
   compact = false,
 }) {
   return (
-    <div
-      className={cx(
-        "relative overflow-hidden rounded-[24px] border bg-white transition-[border-color,box-shadow,background-color] duration-base ease-premium",
-        "shadow-[0_24px_60px_-48px_rgba(15,23,42,0.22)]",
-        compact ? "px-4 py-4" : "px-5 py-5",
-        selected
-          ? "border-[rgba(46,96,255,0.2)] shadow-[0_28px_70px_-50px_rgba(46,96,255,0.24)]"
-          : "border-line-soft hover:border-line hover:shadow-[0_30px_74px_-52px_rgba(15,23,42,0.26)]",
-        className
-      )}
+    <Card
+      padded={compact ? "sm" : "md"}
+      interactive
+      tone={selected ? "brand" : "neutral"}
+      className={className}
     >
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -400,7 +365,7 @@ export function LaunchCardHeader({
 
         <div className="min-w-0">
           {title ? (
-            <div className="truncate text-[15px] font-semibold tracking-[-0.02em] text-text">
+            <div className="truncate text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
               {title}
             </div>
           ) : null}
@@ -427,7 +392,7 @@ export function LaunchCardBody({
   return (
     <div className={cx("mt-5", className)}>
       {title ? (
-        <div className="text-[13.5px] font-semibold tracking-[-0.015em] text-text">
+        <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
           {title}
         </div>
       ) : null}
@@ -435,7 +400,7 @@ export function LaunchCardBody({
       {description ? (
         <div
           className={cx(
-            "text-[13.5px] font-medium leading-7 text-text-muted",
+            "text-[13.5px] font-medium leading-7 tracking-[var(--tracking-tight-xs)] text-text-muted",
             title ? "mt-2" : ""
           )}
         >
@@ -489,7 +454,7 @@ export function StatusBanner({
   return (
     <div
       className={cx(
-        "rounded-panel border px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
+        "rounded-[var(--radius-lg)] border px-4 py-4 shadow-[var(--shadow-inset-top)]",
         bannerToneClass(tone),
         className
       )}
@@ -497,7 +462,7 @@ export function StatusBanner({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           {label ? (
-            <div className="text-[11px] font-bold uppercase tracking-[0.12em]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]">
               {label}
             </div>
           ) : null}
@@ -505,7 +470,7 @@ export function StatusBanner({
           {title ? (
             <div
               className={cx(
-                "font-semibold tracking-[-0.025em] text-text",
+                "font-semibold tracking-[var(--tracking-tight-md)] text-text",
                 label ? "mt-2 text-[15px]" : "text-[15px]"
               )}
             >
@@ -570,13 +535,13 @@ export function PropertyRow({
           : `${labelWidth} minmax(0,1fr)`,
       }}
     >
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-subtle">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
         {label}
       </div>
 
       <div
         className={cx(
-          "min-w-0 text-[13.5px] font-medium leading-6 text-text",
+          "min-w-0 text-[13.5px] font-medium leading-6 tracking-[var(--tracking-tight-xs)] text-text",
           align === "right" && "text-right",
           valueClassName
         )}
@@ -593,7 +558,7 @@ export function FieldGroup({ label, description, children, className }) {
   return (
     <div className={cx("space-y-2", className)}>
       {label ? (
-        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-subtle">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
           {label}
         </div>
       ) : null}
@@ -627,7 +592,7 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "rounded-[14px] border shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
+        "rounded-[var(--radius-lg)] border shadow-[var(--shadow-inset-top)]",
         palette.container,
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
         className
@@ -647,7 +612,7 @@ export function InlineNotice({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-[14px] font-semibold tracking-[-0.015em] text-text">
+            <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
               {title}
             </div>
           ) : null}
@@ -674,10 +639,7 @@ export function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
-      className={cx(
-        "animate-pulse rounded-[14px] bg-surface-subtle",
-        className
-      )}
+      className={cx("animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle", className)}
     />
   );
 }
@@ -692,12 +654,12 @@ export function SectionLoading({
   return (
     <Surface className={className} tone="muted" shadow="sm">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-[13px] border border-line bg-surface text-text-subtle shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-[13px] border border-line bg-surface text-text-subtle shadow-[var(--shadow-inset-top)]">
           <Spin size="small" />
         </span>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
+          <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>
           {description ? (
@@ -755,7 +717,7 @@ export function EmptyState({ title, description, action, className }) {
         </span>
 
         <div>
-          <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
+          <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>
           {description ? (
@@ -775,7 +737,7 @@ export function CompactState({ title, description, action, className }) {
   return (
     <Surface className={className} padded="sm" tone="muted">
       <div className="space-y-1.5">
-        <div className="text-[14.5px] font-semibold tracking-[-0.015em] text-text">
+        <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
           {title}
         </div>
         {description ? (

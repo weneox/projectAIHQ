@@ -6,7 +6,10 @@
   Radio,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 import Button from "../../components/ui/Button.jsx";
+import Card from "../../components/ui/Card.jsx";
+import Badge from "../../components/ui/Badge.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -47,9 +50,11 @@ function openConversationCount(home) {
 
 function shortChannelLabel(channel = {}) {
   const provider = lower(channel.provider);
+
   if (provider === "telegram") return "Telegram";
   if (provider === "meta") return "Instagram";
   if (provider === "website" || provider === "webchat") return "Website chat";
+
   return s(channel.channelLabel, "Live channel");
 }
 
@@ -172,7 +177,7 @@ function humanInboxState(home) {
       label: "Inbox",
       value: "Active",
       hint: "Conversation work is present",
-      tone: "info",
+      tone: "brand",
     };
   }
 
@@ -188,7 +193,8 @@ function buildHeroCopy(home) {
   const channel = home?.launchChannel || {};
   const truthReady = home?.truthRuntime?.truthReady === true;
   const runtimeReady = home?.truthRuntime?.ready === true;
-  const channelReady = channel.connected === true && channel.deliveryReady === true;
+  const channelReady =
+    channel.connected === true && channel.deliveryReady === true;
   const inboxUnavailable = lower(home?.inboxState?.status) === "unavailable";
   const unread = unreadCount(home);
 
@@ -207,7 +213,8 @@ function buildHeroCopy(home) {
   if (!truthReady) {
     return {
       title: "Approve business truth.",
-      summary: "Define the facts AI can use before any channel is treated as live.",
+      summary:
+        "Define the facts AI can use before any channel is treated as live.",
     };
   }
 
@@ -242,37 +249,80 @@ function buildMetaLine(home) {
   const truth = humanTruthState(home);
   const channel = humanChannelState(home);
   const inbox = humanInboxState(home);
+
   return [truth.value, channel.value, inbox.value].filter(Boolean);
 }
 
-function toneClass(tone = "neutral") {
+function toneTextClass(tone = "neutral") {
   if (tone === "success") return "text-success";
   if (tone === "warning") return "text-warning";
   if (tone === "danger") return "text-danger";
-  if (tone === "info") return "text-brand";
+  if (tone === "brand" || tone === "info") return "text-brand";
+
   return "text-text-subtle";
+}
+
+function badgeTone(tone = "neutral") {
+  if (tone === "success") return "success";
+  if (tone === "warning") return "warning";
+  if (tone === "danger") return "danger";
+  if (tone === "brand" || tone === "info") return "brand";
+
+  return "neutral";
+}
+
+function StatusDot({ tone = "neutral" }) {
+  const className =
+    tone === "success"
+      ? "bg-success"
+      : tone === "warning"
+        ? "bg-warning"
+        : tone === "danger"
+          ? "bg-danger"
+          : tone === "brand" || tone === "info"
+            ? "bg-brand"
+            : "bg-[rgb(var(--color-text-soft))]";
+
+  return <span className={cx("h-1.5 w-1.5 rounded-full", className)} />;
 }
 
 function StatusStripItem({ item, last = false }) {
   return (
     <div
       className={cx(
-        "min-w-0 px-4 py-3.5",
+        "min-w-0 px-4 py-4",
         !last && "border-b border-line-soft md:border-b-0 md:border-r"
       )}
     >
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-        {item.label}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+          {item.label}
+        </div>
+
+        <Badge tone={badgeTone(item.tone)} size="sm">
+          <StatusDot tone={item.tone} />
+          {item.tone === "success"
+            ? "Ready"
+            : item.tone === "warning"
+              ? "Review"
+              : item.tone === "danger"
+                ? "Blocked"
+                : "Active"}
+        </Badge>
       </div>
+
       <div
         className={cx(
-          "mt-2 text-[1rem] font-semibold tracking-[-0.025em]",
-          toneClass(item.tone)
+          "mt-3 text-[18px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
+          toneTextClass(item.tone)
         )}
       >
         {item.value}
       </div>
-      <div className="mt-1 text-[13px] leading-5 text-text-muted">{item.hint}</div>
+
+      <div className="mt-1.5 text-[13px] font-medium leading-5 text-text-muted">
+        {item.hint}
+      </div>
     </div>
   );
 }
@@ -291,7 +341,7 @@ function stepTone(step = {}) {
   }
 
   if (tone === "info" || tone === "pending" || tone === "connecting") {
-    return "info";
+    return "brand";
   }
 
   return "neutral";
@@ -304,23 +354,24 @@ function stepStatus(step = {}) {
 
 function StepLeading({ step, active = false }) {
   if (step.complete) {
-    return <CheckCircle2 className="h-4 w-4 text-success" />;
+    return <CheckCircle2 className="h-4 w-4 text-success" strokeWidth={2.1} />;
   }
 
   if (active) {
-    return <Radio className="h-4 w-4 text-brand" />;
+    return <Radio className="h-4 w-4 text-brand" strokeWidth={2.1} />;
   }
 
   if (stepTone(step) === "danger") {
-    return <LockKeyhole className="h-4 w-4 text-danger" />;
+    return <LockKeyhole className="h-4 w-4 text-danger" strokeWidth={2.1} />;
   }
 
-  return <Circle className="h-4 w-4 text-text-subtle" />;
+  return <Circle className="h-4 w-4 text-text-subtle" strokeWidth={2.1} />;
 }
 
 function StepRow({ step, active = false, last = false, onNavigate }) {
   const action = normalizeNavigationAction(step.action);
   const clickable = Boolean(action?.path);
+  const tone = stepTone(step);
 
   return (
     <button
@@ -330,34 +381,49 @@ function StepRow({ step, active = false, last = false, onNavigate }) {
       }}
       disabled={!clickable}
       className={cx(
-        "group grid w-full grid-cols-[34px_minmax(0,1fr)_22px] items-start gap-4 px-4 py-3.5 text-left transition-[background-color] duration-base ease-premium",
+        "group grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-4 px-4 py-4 text-left",
+        "transition-[background-color,color] duration-base ease-premium",
         !last && "border-b border-line-soft",
         active && "bg-surface-subtle",
         clickable ? "hover:bg-surface-subtle" : "cursor-default"
       )}
     >
-      <div className="flex items-start justify-center pt-[2px]">
-        <StepLeading step={step} active={active} />
+      <div className="flex items-start justify-center pt-[3px]">
+        <span
+          className={cx(
+            "inline-flex h-8 w-8 items-center justify-center rounded-[11px] border bg-surface shadow-[var(--shadow-inset-top)]",
+            active
+              ? "border-[rgba(var(--color-brand),0.18)]"
+              : "border-line-soft"
+          )}
+        >
+          <StepLeading step={step} active={active} />
+        </span>
       </div>
 
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="text-[15px] font-semibold tracking-[-0.02em] text-text">
+          <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
             {s(step.label, "Step")}
           </div>
-          <div className={cx("text-[12px] font-medium", toneClass(stepTone(step)))}>
+
+          <Badge tone={badgeTone(tone)} size="sm">
+            <StatusDot tone={tone} />
             {stepStatus(step)}
-          </div>
+          </Badge>
         </div>
 
-        <div className="mt-1 text-[14px] leading-6 text-text-muted">
+        <div className="mt-1.5 text-[14px] font-medium leading-6 text-text-muted">
           {compactSentence(step.summary || step.detail, "Needs review.")}
         </div>
       </div>
 
-      <div className="flex items-start justify-end pt-[2px]">
+      <div className="flex items-start justify-end pt-[9px]">
         {clickable ? (
-          <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" />
+          <ArrowRight
+            className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+            strokeWidth={2.1}
+          />
         ) : null}
       </div>
     </button>
@@ -379,6 +445,7 @@ export default function ProductHomePage() {
   function navigateFromAction(action = null) {
     const nextAction = normalizeNavigationAction(action);
     if (!nextAction?.path) return;
+
     navigate(nextAction.path);
   }
 
@@ -410,6 +477,7 @@ export default function ProductHomePage() {
     humanChannelState(home),
     humanInboxState(home),
   ];
+
   const steps = arr(home.launchSteps);
   const activeStepId = s(home?.nextStep?.id);
 
@@ -431,17 +499,20 @@ export default function ProductHomePage() {
               AI HQ v1
             </div>
 
-            <h1 className="mt-3 text-[1.95rem] font-semibold leading-[1.02] tracking-[-0.045em] text-text md:text-[2.25rem]">
+            <h1 className="mt-3 font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
               {hero.title}
             </h1>
 
-            <p className="mt-3 max-w-[680px] text-[15px] leading-7 text-text-muted">
+            <p className="mt-3 max-w-[680px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
               {hero.summary}
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-medium leading-5 text-text-subtle">
               {metaParts.map((item, index) => (
-                <span key={`${item}-${index}`} className="inline-flex items-center gap-3">
+                <span
+                  key={`${item}-${index}`}
+                  className="inline-flex items-center gap-3"
+                >
                   {index > 0 ? <span className="text-line-strong">/</span> : null}
                   <span>{item}</span>
                 </span>
@@ -456,7 +527,7 @@ export default function ProductHomePage() {
                 size="md"
                 className="min-w-[148px] justify-center"
                 onClick={() => navigateFromAction(primaryAction)}
-                rightIcon={<ArrowRight className="h-4 w-4" />}
+                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
               >
                 {primaryAction.label}
               </Button>
@@ -477,7 +548,7 @@ export default function ProductHomePage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+      <Card padded={false} clip>
         <div className="grid md:grid-cols-3">
           {stripItems.map((item, index) => (
             <StatusStripItem
@@ -487,19 +558,20 @@ export default function ProductHomePage() {
             />
           ))}
         </div>
-      </section>
+      </Card>
 
       <section className="space-y-3">
         <div>
-          <div className="text-[1.1rem] font-semibold tracking-[-0.025em] text-text">
+          <div className="text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
             Launch path
           </div>
-          <div className="mt-1 text-[14px] leading-6 text-text-muted">
+
+          <div className="mt-1 text-[14px] font-medium leading-6 text-text-muted">
             Business truth, one live channel, then inbox.
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+        <Card padded={false} clip>
           {steps.map((step, index) => (
             <StepRow
               key={step.id}
@@ -509,12 +581,8 @@ export default function ProductHomePage() {
               onNavigate={navigateFromAction}
             />
           ))}
-        </div>
+        </Card>
       </section>
     </PageCanvas>
   );
 }
-
-
-
-

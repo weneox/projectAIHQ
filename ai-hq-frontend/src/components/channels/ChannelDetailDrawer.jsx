@@ -2,13 +2,15 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
-  ChevronRight,
+  ExternalLink,
   RefreshCw,
   ShieldAlert,
   X,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+
 import {
   connectTelegramChannel,
   disconnectTelegramChannel,
@@ -25,14 +27,12 @@ import {
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
-import { ChannelActionButton } from "./ChannelPrimitives.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 import Input from "../ui/Input.jsx";
-import {
-  InlineNotice,
-  PropertyRow,
-  Section,
-} from "../ui/AppShellPrimitives.jsx";
+import Button from "../ui/Button.jsx";
+import Badge from "../ui/Badge.jsx";
+import Card from "../ui/Card.jsx";
+import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import WebsiteWidgetDetailDrawer from "./WebsiteWidgetDetailDrawer.jsx";
 
 const BOTFATHER_URL = "https://t.me/BotFather";
@@ -60,43 +60,41 @@ function isWebsiteChannel(channel = {}) {
 function buildInstagramStateCopy(status = {}) {
   if (status?.pendingSelection?.required === true) {
     return {
-      title:
-        "Instagram account selection is required before this tenant can connect.",
+      title: "Instagram account selection is required.",
       body:
-        "Meta returned more than one eligible Instagram Business or Professional asset. The tenant stays unbound until one account is explicitly selected below.",
+        "Meta returned more than one eligible Instagram Business or Professional asset. Choose one account before this tenant becomes connected.",
     };
   }
 
   switch (s(status?.state)) {
     case "connected":
       return {
-        title: "Instagram is connected for this tenant.",
+        title: "Instagram is connected.",
         body:
-          "Inbound DMs can resolve against the tenant runtime, and AI replies are allowed only while the runtime stays ready.",
+          "Inbound DMs can resolve against tenant runtime, and AI replies are allowed only while runtime stays ready.",
       };
     case "reconnect_required":
       return {
-        title: "Instagram needs reconnect before automation can resume.",
+        title: "Instagram needs reconnect.",
         body:
-          "The tenant record exists, but a critical identifier or delivery token is missing, so the system stays fail-closed until reconnect completes.",
+          "The tenant record exists, but a critical identifier or delivery token is missing. Automation stays fail-closed until reconnect completes.",
       };
     case "deauthorized":
       return {
-        title: "Meta deauthorized this tenant connection.",
+        title: "Meta deauthorized this connection.",
         body:
-          "The previous tenant mapping was preserved for auditability, but live identifiers and token-backed delivery were revoked.",
+          "The previous tenant mapping is preserved for auditability, but live identifiers and token-backed delivery were revoked.",
       };
     case "disconnected":
       return {
-        title: "Instagram was intentionally disconnected.",
-        body:
-          "No live runtime path remains until the tenant reconnects the account.",
+        title: "Instagram was disconnected.",
+        body: "No live runtime path remains until the account is reconnected.",
       };
     case "blocked":
       return {
         title: "Instagram connect is blocked.",
         body:
-          "Self-serve onboarding is blocked by plan or configuration, and the platform is not pretending otherwise.",
+          "Self-serve onboarding is blocked by plan or configuration. The platform is not pretending otherwise.",
       };
     default:
       return {
@@ -111,27 +109,27 @@ function buildTelegramStateCopy(status = {}) {
   switch (s(status?.state)) {
     case "connected":
       return {
-        title: "Telegram is connected for this tenant.",
+        title: "Telegram is connected.",
         body:
-          "Private text messages can enter the shared inbox/runtime flow, and outbound AI replies stay truthful to webhook and runtime readiness.",
+          "Private text messages can enter the shared inbox/runtime flow, and outbound replies stay truthful to webhook and runtime readiness.",
       };
     case "connecting":
       return {
-        title: "Telegram is finishing connection setup.",
+        title: "Telegram is finishing setup.",
         body:
-          "The bot token has been accepted, but webhook verification or runtime readiness still needs to settle before the channel is treated as fully live.",
+          "The bot token was accepted, but webhook verification or runtime readiness still needs to settle.",
       };
     case "error":
       return {
-        title: "Telegram needs repair before live delivery can resume.",
+        title: "Telegram needs repair.",
         body:
-          "A tenant channel record exists, but bot auth, webhook verification, or runtime readiness is not healthy enough to treat this connector as fully operational.",
+          "A tenant channel record exists, but bot auth, webhook verification, or runtime readiness is not healthy enough for live delivery.",
       };
     case "disconnected":
       return {
-        title: "Telegram was intentionally disconnected.",
+        title: "Telegram was disconnected.",
         body:
-          "The stored bot token and webhook secrets were removed, so no live Telegram delivery path remains until reconnect completes.",
+          "The stored bot token and webhook secrets were removed. No live Telegram delivery path remains until reconnect completes.",
       };
     case "blocked":
       return {
@@ -161,39 +159,59 @@ function buildUserTokenStatusCopy(userToken = {}) {
   }
 }
 
-function DrawerStatus({ status }) {
+function badgeToneFromStatus(status) {
   const meta = getChannelStatusMeta(status);
 
-  const toneClass =
-    meta?.tone === "success" || meta?.tone === "info"
-      ? "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
-      : meta?.tone === "warning"
-      ? "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning"
-      : "border-line bg-surface-subtle text-text-muted";
+  if (meta?.tone === "success") return "success";
+  if (meta?.tone === "warning") return "warning";
+  if (meta?.tone === "danger") return "danger";
+  if (meta?.tone === "info") return "brand";
+  return "neutral";
+}
+
+function dotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function DrawerStatus({ status }) {
+  const meta = getChannelStatusMeta(status);
+  const tone = badgeToneFromStatus(status);
 
   return (
-    <div
-      className={cx(
-        "inline-flex items-center gap-2 rounded-pill border px-2.5 py-1 text-[12px] font-medium",
-        toneClass
-      )}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      <span>{meta?.label || "Unknown"}</span>
-    </div>
+    <Badge tone={tone} size="sm">
+      <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
+      {meta?.label || "Unknown"}
+    </Badge>
   );
 }
 
-function SectionBlock({ eyebrow, title, description, children, last = false }) {
+function SectionCard({ eyebrow, title, description, children, tone = "neutral" }) {
   return (
-    <Section
-      eyebrow={eyebrow}
-      title={title}
-      description={description}
-      className={cx(!last && "border-b border-line-soft pb-6", last && "pb-0")}
-    >
-      {children}
-    </Section>
+    <Card padded="md" tone={tone}>
+      {eyebrow ? (
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+          {eyebrow}
+        </div>
+      ) : null}
+
+      {title ? (
+        <div className="mt-1 text-[18px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)] text-text">
+          {title}
+        </div>
+      ) : null}
+
+      {description ? (
+        <div className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+          {description}
+        </div>
+      ) : null}
+
+      {children ? <div className={title || description || eyebrow ? "mt-4" : ""}>{children}</div> : null}
+    </Card>
   );
 }
 
@@ -207,67 +225,69 @@ function FeedbackBanner({ tone = "success", children }) {
   );
 }
 
-function CapabilityPill({ children }) {
+function CapabilityBadge({ children }) {
   return (
-    <span className="inline-flex items-center rounded-pill border border-line bg-surface-subtle px-2.5 py-1 text-[11px] font-medium text-text-muted">
+    <Badge tone="neutral" size="sm">
       {children}
-    </span>
+    </Badge>
+  );
+}
+
+function ScopeBadge({ children, muted = false }) {
+  return (
+    <Badge tone={muted ? "neutral" : "brand"} size="sm">
+      {children}
+    </Badge>
   );
 }
 
 function RuntimeRow({ ready, label, description }) {
+  const tone = ready ? "success" : "warning";
+
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-line-soft py-4 last:border-b-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           {ready ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={2.1} />
           ) : (
-            <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
+            <ShieldAlert className="h-4 w-4 shrink-0 text-warning" strokeWidth={2.1} />
           )}
 
-          <div className="truncate text-[14px] font-medium text-text">
+          <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {label}
           </div>
         </div>
 
         {description ? (
-          <div className="mt-1 pl-6 text-[13px] leading-6 text-text-muted">
+          <div className="mt-1 pl-6 text-[13px] font-medium leading-6 text-text-muted">
             {description}
           </div>
         ) : null}
       </div>
 
-      <div
-        className={cx(
-          "rounded-pill border px-2.5 py-1 text-[11px] font-medium",
-          ready
-            ? "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
-            : "border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning"
-        )}
-      >
+      <Badge tone={tone} size="sm">
+        <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
         {ready ? "Ready" : "Blocked"}
-      </div>
+      </Badge>
     </div>
   );
 }
 
 function DataRow({ label, value }) {
-  return <PropertyRow label={label} value={value || "Not available"} labelWidth="150px" />;
-}
-
-function ScopePill({ children, muted = false }) {
   return (
-    <span
-      className={cx(
-        "inline-flex items-center rounded-pill border px-2.5 py-1 text-[11px] font-medium",
-        muted
-          ? "border-line bg-surface-subtle text-text-muted"
-          : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
-      )}
-    >
-      {children}
-    </span>
+    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-b border-line-soft py-3 last:border-b-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+        {label}
+      </div>
+
+      <div
+        title={s(value)}
+        className="min-w-0 break-words text-[13px] font-medium leading-6 text-text"
+      >
+        {s(value, "Not available")}
+      </div>
+    </div>
   );
 }
 
@@ -281,65 +301,52 @@ function PendingSelectionPanel({
   if (pendingSelection?.required !== true || !candidates.length) return null;
 
   return (
-    <SectionBlock
+    <SectionCard
+      tone="warning"
       eyebrow="Account selection"
-      title="Choose which Instagram Business account belongs to this tenant."
-      description="The tenant is still not connected. Final binding only happens after you choose one account from the Meta callback results."
+      title="Choose the Instagram account for this tenant."
+      description="The tenant is not connected yet. Final binding only happens after one account is selected from the Meta callback results."
     >
-      <div className="text-[12px] leading-6 text-text-muted">
-        Selection session expires at:{" "}
-        {s(pendingSelection?.expiresAt, "Not available")}
+      <div className="text-[12.5px] font-medium leading-6 text-text-muted">
+        Selection session expires at {s(pendingSelection?.expiresAt, "Not available")}.
       </div>
 
       <div className="mt-4 space-y-3">
         {candidates.map((candidate) => {
-          const isSelecting = selectingCandidateId === s(candidate?.id);
+          const candidateId = s(candidate?.id);
+          const isSelecting = selectingCandidateId === candidateId;
 
           return (
-            <div
-              key={s(candidate?.id)}
-              className="rounded-panel border border-line bg-surface px-4 py-4"
-            >
-              <div className="text-[16px] font-semibold text-text">
-                {s(candidate?.displayName, "Instagram")}
-              </div>
+            <Card key={candidateId} padded="sm" variant="subtle">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                    {s(candidate?.displayName, "Instagram")}
+                  </div>
 
-              <div className="mt-3">
-                <DataRow
-                  label="Page"
-                  value={s(candidate?.pageName, "Not available")}
-                />
-                <DataRow
-                  label="Handle"
-                  value={s(candidate?.igUsername, "Not available")}
-                />
-                <DataRow
-                  label="Instagram user id"
-                  value={s(candidate?.igUserId, "Not available")}
-                />
-              </div>
+                  <div className="mt-3">
+                    <DataRow label="Page" value={s(candidate?.pageName, "Not available")} />
+                    <DataRow label="Handle" value={s(candidate?.igUsername, "Not available")} />
+                    <DataRow label="Instagram user id" value={s(candidate?.igUserId, "Not available")} />
+                  </div>
+                </div>
 
-              <div className="mt-4">
-                <ChannelActionButton
+                <Button
+                  type="button"
                   fullWidth
-                  showArrow={false}
-                  onClick={() => onSelect?.(candidate)}
-                  isLoading={isLoading && isSelecting}
+                  size="sm"
+                  loading={isLoading && isSelecting}
                   disabled={isLoading}
-                  ariaLabel={`Select ${s(
-                    candidate?.displayName,
-                    "Instagram"
-                  )}`}
-                  className="!h-8 !text-[11px]"
+                  onClick={() => onSelect?.(candidate)}
                 >
                   Select this account
-                </ChannelActionButton>
+                </Button>
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>
-    </SectionBlock>
+    </SectionCard>
   );
 }
 
@@ -347,32 +354,42 @@ function BlockerList({ items = [] }) {
   if (!items.length) return null;
 
   return (
-    <SectionBlock eyebrow="Blockers" last>
+    <SectionCard tone="warning" eyebrow="Blockers" title="Needs attention">
       <div className="space-y-3">
         {items.map((item, index) => (
-          <div
+          <Card
             key={`${s(item?.reasonCode) || "blocker"}-${index}`}
-            className="rounded-panel border border-[rgba(var(--color-warning),0.18)] bg-warning-soft px-4 py-3"
+            padded="sm"
+            tone="warning"
+            variant="subtle"
           >
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+                strokeWidth={2.1}
+              />
+
               <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-text">
+                <div className="text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
                   {s(item?.title, "Runtime blocker")}
                 </div>
-                <div className="mt-1 text-[12px] leading-6 text-text-muted">
-                  {s(item?.subtitle || item?.message || item?.description)}
+
+                <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                  {s(
+                    item?.subtitle || item?.message || item?.description,
+                    "Review this blocker before treating the channel as ready."
+                  )}
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
-    </SectionBlock>
+    </SectionCard>
   );
 }
 
-function TelegramSplitAction({
+function TelegramActionGroup({
   connectDisabled = false,
   connectLoading = false,
   createDisabled = false,
@@ -380,42 +397,39 @@ function TelegramSplitAction({
   onCreate,
 }) {
   return (
-    <div className="overflow-hidden rounded-panel border border-line bg-surface">
-      <div className="grid grid-cols-2">
-        <button
-          type="button"
-          onClick={onConnect}
-          disabled={connectDisabled || connectLoading}
-          className={cx(
-            "inline-flex h-9 items-center justify-center px-3 text-[12px] font-medium transition-colors",
-            "border-r border-line",
-            connectDisabled || connectLoading
-              ? "cursor-not-allowed bg-surface-subtle text-text-subtle"
-              : "bg-brand text-white hover:bg-brand-strong"
-          )}
-        >
-          {connectLoading ? "Connecting..." : "Connect with token"}
-        </button>
+    <div className="grid gap-2 sm:grid-cols-2">
+      <Button
+        type="button"
+        size="sm"
+        fullWidth
+        loading={connectLoading}
+        disabled={connectDisabled || connectLoading}
+        onClick={onConnect}
+      >
+        {connectLoading ? "Connecting..." : "Connect with token"}
+      </Button>
 
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={createDisabled || connectLoading}
-          className={cx(
-            "inline-flex h-9 items-center justify-center px-3 text-[12px] font-medium transition-colors",
-            createDisabled || connectLoading
-              ? "cursor-not-allowed bg-surface-subtle text-text-subtle"
-              : "bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
-          )}
-        >
-          Create in BotFather
-        </button>
-      </div>
+      <Button
+        type="button"
+        size="sm"
+        fullWidth
+        variant="secondary"
+        disabled={createDisabled || connectLoading}
+        onClick={onCreate}
+        rightIcon={<ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />}
+      >
+        Create in BotFather
+      </Button>
     </div>
   );
 }
 
-function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigate }) {
+function StandardChannelDetailDrawer({
+  channel,
+  open = false,
+  onClose,
+  onNavigate,
+}) {
   const isInstagram = isInstagramChannel(channel);
   const isTelegram = isTelegramChannel(channel);
   const queryClient = useQueryClient();
@@ -426,6 +440,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const [selectingCandidateId, setSelectingCandidateId] = useState("");
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramFeedback, setTelegramFeedback] = useState(null);
+
   const metaStatusQueryKey = buildWorkspaceScopedQueryKey(
     ["meta-channel-status"],
     workspace.tenantKey
@@ -464,9 +479,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const disconnectMutation = useMutation({
     mutationFn: disconnectMetaChannel,
     async onSuccess() {
-      await queryClient.invalidateQueries({
-        queryKey: metaStatusQueryKey,
-      });
+      await queryClient.invalidateQueries({ queryKey: metaStatusQueryKey });
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
         reason: "meta-disconnected",
@@ -485,13 +498,14 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       nextParams.set("section", "channels");
       nextParams.set("channel", "instagram");
       setSearchParams(nextParams);
-      await queryClient.invalidateQueries({
-        queryKey: metaStatusQueryKey,
-      });
+
+      await queryClient.invalidateQueries({ queryKey: metaStatusQueryKey });
+
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
         reason: "meta-selected",
       });
+
       setSelectingCandidateId("");
     },
     onError() {
@@ -505,12 +519,12 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       setTelegramFeedback({
         tone: "success",
         message:
-          "Telegram connected successfully. The bot token was validated and the tenant webhook state below reflects the latest backend truth.",
+          "Telegram connected successfully. The bot token was validated and the webhook state below reflects the latest backend truth.",
       });
       setTelegramBotToken("");
-      await queryClient.invalidateQueries({
-        queryKey: telegramStatusQueryKey,
-      });
+
+      await queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey });
+
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
         reason: "telegram-connected",
@@ -527,9 +541,9 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
           "Telegram was disconnected. The stored bot token and webhook secrets were removed for this tenant.",
       });
       setTelegramBotToken("");
-      await queryClient.invalidateQueries({
-        queryKey: telegramStatusQueryKey,
-      });
+
+      await queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey });
+
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
         reason: "telegram-disconnected",
@@ -558,9 +572,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
     if (!botToken) return;
 
     setTelegramFeedback(null);
-    telegramConnectMutation.mutate({
-      botToken,
-    });
+    telegramConnectMutation.mutate({ botToken });
   }
 
   function handleTelegramCreate() {
@@ -571,7 +583,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
     setTelegramFeedback({
       tone: "warning",
       message:
-        "BotFather opened. Create the bot there, copy the token, then paste it here and use Connect with token.",
+        "BotFather opened. Create the bot there, copy the token, then paste it here and connect with token.",
     });
   }
 
@@ -588,9 +600,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
 
     if (!isInstagram) return;
 
-    if (metaStatusQuery.data?.pendingSelection?.required === true) {
-      return;
-    }
+    if (metaStatusQuery.data?.pendingSelection?.required === true) return;
 
     if (s(metaStatusQuery.data?.state) === "connected") {
       onNavigate?.("/inbox");
@@ -598,6 +608,18 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
     }
 
     connectMutation.mutate();
+  }
+
+  function handleCandidateSelect(candidate) {
+    const selectionToken = s(pendingSelection?.selectionToken);
+    const candidateId = s(candidate?.id);
+    if (!selectionToken || !candidateId) return;
+
+    setSelectingCandidateId(candidateId);
+    selectionMutation.mutate({
+      selectionToken,
+      candidateId,
+    });
   }
 
   const feedback = {
@@ -621,8 +643,8 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const effectiveStatus = isInstagram
     ? s(metaStatusQuery.data?.state || channel?.status || "ready")
     : isTelegram
-    ? s(telegramStatusQuery.data?.state || channel?.status || "not_connected")
-    : s(channel?.status || "phase2");
+      ? s(telegramStatusQuery.data?.state || channel?.status || "not_connected")
+      : s(channel?.status || "phase2");
 
   const instagramCopy = buildInstagramStateCopy(metaStatusQuery.data || {});
   const telegramCopy = buildTelegramStateCopy(telegramStatusQuery.data || {});
@@ -636,21 +658,25 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const attentionItems = arr(metaStatusQuery.data?.attention?.items);
   const userToken = metaStatusQuery.data?.lifecycle?.userToken || {};
   const capabilities = arr(channel?.capabilities);
+
   const showReconnectButton =
     isInstagram &&
     s(metaStatusQuery.data?.state) === "connected" &&
     metaStatusQuery.data?.actions?.reconnectAvailable === true &&
     metaStatusQuery.data?.actions?.reconnectRecommended === true;
+
   const telegramRequiresTokenInput =
     s(telegramStatusQuery.data?.state) !== "connected";
+
   const telegramConnectAllowed =
     telegramStatusQuery.data?.actions?.connectAvailable !== false ||
     telegramStatusQuery.data?.actions?.reconnectAvailable === true;
+
   const activeStatusQuery = isInstagram
     ? metaStatusQuery
     : isTelegram
-    ? telegramStatusQuery
-    : null;
+      ? telegramStatusQuery
+      : null;
 
   const telegramBusy =
     telegramConnectMutation.isPending ||
@@ -660,23 +686,18 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const primaryLabel = useMemo(() => {
     if (isTelegram) {
       if (s(telegramStatusQuery.data?.state) === "connected") return "Open inbox";
-      if (s(telegramStatusQuery.data?.state) === "error")
-        return "Reconnect Telegram";
-      if (s(telegramStatusQuery.data?.state) === "disconnected")
-        return "Reconnect Telegram";
-      if (s(telegramStatusQuery.data?.state) === "connecting")
-        return "Complete Telegram setup";
+      if (s(telegramStatusQuery.data?.state) === "error") return "Reconnect Telegram";
+      if (s(telegramStatusQuery.data?.state) === "disconnected") return "Reconnect Telegram";
+      if (s(telegramStatusQuery.data?.state) === "connecting") return "Complete Telegram setup";
       return "Connect Telegram";
     }
+
     if (!isInstagram) return "Phase 2";
     if (pendingSelectionRequired) return "Choose account below";
     if (s(metaStatusQuery.data?.state) === "connected") return "Open inbox";
-    if (s(metaStatusQuery.data?.state) === "reconnect_required")
-      return "Reconnect Instagram";
-    if (s(metaStatusQuery.data?.state) === "deauthorized")
-      return "Reconnect Instagram";
-    if (s(metaStatusQuery.data?.state) === "disconnected")
-      return "Reconnect Instagram";
+    if (s(metaStatusQuery.data?.state) === "reconnect_required") return "Reconnect Instagram";
+    if (s(metaStatusQuery.data?.state) === "deauthorized") return "Reconnect Instagram";
+    if (s(metaStatusQuery.data?.state) === "disconnected") return "Reconnect Instagram";
     return "Connect Instagram";
   }, [
     isInstagram,
@@ -686,57 +707,53 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
     telegramStatusQuery.data,
   ]);
 
-  function handleCandidateSelect(candidate) {
-    const selectionToken = s(pendingSelection?.selectionToken);
-    const candidateId = s(candidate?.id);
-    if (!selectionToken || !candidateId) return;
-
-    setSelectingCandidateId(candidateId);
-    selectionMutation.mutate({
-      selectionToken,
-      candidateId,
-    });
-  }
+  const primaryDisabled =
+    (isInstagram && pendingSelectionRequired) ||
+    connectMutation.isPending ||
+    telegramBusy ||
+    (isTelegram &&
+      telegramRequiresTokenInput &&
+      (!s(telegramBotToken) || !telegramConnectAllowed));
 
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full w-full flex-col border-l border-line-soft bg-surface shadow-panel-strong"
+      className="flex h-full w-full flex-col border-l border-line-soft bg-surface shadow-panel"
     >
-      <div className="border-b border-line-soft px-6 py-5">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1">
+      <header className="shrink-0 border-b border-line-soft bg-surface px-6 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2">
           <div className="row-span-2 shrink-0 pt-0.5">
             <ChannelIcon channel={channel} size="lg" />
           </div>
 
           <div className="min-w-0 self-center">
-            <div className="truncate text-[24px] font-semibold text-text">
+            <div className="truncate text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
               {channel?.name}
             </div>
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="row-span-2 inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
+            className="row-span-2 !h-9 !w-9"
           >
-            <X className="h-4.5 w-4.5" strokeWidth={2.35} />
-          </button>
+            <X className="h-4 w-4" strokeWidth={2.2} />
+          </Button>
 
-          <div className="min-w-0 self-start pt-1">
+          <div className="min-w-0 self-start">
             <DrawerStatus status={effectiveStatus} />
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="space-y-6">
+      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto bg-surface-muted px-6 py-6">
+        <div className="space-y-4">
           {feedback.connected ? (
             <FeedbackBanner>
-              Instagram connected successfully. The tenant channel is now bound
-              to the selected account and the status below reflects the live
-              runtime state.
+              Instagram connected successfully. The tenant channel is now bound to the selected account.
             </FeedbackBanner>
           ) : null}
 
@@ -746,21 +763,14 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
             </FeedbackBanner>
           ) : null}
 
-          {pendingSelectionRequired ||
-          (feedback.selection && metaStatusQuery.isLoading) ? (
+          {pendingSelectionRequired || (feedback.selection && metaStatusQuery.isLoading) ? (
             <FeedbackBanner tone="warning">
-              Meta found more than one eligible Instagram Business or
-              Professional asset. Choose the correct account below before this
-              tenant becomes connected.
+              Meta found more than one eligible Instagram Business or Professional asset. Choose the correct account below before this tenant becomes connected.
             </FeedbackBanner>
           ) : null}
 
-          {feedback.error ? (
-            <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner>
-          ) : null}
-          {metaActionError ? (
-            <FeedbackBanner tone="danger">{metaActionError}</FeedbackBanner>
-          ) : null}
+          {feedback.error ? <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner> : null}
+          {metaActionError ? <FeedbackBanner tone="danger">{metaActionError}</FeedbackBanner> : null}
           {isTelegram && telegramActionError ? (
             <FeedbackBanner tone="danger">{telegramActionError}</FeedbackBanner>
           ) : null}
@@ -770,141 +780,122 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
               key={`${s(item?.reasonCode) || "attention"}-${index}`}
               tone="warning"
             >
-              <span className="font-semibold">
-                {s(item?.title, "Reconnect recommended")}
-              </span>{" "}
-              {s(item?.subtitle)}
+              {s(item?.title, "Reconnect recommended")} {s(item?.subtitle)}
             </FeedbackBanner>
           ))}
 
-          <SectionBlock
+          <SectionCard
             eyebrow="Summary"
             title={
               isInstagram
                 ? instagramCopy.title
                 : isTelegram
-                ? telegramCopy.title
-                : channel?.detailSummary
+                  ? telegramCopy.title
+                  : channel?.detailSummary
             }
             description={
               isInstagram
                 ? instagramCopy.body
                 : isTelegram
-                ? telegramCopy.body
-                : channel?.detailNote
+                  ? telegramCopy.body
+                  : channel?.detailNote
             }
           >
             {capabilities.length ? (
               <div className="flex flex-wrap gap-2">
                 {capabilities.map((capability) => (
-                  <CapabilityPill key={capability}>{capability}</CapabilityPill>
+                  <CapabilityBadge key={capability}>{capability}</CapabilityBadge>
                 ))}
               </div>
             ) : null}
-          </SectionBlock>
+          </SectionCard>
 
           {isInstagram ? (
             <>
-              <SectionBlock eyebrow="Runtime">
-                <div className="space-y-0">
-                  <RuntimeRow
-                    ready={metaStatusQuery.data?.runtime?.webhookReady === true}
-                    label="Webhook intake"
-                    description="Inbound events for this tenant."
-                  />
-                  <RuntimeRow
-                    ready={
-                      metaStatusQuery.data?.runtime?.deliveryReady === true
-                    }
-                    label="AI reply delivery"
-                    description="Outbound DM delivery path."
-                  />
-                </div>
+              <SectionCard eyebrow="Runtime" title="Live runtime checks">
+                <RuntimeRow
+                  ready={metaStatusQuery.data?.runtime?.webhookReady === true}
+                  label="Webhook intake"
+                  description="Inbound events for this tenant."
+                />
 
-                <div className="mt-4 text-[12px] leading-6 text-text-muted">
+                <RuntimeRow
+                  ready={metaStatusQuery.data?.runtime?.deliveryReady === true}
+                  label="AI reply delivery"
+                  description="Outbound DM delivery path."
+                />
+
+                <div className="mt-4 text-[12.5px] font-medium leading-6 text-text-muted">
                   {metaStatusQuery.isLoading
                     ? "Loading tenant runtime state..."
-                    : s(
-                        metaStatusQuery.data?.readiness?.message,
-                        "Runtime state unavailable."
-                      )}
+                    : s(metaStatusQuery.data?.readiness?.message, "Runtime state unavailable.")}
                 </div>
-              </SectionBlock>
+              </SectionCard>
 
-              <SectionBlock eyebrow="Connected account">
-                <div className="space-y-0">
-                  <DataRow
-                    label="Display"
-                    value={s(
-                      metaStatusQuery.data?.account?.displayName,
-                      "Not connected"
-                    )}
-                  />
-                  <DataRow
-                    label="Instagram handle"
-                    value={s(
-                      metaStatusQuery.data?.account?.username,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Instagram user id"
-                    value={s(
-                      metaStatusQuery.data?.account?.igUserId,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Meta app user id"
-                    value={s(
-                      metaStatusQuery.data?.account?.metaUserId,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="User token status"
-                    value={buildUserTokenStatusCopy(userToken)}
-                  />
-                  <DataRow
-                    label="Token expires"
-                    value={s(
-                      userToken?.expiresAt ||
-                        metaStatusQuery.data?.lifecycle?.userTokenExpiresAt,
-                      "Not available"
-                    )}
-                  />
-                </div>
-              </SectionBlock>
+              <SectionCard eyebrow="Connected account" title="Instagram account">
+                <DataRow
+                  label="Display"
+                  value={s(metaStatusQuery.data?.account?.displayName, "Not connected")}
+                />
+                <DataRow
+                  label="Instagram handle"
+                  value={s(metaStatusQuery.data?.account?.username, "Not available")}
+                />
+                <DataRow
+                  label="Instagram user id"
+                  value={s(metaStatusQuery.data?.account?.igUserId, "Not available")}
+                />
+                <DataRow
+                  label="Meta app user id"
+                  value={s(metaStatusQuery.data?.account?.metaUserId, "Not available")}
+                />
+                <DataRow label="User token status" value={buildUserTokenStatusCopy(userToken)} />
+                <DataRow
+                  label="Token expires"
+                  value={s(
+                    userToken?.expiresAt ||
+                      metaStatusQuery.data?.lifecycle?.userTokenExpiresAt,
+                    "Not available"
+                  )}
+                />
+              </SectionCard>
 
-              <SectionBlock
-                eyebrow="Review-aligned permission model"
+              <SectionCard
+                eyebrow="Review-aligned permissions"
+                title="Permission model"
                 description={s(
                   metaStatusQuery.data?.review?.story,
                   "Businesses connect their own Instagram account and the platform manages inbound customer conversations."
                 )}
               >
-                <div className="flex flex-wrap gap-2">
-                  {reviewScopes.map((scope) => (
-                    <ScopePill key={scope}>{scope}</ScopePill>
-                  ))}
-                </div>
+                {reviewScopes.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {reviewScopes.map((scope) => (
+                      <ScopeBadge key={scope}>{scope}</ScopeBadge>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[13px] font-medium leading-6 text-text-muted">
+                    No requested scopes were returned.
+                  </div>
+                )}
 
                 {reviewExcludedScopes.length ? (
                   <>
-                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-                      Explicitly out of launch scope
+                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                      Out of launch scope
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {reviewExcludedScopes.map((scope) => (
-                        <ScopePill key={scope} muted>
+                        <ScopeBadge key={scope} muted>
                           {scope}
-                        </ScopePill>
+                        </ScopeBadge>
                       ))}
                     </div>
                   </>
                 ) : null}
-              </SectionBlock>
+              </SectionCard>
 
               <PendingSelectionPanel
                 pendingSelection={pendingSelection}
@@ -918,10 +909,10 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
           ) : isTelegram ? (
             <>
               {telegramRequiresTokenInput ? (
-                <SectionBlock
+                <SectionCard
                   eyebrow="Connect"
-                  title="Choose how you want to connect Telegram."
-                  description="Use an existing bot token or create a new bot in BotFather first. Once you paste the token here, the backend validates the bot and verifies the tenant webhook before marking it live."
+                  title="Connect Telegram"
+                  description="Use an existing bot token or create a new bot in BotFather. The backend validates the bot and verifies the tenant webhook before marking it live."
                 >
                   <Input
                     value={telegramBotToken}
@@ -934,36 +925,40 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                     aria-label="Telegram bot token"
                   />
 
-                  <div className="mt-3 text-[12px] leading-6 text-text-muted">
-                    Telegram MVP is private text only. Group chats, media, read
-                    receipts, and unsupported control actions stay fail-closed
-                    instead of pretending they are available.
+                  <div className="mt-3 text-[12.5px] font-medium leading-6 text-text-muted">
+                    Telegram MVP is private text only. Group chats, media, read receipts, and unsupported control actions stay fail-closed.
                   </div>
-                </SectionBlock>
+
+                  <div className="mt-4">
+                    <TelegramActionGroup
+                      connectDisabled={!s(telegramBotToken) || !telegramConnectAllowed}
+                      connectLoading={telegramConnectMutation.isPending}
+                      createDisabled={false}
+                      onConnect={handleTelegramConnect}
+                      onCreate={handleTelegramCreate}
+                    />
+                  </div>
+                </SectionCard>
               ) : null}
 
-              <SectionBlock eyebrow="Runtime">
-                <div className="space-y-0">
-                  <RuntimeRow
-                    ready={telegramStatusQuery.data?.account?.verified === true}
-                    label="Bot authentication"
-                    description="Stored tenant bot token still validates against Telegram."
-                  />
-                  <RuntimeRow
-                    ready={telegramStatusQuery.data?.webhook?.verified === true}
-                    label="Webhook intake"
-                    description="Telegram is pointed at the tenant-bound webhook route with secret verification enabled."
-                  />
-                  <RuntimeRow
-                    ready={
-                      telegramStatusQuery.data?.runtime?.deliveryReady === true
-                    }
-                    label="AI reply delivery"
-                    description="Inbound Telegram chat can reuse the shared inbox runtime and outbound reply path."
-                  />
-                </div>
+              <SectionCard eyebrow="Runtime" title="Live runtime checks">
+                <RuntimeRow
+                  ready={telegramStatusQuery.data?.account?.verified === true}
+                  label="Bot authentication"
+                  description="Stored tenant bot token still validates against Telegram."
+                />
+                <RuntimeRow
+                  ready={telegramStatusQuery.data?.webhook?.verified === true}
+                  label="Webhook intake"
+                  description="Telegram is pointed at the tenant-bound webhook route with secret verification enabled."
+                />
+                <RuntimeRow
+                  ready={telegramStatusQuery.data?.runtime?.deliveryReady === true}
+                  label="AI reply delivery"
+                  description="Outbound replies are allowed only when runtime and webhook state are ready."
+                />
 
-                <div className="mt-4 text-[12px] leading-6 text-text-muted">
+                <div className="mt-4 text-[12.5px] font-medium leading-6 text-text-muted">
                   {telegramStatusQuery.isLoading
                     ? "Loading Telegram runtime state..."
                     : s(
@@ -971,224 +966,123 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                         "Telegram runtime state unavailable."
                       )}
                 </div>
-              </SectionBlock>
+              </SectionCard>
 
-              <SectionBlock eyebrow="Connected bot">
-                <div className="space-y-0">
-                  <DataRow
-                    label="Display"
-                    value={s(
-                      telegramStatusQuery.data?.account?.displayName,
-                      "Not connected"
-                    )}
-                  />
-                  <DataRow
-                    label="Username"
-                    value={
-                      s(telegramStatusQuery.data?.account?.botUsername)
-                        ? `@${s(
-                            telegramStatusQuery.data?.account?.botUsername
-                          )}`
-                        : "Not available"
-                    }
-                  />
-                  <DataRow
-                    label="Bot user id"
-                    value={s(
-                      telegramStatusQuery.data?.account?.botUserId,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Token"
-                    value={s(
-                      telegramStatusQuery.data?.account?.botTokenMasked,
-                      "Not stored"
-                    )}
-                  />
-                  <DataRow
-                    label="Connected at"
-                    value={s(
-                      telegramStatusQuery.data?.lifecycle?.connectedAt,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Last verified"
-                    value={s(
-                      telegramStatusQuery.data?.lifecycle?.lastVerifiedAt,
-                      "Not available"
-                    )}
-                  />
-                </div>
-              </SectionBlock>
-
-              <SectionBlock eyebrow="Webhook">
-                <div className="space-y-0">
-                  <DataRow
-                    label="Expected URL"
-                    value={s(
-                      telegramStatusQuery.data?.webhook?.expectedUrl,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Actual URL"
-                    value={s(
-                      telegramStatusQuery.data?.webhook?.actualUrl,
-                      "Not available"
-                    )}
-                  />
-                  <DataRow
-                    label="Secret header"
-                    value={
-                      telegramStatusQuery.data?.webhook
-                        ?.secretHeaderConfigured === true
-                        ? "Configured"
-                        : "Missing"
-                    }
-                  />
-                  <DataRow
-                    label="Pending updates"
-                    value={String(
-                      telegramStatusQuery.data?.webhook?.pendingUpdateCount ?? 0
-                    )}
-                  />
-                  <DataRow
-                    label="Last error"
-                    value={s(
-                      telegramStatusQuery.data?.webhook?.lastErrorMessage,
-                      "None"
-                    )}
-                  />
-                </div>
-              </SectionBlock>
+              <SectionCard eyebrow="Bot account" title="Telegram bot">
+                <DataRow
+                  label="Bot username"
+                  value={s(
+                    telegramStatusQuery.data?.account?.username ||
+                      telegramStatusQuery.data?.bot?.username,
+                    "Not available"
+                  )}
+                />
+                <DataRow
+                  label="Bot id"
+                  value={s(
+                    telegramStatusQuery.data?.account?.botId ||
+                      telegramStatusQuery.data?.bot?.id,
+                    "Not available"
+                  )}
+                />
+                <DataRow
+                  label="Webhook"
+                  value={s(
+                    telegramStatusQuery.data?.webhook?.url ||
+                      telegramStatusQuery.data?.webhookUrl,
+                    "Not available"
+                  )}
+                />
+                <DataRow
+                  label="Last checked"
+                  value={s(
+                    telegramStatusQuery.data?.checkedAt ||
+                      telegramStatusQuery.data?.updatedAt,
+                    "Not available"
+                  )}
+                />
+              </SectionCard>
 
               <BlockerList items={blockers} />
             </>
           ) : (
-            <SectionBlock
-              eyebrow="Availability"
-              description="This connector is intentionally marked as phase 2. It stays visible as roadmap context, but it is not part of the DM-first launch path and does not expose a self-serve connect flow."
-              last
+            <SectionCard
+              eyebrow="Coming next"
+              title={channel?.detailSummary || "Connector detail"}
+              description={channel?.detailNote || "This channel is not active in the current launch lane."}
             />
           )}
         </div>
       </div>
 
-      <div className="border-t border-line-soft bg-surface px-6 py-4">
-        <div className="space-y-3">
-          {isTelegram && telegramRequiresTokenInput ? (
-            <TelegramSplitAction
-              onConnect={handleTelegramConnect}
-              onCreate={handleTelegramCreate}
-              connectDisabled={!telegramConnectAllowed || !s(telegramBotToken)}
-              connectLoading={telegramConnectMutation.isPending}
-              createDisabled={telegramDisconnectMutation.isPending}
-            />
-          ) : (
-            <ChannelActionButton
-              fullWidth
-              onClick={handlePrimaryAction}
-              isLoading={
-                isTelegram
-                  ? telegramBusy
-                  : connectMutation.isPending ||
-                    selectionMutation.isPending ||
-                    metaStatusQuery.isFetching
-              }
-              disabled={
-                (!isInstagram && !isTelegram) ||
-                (isInstagram &&
-                  (connectMutation.isPending ||
-                    selectionMutation.isPending ||
-                    pendingSelectionRequired ||
-                    (s(metaStatusQuery.data?.state) !== "connected" &&
-                      metaStatusQuery.data?.actions?.connectAvailable ===
-                        false))) ||
-                (isTelegram &&
-                  (telegramBusy ||
-                    (telegramRequiresTokenInput &&
-                      (!telegramConnectAllowed || !s(telegramBotToken)))))
-              }
-              className="!h-9 !text-[12px]"
-            >
-              {primaryLabel}
-            </ChannelActionButton>
-          )}
+      <footer className="shrink-0 border-t border-line-soft bg-surface px-6 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            fullWidth
+            loading={connectMutation.isPending || telegramConnectMutation.isPending}
+            disabled={primaryDisabled}
+            onClick={handlePrimaryAction}
+          >
+            {primaryLabel}
+          </Button>
 
-          <div className="grid grid-cols-2 gap-3">
-            {isInstagram ? (
-              <ChannelActionButton
-                quiet
-                fullWidth
-                showArrow={false}
-                onClick={() => disconnectMutation.mutate()}
-                isLoading={disconnectMutation.isPending}
-                disabled={!metaStatusQuery.data?.actions?.disconnectAvailable}
-                className="!h-8 !text-[11px]"
-              >
-                {pendingSelectionRequired ? "Cancel selection" : "Disconnect"}
-              </ChannelActionButton>
-            ) : isTelegram ? (
-              <ChannelActionButton
-                quiet
-                fullWidth
-                showArrow={false}
-                onClick={() => telegramDisconnectMutation.mutate()}
-                isLoading={telegramDisconnectMutation.isPending}
-                disabled={!telegramStatusQuery.data?.actions?.disconnectAvailable}
-                className="!h-8 !text-[11px]"
-              >
-                Disconnect
-              </ChannelActionButton>
-            ) : (
-              <div />
-            )}
-
-            <ChannelActionButton
-              quiet
-              fullWidth
-              showArrow={false}
-              onClick={() => activeStatusQuery?.refetch?.()}
-              disabled={!isInstagram && !isTelegram}
-              isLoading={activeStatusQuery?.isFetching}
-              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.2} />}
-              className="!h-8 !text-[11px]"
-            >
-              Refresh
-            </ChannelActionButton>
-          </div>
-
-          {showReconnectButton ? (
-            <ChannelActionButton
-              quiet
-              fullWidth
-              showArrow={false}
+          {isInstagram && s(metaStatusQuery.data?.state) === "connected" ? (
+            <Button
+              type="button"
+              variant={showReconnectButton ? "primary" : "secondary"}
+              loading={connectMutation.isPending}
               onClick={() => connectMutation.mutate()}
-              isLoading={connectMutation.isPending}
-              disabled={connectMutation.isPending || selectionMutation.isPending}
-              leftIcon={<ChevronRight className="h-4 w-4" strokeWidth={2.25} />}
-              className="!h-8 !text-[11px]"
+              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
             >
               Reconnect
-            </ChannelActionButton>
+            </Button>
+          ) : null}
+
+          {isInstagram && s(metaStatusQuery.data?.state) === "connected" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              loading={disconnectMutation.isPending}
+              disabled={disconnectMutation.isPending}
+              onClick={() => disconnectMutation.mutate()}
+            >
+              Disconnect
+            </Button>
+          ) : null}
+
+          {isTelegram && s(telegramStatusQuery.data?.state) === "connected" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              loading={telegramDisconnectMutation.isPending}
+              disabled={telegramDisconnectMutation.isPending}
+              onClick={() => telegramDisconnectMutation.mutate()}
+            >
+              Disconnect
+            </Button>
+          ) : null}
+
+          {activeStatusQuery ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={activeStatusQuery.isFetching}
+              onClick={() => activeStatusQuery.refetch()}
+              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Refresh
+            </Button>
           ) : null}
         </div>
-      </div>
+      </footer>
     </aside>
   );
 }
 
 export default function ChannelDetailDrawer(props) {
   if (isWebsiteChannel(props.channel)) {
-    return (
-      <WebsiteWidgetDetailDrawer
-        channel={props.channel}
-        open={props.open}
-        onClose={props.onClose}
-      />
-    );
+    return <WebsiteWidgetDetailDrawer {...props} />;
   }
 
   return <StandardChannelDetailDrawer {...props} />;

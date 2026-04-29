@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Building2,
+  Check,
   Eye,
   EyeOff,
   Lock,
@@ -18,6 +19,7 @@ import {
 import { cx } from "../lib/cx.js";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
+import Card from "../components/ui/Card.jsx";
 import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
@@ -77,6 +79,7 @@ function normalizeTenantKey(value) {
 
 function isServiceUnavailableError(error) {
   const message = s(error?.message).toLowerCase();
+
   return (
     message.includes("failed to fetch") ||
     message.includes("load failed") ||
@@ -123,42 +126,62 @@ function normalizeAccountChoices(error) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
+function SelectionMark({ selected = false }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        "inline-flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[7px] border",
+        "transition-[background-color,border-color,color] duration-base ease-premium",
+        selected
+          ? "border-brand bg-brand text-white"
+          : "border-line bg-surface text-transparent"
+      )}
+    >
+      <Check
+        className={cx(
+          "h-[12px] w-[12px] transition-opacity duration-base ease-premium",
+          selected ? "opacity-100" : "opacity-0"
+        )}
+        strokeWidth={3}
+      />
+    </span>
+  );
+}
+
 function WorkspaceChoiceCard({ account, selected, onSelect }) {
   const token = s(account?.selectionToken);
   const companyName =
     s(account?.companyName) || s(account?.tenantKey) || "Workspace";
   const role = s(account?.role || "member");
+  const tenantKey = s(account?.tenantKey);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(token)}
-      className={cx(
-        "flex w-full items-center justify-between rounded-[15px] border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
-        selected
-          ? "border-[rgba(var(--color-brand),0.26)] bg-brand-soft shadow-[0_18px_40px_-34px_rgba(46,96,255,0.26)]"
-          : "border-line-soft bg-white shadow-[0_1px_0_rgba(255,255,255,0.96)_inset] hover:border-line"
-      )}
+      className="block w-full text-left"
     >
-      <div className="min-w-0">
-        <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
-          {companyName}
-        </div>
-        <div className="mt-1 text-[13px] font-medium text-text-muted">
-          {s(account?.tenantKey)} · {role}
-        </div>
-      </div>
-
-      <span
-        className={cx(
-          "relative h-[18px] w-[18px] rounded-full border transition-colors",
-          selected ? "border-brand bg-brand" : "border-line-strong bg-white"
-        )}
+      <Card
+        padded="sm"
+        interactive
+        tone={selected ? "brand" : "neutral"}
+        className={cx(selected && "bg-brand-soft/55")}
       >
-        {selected ? (
-          <span className="absolute inset-[4px] rounded-full bg-white" />
-        ) : null}
-      </span>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              {companyName}
+            </div>
+
+            <div className="mt-1 truncate text-[13px] font-medium leading-5 text-text-muted">
+              {tenantKey ? `${tenantKey} · ${role}` : role}
+            </div>
+          </div>
+
+          <SelectionMark selected={selected} />
+        </div>
+      </Card>
     </button>
   );
 }
@@ -305,7 +328,7 @@ export default function Login() {
     <div className="auth-page min-h-screen bg-white text-text">
       <main className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col justify-center px-6 py-10">
         <section className="w-full">
-          <h1 className="text-center text-[46px] font-semibold leading-[0.95] tracking-[-0.075em] text-text md:text-[54px]">
+          <h1 className="text-center font-display text-[46px] font-semibold leading-[0.95] tracking-[var(--tracking-tight-xl)] text-text md:text-[54px]">
             {isSignupMode ? "Create workspace" : "Sign in"}
           </h1>
 
@@ -380,11 +403,12 @@ export default function Login() {
             ) : null}
 
             {accountChoices.length ? (
-              <div className="space-y-3 rounded-[17px] border border-line-soft bg-white p-4 shadow-[0_1px_0_rgba(255,255,255,0.96)_inset,0_18px_46px_-40px_rgba(15,23,42,0.26)]">
+              <Card padded="sm" className="space-y-3">
                 <div>
-                  <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+                  <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
                     Choose workspace
                   </div>
+
                   <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
                     We found more than one workspace for this email.
                   </div>
@@ -403,7 +427,7 @@ export default function Login() {
                     />
                   ))}
                 </div>
-              </div>
+              </Card>
             ) : null}
 
             <Button
@@ -412,7 +436,9 @@ export default function Login() {
               fullWidth
               disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
               loading={loading}
-              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
+              rightIcon={
+                !loading ? <ArrowRight className="h-4 w-4" strokeWidth={2.2} /> : undefined
+              }
             >
               {isSignupMode
                 ? loading
@@ -427,7 +453,7 @@ export default function Login() {
                     : "Sign in"}
             </Button>
 
-            <div className="pt-2 text-center text-[16px] font-medium tracking-[-0.018em] text-text-muted">
+            <div className="pt-2 text-center text-[16px] font-medium tracking-[var(--tracking-tight-sm)] text-text-muted">
               {isSignupMode ? "Already have an account?" : "New workspace?"}{" "}
               <button
                 type="button"
@@ -443,4 +469,3 @@ export default function Login() {
     </div>
   );
 }
-

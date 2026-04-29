@@ -193,6 +193,7 @@ export default function Inbox() {
     getAppSessionContext()
       .then((next) => {
         if (!alive) return;
+
         setOperatorState({
           tenantKey: workspace.tenantKey,
           name: String(next?.actorName || "operator").trim() || "operator",
@@ -200,6 +201,7 @@ export default function Inbox() {
       })
       .catch(() => {
         if (!alive) return;
+
         setOperatorState({
           tenantKey: workspace.tenantKey,
           name: "operator",
@@ -517,6 +519,7 @@ export default function Inbox() {
     setSearchParams(
       (prev) => {
         if (prev.get("threadId") === requestedThreadId) return prev;
+
         const next = new URLSearchParams(prev);
         next.set("threadId", requestedThreadId);
         return next;
@@ -584,81 +587,81 @@ export default function Inbox() {
 
   if (inboxInitializing) {
     return (
-      <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
+      <div className="h-full min-h-0 w-full bg-white">
         <LoadingSurface title="Loading inbox" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.94))]">
-      <div className="shrink-0 px-4 pt-0">
-        <div className="flex flex-col gap-3">
-          {surfaceNotice ? (
-            <InlineNotice
-              tone={surfaceNotice.tone}
-              title={surfaceNotice.title}
-              description={surfaceNotice.description}
-              compact
-            />
-          ) : null}
+    <div className="relative h-full min-h-0 w-full overflow-hidden bg-white">
+      {surfaceNotice || showTruthApprovalNotice ? (
+        <div className="pointer-events-none absolute left-0 right-0 top-0 z-30 px-4 pt-3">
+          <div className="pointer-events-auto flex flex-col gap-2">
+            {surfaceNotice ? (
+              <InlineNotice
+                tone={surfaceNotice.tone}
+                title={surfaceNotice.title}
+                description={surfaceNotice.description}
+                compact
+              />
+            ) : null}
 
-          {showTruthApprovalNotice ? (
-            <InlineNotice
-              tone="warning"
-              title="Truth approval required"
-              description="A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies."
-              compact
-            />
-          ) : null}
+            {showTruthApprovalNotice ? (
+              <InlineNotice
+                tone="warning"
+                title="Truth approval required"
+                description="A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies."
+                compact
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="min-h-0 flex-1 pt-0">
-        <div className="grid h-full min-h-0 grid-cols-[420px_minmax(0,1fr)] bg-transparent">
-          <div className="min-h-0 overflow-hidden border-r border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.64)]">
-            <InboxThreadListPanel
-              threadList={threadList}
-              selectedThreadId={selectedThread?.id || ""}
-              searchQuery=""
-              launchChannelConnected={hasDeliveryReadyLaunchChannel}
-            />
-          </div>
+      <div className="grid h-full min-h-0 grid-cols-[420px_minmax(0,1fr)] bg-white">
+        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-white">
+          <InboxThreadListPanel
+            threadList={threadList}
+            selectedThreadId={selectedThread?.id || ""}
+            searchQuery=""
+            launchChannelConnected={hasDeliveryReadyLaunchChannel}
+          />
+        </div>
 
-          <div className="min-h-0 overflow-hidden bg-transparent">
-            <InboxDetailPanel
-              selectedThread={selectedThread}
-              messages={visibleThreadMessages}
-              outboundAttempts={threadAttemptSurface.attempts}
-              surface={detailPanelSurface}
-              actionState={actionState}
-              markRead={markRead}
-              assignThread={assignThread}
-              activateHandoff={activateHandoff}
-              setThreadStatus={setThreadStatus}
-              onOpenDetails={() => {
-                if (selectedThread?.id) {
-                  setDetailThreadId(selectedThread.id);
-                }
-              }}
-              automationControl={inboxAutomationControl}
-              onToggleAutomation={handleToggleInboxAutonomy}
-              launchChannelConnected={hasDeliveryReadyLaunchChannel}
-              onOpenChannels={() => navigate("/channels")}
-              composer={
-                <InboxComposer
-                  embedded
-                  selectedThread={selectedThread}
-                  surface={composerSurface}
-                  actionState={actionState}
-                  replyText={replyText}
-                  setReplyText={setReplyText}
-                  onSend={handleSend}
-                  onReleaseHandoff={handleRelease}
-                />
+        <div className="min-h-0 overflow-hidden bg-white">
+          <InboxDetailPanel
+            selectedThread={selectedThread}
+            messages={visibleThreadMessages}
+            outboundAttempts={threadAttemptSurface.attempts}
+            surface={detailPanelSurface}
+            actionState={actionState}
+            markRead={markRead}
+            assignThread={assignThread}
+            activateHandoff={activateHandoff}
+            setThreadStatus={setThreadStatus}
+            onOpenDetails={() => {
+              if (selectedThread?.id) {
+                setDetailThreadId(selectedThread.id);
               }
-            />
-          </div>
+            }}
+            automationControl={inboxAutomationControl}
+            onToggleAutomation={handleToggleInboxAutonomy}
+            launchChannelConnected={hasDeliveryReadyLaunchChannel}
+            onOpenChannels={() => navigate("/channels")}
+            composer={
+              <InboxComposer
+                embedded
+                selectedThread={selectedThread}
+                surface={composerSurface}
+                actionState={actionState}
+                replyText={replyText}
+                setReplyText={setReplyText}
+                onSend={handleSend}
+                onReleaseHandoff={handleRelease}
+              />
+            }
+          />
         </div>
       </div>
 
@@ -670,6 +673,8 @@ export default function Inbox() {
           closeLabel="Close conversation details"
           panelWidthClassName="max-w-[96vw] w-[380px]"
           className="z-40"
+          backdropClassName="bg-transparent"
+          panelClassName="bg-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.28)]"
         >
           <InboxLeadPanel
             selectedThread={selectedThread}

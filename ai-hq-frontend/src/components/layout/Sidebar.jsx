@@ -2,6 +2,7 @@ import * as React from "react";
 import { Drawer } from "antd";
 import { NavLink } from "react-router-dom";
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+
 import { cx } from "../../lib/cx.js";
 import {
   PRIMARY_SECTIONS,
@@ -26,8 +27,6 @@ const NAV_ITEMS = [
   ...UTILITY_SECTIONS,
 ];
 
-const SOFT_EASE = "cubic-bezier(0.22,1,0.36,1)";
-
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
@@ -42,13 +41,9 @@ function SidebarImageIcon({ src, isActive = false }) {
         aria-hidden="true"
         draggable="false"
         className={cx(
-          "block h-[21px] w-[21px] select-none object-contain",
-          isActive ? "opacity-100" : "opacity-[0.84] group-hover:opacity-100"
+          "block h-[21px] w-[21px] select-none object-contain transition-[opacity,filter] duration-base ease-premium",
+          isActive ? "opacity-100 saturate-100" : "opacity-[0.84] saturate-[0.96] group-hover:opacity-100"
         )}
-        style={{
-          filter: isActive ? "saturate(1.04)" : "saturate(0.96)",
-          transition: `opacity 190ms ${SOFT_EASE}, filter 220ms ${SOFT_EASE}`,
-        }}
       />
     </span>
   );
@@ -61,13 +56,10 @@ function SidebarVectorIcon({ Icon, isActive = false }) {
     <span className="relative z-[2] flex h-6 w-6 shrink-0 items-center justify-center">
       <Icon
         className={cx(
-          "block h-[21px] w-[21px] shrink-0",
+          "block h-[21px] w-[21px] shrink-0 transition-colors duration-base ease-premium",
           isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
         )}
         strokeWidth={1.95}
-        style={{
-          transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
-        }}
       />
     </span>
   );
@@ -89,49 +81,34 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
     >
       {({ isActive }) => (
         <div
-          className="group relative grid h-10 items-center overflow-hidden px-[17px]"
+          className="group relative grid h-10 items-center overflow-hidden px-[17px] transition-[color,opacity] duration-base ease-premium"
           style={{
             gridTemplateColumns: collapsed ? "24px 0px" : "24px minmax(0,1fr)",
             columnGap: collapsed ? "0px" : "12px",
-            transition: `
-              grid-template-columns 380ms ${SOFT_EASE},
-              column-gap 380ms ${SOFT_EASE},
-              color 190ms ${SOFT_EASE},
-              opacity 190ms ${SOFT_EASE}
-            `,
+            transition:
+              "grid-template-columns var(--motion-slower) var(--motion-premium), column-gap var(--motion-slower) var(--motion-premium), color var(--motion-base) var(--motion-premium), opacity var(--motion-base) var(--motion-premium)",
           }}
         >
           <span
-            className="pointer-events-none absolute inset-y-[5px] left-0 w-[2.5px] rounded-r-full bg-brand"
+            className={cx(
+              "pointer-events-none absolute inset-y-[5px] left-0 w-[2.5px] rounded-r-full bg-brand",
+              "transition-[opacity,transform] duration-slow ease-premium",
+              isActive ? "opacity-100 translate-x-0 scale-y-100" : "opacity-0 -translate-x-0.5 scale-y-75"
+            )}
             style={{
-              opacity: isActive ? 1 : 0,
-              transform: isActive
-                ? "translateX(0) scaleY(1)"
-                : "translateX(-2px) scaleY(0.7)",
               boxShadow:
                 "0 0 0 1px rgba(59,130,246,0.06), 0 9px 18px -9px rgba(37,99,235,0.62)",
-              transition: `opacity 230ms ${SOFT_EASE}, transform 300ms ${SOFT_EASE}`,
             }}
           />
 
           <span
-            className="pointer-events-none absolute inset-y-0 left-0 w-full"
-            style={{
-              opacity: isActive ? 0.58 : 0,
-              background:
-                "linear-gradient(90deg, rgba(37,99,235,0.048) 0%, rgba(37,99,235,0.022) 34%, rgba(37,99,235,0) 78%)",
-              transition: `opacity 280ms ${SOFT_EASE}`,
-            }}
+            className={cx(
+              "pointer-events-none absolute inset-y-0 left-0 w-full bg-[linear-gradient(90deg,rgba(37,99,235,0.048)_0%,rgba(37,99,235,0.022)_34%,rgba(37,99,235,0)_78%)] transition-opacity duration-slow ease-premium",
+              isActive ? "opacity-[0.58]" : "opacity-0"
+            )}
           />
 
-          <span
-            className="pointer-events-none absolute inset-y-0 left-0 w-full opacity-0 group-hover:opacity-100"
-            style={{
-              background:
-                "linear-gradient(90deg, rgba(15,23,42,0.026) 0%, rgba(15,23,42,0.012) 34%, rgba(15,23,42,0) 76%)",
-              transition: `opacity 230ms ${SOFT_EASE}`,
-            }}
-          />
+          <span className="pointer-events-none absolute inset-y-0 left-0 w-full opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(15,23,42,0.026)_0%,rgba(15,23,42,0.012)_34%,rgba(15,23,42,0)_76%)]" />
 
           {item.iconType === "image" && item.iconSrc ? (
             <SidebarImageIcon src={item.iconSrc} isActive={isActive} />
@@ -140,25 +117,17 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           )}
 
           <div
-            className="relative z-[2] min-w-0 overflow-hidden"
-            style={{
-              opacity: collapsed ? 0 : 1,
-              transform: collapsed ? "translateX(-2px)" : "translateX(0)",
-              transition: `
-                opacity 230ms ${SOFT_EASE},
-                transform 360ms ${SOFT_EASE}
-              `,
-            }}
+            className={cx(
+              "relative z-[2] min-w-0 overflow-hidden transition-[opacity,transform] duration-slow ease-premium",
+              collapsed ? "translate-x-[-2px] opacity-0" : "translate-x-0 opacity-100"
+            )}
           >
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className={cx(
-                  "min-w-0 flex-1 truncate text-[12px] font-semibold tracking-[-0.025em]",
+                  "min-w-0 flex-1 truncate text-[12px] font-semibold tracking-[var(--tracking-tight-lg)] transition-colors duration-base ease-premium",
                   isActive ? "text-text" : "text-text-muted group-hover:text-text"
                 )}
-                style={{
-                  transition: `color 190ms ${SOFT_EASE}`,
-                }}
               >
                 {item.label}
               </span>
@@ -166,12 +135,9 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
               {badgeCount ? (
                 <span
                   className={cx(
-                    "shrink-0 text-[10px] font-semibold",
+                    "shrink-0 text-[10px] font-semibold transition-colors duration-base ease-premium",
                     isActive ? "text-brand" : "text-text-subtle"
                   )}
-                  style={{
-                    transition: `color 190ms ${SOFT_EASE}`,
-                  }}
                 >
                   {badgeCount}
                 </span>
@@ -205,23 +171,17 @@ function CollapseControl({ collapsed = false, onToggle }) {
       aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cx(
-        "group relative inline-flex h-9 items-center text-text-subtle hover:text-text",
+        "group relative inline-flex h-9 items-center text-text-subtle transition-colors duration-base ease-premium hover:text-text",
         collapsed ? "w-9 justify-center" : "gap-2 px-1"
       )}
-      style={{
-        transition: `color 190ms ${SOFT_EASE}, opacity 190ms ${SOFT_EASE}`,
-      }}
     >
       <Icon className="relative z-[1] h-[17px] w-[17px]" strokeWidth={1.95} />
 
       <span
         className={cx(
-          "relative z-[1] overflow-hidden text-[11px] font-semibold tracking-[-0.015em]",
+          "relative z-[1] overflow-hidden text-[11px] font-semibold tracking-[var(--tracking-tight-sm)] transition-[max-width,opacity] duration-slow ease-premium",
           collapsed ? "max-w-0 opacity-0" : "max-w-[108px] opacity-100"
         )}
-        style={{
-          transition: `max-width 340ms ${SOFT_EASE}, opacity 230ms ${SOFT_EASE}`,
-        }}
       >
         Collapse
       </span>
@@ -236,42 +196,15 @@ function SidebarBrandSpace() {
 function SidebarChromeLayer() {
   return (
     <>
-      <div
-        className="absolute inset-0 backdrop-blur-xl"
-        style={{ background: SHELL_CHROME_SURFACE }}
-      />
+      <div className="absolute inset-0" style={{ background: SHELL_CHROME_SURFACE }} />
 
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.5]"
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.18) 46%, rgba(226,232,240,0.22) 100%)",
-        }}
-      />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.78)_0%,rgba(255,255,255,0.18)_46%,rgba(226,232,240,0.22)_100%)] opacity-50" />
 
-      <div
-        className="pointer-events-none absolute left-0 top-0 h-full w-px opacity-70"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.9), rgba(226,232,240,0.36), rgba(255,255,255,0.82))",
-        }}
-      />
+      <div className="pointer-events-none absolute left-0 top-0 h-full w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(226,232,240,0.36),rgba(255,255,255,0.82))] opacity-70" />
 
-      <div
-        className="pointer-events-none absolute right-0 top-0 h-full w-px"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(15,23,42,0.032), rgba(15,23,42,0.092) 42%, rgba(15,23,42,0.04))",
-        }}
-      />
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-px bg-[linear-gradient(180deg,rgba(15,23,42,0.032),rgba(15,23,42,0.092)_42%,rgba(15,23,42,0.04))]" />
 
-      <div
-        className="pointer-events-none absolute right-px top-0 h-full w-px opacity-75"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,255,255,0.36), rgba(255,255,255,0.7))",
-        }}
-      />
+      <div className="pointer-events-none absolute right-px top-0 h-full w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.84),rgba(255,255,255,0.36),rgba(255,255,255,0.7))] opacity-75" />
     </>
   );
 }
@@ -292,10 +225,7 @@ function SidebarContent({
             type="button"
             onClick={onCloseMobile}
             aria-label="Close navigation"
-            className="inline-flex h-9 w-9 items-center justify-center text-text-muted hover:text-text"
-            style={{
-              transition: `color 190ms ${SOFT_EASE}`,
-            }}
+            className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
           >
             <X className="h-[18px] w-[18px]" strokeWidth={1.95} />
           </button>
@@ -327,13 +257,9 @@ function SidebarContent({
         >
           <div
             className={cx(
-              "pointer-events-none absolute top-0 h-px",
+              "pointer-events-none absolute top-0 h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.064),rgba(255,255,255,0.76),rgba(15,23,42,0))]",
               collapsed ? "left-3 right-3" : "left-4 right-4"
             )}
-            style={{
-              background:
-                "linear-gradient(90deg, rgba(15,23,42,0), rgba(15,23,42,0.064), rgba(255,255,255,0.76), rgba(15,23,42,0))",
-            }}
           />
 
           <CollapseControl collapsed={collapsed} onToggle={onToggleCollapse} />
@@ -361,7 +287,8 @@ export default function Sidebar({
           width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
           background: SHELL_CHROME_BG,
           boxShadow: SIDEBAR_EDGE_SHADOW,
-          transition: `width 380ms ${SOFT_EASE}, top 270ms ${SOFT_EASE}, height 270ms ${SOFT_EASE}`,
+          transition:
+            "width var(--motion-slower) var(--motion-premium), top var(--motion-slow) var(--motion-premium), height var(--motion-slow) var(--motion-premium)",
         }}
       >
         <div className="relative h-full">
@@ -385,7 +312,6 @@ export default function Sidebar({
           body: {
             padding: 0,
             background: SHELL_CHROME_BG,
-            backdropFilter: "blur(22px)",
           },
           header: { display: "none" },
           content: {
@@ -395,7 +321,6 @@ export default function Sidebar({
           },
           mask: {
             background: "rgba(15,23,42,0.2)",
-            backdropFilter: "blur(5px)",
           },
         }}
       >

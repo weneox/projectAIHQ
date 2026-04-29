@@ -14,9 +14,10 @@ import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
-const INITIAL_MESSAGE_WINDOW = 80;
-const MESSAGE_WINDOW_STEP = 60;
-const REVEAL_OLDER_THRESHOLD_PX = 180;
+const INITIAL_MESSAGE_WINDOW = 48;
+const MESSAGE_WINDOW_STEP = 32;
+const REVEAL_OLDER_THRESHOLD_PX = 220;
+const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
 
 const MemoInboxMessageBubble = memo(InboxMessageBubble);
 
@@ -406,6 +407,7 @@ function InboxDetailPanel({
   const lastThreadIdRef = useRef("");
   const lastWindowThreadIdRef = useRef("");
   const pendingPrependScrollRef = useRef(null);
+  const scrollRafRef = useRef(0);
 
   const [messageWindowLimit, setMessageWindowLimit] = useState(
     INITIAL_MESSAGE_WINDOW
@@ -424,6 +426,7 @@ function InboxDetailPanel({
 
     lastWindowThreadIdRef.current = currentThreadId;
     pendingPrependScrollRef.current = null;
+    shouldStickToBottomRef.current = true;
     setMessageWindowLimit(INITIAL_MESSAGE_WINDOW);
   }, [currentThreadId]);
 
@@ -494,11 +497,14 @@ function InboxDetailPanel({
     const viewport = scrollViewportRef.current;
     if (!viewport) return undefined;
 
-    function updateStickState() {
+    function readScrollState() {
+      scrollRafRef.current = 0;
+
       const distanceFromBottom =
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
 
-      shouldStickToBottomRef.current = distanceFromBottom <= 120;
+      shouldStickToBottomRef.current =
+        distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX;
 
       if (
         viewport.scrollTop <= REVEAL_OLDER_THRESHOLD_PX &&
@@ -508,11 +514,21 @@ function InboxDetailPanel({
       }
     }
 
-    updateStickState();
-    viewport.addEventListener("scroll", updateStickState, { passive: true });
+    function handleScroll() {
+      if (scrollRafRef.current) return;
+      scrollRafRef.current = window.requestAnimationFrame(readScrollState);
+    }
+
+    readScrollState();
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      viewport.removeEventListener("scroll", updateStickState);
+      viewport.removeEventListener("scroll", handleScroll);
+
+      if (scrollRafRef.current) {
+        window.cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
     };
   }, [canRevealOlderMessages, currentThreadId, revealOlderMessages]);
 

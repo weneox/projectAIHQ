@@ -11,15 +11,12 @@ import {
 
 import infoIcon from "../../assets/channels/info.png";
 import refreshIcon from "../../assets/channels/refresh.gif";
+import { cx } from "../../lib/cx.js";
 
 const REFRESH_SPIN_MS = 720;
 
 function s(value) {
   return String(value ?? "").trim();
-}
-
-function cx(...parts) {
-  return parts.filter(Boolean).join(" ");
 }
 
 function resolveTitle({ title, thread }) {
@@ -120,6 +117,12 @@ function RefreshAssetIcon({ spinning = false }) {
   );
 }
 
+function headerActionColor({ danger = false, active = false }) {
+  if (danger) return "text-danger";
+  if (active) return "text-brand";
+  return "text-text-muted hover:text-text";
+}
+
 function HeaderIconButton({
   label,
   onClick,
@@ -143,18 +146,14 @@ function HeaderIconButton({
           aria-label={label}
           title={label}
           className={cx(
-            "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
+            "group relative inline-flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-[10px]",
             "border border-transparent bg-transparent outline-none ring-0 shadow-none",
-            "transition-opacity duration-150",
+            "transition-[background-color,color,opacity] duration-base ease-premium",
             "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
             "active:bg-transparent active:shadow-none active:ring-0",
-            "hover:bg-transparent hover:opacity-70",
+            "hover:bg-surface-subtle",
             "disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent",
-            danger
-              ? "text-[#DC2626]"
-              : active
-                ? "text-[#2563EB]"
-                : "text-[#64748B]"
+            headerActionColor({ danger, active })
           )}
         >
           {children}
@@ -198,16 +197,12 @@ function OverflowActionIcon({
           className={cx(
             "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
             "border-0 bg-transparent outline-none ring-0 shadow-none",
-            "transition-opacity duration-150",
+            "transition-[background-color,color,opacity] duration-base ease-premium",
             "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
             "active:bg-transparent active:shadow-none active:ring-0",
-            "hover:bg-transparent hover:opacity-70",
+            "hover:bg-surface-subtle",
             "disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent",
-            danger
-              ? "text-[#DC2626]"
-              : active
-                ? "text-[#2563EB]"
-                : "text-[#64748B]"
+            headerActionColor({ danger, active })
           )}
         >
           {children}
@@ -281,7 +276,7 @@ function OverflowActions({
         />
       </OverflowActionIcon>
 
-      <div className="my-[1px] h-px w-[22px] bg-[#E4EAF2]" />
+      <div className="my-[1px] h-px w-[22px] bg-line-soft" />
 
       <OverflowActionIcon
         label="Close conversation"
@@ -347,11 +342,11 @@ function OverflowMenu({
         disabled={disabled}
         className={cx(
           "inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px]",
-          "border border-transparent bg-transparent text-[#64748B]",
+          "border border-transparent bg-transparent text-text-muted",
           "outline-none ring-0 shadow-none",
-          "transition-opacity duration-150",
+          "transition-[background-color,color,opacity] duration-base ease-premium",
           "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
-          "hover:bg-transparent hover:opacity-70",
+          "hover:bg-surface-subtle hover:text-text",
           "active:bg-transparent active:shadow-none active:ring-0",
           "disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
         )}
@@ -470,20 +465,20 @@ export default function InboxDetailHeaderCompact({
           .inbox-detail-header-ai-switch.ant-switch {
             min-width: 40px !important;
             height: 22px !important;
-            background: #CBD5E1 !important;
+            background: rgb(203, 213, 225) !important;
             box-shadow: none !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch:hover {
-            background: #CBD5E1 !important;
+            background: rgb(203, 213, 225) !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked {
-            background: #2563EB !important;
+            background: rgb(var(--color-brand)) !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked:hover {
-            background: #2563EB !important;
+            background: rgb(var(--color-brand-strong)) !important;
           }
 
           .inbox-detail-header-ai-switch .ant-switch-handle {
@@ -494,7 +489,7 @@ export default function InboxDetailHeaderCompact({
 
           .inbox-detail-header-ai-switch .ant-switch-handle::before {
             border-radius: 999px !important;
-            box-shadow: 0 5px 12px -6px rgba(15, 23, 42, 0.7) !important;
+            box-shadow: 0 5px 12px -6px rgba(15, 23, 42, 0.55) !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked .ant-switch-handle {
@@ -511,47 +506,46 @@ export default function InboxDetailHeaderCompact({
             justify-content: center;
             width: 56px;
             padding: 11px 10px;
-            border: 1px solid rgba(226, 232, 240, 0.92);
+            border: 1px solid rgb(var(--color-line-soft));
             border-radius: 17px;
             background: linear-gradient(
               180deg,
-              rgba(255,255,255,0.988) 0%,
-              rgba(248,251,255,0.988) 100%
+              rgba(255,255,255,0.99) 0%,
+              rgba(248,251,255,0.99) 100%
             );
             box-shadow:
-              0 22px 52px -36px rgba(15, 23, 42, 0.38),
-              0 1px 0 rgba(255, 255, 255, 0.86) inset;
-            backdrop-filter: blur(18px);
+              0 22px 52px -36px rgba(15, 23, 42, 0.36),
+              0 1px 0 rgba(255, 255, 255, 0.9) inset;
           }
         `}
       </style>
 
-      <div className="flex min-h-[58px] items-center justify-between gap-3 border-b border-[#E4EAF2] bg-[rgba(255,255,255,0.92)] px-4 py-2 backdrop-blur-xl">
+      <div className="flex min-h-[58px] items-center justify-between gap-3 border-b border-line-soft bg-surface/95 px-4 py-2 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
         <div className="min-w-0 flex-1">
           <div className="min-w-0">
-            <div className="truncate text-[14.5px] font-bold leading-5 tracking-[-0.025em] text-[#0F172A]">
+            <div className="truncate text-[14.5px] font-semibold leading-5 tracking-[var(--tracking-tight-lg)] text-text">
               {displayName}
             </div>
 
             <div className="mt-[2px] flex min-w-0 items-center gap-2">
               {meta ? (
-                <div className="truncate text-[11.5px] font-semibold leading-4 text-[#7C8A9A]">
+                <div className="truncate text-[11.5px] font-semibold leading-4 text-text-subtle">
                   {meta}
                 </div>
               ) : (
-                <div className="truncate text-[11.5px] font-semibold leading-4 text-[#9AA7B8]">
+                <div className="truncate text-[11.5px] font-semibold leading-4 text-text-subtle">
                   {hasThread ? "Live conversation" : "Select a conversation"}
                 </div>
               )}
 
               {unread > 0 ? (
-                <span className="inline-flex h-[20px] min-w-[20px] shrink-0 items-center justify-center rounded-[7px] bg-[#2563EB] px-1.5 text-[10px] font-bold leading-none text-white shadow-[0_12px_24px_-16px_rgba(37,99,235,0.55)]">
+                <span className="inline-flex h-[20px] min-w-[20px] shrink-0 items-center justify-center rounded-[7px] bg-brand px-1.5 text-[10px] font-bold leading-none text-white shadow-[0_10px_20px_-16px_rgba(46,96,255,0.48)]">
                   {unread}
                 </span>
               ) : null}
 
               {!launchChannelConnected ? (
-                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#B45309]">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-warning">
                   Channel offline
                 </span>
               ) : null}
@@ -587,7 +581,7 @@ export default function InboxDetailHeaderCompact({
             </span>
           </Tooltip>
 
-          <div className="h-[18px] w-px bg-[#E3EAF3]" />
+          <div className="h-[18px] w-px bg-line-soft" />
 
           <HeaderIconButton
             label="Conversation details"

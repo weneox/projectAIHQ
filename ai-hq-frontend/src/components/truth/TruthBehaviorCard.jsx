@@ -1,4 +1,5 @@
 import Badge from "../ui/Badge.jsx";
+import Card from "../ui/Card.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -6,6 +7,34 @@ function s(value, fallback = "") {
 
 function arr(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
+}
+
+function SectionTitle({ eyebrow = "Behavior", title, subtitle }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {eyebrow}
+      </div>
+
+      <div className="mt-2 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+        {title}
+      </div>
+
+      {s(subtitle) ? (
+        <div className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EmptyText({ children }) {
+  return (
+    <div className="mt-3 rounded-[14px] border border-line-soft bg-surface-muted px-4 py-3 text-[13.5px] font-medium leading-6 text-text-muted">
+      {children}
+    </div>
+  );
 }
 
 export default function TruthBehaviorCard({
@@ -18,16 +47,8 @@ export default function TruthBehaviorCard({
   const safeRows = arr(rows).filter((row) => s(row?.label) && s(row?.value));
 
   return (
-    <section className="border-t border-slate-200/80 px-5 py-5">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-        Behavior
-      </div>
-      <div className="mt-2 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-        {title}
-      </div>
-      {s(subtitle) ? (
-        <div className="mt-2 text-sm leading-6 text-slate-600">{subtitle}</div>
-      ) : null}
+    <Card padded="sm">
+      <SectionTitle title={title} subtitle={subtitle} />
 
       {safeRows.length ? (
         <div
@@ -39,21 +60,22 @@ export default function TruthBehaviorCard({
           {safeRows.map((row) => (
             <div
               key={row.key}
-              className="border-t border-slate-200/70 px-4 py-3"
+              className="rounded-[14px] border border-line-soft bg-surface-muted px-4 py-3"
             >
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
                 {row.label}
               </div>
-              <div className="mt-2 text-sm leading-6 text-slate-800">
+
+              <div className="mt-2 text-[13.5px] font-medium leading-6 text-text">
                 {row.value}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="mt-3 text-sm leading-6 text-slate-600">{emptyMessage}</div>
+        <EmptyText>{emptyMessage}</EmptyText>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -67,20 +89,20 @@ export function TruthBehaviorChangesCard({
   );
 
   return (
-    <div className="border-t border-slate-200/80 px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            {title}
-          </div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            {safeChanges.length
+    <Card padded="sm">
+      <div className="flex items-start justify-between gap-3">
+        <SectionTitle
+          eyebrow="Delta"
+          title={title}
+          subtitle={
+            safeChanges.length
               ? "Behavior deltas are shown explicitly so operators can see how runtime behavior shifted."
-              : emptyMessage}
-          </div>
-        </div>
+              : emptyMessage
+          }
+        />
+
         {safeChanges.length ? (
-          <Badge tone="info" variant="subtle" dot>
+          <Badge tone="brand" size="sm">
             {safeChanges.length} changed
           </Badge>
         ) : null}
@@ -91,23 +113,29 @@ export function TruthBehaviorChangesCard({
           {safeChanges.map((change) => (
             <div
               key={change.key}
-              className="border-t border-slate-200/70 px-3 py-3"
+              className="rounded-[14px] border border-line-soft bg-surface-muted px-4 py-3"
             >
-              <div className="text-sm font-medium text-slate-900">{change.label}</div>
+              <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+                {change.label}
+              </div>
+
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
                     Before
                   </div>
-                  <div className="mt-1 text-sm leading-6 text-slate-700">
+
+                  <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
                     {s(change.beforeSummary) || "Not set"}
                   </div>
                 </div>
+
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
                     After
                   </div>
-                  <div className="mt-1 text-sm leading-6 text-slate-700">
+
+                  <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
                     {s(change.afterSummary) || "Not set"}
                   </div>
                 </div>
@@ -116,6 +144,6 @@ export function TruthBehaviorChangesCard({
           ))}
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }
