@@ -10,7 +10,6 @@
 import { useNavigate } from "react-router-dom";
 
 import Button from "../../components/ui/Button.jsx";
-import Card from "../../components/ui/Card.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -343,7 +342,7 @@ function MiniStatus({ tone = "neutral", children }) {
 
 function Metric({ label, value, detail, tone = "neutral" }) {
   return (
-    <div className="min-w-0 border-l border-[rgb(var(--color-line-faint))] py-1.5 pl-3.5">
+    <div className="min-w-0 py-1.5">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
         {label}
       </div>
@@ -375,7 +374,10 @@ function ActionItem({ item, index, onNavigate }) {
       onClick={() => onNavigate(item.path)}
       className={cx(
         "group grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-3 rounded-[8px] px-3 py-3 text-left",
-        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
+        index === 0
+          ? "bg-white/[0.75] shadow-[0_18px_36px_-34px_rgba(15,23,42,0.42)] ring-1 ring-[rgba(var(--color-line-soft),0.72)]"
+          : "hover:bg-white/[0.55]",
+        "transition-colors duration-base ease-premium"
       )}
     >
       <span
@@ -419,8 +421,8 @@ function CheckItem({ item, onNavigate }) {
       type="button"
       onClick={() => onNavigate(item.path)}
       className={cx(
-        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[8px] px-3 py-3 text-left",
-        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
+        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[7px] px-2 py-2.5 text-left",
+        "transition-colors duration-base ease-premium hover:bg-white/[0.5]"
       )}
     >
       <span className="min-w-0">
@@ -560,8 +562,10 @@ export default function ProductHomePage() {
         </div>
       </section>
 
-      <Card padded={false} clip outerClassName="[--ui-card-radius:8px]">
-        <div className="px-4 py-4 md:px-5">
+      <section className="relative overflow-hidden rounded-[10px] border border-[rgba(var(--color-line-soft),0.72)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(var(--color-surface-muted),0.36))] shadow-[0_26px_62px_-52px_rgba(15,23,42,0.42)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.98),transparent)]" />
+
+        <div className="px-4 py-3.5 md:px-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="Waiting"
@@ -597,8 +601,8 @@ export default function ProductHomePage() {
           </div>
         </div>
 
-        <div className="border-t border-[rgb(var(--color-line-faint))] px-4 py-4 md:px-5">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="px-3 pb-3 md:px-4">
+          <div className="grid gap-4 rounded-[8px] bg-white/[0.62] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] ring-1 ring-[rgba(var(--color-line-soft),0.58)] xl:grid-cols-[minmax(0,1fr)_350px]">
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -631,7 +635,7 @@ export default function ProductHomePage() {
               </div>
             </div>
 
-            <div className="min-w-0 border-t border-[rgb(var(--color-line-faint))] pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+            <div className="min-w-0 border-t border-[rgba(var(--color-line-soft),0.62)] pt-4 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
@@ -658,7 +662,7 @@ export default function ProductHomePage() {
           </div>
         </div>
 
-        <div className="border-t border-[rgb(var(--color-line-faint))] bg-surface-subtle px-4 py-3 md:px-5">
+        <div className="mx-3 mb-3 rounded-[8px] bg-white/[0.48] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] ring-1 ring-[rgba(var(--color-line-soft),0.48)] md:mx-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
@@ -689,6 +693,7 @@ export default function ProductHomePage() {
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="min-h-8"
                 onClick={() => navigate("/truth")}
               >
                 Business info
@@ -698,6 +703,7 @@ export default function ProductHomePage() {
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="min-h-8"
                 onClick={() => navigate("/channels")}
               >
                 Channels
@@ -705,7 +711,7 @@ export default function ProductHomePage() {
             </div>
           </div>
         </div>
-      </Card>
+      </section>
     </PageCanvas>
   );
 }
