@@ -10,8 +10,8 @@ they may not be available for every Railway service. When
 `ENABLE_RAILWAY_DEPLOY_HOOKS` is not exactly `1`, the Railway trigger jobs are
 explicit no-ops and Railway/provider deploy is expected to be handled outside
 that hook step. The strict production verification job remains the source of
-truth and fails closed if the deployed backends are not serving the expected
-release SHA.
+truth for backend health, readiness, launch posture, sidecars, website lane,
+and frontend build identity.
 
 ## Deploy targets
 
@@ -59,7 +59,8 @@ Railway/provider deploy is handled outside the hook step. They do not require
 `RAILWAY_*_DEPLOY_HOOK` secrets and do not block the AI HQ frontend Cloudflare
 deploy. Final production verification still waits for the Railway trigger jobs
 to complete and still checks the deployed AI HQ backend, Meta sidecar, and
-Twilio sidecar strictly.
+Twilio sidecar strictly. Backend release SHA matching is required only when
+`ENABLE_RAILWAY_DEPLOY_HOOKS=1`.
 
 The Neox production deploy job,
 `trigger-neox-frontend-cloudflare-pages-deploy`, is optional. It is skipped
@@ -133,8 +134,12 @@ Railway hook deploy is opt-in:
 When disabled, the three Railway trigger jobs are no-ops. This is the expected
 mode when Railway deploy hooks are not available in the Railway UI. The
 operator must ensure Railway/provider deployment happens through the approved
-external mechanism for the same commit. Strict backend release SHA verification
-then proves whether production is actually serving the expected build.
+external mechanism when backend files changed. If Railway/provider deploy
+no-ops because watched backend files did not change, the backend may continue
+serving a previous backend deploy SHA. In that mode prod-spine still requires
+backend health, readiness, launch posture, website lane, and sidecar checks, but
+does not fail solely because the AI HQ backend build SHA differs from the full
+repo `github.sha`.
 
 When enabled, each Railway production service must have its own deploy hook and
 GitHub secret:
@@ -167,7 +172,7 @@ GitHub Actions stores production secrets under these names and maps them into th
 - `AIHQ_EXPECTED_RELEASE_SHA` set by GitHub Actions to `github.sha`; do not store this as a long-lived secret
 - `AIHQ_RELEASE_SHA` optional platform/build env override when the host does not expose its own commit SHA
 - `AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA=1` in production CI
-- `PROD_SPINE_REQUIRE_RELEASE_SHA=1` in production CI
+- `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1` only when backend deploy is actually expected, currently when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
 - `AIHQ_LAUNCH_POSTURE_TENANT_KEY` optional; if omitted, the smoke scripts use `WEBSITE_LANE_TENANT_KEY` for internal launch posture verification
 - `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_USER_SESSION_TOKEN`, for optional app-route launch posture verification
 - `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_FRONTEND_SMOKE_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_FRONTEND_SMOKE_USER_SESSION_TOKEN`, for optional authenticated frontend browser route smoke
@@ -195,9 +200,12 @@ placeholder configuration leaks, and wrong-backend symptoms. It also fetches
 `/build-meta.json` and requires the deployed frontend release SHA to match
 `AIHQ_EXPECTED_RELEASE_SHA` when strict release identity is enabled. The
 prod-spine smoke fetches AI HQ backend buildcheck metadata from
-`/api/__buildcheck` or `/__buildcheck` and requires the same SHA. Protected
-routes may redirect to login or render an auth boundary when no smoke session
-is available. Generic launch posture smoke checks the contract and allowed
+`/api/__buildcheck` or `/__buildcheck` and requires the same SHA only when
+`PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1`. When Railway hook deploys are
+disabled and Railway/provider no-ops because backend watched files did not
+change, backend SHA mismatch is reported as a warning instead of blocking.
+Protected routes may redirect to login or render an auth boundary when no
+smoke session is available. Generic launch posture smoke checks the contract and allowed
 narrow surfaces only; it does not require `overall.launchReady === true`
 because a tenant may legitimately be blocked pending setup. The
 app-authenticated `/api/launch/posture` route remains guarded by a real user
@@ -210,8 +218,11 @@ uses retry/backoff before accepting release identity:
 - frontend browser smoke: `AIHQ_FRONTEND_PROD_SMOKE_ATTEMPTS=8` and `AIHQ_FRONTEND_PROD_SMOKE_DELAY_MS=15000`
 - prod-spine backend smoke: `PROD_SPINE_SMOKE_ATTEMPTS=8` and `PROD_SPINE_SMOKE_DELAY_MS=15000`
 
-If either service continues serving an old SHA after retries, the release is
-blocked even if health endpoints are green.
+If the frontend continues serving an old SHA after retries, the release is
+blocked even if health endpoints are green. Backend SHA mismatch is blocking
+only when `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1`; otherwise prod-spine keeps
+backend health/readiness strict and treats the SHA mismatch as a Railway no-op
+warning.
 
 Build metadata sources are intentionally non-secret:
 

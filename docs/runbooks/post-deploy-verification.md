@@ -25,11 +25,11 @@ Railway hook deploy is optional: when `ENABLE_RAILWAY_DEPLOY_HOOKS` is not
 exactly `1`, the Railway trigger jobs no-op and the placeholder guard does not
 require `RAILWAY_*_DEPLOY_HOOK` secrets. This does not weaken verification:
 frontend smoke, prod-spine smoke, post-deploy verification, strict sidecars,
-website lane, and release SHA checks still run and fail closed.
+website lane, and frontend release SHA checks still run and fail closed.
 
 The backend verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
 The frontend browser smoke fails closed if `AIHQ_FRONTEND_PROD_URL` is missing or is not an `http(s)` URL.
-In production CI, set `AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA=1` and `PROD_SPINE_REQUIRE_RELEASE_SHA=1`; missing or mismatched `AIHQ_EXPECTED_RELEASE_SHA` then fails closed instead of proving only that an older deployment is healthy.
+In production CI, set `AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA=1`. Set `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1` only when backend deployment is actually expected, currently when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`; missing or mismatched `AIHQ_EXPECTED_RELEASE_SHA` then fails closed for the backend instead of proving only that an older backend deployment is healthy.
 The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with `AIHQ_INTERNAL_TOKEN`, so CI does not depend on expiring browser user sessions.
 If an app session cookie/token is supplied, the verifier also checks `GET /api/launch/posture` as an optional app-route verification.
 In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
@@ -52,7 +52,7 @@ npm run ops:postdeploy:verify
 - AI HQ frontend root, `/login`, `/home`, `/channels`, `/inbox`, and `/truth` in a real Chromium browser
 - deployed frontend blank-screen, boot-error, Vite/env placeholder, dynamic import, console-error, and obvious wrong-backend checks
 - AI HQ frontend `/build-meta.json` release SHA when `AIHQ_EXPECTED_RELEASE_SHA` is set
-- AI HQ backend `/api/__buildcheck` or `/__buildcheck` release SHA when `AIHQ_EXPECTED_RELEASE_SHA` is set
+- AI HQ backend `/api/__buildcheck` or `/__buildcheck` release SHA when `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1`; otherwise mismatches are warnings for Railway/provider no-op deploys
 - AI HQ launch posture contract at `GET /api/internal/launch/posture`
 - optional app-authenticated launch posture contract at `GET /api/launch/posture` when a user session cookie/token is configured
 - Meta sidecar health; required in production CI strict mode
@@ -86,13 +86,14 @@ npm run ops:postdeploy:verify
 ```
 
 The frontend browser smoke is blocking in the Release Gate post-deploy job. Without a smoke session, protected routes must redirect to login or render an auth boundary instead of crashing blank. With a smoke session, they may render authenticated surfaces.
-The frontend smoke and prod-spine smoke both retry in production CI, so async Cloudflare deploy hooks and Railway/provider deploys have time to publish the new build before the release SHA check fails.
+The frontend smoke and prod-spine smoke both retry in production CI, so async Cloudflare deploy hooks and Railway/provider deploys have time to publish the new build before release SHA checks are evaluated. Frontend SHA mismatch is always blocking in production CI; backend SHA mismatch is blocking only when `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1`.
 
 ## Expected outcome
 
 - AI HQ is not blocked
 - deployed AI HQ frontend renders in Chromium and is not blank or pointed at placeholder API configuration
-- deployed AI HQ frontend and backend report the expected release SHA
+- deployed AI HQ frontend reports the expected release SHA
+- deployed AI HQ backend reports the expected release SHA when backend deploy was expected; otherwise backend health/readiness remains strict and SHA mismatch is treated as a Railway no-op warning
 - launch posture returns the narrow `launch_posture_v1` contract without phase-2 surfaces
 - website lane launch verification passes for a real tenant in production CI
 - Meta and Twilio sidecars are reachable, not blocked, and not intentionally unavailable

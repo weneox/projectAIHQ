@@ -240,6 +240,12 @@ function extractBuildShaCandidates(response = {}) {
     .filter(Boolean);
 }
 
+function resolveBackendReleaseShaRequirement() {
+  const explicit = s(process.env.PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA);
+  if (explicit) return bool(explicit, false);
+  return bool(process.env.PROD_SPINE_REQUIRE_RELEASE_SHA, false);
+}
+
 function renderSummary(results = []) {
   let failed = 0;
 
@@ -255,7 +261,11 @@ function renderSummary(results = []) {
     }
 
     if (result.ok) {
-      printLine("OK", result.name, JSON.stringify(result.details));
+      printLine(
+        result.warning ? "WARN" : "OK",
+        result.name,
+        JSON.stringify(result.details)
+      );
       continue;
     }
 
@@ -274,7 +284,7 @@ function getRequiredEnvIssues({
   aihqBaseUrl,
   internalToken,
   expectedReleaseSha,
-  requireReleaseSha,
+  requireBackendReleaseSha,
 }) {
   const issues = [];
 
@@ -306,7 +316,7 @@ function getRequiredEnvIssues({
     });
   }
 
-  if (requireReleaseSha && !expectedReleaseSha) {
+  if (requireBackendReleaseSha && !expectedReleaseSha) {
     issues.push({
       name: "prod_spine_expected_release_sha",
       ok: false,
@@ -315,7 +325,7 @@ function getRequiredEnvIssues({
         env: "AIHQ_EXPECTED_RELEASE_SHA",
         reasonCode: "missing_expected_release_sha",
         message:
-          "AIHQ_EXPECTED_RELEASE_SHA is required when PROD_SPINE_REQUIRE_RELEASE_SHA=1.",
+          "AIHQ_EXPECTED_RELEASE_SHA is required when PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1.",
       },
     });
   }
@@ -357,22 +367,22 @@ async function verifyAihqBuildIdentity({
   baseUrl,
   internalToken,
   expectedReleaseSha,
-  requireReleaseSha,
+  requireBackendReleaseSha,
   timeoutMs,
 }) {
   if (!expectedReleaseSha) {
     return [
       {
         name: "aihq_build_identity",
-        ok: !requireReleaseSha,
-        skipped: !requireReleaseSha,
-        warning: !requireReleaseSha,
-        reason: requireReleaseSha
+        ok: !requireBackendReleaseSha,
+        skipped: !requireBackendReleaseSha,
+        warning: !requireBackendReleaseSha,
+        reason: requireBackendReleaseSha
           ? "AIHQ_EXPECTED_RELEASE_SHA missing"
           : "AIHQ_EXPECTED_RELEASE_SHA not configured",
         details: {
-          requireReleaseSha,
-          reasonCode: requireReleaseSha
+          requireBackendReleaseSha,
+          reasonCode: requireBackendReleaseSha
             ? "missing_expected_release_sha"
             : "expected_release_sha_not_configured",
         },
@@ -395,42 +405,59 @@ async function verifyAihqBuildIdentity({
     const matched = candidates.some((candidate) =>
       releaseShaMatches(candidate, expectedReleaseSha)
     );
+    const shaRequired = Boolean(requireBackendReleaseSha);
+    const ok = shaRequired ? matched : true;
+    const reasonCode = matched
+      ? ""
+      : shaRequired
+        ? "release_sha_mismatch"
+        : "backend_release_sha_not_required";
 
     return [
-      buildResult(
-        "aihq_build_identity",
-        matched,
-        {
-          url,
-          service: s(response.json?.service),
-          marker: s(response.json?.marker || response.json?.build?.marker),
-          expectedSha: expectedReleaseSha,
-          deployedSha: candidates[0] || "",
-          candidateShas: candidates,
-          reasonCode: matched ? "" : "release_sha_mismatch",
-        },
-        response.status
-      ),
+      {
+        ...buildResult(
+          "aihq_build_identity",
+          ok,
+          {
+            url,
+            service: s(response.json?.service),
+            marker: s(response.json?.marker || response.json?.build?.marker),
+            expectedSha: expectedReleaseSha,
+            deployedSha: candidates[0] || "",
+            candidateShas: candidates,
+            requireBackendReleaseSha: shaRequired,
+            reasonCode,
+          },
+          response.status
+        ),
+        warning: !shaRequired && !matched,
+      },
     ];
   }
 
   return [
-    buildResult(
-      "aihq_build_identity",
-      false,
-      {
-        url: lastUrl,
-        status: lastResponse?.status || 0,
-        expectedSha: expectedReleaseSha,
-        reasonCode: "buildcheck_unavailable",
-        message: s(
-          lastResponse?.json?.error ||
-            lastResponse?.error ||
-            "AI HQ buildcheck endpoint is unavailable or unauthorized."
-        ),
-      },
-      lastResponse?.status || 0
-    ),
+    {
+      ...buildResult(
+        "aihq_build_identity",
+        !requireBackendReleaseSha,
+        {
+          url: lastUrl,
+          status: lastResponse?.status || 0,
+          expectedSha: expectedReleaseSha,
+          requireBackendReleaseSha,
+          reasonCode: requireBackendReleaseSha
+            ? "buildcheck_unavailable"
+            : "backend_release_sha_not_required",
+          message: s(
+            lastResponse?.json?.error ||
+              lastResponse?.error ||
+              "AI HQ buildcheck endpoint is unavailable or unauthorized."
+          ),
+        },
+        lastResponse?.status || 0
+      ),
+      warning: !requireBackendReleaseSha,
+    },
   ];
 }
 
@@ -866,7 +893,7 @@ async function runAttempt({
   aihqBaseUrl,
   internalToken,
   expectedReleaseSha,
-  requireReleaseSha,
+  requireBackendReleaseSha,
   metaBaseUrl,
   twilioBaseUrl,
   websiteLaneTenantKey,
@@ -885,7 +912,7 @@ async function runAttempt({
       baseUrl: aihqBaseUrl,
       internalToken,
       expectedReleaseSha,
-      requireReleaseSha,
+      requireBackendReleaseSha,
       timeoutMs,
     }))
   );
@@ -957,7 +984,7 @@ async function main() {
   const launchPostureTenantKey = resolveLaunchPostureTenantKey();
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
   const expectedReleaseSha = resolveExpectedReleaseSha();
-  const requireReleaseSha = bool(process.env.PROD_SPINE_REQUIRE_RELEASE_SHA, false);
+  const requireBackendReleaseSha = resolveBackendReleaseShaRequirement();
   const requireWebsiteLane = bool(
     process.env.PROD_SPINE_REQUIRE_WEBSITE_LANE,
     false
@@ -973,7 +1000,7 @@ async function main() {
       timeoutMs,
       strictSidecars,
       expectedReleaseShaConfigured: Boolean(expectedReleaseSha),
-      requireReleaseSha,
+      requireBackendReleaseSha,
       requireWebsiteLane,
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
@@ -987,7 +1014,7 @@ async function main() {
     aihqBaseUrl,
     internalToken,
     expectedReleaseSha,
-    requireReleaseSha,
+    requireBackendReleaseSha,
   });
   if (envIssues.length > 0) {
     printLine("#", "Prod spine smoke summary");
@@ -1010,7 +1037,7 @@ async function main() {
       aihqBaseUrl,
       internalToken,
       expectedReleaseSha,
-      requireReleaseSha,
+      requireBackendReleaseSha,
       metaBaseUrl,
       twilioBaseUrl,
       websiteLaneTenantKey,

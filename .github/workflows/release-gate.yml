@@ -366,7 +366,7 @@ jobs:
           POSTDEPLOY_STRICT_SIDECARS: "1"
           PROD_SPINE_STRICT_SIDECARS: "1"
           AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
-          PROD_SPINE_REQUIRE_RELEASE_SHA: "1"
+          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' && '1' || '0' }}
         run: npm run security:placeholder-guard
 
       - name: Summarize production security preflight
@@ -382,7 +382,8 @@ jobs:
             echo "| Deploy hook/env placeholders rejected | \`true\` |"
             echo "| Railway hook deploy enabled | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
             echo "| Strict sidecars required | \`true\` |"
-            echo "| Release SHA required | \`true\` |"
+            echo "| Frontend release SHA required | \`true\` |"
+            echo "| Backend release SHA required | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
             echo "| Neox frontend deploy enabled | \`${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1' }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -711,7 +712,7 @@ jobs:
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "1"
           PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
-          PROD_SPINE_REQUIRE_RELEASE_SHA: "1"
+          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' && '1' || '0' }}
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:prod-spine:smoke
@@ -752,7 +753,8 @@ jobs:
             echo "| Prod spine smoke step | \`${{ steps.prod_spine_smoke.outcome }}\` |"
             echo "| Post-deploy verify step | \`${{ steps.postdeploy_verify.outcome }}\` |"
             echo "| Expected release SHA | \`${{ github.sha }}\` |"
-            echo "| Release SHA identity checks | \`true\` |"
+            echo "| Frontend release SHA identity check | \`true\` |"
+            echo "| Backend release SHA identity check | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
             echo "| Strict sidecars | \`true\` |"
             echo "| Strict website lane tenant smoke | \`true\` |"
             echo "| Fail on degraded | \`true\` |"
