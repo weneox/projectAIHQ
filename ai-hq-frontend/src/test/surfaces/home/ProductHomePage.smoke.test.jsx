@@ -30,12 +30,17 @@ function createHomeState(overrides = {}) {
       counts: {
         unreadCount: 0,
         openCount: 0,
+        handoffCount: 0,
+        pendingOutboundCount: 0,
+        outboundPending: 0,
       },
     },
     launchChannel: {
       provider: "telegram",
       connected: false,
       deliveryReady: false,
+      readyCount: 0,
+      connectedCount: 0,
       channelLabel: "Telegram",
       statusLabel: "Connect required",
       summary: "Use Channels to connect the Telegram bot for this workspace.",
@@ -104,11 +109,15 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Approve business truth.",
+        name: "Approve your business info",
       })
     ).toBeInTheDocument();
-    expect(screen.getByText("Launch path")).toBeInTheDocument();
-    expect(screen.getByText(/Business truth, one live channel, then inbox/i)).toBeInTheDocument();
+    expect(screen.getByText("Home")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /AI should not answer customers until your business details are reviewed and approved/i
+      )
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open setup" })[0]);
 
@@ -123,7 +132,7 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Approve business truth." })
+      screen.getByRole("heading", { name: "Approve your business info" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open setup" })).toBeInTheDocument();
   });
@@ -179,12 +188,114 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Connect one live channel.",
+        name: "Connect a customer channel",
       })
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
 
     expect(navigate).toHaveBeenCalledWith("/channels?channel=telegram");
+  });
+
+  it("uses unread message pressure and pending outbound counts for launch-ready posture", () => {
+    useProductHome.mockReturnValue(
+      createHomeState({
+        primaryAction: { label: "Reply now", path: "/inbox" },
+        secondaryAction: { label: "Open channels", path: "/channels" },
+        launchReady: true,
+        nextStep: { id: "inbox" },
+        truthRuntime: {
+          truthReady: true,
+          ready: true,
+          summary: "Business info is ready.",
+        },
+        inboxState: {
+          status: "attention",
+          counts: {
+            unreadCount: 24,
+            openCount: 0,
+            handoffCount: 1,
+            pendingOutboundCount: 72,
+            outboundPending: 72,
+          },
+        },
+        launchChannel: {
+          provider: "",
+          connected: true,
+          deliveryReady: true,
+          readyCount: 3,
+          connectedCount: 3,
+          providerStates: [
+            { provider: "website", available: true },
+            { provider: "instagram", available: true },
+            { provider: "telegram", available: true },
+          ],
+        },
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <ProductHomePage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "24 customer messages waiting" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "24 customer messages need a reply. Business info is ready and 3 channels can receive messages."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/1 conversation need a reply/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("72")).toBeInTheDocument();
+    expect(screen.getByText("Replies pending")).toBeInTheDocument();
+  });
+
+  it("uses singular grammar for one unread customer message", () => {
+    useProductHome.mockReturnValue(
+      createHomeState({
+        primaryAction: { label: "Reply now", path: "/inbox" },
+        truthRuntime: {
+          truthReady: true,
+          ready: true,
+          summary: "Business info is ready.",
+        },
+        inboxState: {
+          status: "attention",
+          counts: {
+            unreadCount: 1,
+            openCount: 0,
+            handoffCount: 0,
+            pendingOutboundCount: 0,
+            outboundPending: 0,
+          },
+        },
+        launchChannel: {
+          provider: "telegram",
+          connected: true,
+          deliveryReady: true,
+          readyCount: 1,
+          connectedCount: 1,
+          providerStates: [{ provider: "telegram", available: true }],
+        },
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <ProductHomePage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByText(
+        "1 customer message needs a reply. Business info is ready and 1 channel can receive messages."
+      )
+    ).toBeInTheDocument();
   });
 });

@@ -41,6 +41,10 @@ function pluralize(count, noun) {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
+function pluralVerb(count, singular, plural) {
+  return count === 1 ? singular : plural;
+}
+
 function unreadCount(home) {
   return n(home?.inboxState?.counts?.unreadCount);
 }
@@ -55,6 +59,13 @@ function handoffCount(home) {
 
 function outboundPendingCount(home) {
   return n(home?.inboxState?.counts?.outboundPending);
+}
+
+function pendingOutboundCount(home) {
+  return n(
+    home?.inboxState?.counts?.pendingOutboundCount ??
+      home?.inboxState?.counts?.outboundPending
+  );
 }
 
 function readyChannelCount(home) {
@@ -95,14 +106,25 @@ function inboxUnavailable(home) {
 
 function buildPageCopy(home) {
   const unread = unreadCount(home);
-  const open = openConversationCount(home);
   const channels = readyChannelCount(home);
 
   if (unread > 0) {
+    const businessReady = businessInfoReady(home);
+    const channelCopy =
+      channels > 0
+        ? `${pluralize(channels, "channel")} can receive messages`
+        : "no channels are marked live";
+
     return {
       eyebrow: "Customer work",
       title: `${pluralize(unread, "customer message")} waiting`,
-      summary: `${pluralize(Math.max(open, 1), "conversation")} need a reply. Business info is ready and ${pluralize(channels || 1, "channel")} can receive messages.`,
+      summary: `${pluralize(unread, "customer message")} ${pluralVerb(
+        unread,
+        "needs",
+        "need"
+      )} a reply. ${
+        businessReady ? "Business info is ready" : "Business info still needs review"
+      } and ${channelCopy}.`,
       primaryLabel: "Reply now",
       primaryPath: "/inbox",
       tone: "warning",
@@ -160,7 +182,6 @@ function buildPageCopy(home) {
 
 function buildMainActions(home) {
   const unread = unreadCount(home);
-  const open = openConversationCount(home);
   const pendingOutbound = outboundPendingCount(home);
 
   const actions = [];
@@ -169,7 +190,7 @@ function buildMainActions(home) {
     actions.push({
       id: "reply",
       title: `Reply to ${pluralize(unread, "customer message")}`,
-      detail: `${pluralize(Math.max(open, 1), "conversation")} waiting in the inbox.`,
+      detail: `${pluralize(unread, "customer message")} waiting in the inbox.`,
       path: "/inbox",
       label: "Open inbox",
       tone: "warning",
@@ -261,7 +282,7 @@ function buildSafetyChecks(home) {
       value: unread > 0 ? `${unread} waiting` : "Clear",
       detail:
         unread > 0
-          ? `${pluralize(unread, "message")} need review.`
+          ? `${pluralize(unread, "message")} ${pluralVerb(unread, "needs", "need")} review.`
           : "No urgent message work right now.",
       tone: unread > 0 ? "warning" : "success",
       path: "/inbox",
@@ -460,7 +481,7 @@ export default function ProductHomePage() {
   const unread = unreadCount(home);
   const open = openConversationCount(home);
   const owned = handoffCount(home);
-  const pendingOutbound = outboundPendingCount(home);
+  const pendingOutbound = pendingOutboundCount(home);
   const channels = readyChannelCount(home);
   const totalChannels = availableChannelCount(home);
 
@@ -561,8 +582,8 @@ export default function ProductHomePage() {
           />
 
           <Metric
-            label="Owned"
-            value={String(owned || pendingOutbound)}
+            label={pendingOutbound > 0 ? "Pending" : "Owned"}
+            value={String(pendingOutbound > 0 ? pendingOutbound : owned)}
             detail={pendingOutbound > 0 ? "Replies pending" : "Operator handoff"}
             tone={pendingOutbound > 0 ? "warning" : owned > 0 ? "brand" : "success"}
             last
