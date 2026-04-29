@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useInboxData = vi.fn();
@@ -13,24 +14,6 @@ const saveSettingsTrustPolicyControl = vi.fn();
 const getMetaChannelStatus = vi.fn();
 const getTelegramChannelStatus = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
-const mockNavigate = vi.fn();
-const mockSetSearchParams = vi.fn();
-
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-    useLocation: () => ({
-      pathname: "/inbox",
-      search: "",
-      hash: "",
-      state: null,
-      key: "test",
-    }),
-    useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
-  };
-});
 
 vi.mock("../../hooks/useInboxData.js", () => ({
   useInboxData: (...args) => useInboxData(...args),
@@ -109,6 +92,14 @@ vi.mock("../../components/inbox/InboxComposer.jsx", () => ({
 }));
 
 import Inbox from "../../pages/Inbox.jsx";
+
+function renderInbox() {
+  return render(
+    <MemoryRouter initialEntries={["/inbox"]}>
+      <Inbox />
+    </MemoryRouter>
+  );
+}
 
 function buildTrustView({
   status = "blocked",
@@ -332,7 +323,7 @@ describe("Inbox", () => {
   });
 
   it("renders the launch prompt when no launch channel is connected", async () => {
-    render(<Inbox />);
+    renderInbox();
 
     expect(
       await screen.findByText(/inbox operations are temporarily unavailable/i)
@@ -363,7 +354,7 @@ describe("Inbox", () => {
       })
     );
 
-    render(<Inbox />);
+    renderInbox();
 
     await waitFor(() => {
       expect(getSettingsTrustView).toHaveBeenCalled();
@@ -390,7 +381,7 @@ describe("Inbox", () => {
       })
     );
 
-    render(<Inbox />);
+    renderInbox();
 
     await waitFor(() => {
       expect(getSettingsTrustView).toHaveBeenCalled();
