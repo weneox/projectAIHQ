@@ -104,11 +104,22 @@ function createQueryClient() {
 
 async function findChannelCard(titleText) {
   const matcher = new RegExp(`^${escapeRegExp(titleText)}$`, "i");
-  const titleNodes = await screen.findAllByText(matcher);
-  const card = titleNodes.map((node) => node.closest("article")).find(Boolean);
+  const titleNode = await screen.findByRole("heading", { name: matcher });
 
-  expect(card).toBeTruthy();
-  return card;
+  let node = titleNode.parentElement;
+
+  while (node && node !== document.body) {
+    const hasDetails = within(node).queryByRole("button", { name: /details/i });
+    const hasPrimary = within(node).queryByRole("button", {
+      name: /^(inbox|connect|fix)$/i,
+    });
+
+    if (hasDetails && hasPrimary) return node;
+
+    node = node.parentElement;
+  }
+
+  throw new Error(`Could not find channel card for ${titleText}`);
 }
 
 function renderCatalog({ queryClient = null, initialEntries = ["/channels"] } = {}) {
@@ -190,7 +201,11 @@ function createMetaStatus(overrides = {}) {
     review: {
       story:
         "Businesses connect their own Instagram account and the platform helps them manage inbound customer conversations.",
-      requestedScopes: ["pages_show_list", "instagram_basic", "instagram_manage_messages"],
+      requestedScopes: [
+        "pages_show_list",
+        "instagram_basic",
+        "instagram_manage_messages",
+      ],
       excludedScopes: ["business_management", "instagram_manage_comments"],
     },
     lifecycle: {
@@ -256,7 +271,8 @@ function createTelegramStatus(overrides = {}) {
     },
     readiness: {
       status: "ready",
-      message: "Telegram bot, webhook, and tenant runtime are ready for live delivery.",
+      message:
+        "Telegram bot, webhook, and tenant runtime are ready for live delivery.",
       blockers: [],
     },
     actions: {
@@ -358,7 +374,7 @@ describe("ChannelCatalog", () => {
     const instagramCard = await findChannelCard("Instagram");
     const telegramCard = await findChannelCard("Telegram");
 
-    expect(screen.getByText(/3\/3 ready/i)).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(/3\/3 ready/i);
 
     expect(within(websiteCard).getByText(/^connected$/i)).toBeInTheDocument();
     expect(within(instagramCard).getByText(/^connected$/i)).toBeInTheDocument();
@@ -370,7 +386,7 @@ describe("ChannelCatalog", () => {
       ).toBeInTheDocument();
 
       expect(
-        within(card).getByRole("button", { name: /^(open )?inbox$/i })
+        within(card).getByRole("button", { name: /^inbox$/i })
       ).toBeInTheDocument();
     }
   });
@@ -380,9 +396,11 @@ describe("ChannelCatalog", () => {
 
     const instagramCard = await findChannelCard("Instagram");
 
-    fireEvent.click(
-      within(instagramCard).getByRole("button", { name: /details/i })
-    );
+    await act(async () => {
+      fireEvent.click(
+        within(instagramCard).getByRole("button", { name: /details/i })
+      );
+    });
 
     await waitFor(() => {
       expect(getMetaChannelStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -391,10 +409,12 @@ describe("ChannelCatalog", () => {
     expect(screen.getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
 
     expect(
-      await screen.findByText(
-        /ready for live messages|instagram dms are ready|instagram is connected for this tenant/i
-      )
+      await screen.findByText(/instagram is connected/i)
     ).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(
+      /Inbound DMs can resolve against tenant runtime/i
+    );
   });
 
   it("refreshes launch posture after a tenant-scoped launch mutation signal", async () => {
@@ -440,7 +460,7 @@ describe("ChannelCatalog", () => {
       },
     });
 
-    act(() => {
+    await act(async () => {
       emitLaunchSliceRefresh({
         tenantKey: "acme",
         reason: "test-refresh",
@@ -448,13 +468,13 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(getSettingsTrustView.mock.calls.length).toBeGreaterThan(initialCallCount);
+      expect(getSettingsTrustView.mock.calls.length).toBeGreaterThan(
+        initialCallCount
+      );
     });
 
     await waitFor(() => {
-      expect(
-        screen.queryAllByText(/truth still needs approval/i).length
-      ).toBeGreaterThan(0);
+      expect(document.body).toHaveTextContent(/truth still needs approval/i);
     });
   });
 
@@ -494,107 +514,112 @@ describe("ChannelCatalog", () => {
     getWebsiteWidgetStatus.mockImplementationOnce(() => nextWebsite);
     getSettingsTrustView.mockImplementationOnce(() => nextTruth);
 
-    rerenderCatalog(view);
+    await act(async () => {
+      rerenderCatalog(view);
+    });
 
     await waitFor(() => {
       expect(getMetaChannelStatus).toHaveBeenCalledTimes(2);
     });
 
     expect(screen.queryAllByText(/^connected$/i)).toHaveLength(0);
+    expect(document.body).toHaveTextContent(/loading channels/i);
 
-    resolveMeta(
-      createMetaStatus({
-        state: "disconnected",
-        status: "disconnected",
-        connected: false,
-        ready: false,
-        deliveryReady: false,
-        runtime: {
-          webhookReady: false,
-          deliveryReady: false,
-        },
-        readiness: {
-          status: "blocked",
-          message: "Instagram is not connected for this tenant.",
-          blockers: [],
-        },
-      })
-    );
-
-    resolveTelegram(
-      createTelegramStatus({
-        connected: false,
-        state: "disconnected",
-        status: "disconnected",
-        ready: false,
-        deliveryReady: false,
-        runtime: {
+    await act(async () => {
+      resolveMeta(
+        createMetaStatus({
+          state: "disconnected",
+          status: "disconnected",
+          connected: false,
           ready: false,
-          authorityAvailable: false,
-          channelAllowed: false,
           deliveryReady: false,
-        },
-        readiness: {
-          status: "blocked",
-          message: "Telegram is not connected for this tenant.",
-          blockers: [],
-        },
-      })
-    );
+          runtime: {
+            webhookReady: false,
+            deliveryReady: false,
+          },
+          readiness: {
+            status: "blocked",
+            message: "Instagram is not connected for this tenant.",
+            blockers: [],
+          },
+        })
+      );
 
-    resolveWebsite(
-      createWebsiteStatus({
-        state: "not_connected",
-        status: "not_connected",
-        connected: false,
-        ready: false,
-        deliveryReady: false,
-        verified: false,
-        domainVerified: false,
-        widget: {
-          enabled: false,
-          publicWidgetId: "",
-          installId: "",
-          websiteUrl: "https://globex.example",
-          domain: "globex.example",
-        },
-        readiness: {
-          status: "blocked",
-          message: "Website chat is not configured yet.",
-          blockers: [],
-        },
-      })
-    );
+      resolveTelegram(
+        createTelegramStatus({
+          connected: false,
+          state: "disconnected",
+          status: "disconnected",
+          ready: false,
+          deliveryReady: false,
+          runtime: {
+            ready: false,
+            authorityAvailable: false,
+            channelAllowed: false,
+            deliveryReady: false,
+          },
+          readiness: {
+            status: "blocked",
+            message: "Telegram is not connected for this tenant.",
+            blockers: [],
+          },
+        })
+      );
 
-    resolveTruth(
-      createTrustView({
-        summary: {
-          truth: {
-            latestVersionId: "",
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-              blockers: [],
+      resolveWebsite(
+        createWebsiteStatus({
+          state: "not_connected",
+          status: "not_connected",
+          connected: false,
+          ready: false,
+          deliveryReady: false,
+          verified: false,
+          domainVerified: false,
+          widget: {
+            enabled: false,
+            publicWidgetId: "",
+            installId: "",
+            websiteUrl: "https://globex.example",
+            domain: "globex.example",
+          },
+          readiness: {
+            status: "blocked",
+            message: "Website chat is not configured yet.",
+            blockers: [],
+          },
+        })
+      );
+
+      resolveTruth(
+        createTrustView({
+          summary: {
+            truth: {
+              latestVersionId: "",
+              readiness: {
+                status: "blocked",
+                reasonCode: "approved_truth_unavailable",
+                blockers: [],
+              },
+            },
+            runtimeProjection: {
+              readiness: {
+                status: "blocked",
+                blockers: [],
+              },
+              health: {
+                usable: false,
+              },
+              authority: {
+                available: false,
+              },
+            },
+            reviewQueue: {
+              pending: 0,
             },
           },
-          runtimeProjection: {
-            readiness: {
-              status: "blocked",
-              blockers: [],
-            },
-            health: {
-              usable: false,
-            },
-            authority: {
-              available: false,
-            },
-          },
-          reviewQueue: {
-            pending: 0,
-          },
-        },
-      })
-    );
+        })
+      );
+    });
 
     await waitFor(() => {
       expect(screen.queryAllByText(/^connected$/i)).toHaveLength(0);
@@ -603,5 +628,7 @@ describe("ChannelCatalog", () => {
     expect(await findChannelCard("Instagram")).toBeInTheDocument();
     expect(await findChannelCard("Telegram")).toBeInTheDocument();
     expect(await findChannelCard("Website chat")).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(/0\/3 ready/i);
   });
 });
