@@ -4,17 +4,22 @@ Use this runbook to keep every production deploy behind the GitHub Actions
 Release Gate. The Release Gate workflow is the source of truth for production
 release control.
 
-Railway and Cloudflare auto deploys must be disabled, or treated as untrusted
-for production release control. Production deploy hooks must only be triggered
-by GitHub Actions after the Release Gate has passed.
+Cloudflare production deploy hooks must only be triggered by GitHub Actions
+after the Release Gate has passed. Railway deploy hooks are optional because
+they may not be available for every Railway service. When
+`ENABLE_RAILWAY_DEPLOY_HOOKS` is not exactly `1`, the Railway trigger jobs are
+explicit no-ops and Railway/provider deploy is expected to be handled outside
+that hook step. The strict production verification job remains the source of
+truth and fails closed if the deployed backends are not serving the expected
+release SHA.
 
 ## Deploy targets
 
 | Target | Host | Build command | Production deploy trigger | Output |
 | --- | --- | --- | --- | --- |
-| AI HQ backend | Railway | `npm run build:ai-hq-backend` or `docker build -f ai-hq-backend/Dockerfile .` from repo root | `RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK` | service process |
-| Meta bot backend | Railway | `npm run build:meta-bot-backend` or `docker build -f meta-bot-backend/Dockerfile .` from repo root | `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK` | service process |
-| Twilio voice backend | Railway | `npm run build:twilio-voice-backend` or `docker build -f twilio-voice-backend/Dockerfile .` from repo root | `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK` | service process |
+| AI HQ backend | Railway | `npm run build:ai-hq-backend` or `docker build -f ai-hq-backend/Dockerfile .` from repo root | optional: `ENABLE_RAILWAY_DEPLOY_HOOKS=1` plus `RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK`; otherwise external Railway/provider deploy | service process |
+| Meta bot backend | Railway | `npm run build:meta-bot-backend` or `docker build -f meta-bot-backend/Dockerfile .` from repo root | optional: `ENABLE_RAILWAY_DEPLOY_HOOKS=1` plus `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK`; otherwise external Railway/provider deploy | service process |
+| Twilio voice backend | Railway | `npm run build:twilio-voice-backend` or `docker build -f twilio-voice-backend/Dockerfile .` from repo root | optional: `ENABLE_RAILWAY_DEPLOY_HOOKS=1` plus `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK`; otherwise external Railway/provider deploy | service process |
 | AI HQ frontend | Cloudflare Pages | `npm run build:ai-hq-frontend` | `CLOUDFLARE_PAGES_DEPLOY_HOOK` | `ai-hq-frontend/dist` |
 | Neox frontend | Separate Cloudflare Pages project | `npm run build:neox-frontend` | optional: `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1` plus `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` | `neox-frontend/dist` |
 | shared-contracts | internal workspace only | `npm run build:shared-contracts` | not deployed directly | package code |
@@ -47,6 +52,15 @@ The gated AI HQ production deploy jobs are:
 - `trigger-twilio-voice-backend-railway-deploy`
 - `trigger-ai-hq-frontend-cloudflare-pages-deploy`
 
+The Railway trigger jobs are hook-based only when the GitHub Actions repository
+variable `ENABLE_RAILWAY_DEPLOY_HOOKS` is exactly `1`. When the flag is unset,
+`0`, or any value other than `1`, those jobs pass as no-ops with a summary that
+Railway/provider deploy is handled outside the hook step. They do not require
+`RAILWAY_*_DEPLOY_HOOK` secrets and do not block the AI HQ frontend Cloudflare
+deploy. Final production verification still waits for the Railway trigger jobs
+to complete and still checks the deployed AI HQ backend, Meta sidecar, and
+Twilio sidecar strictly.
+
 The Neox production deploy job,
 `trigger-neox-frontend-cloudflare-pages-deploy`, is optional. It is skipped
 unless the GitHub Actions repository variable
@@ -55,13 +69,14 @@ or any value other than `1`, Neox deploy is outside the AI HQ production release
 path, `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` is not required, and AI HQ
 post-deploy verification does not wait for Neox.
 
-Each deploy job fails closed when its required hook secret is missing and uses
-`curl --fail` to trigger the hook. The strict production verification job
-`verify-production-post-deploy` waits for the AI HQ backend, Meta sidecar,
-Twilio sidecar, and AI HQ frontend deploy hooks before running production
-smokes, including the AI HQ frontend real-browser smoke against the deployed
-Cloudflare Pages URL and backend/frontend release SHA identity checks against
-the current `github.sha`.
+Each enabled hook deploy job fails closed when its required hook secret is
+missing and uses `curl --fail` to trigger the hook. The strict production
+verification job
+`verify-production-post-deploy` waits for the Railway trigger jobs (AI HQ
+backend, Meta sidecar, and Twilio sidecar) and the AI HQ frontend deploy hook
+before running production smokes, including the AI HQ frontend real-browser
+smoke against the deployed Cloudflare Pages URL and backend/frontend release
+SHA identity checks against the current `github.sha`.
 
 Do not add a separate production deploy workflow that bypasses these needs.
 
@@ -110,16 +125,27 @@ Do not point either Cloudflare project at plain `npm run build`.
 
 ## Railway separation
 
-Each Railway production service must have its own deploy hook and GitHub secret:
+Railway hook deploy is opt-in:
+
+- disabled/default: `ENABLE_RAILWAY_DEPLOY_HOOKS` unset or not `1`
+- enabled: `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
+
+When disabled, the three Railway trigger jobs are no-ops. This is the expected
+mode when Railway deploy hooks are not available in the Railway UI. The
+operator must ensure Railway/provider deployment happens through the approved
+external mechanism for the same commit. Strict backend release SHA verification
+then proves whether production is actually serving the expected build.
+
+When enabled, each Railway production service must have its own deploy hook and
+GitHub secret:
 
 - AI HQ backend: `RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK`
 - Meta bot backend: `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK`
 - Twilio voice backend: `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK`
 
-Do not reuse hook URLs across services. Disable Railway auto deploys from
-`main`, or leave them configured only for non-production environments. The
-production release mechanism is the gated deploy hook invocation from GitHub
-Actions.
+Do not reuse hook URLs across services. If Railway auto deploys are enabled,
+treat them as untrusted release triggers; production acceptance still depends
+on GitHub Actions strict post-deploy verification for the current `github.sha`.
 
 Railway build settings for Twilio voice should use the repo-root Dockerfile
 path `twilio-voice-backend/Dockerfile` when deploying by container. If deploying
@@ -131,9 +157,10 @@ as a workspace process instead, keep the build command
 
 GitHub Actions stores production secrets under these names and maps them into the smoke scripts:
 
-- `RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK` for AI HQ backend Railway deploys
-- `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK` for Meta bot backend Railway deploys
-- `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK` for Twilio voice backend Railway deploys
+- `ENABLE_RAILWAY_DEPLOY_HOOKS=1` only when Railway hook-based deploy should run
+- `RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK` only when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
+- `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK` only when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
+- `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK` only when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
 - `AIHQ_PROD_BASE_URL` -> `AIHQ_BASE_URL`
 - `AIHQ_PROD_INTERNAL_TOKEN` -> `AIHQ_INTERNAL_TOKEN`
 - `AIHQ_FRONTEND_PROD_URL` for the deployed AI HQ frontend browser smoke
@@ -177,7 +204,7 @@ app-authenticated `/api/launch/posture` route remains guarded by a real user
 session and can be checked optionally when a current smoke session is
 available.
 
-Because Railway and Cloudflare deploy hooks are asynchronous, production CI
+Because Railway/provider and Cloudflare deploys are asynchronous, production CI
 uses retry/backoff before accepting release identity:
 
 - frontend browser smoke: `AIHQ_FRONTEND_PROD_SMOKE_ATTEMPTS=8` and `AIHQ_FRONTEND_PROD_SMOKE_DELAY_MS=15000`

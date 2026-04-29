@@ -21,6 +21,11 @@ Before production deploy hooks run, GitHub Actions also executes
 values, example domains, localhost URLs, placeholder deploy hooks for any
 enabled production deploy target, disabled strict sidecar flags, or a missing
 expected release SHA fail closed before the post-deploy verifier can run.
+Railway hook deploy is optional: when `ENABLE_RAILWAY_DEPLOY_HOOKS` is not
+exactly `1`, the Railway trigger jobs no-op and the placeholder guard does not
+require `RAILWAY_*_DEPLOY_HOOK` secrets. This does not weaken verification:
+frontend smoke, prod-spine smoke, post-deploy verification, strict sidecars,
+website lane, and release SHA checks still run and fail closed.
 
 The backend verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
 The frontend browser smoke fails closed if `AIHQ_FRONTEND_PROD_URL` is missing or is not an `http(s)` URL.
@@ -81,7 +86,7 @@ npm run ops:postdeploy:verify
 ```
 
 The frontend browser smoke is blocking in the Release Gate post-deploy job. Without a smoke session, protected routes must redirect to login or render an auth boundary instead of crashing blank. With a smoke session, they may render authenticated surfaces.
-The frontend smoke and prod-spine smoke both retry in production CI, so async Cloudflare/Railway deploy hooks have time to publish the new build before the release SHA check fails.
+The frontend smoke and prod-spine smoke both retry in production CI, so async Cloudflare deploy hooks and Railway/provider deploys have time to publish the new build before the release SHA check fails.
 
 ## Expected outcome
 

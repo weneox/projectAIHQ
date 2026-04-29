@@ -353,6 +353,7 @@ jobs:
           META_BOT_PROD_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_PROD_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
           WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
           RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
           RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
@@ -379,6 +380,7 @@ jobs:
             echo "| --- | --- |"
             echo "| Placeholder guard | \`${{ job.status }}\` |"
             echo "| Deploy hook/env placeholders rejected | \`true\` |"
+            echo "| Railway hook deploy enabled | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
             echo "| Strict sidecars required | \`true\` |"
             echo "| Release SHA required | \`true\` |"
             echo "| Neox frontend deploy enabled | \`${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1' }}\` |"
@@ -397,9 +399,15 @@ jobs:
       - name: Trigger AI HQ backend Railway production deploy
         id: trigger_aihq_backend_railway_deploy
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for AI HQ backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
           if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
             echo "RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK is missing for the AI HQ backend Railway service." >&2
             exit 1
@@ -410,6 +418,7 @@ jobs:
       - name: Summarize AI HQ backend Railway deploy trigger
         if: always()
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -419,9 +428,11 @@ jobs:
             echo "| Item | Value |"
             echo "| --- | --- |"
             echo "| Railway service | \`AI HQ backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
             echo "| Deploy hook secret | \`RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -438,9 +449,15 @@ jobs:
       - name: Trigger Meta bot backend Railway production deploy
         id: trigger_meta_bot_backend_railway_deploy
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for Meta bot backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
           if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
             echo "RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK is missing for the Meta bot backend Railway service." >&2
             exit 1
@@ -451,6 +468,7 @@ jobs:
       - name: Summarize Meta bot backend Railway deploy trigger
         if: always()
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -460,9 +478,11 @@ jobs:
             echo "| Item | Value |"
             echo "| --- | --- |"
             echo "| Railway service | \`Meta bot backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
             echo "| Deploy hook secret | \`RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_meta_bot_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -479,9 +499,15 @@ jobs:
       - name: Trigger Twilio voice backend Railway production deploy
         id: trigger_twilio_voice_backend_railway_deploy
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for Twilio voice backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
           if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
             echo "RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK is missing for the Twilio voice backend Railway service." >&2
             exit 1
@@ -492,6 +518,7 @@ jobs:
       - name: Summarize Twilio voice backend Railway deploy trigger
         if: always()
         env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -501,9 +528,11 @@ jobs:
             echo "| Item | Value |"
             echo "| --- | --- |"
             echo "| Railway service | \`Twilio voice backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
             echo "| Deploy hook secret | \`RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_twilio_voice_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
