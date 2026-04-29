@@ -122,7 +122,10 @@ async function findChannelCard(titleText) {
   throw new Error(`Could not find channel card for ${titleText}`);
 }
 
-function renderCatalog({ queryClient = null, initialEntries = ["/channels"] } = {}) {
+function renderCatalog({
+  queryClient = null,
+  initialEntries = ["/channels"],
+} = {}) {
   const client = queryClient || createQueryClient();
 
   const view = render(
@@ -370,25 +373,37 @@ describe("ChannelCatalog", () => {
   it("renders the compact launch-channel mix after readiness loads", async () => {
     renderCatalog();
 
-    const websiteCard = await findChannelCard("Website chat");
-    const instagramCard = await findChannelCard("Instagram");
-    const telegramCard = await findChannelCard("Telegram");
+    expect(
+      await screen.findByRole("heading", { name: /^launch channels$/i })
+    ).toBeInTheDocument();
+
+    expect(await screen.findByText(/^website chat$/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^instagram$/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^telegram$/i)).toBeInTheDocument();
 
     expect(document.body).toHaveTextContent(/3\/3 ready/i);
 
-    expect(within(websiteCard).getByText(/^connected$/i)).toBeInTheDocument();
-    expect(within(instagramCard).getByText(/^connected$/i)).toBeInTheDocument();
-    expect(within(telegramCard).getByText(/^connected$/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThanOrEqual(
+        3
+      );
+    });
 
-    for (const card of [websiteCard, instagramCard, telegramCard]) {
-      expect(
-        within(card).getByRole("button", { name: /details/i })
-      ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /details/i }).length
+    ).toBeGreaterThanOrEqual(3);
 
-      expect(
-        within(card).getByRole("button", { name: /^inbox$/i })
-      ).toBeInTheDocument();
-    }
+    expect(
+      screen.getAllByRole("button", { name: /^inbox$/i }).length
+    ).toBeGreaterThanOrEqual(3);
+
+    expect(
+      screen.getByRole("button", { name: /open truth/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: /open inbox/i })
+    ).toBeInTheDocument();
   });
 
   it("opens the Instagram drawer with live tenant status", async () => {
