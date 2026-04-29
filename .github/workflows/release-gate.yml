@@ -357,6 +357,7 @@ jobs:
           RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
           RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
           CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+          ENABLE_NEOX_FRONTEND_PROD_DEPLOY: ${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY }}
           CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
           AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
           POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
@@ -380,6 +381,7 @@ jobs:
             echo "| Deploy hook/env placeholders rejected | \`true\` |"
             echo "| Strict sidecars required | \`true\` |"
             echo "| Release SHA required | \`true\` |"
+            echo "| Neox frontend deploy enabled | \`${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1' }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-ai-hq-backend-railway-deploy:
@@ -556,7 +558,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - production-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1'
     steps:
       - name: Trigger Neox frontend Cloudflare Pages production deploy
         id: trigger_neox_frontend_pages_deploy

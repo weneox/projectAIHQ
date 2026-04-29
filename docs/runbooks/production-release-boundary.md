@@ -16,7 +16,7 @@ by GitHub Actions after the Release Gate has passed.
 | Meta bot backend | Railway | `npm run build:meta-bot-backend` or `docker build -f meta-bot-backend/Dockerfile .` from repo root | `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK` | service process |
 | Twilio voice backend | Railway | `npm run build:twilio-voice-backend` or `docker build -f twilio-voice-backend/Dockerfile .` from repo root | `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK` | service process |
 | AI HQ frontend | Cloudflare Pages | `npm run build:ai-hq-frontend` | `CLOUDFLARE_PAGES_DEPLOY_HOOK` | `ai-hq-frontend/dist` |
-| Neox frontend | Separate Cloudflare Pages project | `npm run build:neox-frontend` | `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` | `neox-frontend/dist` |
+| Neox frontend | Separate Cloudflare Pages project | `npm run build:neox-frontend` | optional: `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1` plus `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` | `neox-frontend/dist` |
 | shared-contracts | internal workspace only | `npm run build:shared-contracts` | not deployed directly | package code |
 
 `shared-contracts` is internal only and must never be deployed directly. The
@@ -40,13 +40,20 @@ three release gate jobs plus the production security preflight:
 `frontend-stable-windows`, so no deploy hook can run until the release checks
 and production security checks have passed.
 
-The gated production deploy jobs are:
+The gated AI HQ production deploy jobs are:
 
 - `trigger-ai-hq-backend-railway-deploy`
 - `trigger-meta-bot-backend-railway-deploy`
 - `trigger-twilio-voice-backend-railway-deploy`
 - `trigger-ai-hq-frontend-cloudflare-pages-deploy`
-- `trigger-neox-frontend-cloudflare-pages-deploy`
+
+The Neox production deploy job,
+`trigger-neox-frontend-cloudflare-pages-deploy`, is optional. It is skipped
+unless the GitHub Actions repository variable
+`ENABLE_NEOX_FRONTEND_PROD_DEPLOY` is exactly `1`. When the flag is unset, `0`,
+or any value other than `1`, Neox deploy is outside the AI HQ production release
+path, `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` is not required, and AI HQ
+post-deploy verification does not wait for Neox.
 
 Each deploy job fails closed when its required hook secret is missing and uses
 `curl --fail` to trigger the hook. The strict production verification job
@@ -70,8 +77,8 @@ run:
   sensitive token assignments.
 - `npm run security:placeholder-guard` runs only in the production deploy path
   and rejects missing or placeholder production URLs, internal tokens, deploy
-  hooks, release SHA requirements, website lane strictness, and sidecar
-  strictness.
+  hooks for enabled deploy targets, release SHA requirements, website lane
+  strictness, and sidecar strictness.
 
 Never commit real OpenAI keys, GitHub tokens, Railway deploy hooks, Cloudflare
 tokens or deploy hooks, Meta app secrets or page tokens, Twilio auth/API
@@ -81,7 +88,7 @@ instead.
 
 Missing production env or values such as `REPLACE_WITH...`, `placeholder`,
 `example.com`, `localhost`, `ci-*`, `test-*`, `dummy-*`, or similarly fake
-values fail closed in the production deploy path.
+values fail closed in the production deploy path for enabled deploy targets.
 
 ## Cloudflare Pages separation
 
@@ -95,7 +102,9 @@ values fail closed in the production deploy path.
 - Neox frontend Cloudflare Pages project:
   - build command: `npm run build:neox-frontend`
   - output directory: `neox-frontend/dist`
-  - deploy hook secret: `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK`
+  - deploy enable variable: `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1`
+  - deploy hook secret when enabled: `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK`
+  - default production launch behavior: skipped and non-blocking for AI HQ
 
 Do not point either Cloudflare project at plain `npm run build`.
 
@@ -136,7 +145,8 @@ GitHub Actions stores production secrets under these names and maps them into th
 - `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_USER_SESSION_TOKEN`, for optional app-route launch posture verification
 - `AIHQ_PROD_USER_SESSION_COOKIE` -> `AIHQ_FRONTEND_SMOKE_USER_SESSION_COOKIE`, or a raw app session token -> `AIHQ_FRONTEND_SMOKE_USER_SESSION_TOKEN`, for optional authenticated frontend browser route smoke
 - `CLOUDFLARE_PAGES_DEPLOY_HOOK` for AI HQ frontend only
-- `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` for Neox frontend only
+- `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1` only when the Neox production deploy should run with the AI HQ release
+- `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` for Neox frontend only when `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1`
 - `WEBSITE_LANE_TENANT_KEY`
 - `WEBSITE_LANE_DOMAIN` optional, used when the tenant smoke must target one expected domain
 - `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` in production CI

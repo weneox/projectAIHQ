@@ -26,7 +26,6 @@ const REQUIRED_ENV = [
   { name: "RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "CLOUDFLARE_PAGES_DEPLOY_HOOK", type: "https_url" },
-  { name: "CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK", type: "https_url" },
 ];
 
 const REQUIRED_FLAGS = [
@@ -37,6 +36,10 @@ const REQUIRED_FLAGS = [
   "AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA",
   "PROD_SPINE_REQUIRE_RELEASE_SHA",
 ];
+
+function isNeoxDeployEnabled() {
+  return s(process.env.ENABLE_NEOX_FRONTEND_PROD_DEPLOY) === "1";
+}
 
 function isPlaceholderValue(value = "") {
   const raw = s(value);
@@ -175,8 +178,14 @@ function validateStrictFlags() {
 }
 
 function main() {
+  const requiredEnv = [
+    ...REQUIRED_ENV,
+    ...(isNeoxDeployEnabled()
+      ? [{ name: "CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK", type: "https_url" }]
+      : []),
+  ];
   const results = [
-    ...REQUIRED_ENV.map(validateRequiredEnvItem),
+    ...requiredEnv.map(validateRequiredEnvItem),
     validateReleaseSha(),
     ...validateStrictFlags(),
   ];
