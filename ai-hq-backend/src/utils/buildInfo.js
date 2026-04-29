@@ -17,6 +17,10 @@ function normalizeSha(value = "") {
 }
 
 const rawCommitSha = pickFirst(
+  process.env.AIHQ_RELEASE_SHA,
+  process.env.RELEASE_SHA,
+  process.env.BUILD_SHA,
+  process.env.COMMIT_SHA,
   process.env.RAILWAY_GIT_COMMIT_SHA,
   process.env.SOURCE_VERSION,
   process.env.GITHUB_SHA,
@@ -37,6 +41,7 @@ const startedAt = new Date().toISOString();
 export const buildInfo = {
   version,
   fullSha,
+  releaseSha: fullSha,
   shortSha,
   bootId,
   startedAt,
@@ -50,6 +55,7 @@ export function buildResponseMeta(extra = {}) {
       version: buildInfo.version,
       sha: buildInfo.shortSha || null,
       fullSha: buildInfo.fullSha || null,
+      releaseSha: buildInfo.releaseSha || null,
       bootId: buildInfo.bootId,
       startedAt: buildInfo.startedAt,
       marker: buildInfo.marker,

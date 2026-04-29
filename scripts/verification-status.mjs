@@ -82,7 +82,14 @@ export function getContainerRuntimeParity({ repoRoot = resolveRepoRoot() } = {})
     {
       name: "twilio-voice-backend",
       dockerfilePath: join(repoRoot, "twilio-voice-backend", "Dockerfile"),
-      requiredMarkers: [],
+      requiredMarkers: [
+        "COPY shared-contracts ./shared-contracts",
+        "COPY scripts ./scripts",
+        "COPY twilio-voice-backend/package*.json ./twilio-voice-backend/",
+        "WORKDIR /app/twilio-voice-backend",
+        "RUN npm ci",
+        'CMD ["npm", "start"]',
+      ],
     },
   ];
 

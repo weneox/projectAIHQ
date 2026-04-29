@@ -5,6 +5,18 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function pickFirst(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeSha(value = "") {
+  return s(value).replace(/[^a-f0-9]/gi, "").toLowerCase();
+}
+
 function trimTrailingSlash(value = "") {
   return s(value).replace(/\/+$/, "");
 }
@@ -33,6 +45,56 @@ function toWsTarget(value = "") {
   return raw;
 }
 
+function buildFrontendBuildMeta(env = {}) {
+  const rawSha = pickFirst(
+    env.AIHQ_RELEASE_SHA,
+    process.env.AIHQ_RELEASE_SHA,
+    env.RELEASE_SHA,
+    process.env.RELEASE_SHA,
+    env.BUILD_SHA,
+    process.env.BUILD_SHA,
+    env.GITHUB_SHA,
+    process.env.GITHUB_SHA,
+    env.CF_PAGES_COMMIT_SHA,
+    process.env.CF_PAGES_COMMIT_SHA,
+    env.SOURCE_VERSION,
+    process.env.SOURCE_VERSION,
+    env.VERCEL_GIT_COMMIT_SHA,
+    process.env.VERCEL_GIT_COMMIT_SHA
+  );
+  const fullSha = normalizeSha(rawSha);
+  const shortSha = fullSha.slice(0, 12);
+  const version = pickFirst(
+    env.APP_VERSION,
+    process.env.npm_package_version,
+    "0.0.0"
+  );
+
+  return {
+    schema: "aihq.frontend.build_meta.v1",
+    service: "ai-hq-frontend",
+    version,
+    sha: shortSha || null,
+    fullSha: fullSha || null,
+    releaseSha: fullSha || null,
+    marker: shortSha ? `build:${shortSha}` : "build:unknown",
+    builtAt: new Date().toISOString(),
+  };
+}
+
+function frontendBuildMetaPlugin(env = {}) {
+  return {
+    name: "aihq-frontend-build-meta",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "build-meta.json",
+        source: `${JSON.stringify(buildFrontendBuildMeta(env), null, 2)}\n`,
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
@@ -51,7 +113,7 @@ export default defineConfig(({ mode }) => {
   );
 
   return {
-    plugins: [react()],
+    plugins: [react(), frontendBuildMetaPlugin(env)],
     test: {
       environment: "jsdom",
       setupFiles: "./src/test/setup/vitest.setup.js",

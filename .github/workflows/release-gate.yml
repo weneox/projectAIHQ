@@ -207,6 +207,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run dependency vulnerability audit
+        run: npm run security:audit
+
+      - name: Run static secret scan
+        run: npm run security:scan
+
       - name: Report current verification status
         run: npm run verify:env:status
 
@@ -318,6 +324,63 @@ jobs:
       - name: Run build gate
         run: npm run build:all
 
+      - name: Build Twilio voice backend Docker image
+        run: docker build -f twilio-voice-backend/Dockerfile .
+
+  production-security-preflight:
+    name: Validate production security env
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run production placeholder guard
+        env:
+          AIHQ_PROD_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+          AIHQ_PROD_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
+          META_BOT_PROD_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
+          TWILIO_VOICE_PROD_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
+          WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
+          RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
+          RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
+          RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
+          CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
+          POSTDEPLOY_STRICT_SIDECARS: "1"
+          PROD_SPINE_STRICT_SIDECARS: "1"
+          AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
+          PROD_SPINE_REQUIRE_RELEASE_SHA: "1"
+        run: npm run security:placeholder-guard
+
+      - name: Summarize production security preflight
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Production security preflight"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Placeholder guard | \`${{ job.status }}\` |"
+            echo "| Deploy hook/env placeholders rejected | \`true\` |"
+            echo "| Strict sidecars required | \`true\` |"
+            echo "| Release SHA required | \`true\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   trigger-ai-hq-backend-railway-deploy:
     name: Trigger AI HQ backend Railway deploy
     runs-on: ubuntu-latest
@@ -325,6 +388,7 @@ jobs:
       - workspace-startup-compat-node18
       - monorepo-release-gate
       - frontend-stable-windows
+      - production-security-preflight
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger AI HQ backend Railway production deploy
@@ -355,7 +419,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-meta-bot-backend-railway-deploy:
@@ -365,6 +429,7 @@ jobs:
       - workspace-startup-compat-node18
       - monorepo-release-gate
       - frontend-stable-windows
+      - production-security-preflight
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Meta bot backend Railway production deploy
@@ -395,7 +460,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_meta_bot_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-twilio-voice-backend-railway-deploy:
@@ -405,6 +470,7 @@ jobs:
       - workspace-startup-compat-node18
       - monorepo-release-gate
       - frontend-stable-windows
+      - production-security-preflight
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Twilio voice backend Railway production deploy
@@ -435,7 +501,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_twilio_voice_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-ai-hq-frontend-cloudflare-pages-deploy:
@@ -445,6 +511,7 @@ jobs:
       - workspace-startup-compat-node18
       - monorepo-release-gate
       - frontend-stable-windows
+      - production-security-preflight
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger AI HQ frontend Cloudflare Pages production deploy
@@ -477,7 +544,7 @@ jobs:
             echo "| Deploy hook secret | \`CLOUDFLARE_PAGES_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_frontend_pages_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK:+true}\` |"
-            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-neox-frontend-cloudflare-pages-deploy:
@@ -487,6 +554,7 @@ jobs:
       - workspace-startup-compat-node18
       - monorepo-release-gate
       - frontend-stable-windows
+      - production-security-preflight
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Neox frontend Cloudflare Pages production deploy
@@ -519,7 +587,7 @@ jobs:
             echo "| Deploy hook secret | \`CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_neox_frontend_pages_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK:+true}\` |"
-            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify-production-post-deploy:
@@ -548,6 +616,7 @@ jobs:
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
           META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
           WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
@@ -566,6 +635,7 @@ jobs:
 
           require_secret "AIHQ_PROD_BASE_URL" "$AIHQ_BASE_URL"
           require_secret "AIHQ_PROD_INTERNAL_TOKEN" "$AIHQ_INTERNAL_TOKEN"
+          require_secret "AIHQ_FRONTEND_PROD_URL" "$AIHQ_FRONTEND_PROD_URL"
           require_secret "META_BOT_PROD_BASE_URL" "$META_BOT_BASE_URL"
           require_secret "TWILIO_VOICE_PROD_BASE_URL" "$TWILIO_VOICE_BASE_URL"
           require_secret "WEBSITE_LANE_TENANT_KEY" "$WEBSITE_LANE_TENANT_KEY"
@@ -574,11 +644,29 @@ jobs:
             exit 1
           fi
 
+      - name: Install Playwright Chromium for frontend production smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Run AI HQ frontend production browser smoke
+        id: frontend_prod_smoke
+        env:
+          AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          AIHQ_FRONTEND_SMOKE_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
+          AIHQ_FRONTEND_SMOKE_USER_SESSION_TOKEN: ${{ secrets.AIHQ_PROD_USER_SESSION_TOKEN }}
+          AIHQ_FRONTEND_PROD_SMOKE_ATTEMPTS: "8"
+          AIHQ_FRONTEND_PROD_SMOKE_DELAY_MS: "15000"
+          AIHQ_FRONTEND_PROD_SMOKE_TIMEOUT_MS: "25000"
+          AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
+        shell: bash
+        run: npm run ops:frontend:prod-smoke
+
       - name: Run mandatory production prod-spine smoke with strict sidecars
         id: prod_spine_smoke
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
           AIHQ_LAUNCH_POSTURE_TENANT_KEY: ${{ secrets.AIHQ_LAUNCH_POSTURE_TENANT_KEY }}
           AIHQ_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
           AIHQ_USER_SESSION_TOKEN: ${{ secrets.AIHQ_PROD_USER_SESSION_TOKEN }}
@@ -591,6 +679,7 @@ jobs:
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "1"
           PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
+          PROD_SPINE_REQUIRE_RELEASE_SHA: "1"
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:prod-spine:smoke
@@ -627,14 +716,18 @@ jobs:
             echo "| Meta bot backend deploy dependency | \`${{ needs['trigger-meta-bot-backend-railway-deploy'].result }}\` |"
             echo "| Twilio voice backend deploy dependency | \`${{ needs['trigger-twilio-voice-backend-railway-deploy'].result }}\` |"
             echo "| AI HQ frontend deploy dependency | \`${{ needs['trigger-ai-hq-frontend-cloudflare-pages-deploy'].result }}\` |"
+            echo "| AI HQ frontend browser smoke step | \`${{ steps.frontend_prod_smoke.outcome }}\` |"
             echo "| Prod spine smoke step | \`${{ steps.prod_spine_smoke.outcome }}\` |"
             echo "| Post-deploy verify step | \`${{ steps.postdeploy_verify.outcome }}\` |"
+            echo "| Expected release SHA | \`${{ github.sha }}\` |"
+            echo "| Release SHA identity checks | \`true\` |"
             echo "| Strict sidecars | \`true\` |"
             echo "| Strict website lane tenant smoke | \`true\` |"
             echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"
             echo
+            echo "- \`npm run ops:frontend:prod-smoke\`"
             echo "- \`npm run ops:prod-spine:smoke\`"
             echo "- \`npm run ops:postdeploy:verify\`"
             echo "- \`npm run ops:postdeploy:full\`"

@@ -29,6 +29,18 @@ function n(value, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
+function pickFirst(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeSha(value = "") {
+  return s(value).replace(/[^a-f0-9]/gi, "").toLowerCase();
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -45,6 +57,11 @@ function deriveHealthUrl(baseUrl = "") {
 function deriveRuntimeSignalsUrl(baseUrl = "") {
   const root = normalizeBaseUrl(baseUrl);
   return root ? `${root}/runtime-signals` : "";
+}
+
+function deriveBuildcheckUrls(baseUrl = "") {
+  const root = normalizeBaseUrl(baseUrl);
+  return root ? [`${root}/api/__buildcheck`, `${root}/__buildcheck`] : [];
 }
 
 async function readJson(response) {
@@ -73,6 +90,7 @@ async function fetchJson(url, headers = {}, timeoutMs = 10000) {
       ok: response.ok,
       status: response.status,
       json,
+      headers: Object.fromEntries(response.headers.entries()),
     };
   } catch (error) {
     return {
@@ -178,6 +196,50 @@ function buildResult(name, ok, details = {}, status = 0) {
   };
 }
 
+function resolveExpectedReleaseSha() {
+  return normalizeSha(
+    pickFirst(
+      process.env.AIHQ_EXPECTED_RELEASE_SHA,
+      process.env.EXPECTED_RELEASE_SHA,
+      process.env.AIHQ_RELEASE_SHA,
+      process.env.RELEASE_SHA,
+      process.env.GITHUB_SHA
+    )
+  );
+}
+
+function releaseShaMatches(candidate = "", expected = "") {
+  const actual = normalizeSha(candidate);
+  const wanted = normalizeSha(expected);
+
+  if (!actual || !wanted) return false;
+  if (actual === wanted) return true;
+
+  const minLength = Math.min(actual.length, wanted.length);
+  if (minLength < 7) return false;
+
+  return actual.startsWith(wanted) || wanted.startsWith(actual);
+}
+
+function extractBuildShaCandidates(response = {}) {
+  const json = response.json || {};
+  const build = json.build || {};
+
+  return [
+    build.fullSha,
+    build.releaseSha,
+    build.commitSha,
+    build.gitSha,
+    build.sha,
+    json.fullSha,
+    json.releaseSha,
+    json.sha,
+    response.headers?.["x-aihq-build-sha"],
+  ]
+    .map((value) => normalizeSha(value))
+    .filter(Boolean);
+}
+
 function renderSummary(results = []) {
   let failed = 0;
 
@@ -208,7 +270,12 @@ function renderSummary(results = []) {
   return failed;
 }
 
-function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
+function getRequiredEnvIssues({
+  aihqBaseUrl,
+  internalToken,
+  expectedReleaseSha,
+  requireReleaseSha,
+}) {
   const issues = [];
 
   if (!aihqBaseUrl) {
@@ -235,6 +302,20 @@ function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
         reasonCode: "missing_required_env",
         message:
           "AIHQ_INTERNAL_TOKEN is required by the current release workflow configuration.",
+      },
+    });
+  }
+
+  if (requireReleaseSha && !expectedReleaseSha) {
+    issues.push({
+      name: "prod_spine_expected_release_sha",
+      ok: false,
+      status: 0,
+      details: {
+        env: "AIHQ_EXPECTED_RELEASE_SHA",
+        reasonCode: "missing_expected_release_sha",
+        message:
+          "AIHQ_EXPECTED_RELEASE_SHA is required when PROD_SPINE_REQUIRE_RELEASE_SHA=1.",
       },
     });
   }
@@ -270,6 +351,87 @@ function classifyAihqReadiness(readiness = {}) {
     effectiveBlockersTotal,
     effectiveStatus,
   };
+}
+
+async function verifyAihqBuildIdentity({
+  baseUrl,
+  internalToken,
+  expectedReleaseSha,
+  requireReleaseSha,
+  timeoutMs,
+}) {
+  if (!expectedReleaseSha) {
+    return [
+      {
+        name: "aihq_build_identity",
+        ok: !requireReleaseSha,
+        skipped: !requireReleaseSha,
+        warning: !requireReleaseSha,
+        reason: requireReleaseSha
+          ? "AIHQ_EXPECTED_RELEASE_SHA missing"
+          : "AIHQ_EXPECTED_RELEASE_SHA not configured",
+        details: {
+          requireReleaseSha,
+          reasonCode: requireReleaseSha
+            ? "missing_expected_release_sha"
+            : "expected_release_sha_not_configured",
+        },
+      },
+    ];
+  }
+
+  const headers = internalToken ? { "x-internal-token": internalToken } : {};
+  let lastResponse = null;
+  let lastUrl = "";
+
+  for (const url of deriveBuildcheckUrls(baseUrl)) {
+    const response = await fetchJson(url, headers, timeoutMs);
+    lastResponse = response;
+    lastUrl = url;
+
+    if (!response.ok) continue;
+
+    const candidates = extractBuildShaCandidates(response);
+    const matched = candidates.some((candidate) =>
+      releaseShaMatches(candidate, expectedReleaseSha)
+    );
+
+    return [
+      buildResult(
+        "aihq_build_identity",
+        matched,
+        {
+          url,
+          service: s(response.json?.service),
+          marker: s(response.json?.marker || response.json?.build?.marker),
+          expectedSha: expectedReleaseSha,
+          deployedSha: candidates[0] || "",
+          candidateShas: candidates,
+          reasonCode: matched ? "" : "release_sha_mismatch",
+        },
+        response.status
+      ),
+    ];
+  }
+
+  return [
+    buildResult(
+      "aihq_build_identity",
+      false,
+      {
+        url: lastUrl,
+        status: lastResponse?.status || 0,
+        expectedSha: expectedReleaseSha,
+        reasonCode: "buildcheck_unavailable",
+        message: s(
+          lastResponse?.json?.error ||
+            lastResponse?.error ||
+            "AI HQ buildcheck endpoint is unavailable or unauthorized."
+        ),
+      },
+      lastResponse?.status || 0
+    ),
+  ];
 }
 
 async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
@@ -703,6 +865,8 @@ async function verifyWebsiteLane({
 async function runAttempt({
   aihqBaseUrl,
   internalToken,
+  expectedReleaseSha,
+  requireReleaseSha,
   metaBaseUrl,
   twilioBaseUrl,
   websiteLaneTenantKey,
@@ -715,6 +879,16 @@ async function runAttempt({
   requireWebsiteLane,
 }) {
   const results = [];
+
+  results.push(
+    ...(await verifyAihqBuildIdentity({
+      baseUrl: aihqBaseUrl,
+      internalToken,
+      expectedReleaseSha,
+      requireReleaseSha,
+      timeoutMs,
+    }))
+  );
 
   results.push(
     ...(await verifyAihq({
@@ -782,6 +956,8 @@ async function main() {
   const launchPostureSessionCookie = resolveLaunchPostureSessionCookie();
   const launchPostureTenantKey = resolveLaunchPostureTenantKey();
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
+  const expectedReleaseSha = resolveExpectedReleaseSha();
+  const requireReleaseSha = bool(process.env.PROD_SPINE_REQUIRE_RELEASE_SHA, false);
   const requireWebsiteLane = bool(
     process.env.PROD_SPINE_REQUIRE_WEBSITE_LANE,
     false
@@ -796,6 +972,8 @@ async function main() {
       delayMs,
       timeoutMs,
       strictSidecars,
+      expectedReleaseShaConfigured: Boolean(expectedReleaseSha),
+      requireReleaseSha,
       requireWebsiteLane,
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
@@ -805,7 +983,12 @@ async function main() {
     })
   );
 
-  const envIssues = getRequiredEnvIssues({ aihqBaseUrl, internalToken });
+  const envIssues = getRequiredEnvIssues({
+    aihqBaseUrl,
+    internalToken,
+    expectedReleaseSha,
+    requireReleaseSha,
+  });
   if (envIssues.length > 0) {
     printLine("#", "Prod spine smoke summary");
     const failed = renderSummary(envIssues);
@@ -826,6 +1009,8 @@ async function main() {
     lastResults = await runAttempt({
       aihqBaseUrl,
       internalToken,
+      expectedReleaseSha,
+      requireReleaseSha,
       metaBaseUrl,
       twilioBaseUrl,
       websiteLaneTenantKey,

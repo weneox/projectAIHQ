@@ -46,10 +46,10 @@ Container packaging expectations:
 
 - `ai-hq-backend` must be built from the repo root: `docker build -f ai-hq-backend/Dockerfile .`
 - `meta-bot-backend` must be built from the repo root: `docker build -f meta-bot-backend/Dockerfile .`
-- `twilio-voice-backend` currently has no in-repo Dockerfile and should be treated as workspace-start-only unless a deploy asset is added deliberately.
+- `twilio-voice-backend` must be built from the repo root: `docker build -f twilio-voice-backend/Dockerfile .`
 
 Reason:
-Both shipped Dockerfiles depend on the shared workspace loader in [`scripts/workspace-module-loader.mjs`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/scripts/workspace-module-loader.mjs) and the local [`shared-contracts`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/shared-contracts/package.json) package, so building from a workspace directory alone is not a supported parity path.
+The backend Dockerfiles depend on the shared workspace loader in [`scripts/workspace-module-loader.mjs`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/scripts/workspace-module-loader.mjs) and the local [`shared-contracts`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/shared-contracts/package.json) package, so building from a workspace directory alone is not a supported parity path.
 
 If production-like env is also present:
 
@@ -72,9 +72,10 @@ npm run lint:all
 npm run test:frontend:stable:ci
 npm run test:backend:all
 npm run build:all
+docker build -f twilio-voice-backend/Dockerfile .
 ```
 
-Release Gate uses `npm run build:all`, not root `npm run build`.
+Release Gate uses `npm run build:all`, not root `npm run build`. It also builds the Twilio voice backend Docker image from the repo root before any production deploy hook can run.
 
 ## Production-like verification requirements
 

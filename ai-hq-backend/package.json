@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node --import ../scripts/workspace-module-loader.mjs server.js",
     "dev": "node --watch --import ../scripts/workspace-module-loader.mjs server.js",
+    "migration:safety-preflight": "node scripts/migration-safety-preflight.mjs",
     "migrate": "node --import ../scripts/workspace-module-loader.mjs scripts/migrate.js",
     "backfill:operational-data": "node --import ../scripts/workspace-module-loader.mjs scripts/backfill-operational-data.mjs",
     "repair:canonical-auth": "node --import ../scripts/workspace-module-loader.mjs scripts/repair-canonical-auth.mjs",

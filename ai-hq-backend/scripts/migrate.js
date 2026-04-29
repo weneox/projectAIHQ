@@ -10,6 +10,7 @@ import {
   migrate,
 } from "../src/db/index.js";
 import { createLogger } from "../src/utils/logger.js";
+import { assertMigrationSafetyPreflight } from "./migration-safety-preflight.mjs";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -21,6 +22,8 @@ async function main() {
     component: "db-migrate-cli",
     env: cfg.app.env,
   });
+
+  assertMigrationSafetyPreflight();
 
   assertSelectedConfigValid(["db.url"], console);
   await initDb();

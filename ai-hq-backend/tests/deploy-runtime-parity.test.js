@@ -25,6 +25,9 @@ test("container runtime parity reports supported repo Docker assets honestly", (
   );
 
   assert.ok(twilio);
-  assert.equal(twilio.status, "no_repo_docker_asset");
-  assert.match(twilio.detail, /no Dockerfile is present in-repo/i);
+  assert.equal(twilio.status, "ready");
+  assert.match(
+    twilio.detail,
+    /docker build -f twilio-voice-backend\/Dockerfile \. -> docker run --rm -p 8080:8080 twilio-voice-backend \(build from repo root\)/
+  );
 });
