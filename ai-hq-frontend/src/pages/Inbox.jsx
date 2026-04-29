@@ -1,11 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import {
-  getMetaChannelStatus,
-  getTelegramChannelStatus,
-  getWebsiteWidgetStatus,
-} from "../api/channelConnect.js";
+import { getLaunchPosture } from "../api/launch.js";
 import {
   getSettingsTrustView,
   saveSettingsTrustPolicyControl,
@@ -24,23 +20,42 @@ import { getAppSessionContext } from "../lib/appSession.js";
 import { s } from "../lib/appUi.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import {
-  buildMetaLaunchChannelState,
-  buildTelegramLaunchChannelState,
-  buildWebsiteLaunchChannelState,
-  buildTruthOperationalState,
-} from "../lib/readinessViewModel.js";
-import {
   InlineNotice,
   LoadingSurface,
   SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
+import Button from "../components/ui/Button.jsx";
 
 const EMPTY_READINESS_STATE = {
   tenantKey: "",
-  truth: null,
-  meta: null,
-  telegram: null,
-  website: null,
+  loading: true,
+  error: "",
+  posture: null,
+  truth: {
+    ready: false,
+    status: "unavailable",
+    reasonCode: "launch_posture_unavailable",
+    message: "",
+  },
+  runtime: {
+    ready: false,
+    status: "unavailable",
+    reasonCode: "launch_posture_unavailable",
+    message: "",
+  },
+  overall: {
+    status: "unavailable",
+    launchReady: false,
+    title: "",
+    message: "",
+    primaryAction: { label: "Open channels", path: "/channels" },
+  },
+  channelSummary: {
+    readyCount: 0,
+    connectedCount: 0,
+    deliveryReadyChannelIds: [],
+    selectedChannelId: "",
+  },
 };
 
 const EMPTY_TRUST_STATE = {
@@ -67,6 +82,158 @@ function buildSurfaceNotice(surface = {}) {
   }
 
   return null;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function normalizeNoticeAction(
+  action = null,
+  fallback = { label: "Open channels", path: "/channels" }
+) {
+  const source = obj(action);
+  const target = obj(source.target);
+  const label = s(source.label || fallback.label);
+  const path = s(source.path || target.path || fallback.path);
+
+  if (!label && !path) return null;
+
+  return {
+    label: label || fallback.label,
+    path: path || fallback.path,
+  };
+}
+
+function buildReadinessStateFromPosture({
+  tenantKey = "",
+  posture = null,
+  error = "",
+} = {}) {
+  const payload = obj(posture);
+  const unavailable = s(error);
+  const channelSummary = obj(payload.channelSummary);
+
+  return {
+    tenantKey,
+    loading: false,
+    error: unavailable,
+    posture: unavailable ? null : payload,
+    truth: unavailable ? EMPTY_READINESS_STATE.truth : obj(payload.truth),
+    runtime: unavailable ? EMPTY_READINESS_STATE.runtime : obj(payload.runtime),
+    overall: unavailable
+      ? {
+          ...EMPTY_READINESS_STATE.overall,
+          title: "Launch readiness unavailable",
+          message:
+            "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
+        }
+      : obj(payload.overall),
+    channelSummary: {
+      readyCount: unavailable ? 0 : n(channelSummary.readyCount),
+      connectedCount: unavailable ? 0 : n(channelSummary.connectedCount),
+      deliveryReadyChannelIds: unavailable
+        ? []
+        : arr(channelSummary.deliveryReadyChannelIds),
+      selectedChannelId: unavailable ? "" : s(channelSummary.selectedChannelId),
+    },
+  };
+}
+
+async function loadInboxOperationalState(tenantKey = "") {
+  const [trustResult, postureResult] = await Promise.allSettled([
+    getSettingsTrustView({ limit: 8 }),
+    getLaunchPosture(),
+  ]);
+
+  return {
+    readinessState: buildReadinessStateFromPosture({
+      tenantKey,
+      posture: postureResult.status === "fulfilled" ? postureResult.value : null,
+      error:
+        postureResult.status === "rejected"
+          ? s(postureResult.reason?.message) ||
+            "Launch readiness could not be loaded."
+          : "",
+    }),
+    trustState: {
+      tenantKey,
+      loading: false,
+      trustView: trustResult.status === "fulfilled" ? trustResult.value : null,
+    },
+  };
+}
+
+function buildLaunchReadinessNotice({
+  readinessState = EMPTY_READINESS_STATE,
+  hasDeliveryReadyLaunchChannel = false,
+  truthReady = false,
+  runtimeReady = false,
+  launchReady = false,
+} = {}) {
+  const overall = obj(readinessState.overall);
+  const status = lower(overall.status);
+  const action = normalizeNoticeAction(overall.primaryAction);
+  const postureError = s(readinessState.error);
+
+  if (postureError || status === "unavailable") {
+    return {
+      tone: "warning",
+      title: "Launch readiness unavailable",
+      description:
+        postureError ||
+        s(overall.message) ||
+        "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
+      action,
+    };
+  }
+
+  if (launchReady) return null;
+
+  if (hasDeliveryReadyLaunchChannel && !truthReady) {
+    return {
+      tone: "warning",
+      title: "Truth approval required",
+      description:
+        "A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies.",
+      action,
+    };
+  }
+
+  if (hasDeliveryReadyLaunchChannel && !runtimeReady) {
+    return {
+      tone: "warning",
+      title: "Runtime repair required",
+      description:
+        s(readinessState.runtime?.message) ||
+        "A channel is live, but runtime is not ready yet. Repair runtime before trusting live AI replies.",
+      action,
+    };
+  }
+
+  return {
+    tone: status === "degraded" ? "warning" : "info",
+    title: s(overall.title) || "Launch setup required",
+    description:
+      s(overall.message) ||
+      "Finish launch setup before relying on live inbox replies.",
+    action,
+  };
 }
 
 function resolveInboxPolicyControl(trustView = null) {
@@ -216,44 +383,24 @@ export default function Inbox() {
   const loadOperationalState = useCallback(async () => {
     if (!workspace.ready) return;
 
+    setResolvedReadinessState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+      error: "",
+    }));
     setResolvedTrustState((prev) => ({
       ...prev,
       tenantKey: workspace.tenantKey,
       loading: true,
     }));
 
-    const results = await Promise.allSettled([
-      getSettingsTrustView({ limit: 8 }),
-      getMetaChannelStatus(),
-      getTelegramChannelStatus(),
-      getWebsiteWidgetStatus(),
-    ]);
+    const { readinessState, trustState } = await loadInboxOperationalState(
+      workspace.tenantKey
+    );
 
-    setResolvedReadinessState({
-      tenantKey: workspace.tenantKey,
-      truth:
-        results[0].status === "fulfilled"
-          ? buildTruthOperationalState(results[0].value)
-          : buildTruthOperationalState(null),
-      meta:
-        results[1].status === "fulfilled"
-          ? buildMetaLaunchChannelState(results[1].value)
-          : buildMetaLaunchChannelState({}),
-      telegram:
-        results[2].status === "fulfilled"
-          ? buildTelegramLaunchChannelState(results[2].value)
-          : buildTelegramLaunchChannelState({}),
-      website:
-        results[3].status === "fulfilled"
-          ? buildWebsiteLaunchChannelState(results[3].value)
-          : buildWebsiteLaunchChannelState({}),
-    });
-
-    setResolvedTrustState({
-      tenantKey: workspace.tenantKey,
-      loading: false,
-      trustView: results[0].status === "fulfilled" ? results[0].value : null,
-    });
+    setResolvedReadinessState(readinessState);
+    setResolvedTrustState(trustState);
   }, [workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
@@ -261,52 +408,22 @@ export default function Inbox() {
 
     let alive = true;
 
-    Promise.allSettled([
-      getSettingsTrustView({ limit: 8 }),
-      getMetaChannelStatus(),
-      getTelegramChannelStatus(),
-      getWebsiteWidgetStatus(),
-    ])
-      .then((results) => {
+    loadInboxOperationalState(workspace.tenantKey)
+      .then(({ readinessState, trustState }) => {
         if (!alive) return;
 
-        setResolvedReadinessState({
-          tenantKey: workspace.tenantKey,
-          truth:
-            results[0].status === "fulfilled"
-              ? buildTruthOperationalState(results[0].value)
-              : buildTruthOperationalState(null),
-          meta:
-            results[1].status === "fulfilled"
-              ? buildMetaLaunchChannelState(results[1].value)
-              : buildMetaLaunchChannelState({}),
-          telegram:
-            results[2].status === "fulfilled"
-              ? buildTelegramLaunchChannelState(results[2].value)
-              : buildTelegramLaunchChannelState({}),
-          website:
-            results[3].status === "fulfilled"
-              ? buildWebsiteLaunchChannelState(results[3].value)
-              : buildWebsiteLaunchChannelState({}),
-        });
-
-        setResolvedTrustState({
-          tenantKey: workspace.tenantKey,
-          loading: false,
-          trustView:
-            results[0].status === "fulfilled" ? results[0].value : null,
-        });
+        setResolvedReadinessState(readinessState);
+        setResolvedTrustState(trustState);
       })
       .catch(() => {
         if (!alive) return;
 
-        setResolvedReadinessState({
-          tenantKey: workspace.tenantKey,
-          truth: buildTruthOperationalState(null),
-          meta: buildMetaLaunchChannelState({}),
-          telegram: buildTelegramLaunchChannelState({}),
-          website: buildWebsiteLaunchChannelState({}),
-        });
+        setResolvedReadinessState(
+          buildReadinessStateFromPosture({
+            tenantKey: workspace.tenantKey,
+            error: "Launch readiness could not be loaded.",
+          })
+        );
 
         setResolvedTrustState({
           tenantKey: workspace.tenantKey,
@@ -347,29 +464,35 @@ export default function Inbox() {
     if (!workspace.ready) {
       return {
         loading: false,
-        truth: null,
-        meta: null,
-        telegram: null,
-        website: null,
+        error: "",
+        posture: null,
+        truth: EMPTY_READINESS_STATE.truth,
+        runtime: EMPTY_READINESS_STATE.runtime,
+        overall: EMPTY_READINESS_STATE.overall,
+        channelSummary: EMPTY_READINESS_STATE.channelSummary,
       };
     }
 
     if (resolvedReadinessState.tenantKey !== workspace.tenantKey) {
       return {
         loading: true,
-        truth: null,
-        meta: null,
-        telegram: null,
-        website: null,
+        error: "",
+        posture: null,
+        truth: EMPTY_READINESS_STATE.truth,
+        runtime: EMPTY_READINESS_STATE.runtime,
+        overall: EMPTY_READINESS_STATE.overall,
+        channelSummary: EMPTY_READINESS_STATE.channelSummary,
       };
     }
 
     return {
-      loading: false,
+      loading: resolvedReadinessState.loading === true,
+      error: s(resolvedReadinessState.error),
+      posture: resolvedReadinessState.posture,
       truth: resolvedReadinessState.truth,
-      meta: resolvedReadinessState.meta,
-      telegram: resolvedReadinessState.telegram,
-      website: resolvedReadinessState.website,
+      runtime: resolvedReadinessState.runtime,
+      overall: resolvedReadinessState.overall,
+      channelSummary: resolvedReadinessState.channelSummary,
     };
   }, [workspace.ready, workspace.tenantKey, resolvedReadinessState]);
 
@@ -563,25 +686,39 @@ export default function Inbox() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailOpen]);
 
-  const launchChannels = useMemo(
-    () => [readinessState.meta, readinessState.telegram, readinessState.website],
-    [readinessState.meta, readinessState.telegram, readinessState.website]
-  );
-
   const hasDeliveryReadyLaunchChannel = useMemo(
     () =>
-      launchChannels.some(
-        (item) => item?.connected === true && item?.deliveryReady === true
-      ),
-    [launchChannels]
+      n(readinessState.channelSummary?.readyCount) > 0 ||
+      arr(readinessState.channelSummary?.deliveryReadyChannelIds).length > 0,
+    [readinessState.channelSummary]
   );
 
   const truthReady = useMemo(
-    () => s(readinessState.truth?.status).toLowerCase() === "ready",
+    () =>
+      readinessState.truth?.ready === true &&
+      lower(readinessState.truth?.status) === "ready",
     [readinessState.truth]
   );
 
-  const showTruthApprovalNotice = hasDeliveryReadyLaunchChannel && !truthReady;
+  const runtimeReady = useMemo(
+    () =>
+      readinessState.runtime?.ready === true &&
+      lower(readinessState.runtime?.status) === "ready",
+    [readinessState.runtime]
+  );
+
+  const launchReady =
+    readinessState.overall?.launchReady === true &&
+    truthReady &&
+    runtimeReady &&
+    hasDeliveryReadyLaunchChannel;
+  const launchReadinessNotice = buildLaunchReadinessNotice({
+    readinessState,
+    hasDeliveryReadyLaunchChannel,
+    truthReady,
+    runtimeReady,
+    launchReady,
+  });
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
@@ -595,7 +732,7 @@ export default function Inbox() {
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-white">
-      {surfaceNotice || showTruthApprovalNotice ? (
+      {surfaceNotice || launchReadinessNotice ? (
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-30 px-4 pt-3">
           <div className="pointer-events-auto flex flex-col gap-2">
             {surfaceNotice ? (
@@ -607,11 +744,25 @@ export default function Inbox() {
               />
             ) : null}
 
-            {showTruthApprovalNotice ? (
+            {launchReadinessNotice ? (
               <InlineNotice
-                tone="warning"
-                title="Truth approval required"
-                description="A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies."
+                tone={launchReadinessNotice.tone}
+                title={launchReadinessNotice.title}
+                description={launchReadinessNotice.description}
+                action={
+                  launchReadinessNotice.action ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        const path = s(launchReadinessNotice.action?.path);
+                        navigate(path.startsWith("/") ? path : "/channels");
+                      }}
+                    >
+                      {launchReadinessNotice.action.label}
+                    </Button>
+                  ) : null
+                }
                 compact
               />
             ) : null}

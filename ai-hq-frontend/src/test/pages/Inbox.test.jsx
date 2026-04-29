@@ -9,6 +9,7 @@ const getAppSessionContext = vi.fn();
 const useInboxComposerSurface = vi.fn();
 const useThreadOutboundAttemptsSurface = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
+const getLaunchPosture = vi.fn();
 const getSettingsTrustView = vi.fn();
 const saveSettingsTrustPolicyControl = vi.fn();
 const getMetaChannelStatus = vi.fn();
@@ -45,6 +46,10 @@ vi.mock("../../lib/appSession.js", () => ({
   getAppSessionContext: (...args) => getAppSessionContext(...args),
 }));
 
+vi.mock("../../api/launch.js", () => ({
+  getLaunchPosture: (...args) => getLaunchPosture(...args),
+}));
+
 vi.mock("../../api/trust.js", () => ({
   getSettingsTrustView: (...args) => getSettingsTrustView(...args),
   saveSettingsTrustPolicyControl: (...args) =>
@@ -58,10 +63,13 @@ vi.mock("../../api/channelConnect.js", () => ({
 }));
 
 vi.mock("../../components/inbox/InboxThreadListPanel.jsx", () => ({
-  default: ({ selectedThreadId }) => (
+  default: ({ selectedThreadId, launchChannelConnected }) => (
     <section aria-label="Thread list panel">
       <h2>All conversations</h2>
       <div>selected-thread:{selectedThreadId || "none"}</div>
+      <div>
+        launch-channel-connected:{launchChannelConnected ? "yes" : "no"}
+      </div>
     </section>
   ),
 }));
@@ -177,18 +185,139 @@ function buildTrustView({
   };
 }
 
-function buildConnectedMetaStatus() {
+function buildLaunchPosture({
+  truthReady = true,
+  runtimeReady = true,
+  readyChannelIds = [],
+  connectedChannelIds = readyChannelIds,
+  overall = {},
+} = {}) {
+  const channelLabels = {
+    website: "Website chat",
+    instagram: "Instagram",
+    telegram: "Telegram",
+  };
+  const channelKinds = {
+    website: "website_chat",
+    instagram: "instagram_dm",
+    telegram: "telegram_private_bot_chat",
+  };
+  const channels = Object.fromEntries(
+    ["website", "instagram", "telegram"].map((id) => {
+      const deliveryReady = readyChannelIds.includes(id);
+      const connected = deliveryReady || connectedChannelIds.includes(id);
+      let status = "not_connected";
+      if (deliveryReady) {
+        status = "ready";
+      } else if (connected) {
+        status = "connected_blocked";
+      }
+
+      return [
+        id,
+        {
+          id,
+          label: channelLabels[id],
+          kind: channelKinds[id],
+          status,
+          connected,
+          deliveryReady,
+          available: true,
+          reasonCode: deliveryReady ? "" : "channel_not_delivery_ready",
+          account: null,
+          readiness: {
+            status: deliveryReady ? "ready" : "blocked",
+            message: deliveryReady
+              ? "Channel is ready for live delivery."
+              : "Channel is not ready for live delivery.",
+          },
+          blockers: deliveryReady
+            ? []
+            : [{ reasonCode: "channel_not_delivery_ready" }],
+          repairActions: deliveryReady
+            ? []
+            : [{ label: "Open channels", path: "/channels" }],
+          capabilities: {
+            inbound: true,
+            outbound: true,
+          },
+        },
+      ];
+    })
+  );
+  const launchReady =
+    truthReady === true && runtimeReady === true && readyChannelIds.length > 0;
+
   return {
-    connected: true,
-    state: "connected",
+    ok: true,
+    version: "launch_posture_v1",
+    generatedAt: "2026-04-29T10:00:00.000Z",
+    tenant: {
+      id: "tenant-1",
+      tenantKey: "acme",
+    },
+    scope: {
+      id: "aihq_launch_v1_narrow",
+      surfaces: [
+        "home",
+        "channels",
+        "truth",
+        "inbox",
+        "website_chat",
+        "instagram_dm",
+        "telegram_private_bot_chat",
+      ],
+    },
+    overall: {
+      status: launchReady ? "ready" : "blocked",
+      launchReady,
+      title: launchReady ? "Launch posture ready" : "Launch channel required",
+      message: launchReady
+        ? "Approved business info, runtime, channel delivery, and inbox are ready."
+        : "Connect a launch channel before relying on live inbox replies.",
+      primaryAction: launchReady
+        ? { label: "Open inbox", path: "/inbox" }
+        : { label: "Open channels", path: "/channels" },
+      secondaryAction: { label: "Open truth", path: "/truth" },
+      ...overall,
+    },
+    truth: {
+      ready: truthReady,
+      status: truthReady ? "ready" : "blocked",
+      reasonCode: truthReady ? "" : "approved_truth_unavailable",
+      message: truthReady
+        ? "Approved truth is ready."
+        : "Approved truth is not ready yet.",
+      latestVersionId: truthReady ? "truth_v_123" : "",
+    },
     runtime: {
-      deliveryReady: true,
+      ready: runtimeReady,
+      status: runtimeReady ? "ready" : "blocked",
+      reasonCode: runtimeReady ? "" : "runtime_repair_required",
+      message: runtimeReady
+        ? "Runtime projection is ready."
+        : "Runtime projection still needs repair.",
     },
-    readiness: {
-      status: "ready",
-      message: "Instagram inbox is ready.",
-      blockers: [],
+    channels,
+    channelSummary: {
+      readyCount: readyChannelIds.length,
+      connectedCount: connectedChannelIds.length,
+      deliveryReadyChannelIds: readyChannelIds,
+      selectedChannelId: readyChannelIds[0] || "",
     },
+    inbox: {
+      available: true,
+      unreadCount: 0,
+      openCount: 0,
+      handoffCount: 0,
+      assignedOpenCount: 0,
+      pendingOutboundCount: 0,
+      failedOutboundCount: 0,
+      retryingOutboundCount: 0,
+    },
+    blockers: [],
+    repairActions: [],
+    unavailable: [],
   };
 }
 
@@ -207,7 +336,22 @@ describe("Inbox", () => {
       actorName: "operator",
     });
 
-    getSettingsTrustView.mockRejectedValue(new Error("truth unavailable"));
+    getLaunchPosture.mockResolvedValue(
+      buildLaunchPosture({
+        truthReady: true,
+        runtimeReady: true,
+        readyChannelIds: [],
+        overall: {
+          status: "blocked",
+          launchReady: false,
+          title: "Launch channel required",
+          message:
+            "Connect a launch channel before relying on live inbox replies.",
+          primaryAction: { label: "Open channels", path: "/channels" },
+        },
+      })
+    );
+    getSettingsTrustView.mockResolvedValue(buildTrustView({ status: "ready" }));
     getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
     getTelegramChannelStatus.mockRejectedValue(
       new Error("telegram unavailable")
@@ -340,24 +484,40 @@ describe("Inbox", () => {
     expect(
       screen.getByText(/automation-status:autonomy enabled/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/launch channel required/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open channels/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/launch-channel-connected:no/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread:none/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread-name:none/i)).toBeInTheDocument();
+
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
   it("shows truth approval notice when a launch channel is connected but truth is not ready", async () => {
-    getMetaChannelStatus.mockResolvedValue(buildConnectedMetaStatus());
-    getTelegramChannelStatus.mockResolvedValue({ state: "disconnected" });
-    getWebsiteWidgetStatus.mockResolvedValue({ state: "not_connected" });
-    getSettingsTrustView.mockResolvedValue(
-      buildTrustView({
-        status: "blocked",
+    getLaunchPosture.mockResolvedValue(
+      buildLaunchPosture({
+        truthReady: false,
+        runtimeReady: true,
+        readyChannelIds: ["instagram"],
+        overall: {
+          status: "blocked",
+          launchReady: false,
+          title: "Approved truth required",
+          message: "Approve truth before live replies are trusted.",
+          primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+        },
       })
     );
 
     renderInbox();
 
     await waitFor(() => {
-      expect(getSettingsTrustView).toHaveBeenCalled();
+      expect(getLaunchPosture).toHaveBeenCalled();
     });
 
     expect(
@@ -369,22 +529,30 @@ describe("Inbox", () => {
         /a channel is live, but approved truth is not ready yet\. approve truth before trusting live ai replies\./i
       )
     ).toBeInTheDocument();
+    expect(screen.getByText(/launch-channel-connected:yes/i)).toBeInTheDocument();
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
   it("does not show the truth approval notice when a launch channel is connected and truth is ready", async () => {
-    getMetaChannelStatus.mockResolvedValue(buildConnectedMetaStatus());
-    getTelegramChannelStatus.mockResolvedValue({ state: "disconnected" });
-    getWebsiteWidgetStatus.mockResolvedValue({ state: "not_connected" });
     getSettingsTrustView.mockResolvedValue(
       buildTrustView({
-        status: "ready",
+        status: "blocked",
+      })
+    );
+    getLaunchPosture.mockResolvedValue(
+      buildLaunchPosture({
+        truthReady: true,
+        runtimeReady: true,
+        readyChannelIds: ["website"],
       })
     );
 
     renderInbox();
 
     await waitFor(() => {
-      expect(getSettingsTrustView).toHaveBeenCalled();
+      expect(getLaunchPosture).toHaveBeenCalled();
     });
 
     await waitFor(() => {
@@ -392,5 +560,28 @@ describe("Inbox", () => {
         screen.queryByText(/truth approval required/i)
       ).not.toBeInTheDocument();
     });
+    expect(
+      screen.queryByText(/launch channel required/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/launch-channel-connected:yes/i)).toBeInTheDocument();
+    expect(getSettingsTrustView).toHaveBeenCalled();
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
+  });
+
+  it("shows a fail-closed warning when launch posture cannot be loaded", async () => {
+    getLaunchPosture.mockRejectedValue(new Error("posture unavailable"));
+
+    renderInbox();
+
+    expect(
+      await screen.findByText(/launch readiness unavailable/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/posture unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/launch-channel-connected:no/i)).toBeInTheDocument();
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 });
