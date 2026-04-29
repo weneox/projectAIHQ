@@ -2,13 +2,22 @@
 import { Outlet } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getAppAuthContextMock, peekAppAuthContextMock } = vi.hoisted(() => ({
+const {
+  getAppAuthContextMock,
+  getAppSessionContextMock,
+  peekAppAuthContextMock,
+} = vi.hoisted(() => ({
   getAppAuthContextMock: vi.fn(),
+  getAppSessionContextMock: vi.fn(async () => ({
+    user: { id: "user-1" },
+    workspace: { tenantKey: "acme" },
+  })),
   peekAppAuthContextMock: vi.fn(),
 }));
 
 vi.mock("../lib/appSession.js", () => ({
   getAppAuthContext: getAppAuthContextMock,
+  getAppSessionContext: getAppSessionContextMock,
   peekAppAuthContext: peekAppAuthContextMock,
 }));
 

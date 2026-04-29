@@ -2,13 +2,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const getLaunchPosture = vi.fn();
 const getCurrentSetupAssistantSession = vi.fn();
-const getSettingsTrustView = vi.fn();
-const listInboxThreads = vi.fn();
-const getOutboundSummary = vi.fn();
-const getMetaChannelStatus = vi.fn();
-const getTelegramChannelStatus = vi.fn();
-const getWebsiteWidgetStatus = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 let workspaceScope = {
   tenantKey: "acme",
@@ -16,24 +11,13 @@ let workspaceScope = {
   ready: true,
 };
 
+vi.mock("../../api/launch.js", () => ({
+  getLaunchPosture: (...args) => getLaunchPosture(...args),
+}));
+
 vi.mock("../../api/setup.js", () => ({
   getCurrentSetupAssistantSession: (...args) =>
     getCurrentSetupAssistantSession(...args),
-}));
-
-vi.mock("../../api/trust.js", () => ({
-  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
-}));
-
-vi.mock("../../api/inbox.js", () => ({
-  listInboxThreads: (...args) => listInboxThreads(...args),
-  getOutboundSummary: (...args) => getOutboundSummary(...args),
-}));
-
-vi.mock("../../api/channelConnect.js", () => ({
-  getMetaChannelStatus: (...args) => getMetaChannelStatus(...args),
-  getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
-  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
 }));
 
 vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
@@ -76,93 +60,178 @@ function createQueryClient() {
   });
 }
 
-function createTrustView(overrides = {}) {
+function createChannel(id, overrides = {}) {
+  const labels = {
+    website: ["Website chat", "website_chat"],
+    instagram: ["Instagram DM", "instagram_dm"],
+    telegram: ["Telegram private bot chat", "telegram_private_bot_chat"],
+  };
+  const [label, kind] = labels[id];
+  const deliveryReady = overrides.deliveryReady === true;
+  const connected = overrides.connected ?? deliveryReady;
+  const available = overrides.available ?? true;
+  const status =
+    overrides.status ||
+    (deliveryReady ? "ready" : connected ? "connected_blocked" : "needs_connection");
+  const reasonCode =
+    overrides.reasonCode ||
+    (deliveryReady ? "" : `${kind}_not_ready`);
+
   return {
-    summary: {
-      truth: {
-        latestVersionId: "truth-1",
-        readiness: {
-          status: "ready",
-        },
-      },
-      runtimeProjection: {
-        readiness: {
-          status: "ready",
-        },
-        health: {
-          usable: true,
-        },
-        authority: {
-          available: true,
-        },
-      },
-      reviewQueue: {
-        pending: 0,
-      },
+    id,
+    label,
+    kind,
+    status,
+    connected,
+    deliveryReady,
+    available,
+    reasonCode,
+    account: null,
+    readiness: {
+      status: deliveryReady ? "ready" : "blocked",
+      reasonCode,
+      message: deliveryReady
+        ? `${label} is ready for live delivery.`
+        : `${label} is not ready for live delivery.`,
+      blockers: [],
     },
-    recentRuns: [],
+    blockers: [],
+    repairActions: [],
+    capabilities: [kind],
     ...overrides,
   };
 }
 
-function createTelegramStatus(overrides = {}) {
+function createLaunchPosture(overrides = {}) {
+  const channels = {
+    website: createChannel("website", { connected: false, deliveryReady: false }),
+    instagram: createChannel("instagram", {
+      connected: false,
+      deliveryReady: false,
+    }),
+    telegram: createChannel("telegram", {
+      connected: true,
+      deliveryReady: true,
+      account: {
+        botUsername: "acmebot",
+      },
+    }),
+    ...(overrides.channels || {}),
+  };
+  const deliveryReadyChannelIds = Object.entries(channels)
+    .filter(([, channel]) => channel.deliveryReady === true)
+    .map(([id]) => id);
+  const connectedCount = Object.values(channels).filter(
+    (channel) => channel.connected === true
+  ).length;
+  const truth = {
+    ready: true,
+    status: "ready",
+    reasonCode: "",
+    message: "Approved business info is available.",
+    latestVersionId: "truth-1",
+    ...(overrides.truth || {}),
+  };
+  const runtime = {
+    ready: true,
+    status: "ready",
+    reasonCode: "",
+    message: "Approved runtime authority is available.",
+    ...(overrides.runtime || {}),
+  };
+  const inbox = {
+    available: true,
+    unreadCount: 0,
+    openCount: 0,
+    handoffCount: 0,
+    assignedOpenCount: 0,
+    pendingOutboundCount: 0,
+    failedOutboundCount: 0,
+    retryingOutboundCount: 0,
+    ...(overrides.inbox || {}),
+  };
+  const channelSummary = {
+    readyCount: deliveryReadyChannelIds.length,
+    connectedCount,
+    deliveryReadyChannelIds,
+    selectedChannelId: deliveryReadyChannelIds[0] || "",
+    ...(overrides.channelSummary || {}),
+  };
+  const launchReady =
+    truth.ready === true &&
+    runtime.ready === true &&
+    channelSummary.readyCount > 0 &&
+    inbox.available === true;
+
   return {
-    connected: true,
-    state: "connected",
-    readiness: {
-      message: "Telegram bot, webhook, and tenant runtime are ready for live delivery.",
+    ok: true,
+    version: "launch_posture_v1",
+    generatedAt: "2026-04-29T10:00:00.000Z",
+    tenant: {
+      id: "tenant-1",
+      tenantKey: "acme",
+    },
+    scope: {
+      id: "aihq_launch_v1_narrow",
+      surfaces: [
+        "home",
+        "channels",
+        "truth",
+        "inbox",
+        "website_chat",
+        "instagram_dm",
+        "telegram_private_bot_chat",
+      ],
+    },
+    overall: {
+      status: launchReady ? "ready" : "blocked",
+      launchReady,
+      title: launchReady ? "Launch posture ready" : "Launch posture blocked",
+      message: launchReady
+        ? "Approved business info, runtime, channel delivery, and inbox are ready."
+        : "A launch dependency still needs review.",
+      primaryAction: launchReady
+        ? { label: "Open inbox", path: "/inbox" }
+        : { label: "Open setup", path: "/home?assistant=setup" },
+      secondaryAction: { label: "Open channels", path: "/channels" },
+      ...(overrides.overall || {}),
+    },
+    truth,
+    runtime,
+    channels,
+    channelSummary,
+    inbox,
+    blockers: overrides.blockers || [],
+    repairActions: overrides.repairActions || [],
+    unavailable: overrides.unavailable || [],
+  };
+}
+
+function createBlockedTruthPosture(overrides = {}) {
+  return createLaunchPosture({
+    truth: {
+      ready: false,
+      status: "blocked",
+      reasonCode: "approved_truth_unavailable",
+      message: "Approved business info is unavailable.",
+      latestVersionId: "",
     },
     runtime: {
-      deliveryReady: true,
+      ready: false,
+      status: "blocked",
+      reasonCode: "approved_truth_unavailable",
+      message: "Approved runtime authority is not ready for launch.",
     },
-    account: {
-      botUsername: "acmebot",
-    },
-    ...overrides,
-  };
-}
-
-function createWebsiteStatus(overrides = {}) {
-  return {
-    state: "connected",
-    launchReadiness: {
-      status: "production_ready",
-      channelConfigured: true,
-      configurationReady: true,
-      widgetEnabled: true,
-      launchEnabled: true,
-      publicWidgetId: "ww_acme",
-      publicWidgetIdPresent: true,
-      allowedOriginsPresent: true,
-      allowedDomainsPresent: true,
-      originRulesPresent: true,
-      targetDomain: "acme.test",
-      domainVerificationRequired: true,
-      domainVerificationState: "verified",
-      domainVerified: true,
-      productionBlocked: false,
-      productionLaunchAllowed: true,
-      productionReady: true,
-      testingOnly: false,
-      testReady: true,
-      installSurfaceReady: true,
-      reasonCode: "",
-      message:
-        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-    },
-    readiness: {
-      status: "ready",
-      message:
-        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-    },
-    widget: {
-      enabled: true,
-      title: "Website chat",
-      websiteUrl: "https://acme.test",
-      publicWidgetId: "ww_acme",
+    overall: {
+      status: "blocked",
+      launchReady: false,
+      title: "Business info needs approval",
+      message: "Approve business info before launch posture can turn ready.",
+      primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+      secondaryAction: { label: "Open channels", path: "/channels" },
     },
     ...overrides,
-  };
+  });
 }
 
 describe("useProductHome", () => {
@@ -174,23 +243,34 @@ describe("useProductHome", () => {
       ready: true,
     };
 
-    getSettingsTrustView.mockResolvedValue(createTrustView());
-    listInboxThreads.mockResolvedValue({ threads: [] });
-    getOutboundSummary.mockResolvedValue({ pendingCount: 0 });
-    getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
-    getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
-    getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
+    getLaunchPosture.mockResolvedValue(createLaunchPosture());
     getCurrentSetupAssistantSession.mockResolvedValue(null);
     useWorkspaceTenantKey.mockImplementation(() => workspaceScope);
   });
 
   it("uses a connect CTA posture when Telegram is not connected", async () => {
-    getTelegramChannelStatus.mockResolvedValue(
-      createTelegramStatus({
-        connected: false,
-        state: "disconnected",
-        runtime: {
-          deliveryReady: false,
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        channels: {
+          telegram: createChannel("telegram", {
+            connected: false,
+            deliveryReady: false,
+          }),
+        },
+        channelSummary: {
+          readyCount: 0,
+          connectedCount: 0,
+          deliveryReadyChannelIds: [],
+          selectedChannelId: "",
+        },
+        overall: {
+          status: "blocked",
+          launchReady: false,
+          title: "Connect a launch channel",
+          message:
+            "Website chat, Instagram DM, or Telegram private bot chat must be delivery ready before launch.",
+          primaryAction: { label: "Open channels", path: "/channels" },
+          secondaryAction: { label: "Open setup", path: "/home?assistant=setup" },
         },
       })
     );
@@ -203,47 +283,26 @@ describe("useProductHome", () => {
       expect(result.current.loading).toBe(false);
     });
 
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(result.current.launchChannel.connected).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("connect_channel");
     expect(result.current.primaryAction.path).toBe("/channels");
   });
 
   it("keeps setup as the next action when both approved truth and channel are missing", async () => {
-    getSettingsTrustView.mockResolvedValue(
-      createTrustView({
-        summary: {
-          truth: {
-            latestVersionId: "",
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-            },
-          },
-          runtimeProjection: {
-            readiness: {
-              status: "blocked",
-            },
-            health: {
-              usable: false,
-              reasonCode: "approved_truth_unavailable",
-            },
-            authority: {
-              available: false,
-            },
-          },
-          reviewQueue: {
-            pending: 0,
-          },
+    getLaunchPosture.mockResolvedValue(
+      createBlockedTruthPosture({
+        channels: {
+          telegram: createChannel("telegram", {
+            connected: false,
+            deliveryReady: false,
+          }),
         },
-      })
-    );
-
-    getTelegramChannelStatus.mockResolvedValue(
-      createTelegramStatus({
-        connected: false,
-        state: "disconnected",
-        runtime: {
-          deliveryReady: false,
+        channelSummary: {
+          readyCount: 0,
+          connectedCount: 0,
+          deliveryReadyChannelIds: [],
+          selectedChannelId: "",
         },
       })
     );
@@ -263,34 +322,7 @@ describe("useProductHome", () => {
   });
 
   it("switches to setup-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
-    getSettingsTrustView.mockResolvedValue(
-      createTrustView({
-        summary: {
-          truth: {
-            latestVersionId: "",
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-            },
-          },
-          runtimeProjection: {
-            readiness: {
-              status: "blocked",
-            },
-            health: {
-              usable: false,
-              reasonCode: "approved_truth_unavailable",
-            },
-            authority: {
-              available: false,
-            },
-          },
-          reviewQueue: {
-            pending: 0,
-          },
-        },
-      })
-    );
+    getLaunchPosture.mockResolvedValue(createBlockedTruthPosture());
 
     getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
@@ -335,42 +367,40 @@ describe("useProductHome", () => {
   });
 
   it("keeps home truthful when Telegram is connected but runtime is still unavailable", async () => {
-    getSettingsTrustView.mockResolvedValue(
-      createTrustView({
-        summary: {
-          truth: {
-            latestVersionId: "truth-1",
-            readiness: {
-              status: "ready",
-            },
-          },
-          runtimeProjection: {
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        runtime: {
+          ready: false,
+          status: "blocked",
+          reasonCode: "runtime_authority_unavailable",
+          message: "Approved runtime authority is not ready for launch.",
+        },
+        channels: {
+          telegram: createChannel("telegram", {
+            connected: true,
+            deliveryReady: false,
             readiness: {
               status: "blocked",
-              reasonCode: "runtime_projection_missing",
+              reasonCode: "runtime_authority_unavailable",
+              message:
+                "Inbound Telegram messages cannot reach the AI reply path until the approved runtime projection is ready.",
+              blockers: [],
             },
-            health: {
-              usable: false,
-              reasonCode: "runtime_projection_missing",
-            },
-            authority: {
-              available: false,
-            },
-          },
-          reviewQueue: {
-            pending: 0,
-          },
+          }),
         },
-      })
-    );
-
-    getTelegramChannelStatus.mockResolvedValue(
-      createTelegramStatus({
-        runtime: {
-          deliveryReady: false,
+        channelSummary: {
+          readyCount: 0,
+          connectedCount: 1,
+          deliveryReadyChannelIds: [],
+          selectedChannelId: "",
         },
-        readiness: {
-          message: "Inbound Telegram messages cannot reach the AI reply path until the approved runtime projection is ready.",
+        overall: {
+          status: "blocked",
+          launchReady: false,
+          title: "Runtime authority is not ready",
+          message: "Approved runtime authority must be ready before launch.",
+          primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+          secondaryAction: { label: "Open channels", path: "/channels" },
         },
       })
     );
@@ -386,10 +416,33 @@ describe("useProductHome", () => {
     expect(result.current.truthRuntime.ready).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("runtime_repair_needed");
     expect(result.current.truthRuntime.summary).toMatch(/runtime/i);
-    expect(result.current.primaryAction.path).toBe("/truth");
+    expect(result.current.primaryAction.path).toBe("/home?assistant=setup");
   });
 
   it("moves into normal operation when Telegram, truth, and runtime are ready", async () => {
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        inbox: {
+          available: true,
+          unreadCount: 2,
+          openCount: 4,
+          handoffCount: 1,
+          assignedOpenCount: 1,
+          pendingOutboundCount: 2,
+          failedOutboundCount: 1,
+          retryingOutboundCount: 1,
+        },
+        overall: {
+          status: "attention",
+          launchReady: true,
+          title: "Launch ready with inbox attention",
+          message: "Launch prerequisites are ready and the inbox needs attention.",
+          primaryAction: { label: "Reply now", path: "/inbox" },
+          secondaryAction: { label: "Open channels", path: "/channels" },
+        },
+      })
+    );
+
     const { result } = renderHook(() => useProductHome(), {
       wrapper: createWrapper(),
     });
@@ -399,15 +452,48 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.launchChannel.connected).toBe(true);
+    expect(result.current.truthRuntime.truthReady).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(true);
+    expect(result.current.inboxState.counts).toMatchObject({
+      unreadCount: 2,
+      openCount: 4,
+      handoffCount: 1,
+      pendingOutboundCount: 2,
+      failedOutboundCount: 1,
+      retryingOutboundCount: 1,
+      outboundPending: 4,
+    });
     expect(result.current.assistant.launchPosture).toBe("normal_operation");
     expect(result.current.assistant.setupNeeded).toBe(false);
-    expect(result.current.primaryAction.path).toBe("/inbox");
+    expect(result.current.primaryAction).toEqual({
+      label: "Reply now",
+      path: "/inbox",
+    });
   });
 
   it("does not mark launch ready when inbox state is unavailable", async () => {
-    listInboxThreads.mockRejectedValue(new Error("inbox unavailable"));
-    getOutboundSummary.mockRejectedValue(new Error("outbound unavailable"));
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        inbox: {
+          available: false,
+        },
+        unavailable: [
+          {
+            surface: "inbox",
+            reasonCode: "inbox_pressure_unavailable",
+            message: "Inbox pressure could not be loaded.",
+          },
+        ],
+        overall: {
+          status: "unavailable",
+          launchReady: false,
+          title: "Inbox posture unavailable",
+          message: "Inbox pressure must be available before launch.",
+          primaryAction: { label: "Open inbox", path: "/inbox" },
+          secondaryAction: { label: "Open channels", path: "/channels" },
+        },
+      })
+    );
 
     const { result } = renderHook(() => useProductHome(), {
       wrapper: createWrapper(),
@@ -420,6 +506,7 @@ describe("useProductHome", () => {
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(true);
     expect(result.current.inboxState.status).toBe("unavailable");
+    expect(result.current.availabilityNote?.description).toMatch(/inbox/i);
     expect(result.current.launchReady).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("inbox_unavailable");
     expect(result.current.nextStep?.id).toBe("inbox");
@@ -427,13 +514,27 @@ describe("useProductHome", () => {
   });
 
   it("treats website chat as a real launch channel when it is the only ready option", async () => {
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue(
-      createWebsiteStatus({
-        readiness: {
-          status: "ready",
-          message:
-            "Website chat is configured with trusted origins and a live widget ID.",
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        channels: {
+          telegram: createChannel("telegram", {
+            connected: false,
+            deliveryReady: false,
+          }),
+          website: createChannel("website", {
+            connected: true,
+            deliveryReady: true,
+            account: {
+              targetDomain: "acme.test",
+              publicWidgetId: "ww_acme",
+            },
+          }),
+        },
+        channelSummary: {
+          readyCount: 1,
+          connectedCount: 1,
+          deliveryReadyChannelIds: ["website"],
+          selectedChannelId: "website",
         },
       })
     );
@@ -447,44 +548,48 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.launchChannel.provider).toBe("website");
+    expect(result.current.launchChannel.readyCount).toBe(1);
     expect(result.current.launchChannel.connected).toBe(true);
+    expect(result.current.launchChannel.deliveryReady).toBe(true);
     expect(result.current.launchChannel.action.path).toBe("/channels?channel=website");
   });
 
   it("keeps website chat out of the live launch channel when only testing handoffs are available", async () => {
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue(
-      createWebsiteStatus({
-        state: "blocked",
-        launchReadiness: {
-          status: "testing_only",
-          channelConfigured: true,
-          configurationReady: true,
-          widgetEnabled: true,
-          launchEnabled: true,
-          publicWidgetId: "ww_acme",
-          publicWidgetIdPresent: true,
-          allowedOriginsPresent: true,
-          allowedDomainsPresent: true,
-          originRulesPresent: true,
-          targetDomain: "acme.test",
-          domainVerificationRequired: true,
-          domainVerificationState: "pending",
-          domainVerified: false,
-          productionBlocked: true,
-          productionLaunchAllowed: false,
-          productionReady: false,
-          testingOnly: true,
-          testReady: true,
-          installSurfaceReady: true,
-          reasonCode: "website_domain_verification_required",
-          message:
-            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+    getLaunchPosture.mockResolvedValue(
+      createLaunchPosture({
+        channels: {
+          telegram: createChannel("telegram", {
+            connected: false,
+            deliveryReady: false,
+          }),
+          website: createChannel("website", {
+            connected: true,
+            deliveryReady: false,
+            status: "testing_only",
+            reasonCode: "website_testing_only",
+            readiness: {
+              status: "blocked",
+              reasonCode: "website_testing_only",
+              message:
+                "Website chat is available for test handoff only and is not ready for production delivery.",
+              blockers: [],
+            },
+          }),
         },
-        readiness: {
+        channelSummary: {
+          readyCount: 0,
+          connectedCount: 1,
+          deliveryReadyChannelIds: [],
+          selectedChannelId: "",
+        },
+        overall: {
           status: "blocked",
+          launchReady: false,
+          title: "Connect a launch channel",
           message:
-            "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
+            "Website chat, Instagram DM, or Telegram private bot chat must be delivery ready before launch.",
+          primaryAction: { label: "Open channels", path: "/channels" },
+          secondaryAction: { label: "Open setup", path: "/home?assistant=setup" },
         },
       })
     );
@@ -497,7 +602,7 @@ describe("useProductHome", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.launchChannel.connected).toBe(false);
+    expect(result.current.launchChannel.deliveryReady).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("connect_channel");
     expect(result.current.primaryAction.path).toBe("/channels");
   });
@@ -518,7 +623,7 @@ describe("useProductHome", () => {
       expect(first.result.current.loading).toBe(false);
     });
 
-    expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(1);
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     first.unmount();
 
     workspaceScope = {
@@ -533,44 +638,16 @@ describe("useProductHome", () => {
       expect(second.result.current.loading).toBe(false);
     });
 
-    expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
+    expect(getLaunchPosture).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes home posture when a launch-slice mutation is emitted for the active tenant", async () => {
     const queryClient = createQueryClient();
     const wrapper = createWrapper(queryClient);
 
-    getSettingsTrustView
-      .mockResolvedValueOnce(createTrustView())
-      .mockResolvedValueOnce(
-        createTrustView({
-          summary: {
-            truth: {
-              latestVersionId: "",
-              readiness: {
-                status: "blocked",
-                reasonCode: "approved_truth_unavailable",
-              },
-            },
-            runtimeProjection: {
-              readiness: {
-                status: "blocked",
-                reasonCode: "approved_truth_unavailable",
-              },
-              health: {
-                usable: false,
-                reasonCode: "approved_truth_unavailable",
-              },
-              authority: {
-                available: false,
-              },
-            },
-            reviewQueue: {
-              pending: 0,
-            },
-          },
-        })
-      );
+    getLaunchPosture
+      .mockResolvedValueOnce(createLaunchPosture())
+      .mockResolvedValueOnce(createBlockedTruthPosture());
 
     const { result } = renderHook(() => useProductHome(), {
       wrapper,
@@ -588,7 +665,7 @@ describe("useProductHome", () => {
     });
 
     await waitFor(() => {
-      expect(getSettingsTrustView).toHaveBeenCalledTimes(2);
+      expect(getLaunchPosture).toHaveBeenCalledTimes(2);
     });
 
     await waitFor(() => {
@@ -600,7 +677,7 @@ describe("useProductHome", () => {
     const queryClient = createQueryClient();
     const wrapper = createWrapper(queryClient);
 
-    getSettingsTrustView.mockResolvedValueOnce(createTrustView());
+    getLaunchPosture.mockResolvedValueOnce(createLaunchPosture());
 
     const { result } = renderHook(() => useProductHome(), {
       wrapper,
@@ -617,50 +694,12 @@ describe("useProductHome", () => {
 
     await new Promise((resolve) => window.setTimeout(resolve, 25));
 
-    expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(result.current.truthRuntime.ready).toBe(true);
   });
 
   it("keeps live launch posture fail-closed when only a partial setup draft exists", async () => {
-    getSettingsTrustView.mockResolvedValue(
-      createTrustView({
-        summary: {
-          truth: {
-            latestVersionId: "",
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-            },
-          },
-          runtimeProjection: {
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-            },
-            health: {
-              usable: false,
-              reasonCode: "approved_truth_unavailable",
-            },
-            authority: {
-              available: false,
-            },
-          },
-          reviewQueue: {
-            pending: 0,
-          },
-        },
-      })
-    );
-
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue(
-      createWebsiteStatus({
-        widget: {
-          enabled: true,
-          publicWidgetId: "ww_partial",
-        },
-      })
-    );
+    getLaunchPosture.mockResolvedValue(createBlockedTruthPosture());
 
     getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
@@ -709,15 +748,6 @@ describe("useProductHome", () => {
   });
 
   it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockResolvedValue(
-      createWebsiteStatus({
-        widget: {
-          enabled: true,
-          publicWidgetId: "ww_live",
-        },
-      })
-    );
     getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
         id: "session-rescan",
@@ -758,5 +788,25 @@ describe("useProductHome", () => {
     expect(result.current.truthRuntime.ready).toBe(true);
     expect(result.current.launchReady).toBe(true);
     expect(result.current.assistant.launchPosture).toBe("normal_operation");
+  });
+
+  it("keeps Home fail-closed when launch posture is unavailable", async () => {
+    getLaunchPosture.mockRejectedValue(new Error("launch posture unavailable"));
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe("launch posture unavailable");
+    expect(result.current.launchReady).toBe(false);
+    expect(result.current.truthRuntime.truthReady).toBe(false);
+    expect(result.current.truthRuntime.ready).toBe(false);
+    expect(result.current.launchChannel.deliveryReady).toBe(false);
+    expect(result.current.inboxState.status).toBe("unavailable");
+    expect(result.current.availabilityNote?.description).toMatch(/launch posture/i);
   });
 });

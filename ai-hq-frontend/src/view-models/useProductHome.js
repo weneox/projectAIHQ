@@ -1,19 +1,15 @@
-﻿import { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
+import { getLaunchPosture } from "../api/launch.js";
 import { getCurrentSetupAssistantSession } from "../api/setup.js";
-import {
-  getMetaChannelStatus,
-  getTelegramChannelStatus,
-  getWebsiteWidgetStatus,
-} from "../api/channelConnect.js";
-import { getSettingsTrustView } from "../api/trust.js";
 import {
   buildWorkspaceScopedQueryKey,
   useWorkspaceTenantKey,
 } from "../hooks/useWorkspaceTenantKey.js";
 import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
+
+const CHANNEL_IDS = ["website", "instagram", "telegram"];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -80,6 +76,7 @@ function formatHandle(value = "") {
 
 function buildChannelPath(provider = "") {
   switch (provider) {
+    case "instagram":
     case "meta":
       return "/channels?channel=instagram";
     case "telegram":
@@ -94,6 +91,7 @@ function buildChannelPath(provider = "") {
 
 function buildChannelLabel(provider = "") {
   switch (provider) {
+    case "instagram":
     case "meta":
       return "Instagram";
     case "telegram":
@@ -114,7 +112,9 @@ function buildLaunchAction(provider = "", mode = "open") {
   if (mode === "select") {
     return {
       label:
-        provider === "meta" ? "Select Instagram account" : `Open ${labelBase}`,
+        provider === "instagram" || provider === "meta"
+          ? "Select Instagram account"
+          : `Open ${labelBase}`,
       path,
     };
   }
@@ -203,397 +203,161 @@ function createCanonicalLaunchChannel(value = {}) {
   };
 }
 
-function buildMetaLaunchChannelState({ metaPayload, sourceStatus }) {
-  const available = sourceStatus.metaStatus?.available !== false;
-  const fallback = buildLaunchChannelUnavailableState();
-
-  if (!available) {
-    return createCanonicalLaunchChannel({
-      ...fallback,
-      id: "launch-meta",
-      provider: "meta",
-      channelLabel: "Instagram",
-      action: buildLaunchAction("meta", "open"),
-    });
+function statusLabel(status = "", fallback = "Needs review") {
+  switch (lower(status)) {
+    case "ready":
+      return "Ready";
+    case "connected":
+      return "Connected";
+    case "connected_blocked":
+      return "Connected, blocked";
+    case "testing_only":
+      return "Testing only";
+    case "needs_connection":
+      return "Connect required";
+    case "selection_required":
+      return "Selection required";
+    case "multiple_ready":
+      return "Multiple connected";
+    case "unavailable":
+      return "Unavailable";
+    default:
+      return fallback;
   }
-
-  const state = lower(metaPayload?.state);
-  const connected = metaPayload?.connected === true || state === "connected";
-  const deliveryReady = metaPayload?.runtime?.deliveryReady === true;
-  const selectionRequired = metaPayload?.pendingSelection?.required === true;
-  const account = obj(metaPayload?.account);
-  const displayName = firstText(
-    account.displayName,
-    account.pageName,
-    account.username ? `Instagram ${formatHandle(account.username)}` : ""
-  );
-  const handle = formatHandle(account.username);
-  const detail =
-    firstText(
-      metaPayload?.detail,
-      metaPayload?.readiness?.message,
-      metaPayload?.lastConnectFailure?.message
-    ) || "Open Channels to inspect Instagram connection posture.";
-
-  const base = {
-    id: "launch-meta",
-    provider: "meta",
-    channelLabel: "Instagram",
-    accountLabel: "Instagram account",
-    accountDisplayName: displayName,
-    accountHandle: handle,
-    account: {
-      displayName,
-      handle,
-      pageName: s(account.pageName),
-      username: s(account.username),
-      pageId: s(account.pageId),
-      igUserId: s(account.igUserId),
-      metaUserId: s(account.metaUserId),
-      metaUserName: s(account.metaUserName),
-    },
-    reasonCode: lower(
-      metaPayload?.reasonCode ||
-        metaPayload?.runtime?.reasonCode ||
-        metaPayload?.readiness?.blockers?.[0]?.reasonCode
-    ),
-  };
-
-  if (selectionRequired) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "selection_required",
-      statusLabel: "Selection required",
-      title: "Instagram account selection is still required.",
-      summary:
-        "Meta returned eligible Instagram business assets, but one still needs to be selected before this tenant is bound.",
-      detail,
-      action: buildLaunchAction("meta", "select"),
-      deliveryReady: false,
-    });
-  }
-
-  if (connected) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: true,
-      available: true,
-      status: deliveryReady ? "connected" : "connected_blocked",
-      statusLabel: "Connected",
-      title: deliveryReady
-        ? "Instagram is connected."
-        : "Instagram is connected, but delivery is still gated.",
-      summary:
-        s(metaPayload?.readiness?.message) ||
-        (deliveryReady
-          ? "Instagram can be used as the current launch channel."
-          : "Instagram is attached, but launch delivery is still blocked by runtime or channel readiness."),
-      detail,
-      action: buildLaunchAction("meta", "open"),
-      deliveryReady,
-    });
-  }
-
-  if (state === "connecting") {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "connecting",
-      statusLabel: "Connecting",
-      title: "Instagram connection is still in progress.",
-      summary:
-        s(metaPayload?.summary) ||
-        "Meta OAuth or asset binding still needs to settle before Instagram is treated as connected.",
-      detail,
-      action: buildLaunchAction("meta", "open"),
-      deliveryReady: false,
-    });
-  }
-
-  if (
-    state === "deauthorized" ||
-    state === "reconnect_required" ||
-    state === "disconnected" ||
-    state === "error" ||
-    state === "blocked"
-  ) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "repair_required",
-      statusLabel: "Reconnect required",
-      title: "Instagram needs reconnect or repair.",
-      summary:
-        s(metaPayload?.readiness?.message) ||
-        s(metaPayload?.summary) ||
-        "Instagram exists as a launch option, but the current connection should not be trusted yet.",
-      detail,
-      action: buildLaunchAction("meta", "reconnect"),
-      deliveryReady: false,
-    });
-  }
-
-  return createCanonicalLaunchChannel({
-    ...base,
-    connected: false,
-    available: true,
-    status: "needs_connection",
-    statusLabel: "Connect required",
-    title: "Connect Instagram before using it as the launch channel.",
-    summary:
-      s(metaPayload?.readiness?.message) ||
-      "Instagram is available as a launch channel, but it is not connected yet.",
-    detail,
-    action: buildLaunchAction("meta", "connect"),
-    deliveryReady: false,
-  });
 }
 
-function buildTelegramLaunchChannelState({ telegramPayload, sourceStatus }) {
-  const available = sourceStatus.telegramStatus?.available !== false;
-  const fallback = buildLaunchChannelUnavailableState();
+function accountInfoForChannel(provider = "", accountInput = {}) {
+  const account = obj(accountInput);
 
-  if (!available) {
-    return createCanonicalLaunchChannel({
-      ...fallback,
-      id: "launch-telegram",
-      provider: "telegram",
-      channelLabel: "Telegram",
-      action: buildLaunchAction("telegram", "open"),
-    });
+  if (provider === "telegram") {
+    const botHandle = formatHandle(account.botUsername);
+    const displayName = firstText(
+      account.displayName,
+      botHandle ? `Telegram ${botHandle}` : ""
+    );
+
+    return {
+      accountLabel: "Telegram bot",
+      accountDisplayName: displayName,
+      accountHandle: botHandle,
+      account: {
+        ...account,
+        displayName,
+        handle: botHandle,
+      },
+    };
   }
 
-  const state = lower(
-    telegramPayload?.state ||
-      (telegramPayload?.connected === true ? "connected" : "not_connected")
-  );
-  const connected =
-    telegramPayload?.connected === true || state === "connected";
-  const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
-  const account = obj(telegramPayload?.account);
-  const botHandle = formatHandle(account.botUsername);
-  const displayName = firstText(
-    account.displayName,
-    botHandle ? `Telegram ${botHandle}` : ""
-  );
-  const detail =
-    firstText(
-      telegramPayload?.detail,
-      telegramPayload?.readiness?.message
-    ) || "Open Channels to inspect Telegram connection posture.";
+  if (provider === "instagram") {
+    const handle = formatHandle(account.username);
+    const displayName = firstText(
+      account.displayName,
+      account.pageName,
+      handle ? `Instagram ${handle}` : ""
+    );
 
-  const base = {
-    id: "launch-telegram",
-    provider: "telegram",
-    channelLabel: "Telegram",
-    accountLabel: "Telegram bot",
-    accountDisplayName: displayName,
-    accountHandle: botHandle,
-    account: {
-      displayName,
-      handle: botHandle,
-      botUsername: s(account.botUsername),
-      botUserId: s(account.botUserId),
-      firstName: s(account.firstName),
-      lastName: s(account.lastName),
-    },
-    reasonCode: lower(
-      telegramPayload?.reasonCode ||
-        telegramPayload?.runtime?.reasonCode ||
-        telegramPayload?.webhook?.reasonCode
-    ),
+    return {
+      accountLabel: "Instagram account",
+      accountDisplayName: displayName,
+      accountHandle: handle,
+      account: {
+        ...account,
+        displayName,
+        handle,
+      },
+    };
+  }
+
+  if (provider === "website") {
+    const handle = firstText(account.targetDomain, account.websiteUrl);
+    const displayName = firstText(account.displayName, handle, "Website chat");
+
+    return {
+      accountLabel: "Reference website",
+      accountDisplayName: displayName,
+      accountHandle: handle,
+      account: {
+        ...account,
+        displayName,
+        handle,
+      },
+    };
+  }
+
+  return {
+    accountLabel: "",
+    accountDisplayName: "",
+    accountHandle: "",
+    account,
   };
-
-  if (connected) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: true,
-      available: true,
-      status: deliveryReady ? "connected" : "connected_blocked",
-      statusLabel: "Connected",
-      title: deliveryReady
-        ? "Telegram is connected."
-        : "Telegram is connected, but delivery is still gated.",
-      summary:
-        s(telegramPayload?.readiness?.message) ||
-        (deliveryReady
-          ? "Telegram can be used as the current launch channel."
-          : "Telegram is attached, but launch delivery is still blocked by runtime or channel readiness."),
-      detail,
-      action: buildLaunchAction("telegram", "open"),
-      deliveryReady,
-    });
-  }
-
-  if (state === "connecting") {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "connecting",
-      statusLabel: "Connecting",
-      title: "Telegram connection is still in progress.",
-      summary:
-        s(telegramPayload?.summary) ||
-        "Webhook or runtime checks still need to settle before Telegram is treated as connected.",
-      detail,
-      action: buildLaunchAction("telegram", "open"),
-      deliveryReady: false,
-    });
-  }
-
-  if (
-    state === "error" ||
-    state === "blocked" ||
-    state === "disconnected"
-  ) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "repair_required",
-      statusLabel: "Reconnect required",
-      title: "Telegram needs reconnect or repair.",
-      summary:
-        s(telegramPayload?.readiness?.message) ||
-        s(telegramPayload?.summary) ||
-        "Telegram exists as a launch option, but the current connection should not be trusted yet.",
-      detail,
-      action: buildLaunchAction("telegram", "reconnect"),
-      deliveryReady: false,
-    });
-  }
-
-  return createCanonicalLaunchChannel({
-    ...base,
-    connected: false,
-    available: true,
-    status: "needs_connection",
-    statusLabel: "Connect required",
-    title: "Connect Telegram before using it as the launch channel.",
-    summary:
-      s(telegramPayload?.readiness?.message) ||
-      "Telegram is available as a launch channel, but it is not connected yet.",
-    detail,
-    action: buildLaunchAction("telegram", "connect"),
-    deliveryReady: false,
-  });
 }
 
-function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
-  const available = sourceStatus.websiteStatus?.available !== false;
-  const fallback = buildLaunchChannelUnavailableState();
+function actionForChannel(channel = {}, provider = "") {
+  const fallbackMode =
+    channel.connected === true
+      ? channel.deliveryReady === true
+        ? "open"
+        : "reconnect"
+      : "connect";
+  const blockerAction = obj(arr(channel.blockers)[0]?.nextAction);
 
-  if (!available) {
-    return createCanonicalLaunchChannel({
-      ...fallback,
-      id: "launch-website",
-      provider: "website",
-      channelLabel: "Website chat",
-      action: buildLaunchAction("website", "open"),
-    });
-  }
+  return normalizeAction(
+    arr(channel.repairActions)[0] || blockerAction,
+    buildLaunchAction(provider, fallbackMode)
+  );
+}
 
-  const state = lower(websitePayload?.state);
-  const launchReadiness = obj(websitePayload?.launchReadiness);
-  const readiness = obj(websitePayload?.readiness);
-  const widget = obj(websitePayload?.widget);
-  const blockers =
-    arr(launchReadiness.blockers).length > 0
-      ? arr(launchReadiness.blockers)
-      : arr(readiness.blockers);
-  const enabled =
-    launchReadiness.widgetEnabled === true || widget.enabled === true;
-  const testingOnly = launchReadiness.testingOnly === true;
-  const connected =
-    launchReadiness.productionLaunchAllowed === true ||
-    launchReadiness.productionReady === true ||
-    (state === "connected" && readiness.status === "ready");
-  const deliveryReady = connected;
-  const detail =
+function buildPostureChannelState(provider, channelInput = {}) {
+  const channel = obj(channelInput);
+  const readiness = obj(channel.readiness);
+  const blockers = arr(channel.blockers).length
+    ? arr(channel.blockers)
+    : arr(readiness.blockers);
+  const label = s(channel.label, buildChannelLabel(provider));
+  const available = channel.available === true;
+  const connected = channel.connected === true;
+  const deliveryReady =
+    available && connected && channel.deliveryReady === true;
+  const reasonCode = lower(
+    channel.reasonCode || readiness.reasonCode || blockers[0]?.reasonCode
+  );
+  const summary =
     firstText(
-      launchReadiness.message,
       readiness.message,
-      widget.websiteUrl ? `Reference website: ${widget.websiteUrl}` : "",
+      channel.message,
+      blockers[0]?.message,
       blockers[0]?.subtitle
-    ) || "Open Channels to inspect website chat posture.";
-
-  const base = {
-    id: "launch-website",
-    provider: "website",
-    channelLabel: "Website chat",
-    accountLabel: "Reference website",
-    accountDisplayName: s(widget.title || "Website chat"),
-    accountHandle: s(widget.websiteUrl),
-    account: {
-      displayName: s(widget.title || "Website chat"),
-      handle: s(widget.websiteUrl),
-      websiteUrl: s(widget.websiteUrl),
-      publicWidgetId: s(
-        launchReadiness.publicWidgetId || widget.publicWidgetId
-      ),
-    },
-    reasonCode: lower(launchReadiness.reasonCode || blockers[0]?.reasonCode),
-  };
-
-  if (connected) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: true,
-      available: true,
-      status: "connected",
-      statusLabel: "Connected",
-      title: "Website chat is configured.",
-      summary:
-        launchReadiness.message ||
-        readiness.message ||
-        "Website chat can be used as the current launch channel.",
-      detail,
-      action: buildLaunchAction("website", "open"),
-      deliveryReady,
-    });
-  }
-
-  if (enabled || testingOnly || launchReadiness.channelConfigured === true) {
-    return createCanonicalLaunchChannel({
-      ...base,
-      connected: false,
-      available: true,
-      status: "repair_required",
-      statusLabel: "Configuration required",
-      title: testingOnly
-        ? "Website chat is limited to testing handoffs."
-        : "Website chat still needs configuration.",
-      summary:
-        launchReadiness.message ||
-        readiness.message ||
-        (testingOnly
-          ? "Website chat can be tested, but production launch is still blocked."
-          : "Website chat is enabled, but install hardening is still incomplete."),
-      detail,
-      action: buildLaunchAction("website", "open"),
-      deliveryReady: false,
-    });
-  }
+    ) ||
+    (deliveryReady
+      ? `${label} is ready for live delivery.`
+      : `${label} is not ready for live delivery.`);
+  const accountInfo = accountInfoForChannel(provider, channel.account);
 
   return createCanonicalLaunchChannel({
-    ...base,
-    connected: false,
-    available: true,
-    status: "needs_connection",
-    statusLabel: "Enable required",
-    title: "Enable website chat before using it as the launch channel.",
-    summary:
-      launchReadiness.message ||
-      readiness.message ||
-      "Website chat is supported, but it is not configured yet.",
-    detail,
-    action: buildLaunchAction("website", "connect"),
-    deliveryReady: false,
+    id: `launch-${provider}`,
+    provider,
+    channelLabel: label,
+    connected,
+    available,
+    status: s(
+      channel.status,
+      deliveryReady ? "ready" : available ? "needs_connection" : "unavailable"
+    ),
+    statusLabel: statusLabel(
+      channel.status,
+      deliveryReady ? "Ready" : available ? "Needs review" : "Unavailable"
+    ),
+    title: deliveryReady
+      ? `${label} is ready.`
+      : available
+        ? `${label} still needs review.`
+        : `${label} is unavailable.`,
+    summary,
+    detail: summary,
+    action: actionForChannel(channel, provider),
+    deliveryReady,
+    reasonCode,
+    ...accountInfo,
   });
 }
 
@@ -603,7 +367,7 @@ function buildGenericLaunchChannelsState({
   summary = "",
   detail = "",
   status = "unavailable",
-  statusLabel = "Unavailable",
+  statusLabel: label = "Unavailable",
   connected = false,
   deliveryReady = false,
   reasonCode = "",
@@ -623,7 +387,7 @@ function buildGenericLaunchChannelsState({
     connected,
     available: availableChannels.length > 0,
     status,
-    statusLabel,
+    statusLabel: label,
     title,
     summary,
     detail,
@@ -641,54 +405,70 @@ function buildGenericLaunchChannelsState({
   });
 }
 
-function resolveCanonicalLaunchChannel({
-  metaPayload,
-  telegramPayload,
-  websitePayload,
-  sourceStatus,
-}) {
-  const metaChannel = buildMetaLaunchChannelState({
-    metaPayload,
-    sourceStatus,
-  });
-  const telegramChannel = buildTelegramLaunchChannelState({
-    telegramPayload,
-    sourceStatus,
-  });
-  const websiteChannel = buildWebsiteLaunchChannelState({
-    websitePayload,
-    sourceStatus,
-  });
+function withChannelCounts(channel, providerStates = []) {
+  const availableChannels = providerStates.filter((item) => item.available);
+  const readyChannels = availableChannels.filter(
+    (item) => item.connected && item.deliveryReady
+  );
+  const connectedChannels = availableChannels.filter((item) => item.connected);
 
-  const channels = [metaChannel, telegramChannel, websiteChannel];
-  const availableChannels = channels.filter((channel) => channel.available);
+  return createCanonicalLaunchChannel({
+    ...channel,
+    providerStates,
+    readyCount: readyChannels.length,
+    connectedCount: connectedChannels.length,
+  });
+}
+
+function resolveCanonicalLaunchChannel(posture = {}) {
+  const channels = obj(posture?.channels);
+  const channelSummary = obj(posture?.channelSummary);
+  const providerStates = CHANNEL_IDS.map((provider) =>
+    buildPostureChannelState(provider, {
+      id: provider,
+      ...obj(channels[provider]),
+    })
+  );
+  const availableChannels = providerStates.filter((channel) => channel.available);
   const readyChannels = availableChannels.filter(
     (channel) => channel.connected && channel.deliveryReady
   );
   const connectedChannels = availableChannels.filter(
     (channel) => channel.connected
   );
-  const blockedConnectedChannels = connectedChannels.filter(
-    (channel) => !channel.deliveryReady
+  const deliveryReadyIds = arr(channelSummary.deliveryReadyChannelIds)
+    .map((id) => lower(id))
+    .filter(Boolean);
+  const selectedId = lower(channelSummary.selectedChannelId);
+  const selectedChannel = providerStates.find(
+    (channel) =>
+      channel.provider === selectedId &&
+      channel.connected === true &&
+      channel.deliveryReady === true
   );
 
   if (!availableChannels.length) {
     return createCanonicalLaunchChannel(buildLaunchChannelUnavailableState());
   }
 
-  if (readyChannels.length === 1) {
-    const activeChannel = readyChannels[0];
-    return createCanonicalLaunchChannel({
-      ...activeChannel,
-      providerStates: channels,
-      readyCount: readyChannels.length,
-      connectedCount: connectedChannels.length,
-    });
+  if (selectedChannel) {
+    return withChannelCounts(selectedChannel, providerStates);
+  }
+
+  if (deliveryReadyIds.length === 1) {
+    const readyChannel = readyChannels.find(
+      (channel) => channel.provider === deliveryReadyIds[0]
+    );
+    if (readyChannel) return withChannelCounts(readyChannel, providerStates);
+  }
+
+  if (!deliveryReadyIds.length && readyChannels.length === 1) {
+    return withChannelCounts(readyChannels[0], providerStates);
   }
 
   if (readyChannels.length > 1) {
     return buildGenericLaunchChannelsState({
-      channels,
+      channels: providerStates,
       title: "Multiple launch channels are connected.",
       summary:
         `${readyChannels.length} launch channels are ready. Review Channels before deciding which live surface should lead operations.`,
@@ -704,28 +484,26 @@ function resolveCanonicalLaunchChannel({
 
   if (connectedChannels.length > 0) {
     return buildGenericLaunchChannelsState({
-      channels,
+      channels: providerStates,
       title: "A connected launch channel still needs review.",
       summary:
         connectedChannels.length === 1
           ? "A launch channel is attached, but it should not be treated as live yet."
           : `${connectedChannels.length} connected channels still need review before any one of them should be trusted as live.`,
       detail:
-        blockedConnectedChannels[0]?.detail ||
+        connectedChannels[0]?.detail ||
         "Open Channels to inspect connection posture, provider repair needs, and delivery blockers.",
       status: "connected_blocked",
       statusLabel: "Connected, blocked",
       connected: true,
       deliveryReady: false,
       reasonCode:
-        blockedConnectedChannels.length === 1
-          ? blockedConnectedChannels[0]?.reasonCode
-          : "",
+        connectedChannels.length === 1 ? connectedChannels[0]?.reasonCode : "",
     });
   }
 
   return buildGenericLaunchChannelsState({
-    channels,
+    channels: providerStates,
     title: "Connect a launch channel.",
     summary:
       "No launch channel is connected yet. Open Channels to choose the provider that should enter the launch lane.",
@@ -800,6 +578,12 @@ function buildReasonHeadline(reasonCode = "") {
         summary:
           "The launch lane is blocked until one live channel is connected.",
       };
+    case "launch_posture_unavailable":
+      return {
+        title: "Launch posture is unavailable.",
+        summary:
+          "Home cannot confirm launch readiness right now, so live readiness stays guarded.",
+      };
     default:
       return {
         title: "Live replies are still blocked.",
@@ -809,115 +593,92 @@ function buildReasonHeadline(reasonCode = "") {
   }
 }
 
-function buildRuntimeRepairDetail({ trustPayload, launchChannel }) {
-  const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
-  const health = obj(runtimeProjection.health);
-  const runtimeReadiness = obj(runtimeProjection.readiness);
-  const truthReadiness = obj(trustPayload?.summary?.truth?.readiness);
+function buildTruthRuntimeState({ posture, launchChannel, sourceStatus }) {
+  const truth = obj(posture?.truth);
+  const runtime = obj(posture?.runtime);
+  const postureAvailable = sourceStatus.launchPosture?.available !== false;
+  const truthReady =
+    postureAvailable && truth.ready === true && lower(truth.status) === "ready";
+  const ready =
+    postureAvailable &&
+    runtime.ready === true &&
+    lower(runtime.status) === "ready";
   const reasonCodes = normalizeReasonCodes([
-    health.reasonCode,
-    ...(health.reasons || []),
-    truthReadiness.reasonCode,
-    ...(truthReadiness.reasonCodes || []),
-    runtimeReadiness.reasonCode,
-    ...(runtimeReadiness.reasonCodes || []),
+    postureAvailable ? truth.reasonCode : "launch_posture_unavailable",
+    runtime.reasonCode,
     launchChannel?.reasonCode,
   ]);
-
   const leadReason = reasonCodes[0] || "";
   const copy = buildReasonHeadline(leadReason);
 
-  const detail = firstText(
-    runtimeReadiness.message,
-    truthReadiness.message,
-    health.lastFailure?.errorMessage,
-    health.lastFailure?.errorCode,
-    launchChannel?.detail,
-    launchChannel?.summary
-  );
-
   return {
-    title: copy.title,
-    summary: copy.summary,
-    detail,
+    truthReady,
+    ready,
     reasonCodes,
     leadReason,
+    title: ready ? "Runtime is healthy." : copy.title,
+    summary: ready
+      ? "Approved business truth is backing the workspace runtime."
+      : copy.summary,
+    detail: ready
+      ? firstText(runtime.message, truth.message)
+      : firstText(truth.message, runtime.message, launchChannel?.detail),
+    health: {
+      usable: ready,
+      autonomousAllowed: ready,
+      status: s(runtime.status, ready ? "ready" : "blocked"),
+      reasonCode: s(runtime.reasonCode),
+    },
+    truth,
+    runtimeProjection: runtime,
   };
 }
 
-async function loadProductHomePayloads() {
-  const requests = {
-    trust: getSettingsTrustView({ limit: 4 }),
-    inboxThreads: listInboxThreads({ limit: 10 }),
-    inboxOutbound: getOutboundSummary(),
-    metaStatus: getMetaChannelStatus(),
-    telegramStatus: getTelegramChannelStatus(),
-    websiteStatus: getWebsiteWidgetStatus(),
-    setupAssistantSession: getCurrentSetupAssistantSession(),
-  };
+function buildInboxState({ posture, sourceStatus }) {
+  const inbox = obj(posture?.inbox);
+  const available =
+    sourceStatus.launchPosture?.available !== false && inbox.available === true;
+  const unreadCount = available ? n(inbox.unreadCount) : 0;
+  const openCount = available ? n(inbox.openCount) : 0;
+  const handoffCount = available ? n(inbox.handoffCount) : 0;
+  const assignedOpenCount = available ? n(inbox.assignedOpenCount) : 0;
+  const pendingOutboundCount = available ? n(inbox.pendingOutboundCount) : 0;
+  const failedOutboundCount = available ? n(inbox.failedOutboundCount) : 0;
+  const retryingOutboundCount = available ? n(inbox.retryingOutboundCount) : 0;
+  const outboundPending =
+    pendingOutboundCount + failedOutboundCount + retryingOutboundCount;
 
-  const settledEntries = await Promise.all(
-    Object.entries(requests).map(async ([key, promise]) => [
-      key,
-      await Promise.allSettled([promise]),
-    ])
-  );
-
-  const payloads = {};
-  const sourceStatus = {};
-
-  for (const [key, settledWrapper] of settledEntries) {
-    const settled = settledWrapper[0];
-    if (settled.status === "fulfilled") {
-      payloads[key] = settled.value;
-      sourceStatus[key] = { available: true };
-    } else {
-      payloads[key] = null;
-      sourceStatus[key] = { available: false };
-    }
-  }
-
-  return { payloads, sourceStatus };
-}
-
-function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
-  const threadsAvailable = sourceStatus.inboxThreads?.available !== false;
-  const outboundAvailable = sourceStatus.inboxOutbound?.available !== false;
-  const threads = arr(threadsPayload?.threads);
-  const unreadCount = threads.reduce(
-    (sum, thread) => sum + n(thread?.unread_count),
-    0
-  );
-  const openCount = threads.filter((thread) => {
-    const status = s(thread?.status, "open").toLowerCase();
-    return status !== "resolved" && status !== "closed";
-  }).length;
-  const handoffCount = threads.filter(
-    (thread) => thread?.handoff_active || s(thread?.assigned_to)
-  ).length;
-  const outboundPending = Math.max(
-    n(outboundPayload?.pendingCount),
-    n(outboundPayload?.pending),
-    n(outboundPayload?.retryingCount),
-    n(outboundPayload?.failedCount)
-  );
-
-  if (!threadsAvailable && !outboundAvailable) {
+  if (!available) {
     return {
       status: "unavailable",
       statusLabel: "Unavailable",
       tone: "danger",
       summary: "Conversation activity is unavailable right now.",
-      detail: "Inbox and outbound activity could not be loaded.",
+      detail: "Inbox pressure could not be loaded.",
       action: { label: "Open inbox", path: "/inbox" },
       counts: {
         unreadCount: 0,
         openCount: 0,
         handoffCount: 0,
+        assignedOpenCount: 0,
         outboundPending: 0,
+        pendingOutboundCount: 0,
+        failedOutboundCount: 0,
+        retryingOutboundCount: 0,
       },
     };
   }
+
+  const counts = {
+    unreadCount,
+    openCount,
+    handoffCount,
+    assignedOpenCount,
+    outboundPending,
+    pendingOutboundCount,
+    failedOutboundCount,
+    retryingOutboundCount,
+  };
 
   if (unreadCount > 0) {
     return {
@@ -933,7 +694,7 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
           } operator ownership.`
         : "Open the queue to triage new activity.",
       action: { label: "Open inbox", path: "/inbox" },
-      counts: { unreadCount, openCount, handoffCount, outboundPending },
+      counts,
     };
   }
 
@@ -950,7 +711,7 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
         ? `${pluralize(handoffCount, "conversation")} currently have operator ownership.`
         : "The inbox is active, but there is no unread pressure right now.",
       action: { label: "Open inbox", path: "/inbox" },
-      counts: { unreadCount, openCount, handoffCount, outboundPending },
+      counts,
     };
   }
 
@@ -961,45 +722,7 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
     summary: "Inbox is calm right now.",
     detail: "No unread pressure or pending outbound retries are visible.",
     action: { label: "Open inbox", path: "/inbox" },
-    counts: { unreadCount, openCount, handoffCount, outboundPending },
-  };
-}
-
-function buildTruthRuntimeState({ trustPayload, launchChannel }) {
-  const truth = obj(trustPayload?.summary?.truth);
-  const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
-  const truthReadiness = obj(truth.truthReadiness || truth.readiness);
-  const runtimeReadiness = obj(runtimeProjection.readiness);
-  const health = obj(runtimeProjection.health);
-  const truthReady =
-    lower(truthReadiness.status) === "ready" ||
-    lower(truthReadiness.primary) === "ready";
-  const ready =
-    lower(runtimeReadiness.status) === "ready" ||
-    runtimeProjection.status === "ready" ||
-    health.usable === true ||
-    health.autonomousAllowed === true;
-
-  const repairCopy = buildRuntimeRepairDetail({
-    trustPayload,
-    launchChannel,
-  });
-
-  return {
-    truthReady,
-    ready,
-    reasonCodes: repairCopy.reasonCodes,
-    leadReason: repairCopy.leadReason,
-    title: ready ? "Runtime is healthy." : repairCopy.title,
-    summary: ready
-      ? "Approved business truth is backing the workspace runtime."
-      : repairCopy.summary,
-    detail: ready
-      ? firstText(runtimeReadiness.message, health.status)
-      : repairCopy.detail,
-    health,
-    truth,
-    runtimeProjection,
+    counts,
   };
 }
 
@@ -1131,23 +854,69 @@ function buildLaunchSteps({ launchChannel, truthRuntime, inboxState, assistant }
   ];
 }
 
-function buildAvailabilityNote(sourceStatus = {}) {
-  const unavailable = Object.entries(sourceStatus)
-    .filter(([, state]) => state?.available === false)
-    .map(([key]) => key);
+function surfaceLabel(surface = "") {
+  switch (lower(surface)) {
+    case "launchposture":
+    case "launch_posture":
+      return "launch posture";
+    case "truth":
+      return "business info";
+    case "runtime":
+      return "runtime authority";
+    case "website":
+      return "website chat";
+    case "instagram":
+      return "Instagram DM";
+    case "telegram":
+      return "Telegram";
+    case "inbox":
+      return "inbox";
+    case "setupassistantsession":
+    case "setup_assistant_session":
+      return "setup assistant";
+    default:
+      return s(surface);
+  }
+}
 
-  if (!unavailable.length) return null;
+function buildAvailabilityNote(sourceStatus = {}, posture = {}) {
+  const unavailable = [];
+
+  if (sourceStatus.launchPosture?.available === false) {
+    unavailable.push("launch posture");
+  }
+
+  for (const item of arr(posture?.unavailable)) {
+    const label = surfaceLabel(item?.surface);
+    if (label) unavailable.push(label);
+  }
+
+  if (sourceStatus.setupAssistantSession?.available === false) {
+    unavailable.push("setup assistant");
+  }
+
+  const unique = [...new Set(unavailable.filter(Boolean))];
+  if (!unique.length) return null;
 
   return {
     title: "Some live context is limited",
     description:
-      unavailable.length === 1
-        ? `${unavailable[0]} could not be loaded, so Home is showing a guarded summary.`
-        : `${unavailable.join(", ")} could not be loaded, so Home is showing a guarded summary.`,
+      unique.length === 1
+        ? `${unique[0]} could not be loaded, so Home is showing a guarded summary.`
+        : `${unique.join(", ")} could not be loaded, so Home is showing a guarded summary.`,
   };
 }
 
-function buildPrimaryAction({ launchChannel, truthRuntime, assistant, inboxState }) {
+function buildPrimaryAction({
+  posture,
+  launchChannel,
+  truthRuntime,
+  assistant,
+  inboxState,
+}) {
+  const postureAction = normalizeAction(posture?.overall?.primaryAction);
+  if (postureAction) return postureAction;
+
   const truthReady = truthRuntime.truthReady === true;
   const runtimeReady = truthRuntime.ready === true;
   const channelReady =
@@ -1175,19 +944,12 @@ function buildPrimaryAction({ launchChannel, truthRuntime, assistant, inboxState
   return { label: "Open inbox", path: "/inbox" };
 }
 
-function buildSecondaryAction({ launchChannel, truthRuntime }) {
+function buildSecondaryAction({ posture, truthRuntime }) {
+  const postureAction = normalizeAction(posture?.overall?.secondaryAction);
+  if (postureAction) return postureAction;
+
   const truthReady = truthRuntime.truthReady === true;
-  const runtimeReady = truthRuntime.ready === true;
-  const channelReady =
-    launchChannel.connected === true && launchChannel.deliveryReady === true;
-
-  if (!truthReady) {
-    return null;
-  }
-
-  if (!runtimeReady || !channelReady) {
-    return { label: "Open truth", path: "/truth" };
-  }
+  if (!truthReady) return null;
 
   return { label: "Open truth", path: "/truth" };
 }
@@ -1221,7 +983,10 @@ function deriveAssistantLaunchState({
     };
   }
 
-  if (!(launchChannel.connected === true) || !(launchChannel.deliveryReady === true)) {
+  if (
+    !(launchChannel.connected === true) ||
+    !(launchChannel.deliveryReady === true)
+  ) {
     return {
       launchPosture: "connect_channel",
       setupNeeded: false,
@@ -1231,6 +996,40 @@ function deriveAssistantLaunchState({
   return {
     launchPosture: "inbox_unavailable",
     setupNeeded: false,
+  };
+}
+
+async function loadProductHomePayloads() {
+  const [postureResult, setupAssistantResult] = await Promise.allSettled([
+    getLaunchPosture(),
+    getCurrentSetupAssistantSession(),
+  ]);
+
+  return {
+    payloads: {
+      posture:
+        postureResult.status === "fulfilled" ? postureResult.value : null,
+      setupAssistantSession:
+        setupAssistantResult.status === "fulfilled"
+          ? setupAssistantResult.value
+          : null,
+    },
+    sourceStatus: {
+      launchPosture: {
+        available: postureResult.status === "fulfilled",
+        error:
+          postureResult.status === "rejected"
+            ? s(postureResult.reason?.message)
+            : "",
+      },
+      setupAssistantSession: {
+        available: setupAssistantResult.status === "fulfilled",
+        error:
+          setupAssistantResult.status === "rejected"
+            ? s(setupAssistantResult.reason?.message)
+            : "",
+      },
+    },
   };
 }
 
@@ -1265,29 +1064,35 @@ export default function useProductHome() {
     }
 
     const payloads = obj(query.data?.payloads);
-    const sourceStatus = obj(query.data?.sourceStatus);
+    const rawSourceStatus = obj(query.data?.sourceStatus);
+    const queryError =
+      query.isError && query.error ? s(query.error.message) : "";
+    const sourceStatus = {
+      launchPosture: {
+        ...obj(rawSourceStatus.launchPosture),
+        available: rawSourceStatus.launchPosture?.available === true,
+        error: s(rawSourceStatus.launchPosture?.error || queryError),
+      },
+      setupAssistantSession: {
+        ...obj(rawSourceStatus.setupAssistantSession),
+        available: rawSourceStatus.setupAssistantSession?.available !== false,
+      },
+    };
+    const posture =
+      sourceStatus.launchPosture?.available !== false ? obj(payloads.posture) : {};
 
-    const launchChannel = resolveCanonicalLaunchChannel({
-      metaPayload: payloads.metaStatus,
-      telegramPayload: payloads.telegramStatus,
-      websitePayload: payloads.websiteStatus,
-      sourceStatus,
-    });
-
+    const launchChannel = resolveCanonicalLaunchChannel(posture);
     const truthRuntime = buildTruthRuntimeState({
-      trustPayload: payloads.trust,
+      posture,
       launchChannel,
-    });
-
-    const assistant = buildAssistantState(payloads.setupAssistantSession);
-    const inboxState = buildInboxState({
-      threadsPayload: payloads.inboxThreads,
-      outboundPayload: payloads.inboxOutbound,
       sourceStatus,
     });
+    const assistant = buildAssistantState(payloads.setupAssistantSession);
+    const inboxState = buildInboxState({ posture, sourceStatus });
 
     const inboxReady = lower(inboxState.status) !== "unavailable";
     const launchReady =
+      posture?.overall?.launchReady === true &&
       launchChannel.connected === true &&
       launchChannel.deliveryReady === true &&
       truthRuntime.truthReady === true &&
@@ -1307,6 +1112,7 @@ export default function useProductHome() {
       null;
 
     const primaryAction = buildPrimaryAction({
+      posture,
       launchChannel,
       truthRuntime,
       assistant,
@@ -1314,7 +1120,7 @@ export default function useProductHome() {
     });
 
     const secondaryAction = buildSecondaryAction({
-      launchChannel,
+      posture,
       truthRuntime,
     });
     const assistantLaunchState = deriveAssistantLaunchState({
@@ -1322,11 +1128,14 @@ export default function useProductHome() {
       truthRuntime,
       launchReady,
     });
+    const postureError = s(sourceStatus.launchPosture?.error);
 
     return {
       loading: false,
-      error: query.isError ? s(query.error?.message) : "",
-      availabilityNote: buildAvailabilityNote(sourceStatus),
+      isFetching: query.isFetching,
+      refetch: query.refetch,
+      error: queryError || postureError,
+      availabilityNote: buildAvailabilityNote(sourceStatus, posture),
 
       launchReady,
       launchChannel,
@@ -1346,9 +1155,10 @@ export default function useProductHome() {
     query.data,
     query.error,
     query.isError,
+    query.isFetching,
     query.isLoading,
+    query.refetch,
     tenantLoading,
     tenantReady,
   ]);
 }
-
