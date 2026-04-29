@@ -4,6 +4,12 @@ import {
   buildWebsiteLaneHealthUrl,
   classifyWebsiteLaneHealth,
 } from "./website-lane-verifier.mjs";
+import {
+  buildLaunchPostureHeaders,
+  buildLaunchPostureUrl,
+  classifyLaunchPosture,
+  resolveLaunchPostureSessionCookie,
+} from "./launch-posture-verifier.mjs";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -322,6 +328,67 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   ];
 }
 
+async function verifyLaunchPosture({
+  baseUrl,
+  internalToken,
+  sessionCookie,
+  timeoutMs,
+}) {
+  const url = buildLaunchPostureUrl(baseUrl);
+  const response = await fetchJson(
+    url,
+    buildLaunchPostureHeaders({ internalToken, sessionCookie }),
+    timeoutMs
+  );
+
+  if (!response.ok) {
+    return [
+      buildResult(
+        "aihq_launch_posture",
+        false,
+        {
+          url,
+          httpStatus: response.status,
+          sessionCookieConfigured: Boolean(s(sessionCookie)),
+          internalTokenConfigured: Boolean(s(internalToken)),
+          reasonCode: s(
+            response.json?.reasonCode ||
+              response.json?.reason ||
+              response.json?.error ||
+              response.error ||
+              "launch_posture_unavailable"
+          ),
+          message: s(
+            response.json?.message ||
+              response.json?.reason ||
+              response.json?.error ||
+              response.error ||
+              "Launch posture endpoint is unavailable or unauthorized for smoke credentials."
+          ),
+        },
+        response.status
+      ),
+    ];
+  }
+
+  const posture = classifyLaunchPosture(response.json || {});
+
+  return [
+    buildResult(
+      "aihq_launch_posture",
+      posture.ok,
+      {
+        url,
+        httpStatus: response.status,
+        sessionCookieConfigured: Boolean(s(sessionCookie)),
+        internalTokenConfigured: Boolean(s(internalToken)),
+        ...posture.details,
+      },
+      response.status
+    ),
+  ];
+}
+
 function buildSkippedSidecarResults(prefix = "", reason = "") {
   return [
     {
@@ -549,6 +616,7 @@ async function main() {
   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
   const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
   const websiteLaneDomain = s(process.env.WEBSITE_LANE_DOMAIN);
+  const launchPostureSessionCookie = resolveLaunchPostureSessionCookie();
   const strictSidecars = bool(process.env.POSTDEPLOY_STRICT_SIDECARS, false);
   const requireWebsiteLane = bool(
     process.env.POSTDEPLOY_REQUIRE_WEBSITE_LANE,
@@ -569,6 +637,7 @@ async function main() {
       failOnDegraded,
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
       websiteLaneDomainConfigured: Boolean(websiteLaneDomain),
+      launchPostureSessionCookieConfigured: Boolean(launchPostureSessionCookie),
     })
   );
 
@@ -587,6 +656,14 @@ async function main() {
       baseUrl: aihqBaseUrl,
       timeoutMs,
       failOnDegraded,
+    }))
+  );
+  results.push(
+    ...(await verifyLaunchPosture({
+      baseUrl: aihqBaseUrl,
+      internalToken,
+      sessionCookie: launchPostureSessionCookie,
+      timeoutMs,
     }))
   );
   results.push(

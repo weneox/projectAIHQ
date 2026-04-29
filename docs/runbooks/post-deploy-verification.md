@@ -5,13 +5,15 @@ Run this immediately after a production deploy.
 ## Required environment
 
 - `AIHQ_BASE_URL`
-- `AIHQ_INTERNAL_TOKEN` for `/api/health`
+- `AIHQ_INTERNAL_TOKEN` for internal health/smoke headers
+- `AIHQ_USER_SESSION_COOKIE` for the app-authenticated `/api/launch/posture` smoke, or `AIHQ_USER_SESSION_TOKEN` containing the raw `aihq_user` token
 - `WEBSITE_LANE_TENANT_KEY` for production launch verification
 - optionally `WEBSITE_LANE_DOMAIN`
 - optionally `META_BOT_BASE_URL`
 - optionally `TWILIO_VOICE_BASE_URL`
 
 The verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
+The launch posture smoke fails closed if the app session cookie/token is missing, invalid, or cannot read `GET /api/launch/posture`.
 In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
 
 ## Command
@@ -25,6 +27,7 @@ npm run ops:postdeploy:verify
 
 - AI HQ root health
 - AI HQ API health
+- AI HQ launch posture contract at `GET /api/launch/posture`
 - Meta sidecar health if `META_BOT_BASE_URL` is provided
 - Twilio sidecar health if `TWILIO_VOICE_BASE_URL` is provided
 
@@ -48,6 +51,7 @@ npm run ops:postdeploy:verify
 ## Expected outcome
 
 - AI HQ is not blocked
+- launch posture returns the narrow `launch_posture_v1` contract without phase-2 surfaces
 - website lane launch verification passes for a real tenant in production CI
 - sidecars are not intentionally unavailable
 - blocker reason codes are empty or expected for the environment
