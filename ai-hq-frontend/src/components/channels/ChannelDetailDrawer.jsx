@@ -790,8 +790,8 @@ function StandardChannelDetailDrawer({
       aria-hidden={!open}
       className="flex h-full min-h-0 w-full flex-col overflow-visible border-l border-line-soft bg-surface shadow-panel"
     >
-      <header className="relative z-20 shrink-0 border-b border-line-soft bg-surface px-6 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2">
+      <header className="relative z-40 shrink-0 overflow-visible border-b border-line-soft bg-surface py-5 pl-6 pr-24 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_64px] items-start gap-x-4 gap-y-2 overflow-visible">
           <div className="row-span-2 shrink-0 pt-0.5">
             <ChannelIcon channel={channel} size="lg" />
           </div>
@@ -802,16 +802,14 @@ function StandardChannelDetailDrawer({
             </div>
           </div>
 
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            size="icon"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="row-span-2 !h-9 !w-9 !min-w-9 shrink-0 justify-self-end overflow-visible"
+            className="absolute right-7 top-5 z-50 inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-line-soft bg-surface text-text shadow-[0_14px_34px_-24px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-[background-color,border-color,box-shadow,color] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
           >
-            <X className="h-4 w-4" strokeWidth={2.2} />
-          </Button>
+            <X className="h-4.5 w-4.5" strokeWidth={2.25} />
+          </button>
 
           <div className="min-w-0 self-start">
             <DrawerStatus status={effectiveStatus} />
