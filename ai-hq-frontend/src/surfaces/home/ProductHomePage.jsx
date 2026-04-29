@@ -10,6 +10,7 @@
 import { useNavigate } from "react-router-dom";
 
 import Button from "../../components/ui/Button.jsx";
+import Card from "../../components/ui/Card.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -340,32 +341,35 @@ function MiniStatus({ tone = "neutral", children }) {
   );
 }
 
-function Metric({ label, value, detail, tone = "neutral" }) {
+function Metric({ label, value, detail, tone = "neutral", last = false }) {
   return (
-    <div className="min-w-0 py-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+    <div
+      className={cx(
+        "min-w-0 px-4 py-3",
+        !last && "border-b border-line-soft sm:border-b-0 sm:border-r"
+      )}
+    >
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
         {label}
       </div>
 
-      <div className="mt-1.5 flex min-w-0 items-baseline gap-2">
-        <span
-          className={cx(
-            "text-[22px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
-            toneTextClass(tone)
-          )}
-        >
-          {value}
-        </span>
+      <div
+        className={cx(
+          "mt-1 text-[20px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
+          toneTextClass(tone)
+        )}
+      >
+        {value}
+      </div>
 
-        <span className="min-w-0 truncate text-[12.5px] font-medium leading-5 text-text-muted">
-          {detail}
-        </span>
+      <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+        {detail}
       </div>
     </div>
   );
 }
 
-function ActionItem({ item, index, onNavigate }) {
+function ActionItem({ item, index, last = false, onNavigate }) {
   const Icon = item.icon || ArrowRight;
 
   return (
@@ -373,25 +377,23 @@ function ActionItem({ item, index, onNavigate }) {
       type="button"
       onClick={() => onNavigate(item.path)}
       className={cx(
-        "group grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-3 rounded-[8px] px-3 py-3 text-left",
-        index === 0
-          ? "bg-white/[0.75] shadow-[0_18px_36px_-34px_rgba(15,23,42,0.42)] ring-1 ring-[rgba(var(--color-line-soft),0.72)]"
-          : "hover:bg-white/[0.55]",
-        "transition-colors duration-base ease-premium"
+        "group grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-start gap-3 px-4 py-4 text-left",
+        !last && "border-b border-line-soft",
+        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
       )}
     >
       <span
         className={cx(
-          "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border shadow-[var(--shadow-inset-top)]",
+          "inline-flex h-10 w-10 items-center justify-center rounded-[13px] border shadow-[var(--shadow-inset-top)]",
           toneBgClass(item.tone)
         )}
       >
-        <Icon className="h-4 w-4" strokeWidth={2.05} />
+        <Icon className="h-4.5 w-4.5" strokeWidth={2.05} />
       </span>
 
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+          <span className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
             {item.title}
           </span>
 
@@ -402,12 +404,12 @@ function ActionItem({ item, index, onNavigate }) {
           ) : null}
         </span>
 
-        <span className="mt-1 block text-[12.5px] font-medium leading-5 text-text-muted">
+        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
           {item.detail}
         </span>
       </span>
 
-      <span className="mt-1 inline-flex items-center gap-2 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+      <span className="mt-1.5 inline-flex items-center gap-2 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
         {item.label}
         <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
       </span>
@@ -415,14 +417,15 @@ function ActionItem({ item, index, onNavigate }) {
   );
 }
 
-function CheckItem({ item, onNavigate }) {
+function CheckItem({ item, last = false, onNavigate }) {
   return (
     <button
       type="button"
       onClick={() => onNavigate(item.path)}
       className={cx(
-        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[7px] px-2 py-2.5 text-left",
-        "transition-colors duration-base ease-premium hover:bg-white/[0.5]"
+        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left",
+        !last && "border-b border-line-soft",
+        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
       )}
     >
       <span className="min-w-0">
@@ -433,7 +436,7 @@ function CheckItem({ item, onNavigate }) {
           <MiniStatus tone={item.tone}>{item.value}</MiniStatus>
         </span>
 
-        <span className="mt-1 block text-[12.5px] font-medium leading-5 text-text-muted">
+        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
           {item.detail}
         </span>
       </span>
@@ -507,25 +510,18 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <section className="pb-3">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <section className="border-b border-line-soft pb-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 max-w-[820px]">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
-                Home
-              </div>
-              <span
-                className="h-3 w-px bg-[rgb(var(--color-line-soft))]"
-                aria-hidden="true"
-              />
-              <MiniStatus tone={page.tone}>{page.eyebrow}</MiniStatus>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
+              Home
             </div>
 
-            <h1 className="mt-2.5 font-display text-[31px] font-semibold leading-[1.04] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
+            <h1 className="mt-3 font-display text-[34px] font-semibold leading-[1.01] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
               {page.title}
             </h1>
 
-            <p className="mt-2.5 max-w-[720px] text-[14.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
+            <p className="mt-3 max-w-[720px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
               {page.summary}
             </p>
 
@@ -538,11 +534,11 @@ export default function ProductHomePage() {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             <Button
               type="button"
-              size="sm"
-              className="min-w-[132px] justify-center"
+              size="md"
+              className="min-w-[148px] justify-center"
               onClick={() => goFromAction(primaryAction)}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
             >
@@ -552,8 +548,8 @@ export default function ProductHomePage() {
             <Button
               type="button"
               variant="secondary"
-              size="sm"
-              className="min-w-[118px] justify-center"
+              size="md"
+              className="min-w-[132px] justify-center"
               onClick={() => goFromAction(secondaryAction)}
             >
               {secondaryAction.label || "Review setup"}
@@ -562,156 +558,150 @@ export default function ProductHomePage() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-[10px] border border-[rgba(var(--color-line-soft),0.72)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(var(--color-surface-muted),0.36))] shadow-[0_26px_62px_-52px_rgba(15,23,42,0.42)]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.98),transparent)]" />
+      <Card padded={false} clip>
+        <div className="grid sm:grid-cols-4">
+          <Metric
+            label="Waiting"
+            value={String(unread)}
+            detail="Customer messages"
+            tone={unread > 0 ? "warning" : "success"}
+          />
 
-        <div className="px-4 py-3.5 md:px-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric
-              label="Waiting"
-              value={String(unread)}
-              detail="Customer messages"
-              tone={unread > 0 ? "warning" : "success"}
-            />
+          <Metric
+            label="Open"
+            value={String(open)}
+            detail="Conversations"
+            tone={open > 0 ? "brand" : "success"}
+          />
 
-            <Metric
-              label="Open"
-              value={String(open)}
-              detail="Conversations"
-              tone={open > 0 ? "brand" : "success"}
-            />
+          <Metric
+            label="Channels"
+            value={`${channels}/${totalChannels}`}
+            detail="Live for customers"
+            tone={channels > 0 ? "success" : "warning"}
+          />
 
-            <Metric
-              label="Channels"
-              value={`${channels}/${totalChannels}`}
-              detail="Live for customers"
-              tone={channels > 0 ? "success" : "warning"}
-            />
-
-            <Metric
-              label={pendingOutbound > 0 ? "Pending" : "Owned"}
-              value={String(pendingOutbound > 0 ? pendingOutbound : owned)}
-              detail={
-                pendingOutbound > 0 ? "Replies pending" : "Operator handoff"
-              }
-              tone={
-                pendingOutbound > 0 ? "warning" : owned > 0 ? "brand" : "success"
-              }
-            />
-          </div>
+          <Metric
+            label={pendingOutbound > 0 ? "Pending" : "Owned"}
+            value={String(pendingOutbound > 0 ? pendingOutbound : owned)}
+            detail={pendingOutbound > 0 ? "Replies pending" : "Operator handoff"}
+            tone={pendingOutbound > 0 ? "warning" : owned > 0 ? "brand" : "success"}
+            last
+          />
         </div>
 
-        <div className="px-3 pb-3 md:px-4">
-          <div className="grid gap-4 rounded-[8px] bg-white/[0.62] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] ring-1 ring-[rgba(var(--color-line-soft),0.58)] xl:grid-cols-[minmax(0,1fr)_350px]">
+        <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                  What to do now
+                </div>
+                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  Next action
+                </div>
+              </div>
+
+              <MiniStatus tone={page.tone}>
+                {page.tone === "success" ? "Clear" : page.tone === "danger" ? "Blocked" : "Needs attention"}
+              </MiniStatus>
+            </div>
+
+            <div className="border-t border-line-soft">
+              {actions.map((item, index) => (
+                <ActionItem
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  last={index === actions.length - 1}
+                  onNavigate={go}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="min-w-0 border-t border-line-soft xl:border-l xl:border-t-0">
+            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                  Can AI help?
+                </div>
+                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  Safety check
+                </div>
+              </div>
+
+              {businessInfoReady(home) && channelReady(home) ? (
+                <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={2.05} />
+              ) : (
+                <CircleAlert className="h-5 w-5 text-warning" strokeWidth={2.05} />
+              )}
+            </div>
+
+            <div className="border-t border-line-soft">
+              {checks.map((item, index) => (
+                <CheckItem
+                  key={item.id}
+                  item={item}
+                  last={index === checks.length - 1}
+                  onNavigate={go}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        padded="sm"
+        tone={businessInfoReady(home) && channelReady(home) ? "success" : "warning"}
+      >
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
+              {businessInfoReady(home) && channelReady(home) ? (
+                <ShieldCheck className="h-4 w-4 text-success" strokeWidth={2.1} />
+              ) : (
+                <CircleAlert className="h-4 w-4 text-warning" strokeWidth={2.1} />
+              )}
+            </span>
+
             <div className="min-w-0">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                    What to do now
-                  </div>
-                  <div className="mt-1 text-[17px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                    Next action
-                  </div>
-                </div>
-
-                <MiniStatus tone={page.tone}>
-                  {page.tone === "success"
-                    ? "Clear"
-                    : page.tone === "danger"
-                      ? "Blocked"
-                      : "Needs attention"}
-                </MiniStatus>
+              <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                {businessInfoReady(home) && channelReady(home)
+                  ? "AI can safely support customer messages."
+                  : "Finish setup before relying on AI replies."}
               </div>
 
-              <div className="mt-3 space-y-1">
-                {actions.map((item, index) => (
-                  <ActionItem
-                    key={item.id}
-                    item={item}
-                    index={index}
-                    onNavigate={go}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="min-w-0 border-t border-[rgba(var(--color-line-soft),0.62)] pt-4 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                    Can AI help?
-                  </div>
-                  <div className="mt-1 text-[17px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                    Safety check
-                  </div>
-                </div>
-
-                {businessInfoReady(home) && channelReady(home) ? (
-                  <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={2.05} />
-                ) : (
-                  <CircleAlert className="h-5 w-5 text-warning" strokeWidth={2.05} />
-                )}
-              </div>
-
-              <div className="mt-3 space-y-1">
-                {checks.map((item) => (
-                  <CheckItem key={item.id} item={item} onNavigate={go} />
-                ))}
+              <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+                {businessInfoReady(home) && channelReady(home)
+                  ? "Business info is approved and at least one customer channel is live."
+                  : "AI stays cautious until business info and a live channel are ready."}
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="mx-3 mb-3 rounded-[8px] bg-white/[0.48] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] ring-1 ring-[rgba(var(--color-line-soft),0.48)] md:mx-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
-                {businessInfoReady(home) && channelReady(home) ? (
-                  <ShieldCheck className="h-4 w-4 text-success" strokeWidth={2.1} />
-                ) : (
-                  <CircleAlert className="h-4 w-4 text-warning" strokeWidth={2.1} />
-                )}
-              </span>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate("/truth")}
+            >
+              Business info
+            </Button>
 
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                  {businessInfoReady(home) && channelReady(home)
-                    ? "AI can safely support customer messages."
-                    : "Finish setup before relying on AI replies."}
-                </div>
-
-                <div className="mt-0.5 text-[12.5px] font-medium leading-5 text-text-muted">
-                  {businessInfoReady(home) && channelReady(home)
-                    ? "Business info is approved and at least one customer channel is live."
-                    : "AI stays cautious until business info and a live channel are ready."}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="min-h-8"
-                onClick={() => navigate("/truth")}
-              >
-                Business info
-              </Button>
-
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="min-h-8"
-                onClick={() => navigate("/channels")}
-              >
-                Channels
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate("/channels")}
+            >
+              Channels
+            </Button>
           </div>
         </div>
-      </section>
+      </Card>
     </PageCanvas>
   );
 }

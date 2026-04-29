@@ -360,7 +360,27 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   ];
 }
 
-function buildSkippedSidecarResults(prefix = "", reason = "") {
+function buildSkippedSidecarResults(
+  prefix = "",
+  reason = "",
+  strictSidecars = false
+) {
+  const envName = `${prefix.toUpperCase()}_BASE_URL`;
+
+  if (strictSidecars) {
+    return [
+      buildResult(
+        `${prefix}_required_env`,
+        false,
+        {
+          env: envName,
+          reasonCode: "missing_required_env",
+          message: `${envName} is required when PROD_SPINE_STRICT_SIDECARS=1.`,
+        }
+      ),
+    ];
+  }
+
   return [
     {
       name: `${prefix}_health`,
@@ -380,14 +400,21 @@ function buildSkippedSidecarResults(prefix = "", reason = "") {
   ];
 }
 
-async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
+async function verifySidecar(
+  prefix,
+  baseUrl,
+  timeoutMs,
+  failOnDegraded,
+  strictSidecars = false
+) {
   const healthUrl = deriveHealthUrl(baseUrl);
   const runtimeSignalsUrl = deriveRuntimeSignalsUrl(baseUrl);
 
   if (!healthUrl) {
     return buildSkippedSidecarResults(
       prefix,
-      `${prefix.toUpperCase()}_BASE_URL missing`
+      `${prefix.toUpperCase()}_BASE_URL missing`,
+      strictSidecars
     );
   }
 
@@ -720,13 +747,15 @@ async function runAttempt({
     "meta_bot",
     metaBaseUrl,
     timeoutMs,
-    failOnDegraded
+    failOnDegraded,
+    strictSidecars
   );
   const twilioResults = await verifySidecar(
     "twilio_voice",
     twilioBaseUrl,
     timeoutMs,
-    failOnDegraded
+    failOnDegraded,
+    strictSidecars
   );
 
   if (metaBaseUrl || strictSidecars) {

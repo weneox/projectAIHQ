@@ -10,13 +10,14 @@ Run this immediately after a production deploy.
 - optionally `AIHQ_USER_SESSION_COOKIE` for an additional app-authenticated `/api/launch/posture` smoke, or `AIHQ_USER_SESSION_TOKEN` containing the raw `aihq_user` token
 - `WEBSITE_LANE_TENANT_KEY` for production launch verification
 - optionally `WEBSITE_LANE_DOMAIN`
-- optionally `META_BOT_BASE_URL`
-- optionally `TWILIO_VOICE_BASE_URL`
+- `META_BOT_BASE_URL` for production CI strict sidecar verification
+- `TWILIO_VOICE_BASE_URL` for production CI strict sidecar verification
 
 The verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
 The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with `AIHQ_INTERNAL_TOKEN`, so CI does not depend on expiring browser user sessions.
 If an app session cookie/token is supplied, the verifier also checks `GET /api/launch/posture` as an optional app-route verification.
 In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
+In production CI, set `POSTDEPLOY_STRICT_SIDECARS=1` and `PROD_SPINE_STRICT_SIDECARS=1`; missing Meta or Twilio sidecar base URLs then fail closed.
 
 ## Command
 
@@ -31,15 +32,18 @@ npm run ops:postdeploy:verify
 - AI HQ API health
 - AI HQ launch posture contract at `GET /api/internal/launch/posture`
 - optional app-authenticated launch posture contract at `GET /api/launch/posture` when a user session cookie/token is configured
-- Meta sidecar health if `META_BOT_BASE_URL` is provided
-- Twilio sidecar health if `TWILIO_VOICE_BASE_URL` is provided
+- Meta sidecar health; required in production CI strict mode
+- Twilio sidecar health; required in production CI strict mode
 
 ## Strict mode
 
-If sidecars are expected to be live in the environment, require them explicitly:
+Production launch verification treats the Meta and Twilio sidecars as blocking.
+Require them explicitly:
 
 ```powershell
 $env:POSTDEPLOY_STRICT_SIDECARS='1'
+$env:META_BOT_BASE_URL='https://REPLACE_WITH_META_PROD_URL'
+$env:TWILIO_VOICE_BASE_URL='https://REPLACE_WITH_TWILIO_PROD_URL'
 npm run ops:postdeploy:verify
 ```
 
@@ -56,7 +60,7 @@ npm run ops:postdeploy:verify
 - AI HQ is not blocked
 - launch posture returns the narrow `launch_posture_v1` contract without phase-2 surfaces
 - website lane launch verification passes for a real tenant in production CI
-- sidecars are not intentionally unavailable
+- Meta and Twilio sidecars are reachable, not blocked, and not intentionally unavailable
 - blocker reason codes are empty or expected for the environment
 - missing required verifier env fails the command instead of being reported as a passing skip
 
