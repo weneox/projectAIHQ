@@ -2,12 +2,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
-import {
-  getMetaChannelStatus,
-  getTelegramChannelStatus,
-  getWebsiteWidgetStatus,
-} from "../api/channelConnect.js";
-import { getSettingsTrustView } from "../api/trust.js";
+import { getLaunchPosture } from "../api/launch.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
 import ChannelIcon from "../components/channels/ChannelIcon.jsx";
 import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
@@ -25,12 +20,6 @@ import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import Badge from "../components/ui/Badge.jsx";
 import { s } from "../lib/appUi.js";
-import {
-  buildMetaLaunchChannelState,
-  buildTelegramLaunchChannelState,
-  buildWebsiteLaunchChannelState,
-  buildTruthOperationalState,
-} from "../lib/readinessViewModel.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import globeIcon from "../assets/channels/globe.png";
 
@@ -39,10 +28,28 @@ const EMPTY_READINESS_STATE = {
   requestKey: "",
   loading: true,
   error: "",
-  meta: null,
+  posture: null,
+  instagram: null,
   telegram: null,
   website: null,
-  truth: null,
+  truth: {
+    ready: false,
+    status: "unavailable",
+  },
+  runtime: {
+    ready: false,
+    status: "unavailable",
+  },
+  overall: {
+    launchReady: false,
+    status: "unavailable",
+  },
+  channelSummary: {
+    readyCount: 0,
+    connectedCount: 0,
+    deliveryReadyChannelIds: [],
+    selectedChannelId: "",
+  },
 };
 
 const CONNECTOR_COPY = {
@@ -63,8 +70,181 @@ function resolveLaunchChannels() {
   );
 }
 
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function channelName(channelId = "") {
+  if (channelId === "website") return "Website chat";
+  if (channelId === "instagram") return "Instagram";
+  if (channelId === "telegram") return "Telegram";
+  return "Launch channel";
+}
+
+function normalizeAction(action = null, fallback = { label: "Details", path: "" }) {
+  const source = obj(action);
+  const target = obj(source.target);
+  const label = s(source.label || fallback.label);
+  const path = s(source.path || target.path || fallback.path);
+
+  return {
+    label,
+    path,
+  };
+}
+
+function defaultChannelAction(channel = {}) {
+  if (channel.deliveryReady === true) return { label: "Inbox", path: "/inbox" };
+  return { label: channel.connected === true ? "Fix" : "Connect", path: "" };
+}
+
+function normalizeChannelStatusLabel(channel = {}) {
+  if (channel.available === false || lower(channel.status) === "unavailable") {
+    return "Unavailable";
+  }
+
+  if (channel.deliveryReady === true) return "Connected";
+  if (channel.connected === true || channel.blocked === true) {
+    return "Needs attention";
+  }
+
+  return "Not connected";
+}
+
+function normalizePostureChannel(channelId = "", rawChannel = null) {
+  const channel = obj(rawChannel);
+  const readiness = obj(channel.readiness);
+  const blockers = arr(channel.blockers).length
+    ? arr(channel.blockers)
+    : arr(readiness.blockers);
+  const available =
+    rawChannel == null ? true : channel.available !== false;
+  const connected = channel.connected === true;
+  const deliveryReady =
+    available && connected && channel.deliveryReady === true;
+  const status = s(
+    channel.status,
+    deliveryReady ? "ready" : available ? "needs_connection" : "unavailable"
+  );
+  const blocked =
+    !deliveryReady &&
+    (available === false ||
+      connected ||
+      blockers.length > 0 ||
+      ["blocked", "connected_blocked", "testing_only", "unavailable"].includes(
+        lower(status)
+      ));
+  const reasonCode = s(
+    channel.reasonCode || readiness.reasonCode || blockers[0]?.reasonCode
+  );
+  const summary =
+    s(
+      readiness.message ||
+        channel.message ||
+        blockers[0]?.message ||
+        blockers[0]?.subtitle
+    ) ||
+    (deliveryReady
+      ? `${channelName(channelId)} is ready for live delivery.`
+      : available
+        ? `${channelName(channelId)} is available, but not delivery ready.`
+        : `${channelName(channelId)} posture is unavailable.`);
+
+  const normalized = {
+    id: channelId,
+    available,
+    connected,
+    deliveryReady,
+    blocked,
+    status,
+    statusLabel: "",
+    summary,
+    action: null,
+    reasonCode,
+    blockers,
+  };
+
+  normalized.statusLabel = normalizeChannelStatusLabel(normalized);
+  normalized.action = normalizeAction(
+    arr(channel.repairActions)[0] || blockers[0]?.nextAction,
+    defaultChannelAction(normalized)
+  );
+
+  return normalized;
+}
+
+function unavailablePostureChannel(channelId = "") {
+  return normalizePostureChannel(channelId, {
+    available: false,
+    connected: false,
+    deliveryReady: false,
+    status: "unavailable",
+    reasonCode: "launch_posture_unavailable",
+    readiness: {
+      status: "unavailable",
+      message: `${channelName(channelId)} posture could not be loaded.`,
+      blockers: [],
+    },
+  });
+}
+
+function buildReadinessStateFromPosture({
+  tenantKey = "",
+  requestKey = "",
+  posture = null,
+  error = "",
+} = {}) {
+  const payload = obj(posture);
+  const unavailable = s(error);
+  const channels = obj(payload.channels);
+  const channelSummary = obj(payload.channelSummary);
+
+  return {
+    tenantKey,
+    requestKey,
+    loading: false,
+    error: unavailable,
+    posture: unavailable ? null : payload,
+    website: unavailable
+      ? unavailablePostureChannel("website")
+      : normalizePostureChannel("website", channels.website),
+    instagram: unavailable
+      ? unavailablePostureChannel("instagram")
+      : normalizePostureChannel("instagram", channels.instagram),
+    telegram: unavailable
+      ? unavailablePostureChannel("telegram")
+      : normalizePostureChannel("telegram", channels.telegram),
+    truth: unavailable ? EMPTY_READINESS_STATE.truth : obj(payload.truth),
+    runtime: unavailable ? EMPTY_READINESS_STATE.runtime : obj(payload.runtime),
+    overall: unavailable ? EMPTY_READINESS_STATE.overall : obj(payload.overall),
+    channelSummary: {
+      readyCount: unavailable ? 0 : n(channelSummary.readyCount),
+      connectedCount: unavailable ? 0 : n(channelSummary.connectedCount),
+      deliveryReadyChannelIds: unavailable
+        ? []
+        : arr(channelSummary.deliveryReadyChannelIds),
+      selectedChannelId: unavailable ? "" : s(channelSummary.selectedChannelId),
+    },
+  };
+}
+
 function buildRuntimeMeta(channel, readinessState) {
-  if (channel.id === "instagram") return readinessState.meta;
+  if (channel.id === "instagram") return readinessState.instagram;
   if (channel.id === "telegram") return readinessState.telegram;
   if (channel.id === "website") return readinessState.website;
   return null;
@@ -72,6 +252,16 @@ function buildRuntimeMeta(channel, readinessState) {
 
 function normalizeStatus(runtime = null) {
   const raw = s(runtime?.statusLabel).toLowerCase();
+
+  if (runtime?.available === false || s(runtime?.status).toLowerCase() === "unavailable") {
+    return {
+      label: "Unavailable",
+      tone: "danger",
+      connected: false,
+      deliveryReady: false,
+      blocked: true,
+    };
+  }
 
   if (runtime?.connected === true && runtime?.deliveryReady === true) {
     return {
@@ -83,11 +273,11 @@ function normalizeStatus(runtime = null) {
     };
   }
 
-  if (runtime?.connected === true) {
+  if (runtime?.connected === true || runtime?.blocked === true) {
     return {
       label: "Needs attention",
       tone: "warning",
-      connected: true,
+      connected: runtime?.connected === true,
       deliveryReady: false,
       blocked: true,
     };
@@ -127,8 +317,18 @@ function normalizeStatus(runtime = null) {
   };
 }
 
-function resolveTruthReady(truth = null) {
-  return s(truth?.status).toLowerCase() === "ready";
+function resolveTruthReady(readinessState = {}) {
+  return (
+    readinessState?.truth?.ready === true &&
+    s(readinessState?.truth?.status).toLowerCase() === "ready"
+  );
+}
+
+function resolveRuntimeReady(readinessState = {}) {
+  return (
+    readinessState?.runtime?.ready === true &&
+    s(readinessState?.runtime?.status).toLowerCase() === "ready"
+  );
 }
 
 function resolvePrimaryAction(channel, runtime) {
@@ -179,7 +379,7 @@ function ChannelVisual({ channel }) {
 function CompactHeader({
   availableCount,
   readyCount,
-  truthReady,
+  readinessPendingLabel,
   hasDeliveryReadyLaunchChannel,
   onOpenTruth,
   onOpenInbox,
@@ -198,8 +398,10 @@ function CompactHeader({
 
           <div className="mt-2 text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text-muted">
             {readyCount}/{availableCount} ready
-            {!truthReady ? (
-              <span className="ml-2 text-warning">/ truth pending approval</span>
+            {readinessPendingLabel ? (
+              <span className="ml-2 text-warning">
+                / {readinessPendingLabel}
+              </span>
             ) : null}
           </div>
         </div>
@@ -320,58 +522,32 @@ export default function ChannelCatalog() {
     const tenantKey = workspace.tenantKey;
     const requestKey = currentReadinessRequestKey;
 
-    Promise.allSettled([
-      getMetaChannelStatus(),
-      getTelegramChannelStatus(),
-      getWebsiteWidgetStatus(),
-      getSettingsTrustView({ limit: 4 }),
-    ])
-      .then((results) => {
+    getLaunchPosture()
+      .then((posture) => {
         if (!alive) return;
 
-        const meta =
-          results[0].status === "fulfilled"
-            ? buildMetaLaunchChannelState(results[0].value)
-            : buildMetaLaunchChannelState({});
-        const telegram =
-          results[1].status === "fulfilled"
-            ? buildTelegramLaunchChannelState(results[1].value)
-            : buildTelegramLaunchChannelState({});
-        const website =
-          results[2].status === "fulfilled"
-            ? buildWebsiteLaunchChannelState(results[2].value)
-            : buildWebsiteLaunchChannelState({});
-        const truth =
-          results[3].status === "fulfilled"
-            ? buildTruthOperationalState(results[3].value)
-            : buildTruthOperationalState(null);
-
-        setReadinessState({
-          tenantKey,
-          requestKey,
-          loading: false,
-          error: "",
-          meta,
-          telegram,
-          website,
-          truth,
-        });
+        setReadinessState(
+          buildReadinessStateFromPosture({
+            tenantKey,
+            requestKey,
+            posture,
+          })
+        );
       })
       .catch((error) => {
         if (!alive) return;
 
-        setReadinessState({
-          tenantKey,
-          requestKey,
-          loading: false,
-          error: s(
-            error?.message || error || "Channel readiness could not be loaded."
-          ),
-          meta: buildMetaLaunchChannelState({}),
-          telegram: buildTelegramLaunchChannelState({}),
-          website: buildWebsiteLaunchChannelState({}),
-          truth: buildTruthOperationalState(null),
-        });
+        setReadinessState(
+          buildReadinessStateFromPosture({
+            tenantKey,
+            requestKey,
+            error: s(
+              error?.message ||
+                error ||
+                "Launch posture could not be loaded."
+            ),
+          })
+        );
       });
 
     return () => {
@@ -433,26 +609,20 @@ export default function ChannelCatalog() {
 
   const launchChannels = useMemo(() => resolveLaunchChannels(), []);
 
-  const readyCount = useMemo(() => {
-    const items = [
-      effectiveReadinessState.website,
-      effectiveReadinessState.meta,
-      effectiveReadinessState.telegram,
-    ];
-
-    return items.reduce(
-      (sum, item) =>
-        item?.connected === true && item?.deliveryReady === true ? sum + 1 : sum,
-      0
-    );
-  }, [
-    effectiveReadinessState.website,
-    effectiveReadinessState.meta,
-    effectiveReadinessState.telegram,
-  ]);
-
+  const readyCount = n(effectiveReadinessState.channelSummary?.readyCount);
   const hasDeliveryReadyLaunchChannel = readyCount > 0;
-  const truthReady = resolveTruthReady(effectiveReadinessState.truth);
+  const truthReady = resolveTruthReady(effectiveReadinessState);
+  const runtimeReady = resolveRuntimeReady(effectiveReadinessState);
+  const overallLaunchReady =
+    effectiveReadinessState.overall?.launchReady === true;
+  const readinessPendingLabel =
+    hasDeliveryReadyLaunchChannel && !overallLaunchReady
+      ? !truthReady
+        ? "truth pending approval"
+        : !runtimeReady
+          ? "runtime pending repair"
+          : "launch readiness pending"
+      : "";
 
   function updateSelectedChannel(channelId = "") {
     const nextParams = new URLSearchParams(searchParams);
@@ -524,17 +694,25 @@ export default function ChannelCatalog() {
             />
           ) : null}
 
-          {hasDeliveryReadyLaunchChannel && !truthReady ? (
+          {hasDeliveryReadyLaunchChannel && readinessPendingLabel ? (
             <InlineNotice
               tone="warning"
-              title="A channel is connected, but truth still needs approval."
-              description="Approve truth before relying on live AI replies."
+              title={
+                !truthReady
+                  ? "A channel is connected, but truth still needs approval."
+                  : "A channel is connected, but runtime still needs repair."
+              }
+              description={
+                !truthReady
+                  ? "Approve truth before relying on live AI replies."
+                  : "Repair runtime before relying on live AI replies."
+              }
               compact
             />
           ) : null}
 
           <CompactHeader
-            truthReady={truthReady}
+            readinessPendingLabel={readinessPendingLabel}
             readyCount={readyCount}
             availableCount={launchChannels.length}
             hasDeliveryReadyLaunchChannel={hasDeliveryReadyLaunchChannel}

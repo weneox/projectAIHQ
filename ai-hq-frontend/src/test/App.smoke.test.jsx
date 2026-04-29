@@ -75,6 +75,26 @@ vi.mock("../pages/SelectWorkspace.jsx", () => ({
   default: () => <div>Select Workspace Page</div>,
 }));
 
+vi.mock("../surfaces/home/ProductHomePage.jsx", () => ({
+  default: () => <div>Home Page</div>,
+}));
+
+vi.mock("../pages/Welcome.jsx", () => ({
+  default: () => <div>Welcome Page</div>,
+}));
+
+vi.mock("../pages/Inbox.jsx", () => ({
+  default: () => <div>Inbox Page</div>,
+}));
+
+vi.mock("../pages/ChannelCatalog.jsx", () => ({
+  default: () => <div>Channels Page</div>,
+}));
+
+vi.mock("../pages/Truth/TruthViewerPage.jsx", () => ({
+  default: () => <div>Truth Page</div>,
+}));
+
 import App from "../App.jsx";
 
 const ROUTE_RENDER_TIMEOUT_MS = 5000;
