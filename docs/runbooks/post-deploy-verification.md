@@ -18,9 +18,9 @@ Run this immediately after a production deploy.
 
 Before production deploy hooks run, GitHub Actions also executes
 `npm run security:placeholder-guard` with the production secret names. Missing
-values, example domains, localhost URLs, placeholder deploy hooks, disabled
-strict sidecar flags, or a missing expected release SHA fail closed before the
-post-deploy verifier can run.
+values, example domains, localhost URLs, placeholder deploy hooks for any
+production deploy target, disabled strict sidecar flags, or a missing expected
+release SHA fail closed before the post-deploy verifier can run.
 
 The backend verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
 The frontend browser smoke fails closed if `AIHQ_FRONTEND_PROD_URL` is missing or is not an `http(s)` URL.

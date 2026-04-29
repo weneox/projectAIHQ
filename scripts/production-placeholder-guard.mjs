@@ -26,6 +26,7 @@ const REQUIRED_ENV = [
   { name: "RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "CLOUDFLARE_PAGES_DEPLOY_HOOK", type: "https_url" },
+  { name: "CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK", type: "https_url" },
 ];
 
 const REQUIRED_FLAGS = [
