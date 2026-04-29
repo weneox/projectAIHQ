@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import * as readinessViewModel from "../../lib/readinessViewModel.js";
 import {
-  buildChannelTruthLaunchReadiness,
-  buildWebsiteLaunchChannelState,
   buildTruthOperationalState,
   createReadinessViewModel,
 } from "../../lib/readinessViewModel.js";
@@ -40,58 +39,88 @@ describe("createReadinessViewModel", () => {
     expect(model.blockedItems[0].reasonCode).toBe("runtime_projection_missing");
     expect(model.blockedItems[0].action.kind).toBe("route");
   });
+});
 
-  it("treats enabled website chat as a connected channel even when delivery hardening is still blocked", () => {
-    const channel = buildWebsiteLaunchChannelState({
-      state: "blocked",
-      launchReadiness: {
-        status: "blocked",
-        channelConfigured: true,
-        productionLaunchAllowed: false,
-        productionReady: false,
-        widgetEnabled: true,
-        message:
-          "Website chat is enabled, but installation hardening is still incomplete.",
-      },
-      widget: {
-        enabled: true,
-      },
-      readiness: {
-        status: "blocked",
-        message: "Website chat is enabled, but installation hardening is still incomplete.",
+describe("buildTruthOperationalState", () => {
+  it("keeps truth management fail-closed when approved truth is missing", () => {
+    const state = buildTruthOperationalState({
+      summary: {
+        truth: {
+          latestVersionId: "",
+          readiness: {
+            status: "blocked",
+            reasonCode: "approved_truth_unavailable",
+            message: "Approved truth is not ready yet.",
+            blockers: [],
+          },
+        },
+        runtimeProjection: {
+          health: {
+            usable: false,
+          },
+          authority: {
+            available: false,
+          },
+          readiness: {
+            status: "blocked",
+            blockers: [],
+          },
+        },
       },
     });
 
-    expect(channel.connected).toBe(true);
-    expect(channel.deliveryReady).toBe(false);
-    expect(channel.status).toBe("attention");
-    expect(channel.action.path).toBe("/channels?channel=website");
+    expect(state.truthReady).toBe(false);
+    expect(state.runtimeReady).toBe(false);
+    expect(state.status).toBe("blocked");
+    expect(state.action.path).toBe("/home?assistant=setup");
+    expect(state.reasonCode).toBe("approved_truth_unavailable");
   });
 
-  it("treats website chat as a real launch path when it is the only ready channel", () => {
-    const website = buildWebsiteLaunchChannelState({
-      state: "connected",
-      launchReadiness: {
-        status: "production_ready",
-        channelConfigured: true,
-        productionLaunchAllowed: true,
-        productionReady: true,
-        widgetEnabled: true,
-        publicWidgetId: "widget_public_123",
-        message:
-          "Website chat is configured with a publishable install ID and trusted origin controls.",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "widget_public_123",
-      },
-      readiness: {
-        status: "ready",
-        message:
-          "Website chat is configured with a publishable install ID and trusted origin controls.",
+  it("keeps truth management in repair posture when runtime is unhealthy", () => {
+    const state = buildTruthOperationalState({
+      summary: {
+        truth: {
+          latestVersionId: "truth-1",
+          readiness: {
+            status: "ready",
+            blockers: [],
+          },
+        },
+        runtimeProjection: {
+          health: {
+            usable: false,
+            autonomousAllowed: false,
+            repairAction: {
+              id: "repair_runtime",
+              kind: "route",
+              label: "Repair runtime",
+              target: {
+                path: "/truth?panel=runtime",
+              },
+            },
+          },
+          authority: {
+            available: false,
+          },
+          readiness: {
+            status: "blocked",
+            reasonCode: "runtime_repair_required",
+            message: "Runtime projection still needs repair.",
+            blockers: [],
+          },
+        },
       },
     });
-    const truth = buildTruthOperationalState({
+
+    expect(state.truthReady).toBe(true);
+    expect(state.runtimeReady).toBe(false);
+    expect(state.status).toBe("attention");
+    expect(state.action.path).toBe("/truth?panel=runtime");
+    expect(state.reasonCode).toBe("runtime_repair_required");
+  });
+
+  it("keeps truth management healthy when approved truth and runtime align", () => {
+    const state = buildTruthOperationalState({
       summary: {
         truth: {
           latestVersionId: "truth-1",
@@ -116,116 +145,25 @@ describe("createReadinessViewModel", () => {
       },
     });
 
-    const readiness = buildChannelTruthLaunchReadiness({
-      channels: [website],
-      truthState: truth,
-      surface: {
-        unavailable: false,
-        error: "",
-      },
-      copy: {
-        channelsPath: "/channels",
-        truthPath: "/truth",
-      },
-    });
-
-    expect(readiness.status).toBe("ready");
-    expect(readiness.action.path).toBe("/channels?channel=website");
-    expect(readiness.title).toBe("Launch posture is healthy.");
+    expect(state.truthReady).toBe(true);
+    expect(state.runtimeReady).toBe(true);
+    expect(state.status).toBe("ready");
+    expect(state.action).toBeNull();
   });
+});
 
-  it("stays fail-closed when website chat is connected but approved truth is missing", () => {
-    const website = buildWebsiteLaunchChannelState({
-      state: "connected",
-      launchReadiness: {
-        status: "production_ready",
-        channelConfigured: true,
-        productionLaunchAllowed: true,
-        productionReady: true,
-        widgetEnabled: true,
-        publicWidgetId: "widget_public_123",
-        message:
-          "Website chat is configured with a publishable install ID and trusted origin controls.",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "widget_public_123",
-      },
-      readiness: {
-        status: "ready",
-        message:
-          "Website chat is configured with a publishable install ID and trusted origin controls.",
-      },
-    });
-
-    const readiness = buildChannelTruthLaunchReadiness({
-      channels: [website],
-      truthState: buildTruthOperationalState({
-        summary: {
-          truth: {
-            latestVersionId: "",
-            readiness: {
-              status: "blocked",
-              reasonCode: "approved_truth_unavailable",
-              blockers: [],
-            },
-          },
-          runtimeProjection: {
-            health: {
-              usable: false,
-            },
-            authority: {
-              available: false,
-            },
-            readiness: {
-              status: "blocked",
-              blockers: [],
-            },
-          },
-        },
-      }),
-      surface: {
-        unavailable: false,
-        error: "",
-      },
-      copy: {
-        channelsPath: "/channels",
-        truthPath: "/truth",
-      },
-    });
-
-    expect(readiness.status).toBe("blocked");
-    expect(readiness.title).toMatch(/truth/i);
-    expect(readiness.action.path).toBe("/home?assistant=setup");
-  });
-
-  it("keeps website chat in an attention posture when only testing handoffs are available", () => {
-    const channel = buildWebsiteLaunchChannelState({
-      state: "blocked",
-      launchReadiness: {
-        status: "testing_only",
-        channelConfigured: true,
-        productionLaunchAllowed: false,
-        productionReady: false,
-        testingOnly: true,
-        widgetEnabled: true,
-        message:
-          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "widget_public_123",
-      },
-      readiness: {
-        status: "blocked",
-        message:
-          "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch.",
-      },
-    });
-
-    expect(channel.connected).toBe(true);
-    expect(channel.deliveryReady).toBe(false);
-    expect(channel.status).toBe("attention");
-    expect(channel.summary).toMatch(/local\/dev\/test only/i);
+describe("readinessViewModel launch posture boundary", () => {
+  it("does not export obsolete launch decision helpers", () => {
+    expect(readinessViewModel).not.toHaveProperty("buildLaunchChannelState");
+    expect(readinessViewModel).not.toHaveProperty("buildMetaLaunchChannelState");
+    expect(readinessViewModel).not.toHaveProperty(
+      "buildTelegramLaunchChannelState"
+    );
+    expect(readinessViewModel).not.toHaveProperty(
+      "buildWebsiteLaunchChannelState"
+    );
+    expect(readinessViewModel).not.toHaveProperty(
+      "buildChannelTruthLaunchReadiness"
+    );
   });
 });

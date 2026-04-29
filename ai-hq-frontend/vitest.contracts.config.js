@@ -10,6 +10,7 @@ export default defineConfig({
       "src/test/api/truth.test.js",
       "src/test/api/trust.test.js",
       "src/test/lib/appEntry.test.js",
+      "src/test/lib/readinessViewModel.test.jsx",
     ],
     exclude: ["dist/**", "node_modules/**"],
     setupFiles: [],

@@ -155,28 +155,37 @@ function buildReadinessStateFromPosture({
   };
 }
 
-async function loadInboxOperationalState(tenantKey = "") {
-  const [trustResult, postureResult] = await Promise.allSettled([
-    getSettingsTrustView({ limit: 8 }),
-    getLaunchPosture(),
-  ]);
+async function loadInboxLaunchReadinessState(tenantKey = "") {
+  try {
+    const posture = await getLaunchPosture();
 
-  return {
-    readinessState: buildReadinessStateFromPosture({
+    return buildReadinessStateFromPosture({
       tenantKey,
-      posture: postureResult.status === "fulfilled" ? postureResult.value : null,
+      posture,
+    });
+  } catch (error) {
+    return buildReadinessStateFromPosture({
+      tenantKey,
       error:
-        postureResult.status === "rejected"
-          ? s(postureResult.reason?.message) ||
-            "Launch readiness could not be loaded."
-          : "",
-    }),
-    trustState: {
+        s(error?.message) || "Launch readiness could not be loaded.",
+    });
+  }
+}
+
+async function loadInboxTrustState(tenantKey = "") {
+  try {
+    return {
       tenantKey,
       loading: false,
-      trustView: trustResult.status === "fulfilled" ? trustResult.value : null,
-    },
-  };
+      trustView: await getSettingsTrustView({ limit: 8 }),
+    };
+  } catch {
+    return {
+      tenantKey,
+      loading: false,
+      trustView: null,
+    };
+  }
 }
 
 function buildLaunchReadinessNotice({
@@ -395,9 +404,10 @@ export default function Inbox() {
       loading: true,
     }));
 
-    const { readinessState, trustState } = await loadInboxOperationalState(
-      workspace.tenantKey
-    );
+    const [readinessState, trustState] = await Promise.all([
+      loadInboxLaunchReadinessState(workspace.tenantKey),
+      loadInboxTrustState(workspace.tenantKey),
+    ]);
 
     setResolvedReadinessState(readinessState);
     setResolvedTrustState(trustState);
@@ -408,34 +418,45 @@ export default function Inbox() {
 
     let alive = true;
 
-    loadInboxOperationalState(workspace.tenantKey)
-      .then(({ readinessState, trustState }) => {
-        if (!alive) return;
+    setResolvedReadinessState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+      error: "",
+    }));
 
+    loadInboxLaunchReadinessState(workspace.tenantKey).then(
+      (readinessState) => {
+        if (!alive) return;
         setResolvedReadinessState(readinessState);
-        setResolvedTrustState(trustState);
-      })
-      .catch(() => {
-        if (!alive) return;
-
-        setResolvedReadinessState(
-          buildReadinessStateFromPosture({
-            tenantKey: workspace.tenantKey,
-            error: "Launch readiness could not be loaded.",
-          })
-        );
-
-        setResolvedTrustState({
-          tenantKey: workspace.tenantKey,
-          loading: false,
-          trustView: null,
-        });
-      });
+      }
+    );
 
     return () => {
       alive = false;
     };
   }, [workspace.ready, workspace.tenantKey, refreshToken]);
+
+  useEffect(() => {
+    if (!workspace.ready) return undefined;
+
+    let alive = true;
+
+    setResolvedTrustState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+    }));
+
+    loadInboxTrustState(workspace.tenantKey).then((trustState) => {
+      if (!alive) return;
+      setResolvedTrustState(trustState);
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
     if (!automationMutation.success) return undefined;

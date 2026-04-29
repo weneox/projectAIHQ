@@ -16,6 +16,7 @@ import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 
 const navigate = vi.fn();
 const getLaunchPosture = vi.fn();
+const getSettingsTrustView = vi.fn();
 const getMetaChannelStatus = vi.fn();
 const getMetaConnectUrl = vi.fn();
 const disconnectMetaChannel = vi.fn();
@@ -49,6 +50,10 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("../../api/launch.js", () => ({
   getLaunchPosture: (...args) => getLaunchPosture(...args),
+}));
+
+vi.mock("../../api/trust.js", () => ({
+  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
 }));
 
 vi.mock("../../api/channelConnect.js", () => ({
@@ -490,6 +495,7 @@ describe("ChannelCatalog", () => {
     ).toBeInTheDocument();
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
+    expect(getSettingsTrustView).not.toHaveBeenCalled();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();

@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getLaunchPosture = vi.fn();
 const getCurrentSetupAssistantSession = vi.fn();
+const getSettingsTrustView = vi.fn();
+const getMetaChannelStatus = vi.fn();
+const getTelegramChannelStatus = vi.fn();
+const getWebsiteWidgetStatus = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 let workspaceScope = {
   tenantKey: "acme",
@@ -18,6 +22,16 @@ vi.mock("../../api/launch.js", () => ({
 vi.mock("../../api/setup.js", () => ({
   getCurrentSetupAssistantSession: (...args) =>
     getCurrentSetupAssistantSession(...args),
+}));
+
+vi.mock("../../api/trust.js", () => ({
+  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
+}));
+
+vi.mock("../../api/channelConnect.js", () => ({
+  getMetaChannelStatus: (...args) => getMetaChannelStatus(...args),
+  getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
 }));
 
 vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
@@ -284,6 +298,10 @@ describe("useProductHome", () => {
     });
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
+    expect(getSettingsTrustView).not.toHaveBeenCalled();
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
     expect(result.current.launchChannel.connected).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("connect_channel");
     expect(result.current.primaryAction.path).toBe("/channels");

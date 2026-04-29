@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -535,7 +535,48 @@ describe("Inbox", () => {
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
-  it("does not show the truth approval notice when a launch channel is connected and truth is ready", async () => {
+  it("renders launch readiness from posture while trust policy is still loading", async () => {
+    let resolveTrustView;
+
+    getSettingsTrustView.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveTrustView = resolve;
+        })
+    );
+    getLaunchPosture.mockResolvedValue(
+      buildLaunchPosture({
+        truthReady: false,
+        runtimeReady: true,
+        readyChannelIds: ["telegram"],
+        overall: {
+          status: "blocked",
+          launchReady: false,
+          title: "Approved truth required",
+          message: "Approve truth before live replies are trusted.",
+          primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+        },
+      })
+    );
+
+    renderInbox();
+
+    expect(
+      await screen.findByText(/truth approval required/i)
+    ).toBeInTheDocument();
+
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
+    expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
+    expect(getMetaChannelStatus).not.toHaveBeenCalled();
+    expect(getTelegramChannelStatus).not.toHaveBeenCalled();
+    expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveTrustView(buildTrustView({ status: "ready" }));
+    });
+  });
+
+  it("uses launch posture instead of trust view for the truth approval notice", async () => {
     getSettingsTrustView.mockResolvedValue(
       buildTrustView({
         status: "blocked",
@@ -565,6 +606,7 @@ describe("Inbox", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText(/launch-channel-connected:yes/i)).toBeInTheDocument();
     expect(getSettingsTrustView).toHaveBeenCalled();
+    expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
