@@ -967,7 +967,7 @@ function TruthHero({
             <StatusText tone={tone}>{runtimeLabel}</StatusText>
           </div>
 
-          <h1 className="mt-3 max-w-[760px] font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
+          <h1 aria-label="Business truth runtime" className="mt-3 max-w-[760px] font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
             Business truth
           </h1>
 
@@ -1402,7 +1402,7 @@ function SourcesTab({ sourceRows }) {
 
 function VersionsList({ history = [], onOpenVersion }) {
   if (!arr(history).length) {
-    return <EmptyLine>No approved truth versions available.</EmptyLine>;
+    return <EmptyLine>No approved truth versions are available yet.</EmptyLine>;
   }
 
   return (
@@ -1794,9 +1794,8 @@ export default function TruthViewerPage() {
     }));
 
     try {
-      const result = await rollbackTruthVersion({
+      const result = await rollbackTruthVersion(versionId, {
         tenantKey: workspace.tenantKey,
-        versionId,
         truthVersionId: versionId,
       });
 
@@ -1841,7 +1840,7 @@ export default function TruthViewerPage() {
   if (state.loading) {
     return (
       <PageCanvas>
-        <LoadingSurface title="Loading business truth" />
+        <LoadingSurface title="Loading truth" />
       </PageCanvas>
     );
   }
