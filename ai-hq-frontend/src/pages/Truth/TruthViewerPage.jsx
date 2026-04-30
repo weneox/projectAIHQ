@@ -1764,6 +1764,135 @@ function ContractTab({ contract }) {
   );
 }
 
+function StagedTruthChangesPanel({ changes = [], onEdit, onDiscardAll }) {
+  const items = arr(changes);
+  if (!items.length) return null;
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid gap-0 divide-y divide-line-soft lg:grid-cols-[minmax(0,1fr)_300px] lg:divide-x lg:divide-y-0">
+        <div className="px-4 py-3.5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                Staged changes
+              </div>
+
+              <div className="mt-1.5 text-[18px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {items.length} business record change{items.length === 1 ? "" : "s"}
+              </div>
+
+              <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                These changes are not live yet. Publishing will create a new approved truth version.
+              </div>
+            </div>
+
+            <StatusText tone="warning">Staged</StatusText>
+          </div>
+
+          <div className="mt-4 divide-y divide-line-soft">
+            {items.map((item) => (
+              <div
+                key={`${item.key}-${item.stagedAt || item.to}`}
+                className="grid gap-3 py-3 md:grid-cols-[180px_minmax(0,1fr)_auto]"
+              >
+                <div className="min-w-0">
+                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+                    {item.label || item.key}
+                  </div>
+
+                  {item.note ? (
+                    <div className="mt-1 text-[12px] font-medium leading-5 text-text-muted">
+                      {item.note}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="grid min-w-0 gap-2 md:grid-cols-2">
+                  <div className="min-w-0 rounded-[14px] border border-line-soft bg-surface-subtle px-3 py-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                      Current
+                    </div>
+                    <div className="mt-1 break-words text-[12.5px] font-semibold leading-5 text-text-muted">
+                      {item.from || "Not approved"}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-[14px] border border-warning/30 bg-warning-soft px-3 py-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-warning">
+                      Proposed
+                    </div>
+                    <div className="mt-1 break-words text-[12.5px] font-semibold leading-5 text-text">
+                      {item.to}
+                    </div>
+                  </div>
+                </div>
+
+                {typeof onEdit === "function" ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onEdit({
+                        key: item.key,
+                        label: item.label,
+                        value: item.from,
+                        nextValue: item.to,
+                        note: item.note || "",
+                        multiline: String(item.to || "").length > 80,
+                      })
+                    }
+                    className="self-center text-[12px] font-semibold text-text-subtle transition-colors duration-base ease-premium hover:text-brand"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col justify-between gap-4 px-4 py-3.5">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Publish impact
+            </div>
+
+            <div className="mt-2 text-[13.5px] font-semibold leading-5 text-text">
+              New truth version required
+            </div>
+
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              Live runtime should update only after these changes are published.
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              size="md"
+              className="justify-center"
+              disabled
+              title="Backend publish endpoint comes next."
+            >
+              Publish changes
+            </Button>
+
+            <Button
+              type="button"
+              size="md"
+              variant="secondary"
+              className="justify-center"
+              onClick={onDiscardAll}
+            >
+              Discard staged
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function PendingTruthChangeStrip({ changes = [], onOpenReview, onClear }) {
   const total = arr(changes).length;
   if (!total) return null;
