@@ -261,9 +261,18 @@ function buildRuntimeOutput({
   const normalizedKnowledgeEntries = dedupeKnowledgeEntries(knowledgeEntries, tenant);
   const normalizedResponsePlaybooks = dedupePlaybooks(responsePlaybooks, tenant);
   const behavior = obj(raw?.behavior || raw?.behavior_json || raw?.projection?.behavior_json);
+  const projection = obj(raw?.projection);
+  const projectionIdentity = obj(projection?.identity_json);
+  const projectionProfile = obj(projection?.profile_json);
+  const projectionCapabilities = obj(projection?.capabilities_json);
+  const projectionContent = obj(projection?.content_json);
+  const projectionComments = obj(projection?.comments_json);
   const activeVisibleServices = normalizedServices.filter((x) => x.enabled && x.visibleInAi);
   const disabledVisibleServices = normalizedServices.filter((x) => !x.enabled || !x.visibleInAi);
   const displayName =
+    s(projectionIdentity.displayName) ||
+    s(projectionProfile.displayName) ||
+    s(projectionProfile.companyName) ||
     s(profile.brand_name) ||
     s(tenant?.brand?.displayName) ||
     s(tenant?.company_name) ||
@@ -285,7 +294,10 @@ function buildRuntimeOutput({
   const disabledServicesList = uniqStrings(disabledVisibleServices.map((x) => x.title));
 
   const businessSummary = compactText(
-    s(meta.businessSummary) ||
+    s(projectionProfile.summaryShort) ||
+      s(projectionProfile.summaryLong) ||
+      s(projectionProfile.valueProposition) ||
+      s(meta.businessSummary) ||
       s(aiPolicy.businessContext) ||
       s(profile.brand_summary) ||
       s(profile.value_proposition) ||
@@ -300,7 +312,12 @@ function buildRuntimeOutput({
     1,
     Math.min(
       4,
-      Number(profile?.communication_rules?.maxSentences || inboxPolicy?.max_reply_sentences || 2)
+      Number(
+        projectionComments.maxReplySentences ||
+          profile?.communication_rules?.maxSentences ||
+          inboxPolicy?.max_reply_sentences ||
+          2
+      )
     )
   );
 
@@ -351,8 +368,6 @@ function buildRuntimeOutput({
   ]);
 
   const extraContext = readExtraContext(profile);
-  const projection = obj(raw?.projection);
-  const projectionProfile = obj(projection?.profile_json);
 
   const contacts = dedupeContacts([
     ...arr(tenant?.contacts),
@@ -438,9 +453,9 @@ function buildRuntimeOutput({
   );
 
   const primaryAddress = pickFirstString(
+    projectionProfile?.primaryAddress,
     tenant?.primaryAddress,
     profile?.primary_address,
-    projectionProfile?.primaryAddress,
     arr(locations).find((item) => item?.primary && s(item?.address))?.address,
     arr(locations).find((item) => s(item?.address))?.address
   );
@@ -500,7 +515,7 @@ function buildRuntimeOutput({
     tenantId: s(tenant?.id),
     displayName,
     brandName: displayName,
-    companyName: s(tenant?.company_name || displayName),
+    companyName: s(projectionProfile.companyName || projectionIdentity.companyName || tenant?.company_name || displayName),
     companySummaryShort: compactText(
       s(profile.brand_summary) || s(profile.value_proposition) || businessSummary,
       500

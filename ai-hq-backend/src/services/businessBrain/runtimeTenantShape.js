@@ -430,11 +430,21 @@ function mergeTenantRuntime({
     firstFact(facts, ["contact"]);
 
   const websiteUrl =
-    s(legacy?.profile?.website_url) || s(businessProfile?.website_url);
+    s(businessProfile?.website_url) ||
+    s(businessProfile?.websiteUrl) ||
+    firstCanonical([\"website\", \"social_link\"], [
+      \"website_url\",
+      \"site_url\",
+      \"primary_website\",
+      \"url\",
+    ]) ||
+    firstFact(facts, [\"website\", \"social_link\"]) ||
+    s(legacy?.profile?.website_url);
 
   const primaryAddress =
-    s(legacy?.profile?.primary_address) ||
     s(businessProfile?.primary_address) ||
+    s(businessProfile?.primaryAddress) ||
+    s(legacy?.profile?.primary_address) ||
     collectLocationValues(visibleLocations, [
       "addressLine",
       "address_line",
