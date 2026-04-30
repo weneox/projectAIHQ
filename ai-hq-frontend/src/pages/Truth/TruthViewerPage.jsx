@@ -1949,10 +1949,10 @@ function StagedTruthChangesPanel({ changes = [], onEdit, onDiscardAll, onPublish
               type="button"
               size="md"
               className="justify-center"
-              disabled
-              title="Backend publish endpoint comes next."
+              disabled={publishing || !items.length}
+              onClick={onPublish}
             >
-              Publish changes
+              {publishing ? "Publishing..." : "Publish changes"}
             </Button>
 
             <Button
@@ -2606,7 +2606,48 @@ export default function TruthViewerPage() {
     setPendingFieldChanges([]);
   }, []);
 
-  const contractModel = useMemo(
+  
+  const publishFieldChanges = useCallback(async () => {
+    const changes = arr(pendingFieldChanges);
+
+    if (!changes.length || publishingFieldChanges) return;
+
+    setPublishingFieldChanges(true);
+
+    try {
+      await stageTruthMaintenanceChanges({
+        changes,
+        source: "truth_viewer_inline_edit",
+      });
+
+      await publishTruthMaintenanceChanges({
+        maintenance: true,
+        truthMaintenance: true,
+        reason: "truth_maintenance_inline_edit",
+        changes,
+      });
+
+      setPendingFieldChanges([]);
+      setActiveTab("business");
+
+      emitLaunchSliceRefresh({
+        source: "truth-maintenance-publish",
+      });
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 250);
+    } catch (err) {
+      window.alert(
+        err?.message ||
+          err?.reason ||
+          "Truth maintenance publish failed. Please try again."
+      );
+    } finally {
+      setPublishingFieldChanges(false);
+    }
+  }, [pendingFieldChanges, publishingFieldChanges]);
+const contractModel = useMemo(
     () =>
       buildRuntimeContract({
         data,
