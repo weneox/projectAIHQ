@@ -1049,6 +1049,73 @@ function RuntimeStrip({ operationalState, runtimeLabel }) {
   );
 }
 
+function HealthyTruthRail({ operationalState, runtimeLabel, reviewSummary, onOpenReview }) {
+  const runtimeTone = toneForStatus(operationalState.status || runtimeLabel);
+  const reviewTotal = reviewSummaryTotal(reviewSummary);
+
+  if (runtimeTone !== "success" || reviewTotal > 0) {
+    return (
+      <>
+        <RuntimeStrip
+          operationalState={operationalState}
+          runtimeLabel={runtimeLabel}
+        />
+
+        <ReviewPressureStrip
+          summary={reviewSummary}
+          onOpenReview={onOpenReview}
+        />
+      </>
+    );
+  }
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid gap-0 divide-y divide-line-soft md:grid-cols-2 md:divide-x md:divide-y-0">
+        <div className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5">
+          <FreeIcon icon={CheckCircle2} tone="success" className="h-[18px] w-[18px]" />
+
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Runtime aligned
+            </div>
+            <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
+              Approved truth is the active runtime source.
+            </div>
+          </div>
+
+          <StatusText tone="success">{runtimeLabel}</StatusText>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="group grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+        >
+          <FreeIcon icon={CheckCircle2} tone="success" className="h-[18px] w-[18px]" />
+
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Review clear
+            </div>
+            <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
+              No pending, conflicting, quarantined, or high-risk items.
+            </div>
+          </div>
+
+          <ArrowRight
+            className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+            strokeWidth={2.1}
+          />
+        </button>
+      </div>
+
+      <div className="sr-only">
+        Approved truth and runtime are aligned. Review queue clear.
+      </div>
+    </Card>
+  );
+}
 function ReviewPressureStrip({ summary = {}, onOpenReview }) {
   const total = reviewSummaryTotal(summary);
 
@@ -1888,13 +1955,10 @@ export default function TruthViewerPage() {
 
       {approvedTruthAvailable ? (
         <>
-          <RuntimeStrip
+          <HealthyTruthRail
             operationalState={operationalState}
             runtimeLabel={runtimeLabel}
-          />
-
-          <ReviewPressureStrip
-            summary={reviewSummary}
+            reviewSummary={reviewSummary}
             onOpenReview={() => setActiveTab("review")}
           />
 
