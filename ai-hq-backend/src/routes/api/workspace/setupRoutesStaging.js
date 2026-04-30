@@ -303,9 +303,9 @@ function buildTruthMaintenanceDraftPatch(changes = [], currentDraft = {}) {
 
 import {
   compactDraftObject,
-  getOrCreateSetupDraftSession,
   mergeDraftState,
 } from "../../../services/workspace/setup/draftShared.js";
+import { createSetupReviewSession } from "../../../db/helpers/tenantSetupReview.js";
 export function registerSetupStagingRoutes(
   router,
   {
@@ -335,8 +335,27 @@ export function registerSetupStagingRoutes(
         });
       }
 
-      const current = await getOrCreateSetupDraftSession(actor);
-      const patch = buildTruthMaintenanceDraftPatch(changes, current?.draft || {});
+      const session = await createSetupReviewSession({
+        tenantId: actor.tenantId,
+        mode: "refresh",
+        status: "ready",
+        currentStep: "truth-maintenance",
+        title: "Business record maintenance",
+        notes: "Inline approved truth maintenance",
+        metadata: {
+          origin: "truth_maintenance_inline_edit",
+          truthMaintenance: true,
+          maintenanceChanges: changes.map((item) => item.key),
+        },
+        ensureDraft: true,
+      });
+
+      const current = {
+        session,
+        draft: {},
+      };
+
+      const patch = buildTruthMaintenanceDraftPatch(changes, current.draft);
 
       const draft = await patchSetupReviewDraft({
         sessionId: current.session.id,
