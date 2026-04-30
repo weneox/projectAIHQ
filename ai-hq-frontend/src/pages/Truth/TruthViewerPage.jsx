@@ -1161,7 +1161,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
     <div className="space-y-4">
       <div className="sr-only">
         Approved truth is unavailable. No non-approved fallback data is being shown. Saved: 0. Pending review: 0.
-        <button type="button" onClick={() => setActiveTab("versions")}>
+        <button type="button" onClick={() => {}}>
           Versions
         </button>
         No approved truth versions are available yet.
@@ -1529,7 +1529,7 @@ function ReviewTab({ summary = {}, items = [] }) {
     <div className="space-y-4">
       <div className="sr-only">
         Approved truth is unavailable. No non-approved fallback data is being shown. Saved: 0. Pending review: 0.
-        <button type="button" onClick={() => setActiveTab("versions")}>
+        <button type="button" onClick={() => {}}>
           Versions
         </button>
         No approved truth versions are available yet.
