@@ -535,11 +535,34 @@ export function inboxHandlers({ db, wsHub }) {
           meta,
           sent_at,
           created_at
-        from inbox_messages
-        where thread_id = $1::uuid
-          and tenant_key = $2::text
-        order by sent_at asc, created_at asc
-        limit $3::int
+        from (
+          select
+            id,
+            thread_id,
+            tenant_id,
+            tenant_key,
+            direction,
+            sender_type,
+            external_message_id,
+            message_type,
+            text,
+            attachments,
+            meta,
+            sent_at,
+            created_at
+          from inbox_messages
+          where thread_id = $1::uuid
+            and tenant_key = $2::text
+          order by
+            coalesce(sent_at, created_at) desc,
+            created_at desc,
+            id desc
+          limit $3::int
+        ) latest_messages
+        order by
+          coalesce(sent_at, created_at) asc,
+          created_at asc,
+          id asc
         `,
         [threadId, tenantKey, limit]
       );
