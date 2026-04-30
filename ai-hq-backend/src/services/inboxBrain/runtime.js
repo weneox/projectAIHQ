@@ -372,6 +372,79 @@ function extractRawContacts(container = {}, rawTenant = {}, rawProfile = {}) {
   const profileExtra = obj(profile?.extra_context || profile?.extraContext);
   const raw = obj(container?.raw);
 
+  const projection = obj(
+    container?.projection ||
+      raw?.projection ||
+      rawTenant?.projection ||
+      rawTenant?.runtimeProjection
+  );
+
+  const projectionProfile = obj(
+    projection?.profile_json || projection?.profileJson
+  );
+
+  const projectionIdentity = obj(
+    projection?.identity_json || projection?.identityJson
+  );
+
+  const projectionContacts = arr(
+    projection?.contacts_json || projection?.contactsJson
+  );
+
+  const hasProjectionPhone = projectionContacts.some((item) =>
+    ["phone", "whatsapp"].includes(
+      normalizeContactType(item?.type || item?.channel || item?.contactType || item?.contact_type)
+    )
+  );
+
+  const hasProjectionEmail = projectionContacts.some(
+    (item) =>
+      normalizeContactType(item?.type || item?.channel || item?.contactType || item?.contact_type) ===
+      "email"
+  );
+
+  const hasProjectionWebsite = projectionContacts.some(
+    (item) =>
+      normalizeContactType(item?.type || item?.channel || item?.contactType || item?.contact_type) ===
+      "website"
+  );
+
+  const projectionPrimitiveContacts = [
+    ...(hasProjectionPhone
+      ? []
+      : normalizeStringList(projectionProfile?.primaryPhone).map((value) => ({
+          type: "phone",
+          value,
+          primary: true,
+          public: true,
+        }))),
+    ...(hasProjectionEmail
+      ? []
+      : normalizeStringList(projectionProfile?.primaryEmail).map((value) => ({
+          type: "email",
+          value,
+          primary: true,
+          public: true,
+        }))),
+    ...(hasProjectionWebsite
+      ? []
+      : normalizeStringList(
+          projectionProfile?.websiteUrl || projectionIdentity?.websiteUrl
+        ).map((value) => ({
+          type: "website",
+          value,
+          primary: true,
+          public: true,
+        }))),
+  ];
+
+  if (projectionContacts.length || projectionPrimitiveContacts.length) {
+    return [
+      ...projectionContacts,
+      ...projectionPrimitiveContacts,
+    ];
+  }
+
   const primitiveContacts = [
     ...normalizeStringList(
       container?.contactPhones,
@@ -425,6 +498,39 @@ function extractRawLocations(container = {}, rawTenant = {}) {
     tenantProfile?.extra_context || tenantProfile?.extraContext
   );
   const raw = obj(container?.raw);
+
+  const projection = obj(
+    container?.projection ||
+      raw?.projection ||
+      rawTenant?.projection ||
+      rawTenant?.runtimeProjection
+  );
+
+  const projectionProfile = obj(
+    projection?.profile_json || projection?.profileJson
+  );
+
+  const projectionLocations = arr(
+    projection?.locations_json || projection?.locationsJson
+  );
+
+  const hasProjectionAddress = projectionLocations.some((item) =>
+    s(item?.address || item?.addressLine || item?.address_line || item?.title)
+  );
+
+  const projectionPrimitiveLocations = hasProjectionAddress
+    ? []
+    : normalizeStringList(projectionProfile?.primaryAddress).map((value) => ({
+        address: value,
+        primary: true,
+      }));
+
+  if (projectionLocations.length || projectionPrimitiveLocations.length) {
+    return [
+      ...projectionLocations,
+      ...projectionPrimitiveLocations,
+    ];
+  }
 
   const primitiveLocations = normalizeStringList(tenantMeta?.locations).map(
     (value) => ({
