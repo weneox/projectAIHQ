@@ -138,8 +138,25 @@ function buildTruthMaintenanceDraftPatch(changes = [], currentDraft = {}) {
       continue;
     }
 
-    if (["description", "summaryShort", "shortDescription"].includes(key)) {
+    if (
+      [
+        "description",
+        "summary",
+        "summaryShort",
+        "summaryLong",
+        "shortDescription",
+        "businessSummary",
+        "valueProposition",
+      ].includes(key)
+    ) {
       businessProfile.description = value;
+      businessProfile.summary = value;
+      businessProfile.summaryShort = value;
+      businessProfile.summaryLong = value;
+      businessProfile.shortDescription = value;
+      businessProfile.businessSummary = value;
+      businessProfile.valueProposition = value;
+      businessProfile.brandSummary = value;
       continue;
     }
 

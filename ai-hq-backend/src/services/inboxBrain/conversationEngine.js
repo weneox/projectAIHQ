@@ -1476,9 +1476,14 @@ function buildRuntimeGrounding(profile = {}) {
     industry: firstRuntimeText(profileJson.industryKey, identity.industryKey, profile?.industry),
     businessSummary: firstRuntimeText(
       profileJson.summaryShort,
+      profileJson.summary,
+      profileJson.description,
+      profileJson.businessSummary,
       profileJson.summaryLong,
       profileJson.valueProposition,
-      profile?.businessSummary
+      profile?.businessSummary,
+      profile?.summary,
+      profile?.description
     ),
     businessType: firstRuntimeText(behavior.businessType, behavior.business_type, profile?.businessType),
     niche: firstRuntimeText(behavior.niche, profile?.niche),

@@ -70,10 +70,26 @@ export function normalizeProfile(tenant, profile) {
     legalName: s(profile?.legal_name || profile?.legalName),
     industryKey: s(profile?.industry_key || profile?.industryKey),
     subindustryKey: s(profile?.subindustry_key || profile?.subindustryKey),
-    summaryShort: s(profile?.summary_short || profile?.summaryShort),
-    summaryLong: s(profile?.summary_long || profile?.summaryLong),
+    summaryShort: s(
+      profile?.summary_short ||
+        profile?.summaryShort ||
+        profile?.shortDescription ||
+        profile?.businessSummary ||
+        profile?.description ||
+        profile?.brandSummary
+    ),
+    summaryLong: s(
+      profile?.summary_long ||
+        profile?.summaryLong ||
+        profile?.businessSummary ||
+        profile?.description ||
+        profile?.summaryShort
+    ),
     valueProposition: s(
-      profile?.value_proposition || profile?.valueProposition
+      profile?.value_proposition ||
+        profile?.valueProposition ||
+        profile?.description ||
+        profile?.summaryShort
     ),
     preferredCta: s(profile?.preferred_cta || profile?.preferredCta),
     targetAudience: s(profile?.target_audience || profile?.targetAudience),
