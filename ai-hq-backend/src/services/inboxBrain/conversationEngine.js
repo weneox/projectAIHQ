@@ -953,15 +953,17 @@ function buildGroundedApprovedTruthDecision({
   } else if (wantsName) {
     add("Biznes adı", displayName, "Business name");
   } else if (wantsServices) {
+    const summaryText = s(summary);
     const serviceList = joinList(services);
-    if (serviceList) {
+
+    if (summaryText) {
+      parts.push(summaryText.endsWith(".") ? summaryText : `${summaryText}.`);
+      factsUsed.push(`Business summary: ${summaryText}`);
+    } else if (serviceList) {
       parts.push(`Əsas xidmətlərimiz: ${serviceList}.`);
       factsUsed.push(`Services: ${serviceList}`);
-    } else if (summary) {
-      parts.push(summary.endsWith(".") ? summary : `${summary}.`);
-      factsUsed.push(`Business summary: ${summary}`);
     } else {
-      parts.push("Təsdiqlənmiş xidmət siyahısı hələ əlavə olunmayıb.");
+      parts.push("Təsdiqlənmiş xidmət məlumatı hələ əlavə olunmayıb.");
       factsUsed.push("Services: not approved");
     }
   } else if (wantsProducts) {
