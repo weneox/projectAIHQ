@@ -889,11 +889,14 @@ function buildContactGrounding(profile = {}) {
   const approved = getApprovedProjectionView(profile);
   const profileJson = approved.profileJson;
 
+  const hasApprovedContacts = approved.contactsJson.length > 0;
+  const hasApprovedLocations = approved.locationsJson.length > 0;
+
   const normalizedContacts = [
     ...approved.contactsJson,
-    ...arr(profile?.contacts),
-    ...arr(profile?.meta?.contacts),
-    ...arr(profile?.profile?.extra_context?.contacts),
+    ...(hasApprovedContacts ? [] : arr(profile?.contacts)),
+    ...(hasApprovedContacts ? [] : arr(profile?.meta?.contacts)),
+    ...(hasApprovedContacts ? [] : arr(profile?.profile?.extra_context?.contacts)),
   ]
     .map(normalizeRuntimeContactEntry)
     .filter((item) => item.value)
@@ -901,40 +904,40 @@ function buildContactGrounding(profile = {}) {
 
   const normalizedLocations = [
     ...approved.locationsJson,
-    ...arr(profile?.locations),
-    ...arr(profile?.meta?.locations),
-    ...arr(profile?.profile?.extra_context?.locations),
+    ...(hasApprovedLocations ? [] : arr(profile?.locations)),
+    ...(hasApprovedLocations ? [] : arr(profile?.meta?.locations)),
+    ...(hasApprovedLocations ? [] : arr(profile?.profile?.extra_context?.locations)),
   ]
     .map(normalizeRuntimeLocationEntry)
     .filter((item) => item.title || item.address || item.city)
     .slice(0, 12);
 
   const primaryPhone = firstRuntimeText(
+    pickRuntimeContactValue(normalizedContacts, ["phone", "whatsapp"]),
     profileJson.primaryPhone,
     profile?.primaryPhone,
-    profile?.publicPhone,
-    pickRuntimeContactValue(normalizedContacts, ["phone", "whatsapp"])
+    profile?.publicPhone
   );
 
   const primaryEmail = firstRuntimeText(
+    pickRuntimeContactValue(normalizedContacts, ["email"]),
     profileJson.primaryEmail,
     profile?.primaryEmail,
-    profile?.publicEmail,
-    pickRuntimeContactValue(normalizedContacts, ["email"])
+    profile?.publicEmail
   );
 
   const websiteUrl = firstRuntimeText(
+    pickRuntimeContactValue(normalizedContacts, ["website"]),
     profileJson.websiteUrl,
     approved.identity.websiteUrl,
-    profile?.websiteUrl,
-    pickRuntimeContactValue(normalizedContacts, ["website"])
+    profile?.websiteUrl
   );
 
   const primaryAddress = firstRuntimeText(
-    profileJson.primaryAddress,
-    profile?.primaryAddress,
     arr(normalizedLocations).find((item) => item?.primary && s(item?.address))?.address,
-    arr(normalizedLocations).find((item) => s(item?.address))?.address
+    arr(normalizedLocations).find((item) => s(item?.address))?.address,
+    profileJson.primaryAddress,
+    profile?.primaryAddress
   );
 
   return {
@@ -944,23 +947,23 @@ function buildContactGrounding(profile = {}) {
     primaryAddress,
     contactPhones: uniqStrings([
       primaryPhone,
-      ...arr(profile?.contactPhones).map((x) => s(x)),
       ...listRuntimeContactValues(normalizedContacts, ["phone", "whatsapp"]),
+      ...(hasApprovedContacts ? [] : arr(profile?.contactPhones).map((x) => s(x))),
     ]).slice(0, 8),
     contactEmails: uniqStrings([
       primaryEmail,
-      ...arr(profile?.contactEmails).map((x) => s(x)),
       ...listRuntimeContactValues(normalizedContacts, ["email"]),
+      ...(hasApprovedContacts ? [] : arr(profile?.contactEmails).map((x) => s(x))),
     ]).slice(0, 8),
     websiteUrls: uniqStrings([
       websiteUrl,
-      ...arr(profile?.websiteUrls).map((x) => s(x)),
       ...listRuntimeContactValues(normalizedContacts, ["website"]),
+      ...(hasApprovedContacts ? [] : arr(profile?.websiteUrls).map((x) => s(x))),
     ]).slice(0, 8),
     contactAddresses: uniqStrings([
       primaryAddress,
-      ...arr(profile?.contactAddresses).map((x) => s(x)),
       ...arr(normalizedLocations).map((item) => s(item?.address)),
+      ...(hasApprovedLocations ? [] : arr(profile?.contactAddresses).map((x) => s(x))),
     ]).slice(0, 8),
     contacts: normalizedContacts,
     locations: normalizedLocations,
