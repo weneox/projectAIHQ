@@ -957,12 +957,21 @@ function buildGroundedApprovedTruthDecision({
     if (serviceList) {
       parts.push(`Əsas xidmətlərimiz: ${serviceList}.`);
       factsUsed.push(`Services: ${serviceList}`);
+    } else if (summary) {
+      parts.push(summary.endsWith(".") ? summary : `${summary}.`);
+      factsUsed.push(`Business summary: ${summary}`);
+    } else {
+      parts.push("Təsdiqlənmiş xidmət siyahısı hələ əlavə olunmayıb.");
+      factsUsed.push("Services: not approved");
     }
   } else if (wantsProducts) {
     const productList = joinList(products);
     if (productList) {
       parts.push(`Məhsullarımız: ${productList}.`);
       factsUsed.push(`Products: ${productList}`);
+    } else {
+      parts.push("Təsdiqlənmiş məhsul siyahısı hələ əlavə olunmayıb.");
+      factsUsed.push("Products: not approved");
     }
   } else if (wantsPricing) {
     const pricingText = joinList(pricingHints);
@@ -972,6 +981,9 @@ function buildGroundedApprovedTruthDecision({
     } else if (pricingMode) {
       parts.push(`Qiymət modeli: ${pricingMode}.`);
       factsUsed.push(`Pricing mode: ${pricingMode}`);
+    } else {
+      parts.push("Təsdiqlənmiş qiymət məlumatı hələ əlavə olunmayıb.");
+      factsUsed.push("Pricing: not approved");
     }
   } else if (wantsBooking) {
     const bookingLink = s(bookingLinks[0]);
@@ -981,6 +993,9 @@ function buildGroundedApprovedTruthDecision({
     } else if (bookingMode) {
       parts.push(`Görüş/rezerv qaydası: ${bookingMode}.`);
       factsUsed.push(`Booking mode: ${bookingMode}`);
+    } else {
+      parts.push("Təsdiqlənmiş görüş/rezerv qaydası hələ əlavə olunmayıb.");
+      factsUsed.push("Booking: not approved");
     }
   } else if (wantsSocial) {
     const socialText = joinList(socialLinks);
@@ -1535,6 +1550,12 @@ function buildRuntimeGrounding(profile = {}) {
     activeServiceNames: approvedServices,
     disabledServiceNames: arr(profile?.disabledServices).map((x) => s(x)).filter(Boolean).slice(0, 20),
     pricingHints: uniqStrings([
+      profileJson.pricingGuidance,
+      profileJson.pricingText,
+      profileJson.pricingSummary,
+      profileJson.pricing,
+      profileJson.price,
+      profileJson.pricingMode,
       ...arr(profile?.meta?.pricingHints).map((x) => s(x)),
       ...arr(profile?.pricingHints).map((x) => s(x)),
     ]).slice(0, 8),
@@ -2749,6 +2770,22 @@ export async function runTenantAwareConversationEngine({
     policy,
   });
 
+  const groundedApprovedTruthDecision = buildGroundedApprovedTruthDecision({
+    text,
+    runtimeGrounding,
+  });
+
+  if (groundedApprovedTruthDecision) {
+    logConversationEngine("grounded_approved_truth_direct", {
+      tenantKey,
+      channel,
+      groundedFactsUsed: groundedApprovedTruthDecision.groundedFactsUsed,
+      replyPreview: safePreview(groundedApprovedTruthDecision.replyText, 220),
+      latestMessagePreview: safePreview(text, 160),
+    });
+
+    return groundedApprovedTruthDecision;
+  }
   logConversationEngine("request_start", {
     tenantKey: resolvedTenantKey,
     channel: s(channel || "inbox"),
