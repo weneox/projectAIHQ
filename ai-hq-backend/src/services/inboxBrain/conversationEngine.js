@@ -717,11 +717,38 @@ function inferContactRequest(text = "") {
 
 function buildGroundedContactDecision({ text = "", runtimeGrounding = {} } = {}) {
   const contact = obj(runtimeGrounding?.contactGrounding);
+  const normalized = normalizeFreeText(text);
 
-  const wantsPhone = inferPhoneRequest(text);
-  const wantsEmail = inferEmailRequest(text);
-  const wantsWebsite = inferWebsiteRequest(text);
-  const wantsGeneralContact = inferContactRequest(text);
+  const wantsPhone =
+    inferPhoneRequest(text) ||
+    normalized.includes("nomr") ||
+    normalized.includes("nömr") ||
+    normalized.includes("telefon") ||
+    normalized.includes("elaq") ||
+    normalized.includes("əlaq") ||
+    normalized.includes("phone") ||
+    normalized.includes("number") ||
+    normalized.includes("call");
+
+  const wantsEmail =
+    inferEmailRequest(text) ||
+    normalized.includes("email") ||
+    normalized.includes("mail") ||
+    normalized.includes("poct") ||
+    normalized.includes("poçt");
+
+  const wantsWebsite =
+    inferWebsiteRequest(text) ||
+    normalized.includes("sayt") ||
+    normalized.includes("site") ||
+    normalized.includes("website") ||
+    normalized.includes("link");
+
+  const wantsGeneralContact =
+    inferContactRequest(text) ||
+    normalized.includes("contact") ||
+    normalized.includes("elaq") ||
+    normalized.includes("əlaq");
 
   if (!wantsPhone && !wantsEmail && !wantsWebsite && !wantsGeneralContact) {
     return null;
@@ -734,40 +761,22 @@ function buildGroundedContactDecision({ text = "", runtimeGrounding = {} } = {})
   const parts = [];
   const factsUsed = [];
 
-  if (wantsPhone && phone) {
+  if ((wantsPhone || wantsGeneralContact) && phone) {
     parts.push(`Əlaqə nömrəmiz: ${phone}.`);
     factsUsed.push(`Primary phone: ${phone}`);
   }
 
-  if (wantsEmail && email) {
+  if ((wantsEmail || wantsGeneralContact) && email) {
     parts.push(`E-poçt ünvanımız: ${email}.`);
     factsUsed.push(`Primary email: ${email}`);
   }
 
-  if (wantsWebsite && website) {
+  if ((wantsWebsite || wantsGeneralContact) && website) {
     parts.push(`Vebsayt: ${website}.`);
     factsUsed.push(`Website: ${website}`);
   }
 
-  if (!parts.length && wantsGeneralContact) {
-    if (phone) {
-      parts.push(`Əlaqə nömrəmiz: ${phone}.`);
-      factsUsed.push(`Primary phone: ${phone}`);
-    }
-
-    if (email) {
-      parts.push(`E-poçt ünvanımız: ${email}.`);
-      factsUsed.push(`Primary email: ${email}`);
-    }
-
-    if (website) {
-      parts.push(`Vebsayt: ${website}.`);
-      factsUsed.push(`Website: ${website}`);
-    }
-  }
-
   const replyText = sanitizeReplyText(parts.join(" "));
-
   if (!replyText) return null;
 
   return {
@@ -793,7 +802,6 @@ function buildGroundedContactDecision({ text = "", runtimeGrounding = {} } = {})
     noReply: false,
   };
 }
-
 function firstRuntimeText(...values) {
   for (const value of values) {
     const text = s(value);
@@ -2263,6 +2271,23 @@ export async function runTenantAwareConversationEngine({
 
   const profile = resolvedRuntime;
   const runtimeGrounding = buildRuntimeGrounding(profile);
+
+  const groundedContactDecision = buildGroundedContactDecision({
+    text,
+    runtimeGrounding,
+  });
+
+  if (groundedContactDecision) {
+    logConversationEngine("grounded_contact_direct", {
+      tenantKey,
+      channel,
+      groundedFactsUsed: groundedContactDecision.groundedFactsUsed,
+      replyPreview: safePreview(groundedContactDecision.replyText, 180),
+      latestMessagePreview: safePreview(text, 160),
+    });
+
+    return groundedContactDecision;
+  }
 
   try {
     console.info("[ai-hq] truth_contact_debug_probe", {
