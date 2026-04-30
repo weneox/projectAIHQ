@@ -43,7 +43,9 @@ export function buildTenantRuntimeProjection(graph) {
     supportedLanguages: arr(profile.supportedLanguages),
   };
 
-  const publishedTruthFacts = arr(graph.publishedTruthFacts);
+  const publishedTruthFacts = publishedTruthFactsSnapshot.length
+    ? publishedTruthFactsSnapshot
+    : arr(graph.publishedTruthFacts);
   const operationalFacts = arr(graph.operationalFacts ?? graph.facts);
   const combinedFacts = [...publishedTruthFacts, ...operationalFacts];
 
@@ -53,7 +55,7 @@ export function buildTenantRuntimeProjection(graph) {
 
   const retrievalCorpus = buildRetrievalCorpus({
     profile,
-    services: graph.services,
+    services: selectedServices,
     products: graph.products,
     faq: graph.faq,
     policies: graph.policies,
@@ -64,9 +66,9 @@ export function buildTenantRuntimeProjection(graph) {
   const runtimeContextText = buildRuntimeContextText({
     identity,
     profile,
-    contacts: graph.contacts,
-    locations: graph.locations,
-    services: graph.services,
+    contacts: selectedContacts,
+    locations: selectedLocations,
+    services: selectedServices,
     products: graph.products,
     faq: graph.faq,
     policies: graph.policies,
@@ -76,9 +78,9 @@ export function buildTenantRuntimeProjection(graph) {
 
   const readiness = buildReadiness({
     profile,
-    contacts: graph.contacts,
-    locations: graph.locations,
-    services: graph.services,
+    contacts: selectedContacts,
+    locations: selectedLocations,
+    services: selectedServices,
     products: graph.products,
     faq: graph.faq,
     policies: graph.policies,
@@ -91,16 +93,16 @@ export function buildTenantRuntimeProjection(graph) {
     synthesis: graph.synthesis,
     profile: profileSource,
     capabilities: capabilitiesSource,
-    services: graph.services,
-    contacts: graph.contacts,
+    services: selectedServices,
+    contacts: selectedContacts,
     faq: graph.faq,
     policies: graph.policies,
   });
 
   const inboxJson = buildInboxJson(
     capabilities,
-    graph.services,
-    graph.contacts,
+    selectedServices,
+    selectedContacts,
     operationalChannelPolicies,
     graph.channels
   );
@@ -114,7 +116,7 @@ export function buildTenantRuntimeProjection(graph) {
   const contentJson = buildContentJson(
     profile,
     capabilities,
-    graph.services,
+    selectedServices,
     graph.products,
     graph.socialAccounts
   );
@@ -150,7 +152,7 @@ export function buildTenantRuntimeProjection(graph) {
     contacts_json: graph.contacts,
     locations_json: graph.locations,
     hours_json: graph.hours,
-    services_json: graph.services,
+    services_json: selectedServices,
     products_json: graph.products,
     faq_json: graph.faq,
     policies_json: graph.policies,
