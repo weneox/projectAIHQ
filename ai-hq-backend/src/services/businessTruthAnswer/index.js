@@ -1,5 +1,6 @@
-import { classifyApprovedTruthIntentWithModel } from "./classifier.js";
+﻿import { classifyApprovedTruthIntentWithModel } from "./classifier.js";
 import { composeApprovedTruthAnswer } from "./composer.js";
+import { localizeApprovedTruthAnswer } from "./localizer.js";
 import { resolveApprovedTruthFacts } from "./resolver.js";
 import { validateApprovedTruthAnswer } from "./validator.js";
 import { arr, normalizeIsoLanguage, s } from "./normalize.js";
@@ -29,22 +30,36 @@ export async function answerFromApprovedTruth({
     facts,
   });
 
-  const validation = validateApprovedTruthAnswer({
+  const localized = await localizeApprovedTruthAnswer({
     replyText: composed.replyText,
+    targetLanguage: classification.language,
+    customerText: text,
+    classification,
+    facts,
+  });
+
+  const finalReplyText = s(localized.replyText || composed.replyText);
+  const validation = validateApprovedTruthAnswer({
+    replyText: finalReplyText,
   });
 
   if (!validation.ok) {
     return null;
   }
 
+  const language = normalizeIsoLanguage(
+    localized.language || classification.language,
+    fallbackLanguage
+  );
+
   return {
-    language: normalizeIsoLanguage(classification.language, fallbackLanguage),
+    language,
     understoodIntent: s(classification.primaryIntent || "approved_truth_fact"),
     detectedService: "",
     customerGoal: "approved_truth_or_safe_direct",
-    answerFirst: composed.replyText,
+    answerFirst: finalReplyText,
     nextQuestion: "",
-    replyText: composed.replyText,
+    replyText: finalReplyText,
     missingInformation: [],
     groundedFactsUsed: arr(composed.factsUsed),
     shouldAskQuestion: false,
@@ -64,6 +79,9 @@ export async function answerFromApprovedTruth({
       intents: arr(classification.intents),
       userMeaning: s(classification.userMeaning),
       needsApprovedTruth: classification.needsApprovedTruth === true,
+      localized: localized.localized === true,
+      localizationReason: s(localized.reason),
+      targetLanguage: language,
     },
   };
 }

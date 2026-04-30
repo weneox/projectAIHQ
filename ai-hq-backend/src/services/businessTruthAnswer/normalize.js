@@ -1,4 +1,4 @@
-export function s(value = "", fallback = "") {
+﻿export function s(value = "", fallback = "") {
   const next = String(value ?? fallback).trim();
   return next || fallback;
 }
@@ -50,27 +50,102 @@ export function firstText(...values) {
   return "";
 }
 
+const LANGUAGE_ALIASES = {
+  azerbaijani: "az",
+  azeri: "az",
+  azərbaycan: "az",
+  azərbaycanlı: "az",
+
+  english: "en",
+  ingilis: "en",
+
+  turkish: "tr",
+  türkçe: "tr",
+  turkce: "tr",
+  turkish_language: "tr",
+
+  russian: "ru",
+  русский: "ru",
+  rus: "ru",
+
+  spanish: "es",
+  español: "es",
+  espanol: "es",
+
+  german: "de",
+  deutsch: "de",
+  alman: "de",
+
+  french: "fr",
+  français: "fr",
+  francais: "fr",
+
+  italian: "it",
+  italiano: "it",
+
+  portuguese: "pt",
+  português: "pt",
+  portugues: "pt",
+
+  arabic: "ar",
+  العربية: "ar",
+
+  persian: "fa",
+  farsi: "fa",
+  فارسی: "fa",
+
+  chinese: "zh",
+  mandarin: "zh",
+  中文: "zh",
+
+  japanese: "ja",
+  日本語: "ja",
+
+  korean: "ko",
+  한국어: "ko",
+
+  hindi: "hi",
+  हिन्दी: "hi",
+
+  urdu: "ur",
+  اردو: "ur",
+
+  hebrew: "he",
+  עברית: "he",
+
+  polish: "pl",
+  polski: "pl",
+
+  ukrainian: "uk",
+  українська: "uk",
+
+  dutch: "nl",
+  nederlands: "nl",
+};
+
 export function normalizeIsoLanguage(value = "", fallback = "az") {
-  const x = lower(value).slice(0, 8);
+  const raw = lower(value).replace(/_/g, "-").trim();
+  const fb = lower(fallback) || "az";
 
-  if (x.startsWith("az")) return "az";
-  if (x.startsWith("en")) return "en";
-  if (x.startsWith("es")) return "es";
-  if (x.startsWith("tr")) return "tr";
-  if (x.startsWith("ru")) return "ru";
-  if (x.startsWith("de")) return "de";
-  if (x.startsWith("fr")) return "fr";
-  if (x.startsWith("it")) return "it";
-  if (x.startsWith("pt")) return "pt";
-  if (x.startsWith("ar")) return "ar";
+  if (!raw) return fb;
 
-  return s(fallback) || "az";
+  if (LANGUAGE_ALIASES[raw]) return LANGUAGE_ALIASES[raw];
+
+  const collapsed = raw.replace(/\s+/g, "_");
+  if (LANGUAGE_ALIASES[collapsed]) return LANGUAGE_ALIASES[collapsed];
+
+  const codeMatch = raw.match(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})?/i);
+  if (codeMatch) {
+    return codeMatch[0].split("-")[0].toLowerCase();
+  }
+
+  return fb;
 }
 
 export function sentence(value = "") {
   const text = s(value).replace(/\s+/g, " ");
   if (!text) return "";
-  return /[.!?…]$/u.test(text) ? text : `${text}.`;
+  return /[.!?…؟]$/u.test(text) ? text : `${text}.`;
 }
 
 export function joinHumanList(items = [], language = "az") {
@@ -78,14 +153,24 @@ export function joinHumanList(items = [], language = "az") {
   if (!list.length) return "";
   if (list.length === 1) return list[0];
 
-  const connector =
-    language === "az" || language === "tr"
-      ? "və"
-      : language === "es"
-        ? "y"
-        : language === "ru"
-          ? "и"
-          : "and";
+  const lang = normalizeIsoLanguage(language, "en");
 
-  return `${list.slice(0, -1).join(", ")} ${connector} ${list.at(-1)}`;
+  const connector =
+    lang === "az" || lang === "tr"
+      ? "və"
+      : lang === "es"
+        ? "y"
+        : lang === "ru"
+          ? "и"
+          : lang === "fr"
+            ? "et"
+            : lang === "de"
+              ? "und"
+              : lang === "it"
+                ? "e"
+                : lang === "pt"
+                  ? "e"
+                  : "and";
+
+  return `${list.slice(0, -1).join(", ")} ${connector} ${list[list.length - 1]}`;
 }
