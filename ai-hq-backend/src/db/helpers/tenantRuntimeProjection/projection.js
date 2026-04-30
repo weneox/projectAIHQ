@@ -21,7 +21,26 @@ export function buildTenantRuntimeProjection(graph) {
   const publishedCapabilities =
     publishedTruthVersion?.capabilities_snapshot_json || null;
 
-  const profileSource = publishedProfile || graph.profile;
+  
+  const publishedServices = arr(publishedTruthVersion?.services_snapshot_json);
+  const publishedContacts = arr(publishedTruthVersion?.contacts_snapshot_json);
+  const publishedLocations = arr(publishedTruthVersion?.locations_snapshot_json);
+  const publishedTruthFactsSnapshot = arr(
+    publishedTruthVersion?.truth_facts_snapshot_json
+  );
+
+  const selectedServices = publishedServices.length
+    ? publishedServices
+    : arr(graph.services);
+
+  const selectedContacts = publishedContacts.length
+    ? publishedContacts
+    : arr(graph.contacts);
+
+  const selectedLocations = publishedLocations.length
+    ? publishedLocations
+    : arr(graph.locations);
+const profileSource = publishedProfile || graph.profile;
   const capabilitiesSource = publishedCapabilities || graph.capabilities;
 
   const profile = normalizeProfile(graph.tenant, profileSource);
