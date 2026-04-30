@@ -1333,7 +1333,7 @@ function Tabs({ activeTab, onChange }) {
 
 function BusinessTab({ groups }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid items-start gap-4 xl:grid-cols-2">
       <RecordCard
         title="Identity"
         subtitle="Approved public business identity."
@@ -1367,7 +1367,7 @@ function BusinessTab({ groups }) {
 
 function BehaviorTab({ groups }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid items-start gap-4 xl:grid-cols-2">
       <RecordCard
         title="Conversation behavior"
         subtitle="Approved customer-facing response style."
@@ -1442,7 +1442,7 @@ function ProvenanceList({ rows = [] }) {
 
 function SourcesTab({ sourceRows }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+    <div className="grid items-start gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
       <Card padded={false} clip>
         <div className="px-4 py-3.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
