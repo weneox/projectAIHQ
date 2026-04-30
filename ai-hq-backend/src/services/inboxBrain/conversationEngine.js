@@ -714,6 +714,86 @@ function inferContactRequest(text = "") {
   );
 }
 
+
+function buildGroundedContactDecision({ text = "", runtimeGrounding = {} } = {}) {
+  const contact = obj(runtimeGrounding?.contactGrounding);
+
+  const wantsPhone = inferPhoneRequest(text);
+  const wantsEmail = inferEmailRequest(text);
+  const wantsWebsite = inferWebsiteRequest(text);
+  const wantsGeneralContact = inferContactRequest(text);
+
+  if (!wantsPhone && !wantsEmail && !wantsWebsite && !wantsGeneralContact) {
+    return null;
+  }
+
+  const phone = s(contact.primaryPhone || arr(contact.contactPhones)[0]);
+  const email = s(contact.primaryEmail || arr(contact.contactEmails)[0]);
+  const website = s(contact.websiteUrl || arr(contact.websiteUrls)[0]);
+
+  const parts = [];
+  const factsUsed = [];
+
+  if (wantsPhone && phone) {
+    parts.push(`Əlaqə nömrəmiz: ${phone}.`);
+    factsUsed.push(`Primary phone: ${phone}`);
+  }
+
+  if (wantsEmail && email) {
+    parts.push(`E-poçt ünvanımız: ${email}.`);
+    factsUsed.push(`Primary email: ${email}`);
+  }
+
+  if (wantsWebsite && website) {
+    parts.push(`Vebsayt: ${website}.`);
+    factsUsed.push(`Website: ${website}`);
+  }
+
+  if (!parts.length && wantsGeneralContact) {
+    if (phone) {
+      parts.push(`Əlaqə nömrəmiz: ${phone}.`);
+      factsUsed.push(`Primary phone: ${phone}`);
+    }
+
+    if (email) {
+      parts.push(`E-poçt ünvanımız: ${email}.`);
+      factsUsed.push(`Primary email: ${email}`);
+    }
+
+    if (website) {
+      parts.push(`Vebsayt: ${website}.`);
+      factsUsed.push(`Website: ${website}`);
+    }
+  }
+
+  const replyText = sanitizeReplyText(parts.join(" "));
+
+  if (!replyText) return null;
+
+  return {
+    language: normalizeLanguage(arr(runtimeGrounding?.languages)[0] || "az"),
+    understoodIntent: "ask_contact_details",
+    detectedService: "",
+    customerGoal: "approved_contact_details",
+    answerFirst: replyText,
+    nextQuestion: "",
+    replyText,
+    missingInformation: [],
+    groundedFactsUsed: factsUsed,
+    shouldAskQuestion: false,
+    shouldCreateLead: false,
+    shouldHandoff: false,
+    handoffReason: "",
+    handoffPriority: "normal",
+    confidence: 0.99,
+    leadScore: 0,
+    askCategory: "contact",
+    stage: "answer",
+    replyStyle: "direct",
+    noReply: false,
+  };
+}
+
 function firstRuntimeText(...values) {
   for (const value of values) {
     const text = s(value);
