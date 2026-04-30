@@ -230,6 +230,13 @@ function providerIcon(provider = "") {
   return CHANNEL_ICON_BY_PROVIDER[lower(provider)] || websiteIcon;
 }
 
+function tileStatusLabel(item) {
+  if (item?.mode !== "data") return "Setup";
+  if (item?.tone === "warning") return "Attention";
+  if (item?.tone === "danger") return "Check";
+  return "Active";
+}
+
 function StatusText({ tone = "neutral", children }) {
   return (
     <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
@@ -658,13 +665,13 @@ function buildWorkItems(home) {
 
 function MetricCell({ label, value, tone = "neutral", border = "" }) {
   return (
-    <div className={cx("px-4 py-4", border)}>
+    <div className={cx("px-4 py-3.5", border)}>
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
         {label}
       </div>
       <div
         className={cx(
-          "mt-1.5 text-[27px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+          "mt-1.5 text-[26px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
           toneTextClass(tone)
         )}
       >
@@ -709,7 +716,7 @@ function SetupStatePanel({ home, tone = "warning" }) {
       </div>
 
       <div className="mt-3 text-[12.5px] font-medium leading-5 text-text-muted">
-        Active parts turn into live data as soon as they are ready.
+        Active parts switch to live data automatically.
       </div>
     </div>
   );
@@ -726,7 +733,7 @@ function HeroCard({ hero, home, operating = false, onAction }) {
             : "xl:grid-cols-[minmax(0,1fr)_300px]"
         )}
       >
-        <div className="min-w-0 px-5 py-4 md:px-6">
+        <div className="min-w-0 px-5 py-[18px] md:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
               Home
@@ -740,7 +747,9 @@ function HeroCard({ hero, home, operating = false, onAction }) {
           <h1
             className={cx(
               "mt-3 max-w-[760px] font-display font-semibold leading-[1.01] tracking-[var(--tracking-tight-xl)] text-text",
-              operating ? "text-[34px] md:text-[44px]" : "text-[30px] md:text-[37px]"
+              operating
+                ? "text-[32px] md:text-[42px]"
+                : "text-[30px] md:text-[37px]"
             )}
           >
             {hero.title}
@@ -820,39 +829,37 @@ function SignalTile({ item, index, total, onNavigate }) {
       type="button"
       onClick={() => onNavigate(item.path)}
       className={cx(
-        "group min-h-[144px] w-full px-4 py-4 text-left",
+        "group min-h-[128px] w-full px-4 py-3.5 text-left",
         !last && "border-b border-line-soft md:border-b-0 md:border-r",
         "transition-colors duration-base ease-premium hover:bg-surface-subtle"
       )}
     >
       <div className="flex items-start justify-between gap-4">
-        <FreeIcon icon={Icon} tone={item.tone} />
+        <FreeIcon icon={Icon} tone={item.tone} className="h-[19px] w-[19px]" />
 
-        <StatusText tone={item.tone}>
-          {item.mode === "data" ? "Active" : "Setup"}
-        </StatusText>
+        <StatusText tone={item.tone}>{tileStatusLabel(item)}</StatusText>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3.5">
         <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
           {item.title}
         </div>
 
         <div
           className={cx(
-            "mt-1.5 text-[23px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+            "mt-1.5 text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
             toneTextClass(item.tone)
           )}
         >
           {item.value}
         </div>
 
-        <div className="mt-2 min-h-[36px] text-[12.5px] font-medium leading-5 text-text-muted">
+        <div className="mt-2 min-h-[32px] text-[12.5px] font-medium leading-5 text-text-muted">
           {item.detail}
         </div>
       </div>
 
-      <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+      <div className="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
         {item.actionLabel}
         <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
       </div>
@@ -874,7 +881,11 @@ function LaunchPathPanel({ tiles, onNavigate }) {
         </div>
 
         <FreeIcon
-          icon={tiles.every((item) => item.mode === "data") ? CheckCircle2 : CircleAlert}
+          icon={
+            tiles.every((item) => item.mode === "data")
+              ? CheckCircle2
+              : CircleAlert
+          }
           tone={tiles.every((item) => item.mode === "data") ? "success" : "warning"}
         />
       </div>
@@ -892,7 +903,11 @@ function LaunchPathPanel({ tiles, onNavigate }) {
                 className="group min-w-0 text-left transition-opacity duration-base ease-premium hover:opacity-80"
               >
                 <div className="flex items-start gap-2.5">
-                  <FreeIcon icon={Icon} tone={item.tone} className="mt-0.5 h-[18px] w-[18px]" />
+                  <FreeIcon
+                    icon={Icon}
+                    tone={item.tone}
+                    className="mt-0.5 h-[18px] w-[18px]"
+                  />
 
                   <div className="min-w-0">
                     <div className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
@@ -931,8 +946,16 @@ function WorkPanel({ items, onNavigate }) {
         </div>
 
         <FreeIcon
-          icon={items.some((item) => item.tone === "warning") ? CircleAlert : CheckCircle2}
-          tone={items.some((item) => item.tone === "warning") ? "warning" : "success"}
+          icon={
+            items.some((item) => item.tone === "warning")
+              ? CircleAlert
+              : CheckCircle2
+          }
+          tone={
+            items.some((item) => item.tone === "warning")
+              ? "warning"
+              : "success"
+          }
         />
       </div>
 
@@ -950,7 +973,11 @@ function WorkPanel({ items, onNavigate }) {
           >
             <span className="min-w-0">
               <span className="flex items-center gap-2.5">
-                <FreeIcon icon={item.icon} tone={item.tone} className="h-[18px] w-[18px]" />
+                <FreeIcon
+                  icon={item.icon}
+                  tone={item.tone}
+                  className="h-[18px] w-[18px]"
+                />
                 <span className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
                   {item.title}
                 </span>
@@ -996,7 +1023,8 @@ function ChannelPanel({ items, onNavigate }) {
             onClick={() => onNavigate(item.path)}
             className={cx(
               "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5 text-left",
-              index !== Math.min(items.length, 3) - 1 && "border-b border-line-soft",
+              index !== Math.min(items.length, 3) - 1 &&
+                "border-b border-line-soft",
               "transition-colors duration-base ease-premium hover:bg-surface-subtle"
             )}
           >
@@ -1058,7 +1086,7 @@ export default function ProductHomePage() {
   const operatingMode = aiOperating(home) || hasLiveWork(home);
 
   return (
-    <PageCanvas className="space-y-4">
+    <PageCanvas className="space-y-4 pt-3 md:pt-4">
       {home.availabilityNote ? (
         <InlineNotice
           tone="warning"
