@@ -305,7 +305,7 @@ import {
   compactDraftObject,
   mergeDraftState,
 } from "../../../services/workspace/setup/draftShared.js";
-import { createSetupReviewSession } from "../../../db/helpers/tenantSetupReview.js";
+import { getOrCreateActiveSetupReviewSession } from "../../../db/helpers/tenantSetupReview.js";
 export function registerSetupStagingRoutes(
   router,
   {
@@ -335,14 +335,14 @@ export function registerSetupStagingRoutes(
         });
       }
 
-      const session = await createSetupReviewSession({
+      const session = await getOrCreateActiveSetupReviewSession({
         tenantId: actor.tenantId,
         mode: "refresh",
-        status: "ready",
         currentStep: "truth-maintenance",
         title: "Business record maintenance",
         notes: "Inline approved truth maintenance",
         metadata: {
+          canonicalBaseline: null,
           origin: "truth_maintenance_inline_edit",
           truthMaintenance: true,
           maintenanceChanges: changes.map((item) => item.key),
