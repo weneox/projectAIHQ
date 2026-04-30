@@ -1,13 +1,21 @@
 ﻿import {
   ArrowRight,
+  Bot,
   CheckCircle2,
   CircleAlert,
+  Clock3,
+  Globe2,
   Inbox,
   MessageCircle,
   PlugZap,
+  RadioTower,
   ShieldCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
+import telegramIcon from "../../assets/channels/telegram.svg";
+import instagramIcon from "../../assets/channels/instagram.svg";
+import websiteIcon from "../../assets/channels/web.svg";
 
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
@@ -23,6 +31,14 @@ import {
   s,
 } from "../../lib/appUi.js";
 import useProductHome from "../../view-models/useProductHome.js";
+
+const CHANNEL_ICON_BY_PROVIDER = {
+  website: websiteIcon,
+  webchat: websiteIcon,
+  instagram: instagramIcon,
+  meta: instagramIcon,
+  telegram: telegramIcon,
+};
 
 function arr(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
@@ -41,10 +57,6 @@ function pluralize(count, noun) {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function pluralVerb(count, singular, plural) {
-  return count === 1 ? singular : plural;
-}
-
 function unreadCount(home) {
   return n(home?.inboxState?.counts?.unreadCount);
 }
@@ -57,10 +69,6 @@ function handoffCount(home) {
   return n(home?.inboxState?.counts?.handoffCount);
 }
 
-function outboundPendingCount(home) {
-  return n(home?.inboxState?.counts?.outboundPending);
-}
-
 function pendingOutboundCount(home) {
   return n(
     home?.inboxState?.counts?.pendingOutboundCount ??
@@ -68,17 +76,29 @@ function pendingOutboundCount(home) {
   );
 }
 
-function readyChannelCount(home) {
-  const channel = home?.launchChannel || {};
+function failedOutboundCount(home) {
+  return n(home?.inboxState?.counts?.failedOutboundCount);
+}
 
-  if (n(channel.readyCount) > 0) return n(channel.readyCount);
-  if (channel.connected === true && channel.deliveryReady === true) return 1;
+function retryingOutboundCount(home) {
+  return n(home?.inboxState?.counts?.retryingOutboundCount);
+}
 
-  return 0;
+function outboundAttentionCount(home) {
+  return (
+    pendingOutboundCount(home) +
+    failedOutboundCount(home) +
+    retryingOutboundCount(home)
+  );
+}
+
+function providerStates(home) {
+  return arr(home?.launchChannel?.providerStates);
 }
 
 function availableChannelCount(home) {
-  const states = arr(home?.launchChannel?.providerStates);
+  const states = providerStates(home);
+
   if (states.length) {
     return states.filter((item) => item?.available !== false).length;
   }
@@ -86,208 +106,76 @@ function availableChannelCount(home) {
   return 3;
 }
 
-function businessInfoReady(home) {
-  return (
-    home?.truthRuntime?.truthReady === true &&
-    home?.truthRuntime?.ready === true
-  );
+function readyChannelCount(home) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.filter(
+      (item) => item?.connected === true && item?.deliveryReady === true
+    ).length;
+  }
+
+  const channel = home?.launchChannel || {};
+  if (n(channel.readyCount) > 0) return n(channel.readyCount);
+  if (channel.connected === true && channel.deliveryReady === true) return 1;
+
+  return 0;
+}
+
+function connectedChannelCount(home) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.filter((item) => item?.connected === true).length;
+  }
+
+  return n(home?.launchChannel?.connectedCount);
+}
+
+function truthApproved(home) {
+  return home?.truthRuntime?.truthReady === true;
+}
+
+function runtimeReady(home) {
+  return home?.truthRuntime?.ready === true;
+}
+
+function businessReady(home) {
+  return truthApproved(home) && runtimeReady(home);
 }
 
 function channelReady(home) {
-  return (
-    home?.launchChannel?.connected === true &&
-    home?.launchChannel?.deliveryReady === true
-  );
+  return readyChannelCount(home) > 0;
 }
 
 function inboxUnavailable(home) {
   return lower(home?.inboxState?.status) === "unavailable";
 }
 
-function buildPageCopy(home) {
-  const unread = unreadCount(home);
-  const channels = readyChannelCount(home);
-
-  if (unread > 0) {
-    const businessReady = businessInfoReady(home);
-    const channelCopy =
-      channels > 0
-        ? `${pluralize(channels, "channel")} can receive messages`
-        : "no channels are marked live";
-
-    return {
-      eyebrow: "Customer work",
-      title: `${pluralize(unread, "customer message")} waiting`,
-      summary: `${pluralize(unread, "customer message")} ${pluralVerb(
-        unread,
-        "needs",
-        "need"
-      )} a reply. ${
-        businessReady ? "Business info is ready" : "Business info still needs review"
-      } and ${channelCopy}.`,
-      primaryLabel: "Reply now",
-      primaryPath: "/inbox",
-      tone: "warning",
-    };
-  }
-
-  if (!businessInfoReady(home)) {
-    return {
-      eyebrow: "Setup needed",
-      title: "Approve your business info",
-      summary:
-        "AI should not answer customers until your business details are reviewed and approved.",
-      primaryLabel: "Review business info",
-      primaryPath: "/truth",
-      tone: "warning",
-    };
-  }
-
-  if (!channelReady(home)) {
-    return {
-      eyebrow: "Setup needed",
-      title: "Connect a customer channel",
-      summary:
-        "Choose where customers can message you first: website chat, Instagram, or Telegram.",
-      primaryLabel: "Connect channel",
-      primaryPath: "/channels",
-      tone: "warning",
-    };
-  }
-
-  if (inboxUnavailable(home)) {
-    return {
-      eyebrow: "Needs check",
-      title: "Inbox could not be loaded",
-      summary:
-        "Business info and channels look ready, but customer activity could not be checked.",
-      primaryLabel: "Open inbox",
-      primaryPath: "/inbox",
-      tone: "danger",
-    };
-  }
-
-  return {
-    eyebrow: "All clear",
-    title: "No customer work waiting",
-    summary:
-      channels > 0
-        ? `${pluralize(channels, "channel")} live. Inbox is clear right now.`
-        : "Workspace is calm right now.",
-    primaryLabel: "Open inbox",
-    primaryPath: "/inbox",
-    tone: "success",
-  };
+function inboxReadyForData(home) {
+  return !inboxUnavailable(home);
 }
 
-function buildMainActions(home) {
-  const unread = unreadCount(home);
-  const pendingOutbound = outboundPendingCount(home);
-
-  const actions = [];
-
-  if (unread > 0) {
-    actions.push({
-      id: "reply",
-      title: `Reply to ${pluralize(unread, "customer message")}`,
-      detail: `${pluralize(unread, "customer message")} waiting in the inbox.`,
-      path: "/inbox",
-      label: "Open inbox",
-      tone: "warning",
-      icon: MessageCircle,
-    });
-  }
-
-  if (pendingOutbound > 0) {
-    actions.push({
-      id: "outbound",
-      title: `Check ${pluralize(pendingOutbound, "outbound reply")}`,
-      detail: "Some replies may need retry or delivery review.",
-      path: "/inbox",
-      label: "Review replies",
-      tone: "warning",
-      icon: Inbox,
-    });
-  }
-
-  if (!businessInfoReady(home)) {
-    actions.push({
-      id: "business",
-      title: "Review business info",
-      detail: "Approve the facts AI is allowed to use with customers.",
-      path: "/truth",
-      label: "Review info",
-      tone: "warning",
-      icon: ShieldCheck,
-    });
-  }
-
-  if (!channelReady(home)) {
-    actions.push({
-      id: "channel",
-      title: "Connect one customer channel",
-      detail: "Website chat, Instagram, or Telegram can become your first live channel.",
-      path: "/channels",
-      label: "Open channels",
-      tone: "warning",
-      icon: PlugZap,
-    });
-  }
-
-  if (!actions.length) {
-    actions.push({
-      id: "clear",
-      title: "Nothing urgent right now",
-      detail: "Customer messages are clear. You can open the inbox or review setup anytime.",
-      path: "/inbox",
-      label: "Open inbox",
-      tone: "success",
-      icon: CheckCircle2,
-    });
-  }
-
-  return actions.slice(0, 3);
+function aiOperating(home) {
+  return businessReady(home) && channelReady(home) && inboxReadyForData(home);
 }
 
-function buildSafetyChecks(home) {
-  const unread = unreadCount(home);
-  const channels = readyChannelCount(home);
-  const total = availableChannelCount(home);
+function hasLiveWork(home) {
+  return (
+    unreadCount(home) > 0 ||
+    outboundAttentionCount(home) > 0 ||
+    handoffCount(home) > 0 ||
+    openConversationCount(home) > 0
+  );
+}
 
+function setupReadyCount(home) {
   return [
-    {
-      id: "business",
-      label: "Business info",
-      value: businessInfoReady(home) ? "Ready" : "Needs review",
-      detail: businessInfoReady(home)
-        ? "AI can use approved business details."
-        : "Approve the business details AI should use.",
-      tone: businessInfoReady(home) ? "success" : "warning",
-      path: "/truth",
-    },
-    {
-      id: "channels",
-      label: "Customer channels",
-      value: channels > 0 ? `${channels}/${total} live` : "Not live",
-      detail:
-        channels > 0
-          ? `${pluralize(channels, "channel")} can receive messages.`
-          : "Connect at least one customer channel.",
-      tone: channels > 0 ? "success" : "warning",
-      path: "/channels",
-    },
-    {
-      id: "inbox",
-      label: "Inbox",
-      value: unread > 0 ? `${unread} waiting` : "Clear",
-      detail:
-        unread > 0
-          ? `${pluralize(unread, "message")} ${pluralVerb(unread, "needs", "need")} review.`
-          : "No urgent message work right now.",
-      tone: unread > 0 ? "warning" : "success",
-      path: "/inbox",
-    },
-  ];
+    businessReady(home),
+    channelReady(home),
+    inboxReadyForData(home) && businessReady(home) && channelReady(home),
+    aiOperating(home),
+  ].filter(Boolean).length;
 }
 
 function toneTextClass(tone = "neutral") {
@@ -299,26 +187,6 @@ function toneTextClass(tone = "neutral") {
   return "text-text-muted";
 }
 
-function toneBgClass(tone = "neutral") {
-  if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.22)] bg-success-soft text-success";
-  }
-
-  if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.24)] bg-warning-soft text-warning";
-  }
-
-  if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.22)] bg-danger-soft text-danger";
-  }
-
-  if (tone === "brand" || tone === "info") {
-    return "border-[rgba(var(--color-brand),0.22)] bg-brand-soft text-brand";
-  }
-
-  return "border-line-soft bg-surface-muted text-text-muted";
-}
-
 function toneDotClass(tone = "neutral") {
   if (tone === "success") return "bg-success";
   if (tone === "warning") return "bg-warning";
@@ -328,124 +196,835 @@ function toneDotClass(tone = "neutral") {
   return "bg-[rgb(var(--color-text-soft))]";
 }
 
-function StatusDot({ tone = "neutral" }) {
-  return <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />;
+function providerLabel(provider = "") {
+  switch (lower(provider)) {
+    case "website":
+    case "webchat":
+      return "Website";
+    case "instagram":
+    case "meta":
+      return "Instagram";
+    case "telegram":
+      return "Telegram";
+    default:
+      return "Channel";
+  }
 }
 
-function MiniStatus({ tone = "neutral", children }) {
+function providerPath(provider = "") {
+  switch (lower(provider)) {
+    case "website":
+    case "webchat":
+      return "/channels?channel=website";
+    case "instagram":
+    case "meta":
+      return "/channels?channel=instagram";
+    case "telegram":
+      return "/channels?channel=telegram";
+    default:
+      return "/channels";
+  }
+}
+
+function providerIcon(provider = "") {
+  return CHANNEL_ICON_BY_PROVIDER[lower(provider)] || websiteIcon;
+}
+
+function StatusText({ tone = "neutral", children }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold">
-      <StatusDot tone={tone} />
+    <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
       <span className={toneTextClass(tone)}>{children}</span>
     </span>
   );
 }
 
-function Metric({ label, value, detail, tone = "neutral", last = false }) {
+function FreeIcon({ icon: Icon, tone = "neutral", className }) {
   return (
-    <div
+    <Icon
       className={cx(
-        "min-w-0 px-4 py-3",
-        !last && "border-b border-line-soft sm:border-b-0 sm:border-r"
+        "h-[21px] w-[21px] shrink-0",
+        toneTextClass(tone),
+        className
       )}
-    >
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+      strokeWidth={2.05}
+    />
+  );
+}
+
+function ChannelImageIcon({ provider, className }) {
+  return (
+    <img
+      src={providerIcon(provider)}
+      alt=""
+      aria-hidden="true"
+      draggable="false"
+      className={cx("h-[22px] w-[22px] shrink-0 object-contain", className)}
+    />
+  );
+}
+
+function buildHero(home) {
+  const unread = unreadCount(home);
+  const pending = outboundAttentionCount(home);
+  const readyChannels = readyChannelCount(home);
+
+  if (unread > 0) {
+    return {
+      tone: "warning",
+      eyebrow: "Live work",
+      title: `${unread} ${unread === 1 ? "message" : "messages"} waiting`,
+      summary: "Customer work is active. Open the inbox and handle the queue.",
+      primary: { label: "Open inbox", path: "/inbox" },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (pending > 0) {
+    return {
+      tone: "warning",
+      eyebrow: "Delivery",
+      title: `${pending} ${pending === 1 ? "reply" : "replies"} need review`,
+      summary: "Some outbound replies may need retry or delivery check.",
+      primary: { label: "Review replies", path: "/inbox" },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (!truthApproved(home)) {
+    return {
+      tone: "warning",
+      eyebrow: "Start",
+      title: "Business info first",
+      summary: "Add the facts AI can safely use with customers.",
+      primary:
+        normalizeNavigationAction(home?.assistant?.primaryAction) || {
+          label: "Review setup",
+          path: "/truth",
+        },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (!runtimeReady(home)) {
+    return {
+      tone: "warning",
+      eyebrow: "Review",
+      title: "Runtime needs review",
+      summary: "Business info exists. The live AI layer still needs attention.",
+      primary: { label: "Open business info", path: "/truth" },
+      secondary: { label: "Inbox", path: "/inbox" },
+    };
+  }
+
+  if (!channelReady(home)) {
+    return {
+      tone: "warning",
+      eyebrow: "Connect",
+      title: "Connect one channel",
+      summary: "Website, Instagram, or Telegram can become the first live surface.",
+      primary: { label: "Open channels", path: "/channels" },
+      secondary: { label: "Business info", path: "/truth" },
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      tone: "danger",
+      eyebrow: "Check",
+      title: "Inbox status unavailable",
+      summary: "Setup is ready, but customer activity could not be checked.",
+      primary: { label: "Open inbox", path: "/inbox" },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  return {
+    tone: "success",
+    eyebrow: "Operating",
+    title: "Workspace is calm",
+    summary: `${pluralize(readyChannels, "channel")} live. No urgent customer work.`,
+    primary: { label: "Open inbox", path: "/inbox" },
+    secondary: { label: "Channels", path: "/channels" },
+  };
+}
+
+function buildBusinessTile(home) {
+  if (businessReady(home)) {
+    return {
+      id: "business",
+      tone: "success",
+      icon: ShieldCheck,
+      title: "Business info",
+      value: "Ready",
+      detail: "Approved facts are backing the live runtime.",
+      actionLabel: "View",
+      path: "/truth",
+      mode: "data",
+    };
+  }
+
+  if (truthApproved(home)) {
+    return {
+      id: "business",
+      tone: "warning",
+      icon: CircleAlert,
+      title: "Business info",
+      value: "Review",
+      detail: "Facts are approved. Runtime still needs attention.",
+      actionLabel: "Review",
+      path: "/truth",
+      mode: "guide",
+    };
+  }
+
+  return {
+    id: "business",
+    tone: "warning",
+    icon: ShieldCheck,
+    title: "Business info",
+    value: "Add",
+    detail: "Services, tone, rules, and business basics.",
+    actionLabel: "Start",
+    path: "/truth",
+    mode: "guide",
+  };
+}
+
+function buildChannelTile(home) {
+  const ready = readyChannelCount(home);
+  const connected = connectedChannelCount(home);
+  const total = availableChannelCount(home);
+
+  if (ready > 0) {
+    return {
+      id: "channels",
+      tone: "success",
+      icon: RadioTower,
+      title: "Channels",
+      value: `${ready}/${total} live`,
+      detail:
+        connected > ready
+          ? `${connected} connected, ${ready} ready for delivery.`
+          : "Customers can reach the workspace.",
+      actionLabel: "View",
+      path: "/channels",
+      mode: "data",
+    };
+  }
+
+  if (connected > 0) {
+    return {
+      id: "channels",
+      tone: "warning",
+      icon: PlugZap,
+      title: "Channels",
+      value: "Review",
+      detail: `${connected} connected, but not live yet.`,
+      actionLabel: "Fix",
+      path: "/channels",
+      mode: "guide",
+    };
+  }
+
+  return {
+    id: "channels",
+    tone: "warning",
+    icon: PlugZap,
+    title: "Channels",
+    value: "Connect",
+    detail: "Pick website, Instagram, or Telegram.",
+    actionLabel: "Connect",
+    path: "/channels",
+    mode: "guide",
+  };
+}
+
+function buildInboxTile(home) {
+  const unread = unreadCount(home);
+  const open = openConversationCount(home);
+  const pending = outboundAttentionCount(home);
+
+  if (unread > 0) {
+    return {
+      id: "inbox",
+      tone: "warning",
+      icon: MessageCircle,
+      title: "Inbox",
+      value: String(unread),
+      detail: `${pluralize(unread, "message")} waiting.`,
+      actionLabel: "Reply",
+      path: "/inbox",
+      mode: "data",
+    };
+  }
+
+  if (pending > 0) {
+    return {
+      id: "inbox",
+      tone: "warning",
+      icon: Clock3,
+      title: "Inbox",
+      value: String(pending),
+      detail: "Outbound replies need review.",
+      actionLabel: "Review",
+      path: "/inbox",
+      mode: "data",
+    };
+  }
+
+  if (!businessReady(home) || !channelReady(home)) {
+    return {
+      id: "inbox",
+      tone: "warning",
+      icon: Inbox,
+      title: "Inbox",
+      value: "Next",
+      detail: "Becomes operational after business info and a live channel.",
+      actionLabel: "Open",
+      path: "/inbox",
+      mode: "guide",
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      id: "inbox",
+      tone: "danger",
+      icon: Inbox,
+      title: "Inbox",
+      value: "Check",
+      detail: "Customer activity could not be loaded.",
+      actionLabel: "Open",
+      path: "/inbox",
+      mode: "guide",
+    };
+  }
+
+  return {
+    id: "inbox",
+    tone: "success",
+    icon: Inbox,
+    title: "Inbox",
+    value: open > 0 ? String(open) : "Clear",
+    detail: open > 0 ? `${pluralize(open, "conversation")} open.` : "No urgent work.",
+    actionLabel: "Open",
+    path: "/inbox",
+    mode: "data",
+  };
+}
+
+function buildAiTile(home) {
+  if (aiOperating(home)) {
+    return {
+      id: "ai",
+      tone: "success",
+      icon: Bot,
+      title: "AI status",
+      value: "Operating",
+      detail: "AI can support customers under approved rules.",
+      actionLabel: "View",
+      path: "/truth",
+      mode: "data",
+    };
+  }
+
+  if (businessReady(home) && !channelReady(home)) {
+    return {
+      id: "ai",
+      tone: "warning",
+      icon: Bot,
+      title: "AI status",
+      value: "Waiting",
+      detail: "AI is ready, but no customer channel is live.",
+      actionLabel: "Connect",
+      path: "/channels",
+      mode: "guide",
+    };
+  }
+
+  return {
+    id: "ai",
+    tone: "warning",
+    icon: Bot,
+    title: "AI status",
+    value: "Guarded",
+    detail: "Limited until business info and runtime are ready.",
+    actionLabel: "Review",
+    path: "/truth",
+    mode: "guide",
+  };
+}
+
+function buildTiles(home) {
+  return [
+    buildBusinessTile(home),
+    buildChannelTile(home),
+    buildInboxTile(home),
+    buildAiTile(home),
+  ];
+}
+
+function normalizeChannels(home) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.map((item) => {
+      const provider = lower(item?.provider || item?.id);
+      const ready = item?.connected === true && item?.deliveryReady === true;
+      const connected = item?.connected === true;
+
+      return {
+        id: provider || item?.id || item?.channelLabel || "channel",
+        provider,
+        label: item?.channelLabel || providerLabel(provider),
+        value: ready ? "Live" : connected ? "Review" : "Off",
+        tone: ready ? "success" : connected ? "warning" : "neutral",
+        account:
+          s(item?.accountDisplayName) ||
+          s(item?.accountHandle) ||
+          s(item?.account?.displayName) ||
+          s(item?.account?.handle) ||
+          (ready ? "Ready for delivery" : "Open to configure"),
+        path: providerPath(provider),
+      };
+    });
+  }
+
+  return ["website", "instagram", "telegram"].map((provider) => ({
+    id: provider,
+    provider,
+    label: providerLabel(provider),
+    value: "Off",
+    tone: "neutral",
+    account: "Open to configure",
+    path: providerPath(provider),
+  }));
+}
+
+function buildWorkItems(home) {
+  const items = [];
+
+  const unread = unreadCount(home);
+  const pending = outboundAttentionCount(home);
+  const handoff = handoffCount(home);
+  const open = openConversationCount(home);
+
+  if (unread > 0 || pending > 0) {
+    items.push(buildInboxTile(home));
+  }
+
+  if (handoff > 0) {
+    items.push({
+      id: "handoff",
+      tone: "brand",
+      icon: Inbox,
+      title: `${pluralize(handoff, "handoff")} active`,
+      detail: "Operator-owned conversations are active.",
+      actionLabel: "Open",
+      path: "/inbox",
+      mode: "data",
+    });
+  }
+
+  if (open > 0 && !items.some((item) => item.id === "inbox")) {
+    items.push({
+      id: "open",
+      tone: "brand",
+      icon: Inbox,
+      title: `${pluralize(open, "conversation")} open`,
+      detail: "No urgent unread pressure, but the queue is active.",
+      actionLabel: "Open",
+      path: "/inbox",
+      mode: "data",
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      id: "calm",
+      tone: "success",
+      icon: CheckCircle2,
+      title: "No urgent work",
+      detail: "Everything active is calm right now.",
+      actionLabel: "Open",
+      path: "/inbox",
+      mode: "data",
+    });
+  }
+
+  return items.slice(0, 4);
+}
+
+function MetricCell({ label, value, tone = "neutral", border = "" }) {
+  return (
+    <div className={cx("px-4 py-4", border)}>
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
         {label}
       </div>
-
       <div
         className={cx(
-          "mt-1 text-[20px] font-semibold leading-6 tracking-[var(--tracking-tight-lg)]",
+          "mt-1.5 text-[27px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
           toneTextClass(tone)
         )}
       >
         {value}
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-        {detail}
+function SetupStatePanel({ home, tone = "warning" }) {
+  const readyCount = setupReadyCount(home);
+  const percentage = Math.max(8, readyCount * 25);
+
+  return (
+    <div className="border-t border-line-soft px-5 py-4 xl:border-l xl:border-t-0">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+        Setup state
+      </div>
+
+      <div className="mt-2 flex items-end gap-2">
+        <div
+          className={cx(
+            "text-[31px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+            toneTextClass(tone)
+          )}
+        >
+          {readyCount}/4
+        </div>
+        <div className="pb-1 text-[12.5px] font-semibold text-text-muted">
+          ready
+        </div>
+      </div>
+
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-subtle">
+        <div
+          className={cx(
+            "h-full rounded-full transition-all duration-base ease-premium",
+            readyCount === 4 ? "bg-success" : "bg-warning"
+          )}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+
+      <div className="mt-3 text-[12.5px] font-medium leading-5 text-text-muted">
+        Active parts turn into live data as soon as they are ready.
       </div>
     </div>
   );
 }
 
-function ActionItem({ item, index, last = false, onNavigate }) {
-  const Icon = item.icon || ArrowRight;
+function HeroCard({ hero, home, operating = false, onAction }) {
+  return (
+    <Card padded={false} clip>
+      <section
+        className={cx(
+          "grid",
+          operating
+            ? "xl:grid-cols-[minmax(0,1fr)_360px]"
+            : "xl:grid-cols-[minmax(0,1fr)_300px]"
+        )}
+      >
+        <div className="min-w-0 px-5 py-4 md:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
+              Home
+            </div>
+
+            <StatusText tone={hero.tone}>
+              {hero.tone === "success" ? "Operating" : "Attention"}
+            </StatusText>
+          </div>
+
+          <h1
+            className={cx(
+              "mt-3 max-w-[760px] font-display font-semibold leading-[1.01] tracking-[var(--tracking-tight-xl)] text-text",
+              operating ? "text-[34px] md:text-[44px]" : "text-[30px] md:text-[37px]"
+            )}
+          >
+            {hero.title}
+          </h1>
+
+          <p className="mt-2.5 max-w-[640px] text-[14.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
+            {hero.summary}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <Button
+              type="button"
+              size="md"
+              className="min-w-[142px] justify-center"
+              onClick={() => onAction(hero.primary)}
+            >
+              {hero.primary.label}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="min-w-[126px] justify-center"
+              onClick={() => onAction(hero.secondary)}
+            >
+              {hero.secondary.label}
+            </Button>
+          </div>
+        </div>
+
+        {operating ? (
+          <div className="border-t border-line-soft xl:border-l xl:border-t-0">
+            <div className="grid grid-cols-2">
+              <MetricCell
+                label="Messages"
+                value={unreadCount(home)}
+                tone={unreadCount(home) > 0 ? "warning" : "success"}
+                border="border-b border-r border-line-soft"
+              />
+
+              <MetricCell
+                label="Open"
+                value={openConversationCount(home)}
+                tone={openConversationCount(home) > 0 ? "brand" : "neutral"}
+                border="border-b border-line-soft"
+              />
+
+              <MetricCell
+                label="Channels"
+                value={`${readyChannelCount(home)}/${availableChannelCount(home)}`}
+                tone={channelReady(home) ? "success" : "warning"}
+                border="border-r border-line-soft"
+              />
+
+              <MetricCell
+                label="Replies"
+                value={outboundAttentionCount(home)}
+                tone={outboundAttentionCount(home) > 0 ? "warning" : "success"}
+              />
+            </div>
+          </div>
+        ) : (
+          <SetupStatePanel home={home} tone={hero.tone} />
+        )}
+      </section>
+    </Card>
+  );
+}
+
+function SignalTile({ item, index, total, onNavigate }) {
+  const Icon = item.icon;
+  const last = index === total - 1;
 
   return (
     <button
       type="button"
       onClick={() => onNavigate(item.path)}
       className={cx(
-        "group grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-start gap-3 px-4 py-4 text-left",
-        !last && "border-b border-line-soft",
+        "group min-h-[144px] w-full px-4 py-4 text-left",
+        !last && "border-b border-line-soft md:border-b-0 md:border-r",
         "transition-colors duration-base ease-premium hover:bg-surface-subtle"
       )}
     >
-      <span
-        className={cx(
-          "inline-flex h-10 w-10 items-center justify-center rounded-[13px] border shadow-[var(--shadow-inset-top)]",
-          toneBgClass(item.tone)
-        )}
-      >
-        <Icon className="h-4.5 w-4.5" strokeWidth={2.05} />
-      </span>
+      <div className="flex items-start justify-between gap-4">
+        <FreeIcon icon={Icon} tone={item.tone} />
 
-      <span className="min-w-0">
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-            {item.title}
-          </span>
+        <StatusText tone={item.tone}>
+          {item.mode === "data" ? "Active" : "Setup"}
+        </StatusText>
+      </div>
 
-          {index === 0 ? (
-            <MiniStatus tone={item.tone}>
-              {item.tone === "success" ? "Clear" : "Needs attention"}
-            </MiniStatus>
-          ) : null}
-        </span>
+      <div className="mt-4">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+          {item.title}
+        </div>
 
-        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
+        <div
+          className={cx(
+            "mt-1.5 text-[23px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+            toneTextClass(item.tone)
+          )}
+        >
+          {item.value}
+        </div>
+
+        <div className="mt-2 min-h-[36px] text-[12.5px] font-medium leading-5 text-text-muted">
           {item.detail}
-        </span>
-      </span>
+        </div>
+      </div>
 
-      <span className="mt-1.5 inline-flex items-center gap-2 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
-        {item.label}
+      <div className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+        {item.actionLabel}
         <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
-      </span>
+      </div>
     </button>
   );
 }
 
-function CheckItem({ item, last = false, onNavigate }) {
+function LaunchPathPanel({ tiles, onNavigate }) {
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(item.path)}
-      className={cx(
-        "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left",
-        !last && "border-b border-line-soft",
-        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
-      )}
-    >
-      <span className="min-w-0">
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            {item.label}
-          </span>
-          <MiniStatus tone={item.tone}>{item.value}</MiniStatus>
-        </span>
+    <Card padded={false} clip>
+      <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Path
+          </div>
+          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Launch progress
+          </div>
+        </div>
 
-        <span className="mt-1.5 block text-[13px] font-medium leading-5 text-text-muted">
-          {item.detail}
-        </span>
-      </span>
+        <FreeIcon
+          icon={tiles.every((item) => item.mode === "data") ? CheckCircle2 : CircleAlert}
+          tone={tiles.every((item) => item.mode === "data") ? "success" : "warning"}
+        />
+      </div>
 
-      <ArrowRight
-        className="h-4 w-4 shrink-0 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
-        strokeWidth={2.1}
-      />
-    </button>
+      <div className="border-t border-line-soft px-4 py-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          {tiles.map((item, index) => {
+            const Icon = item.icon;
+
+            return (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => onNavigate(item.path)}
+                className="group min-w-0 text-left transition-opacity duration-base ease-premium hover:opacity-80"
+              >
+                <div className="flex items-start gap-2.5">
+                  <FreeIcon icon={Icon} tone={item.tone} className="mt-0.5 h-[18px] w-[18px]" />
+
+                  <div className="min-w-0">
+                    <div className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                      {item.title}
+                    </div>
+
+                    <StatusText tone={item.tone}>
+                      {item.mode === "data" ? "Ready" : item.value}
+                    </StatusText>
+                  </div>
+                </div>
+
+                {index < tiles.length - 1 ? (
+                  <div className="ml-[27px] mt-3 hidden h-px bg-line-soft md:block" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function WorkPanel({ items, onNavigate }) {
+  return (
+    <Card padded={false} clip>
+      <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Now
+          </div>
+          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Current work
+          </div>
+        </div>
+
+        <FreeIcon
+          icon={items.some((item) => item.tone === "warning") ? CircleAlert : CheckCircle2}
+          tone={items.some((item) => item.tone === "warning") ? "warning" : "success"}
+        />
+      </div>
+
+      <div className="border-t border-line-soft">
+        {items.map((item, index) => (
+          <button
+            type="button"
+            key={item.id}
+            onClick={() => onNavigate(item.path)}
+            className={cx(
+              "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5 text-left",
+              index !== items.length - 1 && "border-b border-line-soft",
+              "transition-colors duration-base ease-premium hover:bg-surface-subtle"
+            )}
+          >
+            <span className="min-w-0">
+              <span className="flex items-center gap-2.5">
+                <FreeIcon icon={item.icon} tone={item.tone} className="h-[18px] w-[18px]" />
+                <span className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                  {item.title}
+                </span>
+              </span>
+
+              <span className="mt-1.5 block text-[12.5px] font-medium leading-5 text-text-muted">
+                {item.detail}
+              </span>
+            </span>
+
+            <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+              {item.actionLabel}
+              <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ChannelPanel({ items, onNavigate }) {
+  return (
+    <Card padded={false} clip>
+      <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Surfaces
+          </div>
+          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Customer channels
+          </div>
+        </div>
+
+        <FreeIcon icon={Globe2} tone="brand" />
+      </div>
+
+      <div className="border-t border-line-soft">
+        {items.slice(0, 3).map((item, index) => (
+          <button
+            type="button"
+            key={item.id}
+            onClick={() => onNavigate(item.path)}
+            className={cx(
+              "group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5 text-left",
+              index !== Math.min(items.length, 3) - 1 && "border-b border-line-soft",
+              "transition-colors duration-base ease-premium hover:bg-surface-subtle"
+            )}
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <ChannelImageIcon provider={item.provider} />
+
+              <span className="min-w-0">
+                <span className="flex items-center gap-3">
+                  <span className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                    {item.label}
+                  </span>
+                  <StatusText tone={item.tone}>{item.value}</StatusText>
+                </span>
+
+                <span className="mt-1 block truncate text-[12.5px] font-medium text-text-muted">
+                  {item.account}
+                </span>
+              </span>
+            </span>
+
+            <ArrowRight
+              className="h-4 w-4 shrink-0 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+              strokeWidth={2.1}
+            />
+          </button>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -470,34 +1049,13 @@ export default function ProductHomePage() {
     if (next?.path) navigate(next.path);
   }
 
-  if (home.loading) {
-    return <ProductHomeLoadingSurface />;
-  }
+  if (home.loading) return <ProductHomeLoadingSurface />;
 
-  const page = buildPageCopy(home);
-  const actions = buildMainActions(home);
-  const checks = buildSafetyChecks(home);
-
-  const unread = unreadCount(home);
-  const open = openConversationCount(home);
-  const owned = handoffCount(home);
-  const pendingOutbound = pendingOutboundCount(home);
-  const channels = readyChannelCount(home);
-  const totalChannels = availableChannelCount(home);
-
-  const primaryAction =
-    normalizeNavigationAction(home.primaryAction || home.assistant?.primaryAction) ||
-    {
-      label: page.primaryLabel,
-      path: page.primaryPath,
-    };
-
-  const secondaryAction =
-    normalizeNavigationAction(home.secondaryAction || home.assistant?.secondaryAction) ||
-    {
-      label: "Review setup",
-      path: "/channels",
-    };
+  const hero = buildHero(home);
+  const tiles = buildTiles(home);
+  const workItems = buildWorkItems(home);
+  const channels = normalizeChannels(home);
+  const operatingMode = aiOperating(home) || hasLiveWork(home);
 
   return (
     <PageCanvas className="space-y-4">
@@ -510,198 +1068,38 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <section className="border-b border-line-soft pb-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 max-w-[820px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
-              Home
-            </div>
+      <HeroCard
+        hero={hero}
+        home={home}
+        operating={operatingMode}
+        onAction={goFromAction}
+      />
 
-            <h1 className="mt-3 font-display text-[34px] font-semibold leading-[1.01] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
-              {page.title}
-            </h1>
-
-            <p className="mt-3 max-w-[720px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
-              {page.summary}
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-medium leading-5 text-text-subtle">
-              <span>{businessInfoReady(home) ? "Business info ready" : "Business info needs review"}</span>
-              <span className="text-line-strong">/</span>
-              <span>{channels} live channel{channels === 1 ? "" : "s"}</span>
-              <span className="text-line-strong">/</span>
-              <span>{unread} message{unread === 1 ? "" : "s"} waiting</span>
-            </div>
+      {operatingMode ? (
+        <Card padded={false} clip>
+          <div className="grid md:grid-cols-4">
+            {tiles.map((item, index) => (
+              <SignalTile
+                key={item.id}
+                item={item}
+                index={index}
+                total={tiles.length}
+                onNavigate={go}
+              />
+            ))}
           </div>
+        </Card>
+      ) : null}
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            <Button
-              type="button"
-              size="md"
-              className="min-w-[148px] justify-center"
-              onClick={() => goFromAction(primaryAction)}
-              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              {primaryAction.label || page.primaryLabel}
-            </Button>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        {operatingMode ? (
+          <WorkPanel items={workItems} onNavigate={go} />
+        ) : (
+          <LaunchPathPanel tiles={tiles} onNavigate={go} />
+        )}
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="min-w-[132px] justify-center"
-              onClick={() => goFromAction(secondaryAction)}
-            >
-              {secondaryAction.label || "Review setup"}
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <Card padded={false} clip>
-        <div className="grid sm:grid-cols-4">
-          <Metric
-            label="Waiting"
-            value={String(unread)}
-            detail="Customer messages"
-            tone={unread > 0 ? "warning" : "success"}
-          />
-
-          <Metric
-            label="Open"
-            value={String(open)}
-            detail="Conversations"
-            tone={open > 0 ? "brand" : "success"}
-          />
-
-          <Metric
-            label="Channels"
-            value={`${channels}/${totalChannels}`}
-            detail="Live for customers"
-            tone={channels > 0 ? "success" : "warning"}
-          />
-
-          <Metric
-            label={pendingOutbound > 0 ? "Pending" : "Owned"}
-            value={String(pendingOutbound > 0 ? pendingOutbound : owned)}
-            detail={pendingOutbound > 0 ? "Replies pending" : "Operator handoff"}
-            tone={pendingOutbound > 0 ? "warning" : owned > 0 ? "brand" : "success"}
-            last
-          />
-        </div>
-
-        <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="min-w-0">
-            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                  What to do now
-                </div>
-                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  Next action
-                </div>
-              </div>
-
-              <MiniStatus tone={page.tone}>
-                {page.tone === "success" ? "Clear" : page.tone === "danger" ? "Blocked" : "Needs attention"}
-              </MiniStatus>
-            </div>
-
-            <div className="border-t border-line-soft">
-              {actions.map((item, index) => (
-                <ActionItem
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  last={index === actions.length - 1}
-                  onNavigate={go}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="min-w-0 border-t border-line-soft xl:border-l xl:border-t-0">
-            <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                  Can AI help?
-                </div>
-                <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  Safety check
-                </div>
-              </div>
-
-              {businessInfoReady(home) && channelReady(home) ? (
-                <CheckCircle2 className="h-5 w-5 text-success" strokeWidth={2.05} />
-              ) : (
-                <CircleAlert className="h-5 w-5 text-warning" strokeWidth={2.05} />
-              )}
-            </div>
-
-            <div className="border-t border-line-soft">
-              {checks.map((item, index) => (
-                <CheckItem
-                  key={item.id}
-                  item={item}
-                  last={index === checks.length - 1}
-                  onNavigate={go}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card
-        padded="sm"
-        tone={businessInfoReady(home) && channelReady(home) ? "success" : "warning"}
-      >
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
-              {businessInfoReady(home) && channelReady(home) ? (
-                <ShieldCheck className="h-4 w-4 text-success" strokeWidth={2.1} />
-              ) : (
-                <CircleAlert className="h-4 w-4 text-warning" strokeWidth={2.1} />
-              )}
-            </span>
-
-            <div className="min-w-0">
-              <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                {businessInfoReady(home) && channelReady(home)
-                  ? "AI can safely support customer messages."
-                  : "Finish setup before relying on AI replies."}
-              </div>
-
-              <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
-                {businessInfoReady(home) && channelReady(home)
-                  ? "Business info is approved and at least one customer channel is live."
-                  : "AI stays cautious until business info and a live channel are ready."}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate("/truth")}
-            >
-              Business info
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => navigate("/channels")}
-            >
-              Channels
-            </Button>
-          </div>
-        </div>
-      </Card>
+        <ChannelPanel items={channels} onNavigate={go} />
+      </div>
     </PageCanvas>
   );
 }
