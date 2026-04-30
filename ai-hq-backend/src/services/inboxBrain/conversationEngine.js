@@ -714,37 +714,122 @@ function inferContactRequest(text = "") {
   );
 }
 
-function buildSalesContext(profile = {}) {
-  const industryHints = getIndustryHints(profile?.industry);
-  const primaryCta = s(
-    profile?.primaryCta ||
-      profile?.conversationAssets?.primaryCtaRaw ||
-      pickLeadPrompt(profile) ||
-      pickBehaviorLeadPrompt(profile)
-  );
+function firstRuntimeText(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
 
-  const keyOffers = arr(profile?.serviceCatalog)
-    .filter((item) => item?.active && item?.visibleInAi)
-    .map((item) => ({
-      key: s(item?.key),
-      name: s(item?.name),
-      description: s(item?.description),
-      pricingMode: s(item?.pricingMode),
-      responseMode: s(item?.responseMode),
-      contactCaptureMode: s(item?.contactCaptureMode),
-    }))
-    .slice(0, 8);
+function getApprovedProjectionView(profile = {}) {
+  const projection = obj(profile?.raw?.projection);
 
   return {
-    primaryCta,
-    qualificationPrompts: uniqStrings([
-      ...arr(profile?.qualificationQuestions),
-      ...arr(profile?.leadPrompts),
-    ]).slice(0, 6),
-    pricingHint: s(industryHints?.pricingHint || ""),
-    offerNames: keyOffers.map((item) => item.name).filter(Boolean),
-    keyOffers,
+    projection,
+    identity: obj(projection?.identity_json),
+    profileJson: obj(projection?.profile_json),
+    capabilitiesJson: obj(projection?.capabilities_json),
+    inboxJson: obj(projection?.inbox_json),
+    commentsJson: obj(projection?.comments_json),
+    contentJson: obj(projection?.content_json),
+    behaviorJson: obj(projection?.behavior_json),
+    contactsJson: arr(projection?.contacts_json),
+    locationsJson: arr(projection?.locations_json),
+    servicesJson: arr(projection?.services_json),
   };
+}
+
+function normalizeRuntimeContactEntry(item = {}) {
+  const x = obj(item);
+
+  return {
+    type: normalizeContactType(
+      x.type ||
+        x.channel ||
+        x.contactType ||
+        x.contact_type ||
+        x.kind ||
+        ""
+    ),
+    label: s(x.label || x.title || x.name),
+    value: s(
+      x.value ||
+        x.contactValue ||
+        x.contact_value ||
+        x.phone ||
+        x.phoneNumber ||
+        x.phone_number ||
+        x.email ||
+        x.website ||
+        x.url ||
+        x.href ||
+        ""
+    ),
+    primary:
+      x.primary === true ||
+      x.isPrimary === true ||
+      x.is_primary === true,
+    public:
+      x.public !== false &&
+      x.isPublic !== false &&
+      x.is_public !== false &&
+      x.visiblePublic !== false &&
+      x.visible_public !== false &&
+      x.visibleInAi !== false &&
+      x.visible_in_ai !== false,
+  };
+}
+
+function normalizeRuntimeLocationEntry(item = {}) {
+  const x = obj(item);
+
+  return {
+    title: s(x.title || x.label || x.name),
+    address: s(x.address || x.addressLine || x.address_line),
+    city: s(x.city),
+    region: s(x.region),
+    country: s(x.country),
+    primary:
+      x.primary === true ||
+      x.isPrimary === true ||
+      x.is_primary === true,
+  };
+}
+
+function pickRuntimeContactValue(contacts = [], types = []) {
+  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
+
+  const primary = arr(contacts).find(
+    (item) =>
+      wanted.has(normalizeContactType(item?.type)) &&
+      item?.public !== false &&
+      item?.primary === true &&
+      s(item?.value)
+  );
+
+  if (primary?.value) return s(primary.value);
+
+  const firstPublic = arr(contacts).find(
+    (item) =>
+      wanted.has(normalizeContactType(item?.type)) &&
+      item?.public !== false &&
+      s(item?.value)
+  );
+
+  return s(firstPublic?.value);
+}
+
+function listRuntimeContactValues(contacts = [], types = []) {
+  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
+
+  return uniqStrings(
+    arr(contacts)
+      .filter((item) => wanted.has(normalizeContactType(item?.type)))
+      .filter((item) => item?.public !== false)
+      .map((item) => s(item?.value))
+      .filter(Boolean)
+  );
 }
 
 function firstRuntimeText(...values) {
@@ -865,78 +950,56 @@ function listRuntimeContactValues(contacts = [], types = []) {
   );
 }
 
-) {
-  const projection = obj(profile?.raw?.projection);
+function buildSalesContext(profile = {}) {
+  const approved = getApprovedProjectionView(profile);
+  const profileJson = approved.profileJson;
+  const behavior = approved.behaviorJson;
+  const content = approved.contentJson;
+
+  const industryHints = getIndustryHints(
+    firstRuntimeText(profileJson.industryKey, approved.identity.industryKey, profile?.industry)
+  );
+
+  const primaryCta = s(
+    firstRuntimeText(
+      profileJson.preferredCta,
+      behavior.primaryCta,
+      behavior.primary_cta,
+      content.ctaStyle,
+      profile?.primaryCta,
+      profile?.conversationAssets?.primaryCtaRaw,
+      pickLeadPrompt(profile),
+      pickBehaviorLeadPrompt(profile)
+    )
+  );
+
+  const catalog = arr(profile?.serviceCatalog).length
+    ? arr(profile?.serviceCatalog)
+    : approved.servicesJson;
+
+  const keyOffers = catalog
+    .filter((item) => item?.active !== false && item?.visibleInAi !== false)
+    .map((item) => ({
+      key: s(item?.key || item?.serviceKey || item?.service_key),
+      name: s(item?.name || item?.title),
+      description: s(item?.description),
+      pricingMode: s(item?.pricingMode || item?.pricing_model),
+      responseMode: s(item?.responseMode || item?.response_mode),
+      contactCaptureMode: s(item?.contactCaptureMode || item?.contact_capture_mode),
+    }))
+    .slice(0, 8);
 
   return {
-    projection,
-    identity: obj(projection?.identity_json),
-    profileJson: obj(projection?.profile_json),
-    capabilitiesJson: obj(projection?.capabilities_json),
-    inboxJson: obj(projection?.inbox_json),
-    commentsJson: obj(projection?.comments_json),
-    contentJson: obj(projection?.content_json),
-    behaviorJson: obj(projection?.behavior_json),
-    contactsJson: arr(projection?.contacts_json),
-    locationsJson: arr(projection?.locations_json),
-    servicesJson: arr(projection?.services_json),
-  };
-}
-
-) {
-  const x = obj(item);
-
-  return {
-    type: normalizeContactType(
-      x.type ||
-        x.channel ||
-        x.contactType ||
-        x.contact_type ||
-        x.kind ||
-        ""
-    ),
-    label: s(x.label || x.title || x.name),
-    value: s(
-      x.value ||
-        x.contactValue ||
-        x.contact_value ||
-        x.phone ||
-        x.phoneNumber ||
-        x.phone_number ||
-        x.email ||
-        x.website ||
-        x.url ||
-        x.href ||
-        ""
-    ),
-    primary:
-      x.primary === true ||
-      x.isPrimary === true ||
-      x.is_primary === true,
-    public:
-      x.public !== false &&
-      x.isPublic !== false &&
-      x.is_public !== false &&
-      x.visiblePublic !== false &&
-      x.visible_public !== false &&
-      x.visibleInAi !== false &&
-      x.visible_in_ai !== false,
-  };
-}
-
-) {
-  const x = obj(item);
-
-  return {
-    title: s(x.title || x.label || x.name),
-    address: s(x.address || x.addressLine || x.address_line),
-    city: s(x.city),
-    region: s(x.region),
-    country: s(x.country),
-    primary:
-      x.primary === true ||
-      x.isPrimary === true ||
-      x.is_primary === true,
+    primaryCta,
+    qualificationPrompts: uniqStrings([
+      ...arr(behavior.qualificationQuestions),
+      ...arr(behavior.qualification_questions),
+      ...arr(profile?.qualificationQuestions),
+      ...arr(profile?.leadPrompts),
+    ]).slice(0, 6),
+    pricingHint: s(industryHints?.pricingHint || ""),
+    offerNames: keyOffers.map((item) => item.name).filter(Boolean),
+    keyOffers,
   };
 }
 
@@ -988,8 +1051,7 @@ function buildContactGrounding(profile = {}) {
   const primaryAddress = firstRuntimeText(
     profileJson.primaryAddress,
     profile?.primaryAddress,
-    arr(normalizedLocations).find((item) => item?.primary && s(item?.address))
-      ?.address,
+    arr(normalizedLocations).find((item) => item?.primary && s(item?.address))?.address,
     arr(normalizedLocations).find((item) => s(item?.address))?.address
   );
 
@@ -1032,18 +1094,13 @@ function buildRuntimeGrounding(profile = {}) {
   const behavior = approved.behaviorJson;
   const comments = approved.commentsJson;
 
+  const serviceCatalog = arr(profile?.serviceCatalog).length
+    ? arr(profile?.serviceCatalog)
+    : approved.servicesJson;
+
   const salesContext = buildSalesContext({
     ...profile,
-    serviceCatalog: arr(profile?.serviceCatalog).length
-      ? profile.serviceCatalog
-      : approved.servicesJson,
-    primaryCta: firstRuntimeText(
-      profileJson.preferredCta,
-      behavior.primaryCta,
-      behavior.primary_cta,
-      content.ctaStyle,
-      profile?.primaryCta
-    ),
+    serviceCatalog,
   });
 
   const contactGrounding = buildContactGrounding(profile);
@@ -1062,58 +1119,31 @@ function buildRuntimeGrounding(profile = {}) {
       profile?.displayName,
       profile?.companyName
     ),
-    industry: firstRuntimeText(
-      profileJson.industryKey,
-      identity.industryKey,
-      profile?.industry
-    ),
+    industry: firstRuntimeText(profileJson.industryKey, identity.industryKey, profile?.industry),
     businessSummary: firstRuntimeText(
       profileJson.summaryShort,
       profileJson.summaryLong,
       profileJson.valueProposition,
       profile?.businessSummary
     ),
-    businessType: firstRuntimeText(
-      behavior.businessType,
-      behavior.business_type,
-      profile?.businessType
-    ),
+    businessType: firstRuntimeText(behavior.businessType, behavior.business_type, profile?.businessType),
     niche: firstRuntimeText(behavior.niche, profile?.niche),
-    subNiche: firstRuntimeText(
-      behavior.subNiche,
-      behavior.sub_niche,
-      profile?.subNiche
-    ),
+    subNiche: firstRuntimeText(behavior.subNiche, behavior.sub_niche, profile?.subNiche),
     languages: uniqStrings([
       ...arr(identity.supportedLanguages).map((x) => s(x)),
       ...arr(profileJson.supportedLanguages).map((x) => s(x)),
       capabilities.primaryLanguage,
       profileJson.mainLanguage,
       ...arr(profile?.languages).map((x) => s(x)),
-    ])
-      .filter(Boolean)
-      .slice(0, 6),
-    tone: firstRuntimeText(
-      profileJson.toneProfile,
-      content.toneProfile,
-      capabilities.replyStyle,
-      profile?.tone
-    ),
-    toneProfile: firstRuntimeText(
-      profileJson.toneProfile,
-      content.toneProfile,
-      profile?.toneProfile
-    ),
+    ]).filter(Boolean).slice(0, 6),
+    tone: firstRuntimeText(profileJson.toneProfile, content.toneProfile, capabilities.replyStyle, profile?.tone),
+    toneProfile: firstRuntimeText(profileJson.toneProfile, content.toneProfile, profile?.toneProfile),
     replyStyle: firstRuntimeText(capabilities.replyStyle, profile?.replyStyle),
     replyLength: firstRuntimeText(capabilities.replyLength, profile?.replyLength),
     pricingMode: firstRuntimeText(capabilities.pricingMode, profile?.pricingMode),
     bookingMode: firstRuntimeText(capabilities.bookingMode, profile?.bookingMode),
     salesMode: firstRuntimeText(capabilities.salesMode, profile?.salesMode),
-    conversionGoal: firstRuntimeText(
-      behavior.conversionGoal,
-      behavior.conversion_goal,
-      profile?.conversionGoal
-    ),
+    conversionGoal: firstRuntimeText(behavior.conversionGoal, behavior.conversion_goal, profile?.conversionGoal),
     primaryCta: firstRuntimeText(
       behavior.primaryCta,
       behavior.primary_cta,
@@ -1137,10 +1167,7 @@ function buildRuntimeGrounding(profile = {}) {
       ...arr(behavior.qualification_questions).map((x) => s(x)),
       ...arr(profile?.qualificationQuestions).map((x) => s(x)),
     ]).slice(0, 6),
-    leadPrompts: arr(profile?.leadPrompts)
-      .map((x) => s(x))
-      .filter(Boolean)
-      .slice(0, 5),
+    leadPrompts: arr(profile?.leadPrompts).map((x) => s(x)).filter(Boolean).slice(0, 5),
     handoffTriggers: uniqStrings([
       ...arr(behavior.handoffTriggers).map((x) => s(x)),
       ...arr(behavior.handoff_triggers).map((x) => s(x)),
@@ -1151,32 +1178,25 @@ function buildRuntimeGrounding(profile = {}) {
       ...arr(behavior.disallowed_claims).map((x) => s(x)),
       ...arr(profile?.disallowedClaims).map((x) => s(x)),
     ]).slice(0, 12),
-    maxReplySentences:
-      Number(comments.maxReplySentences || profile?.maxSentences || 0) || 2,
-    services: arr(profile?.serviceCatalog)
-      .filter((item) => item?.visibleInAi)
+    maxReplySentences: Number(comments.maxReplySentences || profile?.maxSentences || 0) || 2,
+    services: serviceCatalog
+      .filter((item) => item?.visibleInAi !== false)
       .map((item) => ({
-        key: s(item?.key),
+        key: s(item?.key || item?.serviceKey || item?.service_key),
         name: s(item?.name || item?.title),
         description: s(item?.description),
-        aliases: arr(item?.aliases)
-          .map((x) => s(x))
-          .filter(Boolean)
-          .slice(0, 10),
+        aliases: arr(item?.aliases).map((x) => s(x)).filter(Boolean).slice(0, 10),
         active: item?.active !== false,
         faqAnswer: s(item?.faqAnswer),
         disabledReplyText: s(item?.disabledReplyText),
         responseMode: s(item?.responseMode),
-        pricingMode: s(item?.pricingMode || capabilities.pricingMode),
+        pricingMode: s(item?.pricingMode || item?.pricing_model || capabilities.pricingMode),
         contactCaptureMode: s(item?.contactCaptureMode),
         handoffMode: s(item?.handoffMode),
       }))
       .slice(0, 24),
     activeServiceNames: approvedServices,
-    disabledServiceNames: arr(profile?.disabledServices)
-      .map((x) => s(x))
-      .filter(Boolean)
-      .slice(0, 20),
+    disabledServiceNames: arr(profile?.disabledServices).map((x) => s(x)).filter(Boolean).slice(0, 20),
     pricingHints: uniqStrings([
       ...arr(profile?.meta?.pricingHints).map((x) => s(x)),
       ...arr(profile?.pricingHints).map((x) => s(x)),
@@ -1189,14 +1209,9 @@ function buildRuntimeGrounding(profile = {}) {
       ...arr(profile?.socialLinks).map((x) => s(x)),
       ...arr(profile?.meta?.socialLinks).map((x) => s(x)),
     ]).slice(0, 12),
-    canCaptureLeads:
-      capabilities.canCaptureLeads ?? profile?.canCaptureLeads ?? true,
-    canOfferBooking:
-      capabilities.canOfferBooking ?? profile?.canOfferBooking ?? false,
-    canOfferConsultation:
-      capabilities.canOfferConsultation ??
-      profile?.canOfferConsultation ??
-      false,
+    canCaptureLeads: capabilities.canCaptureLeads ?? profile?.canCaptureLeads ?? true,
+    canOfferBooking: capabilities.canOfferBooking ?? profile?.canOfferBooking ?? false,
+    canOfferConsultation: capabilities.canOfferConsultation ?? profile?.canOfferConsultation ?? false,
     handoffEnabled: capabilities.handoffEnabled ?? profile?.handoffEnabled ?? true,
     salesContext,
     contactGrounding,
