@@ -50,19 +50,6 @@ export function firstText(...values) {
   return "";
 }
 
-export function compactText(value = "", max = 900) {
-  const text = s(value).replace(/\s+/g, " ");
-  if (!text) return "";
-  if (text.length <= max) return text;
-  return `${text.slice(0, max).trim()}…`;
-}
-
-export function sentence(value = "") {
-  const text = compactText(value);
-  if (!text) return "";
-  return /[.!?…]$/u.test(text) ? text : `${text}.`;
-}
-
 export function normalizeIsoLanguage(value = "", fallback = "az") {
   const x = lower(value).slice(0, 8);
 
@@ -80,16 +67,25 @@ export function normalizeIsoLanguage(value = "", fallback = "az") {
   return s(fallback) || "az";
 }
 
+export function sentence(value = "") {
+  const text = s(value).replace(/\s+/g, " ");
+  if (!text) return "";
+  return /[.!?…]$/u.test(text) ? text : `${text}.`;
+}
+
 export function joinHumanList(items = [], language = "az") {
   const list = uniqStrings(items).filter(Boolean).slice(0, 8);
   if (!list.length) return "";
   if (list.length === 1) return list[0];
 
   const connector =
-    language === "az" || language === "tr" ? "və" :
-    language === "es" ? "y" :
-    language === "ru" ? "и" :
-    "and";
+    language === "az" || language === "tr"
+      ? "və"
+      : language === "es"
+        ? "y"
+        : language === "ru"
+          ? "и"
+          : "and";
 
   return `${list.slice(0, -1).join(", ")} ${connector} ${list.at(-1)}`;
 }

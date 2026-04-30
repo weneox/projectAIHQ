@@ -109,6 +109,30 @@ function listNames(values = []) {
   );
 }
 
+function isDefaultishFact(value = "") {
+  const x = lower(value);
+  if (!x) return true;
+
+  return [
+    "inherit",
+    "unknown",
+    "none",
+    "null",
+    "manual",
+    "custom_quote",
+    "consultative",
+    "pricing can vary depending on the service, scope, and requirements.",
+    "pricing can vary depending on the service scope and requirements.",
+    "price depends on scope",
+    "depends on scope",
+  ].includes(x);
+}
+
+function approvedText(...values) {
+  const value = firstText(...values);
+  return isDefaultishFact(value) ? "" : value;
+}
+
 function resolveProjection(profile = {}, runtimeGrounding = {}) {
   const raw = obj(profile?.raw);
   return obj(
@@ -131,16 +155,14 @@ export function resolveApprovedTruthFacts({
     projection?.capabilities_json || projection?.capabilitiesJson
   );
   const contactsJson = arr(projection?.contacts_json || projection?.contactsJson);
-  const locationsJson = arr(
-    projection?.locations_json || projection?.locationsJson
-  );
+  const locationsJson = arr(projection?.locations_json || projection?.locationsJson);
   const servicesJson = arr(projection?.services_json || projection?.servicesJson);
   const productsJson = arr(projection?.products_json || projection?.productsJson);
 
   const contactGrounding = obj(runtimeGrounding?.contactGrounding);
   const salesContext = obj(runtimeGrounding?.salesContext);
 
-  const summary = firstText(
+  const summary = approvedText(
     profileJson?.summaryShort,
     profileJson?.summary,
     profileJson?.description,
@@ -155,137 +177,101 @@ export function resolveApprovedTruthFacts({
     profile?.description
   );
 
-  const displayName = firstText(
-    profileJson?.displayName,
-    profileJson?.companyName,
-    profileJson?.businessName,
-    identityJson?.displayName,
-    identityJson?.companyName,
-    runtimeGrounding?.displayName,
-    profile?.displayName,
-    profile?.companyName
-  );
-
-  const phone = firstText(
-    profileJson?.primaryPhone,
-    profileJson?.phone,
-    contactGrounding?.primaryPhone,
-    arr(contactGrounding?.contactPhones)[0],
-    pickContactValue(contactsJson, ["phone", "whatsapp"]),
-    runtimeGrounding?.primaryPhone
-  );
-
-  const email = firstText(
-    profileJson?.primaryEmail,
-    profileJson?.email,
-    contactGrounding?.primaryEmail,
-    arr(contactGrounding?.contactEmails)[0],
-    pickContactValue(contactsJson, ["email"]),
-    runtimeGrounding?.primaryEmail
-  );
-
-  const website = firstText(
-    profileJson?.websiteUrl,
-    profileJson?.website,
-    identityJson?.websiteUrl,
-    contactGrounding?.websiteUrl,
-    arr(contactGrounding?.websiteUrls)[0],
-    runtimeGrounding?.websiteUrl,
-    arr(runtimeGrounding?.websiteUrls)[0],
-    pickContactValue(contactsJson, ["website"])
-  );
-
-  const address = firstText(
-    profileJson?.primaryAddress,
-    profileJson?.address,
-    contactGrounding?.primaryAddress,
-    arr(contactGrounding?.contactAddresses)[0],
-    runtimeGrounding?.primaryAddress,
-    pickLocationAddress(locationsJson)
-  );
-
-  const services = uniqStrings([
-    ...listNames(servicesJson),
-    ...listNames(runtimeGrounding?.services),
-    ...arr(runtimeGrounding?.activeServiceNames).map((item) => s(item)),
-    ...arr(salesContext?.offerNames).map((item) => s(item)),
-    ...listNames(salesContext?.keyOffers),
-  ]);
-
-  const products = uniqStrings([
-    ...listNames(productsJson),
-    ...listNames(runtimeGrounding?.products),
-    ...arr(runtimeGrounding?.activeProductNames).map((item) => s(item)),
-  ]);
-
-  const pricing = firstText(
-    profileJson?.pricingGuidance,
-    profileJson?.pricingText,
-    profileJson?.pricingSummary,
-    profileJson?.pricing,
-    profileJson?.price,
-    profileJson?.pricingMode,
-    arr(runtimeGrounding?.pricingHints)[0],
-    salesContext?.pricingHint,
-    runtimeGrounding?.pricingMode,
-    capabilitiesJson?.pricingMode,
-    capabilitiesJson?.pricing_mode
-  );
-
-  const booking = firstText(
-    profileJson?.bookingUrl,
-    profileJson?.appointmentUrl,
-    profileJson?.bookingMode,
-    arr(runtimeGrounding?.bookingLinks)[0],
-    runtimeGrounding?.bookingUrl,
-    runtimeGrounding?.appointmentUrl,
-    runtimeGrounding?.bookingMode,
-    runtimeGrounding?.bookingFlowType,
-    capabilitiesJson?.bookingMode,
-    capabilitiesJson?.booking_mode
-  );
-
-  const socialLinks = uniqStrings([
-    ...arr(runtimeGrounding?.socialLinks).map((item) => s(item)),
-    ...arr(runtimeGrounding?.socialUrls).map((item) => s(item)),
-    ...arr(profileJson?.socialLinks).map((item) => s(item)),
-    ...arr(profileJson?.socialUrls).map((item) => s(item)),
-    ...listContactValues(contactsJson, [
-      "instagram",
-      "facebook",
-      "telegram",
-      "whatsapp",
-      "tiktok",
-      "youtube",
-      "linkedin",
-    ]),
-  ]);
-
-  const behavior = obj(
-    profileJson?.nicheBehavior ||
-      profileJson?.niche_behavior ||
-      capabilitiesJson?.behavior ||
-      capabilitiesJson?.nicheBehavior ||
-      capabilitiesJson?.niche_behavior
-  );
-
   return {
-    displayName,
+    displayName: approvedText(
+      profileJson?.displayName,
+      profileJson?.companyName,
+      profileJson?.businessName,
+      identityJson?.displayName,
+      identityJson?.companyName,
+      runtimeGrounding?.displayName,
+      profile?.displayName,
+      profile?.companyName
+    ),
     summary,
-    industry: firstText(
+    industry: approvedText(
       profileJson?.industry,
       profileJson?.industryKey,
       runtimeGrounding?.industry
     ),
-    phone,
-    email,
-    website,
-    address,
-    services,
-    products,
-    pricing,
-    booking,
-    socialLinks,
+    phone: approvedText(
+      profileJson?.primaryPhone,
+      profileJson?.phone,
+      contactGrounding?.primaryPhone,
+      arr(contactGrounding?.contactPhones)[0],
+      pickContactValue(contactsJson, ["phone", "whatsapp"]),
+      runtimeGrounding?.primaryPhone
+    ),
+    email: approvedText(
+      profileJson?.primaryEmail,
+      profileJson?.email,
+      contactGrounding?.primaryEmail,
+      arr(contactGrounding?.contactEmails)[0],
+      pickContactValue(contactsJson, ["email"]),
+      runtimeGrounding?.primaryEmail
+    ),
+    website: approvedText(
+      profileJson?.websiteUrl,
+      profileJson?.website,
+      identityJson?.websiteUrl,
+      contactGrounding?.websiteUrl,
+      arr(contactGrounding?.websiteUrls)[0],
+      runtimeGrounding?.websiteUrl,
+      arr(runtimeGrounding?.websiteUrls)[0],
+      pickContactValue(contactsJson, ["website"])
+    ),
+    address: approvedText(
+      profileJson?.primaryAddress,
+      profileJson?.address,
+      contactGrounding?.primaryAddress,
+      arr(contactGrounding?.contactAddresses)[0],
+      runtimeGrounding?.primaryAddress,
+      pickLocationAddress(locationsJson)
+    ),
+    services: uniqStrings([
+      ...listNames(servicesJson),
+      ...listNames(runtimeGrounding?.services),
+      ...arr(runtimeGrounding?.activeServiceNames).map((item) => s(item)),
+      ...arr(salesContext?.offerNames).map((item) => s(item)),
+      ...listNames(salesContext?.keyOffers),
+    ]).filter((item) => !isDefaultishFact(item)),
+    products: uniqStrings([
+      ...listNames(productsJson),
+      ...listNames(runtimeGrounding?.products),
+      ...arr(runtimeGrounding?.activeProductNames).map((item) => s(item)),
+    ]).filter((item) => !isDefaultishFact(item)),
+    pricing: approvedText(
+      profileJson?.pricingGuidance,
+      profileJson?.pricingText,
+      profileJson?.pricingSummary,
+      profileJson?.pricing,
+      profileJson?.price,
+      arr(runtimeGrounding?.pricingHints)[0],
+      salesContext?.pricingHint
+    ),
+    booking: approvedText(
+      profileJson?.bookingUrl,
+      profileJson?.appointmentUrl,
+      profileJson?.bookingInfo,
+      arr(runtimeGrounding?.bookingLinks)[0],
+      runtimeGrounding?.bookingUrl,
+      runtimeGrounding?.appointmentUrl
+    ),
+    socialLinks: uniqStrings([
+      ...arr(runtimeGrounding?.socialLinks).map((item) => s(item)),
+      ...arr(runtimeGrounding?.socialUrls).map((item) => s(item)),
+      ...arr(profileJson?.socialLinks).map((item) => s(item)),
+      ...arr(profileJson?.socialUrls).map((item) => s(item)),
+      ...listContactValues(contactsJson, [
+        "instagram",
+        "facebook",
+        "telegram",
+        "whatsapp",
+        "tiktok",
+        "youtube",
+        "linkedin",
+      ]),
+    ]).filter((item) => !isDefaultishFact(item)),
     languages: uniqStrings([
       ...arr(runtimeGrounding?.languages).map((item) => s(item)),
       profileJson?.language,
@@ -295,30 +281,22 @@ export function resolveApprovedTruthFacts({
       capabilitiesJson?.primary_language,
     ]).filter(Boolean),
     behavior: {
-      tone: firstText(
-        behavior?.tone,
-        behavior?.replyTone,
-        behavior?.reply_tone,
+      tone: approvedText(
+        profileJson?.toneProfile,
         runtimeGrounding?.toneProfile,
         runtimeGrounding?.tone,
         runtimeGrounding?.replyStyle,
         capabilitiesJson?.replyStyle,
         capabilitiesJson?.reply_style
       ),
-      primaryCta: firstText(
-        behavior?.primaryCta,
-        behavior?.primary_cta,
+      primaryCta: approvedText(
         profileJson?.primaryCta,
         salesContext?.primaryCta,
         runtimeGrounding?.primaryCta,
         capabilitiesJson?.ctaStyle,
         capabilitiesJson?.cta_style
       ),
-      handoffPolicy: firstText(
-        behavior?.handoffPolicy,
-        behavior?.handoff_policy,
-        runtimeGrounding?.handoffPolicy
-      ),
+      handoffPolicy: approvedText(runtimeGrounding?.handoffPolicy),
     },
   };
 }

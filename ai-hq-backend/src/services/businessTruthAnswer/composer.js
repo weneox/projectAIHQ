@@ -1,4 +1,4 @@
-import { firstText, joinHumanList, sentence, s } from "./normalize.js";
+import { firstText, joinHumanList, sentence, s, uniqStrings } from "./normalize.js";
 
 const LABELS = {
   az: {
@@ -15,6 +15,9 @@ const LABELS = {
     languages: "Dəstəklənən dil",
     behavior: "Təsdiqlənmiş AI davranışı",
     unavailable: "Bu sual üçün təsdiqlənmiş məlumat hələ əlavə olunmayıb.",
+    greeting: "Salam, necə kömək edə bilərəm?",
+    gratitude: "Buyurun, məmnuniyyətlə.",
+    clarify: "Əlbəttə, hansı məlumat lazımdır?",
   },
   en: {
     phone: "Phone",
@@ -30,6 +33,9 @@ const LABELS = {
     languages: "Supported language",
     behavior: "Approved AI behavior",
     unavailable: "Approved information for this question is not available yet.",
+    greeting: "Hello, how can I help?",
+    gratitude: "You're welcome.",
+    clarify: "Sure, what information do you need?",
   },
   es: {
     phone: "Teléfono",
@@ -45,6 +51,9 @@ const LABELS = {
     languages: "Idioma compatible",
     behavior: "Comportamiento aprobado de IA",
     unavailable: "La información aprobada para esta pregunta aún no está disponible.",
+    greeting: "Hola, ¿cómo puedo ayudarte?",
+    gratitude: "Con gusto.",
+    clarify: "Claro, ¿qué información necesitas?",
   },
   tr: {
     phone: "Telefon",
@@ -60,6 +69,9 @@ const LABELS = {
     languages: "Desteklenen dil",
     behavior: "Onaylı AI davranışı",
     unavailable: "Bu soru için onaylı bilgi henüz eklenmemiş.",
+    greeting: "Merhaba, nasıl yardımcı olabilirim?",
+    gratitude: "Rica ederim.",
+    clarify: "Elbette, hangi bilgiye ihtiyacınız var?",
   },
   ru: {
     phone: "Телефон",
@@ -75,6 +87,9 @@ const LABELS = {
     languages: "Поддерживаемый язык",
     behavior: "Подтвержденное поведение AI",
     unavailable: "Подтвержденная информация по этому вопросу пока не добавлена.",
+    greeting: "Здравствуйте, чем могу помочь?",
+    gratitude: "Пожалуйста.",
+    clarify: "Конечно, какая информация вам нужна?",
   },
 };
 
@@ -82,10 +97,11 @@ function labels(language = "az") {
   return LABELS[language] || LABELS.en;
 }
 
-function pushFact({ parts, factsUsed, label, value, factKey }) {
+function pushFact({ parts, factsUsed, used, label, value, factKey }) {
   const safe = s(value);
-  if (!safe) return;
+  if (!safe || used.has(factKey)) return;
 
+  used.add(factKey);
   parts.push(`${label}: ${safe}.`);
   factsUsed.push(`${factKey}: ${safe}`);
 }
@@ -95,39 +111,28 @@ export function composeApprovedTruthAnswer({
   facts = {},
 } = {}) {
   const language = s(classification.language || "az") || "az";
-  const intent = s(classification.intent);
+  const intents = uniqStrings(classification.intents || [classification.primaryIntent]);
   const l = labels(language);
   const parts = [];
   const factsUsed = [];
+  const used = new Set();
 
-  if (intent === "contact.general") {
-    pushFact({ parts, factsUsed, label: l.phone, value: facts.phone, factKey: "Primary phone" });
-    pushFact({ parts, factsUsed, label: l.email, value: facts.email, factKey: "Primary email" });
-    pushFact({ parts, factsUsed, label: l.website, value: facts.website, factKey: "Website" });
-    pushFact({ parts, factsUsed, label: l.address, value: facts.address, factKey: "Address" });
+  if (intents.includes("smalltalk.greeting")) {
+    parts.push(l.greeting);
+    factsUsed.push("Smalltalk: greeting");
   }
 
-  if (intent === "contact.phone") {
-    pushFact({ parts, factsUsed, label: l.phone, value: facts.phone, factKey: "Primary phone" });
+  if (intents.includes("smalltalk.gratitude")) {
+    parts.push(l.gratitude);
+    factsUsed.push("Smalltalk: gratitude");
   }
 
-  if (intent === "contact.email") {
-    pushFact({ parts, factsUsed, label: l.email, value: facts.email, factKey: "Primary email" });
+  if (intents.includes("clarify.unclear")) {
+    parts.push(l.clarify);
+    factsUsed.push("Clarification: unclear");
   }
 
-  if (intent === "contact.website") {
-    pushFact({ parts, factsUsed, label: l.website, value: facts.website, factKey: "Website" });
-  }
-
-  if (intent === "contact.address") {
-    pushFact({ parts, factsUsed, label: l.address, value: facts.address, factKey: "Address" });
-  }
-
-  if (intent === "identity.name") {
-    pushFact({ parts, factsUsed, label: l.name, value: facts.displayName, factKey: "Business name" });
-  }
-
-  if (intent === "business.summary") {
+  if (intents.includes("business.summary")) {
     const value = firstText(facts.summary, facts.industry, facts.displayName);
     if (value) {
       parts.push(sentence(value));
@@ -135,7 +140,7 @@ export function composeApprovedTruthAnswer({
     }
   }
 
-  if (intent === "business.services") {
+  if (intents.includes("business.services")) {
     if (facts.summary) {
       parts.push(sentence(facts.summary));
       factsUsed.push(`Business summary: ${facts.summary}`);
@@ -143,38 +148,93 @@ export function composeApprovedTruthAnswer({
       const list = joinHumanList(facts.services, language);
       parts.push(`${l.services}: ${list}.`);
       factsUsed.push(`Services: ${list}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Services: not approved");
     }
   }
 
-  if (intent === "business.products" && facts.products?.length) {
-    const list = joinHumanList(facts.products, language);
-    parts.push(`${l.products}: ${list}.`);
-    factsUsed.push(`Products: ${list}`);
+  if (intents.includes("contact.general")) {
+    pushFact({ parts, factsUsed, used, label: l.phone, value: facts.phone, factKey: "Primary phone" });
+    pushFact({ parts, factsUsed, used, label: l.email, value: facts.email, factKey: "Primary email" });
+    pushFact({ parts, factsUsed, used, label: l.website, value: facts.website, factKey: "Website" });
+    pushFact({ parts, factsUsed, used, label: l.address, value: facts.address, factKey: "Address" });
   }
 
-  if (intent === "business.pricing" && facts.pricing) {
-    parts.push(`${l.pricing}: ${facts.pricing}.`);
-    factsUsed.push(`Pricing: ${facts.pricing}`);
+  if (intents.includes("contact.phone")) {
+    pushFact({ parts, factsUsed, used, label: l.phone, value: facts.phone, factKey: "Primary phone" });
   }
 
-  if (intent === "business.booking" && facts.booking) {
-    parts.push(`${l.booking}: ${facts.booking}.`);
-    factsUsed.push(`Booking: ${facts.booking}`);
+  if (intents.includes("contact.email")) {
+    pushFact({ parts, factsUsed, used, label: l.email, value: facts.email, factKey: "Primary email" });
   }
 
-  if (intent === "business.social" && facts.socialLinks?.length) {
-    const list = joinHumanList(facts.socialLinks, language);
-    parts.push(`${l.social}: ${list}.`);
-    factsUsed.push(`Social links: ${list}`);
+  if (intents.includes("contact.website")) {
+    pushFact({ parts, factsUsed, used, label: l.website, value: facts.website, factKey: "Website" });
   }
 
-  if (intent === "business.language" && facts.languages?.length) {
-    const list = joinHumanList(facts.languages, language);
-    parts.push(`${l.languages}: ${list}.`);
-    factsUsed.push(`Languages: ${list}`);
+  if (intents.includes("contact.address")) {
+    pushFact({ parts, factsUsed, used, label: l.address, value: facts.address, factKey: "Address" });
   }
 
-  if (intent === "behavior.policy") {
+  if (intents.includes("identity.name")) {
+    pushFact({ parts, factsUsed, used, label: l.name, value: facts.displayName, factKey: "Business name" });
+  }
+
+  if (intents.includes("business.products")) {
+    if (facts.products?.length) {
+      const list = joinHumanList(facts.products, language);
+      parts.push(`${l.products}: ${list}.`);
+      factsUsed.push(`Products: ${list}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Products: not approved");
+    }
+  }
+
+  if (intents.includes("business.pricing")) {
+    if (facts.pricing) {
+      parts.push(`${l.pricing}: ${facts.pricing}.`);
+      factsUsed.push(`Pricing: ${facts.pricing}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Pricing: not approved");
+    }
+  }
+
+  if (intents.includes("business.booking")) {
+    if (facts.booking) {
+      parts.push(`${l.booking}: ${facts.booking}.`);
+      factsUsed.push(`Booking: ${facts.booking}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Booking: not approved");
+    }
+  }
+
+  if (intents.includes("business.social")) {
+    if (facts.socialLinks?.length) {
+      const list = joinHumanList(facts.socialLinks, language);
+      parts.push(`${l.social}: ${list}.`);
+      factsUsed.push(`Social links: ${list}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Social links: not approved");
+    }
+  }
+
+  if (intents.includes("business.language")) {
+    if (facts.languages?.length) {
+      const list = joinHumanList(facts.languages, language);
+      parts.push(`${l.languages}: ${list}.`);
+      factsUsed.push(`Languages: ${list}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Languages: not approved");
+    }
+  }
+
+  if (intents.includes("behavior.policy")) {
     const behaviorParts = [
       facts.behavior?.tone ? `tone: ${facts.behavior.tone}` : "",
       facts.behavior?.primaryCta ? `CTA: ${facts.behavior.primaryCta}` : "",
@@ -185,15 +245,22 @@ export function composeApprovedTruthAnswer({
       const text = joinHumanList(behaviorParts, language);
       parts.push(`${l.behavior}: ${text}.`);
       factsUsed.push(`Behavior: ${text}`);
+    } else {
+      parts.push(l.unavailable);
+      factsUsed.push("Behavior: not approved");
     }
   }
 
-  const replyText = parts.join(" ").replace(/\s+/g, " ").trim();
+  const replyText = uniqStrings(parts)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .replace(/\.\./g, ".")
+    .trim();
 
   if (!replyText && classification.shouldHandle) {
     return {
       replyText: l.unavailable,
-      factsUsed: [`${intent}: not approved`],
+      factsUsed: ["approved_truth: unavailable"],
     };
   }
 

@@ -1,12 +1,14 @@
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
-import { arr, lower, normalizeIsoLanguage, obj, s } from "./normalize.js";
+import { arr, lower, normalizeIsoLanguage, s, uniqStrings } from "./normalize.js";
 
 let openaiSingleton = null;
 
 const APPROVED_TRUTH_INTENTS = [
   "unknown",
-  "smalltalk",
+  "smalltalk.greeting",
+  "smalltalk.gratitude",
+  "clarify.unclear",
   "sales_interest",
   "handoff.request",
   "support.request",
@@ -46,6 +48,12 @@ const FACTUAL_INTENTS = new Set([
   "behavior.policy",
 ]);
 
+const SAFE_DIRECT_INTENTS = new Set([
+  "smalltalk.greeting",
+  "smalltalk.gratitude",
+  "clarify.unclear",
+]);
+
 function ensureOpenAI() {
   const key = s(cfg?.ai?.openaiApiKey || "");
   if (!key) return null;
@@ -62,7 +70,6 @@ function pickClassifierModel() {
     s(cfg?.ai?.openaiTruthIntentModel) ||
     s(cfg?.ai?.openaiStructuredFallbackModel) ||
     s(cfg?.ai?.openaiFallbackModel) ||
-    s(cfg?.ai?.openaiModel) ||
     "gpt-4.1-mini"
   );
 }
@@ -72,13 +79,19 @@ function buildIntentSchema() {
     type: "object",
     additionalProperties: false,
     properties: {
-      intent: {
+      primaryIntent: {
         type: "string",
         enum: APPROVED_TRUTH_INTENTS,
       },
+      intents: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: APPROVED_TRUTH_INTENTS,
+        },
+      },
       language: {
         type: "string",
-        description: "ISO-like language code of the customer message, for example az, en, es, tr, ru.",
       },
       confidence: {
         type: "number",
@@ -87,15 +100,14 @@ function buildIntentSchema() {
       },
       needsApprovedTruth: {
         type: "boolean",
-        description: "True only when the user is asking for a factual business truth field.",
       },
       userMeaning: {
         type: "string",
-        description: "Short English explanation of what the user wants. Do not answer the user.",
       },
     },
     required: [
-      "intent",
+      "primaryIntent",
+      "intents",
       "language",
       "confidence",
       "needsApprovedTruth",
@@ -108,10 +120,14 @@ function extractOutputText(response = {}) {
   const direct = s(response?.output_text);
   if (direct) return direct;
 
-  const output = arr(response?.output);
-  for (const item of output) {
-    for (const content of arr(item?.content)) {
-      const text = s(content?.text || content?.output_text || content?.value);
+  for (const outputItem of arr(response?.output)) {
+    for (const contentItem of arr(outputItem?.content)) {
+      const text = s(
+        contentItem?.text ||
+          contentItem?.output_text ||
+          contentItem?.value ||
+          ""
+      );
       if (text) return text;
     }
   }
@@ -119,7 +135,7 @@ function extractOutputText(response = {}) {
   return "";
 }
 
-function parseClassifierJson(raw = "") {
+function parseJson(raw = "") {
   if (!s(raw)) return null;
 
   try {
@@ -136,26 +152,46 @@ function parseClassifierJson(raw = "") {
   }
 }
 
-function normalizeIntentResult(result = {}, fallbackLanguage = "az") {
-  const intent = APPROVED_TRUTH_INTENTS.includes(s(result?.intent))
-    ? s(result.intent)
-    : "unknown";
+function normalizeIntentList(value = [], primaryIntent = "unknown") {
+  const items = uniqStrings([
+    ...arr(value),
+    primaryIntent,
+  ])
+    .map((item) => s(item))
+    .filter((item) => APPROVED_TRUTH_INTENTS.includes(item))
+    .filter((item) => item !== "unknown");
 
+  return items.length ? items : ["unknown"];
+}
+
+function normalizeClassifierResult(result = {}, fallbackLanguage = "az") {
+  const primaryIntent = APPROVED_TRUTH_INTENTS.includes(s(result?.primaryIntent))
+    ? s(result.primaryIntent)
+    : APPROVED_TRUTH_INTENTS.includes(s(result?.intent))
+      ? s(result.intent)
+      : "unknown";
+
+  const intents = normalizeIntentList(result?.intents, primaryIntent);
   const language = normalizeIsoLanguage(result?.language, fallbackLanguage);
   const confidence = Math.max(0, Math.min(1, Number(result?.confidence) || 0));
+
+  const hasFactualIntent = intents.some((intent) => FACTUAL_INTENTS.has(intent));
+  const hasSafeDirectIntent = intents.some((intent) =>
+    SAFE_DIRECT_INTENTS.has(intent)
+  );
+
   const needsApprovedTruth =
-    result?.needsApprovedTruth === true || FACTUAL_INTENTS.has(intent);
+    result?.needsApprovedTruth === true || hasFactualIntent;
 
   return {
-    intent,
+    primaryIntent: intents[0] || primaryIntent,
+    intents,
     language,
     confidence,
     needsApprovedTruth,
     userMeaning: s(result?.userMeaning),
     shouldHandle:
-      FACTUAL_INTENTS.has(intent) &&
-      needsApprovedTruth &&
-      confidence >= 0.45,
+      confidence >= 0.45 && (hasFactualIntent || hasSafeDirectIntent),
   };
 }
 
@@ -163,13 +199,14 @@ export async function classifyApprovedTruthIntentWithModel({
   text = "",
   fallbackLanguage = "az",
 } = {}) {
-  const openai = ensureOpenAI();
   const latestText = s(text);
+  const openai = ensureOpenAI();
 
-  if (!openai || !latestText) {
-    return normalizeIntentResult(
+  if (!latestText || !openai) {
+    return normalizeClassifierResult(
       {
-        intent: "unknown",
+        primaryIntent: "unknown",
+        intents: ["unknown"],
         language: fallbackLanguage,
         confidence: 0,
         needsApprovedTruth: false,
@@ -185,41 +222,46 @@ export async function classifyApprovedTruthIntentWithModel({
     "You are ONLY an intent classifier for a governed business AI system.",
     "Do not answer the customer.",
     "Do not provide business facts.",
-    "Do not infer phone numbers, emails, prices, services, or policies.",
-    "Classify what the customer is asking for into the provided enum.",
+    "Do not infer phone numbers, emails, prices, services, names, addresses, or policies.",
     "The backend will answer using approved business truth only.",
+    "Return one or more intents when the customer asks multiple things in the same message.",
+    "",
+    "Critical principle:",
+    "The model may understand intent, but approved truth owns factual answers.",
     "",
     "Intent guide:",
-    "- contact.general: user wants contact information generally.",
-    "- contact.phone: user asks for phone/call/WhatsApp number.",
-    "- contact.email: user asks for email.",
-    "- contact.website: user asks for website or link.",
-    "- contact.address: user asks for address/location.",
-    "- identity.name: user asks business/company name.",
-    "- business.summary: user asks what the business does or asks about the business generally.",
-    "- business.services: user asks what services are provided.",
-    "- business.products: user asks what products are offered.",
-    "- business.pricing: user asks price/cost/budget/quote.",
-    "- business.booking: user asks appointment/booking/reservation.",
-    "- business.social: user asks social channels.",
-    "- business.language: user asks supported languages.",
-    "- behavior.policy: user asks how AI/business replies, handoff, tone, CTA, or operator policy.",
-    "- sales_interest: user is interested but not asking an exact approved fact.",
-    "- handoff.request: user asks for a human/operator.",
-    "- support.request: user has a support problem.",
-    "- smalltalk: greetings or casual talk.",
-    "- unknown: unclear.",
+    "- smalltalk.greeting: greeting only.",
+    "- smalltalk.gratitude: thanks/closing only.",
+    "- clarify.unclear: unclear short message like 'please', 'por favor', 'ok?', or incomplete request.",
+    "- contact.general: wants contact information generally.",
+    "- contact.phone: asks phone/call/WhatsApp number.",
+    "- contact.email: asks email.",
+    "- contact.website: asks website/link.",
+    "- contact.address: asks address/location.",
+    "- identity.name: asks business/company name.",
+    "- business.summary: asks what the business does or asks generally about the business.",
+    "- business.services: asks services/offers.",
+    "- business.products: asks products.",
+    "- business.pricing: asks price/cost/budget/quote.",
+    "- business.booking: asks appointment/booking/reservation.",
+    "- business.social: asks social channels.",
+    "- business.language: asks supported languages.",
+    "- behavior.policy: asks tone, handoff, operator, CTA, or AI behavior policy.",
+    "- sales_interest: interested in buying/starting, but not asking an exact approved fact.",
+    "- handoff.request: asks for human/operator.",
+    "- support.request: reports a support problem.",
+    "- unknown: unclear and not safely classifiable.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({
     latestCustomerMessage: latestText,
-    task: "Classify the customer intent only. Never answer the customer.",
+    task: "Classify intent only. Never answer the customer.",
   });
 
   try {
     const response = await openai.responses.create({
       model,
-      max_output_tokens: 350,
+      max_output_tokens: 450,
       text: {
         format: {
           type: "json_schema",
@@ -240,8 +282,10 @@ export async function classifyApprovedTruthIntentWithModel({
       ],
     });
 
-    const parsed = parseClassifierJson(extractOutputText(response));
-    return normalizeIntentResult(parsed || {}, fallbackLanguage);
+    return normalizeClassifierResult(
+      parseJson(extractOutputText(response)) || {},
+      fallbackLanguage
+    );
   } catch (err) {
     try {
       console.warn("[ai-hq] approved truth intent classifier failed", {
@@ -250,9 +294,10 @@ export async function classifyApprovedTruthIntentWithModel({
       });
     } catch {}
 
-    return normalizeIntentResult(
+    return normalizeClassifierResult(
       {
-        intent: "unknown",
+        primaryIntent: "unknown",
+        intents: ["unknown"],
         language: fallbackLanguage,
         confidence: 0,
         needsApprovedTruth: false,

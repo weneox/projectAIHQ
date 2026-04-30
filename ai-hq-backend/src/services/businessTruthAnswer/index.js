@@ -31,7 +31,6 @@ export async function answerFromApprovedTruth({
 
   const validation = validateApprovedTruthAnswer({
     replyText: composed.replyText,
-    factsUsed: composed.factsUsed,
   });
 
   if (!validation.ok) {
@@ -40,9 +39,9 @@ export async function answerFromApprovedTruth({
 
   return {
     language: normalizeIsoLanguage(classification.language, fallbackLanguage),
-    understoodIntent: s(classification.intent || "approved_truth_fact"),
+    understoodIntent: s(classification.primaryIntent || "approved_truth_fact"),
     detectedService: "",
-    customerGoal: "approved_truth_fact",
+    customerGoal: "approved_truth_or_safe_direct",
     answerFirst: composed.replyText,
     nextQuestion: "",
     replyText: composed.replyText,
@@ -62,6 +61,7 @@ export async function answerFromApprovedTruth({
     shouldReply: true,
     source: "approved_truth_answer_engine",
     diagnostics: {
+      intents: arr(classification.intents),
       userMeaning: s(classification.userMeaning),
       needsApprovedTruth: classification.needsApprovedTruth === true,
     },

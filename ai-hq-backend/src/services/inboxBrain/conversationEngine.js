@@ -2210,6 +2210,7 @@ export async function runTenantAwareConversationEngine({
       channel,
       source: approvedTruthAnswer.source,
       understoodIntent: approvedTruthAnswer.understoodIntent,
+      intents: approvedTruthAnswer.diagnostics?.intents || [],
       groundedFactsUsed: approvedTruthAnswer.groundedFactsUsed,
       replyPreview: safePreview(approvedTruthAnswer.replyText, 220),
       latestMessagePreview: safePreview(text, 160),
@@ -2217,6 +2218,8 @@ export async function runTenantAwareConversationEngine({
 
     return approvedTruthAnswer;
   }
+
+
 
 
 
