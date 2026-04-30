@@ -2909,6 +2909,15 @@ const contractModel = useMemo(
             />
           ) : null}
 
+          {activeTab === "review" && arr(pendingFieldChanges).length ? (
+            <StagedTruthChangesPanel
+              changes={pendingFieldChanges}
+              onEdit={openFieldChange}
+              onDiscardAll={clearPendingFieldChanges}
+              onPublish={publishFieldChanges}
+              publishing={publishingFieldChanges}
+            />
+          ) : null}
           {activeTab === "review" ? (
             <ReviewTab
               summary={reviewSummary}
