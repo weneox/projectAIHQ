@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
@@ -586,9 +586,11 @@ export default function Inbox() {
     leadSurface,
     actionState,
     loadThreads,
+    syncSelected,
     loadThreadDetail,
     loadMessages,
     loadRelatedLead,
+    syncSelected,
     markRead,
     assignThread,
     activateHandoff,
@@ -608,6 +610,7 @@ export default function Inbox() {
     setSelectedThread,
     surface,
     loadThreads,
+    syncSelected,
     loadThreadDetail,
     loadMessages,
     loadRelatedLead,
@@ -639,6 +642,7 @@ export default function Inbox() {
     setSelectedThread,
     setMessages,
     loadThreads,
+    syncSelected,
     loadThreadDetail,
     loadRelatedLead,
     setRelatedLead,

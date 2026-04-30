@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { realtimeStore } from "../lib/realtime/realtimeStore.js";
 
 const THREAD_REFRESH_DEBOUNCE_MS = 1100;
+const SELECTED_THREAD_SYNC_DEBOUNCE_MS = 420;
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -268,11 +269,15 @@ export function useInboxRealtime({
   setSelectedThread,
   setMessages,
   loadThreads,
+  syncSelected,
   setRelatedLead,
 }) {
   const selectedThreadRef = useRef(selectedThread);
   const loadThreadsRef = useRef(loadThreads);
+  const syncSelectedRef = useRef(syncSelected);
   const threadRefreshTimerRef = useRef(null);
+  const selectedThreadSyncTimerRef = useRef(null);
+  const selectedThreadSyncReasonRef = useRef("");
   const threadRefreshPreferredIdRef = useRef("");
 
   useEffect(() => {
@@ -284,6 +289,37 @@ export function useInboxRealtime({
   }, [loadThreads]);
 
   useEffect(() => {
+    syncSelectedRef.current = syncSelected;
+  }, [syncSelected]);
+
+  useEffect(() => {
+    function scheduleSelectedThreadSync(threadId = "", reason = "realtime") {
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
+      if (s(selectedThreadRef.current?.id) !== safeThreadId) return;
+
+      selectedThreadSyncReasonRef.current = reason || "realtime";
+
+      if (selectedThreadSyncTimerRef.current) {
+        window.clearTimeout(selectedThreadSyncTimerRef.current);
+      }
+
+      selectedThreadSyncTimerRef.current = window.setTimeout(() => {
+        selectedThreadSyncTimerRef.current = null;
+
+        if (s(selectedThreadRef.current?.id) !== safeThreadId) return;
+
+        Promise.resolve(
+          syncSelectedRef.current?.(safeThreadId, {
+            force: true,
+            reason: selectedThreadSyncReasonRef.current || "realtime",
+          })
+        ).catch(() => {
+          // Realtime refresh is best-effort; visible surfaces keep their current state on failure.
+        });
+      }, SELECTED_THREAD_SYNC_DEBOUNCE_MS);
+    }
+
     function scheduleThreadRefresh(preferredThreadId = "") {
       const safePreferredId = s(preferredThreadId);
 
@@ -340,6 +376,10 @@ export function useInboxRealtime({
           prev && prev.id === thread.id ? mergeIfChanged(prev, thread) : prev
         );
 
+        if (s(selectedThreadRef.current?.id) === s(thread.id)) {
+          scheduleSelectedThreadSync(thread.id, type);
+        }
+
         return;
       }
 
@@ -378,6 +418,7 @@ export function useInboxRealtime({
 
         if (selected) {
           setMessages((prev) => upsertRealtimeMessage(prev, message));
+          scheduleSelectedThreadSync(threadId, type);
         }
 
         setThreads((prev) =>
@@ -418,6 +459,7 @@ export function useInboxRealtime({
 
         if (selected) {
           setMessages((prev) => upsertRealtimeMessage(prev, message));
+          scheduleSelectedThreadSync(threadId, type);
         }
 
         setThreads((prev) =>
@@ -468,6 +510,7 @@ export function useInboxRealtime({
 
         if (threadId) {
           scheduleThreadRefresh(threadId);
+          scheduleSelectedThreadSync(threadId, type);
         }
 
         return;
@@ -498,6 +541,11 @@ export function useInboxRealtime({
       if (threadRefreshTimerRef.current) {
         window.clearTimeout(threadRefreshTimerRef.current);
         threadRefreshTimerRef.current = null;
+      }
+
+      if (selectedThreadSyncTimerRef.current) {
+        window.clearTimeout(selectedThreadSyncTimerRef.current);
+        selectedThreadSyncTimerRef.current = null;
       }
     };
   }, [

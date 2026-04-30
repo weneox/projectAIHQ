@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
 import { getLeadByThreadId } from "../api/leads.js";
 import { useActionState } from "./useActionState.js";
@@ -500,14 +500,25 @@ export function useInboxData({
   );
 
   const syncSelected = useCallback(
-    async (threadId) => {
+    async (threadId, options = {}) => {
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
+
+      const forceFresh = options?.force !== false;
+
+      if (forceFresh) {
+        clearSharedInboxRequests(`${requestScopePrefix}threads:detail:${safeThreadId}`);
+        clearSharedInboxRequests(`${requestScopePrefix}threads:messages:${safeThreadId}`);
+        clearSharedInboxRequests(`${requestScopePrefix}threads:lead:${safeThreadId}`);
+      }
+
       await Promise.all([
-        loadThreadDetail(threadId),
-        loadMessages(threadId),
-        loadRelatedLead(threadId),
+        loadThreadDetail(safeThreadId),
+        loadMessages(safeThreadId),
+        loadRelatedLead(safeThreadId),
       ]);
     },
-    [loadMessages, loadRelatedLead, loadThreadDetail]
+    [loadMessages, loadRelatedLead, loadThreadDetail, requestScopePrefix]
   );
 
   const markRead = useCallback(
