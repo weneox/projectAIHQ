@@ -230,7 +230,7 @@ function buildSnapshotOperationalState(data = {}) {
       summary: "Only approved business truth can power the runtime.",
       detail: "This surface stays fail-closed until approved truth is available.",
       action: {
-        label: "Continue setup",
+        label: "Create business record",
         path: "/home?assistant=setup",
       },
     };
@@ -993,13 +993,13 @@ function TruthHero({
           </div>
 
           <div className="mt-2 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            {approvedTruthAvailable ? "Version active" : "Setup required"}
+            {approvedTruthAvailable ? "Version active" : "Record required"}
           </div>
 
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
             {approvedTruthAvailable && text(approval.approvedAt)
               ? `Approved ${formatShortWhen(approval.approvedAt)}`
-              : "No approved business truth is published yet."}
+              : "No approved business record is published yet."}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2.5">
@@ -1241,7 +1241,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
             </div>
 
             <div className="mt-2 text-[23px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              Publish the first business truth
+              Publish the first business record
             </div>
 
             <div className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
@@ -1257,7 +1257,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
               className="w-full justify-center gap-2"
               onClick={onStartSetup}
             >
-              <span className="inline-flex items-center gap-2">Start setup<ArrowRight className="h-4 w-4" strokeWidth={2.1} /></span>
+              <span className="inline-flex items-center gap-2">Create record<ArrowRight className="h-4 w-4" strokeWidth={2.1} /></span>
             </Button>
 
             <Button
@@ -1277,7 +1277,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
         <div className="grid md:grid-cols-4">
           <EmptyStep
             icon={ShieldCheck}
-            title="Business facts"
+            title="Business record"
             detail="Name, contacts, services, tone, rules."
             tone="warning"
           />
@@ -1299,7 +1299,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
           <EmptyStep
             icon={CheckCircle2}
             title="Runtime"
-            detail="AI starts using only approved truth."
+            detail="AI uses only the approved contract."
             tone="success"
             last
           />
@@ -1327,6 +1327,416 @@ function Tabs({ activeTab, onChange }) {
           {label}
         </TabButton>
       ))}
+    </div>
+  );
+}
+
+function hasAnyApprovedField(fields = [], keys = []) {
+  return arr(keys).some((key) => Boolean(fieldValue(fields, key)));
+}
+
+function contractStatusTone(status = "") {
+  const safe = lower(status);
+
+  if (safe === "active" || safe === "passed") return "success";
+  if (safe === "guarded" || safe === "handoff" || safe === "partial") {
+    return "warning";
+  }
+  if (safe === "operator_only" || safe === "blocked" || safe === "failed") {
+    return "danger";
+  }
+
+  return "neutral";
+}
+
+function contractStatusLabel(status = "") {
+  const safe = lower(status);
+
+  if (safe === "active") return "Active";
+  if (safe === "guarded") return "Guarded";
+  if (safe === "handoff") return "Handoff";
+  if (safe === "operator_only") return "Operator only";
+  if (safe === "partial") return "Partial";
+  if (safe === "blocked") return "Blocked";
+  if (safe === "passed") return "Passed";
+  if (safe === "failed") return "Failed";
+
+  return titleize(status || "Unknown");
+}
+
+function buildRuntimeContract({ data = {}, operationalState = {}, runtimeLabel = "" }) {
+  const fields = arr(data.fields);
+  const approved = hasApprovedTruth(data);
+  const runtimeTone = toneForStatus(operationalState.status || runtimeLabel);
+  const runtimeHealthy = approved && runtimeTone === "success";
+
+  const identityReady = hasAnyApprovedField(fields, [
+    "companyName",
+    "description",
+    "summaryShort",
+    "shortDescription",
+    "mainLanguage",
+  ]);
+
+  const contactReady = hasAnyApprovedField(fields, [
+    "primaryPhone",
+    "primaryEmail",
+    "primaryAddress",
+  ]);
+
+  const offeringReady = hasAnyApprovedField(fields, [
+    "services",
+    "products",
+    "pricingHints",
+    "pricingPolicy",
+    "pricingSummary",
+    "hours",
+    "faqQuestions",
+  ]);
+
+  const pricingReady = hasAnyApprovedField(fields, [
+    "pricingHints",
+    "pricingPolicy",
+    "pricingSummary",
+  ]);
+
+  const bookingReady = hasAnyApprovedField(fields, [
+    "bookingBehaviorSummary",
+    "bookingUrl",
+    "bookingInstructions",
+    "appointmentPolicy",
+  ]);
+
+  const handoffReady = hasAnyApprovedField(fields, [
+    "handoffBehaviorSummary",
+    "contactBehaviorSummary",
+    "afterHoursBehavior",
+  ]);
+
+  const behaviorReady = hasAnyApprovedField(fields, [
+    "toneBehaviorSummary",
+    "tone",
+    "greetingBehaviorSummary",
+    "closingBehaviorSummary",
+    "handoffBehaviorSummary",
+    "afterHoursBehavior",
+  ]);
+
+  const capabilities = [
+    {
+      key: "identity",
+      title: "Identity answers",
+      icon: Building2,
+      status: runtimeHealthy && identityReady ? "active" : "blocked",
+      detail: identityReady
+        ? "AI can answer who the business is."
+        : "Business identity is not approved yet.",
+    },
+    {
+      key: "contact",
+      title: "Contact answers",
+      icon: Phone,
+      status: runtimeHealthy && contactReady ? "active" : "blocked",
+      detail: contactReady
+        ? "AI can share approved phone, email, or address facts."
+        : "No approved contact facts are available.",
+    },
+    {
+      key: "offering",
+      title: "Services and offering",
+      icon: Sparkles,
+      status: runtimeHealthy && offeringReady ? "active" : "blocked",
+      detail: offeringReady
+        ? "AI can talk about approved services, products, hours, or FAQs."
+        : "Approved offering data is missing.",
+    },
+    {
+      key: "pricing",
+      title: "Pricing answers",
+      icon: ShieldAlert,
+      status: runtimeHealthy && pricingReady ? "active" : "guarded",
+      detail: pricingReady
+        ? "AI can use approved pricing guidance."
+        : "AI must not invent prices and should clarify or hand off.",
+    },
+    {
+      key: "booking",
+      title: "Booking flow",
+      icon: Wrench,
+      status: runtimeHealthy && bookingReady ? "active" : "handoff",
+      detail: bookingReady
+        ? "AI can follow approved booking instructions."
+        : "Booking should be routed to an operator or existing channel.",
+    },
+    {
+      key: "complaints",
+      title: "Complaints and risk",
+      icon: ShieldCheck,
+      status: handoffReady ? "operator_only" : "guarded",
+      detail: handoffReady
+        ? "Sensitive cases should move to operator control."
+        : "No explicit handoff policy is approved yet.",
+    },
+  ];
+
+  const simulations = [
+    {
+      key: "identity-question",
+      title: "Customer asks who the business is",
+      status: identityReady && runtimeHealthy ? "passed" : "failed",
+      detail: identityReady
+        ? "Approved identity facts are available."
+        : "Identity data must be approved first.",
+    },
+    {
+      key: "contact-question",
+      title: "Customer asks for contact details",
+      status: contactReady && runtimeHealthy ? "passed" : "failed",
+      detail: contactReady
+        ? "Approved contact facts are available."
+        : "Contact data is missing.",
+    },
+    {
+      key: "service-question",
+      title: "Customer asks about services",
+      status: offeringReady && runtimeHealthy ? "passed" : "failed",
+      detail: offeringReady
+        ? "Offering data can be used safely."
+        : "Services or offering facts are missing.",
+    },
+    {
+      key: "pricing-question",
+      title: "Customer asks for price",
+      status: pricingReady && runtimeHealthy ? "passed" : "guarded",
+      detail: pricingReady
+        ? "Approved pricing guidance exists."
+        : "AI should not make up prices.",
+    },
+    {
+      key: "handoff-question",
+      title: "Customer needs operator help",
+      status: handoffReady || behaviorReady ? "passed" : "guarded",
+      detail: handoffReady || behaviorReady
+        ? "Behavior or handoff rules are available."
+        : "Operator routing should stay conservative.",
+    },
+  ];
+
+  const activeCount = capabilities.filter((item) => item.status === "active").length;
+  const guardedCount = capabilities.filter((item) =>
+    ["guarded", "handoff", "operator_only"].includes(item.status)
+  ).length;
+  const blockedCount = capabilities.filter((item) => item.status === "blocked").length;
+  const passedCount = simulations.filter((item) => item.status === "passed").length;
+  const guardedSimulationCount = simulations.filter((item) => item.status === "guarded").length;
+  const failedSimulationCount = simulations.filter((item) => item.status === "failed").length;
+
+  return {
+    approved,
+    runtimeHealthy,
+    runtimeLabel,
+    activeCount,
+    guardedCount,
+    blockedCount,
+    passedCount,
+    guardedSimulationCount,
+    failedSimulationCount,
+    capabilities,
+    simulations,
+  };
+}
+
+function ContractMetric({ label, value, tone = "neutral" }) {
+  return (
+    <div className="px-4 py-3.5">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {label}
+      </div>
+      <div
+        className={cx(
+          "mt-1.5 text-[24px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+          toneTextClass(tone)
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ContractCapabilityRow({ item }) {
+  const tone = contractStatusTone(item.status);
+
+  return (
+    <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 py-3">
+      <FreeIcon icon={item.icon} tone={tone} className="mt-[2px] h-[18px] w-[18px]" />
+
+      <div className="min-w-0">
+        <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+          {item.title}
+        </div>
+        <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+          {item.detail}
+        </div>
+      </div>
+
+      <StatusText tone={tone}>{contractStatusLabel(item.status)}</StatusText>
+    </div>
+  );
+}
+
+function ContractSimulationRow({ item, last = false }) {
+  const tone = contractStatusTone(item.status);
+
+  return (
+    <div
+      className={cx(
+        "grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 py-3",
+        !last && "border-b border-line-soft"
+      )}
+    >
+      <FreeIcon
+        icon={item.status === "passed" ? CheckCircle2 : CircleAlert}
+        tone={tone}
+        className="mt-[2px] h-[18px] w-[18px]"
+      />
+
+      <div className="min-w-0">
+        <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+          {item.title}
+        </div>
+        <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+          {item.detail}
+        </div>
+      </div>
+
+      <StatusText tone={tone}>{contractStatusLabel(item.status)}</StatusText>
+    </div>
+  );
+}
+
+function ContractTab({ contract }) {
+  const contractTone = contract.runtimeHealthy ? "success" : "warning";
+
+  return (
+    <div className="space-y-4">
+      <Card padded={false} clip>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="px-4 py-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Runtime contract
+            </div>
+
+            <div className="mt-2 text-[23px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              AI capability contract
+            </div>
+
+            <div className="mt-2 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
+              This contract defines what AI can answer, what stays guarded, and
+              when operator control is required.
+            </div>
+          </div>
+
+          <div className="border-t border-line-soft px-4 py-4 lg:border-l lg:border-t-0">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+              Contract state
+            </div>
+
+            <div className="mt-2">
+              <StatusText tone={contractTone}>
+                {contract.runtimeHealthy ? "Runtime active" : "Guarded"}
+              </StatusText>
+            </div>
+
+            <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+              {contract.runtimeHealthy
+                ? "Approved truth is published and can govern live replies."
+                : "Runtime should stay conservative until approved truth is ready."}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid divide-y divide-line-soft border-t border-line-soft md:grid-cols-4 md:divide-x md:divide-y-0">
+          <ContractMetric label="Active" value={contract.activeCount} tone="success" />
+          <ContractMetric label="Guarded" value={contract.guardedCount} tone="warning" />
+          <ContractMetric label="Blocked" value={contract.blockedCount} tone="danger" />
+          <ContractMetric label="Simulation" value={`${contract.passedCount}/${contract.simulations.length}`} tone="brand" />
+        </div>
+      </Card>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
+        <Card padded={false} clip>
+          <div className="px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Capability matrix
+            </div>
+
+            <div className="mt-3 divide-y divide-line-soft">
+              {contract.capabilities.map((item) => (
+                <ContractCapabilityRow key={item.key} item={item} />
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card padded={false} clip>
+          <div className="px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Simulation checks
+            </div>
+
+            <div className="mt-3">
+              {contract.simulations.map((item, index) => (
+                <ContractSimulationRow
+                  key={item.key}
+                  item={item}
+                  last={index === contract.simulations.length - 1}
+                />
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card padded={false} clip>
+        <div className="grid gap-0 divide-y divide-line-soft md:grid-cols-3 md:divide-x md:divide-y-0">
+          <div className="px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Unknown questions
+            </div>
+            <div className="mt-2 text-[13.5px] font-semibold text-text">
+              Clarify or hand off
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              AI should not invent facts outside the approved record.
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Sensitive cases
+            </div>
+            <div className="mt-2 text-[13.5px] font-semibold text-text">
+              Operator control
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              Complaints, legal, medical, payment, or angry customers stay guarded.
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Contract source
+            </div>
+            <div className="mt-2 text-[13.5px] font-semibold text-text">
+              Approved truth
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              Runtime permissions are derived from published business truth.
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -1741,6 +2151,15 @@ export default function TruthViewerPage() {
     [data.fields]
   );
   const sourceRows = useMemo(() => buildSourceRows(data), [data]);
+  const contractModel = useMemo(
+    () =>
+      buildRuntimeContract({
+        data,
+        operationalState,
+        runtimeLabel,
+      }),
+    [data, operationalState, runtimeLabel]
+  );
 
   const visibleNotices = arr(data.notices).filter(
     (notice) => !(data.approvedTruthUnavailable && isTruthUnavailableNotice(notice))
@@ -1970,6 +2389,10 @@ export default function TruthViewerPage() {
 
           {activeTab === "behavior" ? (
             <BehaviorTab groups={behaviorGroups} />
+          ) : null}
+
+          {activeTab === "contract" ? (
+            <ContractTab contract={contractModel} />
           ) : null}
 
           {activeTab === "sources" ? (
