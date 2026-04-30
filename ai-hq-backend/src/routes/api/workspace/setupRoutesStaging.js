@@ -163,6 +163,8 @@ function buildTruthMaintenanceDraftPatch(changes = [], currentDraft = {}) {
     }
 
     if (key === "primaryPhone") {
+      businessProfile.primaryPhone = value;
+
       contacts = upsertByKey(contacts, "contactKey", "primary_phone", {
         contactKey: "primary_phone",
         key: "primary_phone",
@@ -184,6 +186,8 @@ function buildTruthMaintenanceDraftPatch(changes = [], currentDraft = {}) {
     }
 
     if (key === "primaryEmail") {
+      businessProfile.primaryEmail = value;
+
       contacts = upsertByKey(contacts, "contactKey", "primary_email", {
         contactKey: "primary_email",
         key: "primary_email",
@@ -205,6 +209,8 @@ function buildTruthMaintenanceDraftPatch(changes = [], currentDraft = {}) {
     }
 
     if (key === "primaryAddress") {
+      businessProfile.primaryAddress = value;
+
       locations = upsertByKey(locations, "locationKey", "primary", {
         locationKey: "primary",
         key: "primary",
