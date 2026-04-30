@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { deriveThreadState } from "../../../lib/inbox-ui.js";
 
@@ -18,6 +18,7 @@ export function useInboxThreadListSurface({
   setSelectedThread,
   surface,
   loadThreads,
+  syncSelected,
   loadThreadDetail,
   loadMessages,
   loadRelatedLead,
@@ -43,6 +44,54 @@ export function useInboxThreadListSurface({
   const deepLinkNotice =
     requestedId && failedRequest.id === requestedId ? failedRequest.message : "";
 
+  const syncThreadFromServer = useCallback(
+    async (threadId, reason = "thread_list_sync") => {
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
+
+      if (typeof syncSelected === "function") {
+        await syncSelected(safeThreadId, {
+          force: true,
+          reason,
+        });
+        return;
+      }
+
+      await Promise.all([
+        loadThreadDetail(safeThreadId),
+        loadMessages(safeThreadId),
+        loadRelatedLead(safeThreadId),
+      ]);
+    },
+    [loadMessages, loadRelatedLead, loadThreadDetail, syncSelected]
+  );
+
+  const openThread = useCallback(
+    (thread) => {
+      const threadId = s(thread?.id);
+      if (!threadId) return;
+
+      setSelectedThread(thread);
+
+      Promise.resolve(syncThreadFromServer(threadId, "thread_list_open")).catch(
+        () => {
+          // Best-effort refresh. The selected card still opens immediately.
+        }
+      );
+    },
+    [setSelectedThread, syncThreadFromServer]
+  );
+
+  const refreshThreadList = useCallback(async () => {
+    const threadId = selectedThreadId || requestedId || "";
+
+    await loadThreads(threadId);
+
+    if (threadId) {
+      await syncThreadFromServer(threadId, "thread_list_refresh");
+    }
+  }, [loadThreads, requestedId, selectedThreadId, syncThreadFromServer]);
+
   useEffect(() => {
     loadThreads(pendingThreadId || requestedId);
   }, [loadThreads, pendingThreadId, requestedId]);
@@ -61,6 +110,8 @@ export function useInboxThreadListSurface({
         if (selectedThreadId !== s(matchingThread.id)) {
           setSelectedThread(matchingThread);
         }
+
+        await syncThreadFromServer(pendingThreadId, "deep_link_matched");
         if (cancelled) return;
 
         setFailedRequest((current) => clearFailure(current, pendingThreadId));
@@ -69,11 +120,7 @@ export function useInboxThreadListSurface({
       }
 
       try {
-        await Promise.all([
-          loadThreadDetail(pendingThreadId),
-          loadMessages(pendingThreadId),
-          loadRelatedLead(pendingThreadId),
-        ]);
+        await syncThreadFromServer(pendingThreadId, "deep_link_missing_from_list");
 
         if (cancelled) return;
 
@@ -114,13 +161,11 @@ export function useInboxThreadListSurface({
       cancelled = true;
     };
   }, [
-    loadMessages,
-    loadRelatedLead,
-    loadThreadDetail,
     pendingThreadId,
     selectedThreadId,
     setSelectedThread,
     surface?.loading,
+    syncThreadFromServer,
     threads,
   ]);
 
@@ -170,10 +215,10 @@ export function useInboxThreadListSurface({
     stats,
     deepLinkNotice,
     filteredThreads,
-    openThread: setSelectedThread,
+    openThread,
     surface: {
       ...surface,
-      refresh: () => loadThreads(selectedThreadId || requestedId || ""),
+      refresh: refreshThreadList,
     },
   };
 }

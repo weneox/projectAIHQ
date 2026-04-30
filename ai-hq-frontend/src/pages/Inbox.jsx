@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
@@ -662,12 +662,45 @@ export default function Inbox() {
     );
   }, [requestedThreadId, setSearchParams]);
 
+  const selectedThreadSyncKey = useMemo(() => {
+    const thread = obj(selectedThread);
+    const threadId = s(thread.id);
+    if (!threadId) return "";
+
+    return [
+      threadId,
+      s(thread.last_message_at || thread.lastMessageAt),
+      s(thread.last_inbound_at || thread.lastInboundAt),
+      s(thread.last_outbound_at || thread.lastOutboundAt),
+      s(thread.updated_at || thread.updatedAt),
+      String(n(thread.unread_count ?? thread.unreadCount, 0)),
+    ].join("|");
+  }, [selectedThread]);
+
+  const lastSelectedThreadSyncKeyRef = useRef("");
+
   useEffect(() => {
-    if (selectedThread?.id) {
-      loadMessages(selectedThread.id);
-      loadRelatedLead(selectedThread.id);
+    const threadId = s(selectedThread?.id);
+
+    if (!threadId) {
+      lastSelectedThreadSyncKeyRef.current = "";
+      return;
     }
-  }, [selectedThread?.id, loadMessages, loadRelatedLead]);
+
+    if (!selectedThreadSyncKey) return;
+    if (lastSelectedThreadSyncKeyRef.current === selectedThreadSyncKey) return;
+
+    lastSelectedThreadSyncKeyRef.current = selectedThreadSyncKey;
+
+    Promise.resolve(
+      syncSelected(threadId, {
+        force: true,
+        reason: "selected_thread_version_changed",
+      })
+    ).catch(() => {
+      // Best-effort detail sync. The visible inbox keeps its current state on failure.
+    });
+  }, [selectedThread?.id, selectedThreadSyncKey, syncSelected]);
 
   const detailOpen =
     Boolean(selectedThread?.id) && detailThreadId === selectedThread?.id;

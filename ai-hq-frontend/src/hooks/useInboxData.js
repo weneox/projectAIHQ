@@ -238,9 +238,14 @@ export function useInboxData({
 
   const [messages, setMessages] = useState([]);
   const [messagesThreadId, setMessagesThreadId] = useState("");
+  const messagesThreadIdRef = useRef("");
   const messagesRequestSeqRef = useRef(0);
   const threadDetailRequestSeqRef = useRef(0);
   const leadRequestSeqRef = useRef(0);
+
+  useEffect(() => {
+    messagesThreadIdRef.current = messagesThreadId;
+  }, [messagesThreadId]);
 
   const [selectedThread, setSelectedThread] = useState(null);
   const [relatedLead, setRelatedLead] = useState(null);
@@ -432,8 +437,14 @@ export function useInboxData({
         return;
       }
 
+      const previousMessagesThreadId = s(messagesThreadIdRef.current);
+
       setMessagesThreadId(safeThreadId);
-      setMessages([]);
+
+      if (previousMessagesThreadId !== safeThreadId) {
+        setMessages([]);
+      }
+
       setLoadingMessages(true);
       setMessagesError("");
 
@@ -699,7 +710,11 @@ export function useInboxData({
         setMessagesError("");
 
         setMessages((prev) => {
-          if (messagesThreadId && messagesThreadId !== safeThreadId) return prev;
+          const activeMessagesThreadId = s(messagesThreadIdRef.current);
+          if (activeMessagesThreadId && activeMessagesThreadId !== safeThreadId) {
+            return prev;
+          }
+
           return upsertMessageByIdOrClientMutationId(prev, optimisticMessage);
         });
 
@@ -784,7 +799,6 @@ export function useInboxData({
       actorName,
       beginSave,
       failSave,
-      messagesThreadId,
       requestScopePrefix,
       setData,
       succeedSave,
