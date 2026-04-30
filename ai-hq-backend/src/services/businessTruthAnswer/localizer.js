@@ -60,6 +60,10 @@ function extractOutputText(response = {}) {
   return "";
 }
 
+function escapeRegExp(value = "") {
+  return s(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function normalizePhoneComparable(value = "") {
   return s(value).replace(/[^\d+]/g, "");
 }
@@ -71,19 +75,36 @@ function normalizeComparable(value = "") {
     .trim();
 }
 
-function containsFact(replyText = "", fact = "") {
-  const reply = s(replyText);
-  const value = s(fact);
+function inferFactKind(value = "", explicitKind = "") {
+  const explicit = s(explicitKind).toLowerCase();
+  if (explicit) return explicit;
 
-  if (!value) return true;
-  if (!reply) return false;
+  const text = s(value);
+  if (!text) return "text";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(text)) return "email";
+  if (/^https?:\/\//iu.test(text) || /^www\./iu.test(text)) return "url";
 
-  const phoneFact = normalizePhoneComparable(value);
-  if (phoneFact && phoneFact.replace(/[^\d]/g, "").length >= 5) {
-    return normalizePhoneComparable(reply).includes(phoneFact);
-  }
+  const digits = text.replace(/\D/g, "");
+  if (digits.length >= 7 && digits.length <= 16) return "phone";
 
-  return normalizeComparable(reply).includes(normalizeComparable(value));
+  return "text";
+}
+
+function addFact(out, seen, key, value, kind = "") {
+  const safeValue = s(value);
+  if (!safeValue) return;
+
+  const safeKind = inferFactKind(safeValue, kind);
+  const dedupeKey = `${safeKind}:${normalizeComparable(safeValue)}`;
+  if (seen.has(dedupeKey)) return;
+
+  seen.add(dedupeKey);
+  out.push({
+    key: s(key) || safeKind,
+    value: safeValue,
+    kind: safeKind,
+    token: `[[AIHQ_FACT_${out.length + 1}]]`,
+  });
 }
 
 function buildCriticalFacts({ classification = {}, facts = {} } = {}) {
@@ -93,68 +114,240 @@ function buildCriticalFacts({ classification = {}, facts = {} } = {}) {
   ]);
 
   const out = [];
+  const seen = new Set();
 
   if (
     intents.includes("contact.general") ||
     intents.includes("contact.phone")
   ) {
-    out.push(facts.phone);
+    addFact(out, seen, "Primary phone", facts.phone, "phone");
   }
 
   if (
     intents.includes("contact.general") ||
     intents.includes("contact.email")
   ) {
-    out.push(facts.email);
+    addFact(out, seen, "Primary email", facts.email, "email");
   }
 
   if (
     intents.includes("contact.general") ||
     intents.includes("contact.website")
   ) {
-    out.push(facts.website);
+    addFact(out, seen, "Website", facts.website, "url");
   }
 
   if (
     intents.includes("contact.general") ||
     intents.includes("contact.address")
   ) {
-    out.push(facts.address);
+    addFact(out, seen, "Address", facts.address, "text");
   }
 
   if (intents.includes("identity.name")) {
-    out.push(facts.displayName);
+    addFact(out, seen, "Business name", facts.displayName, "name");
   }
 
   if (intents.includes("business.pricing")) {
-    out.push(facts.pricing);
+    addFact(out, seen, "Pricing", facts.pricing, "text");
   }
 
   if (intents.includes("business.booking")) {
-    out.push(facts.booking);
+    addFact(out, seen, "Booking", facts.booking, "text");
   }
 
   if (intents.includes("business.services")) {
-    out.push(...arr(facts.services));
+    for (const item of arr(facts.services)) {
+      addFact(out, seen, "Service", item, "service");
+    }
   }
 
   if (intents.includes("business.products")) {
-    out.push(...arr(facts.products));
+    for (const item of arr(facts.products)) {
+      addFact(out, seen, "Product", item, "product");
+    }
   }
 
-  return uniqStrings(out).filter(Boolean).slice(0, 20);
+  return out.slice(0, 30);
+}
+
+function protectFactsInText(text = "", criticalFacts = []) {
+  let out = s(text);
+
+  const sorted = [...arr(criticalFacts)].sort(
+    (a, b) => s(b?.value).length - s(a?.value).length
+  );
+
+  for (const fact of sorted) {
+    const value = s(fact?.value);
+    const token = s(fact?.token);
+    if (!value || !token) continue;
+
+    out = out.split(value).join(token);
+  }
+
+  return out;
+}
+
+const ATTACHED_SUFFIXES = [
+  "dır",
+  "dir",
+  "dur",
+  "dür",
+  "tır",
+  "tir",
+  "tur",
+  "tür",
+  "dı",
+  "di",
+  "du",
+  "dü",
+  "dırlar",
+  "dirler",
+  "durlar",
+  "dürler",
+];
+
+function stripAttachedSuffixesFromTokens(text = "", criticalFacts = []) {
+  let out = s(text);
+
+  for (const fact of arr(criticalFacts)) {
+    const token = s(fact?.token);
+    if (!token) continue;
+
+    const tokenPattern = escapeRegExp(token);
+    const suffixPattern = ATTACHED_SUFFIXES.map(escapeRegExp).join("|");
+
+    out = out.replace(
+      new RegExp(`${tokenPattern}(?:[-–—]?(?:${suffixPattern}))(?=$|[\\s.,!?؟;:])`, "giu"),
+      token
+    );
+  }
+
+  return out;
+}
+
+function restoreFactTokens(text = "", criticalFacts = []) {
+  let out = s(text);
+
+  for (const fact of arr(criticalFacts)) {
+    const token = s(fact?.token);
+    const value = s(fact?.value);
+    if (!token || !value) continue;
+
+    out = out.split(token).join(value);
+  }
+
+  return out;
+}
+
+function stripAttachedSuffixesFromMachineValues(text = "", criticalFacts = []) {
+  let out = s(text);
+
+  for (const fact of arr(criticalFacts)) {
+    const value = s(fact?.value);
+    const kind = s(fact?.kind).toLowerCase();
+    if (!value) continue;
+
+    if (!["email", "url", "phone"].includes(kind)) continue;
+
+    const valuePattern = escapeRegExp(value);
+    const suffixPattern = ATTACHED_SUFFIXES.map(escapeRegExp).join("|");
+
+    out = out.replace(
+      new RegExp(`${valuePattern}(?:[-–—]?(?:${suffixPattern}))(?=$|[\\s.,!?؟;:])`, "giu"),
+      value
+    );
+  }
+
+  return out;
+}
+
+function normalizeReplyWhitespace(text = "") {
+  return s(text)
+    .replace(/\s+([,.!?؟;:])/g, "$1")
+    .replace(/([,.!?؟;:])([^\s\])}])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function factHasSafeBoundary(replyText = "", fact = {}) {
+  const reply = s(replyText);
+  const value = s(fact?.value);
+  const kind = s(fact?.kind).toLowerCase();
+
+  if (!value) return true;
+  if (!reply) return false;
+
+  let startIndex = reply.indexOf(value);
+
+  while (startIndex >= 0) {
+    const before = startIndex > 0 ? reply[startIndex - 1] : "";
+    const after = reply[startIndex + value.length] || "";
+
+    const beforeOk =
+      !before ||
+      /[\s([{"'“‘:;]/u.test(before);
+
+    const afterOk =
+      !after ||
+      /[\s.,!?؟;:)\]}"'”’]/u.test(after);
+
+    if (kind === "email" || kind === "url") {
+      if (beforeOk && afterOk) return true;
+    } else if (kind === "phone") {
+      const afterDigit = /\d/u.test(after);
+      if (beforeOk && !afterDigit) return true;
+    } else {
+      return true;
+    }
+
+    startIndex = reply.indexOf(value, startIndex + value.length);
+  }
+
+  return false;
+}
+
+function containsFact(replyText = "", fact = {}) {
+  const reply = s(replyText);
+  const value = s(fact?.value);
+
+  if (!value) return true;
+  if (!reply) return false;
+
+  const kind = s(fact?.kind).toLowerCase();
+
+  if (kind === "phone") {
+    const phoneFact = normalizePhoneComparable(value);
+    return Boolean(phoneFact) && normalizePhoneComparable(reply).includes(phoneFact);
+  }
+
+  return normalizeComparable(reply).includes(normalizeComparable(value));
 }
 
 function validateLocalizedReply({ replyText = "", criticalFacts = [] } = {}) {
-  const missing = arr(criticalFacts).filter(
-    (fact) => !containsFact(replyText, fact)
-  );
+  const missing = [];
+  const unsafeBoundary = [];
 
-  if (missing.length) {
+  for (const fact of arr(criticalFacts)) {
+    if (!containsFact(replyText, fact)) {
+      missing.push(fact);
+      continue;
+    }
+
+    if (!factHasSafeBoundary(replyText, fact)) {
+      unsafeBoundary.push(fact);
+    }
+  }
+
+  if (missing.length || unsafeBoundary.length) {
     return {
       ok: false,
-      reason: "localized_reply_changed_or_dropped_fact",
+      reason: missing.length
+        ? "localized_reply_dropped_fact"
+        : "localized_reply_has_unsafe_fact_boundary",
       missing,
+      unsafeBoundary,
     };
   }
 
@@ -162,6 +355,7 @@ function validateLocalizedReply({ replyText = "", criticalFacts = [] } = {}) {
     ok: true,
     reason: "",
     missing: [],
+    unsafeBoundary: [],
   };
 }
 
@@ -176,6 +370,11 @@ function buildLocalizationSchema() {
   };
 }
 
+function buildSafeFallbackReply(replyText = "", criticalFacts = []) {
+  const stripped = stripAttachedSuffixesFromMachineValues(replyText, criticalFacts);
+  return normalizeReplyWhitespace(stripped);
+}
+
 export async function localizeApprovedTruthAnswer({
   replyText = "",
   targetLanguage = "az",
@@ -184,52 +383,61 @@ export async function localizeApprovedTruthAnswer({
   facts = {},
 } = {}) {
   const baseReply = s(replyText);
+  const language = normalizeIsoLanguage(targetLanguage, "az");
+
   if (!baseReply) {
     return {
       replyText: "",
       localized: false,
       reason: "empty_reply",
-      language: normalizeIsoLanguage(targetLanguage, "az"),
+      language,
     };
   }
 
-  const language = normalizeIsoLanguage(targetLanguage, "az");
+  const criticalFacts = buildCriticalFacts({ classification, facts });
+  const safeFallbackReply = buildSafeFallbackReply(baseReply, criticalFacts);
   const openai = ensureOpenAI();
 
   if (!openai) {
     return {
-      replyText: baseReply,
+      replyText: safeFallbackReply,
       localized: false,
       reason: "openai_unavailable",
       language,
     };
   }
 
-  const criticalFacts = buildCriticalFacts({ classification, facts });
   const model = pickLocalizerModel();
+  const protectedAnswer = protectFactsInText(safeFallbackReply, criticalFacts);
 
   const systemPrompt = [
     "You are a safe multilingual response localizer for a governed business AI system.",
-    "You do not create business facts.",
-    "You only rewrite/localize the already approved answer into the customer's language.",
-    "Keep the response natural, short, human, and suitable for chat.",
-    "Do not mention policies, approved truth, backend, system, AI, or internal rules.",
+    "You only rewrite the approved answer into the customer's language.",
+    "You do not create, infer, remove, translate, or modify business facts.",
+    "All fact tokens like [[AIHQ_FACT_1]] must remain exactly as tokens.",
+    "Never attach grammar suffixes, particles, or letters directly to fact tokens.",
+    "Keep emails, phone numbers, URLs, names, prices, services, and addresses as separate clean tokens.",
+    "For email, phone, and URL facts, prefer a clear chat format like 'Email: [[AIHQ_FACT_1]]' or 'Phone: [[AIHQ_FACT_2]]'.",
+    "Do not mention approved truth, backend, policy, validator, system, AI, internal rules, or tokens.",
     "Do not add emojis unless the approved answer already contains emojis.",
-    "Do not add prices, services, phone numbers, emails, addresses, websites, names, promises, discounts, or availability.",
-    "Critical facts must remain exactly present in the final reply.",
-    "If a critical fact is a phone number, email, website, address, or business name, preserve it exactly.",
-    "If the target language is unknown, infer the customer's language from the message.",
+    "Keep the final message short, natural, and suitable for a customer chat.",
+    "If the customer writes in a language not listed anywhere, infer that language and answer in it.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({
     targetLanguage: language,
     latestCustomerMessage: s(customerText),
-    approvedAnswer: baseReply,
-    criticalFacts,
+    approvedAnswerWithFactTokens: protectedAnswer,
+    criticalFactTokens: criticalFacts.map((fact) => ({
+      token: fact.token,
+      kind: fact.kind,
+      key: fact.key,
+    })),
     style: {
       tone: "natural_business_chat",
       maxSentences: 2,
-      noRobotLabels: true,
+      cleanMachineValues: true,
+      noRobotLabels: false,
       noInternalLanguage: true,
     },
   });
@@ -237,7 +445,7 @@ export async function localizeApprovedTruthAnswer({
   try {
     const response = await openai.responses.create({
       model,
-      max_output_tokens: 500,
+      max_output_tokens: 550,
       text: {
         format: {
           type: "json_schema",
@@ -259,16 +467,21 @@ export async function localizeApprovedTruthAnswer({
     });
 
     const parsed = parseJson(extractOutputText(response)) || {};
-    const localizedReply = s(parsed.replyText);
+    let localizedReply = s(parsed.replyText);
 
     if (!localizedReply) {
       return {
-        replyText: baseReply,
+        replyText: safeFallbackReply,
         localized: false,
         reason: "empty_localized_reply",
         language,
       };
     }
+
+    localizedReply = stripAttachedSuffixesFromTokens(localizedReply, criticalFacts);
+    localizedReply = restoreFactTokens(localizedReply, criticalFacts);
+    localizedReply = stripAttachedSuffixesFromMachineValues(localizedReply, criticalFacts);
+    localizedReply = normalizeReplyWhitespace(localizedReply);
 
     const validation = validateLocalizedReply({
       replyText: localizedReply,
@@ -279,14 +492,21 @@ export async function localizeApprovedTruthAnswer({
       try {
         console.warn("[ai-hq] approved truth localization rejected", {
           reason: validation.reason,
-          missing: validation.missing,
+          missing: validation.missing.map((item) => ({
+            key: item.key,
+            kind: item.kind,
+          })),
+          unsafeBoundary: validation.unsafeBoundary.map((item) => ({
+            key: item.key,
+            kind: item.kind,
+          })),
           language,
           model,
         });
       } catch {}
 
       return {
-        replyText: baseReply,
+        replyText: safeFallbackReply,
         localized: false,
         reason: validation.reason,
         language,
@@ -309,7 +529,7 @@ export async function localizeApprovedTruthAnswer({
     } catch {}
 
     return {
-      replyText: baseReply,
+      replyText: safeFallbackReply,
       localized: false,
       reason: "localizer_failed",
       language,
@@ -320,5 +540,7 @@ export async function localizeApprovedTruthAnswer({
 export const __test__ = {
   buildCriticalFacts,
   containsFact,
+  factHasSafeBoundary,
   validateLocalizedReply,
+  stripAttachedSuffixesFromMachineValues,
 };
