@@ -802,13 +802,15 @@ function RecordRow({
   hint = "",
   multiline = false,
   last = false,
+  fieldKey = "",
+  onEdit,
 }) {
   if (!text(value)) return null;
 
   return (
     <div
       className={cx(
-        "grid grid-cols-[22px_minmax(0,1fr)_18px] gap-3 py-3",
+        "grid grid-cols-[22px_minmax(0,1fr)_auto] gap-3 py-3",
         !last && "border-b border-line-soft"
       )}
     >
@@ -833,14 +835,32 @@ function RecordRow({
         </div>
       </div>
 
-      <div className="pt-[4px]">
+      <div className="flex items-center gap-2 pt-[4px]">
+        {typeof onEdit === "function" ? (
+          <button
+            type="button"
+            onClick={() =>
+              onEdit({
+                key: fieldKey,
+                label,
+                value,
+                hint,
+                multiline,
+              })
+            }
+            className="text-[12px] font-semibold text-text-subtle transition-colors duration-base ease-premium hover:text-brand"
+          >
+            Edit
+          </button>
+        ) : null}
+
         <InfoHint text={hint} align="right" />
       </div>
     </div>
   );
 }
 
-function RecordCard({ title, subtitle = "", rows = [], tone = "neutral" }) {
+function RecordCard({ title, subtitle = "", rows = [], tone = "neutral", onEdit }) {
   return (
     <Card padded={false} clip>
       <div className="px-4 py-3.5">
@@ -871,6 +891,8 @@ function RecordCard({ title, subtitle = "", rows = [], tone = "neutral" }) {
                 hint={item.hint}
                 multiline={item.multiline}
                 last={index === rows.length - 1}
+                              fieldKey={item.key}
+                onEdit={onEdit}
               />
             ))
           ) : (
@@ -1742,32 +1764,207 @@ function ContractTab({ contract }) {
   );
 }
 
-function BusinessTab({ groups }) {
+function PendingTruthChangeStrip({ changes = [], onOpenReview, onClear }) {
+  const total = arr(changes).length;
+  if (!total) return null;
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid gap-0 divide-y divide-line-soft md:grid-cols-[minmax(0,1fr)_auto] md:divide-x md:divide-y-0">
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="group grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+        >
+          <FreeIcon icon={CircleAlert} tone="warning" className="h-[18px] w-[18px]" />
+
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              {total} pending record change{total === 1 ? "" : "s"}
+            </div>
+            <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
+              Changes are staged only. Publish later to create a new truth version.
+            </div>
+          </div>
+
+          <ArrowRight
+            className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+            strokeWidth={2.1}
+          />
+        </button>
+
+        <div className="flex items-center gap-2 px-4 py-3.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="justify-center"
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            className="justify-center"
+            onClick={onOpenReview}
+          >
+            Review changes
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function TruthFieldChangeDrawer({ draft, onDraftChange, onClose, onSave }) {
+  if (!draft) return null;
+
+  const originalValue = text(draft.value);
+  const nextValue = String(draft.nextValue ?? "");
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        aria-label="Close truth field editor"
+        className="absolute inset-0 cursor-default bg-[rgba(15,23,42,0.18)] backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <aside className="absolute right-4 top-4 flex max-h-[calc(100vh-32px)] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[24px] border border-line-soft bg-surface shadow-panel">
+        <div className="border-b border-line-soft px-5 py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+            Propose change
+          </div>
+
+          <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+            {draft.label}
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            This will create a pending change. It will not update live runtime until published.
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div>
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Current approved value
+            </div>
+            <div className="mt-2 rounded-[16px] border border-line-soft bg-surface-subtle px-3 py-2.5 text-[13px] font-semibold leading-6 text-text">
+              {originalValue || "Not approved"}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              New value
+            </span>
+
+            {draft.multiline ? (
+              <textarea
+                value={nextValue}
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draft,
+                    nextValue: event.target.value,
+                  })
+                }
+                rows={5}
+                className="mt-2 w-full resize-none rounded-[16px] border border-line bg-surface px-3 py-2.5 text-[13px] font-semibold leading-6 text-text outline-none transition-colors duration-base ease-premium focus:border-brand"
+              />
+            ) : (
+              <input
+                value={nextValue}
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draft,
+                    nextValue: event.target.value,
+                  })
+                }
+                className="mt-2 h-11 w-full rounded-[16px] border border-line bg-surface px-3 text-[13px] font-semibold text-text outline-none transition-colors duration-base ease-premium focus:border-brand"
+              />
+            )}
+          </label>
+
+          <label className="block">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Internal note
+            </span>
+
+            <textarea
+              value={draft.note || ""}
+              onChange={(event) =>
+                onDraftChange({
+                  ...draft,
+                  note: event.target.value,
+                })
+              }
+              rows={3}
+              placeholder="Why is this changing?"
+              className="mt-2 w-full resize-none rounded-[16px] border border-line bg-surface px-3 py-2.5 text-[13px] font-medium leading-6 text-text outline-none transition-colors duration-base ease-premium placeholder:text-text-soft focus:border-brand"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-line-soft px-5 py-4">
+          <Button
+            type="button"
+            size="md"
+            variant="secondary"
+            className="justify-center"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            size="md"
+            className="justify-center"
+            disabled={!text(nextValue) || text(nextValue) === originalValue}
+            onClick={() => onSave(draft)}
+          >
+            Stage change
+          </Button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function BusinessTab({ groups, onEdit }) {
   return (
     <div className="grid items-start gap-4 xl:grid-cols-2">
       <RecordCard
-        title="Identity"
+              onEdit={onEdit}
+              title="Identity"
         subtitle="Approved public business identity."
         rows={groups.identity}
         tone={groups.identity.length ? "success" : "neutral"}
       />
 
       <RecordCard
-        title="Contact"
+              onEdit={onEdit}
+              title="Contact"
         subtitle="Approved contact and location facts."
         rows={groups.contact}
         tone={groups.contact.length ? "success" : "neutral"}
       />
 
       <RecordCard
-        title="Presence"
+              onEdit={onEdit}
+              title="Presence"
         subtitle="Approved online presence."
         rows={groups.presence}
         tone={groups.presence.length ? "success" : "neutral"}
       />
 
       <RecordCard
-        title="Offering"
+              onEdit={onEdit}
+              title="Offering"
         subtitle="Services, products, pricing, hours, and FAQs."
         rows={groups.offering}
         tone={groups.offering.length ? "success" : "neutral"}
@@ -2059,6 +2256,8 @@ export default function TruthViewerPage() {
 
   const [state, setState] = useState(() => initialState(workspace.tenantKey));
   const [activeTab, setActiveTab] = useState("business");
+  const [pendingFieldChange, setPendingFieldChange] = useState(null);
+  const [pendingFieldChanges, setPendingFieldChanges] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
     loading: false,
@@ -2152,6 +2351,54 @@ export default function TruthViewerPage() {
     [data.fields]
   );
   const sourceRows = useMemo(() => buildSourceRows(data), [data]);
+
+  const openFieldChange = useCallback((field = {}) => {
+    setPendingFieldChange({
+      key: text(field.key),
+      label: text(field.label, "Approved field"),
+      value: text(field.value),
+      nextValue: text(field.value),
+      hint: text(field.hint),
+      multiline: Boolean(field.multiline),
+      note: "",
+    });
+  }, []);
+
+  const closeFieldChange = useCallback(() => {
+    setPendingFieldChange(null);
+  }, []);
+
+  const saveFieldChange = useCallback((draft = {}) => {
+    const nextValue = text(draft.nextValue);
+    const originalValue = text(draft.value);
+
+    if (!text(draft.key) || !nextValue || nextValue === originalValue) {
+      setPendingFieldChange(null);
+      return;
+    }
+
+    const stagedChange = {
+      key: text(draft.key),
+      label: text(draft.label, "Approved field"),
+      from: originalValue,
+      to: nextValue,
+      note: text(draft.note),
+      stagedAt: new Date().toISOString(),
+    };
+
+    setPendingFieldChanges((current) => [
+      stagedChange,
+      ...arr(current).filter((item) => text(item.key) !== stagedChange.key),
+    ]);
+
+    setPendingFieldChange(null);
+    setActiveTab("review");
+  }, []);
+
+  const clearPendingFieldChanges = useCallback(() => {
+    setPendingFieldChanges([]);
+  }, []);
+
   const contractModel = useMemo(
     () =>
       buildRuntimeContract({
@@ -2384,8 +2631,15 @@ export default function TruthViewerPage() {
 
           <Tabs activeTab={activeTab} onChange={setActiveTab} />
 
+          {arr(pendingFieldChanges).length ? (
+            <PendingTruthChangeStrip
+              changes={pendingFieldChanges}
+              onOpenReview={() => setActiveTab("review")}
+              onClear={clearPendingFieldChanges}
+            />
+          ) : null}
           {activeTab === "business" ? (
-            <BusinessTab groups={businessGroups} />
+            <BusinessTab groups={businessGroups} onEdit={openFieldChange} />
           ) : null}
 
           {activeTab === "behavior" ? (
@@ -2431,6 +2685,12 @@ export default function TruthViewerPage() {
         rollbackSurface={compareState.rollbackSurface}
         onRollback={handleRollback}
       />
-    </PageCanvas>
+          <TruthFieldChangeDrawer
+        draft={pendingFieldChange}
+        onDraftChange={setPendingFieldChange}
+        onClose={closeFieldChange}
+        onSave={saveFieldChange}
+      />
+</PageCanvas>
   );
 }
