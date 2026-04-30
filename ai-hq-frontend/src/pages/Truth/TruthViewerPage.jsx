@@ -1312,8 +1312,8 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
 function Tabs({ activeTab, onChange }) {
   const tabs = [
     ["business", "Business"],
-    ["behavior", "Behavior"],
     ["contract", "Contract"],
+    ["behavior", "Behavior"],
     ["sources", "Sources"],
     ["versions", "Versions"],
     ["review", "Review queue"],
