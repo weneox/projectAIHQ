@@ -230,13 +230,6 @@ function providerIcon(provider = "") {
   return CHANNEL_ICON_BY_PROVIDER[lower(provider)] || websiteIcon;
 }
 
-function tileStatusLabel(item) {
-  if (item?.mode !== "data") return "Setup";
-  if (item?.tone === "warning") return "Attention";
-  if (item?.tone === "danger") return "Check";
-  return "Active";
-}
-
 function StatusText({ tone = "neutral", children }) {
   return (
     <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
@@ -279,7 +272,6 @@ function buildHero(home) {
   if (unread > 0) {
     return {
       tone: "warning",
-      eyebrow: "Live work",
       title: `${unread} ${unread === 1 ? "message" : "messages"} waiting`,
       summary: "Customer work is active. Open the inbox and handle the queue.",
       primary: { label: "Open inbox", path: "/inbox" },
@@ -290,7 +282,6 @@ function buildHero(home) {
   if (pending > 0) {
     return {
       tone: "warning",
-      eyebrow: "Delivery",
       title: `${pending} ${pending === 1 ? "reply" : "replies"} need review`,
       summary: "Some outbound replies may need retry or delivery check.",
       primary: { label: "Review replies", path: "/inbox" },
@@ -301,7 +292,6 @@ function buildHero(home) {
   if (!truthApproved(home)) {
     return {
       tone: "warning",
-      eyebrow: "Start",
       title: "Business info first",
       summary: "Add the facts AI can safely use with customers.",
       primary:
@@ -316,7 +306,6 @@ function buildHero(home) {
   if (!runtimeReady(home)) {
     return {
       tone: "warning",
-      eyebrow: "Review",
       title: "Runtime needs review",
       summary: "Business info exists. The live AI layer still needs attention.",
       primary: { label: "Open business info", path: "/truth" },
@@ -327,7 +316,6 @@ function buildHero(home) {
   if (!channelReady(home)) {
     return {
       tone: "warning",
-      eyebrow: "Connect",
       title: "Connect one channel",
       summary: "Website, Instagram, or Telegram can become the first live surface.",
       primary: { label: "Open channels", path: "/channels" },
@@ -338,7 +326,6 @@ function buildHero(home) {
   if (inboxUnavailable(home)) {
     return {
       tone: "danger",
-      eyebrow: "Check",
       title: "Inbox status unavailable",
       summary: "Setup is ready, but customer activity could not be checked.",
       primary: { label: "Open inbox", path: "/inbox" },
@@ -348,7 +335,6 @@ function buildHero(home) {
 
   return {
     tone: "success",
-    eyebrow: "Operating",
     title: "Workspace is calm",
     summary: `${pluralize(readyChannels, "channel")} live. No urgent customer work.`,
     primary: { label: "Open inbox", path: "/inbox" },
@@ -364,8 +350,6 @@ function buildBusinessTile(home) {
       icon: ShieldCheck,
       title: "Business info",
       value: "Ready",
-      detail: "Approved facts are backing the live runtime.",
-      actionLabel: "View",
       path: "/truth",
       mode: "data",
     };
@@ -378,8 +362,6 @@ function buildBusinessTile(home) {
       icon: CircleAlert,
       title: "Business info",
       value: "Review",
-      detail: "Facts are approved. Runtime still needs attention.",
-      actionLabel: "Review",
       path: "/truth",
       mode: "guide",
     };
@@ -391,8 +373,6 @@ function buildBusinessTile(home) {
     icon: ShieldCheck,
     title: "Business info",
     value: "Add",
-    detail: "Services, tone, rules, and business basics.",
-    actionLabel: "Start",
     path: "/truth",
     mode: "guide",
   };
@@ -410,11 +390,6 @@ function buildChannelTile(home) {
       icon: RadioTower,
       title: "Channels",
       value: `${ready}/${total} live`,
-      detail:
-        connected > ready
-          ? `${connected} connected, ${ready} ready for delivery.`
-          : "Customers can reach the workspace.",
-      actionLabel: "View",
       path: "/channels",
       mode: "data",
     };
@@ -427,8 +402,6 @@ function buildChannelTile(home) {
       icon: PlugZap,
       title: "Channels",
       value: "Review",
-      detail: `${connected} connected, but not live yet.`,
-      actionLabel: "Fix",
       path: "/channels",
       mode: "guide",
     };
@@ -440,8 +413,6 @@ function buildChannelTile(home) {
     icon: PlugZap,
     title: "Channels",
     value: "Connect",
-    detail: "Pick website, Instagram, or Telegram.",
-    actionLabel: "Connect",
     path: "/channels",
     mode: "guide",
   };
@@ -449,7 +420,6 @@ function buildChannelTile(home) {
 
 function buildInboxTile(home) {
   const unread = unreadCount(home);
-  const open = openConversationCount(home);
   const pending = outboundAttentionCount(home);
 
   if (unread > 0) {
@@ -459,8 +429,6 @@ function buildInboxTile(home) {
       icon: MessageCircle,
       title: "Inbox",
       value: String(unread),
-      detail: `${pluralize(unread, "message")} waiting.`,
-      actionLabel: "Reply",
       path: "/inbox",
       mode: "data",
     };
@@ -473,8 +441,6 @@ function buildInboxTile(home) {
       icon: Clock3,
       title: "Inbox",
       value: String(pending),
-      detail: "Outbound replies need review.",
-      actionLabel: "Review",
       path: "/inbox",
       mode: "data",
     };
@@ -487,8 +453,6 @@ function buildInboxTile(home) {
       icon: Inbox,
       title: "Inbox",
       value: "Next",
-      detail: "Becomes operational after business info and a live channel.",
-      actionLabel: "Open",
       path: "/inbox",
       mode: "guide",
     };
@@ -501,8 +465,6 @@ function buildInboxTile(home) {
       icon: Inbox,
       title: "Inbox",
       value: "Check",
-      detail: "Customer activity could not be loaded.",
-      actionLabel: "Open",
       path: "/inbox",
       mode: "guide",
     };
@@ -513,9 +475,7 @@ function buildInboxTile(home) {
     tone: "success",
     icon: Inbox,
     title: "Inbox",
-    value: open > 0 ? String(open) : "Clear",
-    detail: open > 0 ? `${pluralize(open, "conversation")} open.` : "No urgent work.",
-    actionLabel: "Open",
+    value: "Clear",
     path: "/inbox",
     mode: "data",
   };
@@ -529,8 +489,6 @@ function buildAiTile(home) {
       icon: Bot,
       title: "AI status",
       value: "Operating",
-      detail: "AI can support customers under approved rules.",
-      actionLabel: "View",
       path: "/truth",
       mode: "data",
     };
@@ -543,8 +501,6 @@ function buildAiTile(home) {
       icon: Bot,
       title: "AI status",
       value: "Waiting",
-      detail: "AI is ready, but no customer channel is live.",
-      actionLabel: "Connect",
       path: "/channels",
       mode: "guide",
     };
@@ -556,8 +512,6 @@ function buildAiTile(home) {
     icon: Bot,
     title: "AI status",
     value: "Guarded",
-    detail: "Limited until business info and runtime are ready.",
-    actionLabel: "Review",
     path: "/truth",
     mode: "guide",
   };
@@ -617,8 +571,26 @@ function buildWorkItems(home) {
   const handoff = handoffCount(home);
   const open = openConversationCount(home);
 
-  if (unread > 0 || pending > 0) {
-    items.push(buildInboxTile(home));
+  if (unread > 0) {
+    items.push({
+      id: "inbox",
+      tone: "warning",
+      icon: MessageCircle,
+      title: "Inbox",
+      detail: `${pluralize(unread, "message")} waiting.`,
+      actionLabel: "Reply",
+      path: "/inbox",
+    });
+  } else if (pending > 0) {
+    items.push({
+      id: "outbound",
+      tone: "warning",
+      icon: Clock3,
+      title: "Replies",
+      detail: `${pluralize(pending, "reply")} need review.`,
+      actionLabel: "Review",
+      path: "/inbox",
+    });
   }
 
   if (handoff > 0) {
@@ -630,7 +602,6 @@ function buildWorkItems(home) {
       detail: "Operator-owned conversations are active.",
       actionLabel: "Open",
       path: "/inbox",
-      mode: "data",
     });
   }
 
@@ -643,7 +614,6 @@ function buildWorkItems(home) {
       detail: "No urgent unread pressure, but the queue is active.",
       actionLabel: "Open",
       path: "/inbox",
-      mode: "data",
     });
   }
 
@@ -656,7 +626,6 @@ function buildWorkItems(home) {
       detail: "Everything active is calm right now.",
       actionLabel: "Open",
       path: "/inbox",
-      mode: "data",
     });
   }
 
@@ -817,53 +786,6 @@ function HeroCard({ hero, home, operating = false, onAction }) {
         )}
       </section>
     </Card>
-  );
-}
-
-function SignalTile({ item, index, total, onNavigate }) {
-  const Icon = item.icon;
-  const last = index === total - 1;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onNavigate(item.path)}
-      className={cx(
-        "group min-h-[128px] w-full px-4 py-3.5 text-left",
-        !last && "border-b border-line-soft md:border-b-0 md:border-r",
-        "transition-colors duration-base ease-premium hover:bg-surface-subtle"
-      )}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <FreeIcon icon={Icon} tone={item.tone} className="h-[19px] w-[19px]" />
-
-        <StatusText tone={item.tone}>{tileStatusLabel(item)}</StatusText>
-      </div>
-
-      <div className="mt-3.5">
-        <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-          {item.title}
-        </div>
-
-        <div
-          className={cx(
-            "mt-1.5 text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
-            toneTextClass(item.tone)
-          )}
-        >
-          {item.value}
-        </div>
-
-        <div className="mt-2 min-h-[32px] text-[12.5px] font-medium leading-5 text-text-muted">
-          {item.detail}
-        </div>
-      </div>
-
-      <div className="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
-        {item.actionLabel}
-        <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
-      </div>
-    </button>
   );
 }
 
@@ -1102,22 +1024,6 @@ export default function ProductHomePage() {
         operating={operatingMode}
         onAction={goFromAction}
       />
-
-      {operatingMode ? (
-        <Card padded={false} clip>
-          <div className="grid md:grid-cols-4">
-            {tiles.map((item, index) => (
-              <SignalTile
-                key={item.id}
-                item={item}
-                index={index}
-                total={tiles.length}
-                onNavigate={go}
-              />
-            ))}
-          </div>
-        </Card>
-      ) : null}
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         {operatingMode ? (
