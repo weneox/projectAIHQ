@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  CircleAlert,
   Globe,
   History,
   Mail,
@@ -24,7 +25,6 @@ import {
   getTruthVersionDetail,
   rollbackTruthVersion,
 } from "../../api/truth.js";
-import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
 import {
@@ -61,10 +61,16 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 function initialState(tenantKey = "") {
   return {
     tenantKey,
     loading: true,
+    refreshing: false,
     error: "",
     data: {
       fields: [],
@@ -96,6 +102,20 @@ function formatWhen(value = "") {
   if (Number.isNaN(date.getTime())) return raw;
 
   return date.toLocaleString();
+}
+
+function formatShortWhen(value = "") {
+  const raw = text(value);
+  if (!raw) return "Not available";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function resolveRequestedVersionId(searchParams, location) {
@@ -183,6 +203,17 @@ function hasTrustOperationalData(trust = null) {
   );
 }
 
+function hasApprovedTruth(data = {}) {
+  if (data.approvedTruthUnavailable) return false;
+
+  return Boolean(
+    text(data.approval?.version) ||
+      text(data.approval?.approvedAt) ||
+      arr(data.fields).length ||
+      arr(data.history).length
+  );
+}
+
 function buildSnapshotOperationalState(data = {}) {
   const approval = obj(data.approval);
   const readiness = obj(data.readiness);
@@ -194,14 +225,12 @@ function buildSnapshotOperationalState(data = {}) {
       truthReady: false,
       runtimeReady: false,
       status: "blocked",
-      statusLabel: "Approval required",
-      title: "Approved truth is unavailable.",
-      summary:
-        "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
-      detail:
-        "This page is intentionally fail-closed when approved truth is unavailable.",
+      statusLabel: "Unavailable",
+      title: "Approved truth unavailable",
+      summary: "Only approved business truth can power the runtime.",
+      detail: "This surface stays fail-closed until approved truth is available.",
       action: {
-        label: "Continue AI setup",
+        label: "Continue setup",
         path: "/home?assistant=setup",
       },
     };
@@ -212,28 +241,44 @@ function buildSnapshotOperationalState(data = {}) {
     runtimeReady: true,
     status: "ready",
     statusLabel: "Healthy",
-    title: "Approved truth is available.",
-    summary: "Approved truth is present, and no blocker is visible from this page.",
+    title: "Approved truth active",
+    summary: "Approved business truth is aligned with the runtime.",
     detail: text(approval.version)
-      ? `Truth version ${approval.version} is currently approved.`
-      : "Approved truth is available.",
+      ? `Truth version ${approval.version} is the active runtime source.`
+      : "Approved truth is active.",
     action: null,
   };
 }
 
-function resolveRuntimeLabel(
-  trust = null,
-  approvedTruthUnavailable = false,
-  snapshot = {}
-) {
-  if (approvedTruthUnavailable) return "Unavailable";
-
-  if (!hasTrustOperationalData(trust)) {
-    return lower(snapshot?.readiness?.status) === "ready" ? "Ready" : "Unknown";
+function resolveOperationalState(data = {}) {
+  if (data.approvedTruthUnavailable) {
+    return buildSnapshotOperationalState({
+      ...data,
+      approval: {},
+      readiness: { status: "blocked" },
+    });
   }
 
-  const operationalState = buildTruthOperationalState(trust);
-  return text(operationalState.statusLabel, "Unknown");
+  if (hasTrustOperationalData(data.trust)) {
+    try {
+      return buildTruthOperationalState(data.trust);
+    } catch {
+      return buildSnapshotOperationalState(data);
+    }
+  }
+
+  return buildSnapshotOperationalState(data);
+}
+
+function resolveRuntimeLabel(data = {}, operationalState = {}) {
+  if (data.approvedTruthUnavailable) return "Unavailable";
+
+  return text(
+    operationalState.statusLabel ||
+      operationalState.runtimeLabel ||
+      data.readiness?.status,
+    "Unknown"
+  );
 }
 
 function resolveSourceSummaryLine(sourceSummary = {}) {
@@ -276,14 +321,6 @@ function toneForStatus(status = "") {
   return "neutral";
 }
 
-function dotClass(tone = "neutral") {
-  if (tone === "success") return "bg-success";
-  if (tone === "warning") return "bg-warning";
-  if (tone === "danger") return "bg-danger";
-  if (tone === "brand" || tone === "info") return "bg-brand";
-  return "bg-[rgb(var(--color-text-soft))]";
-}
-
 function titleize(value = "") {
   const safe = text(value);
   if (!safe) return "";
@@ -293,136 +330,152 @@ function titleize(value = "") {
     .replace(/\b\w/g, (item) => item.toUpperCase());
 }
 
-function InfoHint({ text: message = "", align = "right" }) {
-  const safe = text(message);
-  if (!safe) return null;
+function toneTextClass(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand" || tone === "info") return "text-brand";
+  return "text-text-muted";
+}
 
+function toneDotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function reviewSummaryTotal(summary = {}) {
   return (
-    <span className="group relative inline-flex shrink-0">
-      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[7px] border border-line bg-surface text-[11px] font-semibold leading-none text-text-subtle transition-colors duration-base ease-premium hover:border-line-strong hover:text-text">
-        i
-      </span>
-
-      <span
-        className={cx(
-          "pointer-events-none absolute top-[calc(100%+8px)] z-30 hidden w-[260px] rounded-[14px] border border-line-soft bg-surface px-3 py-2 text-[12px] font-medium leading-5 text-text-muted shadow-panel group-hover:block",
-          align === "left"
-            ? "left-0"
-            : align === "center"
-              ? "left-1/2 -translate-x-1/2"
-              : "right-0"
-        )}
-      >
-        {safe}
-      </span>
-    </span>
+    n(summary.pending) +
+    n(summary.quarantined) +
+    n(summary.conflicting) +
+    n(summary.autoApprovable) +
+    n(summary.highRisk || summary.blockedHighRisk)
   );
 }
 
-function EmptyInline({ text: value }) {
+function isTruthUnavailableNotice(notice = {}) {
+  const raw =
+    typeof notice === "string"
+      ? notice
+      : `${notice?.code || ""} ${notice?.title || ""} ${notice?.message || ""} ${notice?.description || ""}`;
+
+  const safe = lower(raw);
   return (
-    <div className="rounded-[14px] border border-line-soft bg-surface-muted px-4 py-3 text-[13.5px] font-medium leading-6 text-text-muted">
-      {value}
-    </div>
+    safe.includes("approved truth") &&
+    (safe.includes("unavailable") || safe.includes("not available"))
   );
 }
 
-function MainRow({
-  icon: Icon,
-  label,
-  value,
-  hint = "",
-  multiline = false,
-  last = false,
-}) {
-  if (!text(value)) return null;
-
-  return (
-    <div
-      className={cx(
-        "grid grid-cols-[32px_minmax(0,1fr)_18px] gap-3 py-3.5",
-        !last && "border-b border-line-soft"
-      )}
-    >
-      <div className="pt-[2px] text-text-subtle">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] border border-line-soft bg-surface shadow-[var(--shadow-inset-top)]">
-          <Icon className="h-[16px] w-[16px]" strokeWidth={2.05} />
-        </span>
-      </div>
-
-      <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-          {label}
-        </div>
-
-        <div
-          className={cx(
-            "mt-1.5 text-[14px] font-medium text-text",
-            multiline ? "whitespace-pre-wrap break-words leading-6" : "leading-6"
-          )}
-        >
-          {value}
-        </div>
-      </div>
-
-      <div className="pt-[6px]">
-        <InfoHint text={hint} align="right" />
-      </div>
-    </div>
+function normalizeSnapshotPayload(payload = {}) {
+  const root = obj(
+    payload?.data ||
+      payload?.snapshot ||
+      payload?.truth ||
+      payload?.canonicalTruth ||
+      payload
   );
+
+  return {
+    fields: arr(root.fields || root.approvedFields),
+    approval: obj(root.approval || root.approved || root.versionApproval),
+    history: arr(root.history || root.versions),
+    notices: arr(root.notices || root.warnings),
+    hasProvenance: Boolean(root.hasProvenance),
+    approvedTruthUnavailable: Boolean(root.approvedTruthUnavailable),
+    readiness: obj(root.readiness || root.runtimeReadiness),
+    sourceSummary: obj(root.sourceSummary),
+    metadata: obj(root.metadata),
+    governance: obj(root.governance),
+    finalizeImpact: obj(root.finalizeImpact),
+  };
 }
 
-function TabButton({ active = false, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "inline-flex h-9 items-center rounded-[11px] px-3.5 text-[12.5px] font-semibold tracking-[var(--tracking-tight-sm)]",
-        "transition-[background-color,color,box-shadow] duration-base ease-premium",
-        active
-          ? "bg-surface text-text shadow-[var(--shadow-inset-top),0_12px_28px_-26px_rgba(15,23,42,0.22)]"
-          : "text-text-muted hover:bg-surface-subtle hover:text-text"
-      )}
-    >
-      {children}
-    </button>
-  );
+function normalizeReviewWorkbenchPayload(payload = {}) {
+  const root = obj(payload?.data || payload?.workbench || payload);
+
+  return {
+    tenantId: text(root.tenantId),
+    tenantKey: text(root.tenantKey),
+    viewerRole: text(root.viewerRole).toLowerCase(),
+    count: n(root.count),
+    summary: {
+      total: n(root.summary?.total),
+      pending: n(root.summary?.pending),
+      quarantined: n(root.summary?.quarantined),
+      conflicting: n(root.summary?.conflicting),
+      autoApprovable: n(root.summary?.autoApprovable),
+      blockedHighRisk: n(root.summary?.blockedHighRisk),
+      highRisk: n(root.summary?.highRisk || root.summary?.blockedHighRisk),
+    },
+    items: arr(root.items).map((item) => {
+      const current = obj(item);
+      return {
+        id: text(current.id || current.candidateId || current.candidate_id),
+        candidateId: text(
+          current.candidateId || current.candidate_id || current.id
+        ),
+        title: text(current.title || current.valueText || "Candidate"),
+        valueText: text(current.valueText || current.value_text),
+        normalizedText: text(current.normalizedText || current.normalized_text),
+        status: text(current.status).toLowerCase(),
+        queueBucket: text(current.queueBucket || current.queue_bucket).toLowerCase(),
+        source: obj(current.source),
+        review: obj(current.review),
+        approvalPolicy: obj(current.approvalPolicy || current.approval_policy),
+        actions: arr(current.actions),
+      };
+    }),
+  };
 }
 
-function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-medium leading-5 text-text-subtle">
-      <span>
-        <span className="text-text-muted">Version:</span>{" "}
-        {text(approval?.version, "Pending")}
-      </span>
-      <span className="text-line-strong">/</span>
-      <span>
-        <span className="text-text-muted">Runtime:</span> {runtimeLabel}
-      </span>
-      <span className="text-line-strong">/</span>
-      <span>
-        <span className="text-text-muted">Approved:</span>{" "}
-        {text(approval?.approvedAt) ? formatWhen(approval.approvedAt) : "Not available"}
-      </span>
-      <span className="text-line-strong">/</span>
-      <span>
-        <span className="text-text-muted">Source:</span>{" "}
-        {text(sourceLine, "Not available")}
-      </span>
-      <span className="text-line-strong">/</span>
-      <span>
-        <span className="text-text-muted">Saved:</span>{" "}
-        {String(arr(history).length)}
-      </span>
-      <span className="text-line-strong">/</span>
-      <span>
-        <span className="text-text-muted">Pending review:</span>{" "}
-        {String(Number(reviewSummary.pending || 0))}
-      </span>
-    </div>
-  );
+function normalizeCompareDetail(payload = {}, fallbackItem = {}) {
+  const root = obj(payload?.data || payload?.detail || payload);
+  const versionId = getHistoryVersionId(fallbackItem);
+
+  const changedFields = arr(root.changedFields || root.changed_fields);
+  const fieldChanges = arr(root.fieldChanges || root.field_changes);
+  const sectionChanges = arr(root.sectionChanges || root.section_changes);
+  const versionDiff = obj(root.versionDiff || root.version_diff || root.diff);
+
+  return {
+    ...root,
+    selectedVersion:
+      root.selectedVersion ||
+      root.version ||
+      root.truthVersion ||
+      root.selected ||
+      fallbackItem,
+    comparedVersion:
+      root.comparedVersion ||
+      root.compareToVersion ||
+      root.previousVersion ||
+      root.compared ||
+      {},
+    currentVersion:
+      root.currentVersion ||
+      root.currentApprovedVersion ||
+      root.current ||
+      {},
+    changedFields,
+    fieldChanges,
+    sectionChanges,
+    versionDiff,
+    rollbackPreview: obj(root.rollbackPreview || root.rollback_preview),
+    rollbackAction: obj(root.rollbackAction || root.rollback_action),
+    hasStructuredDiff:
+      root.hasStructuredDiff !== false &&
+      Boolean(
+        root.hasStructuredDiff ||
+          changedFields.length ||
+          fieldChanges.length ||
+          sectionChanges.length ||
+          Object.keys(versionDiff).length
+      ),
+    selectedVersionId: text(root.selectedVersionId || versionId),
+  };
 }
 
 function groupBusinessRows(fields = []) {
@@ -589,7 +642,7 @@ function groupBehaviorRows(fields = []) {
     {
       key: "afterHoursBehavior",
       label: "After-hours",
-      icon: ShieldCheck,
+      icon: ShieldAlert,
       value: fieldValue(fields, "afterHoursBehavior"),
       hint: fieldProvenance(fields, "afterHoursBehavior"),
       multiline: true,
@@ -608,7 +661,7 @@ function groupBehaviorRows(fields = []) {
     {
       key: "locationBehaviorSummary",
       label: "Location response",
-      icon: Sparkles,
+      icon: MapPin,
       value: fieldValue(fields, "locationBehaviorSummary"),
       hint: fieldProvenance(fields, "locationBehaviorSummary"),
       multiline: true,
@@ -624,7 +677,7 @@ function groupBehaviorRows(fields = []) {
     {
       key: "contactBehaviorSummary",
       label: "Contact preference",
-      icon: Sparkles,
+      icon: Phone,
       value: fieldValue(fields, "contactBehaviorSummary"),
       hint: fieldProvenance(fields, "contactBehaviorSummary"),
       multiline: true,
@@ -649,7 +702,7 @@ function buildSourceRows(data = {}) {
 
   const primaryRows = [
     {
-      label: "Latest source type",
+      label: "Latest source",
       value: text(
         latestImport.sourceLabel ||
           latestImport.sourceType ||
@@ -658,7 +711,7 @@ function buildSourceRows(data = {}) {
       ),
     },
     {
-      label: "Latest source url",
+      label: "Source URL",
       value: text(
         latestImport.sourceUrl ||
           sourceSummary.primaryUrl ||
@@ -666,8 +719,8 @@ function buildSourceRows(data = {}) {
       ),
     },
     {
-      label: "Has provenance",
-      value: data.hasProvenance ? "Yes" : "No",
+      label: "Provenance",
+      value: data.hasProvenance ? "Available" : "Not returned",
     },
   ].filter((item) => text(item.value));
 
@@ -686,143 +739,587 @@ function buildSourceRows(data = {}) {
   };
 }
 
-function SectionCard({ title, subtitle = "", children }) {
+function StatusText({ tone = "neutral", children }) {
   return (
-    <Card padded="sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-        {title}
+    <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
+      <span className={toneTextClass(tone)}>{children}</span>
+    </span>
+  );
+}
+
+function FreeIcon({ icon: Icon, tone = "neutral", className }) {
+  return (
+    <Icon
+      className={cx(
+        "h-[20px] w-[20px] shrink-0",
+        toneTextClass(tone),
+        className
+      )}
+      strokeWidth={2.05}
+    />
+  );
+}
+
+function EmptyLine({ children = "Nothing approved yet." }) {
+  return (
+    <div className="py-2 text-[13px] font-medium leading-6 text-text-subtle">
+      {children}
+    </div>
+  );
+}
+
+function InfoHint({ text: message = "", align = "right" }) {
+  const safe = text(message);
+  if (!safe) return null;
+
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[7px] border border-line bg-surface text-[11px] font-semibold leading-none text-text-subtle transition-colors duration-base ease-premium hover:border-line-strong hover:text-text">
+        i
+      </span>
+
+      <span
+        className={cx(
+          "pointer-events-none absolute top-[calc(100%+8px)] z-30 hidden w-[260px] rounded-[14px] border border-line-soft bg-surface px-3 py-2 text-[12px] font-medium leading-5 text-text-muted shadow-panel group-hover:block",
+          align === "left"
+            ? "left-0"
+            : align === "center"
+              ? "left-1/2 -translate-x-1/2"
+              : "right-0"
+        )}
+      >
+        {safe}
+      </span>
+    </span>
+  );
+}
+
+function RecordRow({
+  icon: Icon,
+  label,
+  value,
+  hint = "",
+  multiline = false,
+  last = false,
+}) {
+  if (!text(value)) return null;
+
+  return (
+    <div
+      className={cx(
+        "grid grid-cols-[22px_minmax(0,1fr)_18px] gap-3 py-3",
+        !last && "border-b border-line-soft"
+      )}
+    >
+      <FreeIcon
+        icon={Icon}
+        tone="neutral"
+        className="mt-[3px] h-[17px] w-[17px]"
+      />
+
+      <div className="min-w-0">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          {label}
+        </div>
+
+        <div
+          className={cx(
+            "mt-1 text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text",
+            multiline ? "whitespace-pre-wrap break-words leading-6" : "leading-6"
+          )}
+        >
+          {value}
+        </div>
       </div>
 
-      {subtitle ? (
-        <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
-          {subtitle}
-        </div>
-      ) : null}
+      <div className="pt-[4px]">
+        <InfoHint text={hint} align="right" />
+      </div>
+    </div>
+  );
+}
 
-      <div className="mt-3">{children}</div>
+function RecordCard({ title, subtitle = "", rows = [], tone = "neutral" }) {
+  return (
+    <Card padded={false} clip>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              {title}
+            </div>
+
+            {subtitle ? (
+              <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+
+          <span className={cx("mt-1 h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
+        </div>
+
+        <div className="mt-3">
+          {arr(rows).length ? (
+            rows.map((item, index) => (
+              <RecordRow
+                key={item.key}
+                icon={item.icon}
+                label={item.label}
+                value={item.value}
+                hint={item.hint}
+                multiline={item.multiline}
+                last={index === rows.length - 1}
+              />
+            ))
+          ) : (
+            <EmptyLine />
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
 
-function RowsBlock({ rows = [] }) {
-  if (!arr(rows).length) {
-    return <EmptyInline text="No approved fields are visible in this section yet." />;
-  }
-
+function TabButton({ active = false, onClick, children }) {
   return (
-    <div>
-      {rows.map((item, index) => (
-        <MainRow
-          key={item.key}
-          icon={item.icon}
-          label={item.label}
-          value={item.value}
-          hint={item.hint}
-          multiline={item.multiline}
-          last={index === rows.length - 1}
-        />
-      ))}
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cx(
+        "relative inline-flex h-9 items-center px-2.5 text-[12.5px] font-semibold tracking-[var(--tracking-tight-sm)]",
+        "transition-colors duration-base ease-premium",
+        active ? "text-text" : "text-text-muted hover:text-text"
+      )}
+    >
+      {children}
+      <span
+        className={cx(
+          "absolute bottom-0 left-2 right-2 h-px rounded-full transition-opacity duration-base ease-premium",
+          active ? "bg-brand opacity-100" : "bg-transparent opacity-0"
+        )}
+      />
+    </button>
+  );
+}
+
+function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-medium leading-5 text-text-subtle">
+      <span>
+        <span className="text-text-muted">Version:</span>{" "}
+        {text(approval?.version, "Pending")}
+      </span>
+      <span className="text-line-strong">/</span>
+      <span>
+        <span className="text-text-muted">Runtime:</span> {runtimeLabel}
+      </span>
+      <span className="text-line-strong">/</span>
+      <span>
+        <span className="text-text-muted">Approved:</span>{" "}
+        {text(approval?.approvedAt) ? formatWhen(approval.approvedAt) : "Not available"}
+      </span>
+      <span className="text-line-strong">/</span>
+      <span>
+        <span className="text-text-muted">Source:</span>{" "}
+        {text(sourceLine, "Not available")}
+      </span>
+      <span className="text-line-strong">/</span>
+      <span>
+        <span className="text-text-muted">Versions:</span>{" "}
+        {String(arr(history).length)}
+      </span>
+      <span className="text-line-strong">/</span>
+      <span>
+        <span className="text-text-muted">Review:</span>{" "}
+        {String(Number(reviewSummary.pending || 0))}
+      </span>
     </div>
   );
 }
 
-function VersionsList({ history = [], onOpenVersion }) {
-  if (!arr(history).length) {
-    return <EmptyInline text="No approved truth versions are available yet." />;
-  }
+function TruthHero({
+  data,
+  operationalState,
+  runtimeLabel,
+  sourceLine,
+  reviewSummary,
+  approvedTruthAvailable,
+  onRefresh,
+  refreshing = false,
+}) {
+  const approval = obj(data.approval);
+  const history = arr(data.history);
+  const tone = toneForStatus(operationalState.status || runtimeLabel);
 
   return (
-    <div className="space-y-3">
-      {arr(history).map((item) => {
-        const key = text(item.id || item.version || item.versionId);
-        const label = text(
-          item.versionLabel || item.version || item.id || "Truth version"
-        );
-
-        return (
-          <Card key={key} padded="sm" interactive>
-            <button
-              type="button"
-              onClick={() => onOpenVersion(item)}
-              className="w-full text-left"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                    {label}
-                  </div>
-
-                  <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
-                    {text(
-                      item.diffSummary || item.sourceSummary || "Open compare view"
-                    )}
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenVersion(item);
-                  }}
-                >
-                  Compare
-                </Button>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium text-text-subtle">
-                <span>Version: {text(item.version, "Unknown")}</span>
-                <span className="text-line-strong">/</span>
-                <span>Status: {text(item.profileStatus, "Unknown")}</span>
-                <span className="text-line-strong">/</span>
-                <span>
-                  Approved:{" "}
-                  {text(item.approvedAt) ? formatWhen(item.approvedAt) : "Unknown"}
-                </span>
-              </div>
-            </button>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function ProvenanceList({ rows = [] }) {
-  if (!arr(rows).length) {
-    return <EmptyInline text="No field-level provenance was returned by the backend." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      {rows.map((row) => (
-        <Card key={`${row.key}-${row.label}`} padded="sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-              {row.label}
+    <Card padded={false} clip>
+      <section className="grid xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 px-5 py-[18px] md:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
+              Approved truth
             </div>
 
-            {row.value ? (
-              <Badge tone="neutral" size="sm">
-                {row.value}
-              </Badge>
-            ) : null}
+            <StatusText tone={tone}>{runtimeLabel}</StatusText>
           </div>
 
-          <div className="mt-2 text-[13px] font-medium leading-6 text-text-muted">
-            {row.provenance}
+          <h1 className="mt-3 max-w-[760px] font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[42px]">
+            Business truth
+          </h1>
+
+          <p className="mt-2.5 max-w-[720px] text-[14.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
+            {approvedTruthAvailable
+              ? compactSentence(
+                  operationalState.summary ||
+                    "Approved business truth is the source of runtime authority."
+                )
+              : "Create the approved business record before AI can use customer-facing facts."}
+          </p>
+
+          <div className="mt-4">
+            <MetaLine
+              approval={approval}
+              runtimeLabel={runtimeLabel}
+              sourceLine={sourceLine}
+              reviewSummary={reviewSummary}
+              history={history}
+            />
           </div>
-        </Card>
+        </div>
+
+        <div className="border-t border-line-soft px-5 py-4 xl:border-l xl:border-t-0">
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+            Current record
+          </div>
+
+          <div className="mt-2 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            {approvedTruthAvailable ? "Version active" : "Setup required"}
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {approvedTruthAvailable && text(approval.approvedAt)
+              ? `Approved ${formatShortWhen(approval.approvedAt)}`
+              : "No approved business truth is published yet."}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <Button
+              type="button"
+              size="md"
+              variant={approvedTruthAvailable ? "primary" : "secondary"}
+              className="min-w-[118px] justify-center"
+              loading={refreshing}
+              onClick={onRefresh}
+            >
+              <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4" strokeWidth={2.1} />Refresh</span>
+            </Button>
+          </div>
+        </div>
+      </section>
+    </Card>
+  );
+}
+
+function RuntimeStrip({ operationalState, runtimeLabel }) {
+  const tone = toneForStatus(operationalState.status || runtimeLabel);
+  const Icon = tone === "success" ? CheckCircle2 : CircleAlert;
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5">
+        <FreeIcon icon={Icon} tone={tone} />
+
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {text(operationalState.title, "Runtime status")}
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {compactSentence(
+              operationalState.detail ||
+                operationalState.summary ||
+                "Truth and runtime state are being checked."
+            )}
+          </div>
+        </div>
+
+        <StatusText tone={tone}>{runtimeLabel}</StatusText>
+      </div>
+    </Card>
+  );
+}
+
+function ReviewPressureStrip({ summary = {}, onOpenReview }) {
+  const total = reviewSummaryTotal(summary);
+
+  if (!total) {
+    return (
+      <Card padded={false} clip>
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="group grid w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+        >
+          <FreeIcon icon={CheckCircle2} tone="success" />
+
+          <div className="min-w-0">
+            <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Review queue clear
+            </div>
+
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              No pending, conflicting, quarantined, or high-risk truth items.
+            </div>
+          </div>
+
+          <ArrowRight
+            className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+            strokeWidth={2.1}
+          />
+        </button>
+      </Card>
+    );
+  }
+
+  const items = [
+    ["Pending", summary.pending, "warning"],
+    ["Quarantined", summary.quarantined, "danger"],
+    ["Conflicting", summary.conflicting, "warning"],
+    ["Auto approvable", summary.autoApprovable, "success"],
+    ["High risk", summary.highRisk || summary.blockedHighRisk, "danger"],
+  ].filter(([, value]) => n(value) > 0);
+
+  return (
+    <Card padded={false} clip>
+      <button
+        type="button"
+        onClick={onOpenReview}
+        className="group w-full px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <FreeIcon icon={CircleAlert} tone="warning" />
+
+            <div>
+              <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                Review pressure
+              </div>
+              <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                Some truth items need operator attention.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {items.map(([label, value, tone]) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-text-muted"
+              >
+                <span
+                  className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))}
+                />
+                <span>{label}</span>
+                <span className={toneTextClass(tone)}>{n(value)}</span>
+              </span>
+            ))}
+
+            <ArrowRight
+              className="h-4 w-4 text-text-subtle transition-colors duration-base ease-premium group-hover:text-text"
+              strokeWidth={2.1}
+            />
+          </div>
+        </div>
+      </button>
+    </Card>
+  );
+}
+
+function EmptyStep({ icon: Icon, title, detail, tone = "warning", last = false }) {
+  return (
+    <div
+      className={cx(
+        "min-w-0 px-4 py-4",
+        !last && "border-b border-line-soft md:border-b-0 md:border-r"
+      )}
+    >
+      <FreeIcon icon={Icon} tone={tone} className="h-[19px] w-[19px]" />
+
+      <div className="mt-3 text-[13.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+        {title}
+      </div>
+
+      <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
+  return (
+    <div className="space-y-4">
+      <Card padded={false} clip>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="px-5 py-5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+              Next action
+            </div>
+
+            <div className="mt-2 text-[23px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              Publish the first business truth
+            </div>
+
+            <div className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
+              Add business facts, review the draft, then publish the approved record.
+              The runtime stays guarded until that record exists.
+            </div>
+          </div>
+
+          <div className="border-t border-line-soft px-5 py-5 lg:border-l lg:border-t-0">
+            <Button
+              type="button"
+              size="md"
+              className="w-full justify-center gap-2"
+              onClick={onStartSetup}
+            >
+              <span className="inline-flex items-center gap-2">Start setup<ArrowRight className="h-4 w-4" strokeWidth={2.1} /></span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="mt-2.5 w-full justify-center"
+              onClick={onOpenHome}
+            >
+              Open home
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card padded={false} clip>
+        <div className="grid md:grid-cols-4">
+          <EmptyStep
+            icon={ShieldCheck}
+            title="Business facts"
+            detail="Name, contacts, services, tone, rules."
+            tone="warning"
+          />
+
+          <EmptyStep
+            icon={Globe}
+            title="Sources"
+            detail="Website, Instagram, Telegram, or manual input."
+            tone="brand"
+          />
+
+          <EmptyStep
+            icon={Sparkles}
+            title="Review"
+            detail="Edit the draft before it becomes canonical."
+            tone="warning"
+          />
+
+          <EmptyStep
+            icon={CheckCircle2}
+            title="Runtime"
+            detail="AI starts using only approved truth."
+            tone="success"
+            last
+          />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Tabs({ activeTab, onChange }) {
+  const tabs = [
+    ["business", "Business"],
+    ["behavior", "Behavior"],
+    ["sources", "Sources"],
+    ["versions", "Versions"],
+    ["review", "Review queue"],
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Truth sections"
+      className="flex flex-wrap items-center gap-3 border-b border-line-soft px-1"
+    >
+      {tabs.map(([id, label]) => (
+        <TabButton key={id} active={activeTab === id} onClick={() => onChange(id)}>
+          {label}
+        </TabButton>
       ))}
+    </div>
+  );
+}
+
+function BusinessTab({ groups }) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <RecordCard
+        title="Identity"
+        subtitle="Approved public business identity."
+        rows={groups.identity}
+        tone={groups.identity.length ? "success" : "neutral"}
+      />
+
+      <RecordCard
+        title="Contact"
+        subtitle="Approved contact and location facts."
+        rows={groups.contact}
+        tone={groups.contact.length ? "success" : "neutral"}
+      />
+
+      <RecordCard
+        title="Presence"
+        subtitle="Approved online presence."
+        rows={groups.presence}
+        tone={groups.presence.length ? "success" : "neutral"}
+      />
+
+      <RecordCard
+        title="Offering"
+        subtitle="Services, products, pricing, hours, and FAQs."
+        rows={groups.offering}
+        tone={groups.offering.length ? "success" : "neutral"}
+      />
+    </div>
+  );
+}
+
+function BehaviorTab({ groups }) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <RecordCard
+        title="Conversation behavior"
+        subtitle="Approved customer-facing response style."
+        rows={groups.core}
+        tone={groups.core.length ? "success" : "neutral"}
+      />
+
+      <RecordCard
+        title="Routing behavior"
+        subtitle="Approved handling for pricing, booking, location, and handoff."
+        rows={groups.routing}
+        tone={groups.routing.length ? "success" : "neutral"}
+      />
     </div>
   );
 }
 
 function SourcePrimaryRows({ rows = [] }) {
   if (!arr(rows).length) {
-    return <EmptyInline text="No source summary was returned by the backend." />;
+    return <EmptyLine>No source summary returned.</EmptyLine>;
   }
 
   return (
@@ -830,13 +1327,13 @@ function SourcePrimaryRows({ rows = [] }) {
       {rows.map((row) => (
         <div
           key={row.label}
-          className="grid grid-cols-[170px_minmax(0,1fr)] gap-4 py-3"
+          className="grid gap-2 py-3 md:grid-cols-[160px_minmax(0,1fr)]"
         >
-          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
             {row.label}
           </div>
 
-          <div className="min-w-0 break-words text-[13.5px] font-medium leading-6 text-text">
+          <div className="min-w-0 break-words text-[13.5px] font-semibold leading-6 text-text">
             {row.value}
           </div>
         </div>
@@ -845,8 +1342,181 @@ function SourcePrimaryRows({ rows = [] }) {
   );
 }
 
-function ReviewSummary({ summary = {} }) {
-  const items = [
+function ProvenanceList({ rows = [] }) {
+  if (!arr(rows).length) {
+    return <EmptyLine>No field-level provenance returned.</EmptyLine>;
+  }
+
+  return (
+    <div className="divide-y divide-line-soft">
+      {rows.map((row) => (
+        <div key={`${row.key}-${row.label}`} className="py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+              {row.label}
+            </div>
+
+            {row.value ? (
+              <div className="text-[12.5px] font-medium text-text-subtle">
+                {row.value}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {row.provenance}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SourcesTab({ sourceRows }) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <Card padded={false} clip>
+        <div className="px-4 py-3.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Source summary
+          </div>
+          <div className="mt-3">
+            <SourcePrimaryRows rows={sourceRows.primaryRows} />
+          </div>
+        </div>
+      </Card>
+
+      <Card padded={false} clip>
+        <div className="px-4 py-3.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Provenance
+          </div>
+          <div className="mt-3">
+            <ProvenanceList rows={sourceRows.provenanceRows} />
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function VersionsList({ history = [], onOpenVersion }) {
+  if (!arr(history).length) {
+    return <EmptyLine>No approved truth versions available.</EmptyLine>;
+  }
+
+  return (
+    <div className="divide-y divide-line-soft">
+      {arr(history).map((item) => {
+        const key = text(item.id || item.version || item.versionId);
+        const label = text(
+          item.versionLabel || item.version || item.id || "Truth version"
+        );
+
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onOpenVersion(item)}
+            className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+          >
+            <span className="min-w-0 px-4">
+              <span className="block text-[14.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                {label}
+              </span>
+
+              <span className="mt-1 block text-[12.5px] font-medium leading-5 text-text-muted">
+                {text(item.diffSummary || item.sourceSummary || "Open compare view")}
+              </span>
+
+              <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium text-text-subtle">
+                <span>Version: {text(item.version, "Unknown")}</span>
+                <span className="text-line-strong">/</span>
+                <span>Status: {text(item.profileStatus, "Unknown")}</span>
+                <span className="text-line-strong">/</span>
+                <span>
+                  Approved:{" "}
+                  {text(item.approvedAt) ? formatWhen(item.approvedAt) : "Unknown"}
+                </span>
+              </span>
+            </span>
+
+            <span className="mr-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text-muted transition-colors duration-base ease-premium group-hover:text-text">
+              Compare
+              <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function VersionsTab({ history, onOpenVersion }) {
+  return (
+    <Card padded={false} clip>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Versions
+            </div>
+            <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+              Approved business truth history and rollback preview.
+            </div>
+          </div>
+
+          <FreeIcon icon={History} tone="brand" />
+        </div>
+      </div>
+
+      <div className="border-t border-line-soft">
+        <VersionsList history={history} onOpenVersion={onOpenVersion} />
+      </div>
+    </Card>
+  );
+}
+
+function ReviewWorkbenchList({ items = [] }) {
+  const safeItems = arr(items).slice(0, 12);
+
+  if (!safeItems.length) {
+    return <EmptyLine>No pending truth review items.</EmptyLine>;
+  }
+
+  return (
+    <div className="divide-y divide-line-soft">
+      {safeItems.map((item) => (
+        <div
+          key={text(item.id || item.candidateId || item.title)}
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 py-3.5"
+        >
+          <div className="min-w-0">
+            <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              {text(item.title || item.valueText || "Candidate")}
+            </div>
+
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              {compactSentence(
+                item.valueText ||
+                  item.normalizedText ||
+                  item.review?.reviewReason,
+                "Review item needs operator decision."
+              )}
+            </div>
+          </div>
+
+          <StatusText tone={item.status === "blocked" ? "danger" : "warning"}>
+            {titleize(item.status || item.queueBucket || "pending")}
+          </StatusText>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReviewTab({ summary = {}, items = [] }) {
+  const reviewItems = [
     ["Pending", summary.pending, "warning"],
     ["Quarantined", summary.quarantined, "danger"],
     ["Conflicting", summary.conflicting, "warning"],
@@ -855,96 +1525,40 @@ function ReviewSummary({ summary = {} }) {
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-5">
-      {items.map(([label, value, tone]) => (
-        <Card key={label} padded="sm" tone={tone}>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
-            {label}
-          </div>
-
-          <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            {Number(value || 0)}
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function ReviewWorkbenchList({ items = [] }) {
-  const safeItems = arr(items).slice(0, 12);
-
-  if (!safeItems.length) {
-    return <EmptyInline text="No pending truth review items were returned." />;
-  }
-
-  return (
-    <div className="space-y-3">
-      {safeItems.map((item) => (
-        <Card key={text(item.id || item.candidateId || item.title)} padded="sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                {text(item.title || item.valueText || "Candidate")}
+    <div className="space-y-4">
+      <Card padded={false} clip>
+        <div className="grid divide-y divide-line-soft md:grid-cols-5 md:divide-x md:divide-y-0">
+          {reviewItems.map(([label, value, tone]) => (
+            <div key={label} className="px-4 py-3.5">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                {label}
               </div>
-
-              <div className="mt-1 text-[13px] font-medium leading-6 text-text-muted">
-                {compactSentence(
-                  item.valueText || item.normalizedText || item.review?.reviewReason,
-                  "Review item needs operator decision."
+              <div
+                className={cx(
+                  "mt-1.5 text-[23px] font-semibold leading-none tracking-[var(--tracking-tight-xl)]",
+                  toneTextClass(n(value) > 0 ? tone : "neutral")
                 )}
+              >
+                {n(value)}
               </div>
             </div>
+          ))}
+        </div>
+      </Card>
 
-            <Badge tone="neutral" size="sm">
-              {titleize(item.status || item.queueBucket || "pending")}
-            </Badge>
+      <Card padded={false} clip>
+        <div className="px-4 py-3.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+            Review items
           </div>
-        </Card>
-      ))}
+        </div>
+
+        <div className="border-t border-line-soft px-4">
+          <ReviewWorkbenchList items={items} />
+        </div>
+      </Card>
     </div>
   );
-}
-
-function normalizeCompareDetail(payload = {}, fallbackItem = {}) {
-  const root = obj(payload);
-  const versionId = getHistoryVersionId(fallbackItem);
-
-  return {
-    ...root,
-    selectedVersion:
-      root.selectedVersion ||
-      root.version ||
-      root.truthVersion ||
-      root.selected ||
-      fallbackItem,
-    comparedVersion:
-      root.comparedVersion ||
-      root.compareToVersion ||
-      root.previousVersion ||
-      root.compared ||
-      {},
-    currentVersion:
-      root.currentVersion ||
-      root.currentApprovedVersion ||
-      root.current ||
-      {},
-    changedFields: arr(root.changedFields || root.changed_fields),
-    fieldChanges: arr(root.fieldChanges || root.field_changes),
-    sectionChanges: arr(root.sectionChanges || root.section_changes),
-    versionDiff: obj(root.versionDiff || root.version_diff || root.diff),
-    rollbackPreview: obj(root.rollbackPreview || root.rollback_preview),
-    rollbackAction: obj(root.rollbackAction || root.rollback_action),
-    hasStructuredDiff:
-      root.hasStructuredDiff !== false &&
-      Boolean(
-        root.hasStructuredDiff ||
-          arr(root.changedFields || root.changed_fields).length ||
-          arr(root.fieldChanges || root.field_changes).length ||
-          Object.keys(obj(root.versionDiff || root.version_diff || root.diff)).length
-      ),
-    selectedVersionId: text(root.selectedVersionId || versionId),
-  };
 }
 
 export default function TruthViewerPage() {
@@ -957,7 +1571,7 @@ export default function TruthViewerPage() {
     workspace.ready
   );
 
-  const [state, setState] = useState(initialState);
+  const [state, setState] = useState(() => initialState(workspace.tenantKey));
   const [activeTab, setActiveTab] = useState("business");
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
@@ -974,258 +1588,200 @@ export default function TruthViewerPage() {
 
   const deepLinkHandledRef = useRef("");
 
-  const viewState = useMemo(() => {
-    if (!workspace.ready) return initialState();
+  const loadTruth = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!workspace.ready || !workspace.tenantKey) return;
 
-    if (state.tenantKey !== workspace.tenantKey) {
-      return initialState(workspace.tenantKey);
-    }
+      setState((current) => ({
+        ...current,
+        tenantKey: workspace.tenantKey,
+        loading: silent ? current.loading : true,
+        refreshing: silent,
+        error: "",
+      }));
 
-    return state;
-  }, [state, workspace.ready, workspace.tenantKey]);
+      try {
+        const [snapshotResult, workbenchResult, trustResult] =
+          await Promise.allSettled([
+            getCanonicalTruthSnapshot({ tenantKey: workspace.tenantKey }),
+            getTruthReviewWorkbench({ tenantKey: workspace.tenantKey }),
+            getSettingsTrustView({ tenantKey: workspace.tenantKey }),
+          ]);
 
-  const requestedVersionId = useMemo(
-    () => resolveRequestedVersionId(searchParams, location),
-    [searchParams, location]
-  );
-
-  const runtimeLabel = useMemo(
-    () =>
-      resolveRuntimeLabel(
-        viewState.data.trust,
-        viewState.data.approvedTruthUnavailable,
-        viewState.data
-      ),
-    [viewState.data]
-  );
-
-  const sourceLine = useMemo(
-    () => resolveSourceSummaryLine(viewState.data.sourceSummary),
-    [viewState.data.sourceSummary]
-  );
-
-  const operationalState = useMemo(
-    () =>
-      viewState.data.approvedTruthUnavailable
-        ? {
-            truthReady: false,
-            runtimeReady: false,
-            status: "blocked",
-            statusLabel: "Approval required",
-            title: "Approved truth is unavailable.",
-            summary:
-              "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
-            detail:
-              "This page is intentionally fail-closed when approved truth is unavailable.",
-            action: {
-              label: "Continue AI setup",
-              path: "/home?assistant=setup",
-            },
-          }
-        : hasTrustOperationalData(viewState.data.trust)
-          ? buildTruthOperationalState(viewState.data.trust)
-          : buildSnapshotOperationalState(viewState.data),
-    [viewState.data]
-  );
-
-  const businessGroups = useMemo(
-    () => groupBusinessRows(viewState.data.fields),
-    [viewState.data.fields]
-  );
-
-  const behaviorGroups = useMemo(
-    () => groupBehaviorRows(viewState.data.fields),
-    [viewState.data.fields]
-  );
-
-  const sourceGroups = useMemo(
-    () => buildSourceRows(viewState.data),
-    [viewState.data]
-  );
-
-  async function refreshTruthSurface() {
-    const [truthResult, reviewResult, trustResult] = await Promise.allSettled([
-      getCanonicalTruthSnapshot(),
-      getTruthReviewWorkbench({ limit: 100 }),
-      getSettingsTrustView({ limit: 6 }),
-    ]);
-
-    if (truthResult.status !== "fulfilled") {
-      throw truthResult.reason;
-    }
-
-    const truthData = truthResult.value || {};
-    const reviewData =
-      reviewResult.status === "fulfilled"
-        ? reviewResult.value || { summary: {}, items: [] }
-        : { summary: {}, items: [] };
-    const trustData =
-      trustResult.status === "fulfilled" ? trustResult.value : null;
-
-    setState({
-      tenantKey: workspace.tenantKey,
-      loading: false,
-      error: "",
-      data: {
-        fields: truthData.fields || [],
-        approval: truthData.approval || {},
-        history: truthData.history || [],
-        notices: truthData.notices || [],
-        hasProvenance: !!truthData.hasProvenance,
-        approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
-        readiness: truthData.readiness || {},
-        sourceSummary: truthData.sourceSummary || {},
-        metadata: truthData.metadata || {},
-        governance: truthData.governance || {},
-        finalizeImpact: truthData.finalizeImpact || {},
-        reviewWorkbench: reviewData || { summary: {}, items: [] },
-        trust: trustData,
-      },
-    });
-  }
-
-  useEffect(() => {
-    let alive = true;
-
-    setState((current) =>
-      current.tenantKey === workspace.tenantKey
-        ? {
-            ...current,
-            error: "",
-          }
-        : initialState(workspace.tenantKey)
-    );
-
-    if (!workspace.ready) {
-      return () => {
-        alive = false;
-      };
-    }
-
-    Promise.allSettled([
-      getCanonicalTruthSnapshot(),
-      getTruthReviewWorkbench({ limit: 100 }),
-      getSettingsTrustView({ limit: 6 }),
-    ])
-      .then((results) => {
-        if (!alive) return;
-
-        const truthResult = results[0];
-        const reviewResult = results[1];
-        const trustResult = results[2];
-
-        if (truthResult.status !== "fulfilled") {
-          throw truthResult.reason;
+        if (snapshotResult.status === "rejected") {
+          throw snapshotResult.reason;
         }
 
-        const truthData = truthResult.value || {};
-        const reviewData =
-          reviewResult.status === "fulfilled"
-            ? reviewResult.value || { summary: {}, items: [] }
+        const snapshot = normalizeSnapshotPayload(snapshotResult.value);
+        const reviewWorkbench =
+          workbenchResult.status === "fulfilled"
+            ? normalizeReviewWorkbenchPayload(workbenchResult.value)
             : { summary: {}, items: [] };
-        const trustData =
+
+        const trust =
           trustResult.status === "fulfilled" ? trustResult.value : null;
 
         setState({
           tenantKey: workspace.tenantKey,
           loading: false,
+          refreshing: false,
           error: "",
           data: {
-            fields: truthData.fields || [],
-            approval: truthData.approval || {},
-            history: truthData.history || [],
-            notices: truthData.notices || [],
-            hasProvenance: !!truthData.hasProvenance,
-            approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
-            readiness: truthData.readiness || {},
-            sourceSummary: truthData.sourceSummary || {},
-            metadata: truthData.metadata || {},
-            governance: truthData.governance || {},
-            finalizeImpact: truthData.finalizeImpact || {},
-            reviewWorkbench: reviewData || { summary: {}, items: [] },
-            trust: trustData,
+            ...snapshot,
+            reviewWorkbench,
+            trust,
           },
         });
-      })
-      .catch((error) => {
-        if (!alive) return;
-
-        setState({
-          tenantKey: workspace.tenantKey,
+      } catch (error) {
+        setState((current) => ({
+          ...current,
           loading: false,
-          error: String(
-            error?.message || error || "Truth viewer could not be loaded."
-          ),
-          data: initialState().data,
-        });
+          refreshing: false,
+          error:
+            error?.message ||
+            error?.reason ||
+            "Business truth could not be loaded.",
+        }));
+      }
+    },
+    [workspace.ready, workspace.tenantKey]
+  );
+
+  useEffect(() => {
+    loadTruth();
+  }, [loadTruth, refreshToken]);
+
+  const data = state.data;
+  const approvedTruthAvailable = hasApprovedTruth(data);
+  const operationalState = useMemo(() => resolveOperationalState(data), [data]);
+  const runtimeLabel = resolveRuntimeLabel(data, operationalState);
+  const sourceLine = resolveSourceSummaryLine(data.sourceSummary);
+  const reviewSummary = obj(data.reviewWorkbench?.summary);
+  const businessGroups = useMemo(
+    () => groupBusinessRows(data.fields),
+    [data.fields]
+  );
+  const behaviorGroups = useMemo(
+    () => groupBehaviorRows(data.fields),
+    [data.fields]
+  );
+  const sourceRows = useMemo(() => buildSourceRows(data), [data]);
+
+  const visibleNotices = arr(data.notices).filter(
+    (notice) => !(data.approvedTruthUnavailable && isTruthUnavailableNotice(notice))
+  );
+
+  const openVersionDetail = useCallback(
+    async (item = {}) => {
+      const versionId = getHistoryVersionId(item);
+      if (!versionId || !workspace.tenantKey) return;
+
+      setCompareOpen(true);
+      setCompareState({
+        loading: true,
+        error: "",
+        detail: null,
+        rollbackSurface: {
+          saving: false,
+          error: "",
+          saveSuccess: "",
+          rollbackReceipt: null,
+        },
       });
 
-    return () => {
-      alive = false;
-    };
-  }, [refreshToken, workspace.ready, workspace.tenantKey]);
+      try {
+        const detail = await getTruthVersionDetail({
+          tenantKey: workspace.tenantKey,
+          versionId,
+          truthVersionId: versionId,
+        });
 
-  async function handleOpenVersion(item = {}) {
-    const versionId = getHistoryVersionId(item);
-    const compareTo = normalizeTruthToken(
-      item?.previousVersionId || item?.compareTo || ""
-    );
+        setCompareState({
+          loading: false,
+          error: "",
+          detail: normalizeCompareDetail(detail, item),
+          rollbackSurface: {
+            saving: false,
+            error: "",
+            saveSuccess: "",
+            rollbackReceipt: null,
+          },
+        });
+      } catch (error) {
+        setCompareState({
+          loading: false,
+          error:
+            error?.message ||
+            error?.reason ||
+            "Truth version detail could not be loaded.",
+          detail: null,
+          rollbackSurface: {
+            saving: false,
+            error: "",
+            saveSuccess: "",
+            rollbackReceipt: null,
+          },
+        });
+      }
+    },
+    [workspace.tenantKey]
+  );
 
-    if (!versionId) return;
+  useEffect(() => {
+    if (state.loading || !arr(data.history).length) return;
 
-    setCompareOpen(true);
-    setCompareState({
-      loading: true,
-      error: "",
-      detail: normalizeCompareDetail(
-        {
-          selectedVersion: item,
-          selectedVersionId: versionId,
-        },
-        item
-      ),
-      rollbackSurface: {
-        saving: false,
-        error: "",
-        saveSuccess: "",
-        rollbackReceipt: null,
-      },
+    const requestedVersionId = resolveRequestedVersionId(searchParams, location);
+    if (!requestedVersionId) return;
+    if (deepLinkHandledRef.current === requestedVersionId) return;
+
+    const item = findRequestedHistoryItem({
+      history: arr(data.history),
+      requestedVersionId,
+      approval: data.approval,
     });
 
-    try {
-      const payload = await getTruthVersionDetail(versionId, {
-        compareTo: compareTo || undefined,
-      });
+    if (!item) return;
 
-      setCompareState((current) => ({
-        ...current,
-        loading: false,
-        error: "",
-        detail: normalizeCompareDetail(payload, item),
-      }));
-    } catch (error) {
-      setCompareState((current) => ({
-        ...current,
-        loading: false,
-        error: text(
-          error?.message || error,
-          "Truth version detail could not be loaded."
-        ),
-      }));
-    }
+    deepLinkHandledRef.current = requestedVersionId;
+    openVersionDetail(item);
+  }, [
+    state.loading,
+    data.history,
+    data.approval,
+    searchParams,
+    location,
+    openVersionDetail,
+  ]);
+
+  async function handleRefresh() {
+    await loadTruth({ silent: true });
+    emitLaunchSliceRefresh({
+      tenantKey: workspace.tenantKey,
+      reason: "truth_viewer_refresh",
+    });
   }
 
   async function handleRollback(detail = null) {
     const selected = obj(detail?.selectedVersion);
-    const versionId = normalizeTruthToken(
+    const versionId = text(
       detail?.selectedVersionId ||
-        selected?.id ||
-        selected?.versionId ||
-        selected?.truthVersionId ||
-        selected?.version
+        selected.id ||
+        selected.versionId ||
+        selected.truthVersionId ||
+        selected.version
     );
 
-    if (!versionId) return;
+    if (!versionId || !workspace.tenantKey) {
+      setCompareState((current) => ({
+        ...current,
+        rollbackSurface: {
+          ...current.rollbackSurface,
+          error: "Rollback target version is unavailable.",
+          saveSuccess: "",
+        },
+      }));
+      return;
+    }
 
     setCompareState((current) => ({
       ...current,
@@ -1238,285 +1794,136 @@ export default function TruthViewerPage() {
     }));
 
     try {
-      const receipt = await rollbackTruthVersion(versionId);
+      const result = await rollbackTruthVersion({
+        tenantKey: workspace.tenantKey,
+        versionId,
+        truthVersionId: versionId,
+      });
+
+      const receipt =
+        result?.rollbackReceipt ||
+        result?.receipt ||
+        result?.data?.rollbackReceipt ||
+        result?.data?.receipt ||
+        result;
 
       setCompareState((current) => ({
         ...current,
         rollbackSurface: {
           saving: false,
           error: "",
-          saveSuccess: "Rollback completed and truth runtime was refreshed.",
-          rollbackReceipt: receipt?.rollbackReceipt || receipt || null,
+          saveSuccess: "Rollback request completed.",
+          rollbackReceipt: receipt,
         },
       }));
 
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
-        reason: "truth-rollback",
+        reason: "truth_rollback",
       });
-
-      await refreshTruthSurface();
+      await loadTruth({ silent: true });
     } catch (error) {
       setCompareState((current) => ({
         ...current,
         rollbackSurface: {
           ...current.rollbackSurface,
           saving: false,
-          error: text(error?.message || error, "Rollback could not be completed."),
+          error:
+            error?.message ||
+            error?.reason ||
+            "Rollback request could not be completed.",
+          saveSuccess: "",
         },
       }));
     }
   }
 
-  useEffect(() => {
-    if (viewState.loading) return;
-    if (!requestedVersionId) return;
-
-    const signature = `${workspace.tenantKey}:${requestedVersionId}:${arr(
-      viewState.data.history
-    ).length}`;
-
-    if (deepLinkHandledRef.current === signature) return;
-
-    const item = findRequestedHistoryItem({
-      history: arr(viewState.data.history),
-      requestedVersionId,
-      approval: viewState.data.approval,
-    });
-
-    if (!item) return;
-
-    deepLinkHandledRef.current = signature;
-    handleOpenVersion(item);
-  }, [
-    requestedVersionId,
-    viewState.loading,
-    viewState.data.history,
-    viewState.data.approval,
-    workspace.tenantKey,
-  ]);
-
-  const reviewSummary = obj(viewState.data.reviewWorkbench?.summary);
-  const operationalTone = toneForStatus(
-    operationalState.status || operationalState.statusLabel
-  );
-
-  if (!workspace.ready || viewState.loading) {
+  if (state.loading) {
     return (
       <PageCanvas>
-        <LoadingSurface title="Loading truth" />
+        <LoadingSurface title="Loading business truth" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="space-y-4">
-      {viewState.error ? (
-        <InlineNotice
-          tone="danger"
-          title="Truth viewer unavailable"
-          description={viewState.error}
-          compact
+    <PageCanvas className="space-y-4 pt-3 md:pt-4">
+      {state.error ? (
+        <InlineNotice tone="danger" description={state.error} compact />
+      ) : null}
+
+      {visibleNotices.length ? (
+        <div className="space-y-2">
+          {visibleNotices.slice(0, 3).map((notice, index) => (
+            <InlineNotice
+              key={`${text(notice?.code || notice?.title || "notice")}-${index}`}
+              tone={toneForStatus(notice?.tone || notice?.severity || "warning")}
+              title={text(notice?.title)}
+              description={compactSentence(
+                notice?.description || notice?.message || notice
+              )}
+              compact
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <TruthHero
+        data={data}
+        operationalState={operationalState}
+        runtimeLabel={runtimeLabel}
+        sourceLine={sourceLine}
+        reviewSummary={reviewSummary}
+        approvedTruthAvailable={approvedTruthAvailable}
+        onRefresh={handleRefresh}
+        refreshing={state.refreshing}
+      />
+
+      {approvedTruthAvailable ? (
+        <>
+          <RuntimeStrip
+            operationalState={operationalState}
+            runtimeLabel={runtimeLabel}
+          />
+
+          <ReviewPressureStrip
+            summary={reviewSummary}
+            onOpenReview={() => setActiveTab("review")}
+          />
+
+          <Tabs activeTab={activeTab} onChange={setActiveTab} />
+
+          {activeTab === "business" ? (
+            <BusinessTab groups={businessGroups} />
+          ) : null}
+
+          {activeTab === "behavior" ? (
+            <BehaviorTab groups={behaviorGroups} />
+          ) : null}
+
+          {activeTab === "sources" ? (
+            <SourcesTab sourceRows={sourceRows} />
+          ) : null}
+
+          {activeTab === "versions" ? (
+            <VersionsTab
+              history={arr(data.history)}
+              onOpenVersion={openVersionDetail}
+            />
+          ) : null}
+
+          {activeTab === "review" ? (
+            <ReviewTab
+              summary={reviewSummary}
+              items={arr(data.reviewWorkbench?.items)}
+            />
+          ) : null}
+        </>
+      ) : (
+        <EmptyTruthStartPanel
+          onOpenHome={() => navigate("/home")}
         />
-      ) : null}
-
-      {arr(viewState.data.notices).map((notice, index) => {
-        const noticeObject =
-          notice && typeof notice === "object" && !Array.isArray(notice)
-            ? notice
-            : {
-                tone: "warning",
-                title: "",
-                message: String(notice || ""),
-              };
-
-        return (
-          <InlineNotice
-            key={`${text(noticeObject?.title || noticeObject?.message)}-${index}`}
-            tone={lower(noticeObject?.tone || noticeObject?.type) || "info"}
-            title={text(noticeObject?.title)}
-            description={text(noticeObject?.message || noticeObject?.description)}
-            compact
-          />
-        );
-      })}
-
-      <section className="border-b border-line-soft pb-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 max-w-[900px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
-              Approved truth
-            </div>
-
-            <h1 className="mt-3 font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
-              Business truth runtime
-            </h1>
-
-            <p className="mt-3 max-w-[760px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
-              {compactSentence(
-                operationalState.summary,
-                "Approved truth is the only source runtime can trust."
-              )}
-            </p>
-
-            <div className="mt-4">
-              <MetaLine
-                approval={viewState.data.approval}
-                runtimeLabel={runtimeLabel}
-                sourceLine={sourceLine}
-                reviewSummary={reviewSummary}
-                history={viewState.data.history}
-              />
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            {operationalState?.action?.path ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => navigate(operationalState.action.path)}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                {operationalState.action.label || "Continue setup"}
-              </Button>
-            ) : null}
-
-            <Button
-              type="button"
-              size="md"
-              onClick={() => {
-                emitLaunchSliceRefresh({
-                  tenantKey: workspace.tenantKey,
-                  reason: "truth-refresh",
-                });
-                refreshTruthSurface();
-              }}
-              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <Card padded="md" tone={operationalTone}>
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <span
-              className={cx(
-                "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border bg-surface shadow-[var(--shadow-inset-top)]",
-                operationalTone === "success"
-                  ? "border-[rgba(var(--color-success),0.18)] text-success"
-                  : operationalTone === "danger"
-                    ? "border-[rgba(var(--color-danger),0.18)] text-danger"
-                    : "border-[rgba(var(--color-warning),0.18)] text-warning"
-              )}
-            >
-              {operationalTone === "success" ? (
-                <CheckCircle2 className="h-5 w-5" strokeWidth={2.1} />
-              ) : (
-                <ShieldAlert className="h-5 w-5" strokeWidth={2.1} />
-              )}
-            </span>
-
-            <div className="min-w-0">
-              <div className="text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                {operationalState.title || operationalState.statusLabel}
-              </div>
-
-              <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
-                {operationalState.detail || operationalState.summary}
-              </div>
-            </div>
-          </div>
-
-          <Badge tone={operationalTone} size="sm">
-            <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(operationalTone))} />
-            {operationalState.statusLabel || titleize(operationalState.status)}
-          </Badge>
-        </div>
-      </Card>
-
-      <ReviewSummary summary={reviewSummary} />
-
-      <div className="flex flex-wrap gap-2 rounded-[16px] border border-line-soft bg-surface-muted p-1.5">
-        <TabButton active={activeTab === "business"} onClick={() => setActiveTab("business")}>
-          Business
-        </TabButton>
-        <TabButton active={activeTab === "behavior"} onClick={() => setActiveTab("behavior")}>
-          Behavior
-        </TabButton>
-        <TabButton active={activeTab === "sources"} onClick={() => setActiveTab("sources")}>
-          Sources
-        </TabButton>
-        <TabButton active={activeTab === "versions"} onClick={() => setActiveTab("versions")}>
-          Versions
-        </TabButton>
-        <TabButton active={activeTab === "review"} onClick={() => setActiveTab("review")}>
-          Review queue
-        </TabButton>
-      </div>
-
-      {activeTab === "business" ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard title="Identity" subtitle="Approved public business identity.">
-            <RowsBlock rows={businessGroups.identity} />
-          </SectionCard>
-
-          <SectionCard title="Contact" subtitle="Approved contact and location facts.">
-            <RowsBlock rows={businessGroups.contact} />
-          </SectionCard>
-
-          <SectionCard title="Presence" subtitle="Approved online presence.">
-            <RowsBlock rows={businessGroups.presence} />
-          </SectionCard>
-
-          <SectionCard title="Offering" subtitle="Services, products, policies, and FAQs.">
-            <RowsBlock rows={businessGroups.offering} />
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {activeTab === "behavior" ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionCard title="Conversation behavior" subtitle="How runtime should speak.">
-            <RowsBlock rows={behaviorGroups.core} />
-          </SectionCard>
-
-          <SectionCard title="Routing behavior" subtitle="How runtime should route common asks.">
-            <RowsBlock rows={behaviorGroups.routing} />
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {activeTab === "sources" ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-          <SectionCard title="Source summary" subtitle="Latest source and provenance posture.">
-            <SourcePrimaryRows rows={sourceGroups.primaryRows} />
-          </SectionCard>
-
-          <SectionCard title="Field provenance" subtitle="Evidence attached to approved fields.">
-            <ProvenanceList rows={sourceGroups.provenanceRows} />
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {activeTab === "versions" ? (
-        <SectionCard title="Version history" subtitle="Durable approved truth versions.">
-          <VersionsList
-            history={viewState.data.history}
-            onOpenVersion={handleOpenVersion}
-          />
-        </SectionCard>
-      ) : null}
-
-      {activeTab === "review" ? (
-        <SectionCard title="Review workbench" subtitle="Pending truth candidates and conflicts.">
-          <ReviewWorkbenchList items={viewState.data.reviewWorkbench?.items} />
-        </SectionCard>
-      ) : null}
+      )}
 
       <TruthVersionComparePanel
         open={compareOpen}
@@ -1524,8 +1931,8 @@ export default function TruthViewerPage() {
         loading={compareState.loading}
         error={compareState.error}
         detail={compareState.detail}
-        versions={viewState.data.history}
-        onSelectVersion={handleOpenVersion}
+        versions={arr(data.history)}
+        onSelectVersion={openVersionDetail}
         rollbackSurface={compareState.rollbackSurface}
         onRollback={handleRollback}
       />
