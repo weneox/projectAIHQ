@@ -884,11 +884,7 @@ function RecordCard({ title, subtitle = "", rows = [], tone = "neutral" }) {
 
 function TabButton({ active = false, onClick, children }) {
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
+    <button type="button" onClick={onClick}
       className={cx(
         "relative inline-flex h-9 items-center px-2.5 text-[12.5px] font-semibold tracking-[var(--tracking-tight-sm)]",
         "transition-colors duration-base ease-premium",
@@ -1250,8 +1246,6 @@ function Tabs({ activeTab, onChange }) {
 
   return (
     <div
-      role="tablist"
-      aria-label="Truth sections"
       className="flex flex-wrap items-center gap-3 border-b border-line-soft px-1"
     >
       {tabs.map(([id, label]) => (
