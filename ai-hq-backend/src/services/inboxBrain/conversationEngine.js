@@ -34,6 +34,7 @@ import {
   stripLeadingCommand,
 } from "./messages.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
+import { answerFromApprovedTruth } from "../businessTruthAnswer/index.js";
 
 let openaiSingleton = null;
 
@@ -715,439 +716,6 @@ function inferContactRequest(text = "") {
 }
 
 
-function buildGroundedApprovedTruthDecision({
-  text = "",
-  runtimeGrounding = {},
-} = {}) {
-  const normalized = s(text)
-    .toLowerCase()
-    .replace(/[ə]/g, "e")
-    .replace(/[ıİ]/g, "i")
-    .replace(/[ö]/g, "o")
-    .replace(/[ü]/g, "u")
-    .replace(/[ğ]/g, "g")
-    .replace(/[ş]/g, "s")
-    .replace(/[ç]/g, "c")
-    .replace(/[^\p{L}\p{N}\s@.:/+_-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const hasAny = (...terms) =>
-    terms.some((term) =>
-      normalized.includes(
-        s(term)
-          .toLowerCase()
-          .replace(/[ə]/g, "e")
-          .replace(/[ıİ]/g, "i")
-          .replace(/[ö]/g, "o")
-          .replace(/[ü]/g, "u")
-          .replace(/[ğ]/g, "g")
-          .replace(/[ş]/g, "s")
-          .replace(/[ç]/g, "c")
-      )
-    );
-
-  const joinList = (items = []) => {
-    const list = uniqStrings(items).filter(Boolean).slice(0, 8);
-    if (!list.length) return "";
-    if (list.length === 1) return list[0];
-    return `${list.slice(0, -1).join(", ")} və ${list.at(-1)}`;
-  };
-
-  const contact = obj(runtimeGrounding?.contactGrounding);
-  const salesContext = obj(runtimeGrounding?.salesContext);
-
-  const phone = s(contact.primaryPhone || arr(contact.contactPhones)[0]);
-  const email = s(contact.primaryEmail || arr(contact.contactEmails)[0]);
-  const website = s(
-    contact.websiteUrl ||
-      arr(contact.websiteUrls)[0] ||
-      runtimeGrounding?.websiteUrl ||
-      arr(runtimeGrounding?.websiteUrls)[0]
-  );
-  const address = s(
-    contact.primaryAddress ||
-      arr(contact.contactAddresses)[0] ||
-      runtimeGrounding?.primaryAddress ||
-      arr(runtimeGrounding?.contactAddresses)[0]
-  );
-
-  const displayName = s(runtimeGrounding?.displayName);
-  const summary = s(runtimeGrounding?.businessSummary);
-  const industry = s(runtimeGrounding?.industry);
-  const languages = uniqStrings(arr(runtimeGrounding?.languages).map((item) => s(item)));
-  const tone = s(runtimeGrounding?.toneProfile || runtimeGrounding?.tone || runtimeGrounding?.replyStyle);
-  const primaryCta = s(runtimeGrounding?.primaryCta || salesContext?.primaryCta);
-  const pricingMode = s(runtimeGrounding?.pricingMode);
-  const bookingMode = s(runtimeGrounding?.bookingMode || runtimeGrounding?.bookingFlowType);
-
-  const services = uniqStrings([
-    ...arr(runtimeGrounding?.services).map((item) => s(item?.name || item?.title)),
-    ...arr(runtimeGrounding?.activeServiceNames).map((item) => s(item)),
-    ...arr(salesContext?.offerNames).map((item) => s(item)),
-    ...arr(salesContext?.keyOffers).map((item) => s(item?.name || item?.title)),
-  ]).filter(Boolean);
-
-  const products = uniqStrings([
-    ...arr(runtimeGrounding?.products).map((item) => s(item?.name || item?.title)),
-    ...arr(runtimeGrounding?.activeProductNames).map((item) => s(item)),
-  ]).filter(Boolean);
-
-  const pricingHints = uniqStrings([
-    ...arr(runtimeGrounding?.pricingHints).map((item) => s(item)),
-    s(salesContext?.pricingHint),
-    ...arr(salesContext?.keyOffers).map((item) =>
-      s(item?.pricingText || item?.pricing || item?.pricingMode)
-    ),
-    pricingMode,
-  ])
-    .filter(Boolean)
-    .filter((item) => !["inherit", "unknown", "none", "null"].includes(item.toLowerCase()));
-
-  const bookingLinks = uniqStrings([
-    ...arr(runtimeGrounding?.bookingLinks).map((item) => s(item)),
-    s(runtimeGrounding?.bookingUrl),
-    s(runtimeGrounding?.appointmentUrl),
-  ]).filter(Boolean);
-
-  const socialLinks = uniqStrings([
-    ...arr(runtimeGrounding?.socialLinks).map((item) => s(item)),
-    ...arr(runtimeGrounding?.socialUrls).map((item) => s(item)),
-  ]).filter(Boolean);
-
-  const parts = [];
-  const factsUsed = [];
-
-  const add = (label, value, factKey) => {
-    const safeValue = s(value);
-    if (!safeValue) return;
-    parts.push(`${label}: ${safeValue}.`);
-    factsUsed.push(`${factKey}: ${safeValue}`);
-  };
-
-  const wantsPhone =
-    inferPhoneRequest(text) ||
-    hasAny("nomre", "nömr", "telefon", "zeng", "zəng", "phone", "number", "call");
-  const wantsEmail =
-    inferEmailRequest(text) ||
-    hasAny("email", "mail", "e poct", "e-poct", "e-poçt", "poct", "poçt");
-  const wantsWebsite =
-    inferWebsiteRequest(text) ||
-    hasAny("website", "vebsayt", "websayt", "sayt", "site", "link");
-  const wantsAddress =
-    hasAny("unvan", "ünvan", "adres", "address", "location", "harada", "where");
-  const wantsContact =
-    inferContactRequest(text) ||
-    hasAny("elaqe", "əlaqə", "contact", "contact details");
-
-  const wantsName = hasAny(
-    "adiniz",
-    "adınız",
-    "adi nedir",
-    "adı nedir",
-    "sirket adi",
-    "şirkət adı",
-    "biznes adi",
-    "business name",
-    "company name",
-    "name"
-  );
-
-  const wantsSummary = hasAny(
-    "kimsiniz",
-    "kimdir",
-    "ne is gorursuz",
-    "nə iş görürsünüz",
-    "ne edirsiniz",
-    "nə edirsiniz",
-    "haqqinda",
-    "haqqında",
-    "about",
-    "what do you do",
-    "melumat",
-    "məlumat"
-  );
-
-  const wantsServices = hasAny(
-    "xidmet",
-    "xidmət",
-    "xidmetler",
-    "xidmətlər",
-    "services",
-    "service",
-    "offer",
-    "teklif",
-    "ne teklif",
-    "nə təklif"
-  );
-
-  const wantsProducts = hasAny(
-    "mehsul",
-    "məhsul",
-    "product",
-    "products"
-  );
-
-  const wantsPricing = hasAny(
-    "qiymet",
-    "qiymət",
-    "price",
-    "pricing",
-    "cost",
-    "necedir",
-    "neceyedir",
-    "ne qeder",
-    "nə qədər"
-  );
-
-  const wantsBooking = hasAny(
-    "booking",
-    "rezerv",
-    "bron",
-    "randevu",
-    "gorus",
-    "görüş",
-    "appointment",
-    "qebul",
-    "qəbul"
-  );
-
-  const wantsSocial = hasAny(
-    "social",
-    "sosial",
-    "instagram",
-    "facebook",
-    "telegram",
-    "whatsapp",
-    "tiktok",
-    "youtube"
-  );
-
-  const wantsLanguage = hasAny(
-    "hansi dil",
-    "hansı dil",
-    "diliniz",
-    "language",
-    "languages"
-  );
-
-  const wantsBehavior = hasAny(
-    "nece cavab",
-    "necə cavab",
-    "cavab tonu",
-    "danisma tonu",
-    "danışma tonu",
-    "tone",
-    "reply style",
-    "cta",
-    "call to action",
-    "operator",
-    "handoff"
-  );
-
-  if (wantsContact || wantsPhone || wantsEmail || wantsWebsite || wantsAddress) {
-    if (wantsPhone || wantsContact) add("Əlaqə nömrəmiz", phone, "Primary phone");
-    if (wantsEmail || wantsContact) add("E-poçt ünvanımız", email, "Primary email");
-    if (wantsWebsite || wantsContact) add("Vebsayt", website, "Website");
-    if (wantsAddress || wantsContact) add("Ünvan", address, "Address");
-  } else if (wantsName) {
-    add("Biznes adı", displayName, "Business name");
-  } else if (wantsServices) {
-    const summaryText = s(summary);
-    const serviceList = joinList(services);
-
-    if (summaryText) {
-      parts.push(summaryText.endsWith(".") ? summaryText : `${summaryText}.`);
-      factsUsed.push(`Business summary: ${summaryText}`);
-    } else if (serviceList) {
-      parts.push(`Əsas xidmətlərimiz: ${serviceList}.`);
-      factsUsed.push(`Services: ${serviceList}`);
-    } else {
-      parts.push("Təsdiqlənmiş xidmət məlumatı hələ əlavə olunmayıb.");
-      factsUsed.push("Services: not approved");
-    }
-  } else if (wantsProducts) {
-    const productList = joinList(products);
-    if (productList) {
-      parts.push(`Məhsullarımız: ${productList}.`);
-      factsUsed.push(`Products: ${productList}`);
-    } else {
-      parts.push("Təsdiqlənmiş məhsul siyahısı hələ əlavə olunmayıb.");
-      factsUsed.push("Products: not approved");
-    }
-  } else if (wantsPricing) {
-    const pricingText = joinList(pricingHints);
-    if (pricingText) {
-      parts.push(`Qiymət məlumatı: ${pricingText}.`);
-      factsUsed.push(`Pricing: ${pricingText}`);
-    } else if (pricingMode) {
-      parts.push(`Qiymət modeli: ${pricingMode}.`);
-      factsUsed.push(`Pricing mode: ${pricingMode}`);
-    } else {
-      parts.push("Təsdiqlənmiş qiymət məlumatı hələ əlavə olunmayıb.");
-      factsUsed.push("Pricing: not approved");
-    }
-  } else if (wantsBooking) {
-    const bookingLink = s(bookingLinks[0]);
-    if (bookingLink) {
-      parts.push(`Görüş/rezerv üçün link: ${bookingLink}.`);
-      factsUsed.push(`Booking link: ${bookingLink}`);
-    } else if (bookingMode) {
-      parts.push(`Görüş/rezerv qaydası: ${bookingMode}.`);
-      factsUsed.push(`Booking mode: ${bookingMode}`);
-    } else {
-      parts.push("Təsdiqlənmiş görüş/rezerv qaydası hələ əlavə olunmayıb.");
-      factsUsed.push("Booking: not approved");
-    }
-  } else if (wantsSocial) {
-    const socialText = joinList(socialLinks);
-    if (socialText) {
-      parts.push(`Sosial linklərimiz: ${socialText}.`);
-      factsUsed.push(`Social links: ${socialText}`);
-    }
-  } else if (wantsLanguage) {
-    const languageText = joinList(languages);
-    if (languageText) {
-      parts.push(`Dəstəklənən dil: ${languageText}.`);
-      factsUsed.push(`Languages: ${languageText}`);
-    }
-  } else if (wantsBehavior) {
-    const behaviorParts = [];
-    if (tone) behaviorParts.push(`cavab tonu: ${tone}`);
-    if (primaryCta) behaviorParts.push(`əsas yönləndirmə: ${primaryCta}`);
-    if (bookingMode) behaviorParts.push(`booking qaydası: ${bookingMode}`);
-
-    const behaviorText = joinList(behaviorParts);
-    if (behaviorText) {
-      parts.push(`AI davranış qaydası: ${behaviorText}.`);
-      factsUsed.push(`Behavior: ${behaviorText}`);
-    }
-  } else if (wantsSummary) {
-    if (summary) {
-      parts.push(summary.endsWith(".") ? summary : `${summary}.`);
-      factsUsed.push(`Business summary: ${summary}`);
-    } else if (displayName || industry) {
-      const value = [displayName, industry].filter(Boolean).join(" — ");
-      parts.push(value.endsWith(".") ? value : `${value}.`);
-      factsUsed.push(`Business identity: ${value}`);
-    }
-  }
-
-  const replyText = sanitizeReplyText(parts.join(" "));
-
-  if (!replyText) return null;
-
-  return {
-    language: normalizeLanguage(arr(runtimeGrounding?.languages)[0] || "az"),
-    understoodIntent: "ask_approved_truth_fact",
-    detectedService: "",
-    customerGoal: "approved_truth_fact",
-    answerFirst: replyText,
-    nextQuestion: "",
-    replyText,
-    missingInformation: [],
-    groundedFactsUsed: factsUsed,
-    shouldAskQuestion: false,
-    shouldCreateLead: false,
-    shouldHandoff: false,
-    handoffReason: "",
-    handoffPriority: "normal",
-    confidence: 0.99,
-    leadScore: 0,
-    askCategory: "approved_truth",
-    stage: "answer",
-    replyStyle: "direct",
-    noReply: false,
-  };
-}
-
-function buildGroundedContactDecision({ text = "", runtimeGrounding = {} } = {}) {
-  const contact = obj(runtimeGrounding?.contactGrounding);
-  const normalized = normalizeFreeText(text);
-
-  const wantsPhone =
-    inferPhoneRequest(text) ||
-    normalized.includes("nomr") ||
-    normalized.includes("nömr") ||
-    normalized.includes("telefon") ||
-    normalized.includes("elaq") ||
-    normalized.includes("əlaq") ||
-    normalized.includes("phone") ||
-    normalized.includes("number") ||
-    normalized.includes("call");
-
-  const wantsEmail =
-    inferEmailRequest(text) ||
-    normalized.includes("email") ||
-    normalized.includes("mail") ||
-    normalized.includes("poct") ||
-    normalized.includes("poçt");
-
-  const wantsWebsite =
-    inferWebsiteRequest(text) ||
-    normalized.includes("sayt") ||
-    normalized.includes("site") ||
-    normalized.includes("website") ||
-    normalized.includes("link");
-
-  const wantsGeneralContact =
-    inferContactRequest(text) ||
-    normalized.includes("contact") ||
-    normalized.includes("elaq") ||
-    normalized.includes("əlaq");
-
-  if (!wantsPhone && !wantsEmail && !wantsWebsite && !wantsGeneralContact) {
-    return null;
-  }
-
-  const phone = s(contact.primaryPhone || arr(contact.contactPhones)[0]);
-  const email = s(contact.primaryEmail || arr(contact.contactEmails)[0]);
-  const website = s(contact.websiteUrl || arr(contact.websiteUrls)[0]);
-
-  const parts = [];
-  const factsUsed = [];
-
-  if ((wantsPhone || wantsGeneralContact) && phone) {
-    parts.push(`Əlaqə nömrəmiz: ${phone}.`);
-    factsUsed.push(`Primary phone: ${phone}`);
-  }
-
-  if ((wantsEmail || wantsGeneralContact) && email) {
-    parts.push(`E-poçt ünvanımız: ${email}.`);
-    factsUsed.push(`Primary email: ${email}`);
-  }
-
-  if ((wantsWebsite || wantsGeneralContact) && website) {
-    parts.push(`Vebsayt: ${website}.`);
-    factsUsed.push(`Website: ${website}`);
-  }
-
-  const replyText = sanitizeReplyText(parts.join(" "));
-  if (!replyText) return null;
-
-  return {
-    language: normalizeLanguage(arr(runtimeGrounding?.languages)[0] || "az"),
-    understoodIntent: "ask_contact_details",
-    detectedService: "",
-    customerGoal: "approved_contact_details",
-    answerFirst: replyText,
-    nextQuestion: "",
-    replyText,
-    missingInformation: [],
-    groundedFactsUsed: factsUsed,
-    shouldAskQuestion: false,
-    shouldCreateLead: false,
-    shouldHandoff: false,
-    handoffReason: "",
-    handoffPriority: "normal",
-    confidence: 0.99,
-    leadScore: 0,
-    askCategory: "contact",
-    stage: "answer",
-    replyStyle: "direct",
-    noReply: false,
-  };
-}
 function firstRuntimeText(...values) {
   for (const value of values) {
     const text = s(value);
@@ -2629,22 +2197,28 @@ export async function runTenantAwareConversationEngine({
   const profile = resolvedRuntime;
   const runtimeGrounding = buildRuntimeGrounding(profile);
 
-  const groundedContactDecision = buildGroundedContactDecision({
+  const approvedTruthAnswer = await answerFromApprovedTruth({
     text,
     runtimeGrounding,
+    profile,
+    fallbackLanguage: arr(runtimeGrounding?.languages)[0] || "az",
   });
 
-  if (groundedContactDecision) {
-    logConversationEngine("grounded_contact_direct", {
+  if (approvedTruthAnswer?.shouldReply) {
+    logConversationEngine("approved_truth_answer", {
       tenantKey,
       channel,
-      groundedFactsUsed: groundedContactDecision.groundedFactsUsed,
-      replyPreview: safePreview(groundedContactDecision.replyText, 180),
+      source: approvedTruthAnswer.source,
+      understoodIntent: approvedTruthAnswer.understoodIntent,
+      groundedFactsUsed: approvedTruthAnswer.groundedFactsUsed,
+      replyPreview: safePreview(approvedTruthAnswer.replyText, 220),
       latestMessagePreview: safePreview(text, 160),
     });
 
-    return groundedContactDecision;
+    return approvedTruthAnswer;
   }
+
+
 
 
   try {
@@ -2777,22 +2351,6 @@ export async function runTenantAwareConversationEngine({
     policy,
   });
 
-  const groundedApprovedTruthDecision = buildGroundedApprovedTruthDecision({
-    text,
-    runtimeGrounding,
-  });
-
-  if (groundedApprovedTruthDecision) {
-    logConversationEngine("grounded_approved_truth_direct", {
-      tenantKey,
-      channel,
-      groundedFactsUsed: groundedApprovedTruthDecision.groundedFactsUsed,
-      replyPreview: safePreview(groundedApprovedTruthDecision.replyText, 220),
-      latestMessagePreview: safePreview(text, 160),
-    });
-
-    return groundedApprovedTruthDecision;
-  }
   logConversationEngine("request_start", {
     tenantKey: resolvedTenantKey,
     channel: s(channel || "inbox"),
