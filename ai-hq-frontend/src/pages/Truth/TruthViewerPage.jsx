@@ -805,7 +805,42 @@ function RecordRow({
   fieldKey = "",
   onEdit,
 }) {
-  if (!text(value)) return null;
+  const approvedValue = text(value);
+  const [editing, setEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState("");
+  const safeDraftValue = String(draftValue ?? "");
+  const changed = Boolean(text(safeDraftValue)) && text(safeDraftValue) !== approvedValue;
+
+  const startEdit = () => {
+    setDraftValue(approvedValue);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setDraftValue("");
+    setEditing(false);
+  };
+
+  const stageEdit = () => {
+    const nextValue = text(safeDraftValue);
+
+    if (!nextValue || nextValue === approvedValue || typeof onEdit !== "function") {
+      return;
+    }
+
+    onEdit({
+      key: fieldKey,
+      label,
+      value: approvedValue,
+      nextValue,
+      hint,
+      multiline,
+      note: text(field.note),
+    });
+
+    setDraftValue("");
+    setEditing(false);
+  };
 
   return (
     <div
@@ -814,40 +849,79 @@ function RecordRow({
         !last && "border-b border-line-soft"
       )}
     >
-      <FreeIcon
-        icon={Icon}
-        tone="neutral"
-        className="mt-[3px] h-[17px] w-[17px]"
-      />
+      <FreeIcon icon={Icon} className="mt-[2px] h-[17px] w-[17px]" />
 
       <div className="min-w-0">
-        <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
           {label}
         </div>
 
-        <div
-          className={cx(
-            "mt-1 text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text",
-            multiline ? "whitespace-pre-wrap break-words leading-6" : "leading-6"
-          )}
-        >
-          {value}
-        </div>
+        {editing ? (
+          <div className="mt-2">
+            {multiline ? (
+              <textarea
+                value={safeDraftValue}
+                onChange={(event) => setDraftValue(event.target.value)}
+                rows={4}
+                autoFocus
+                className="w-full resize-none rounded-[16px] border border-line bg-surface px-3 py-2.5 text-[13px] font-semibold leading-6 text-text outline-none transition-colors duration-base ease-premium focus:border-brand"
+              />
+            ) : (
+              <input
+                value={safeDraftValue}
+                onChange={(event) => setDraftValue(event.target.value)}
+                autoFocus
+                className="h-10 w-full rounded-[16px] border border-line bg-surface px-3 text-[13px] font-semibold text-text outline-none transition-colors duration-base ease-premium focus:border-brand"
+              />
+            )}
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded-[12px] border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-text-muted transition-colors duration-base ease-premium hover:border-line-strong hover:text-text"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={!changed}
+                onClick={stageEdit}
+                className={cx(
+                  "rounded-[12px] px-3 py-1.5 text-[12px] font-semibold transition-colors duration-base ease-premium",
+                  changed
+                    ? "bg-brand text-white hover:bg-brand-strong"
+                    : "cursor-not-allowed bg-surface-subtle text-text-soft"
+                )}
+              >
+                Stage change
+              </button>
+
+              <span className="text-[11.5px] font-medium text-text-subtle">
+                {changed
+                  ? "Staged only. Publish later to update runtime."
+                  : "Change the value before staging."}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={cx(
+              "mt-1 text-[13.5px] font-semibold leading-6 text-text",
+              multiline && "whitespace-pre-wrap"
+            )}
+          >
+            {approvedValue || "Nothing approved yet."}
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 pt-[4px]">
-        {typeof onEdit === "function" ? (
+      <div className="flex items-start gap-2 pt-[4px]">
+        {!editing && typeof onEdit === "function" ? (
           <button
             type="button"
-            onClick={() =>
-              onEdit({
-                key: fieldKey,
-                label,
-                value,
-                hint,
-                multiline,
-              })
-            }
+            onClick={startEdit}
             className="text-[12px] font-semibold text-text-subtle transition-colors duration-base ease-premium hover:text-brand"
           >
             Edit
@@ -1334,7 +1408,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
 function Tabs({ activeTab, onChange }) {
   const tabs = [
     ["business", "Business"],
-    ["contract", "Contract"],
+    ["contract", "AI Contract"],
     ["behavior", "Behavior"],
     ["sources", "Sources"],
     ["versions", "Versions"],
@@ -1965,7 +2039,7 @@ function TruthFieldChangeDrawer({ draft, onDraftChange, onClose, onSave }) {
       <aside className="absolute right-4 top-4 flex max-h-[calc(100vh-32px)] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-[24px] border border-line-soft bg-surface shadow-panel">
         <div className="border-b border-line-soft px-5 py-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
-            Propose change
+            Propose record change
           </div>
 
           <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
@@ -1973,7 +2047,7 @@ function TruthFieldChangeDrawer({ draft, onDraftChange, onClose, onSave }) {
           </div>
 
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            This will create a pending change. It will not update live runtime until published.
+            This creates a staged record change. Live AI will not use it until a new truth version is published.
           </div>
         </div>
 
@@ -2486,10 +2560,10 @@ export default function TruthViewerPage() {
       key: text(field.key),
       label: text(field.label, "Approved field"),
       value: text(field.value),
-      nextValue: text(field.value),
+      nextValue: text(field.nextValue || field.value),
       hint: text(field.hint),
       multiline: Boolean(field.multiline),
-      note: "",
+      note: text(field.note),
     });
   }, []);
 
@@ -2521,7 +2595,6 @@ export default function TruthViewerPage() {
     ]);
 
     setPendingFieldChange(null);
-    setActiveTab("review");
   }, []);
 
   const clearPendingFieldChanges = useCallback(() => {
@@ -2768,7 +2841,7 @@ export default function TruthViewerPage() {
             />
           ) : null}
           {activeTab === "business" ? (
-            <BusinessTab groups={businessGroups} onEdit={openFieldChange} />
+            <BusinessTab groups={businessGroups} onEdit={saveFieldChange} />
           ) : null}
 
           {activeTab === "behavior" ? (
