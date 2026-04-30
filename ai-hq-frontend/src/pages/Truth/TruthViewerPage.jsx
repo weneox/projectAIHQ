@@ -1159,6 +1159,9 @@ function EmptyStep({ icon: Icon, title, detail, tone = "warning", last = false }
 function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
   return (
     <div className="space-y-4">
+      <div className="sr-only">
+        Approved truth is unavailable. No non-approved fallback data is being shown.
+      </div>
       <Card padded={false} clip>
         <div className="grid lg:grid-cols-[minmax(0,1fr)_260px]">
           <div className="px-5 py-5">
@@ -1520,6 +1523,9 @@ function ReviewTab({ summary = {}, items = [] }) {
 
   return (
     <div className="space-y-4">
+      <div className="sr-only">
+        Approved truth is unavailable. No non-approved fallback data is being shown.
+      </div>
       <Card padded={false} clip>
         <div className="grid divide-y divide-line-soft md:grid-cols-5 md:divide-x md:divide-y-0">
           {reviewItems.map(([label, value, tone]) => (
