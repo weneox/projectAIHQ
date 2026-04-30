@@ -309,10 +309,16 @@ export async function finalizeSetupReviewComposition(
       };
     }
 
+    const maintenanceChanges = arr(current?.draft?.draftPayload?.stagedTruthMaintenance?.changes);
+    const maintenancePublishRequested =
+      body?.maintenance === true ||
+      body?.truthMaintenance === true ||
+      maintenanceChanges.length > 0;
+
     if (current?.session?.id) {
       const readiness = buildFinalizeReadiness(current);
 
-      if (readiness.review.finalizeAvailable !== true) {
+      if (!maintenancePublishRequested && readiness.review.finalizeAvailable !== true) {
         await auditSetupAction(
           db,
           actor,

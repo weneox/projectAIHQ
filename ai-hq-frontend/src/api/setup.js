@@ -8,6 +8,8 @@ const SETUP_REVIEW_CURRENT_PATH = "/api/setup/review/current";
 const SETUP_REVIEW_ANALYZE_PATH = "/api/setup/review/current/analyze";
 const SETUP_REVIEW_DISCARD_PATH = "/api/setup/review/current/discard";
 const SETUP_REVIEW_FINALIZE_PATH = "/api/setup/review/current/finalize";
+const TRUTH_MAINTENANCE_STAGE_PATH = "/api/truth/maintenance/stage";
+const TRUTH_MAINTENANCE_PUBLISH_PATH = "/api/truth/maintenance/publish";
 
 const SETUP_ASSISTANT_TIMEOUT_MS = 45_000;
 const SETUP_IMPORT_TIMEOUT_MS = 75_000;
@@ -335,6 +337,17 @@ export async function getCurrentSetupReview(params = {}) {
   return normalizeReviewPayload(response);
 }
 
+export function stageTruthMaintenanceChanges(payload = {}) {
+  return apiPost(TRUTH_MAINTENANCE_STAGE_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
+}
+
+export function publishTruthMaintenanceChanges(payload = {}) {
+  return apiPost(TRUTH_MAINTENANCE_PUBLISH_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
+}
 export function patchCurrentSetupReview(payload = {}) {
   return apiPatch(SETUP_REVIEW_CURRENT_PATH, payload, {
     timeoutMs: SETUP_REVIEW_TIMEOUT_MS,

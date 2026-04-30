@@ -129,5 +129,6 @@ export function registerSetupReviewRoutes(
   }
 
   router.post("/setup/review/current/finalize", handleFinalize);
+  router.post("/truth/maintenance/publish", handleFinalize);
   router.post("/setup/review-finalize", handleFinalize);
 }

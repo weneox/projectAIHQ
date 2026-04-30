@@ -20,6 +20,10 @@ import {
 
 import { getSettingsTrustView } from "../../api/trust.js";
 import {
+  publishTruthMaintenanceChanges,
+  stageTruthMaintenanceChanges,
+} from "../../api/setup.js";
+import {
   getCanonicalTruthSnapshot,
   getTruthReviewWorkbench,
   getTruthVersionDetail,
@@ -835,7 +839,7 @@ function RecordRow({
       nextValue,
       hint,
       multiline,
-      note: text(field.note),
+      note: "",
     });
 
     setDraftValue("");
@@ -1838,7 +1842,7 @@ function ContractTab({ contract }) {
   );
 }
 
-function StagedTruthChangesPanel({ changes = [], onEdit, onDiscardAll }) {
+function StagedTruthChangesPanel({ changes = [], onEdit, onDiscardAll, onPublish, publishing = false }) {
   const items = arr(changes);
   if (!items.length) return null;
 
@@ -2461,6 +2465,7 @@ export default function TruthViewerPage() {
   const [activeTab, setActiveTab] = useState("business");
   const [pendingFieldChange, setPendingFieldChange] = useState(null);
   const [pendingFieldChanges, setPendingFieldChanges] = useState([]);
+  const [publishingFieldChanges, setPublishingFieldChanges] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
     loading: false,
@@ -2563,7 +2568,7 @@ export default function TruthViewerPage() {
       nextValue: text(field.nextValue || field.value),
       hint: text(field.hint),
       multiline: Boolean(field.multiline),
-      note: text(field.note),
+      note: "",
     });
   }, []);
 
