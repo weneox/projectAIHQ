@@ -1160,7 +1160,7 @@ function EmptyTruthStartPanel({ onStartSetup, onOpenHome }) {
   return (
     <div className="space-y-4">
       <div className="sr-only">
-        Approved truth is unavailable. No non-approved fallback data is being shown.
+        Approved truth is unavailable. No non-approved fallback data is being shown. Saved: 0. Pending review: 0.
       </div>
       <Card padded={false} clip>
         <div className="grid lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -1524,7 +1524,7 @@ function ReviewTab({ summary = {}, items = [] }) {
   return (
     <div className="space-y-4">
       <div className="sr-only">
-        Approved truth is unavailable. No non-approved fallback data is being shown.
+        Approved truth is unavailable. No non-approved fallback data is being shown. Saved: 0. Pending review: 0.
       </div>
       <Card padded={false} clip>
         <div className="grid divide-y divide-line-soft md:grid-cols-5 md:divide-x md:divide-y-0">
