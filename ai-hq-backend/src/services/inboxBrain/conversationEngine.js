@@ -865,15 +865,7 @@ function listRuntimeContactValues(contacts = [], types = []) {
   );
 }
 
-function firstRuntimeText(...values) {
-  for (const value of values) {
-    const text = s(value);
-    if (text) return text;
-  }
-  return "";
-}
-
-function getApprovedProjectionView(profile = {}) {
+) {
   const projection = obj(profile?.raw?.projection);
 
   return {
@@ -891,7 +883,7 @@ function getApprovedProjectionView(profile = {}) {
   };
 }
 
-function normalizeRuntimeContactEntry(item = {}) {
+) {
   const x = obj(item);
 
   return {
@@ -932,7 +924,7 @@ function normalizeRuntimeContactEntry(item = {}) {
   };
 }
 
-function normalizeRuntimeLocationEntry(item = {}) {
+) {
   const x = obj(item);
 
   return {
@@ -946,41 +938,6 @@ function normalizeRuntimeLocationEntry(item = {}) {
       x.isPrimary === true ||
       x.is_primary === true,
   };
-}
-
-function pickRuntimeContactValue(contacts = [], types = []) {
-  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
-
-  const primary = arr(contacts).find(
-    (item) =>
-      wanted.has(normalizeContactType(item?.type)) &&
-      item?.public !== false &&
-      item?.primary === true &&
-      s(item?.value)
-  );
-
-  if (primary?.value) return s(primary.value);
-
-  const firstPublic = arr(contacts).find(
-    (item) =>
-      wanted.has(normalizeContactType(item?.type)) &&
-      item?.public !== false &&
-      s(item?.value)
-  );
-
-  return s(firstPublic?.value);
-}
-
-function listRuntimeContactValues(contacts = [], types = []) {
-  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
-
-  return uniqStrings(
-    arr(contacts)
-      .filter((item) => wanted.has(normalizeContactType(item?.type)))
-      .filter((item) => item?.public !== false)
-      .map((item) => s(item?.value))
-      .filter(Boolean)
-  );
 }
 
 function buildContactGrounding(profile = {}) {
