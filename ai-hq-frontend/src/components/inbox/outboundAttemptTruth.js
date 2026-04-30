@@ -222,6 +222,7 @@ export function getAttemptStatusTone(status) {
     failed: "border-amber-200 bg-amber-50 text-amber-700",
     retrying: "border-violet-200 bg-violet-50 text-violet-700",
     dead: "border-rose-200 bg-rose-50 text-rose-700",
+    unconfirmed: "border-amber-200 bg-amber-50 text-amber-800",
   }[value] || "border-stone-200 bg-stone-100 text-stone-700";
 }
 

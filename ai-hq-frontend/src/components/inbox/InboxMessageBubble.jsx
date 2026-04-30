@@ -3,6 +3,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
 import InboxReplayTraceCard from "./InboxReplayTraceCard.jsx";
+import {
+  getAttemptStatusTone,
+  getMessageOutboundTruth,
+} from "./outboundAttemptTruth.js";
 
 function s(value) {
   return String(value ?? "").trim();
@@ -227,6 +231,56 @@ function EliteBubble({ side = "left", text, sentAt }) {
   );
 }
 
+function normalizeOutboundTruthLabel(truth = {}) {
+  const status = s(truth?.status).toLowerCase();
+
+  if (status === "sent") return "Sent";
+  if (status === "queued") return "Sending";
+  if (status === "sending") return "Sending";
+  if (status === "retrying") return "Retrying";
+  if (status === "failed") return "Not delivered";
+  if (status === "dead") return "Not delivered";
+  if (status === "unconfirmed") return "Delivery unconfirmed";
+
+  const kind = s(truth?.kind).toLowerCase();
+  if (kind === "awaiting_attempt") return "Waiting for delivery";
+  if (kind === "missing_correlation") return "Delivery unverified";
+  if (kind === "stale_attempt") return "Delivery stale";
+
+  return s(truth?.label) || "Delivery unverified";
+}
+
+function OutboundDeliveryTruth({ truth }) {
+  if (!truth) return null;
+
+  const status = s(truth?.status).toLowerCase();
+  const label = normalizeOutboundTruthLabel(truth);
+  const detail = s(truth?.detail);
+
+  const tone =
+    status === "sent"
+      ? "border-emerald-200/80 bg-emerald-50/80 text-emerald-700"
+      : status
+        ? getAttemptStatusTone(status)
+        : "border-amber-200 bg-amber-50 text-amber-800";
+
+  return (
+    <div className="mt-1.5 flex justify-end pr-1">
+      <span
+        title={detail || label}
+        className={[
+          "inline-flex max-w-[260px] items-center rounded-full border px-2 py-[3px]",
+          "text-[10.5px] font-semibold leading-none tracking-[-0.01em]",
+          "shadow-[0_8px_18px_-16px_rgba(15,23,42,0.22)]",
+          tone,
+        ].join(" ")}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
   return (
     <div
@@ -267,7 +321,7 @@ function InspectBlock({ open, onToggle, traceSource, align = "start" }) {
 export default function InboxMessageBubble({
   m,
   thread = null,
-  attemptsByCorrelation: _attemptsByCorrelation,
+  attemptsByCorrelation,
   enableInspect = false,
 }) {
   const [inspectOpen, setInspectOpen] = useState(false);
@@ -279,6 +333,9 @@ export default function InboxMessageBubble({
 
   const displayName = resolveDisplayName(m, inbound, thread);
   const avatarUrl = inbound ? resolveAvatarUrl(m, thread) : "";
+  const outboundTruth = inbound
+    ? null
+    : getMessageOutboundTruth(m, attemptsByCorrelation);
 
   const bubbleWidthClass = "max-w-[min(430px,68vw)]";
 
@@ -309,6 +366,7 @@ export default function InboxMessageBubble({
     <div className="flex w-full justify-end px-3 py-[5px] sm:px-5">
       <div className={bubbleWidthClass}>
         <EliteBubble side="right" text={text} sentAt={sentAt} />
+        <OutboundDeliveryTruth truth={outboundTruth} />
 
         {showInspect ? (
           <InspectBlock

@@ -78,8 +78,8 @@ function classifyChannelOutboundFailure({ execution = {}, delivery = {} } = {}) 
 
   const status = Number(classified?.status ?? delivery?.status ?? 0);
   const reasonCode = s(
-    classified?.errorCode ||
-      delivery?.reasonCode ||
+    delivery?.reasonCode ||
+      classified?.errorCode ||
       delivery?.status ||
       "delivery_failed"
   );
