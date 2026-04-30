@@ -590,7 +590,6 @@ export default function Inbox() {
     loadThreadDetail,
     loadMessages,
     loadRelatedLead,
-    syncSelected,
     markRead,
     assignThread,
     activateHandoff,
