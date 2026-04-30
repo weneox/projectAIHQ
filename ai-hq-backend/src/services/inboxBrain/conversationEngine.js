@@ -912,59 +912,94 @@ function buildContactGrounding(profile = {}) {
     .filter((item) => item.title || item.address || item.city)
     .slice(0, 12);
 
-  const primaryPhone = firstRuntimeText(
-    pickRuntimeContactValue(normalizedContacts, ["phone", "whatsapp"]),
+  const profilePhone = firstRuntimeText(
     profileJson.primaryPhone,
     profile?.primaryPhone,
     profile?.publicPhone
   );
 
-  const primaryEmail = firstRuntimeText(
-    pickRuntimeContactValue(normalizedContacts, ["email"]),
+  const profileEmail = firstRuntimeText(
     profileJson.primaryEmail,
     profile?.primaryEmail,
     profile?.publicEmail
   );
 
-  const websiteUrl = firstRuntimeText(
-    pickRuntimeContactValue(normalizedContacts, ["website"]),
+  const profileWebsite = firstRuntimeText(
     profileJson.websiteUrl,
     approved.identity.websiteUrl,
     profile?.websiteUrl
   );
 
-  const primaryAddress = firstRuntimeText(
-    arr(normalizedLocations).find((item) => item?.primary && s(item?.address))?.address,
-    arr(normalizedLocations).find((item) => s(item?.address))?.address,
+  const profileAddress = firstRuntimeText(
     profileJson.primaryAddress,
     profile?.primaryAddress
   );
+
+  const contactPhone = pickRuntimeContactValue(normalizedContacts, [
+    "phone",
+    "whatsapp",
+  ]);
+
+  const contactEmail = pickRuntimeContactValue(normalizedContacts, ["email"]);
+  const contactWebsite = pickRuntimeContactValue(normalizedContacts, ["website"]);
+
+  const locationAddress = firstRuntimeText(
+    arr(normalizedLocations).find((item) => item?.primary && s(item?.address))
+      ?.address,
+    arr(normalizedLocations).find((item) => s(item?.address))?.address
+  );
+
+  const primaryPhone = firstRuntimeText(profilePhone, contactPhone);
+  const primaryEmail = firstRuntimeText(profileEmail, contactEmail);
+  const websiteUrl = firstRuntimeText(profileWebsite, contactWebsite);
+  const primaryAddress = firstRuntimeText(profileAddress, locationAddress);
 
   return {
     primaryPhone,
     primaryEmail,
     websiteUrl,
     primaryAddress,
+
     contactPhones: uniqStrings([
       primaryPhone,
-      ...listRuntimeContactValues(normalizedContacts, ["phone", "whatsapp"]),
-      ...(hasApprovedContacts ? [] : arr(profile?.contactPhones).map((x) => s(x))),
+      ...(profilePhone
+        ? []
+        : listRuntimeContactValues(normalizedContacts, ["phone", "whatsapp"])),
+      ...(profilePhone || hasApprovedContacts
+        ? []
+        : arr(profile?.contactPhones).map((x) => s(x))),
     ]).slice(0, 8),
+
     contactEmails: uniqStrings([
       primaryEmail,
-      ...listRuntimeContactValues(normalizedContacts, ["email"]),
-      ...(hasApprovedContacts ? [] : arr(profile?.contactEmails).map((x) => s(x))),
+      ...(profileEmail
+        ? []
+        : listRuntimeContactValues(normalizedContacts, ["email"])),
+      ...(profileEmail || hasApprovedContacts
+        ? []
+        : arr(profile?.contactEmails).map((x) => s(x))),
     ]).slice(0, 8),
+
     websiteUrls: uniqStrings([
       websiteUrl,
-      ...listRuntimeContactValues(normalizedContacts, ["website"]),
-      ...(hasApprovedContacts ? [] : arr(profile?.websiteUrls).map((x) => s(x))),
+      ...(profileWebsite
+        ? []
+        : listRuntimeContactValues(normalizedContacts, ["website"])),
+      ...(profileWebsite || hasApprovedContacts
+        ? []
+        : arr(profile?.websiteUrls).map((x) => s(x))),
     ]).slice(0, 8),
+
     contactAddresses: uniqStrings([
       primaryAddress,
-      ...arr(normalizedLocations).map((item) => s(item?.address)),
-      ...(hasApprovedLocations ? [] : arr(profile?.contactAddresses).map((x) => s(x))),
+      ...(profileAddress
+        ? []
+        : arr(normalizedLocations).map((item) => s(item?.address))),
+      ...(profileAddress || hasApprovedLocations
+        ? []
+        : arr(profile?.contactAddresses).map((x) => s(x))),
     ]).slice(0, 8),
+
     contacts: normalizedContacts,
     locations: normalizedLocations,
   };
