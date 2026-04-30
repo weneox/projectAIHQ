@@ -865,6 +865,124 @@ function listRuntimeContactValues(contacts = [], types = []) {
   );
 }
 
+function firstRuntimeText(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function getApprovedProjectionView(profile = {}) {
+  const projection = obj(profile?.raw?.projection);
+
+  return {
+    projection,
+    identity: obj(projection?.identity_json),
+    profileJson: obj(projection?.profile_json),
+    capabilitiesJson: obj(projection?.capabilities_json),
+    inboxJson: obj(projection?.inbox_json),
+    commentsJson: obj(projection?.comments_json),
+    contentJson: obj(projection?.content_json),
+    behaviorJson: obj(projection?.behavior_json),
+    contactsJson: arr(projection?.contacts_json),
+    locationsJson: arr(projection?.locations_json),
+    servicesJson: arr(projection?.services_json),
+  };
+}
+
+function normalizeRuntimeContactEntry(item = {}) {
+  const x = obj(item);
+
+  return {
+    type: normalizeContactType(
+      x.type ||
+        x.channel ||
+        x.contactType ||
+        x.contact_type ||
+        x.kind ||
+        ""
+    ),
+    label: s(x.label || x.title || x.name),
+    value: s(
+      x.value ||
+        x.contactValue ||
+        x.contact_value ||
+        x.phone ||
+        x.phoneNumber ||
+        x.phone_number ||
+        x.email ||
+        x.website ||
+        x.url ||
+        x.href ||
+        ""
+    ),
+    primary:
+      x.primary === true ||
+      x.isPrimary === true ||
+      x.is_primary === true,
+    public:
+      x.public !== false &&
+      x.isPublic !== false &&
+      x.is_public !== false &&
+      x.visiblePublic !== false &&
+      x.visible_public !== false &&
+      x.visibleInAi !== false &&
+      x.visible_in_ai !== false,
+  };
+}
+
+function normalizeRuntimeLocationEntry(item = {}) {
+  const x = obj(item);
+
+  return {
+    title: s(x.title || x.label || x.name),
+    address: s(x.address || x.addressLine || x.address_line),
+    city: s(x.city),
+    region: s(x.region),
+    country: s(x.country),
+    primary:
+      x.primary === true ||
+      x.isPrimary === true ||
+      x.is_primary === true,
+  };
+}
+
+function pickRuntimeContactValue(contacts = [], types = []) {
+  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
+
+  const primary = arr(contacts).find(
+    (item) =>
+      wanted.has(normalizeContactType(item?.type)) &&
+      item?.public !== false &&
+      item?.primary === true &&
+      s(item?.value)
+  );
+
+  if (primary?.value) return s(primary.value);
+
+  const firstPublic = arr(contacts).find(
+    (item) =>
+      wanted.has(normalizeContactType(item?.type)) &&
+      item?.public !== false &&
+      s(item?.value)
+  );
+
+  return s(firstPublic?.value);
+}
+
+function listRuntimeContactValues(contacts = [], types = []) {
+  const wanted = new Set(arr(types).map((item) => normalizeContactType(item)));
+
+  return uniqStrings(
+    arr(contacts)
+      .filter((item) => wanted.has(normalizeContactType(item?.type)))
+      .filter((item) => item?.public !== false)
+      .map((item) => s(item?.value))
+      .filter(Boolean)
+  );
+}
+
 function buildContactGrounding(profile = {}) {
   const approved = getApprovedProjectionView(profile);
   const profileJson = approved.profileJson;
@@ -1218,6 +1336,7 @@ function buildConversationUserPrompt({
     "",
     "Sales behavior instructions:",
     "- Treat this as a lead conversation unless the message is clearly support-only.",
+    "- Use tenant runtime grounding as the current approved truth. Do not prefer older thread history over it.",
     "- Use tenant runtime grounding as the current approved truth. Do not prefer older thread history over it.",
     "- If the lead asks for contact details and grounded contact details exist, return the exact grounded details directly.",
     "- If the lead asks for the offer, explain the real offer in business language, not abstract wording.",
