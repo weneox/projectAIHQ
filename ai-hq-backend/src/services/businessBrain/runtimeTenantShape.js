@@ -432,13 +432,13 @@ function mergeTenantRuntime({
   const websiteUrl =
     s(businessProfile?.website_url) ||
     s(businessProfile?.websiteUrl) ||
-    firstCanonical([\"website\", \"social_link\"], [
-      \"website_url\",
-      \"site_url\",
-      \"primary_website\",
-      \"url\",
+    firstCanonical(["website", "social_link"], [
+      "website_url",
+      "site_url",
+      "primary_website",
+      "url",
     ]) ||
-    firstFact(facts, [\"website\", \"social_link\"]) ||
+    firstFact(facts, ["website", "social_link"]) ||
     s(legacy?.profile?.website_url);
 
   const primaryAddress =
