@@ -2289,6 +2289,7 @@ export async function runTenantAwareConversationEngine({
     return groundedContactDecision;
   }
 
+
   try {
     console.info("[ai-hq] truth_contact_debug_probe", {
       displayName: runtimeGrounding?.displayName || "",
