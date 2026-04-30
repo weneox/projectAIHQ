@@ -2149,6 +2149,27 @@ export async function runTenantAwareConversationEngine({
   const profile = resolvedRuntime;
   const runtimeGrounding = buildRuntimeGrounding(profile);
 
+  try {
+    console.info("[ai-hq] truth_contact_debug_probe", {
+      displayName: runtimeGrounding?.displayName || "",
+      groundingPrimaryPhone: runtimeGrounding?.contactGrounding?.primaryPhone || "",
+      groundingPhones: runtimeGrounding?.contactGrounding?.contactPhones || [],
+      profilePrimaryPhone: profile?.primaryPhone || "",
+      profilePublicPhone: profile?.publicPhone || "",
+      profileContactPhones: profile?.contactPhones || [],
+      projectionProfilePhone:
+        profile?.raw?.projection?.profile_json?.primaryPhone ||
+        profile?.raw?.projection?.profileJson?.primaryPhone ||
+        "",
+      projectionContacts:
+        profile?.raw?.projection?.contacts_json ||
+        profile?.raw?.projection?.contactsJson ||
+        [],
+      latestText: text,
+    });
+  } catch {}
+
+
   const matchedKnowledge = matchKnowledgeEntries(
     text,
     resolvedRuntime.knowledgeEntries,
