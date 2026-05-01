@@ -43,13 +43,23 @@ function InboxComposer({
   className = "",
   submitLabel = "Send",
   voiceLabel = "Voice message",
+  aiReplyEnabled = false,
+  threadAiEnabled = false,
+  threadAiPaused = false,
+  threadAiSaving = false,
+  onToggleThreadAi,
 }) {
   const textareaRef = useRef(null);
   const autosizeRafRef = useRef(0);
+  const [aiNoticeOpen, setAiNoticeOpen] = useState(false);
 
   const selectedThreadId = trim(selectedThread?.id);
   const hasSelectedThreadProp = selectedThread !== undefined;
   const hasThread = !hasSelectedThreadProp || Boolean(selectedThreadId);
+
+  useEffect(() => {
+    setAiNoticeOpen(false);
+  }, [selectedThreadId]);
 
   const controlled =
     replyText !== undefined ||
@@ -83,6 +93,26 @@ function InboxComposer({
   const resolvedDisabled = Boolean(
     disabled || isSending || unavailable || !ready || !hasThread
   );
+
+  const globalAiActive = aiReplyEnabled === true;
+  const threadAiActive = threadAiEnabled === true && threadAiPaused !== true;
+  const threadAiSwitchPending =
+    threadAiSaving === true ||
+    isActionPending(actionState, "handoff") ||
+    isActionPending(actionState, "release");
+
+  const shouldShowAiNotice = aiNoticeOpen && hasThread && globalAiActive;
+
+  function revealAiNotice() {
+    if (!globalAiActive || !hasThread) return;
+    setAiNoticeOpen(true);
+  }
+
+  function handleThreadAiToggle() {
+    if (threadAiSwitchPending) return;
+    if (typeof onToggleThreadAi !== "function") return;
+    void onToggleThreadAi(!threadAiActive);
+  }
 
   const canSend = useMemo(() => {
     return !resolvedDisabled && hasText;
@@ -228,7 +258,69 @@ function InboxComposer({
 
   return (
     <div className={["w-full", className].filter(Boolean).join(" ")}>
+      {shouldShowAiNotice ? (
+        <div className="mb-2 overflow-hidden rounded-[20px] border border-[#D8E7F7] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(246,250,255,0.98)_100%)] px-4 py-3 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.94)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-[220px] flex-1">
+              <div className="text-[13px] font-semibold leading-5 tracking-[-0.01em] text-[#15263B]">
+                {threadAiActive
+                  ? "AI bu söhbətdə aktivdir."
+                  : "Operator rejimi aktivdir."}
+              </div>
+              <div className="mt-0.5 text-[12px] font-medium leading-5 text-[#64748B]">
+                {threadAiActive
+                  ? "Manual cavab yazsanız, AI cavabı ilə üst-üstə düşə bilər."
+                  : "AI bu söhbətdə avtomatik cavab verməyəcək. İstəsəniz yenidən aktiv edin."}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={threadAiActive}
+                disabled={threadAiSwitchPending || !globalAiActive}
+                onClick={handleThreadAiToggle}
+                className={[
+                  "inline-flex h-9 items-center gap-2 rounded-full border px-2.5 pr-3",
+                  "text-[12px] font-semibold transition-all duration-200",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  threadAiActive
+                    ? "border-[#B9D7FF] bg-[#EEF7FF] text-[#1167C7]"
+                    : "border-[#E3EAF2] bg-white text-[#526176]",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "relative inline-flex h-[20px] w-[34px] items-center rounded-full transition-colors duration-200",
+                    threadAiActive ? "bg-[#2F8FEA]" : "bg-[#CBD5E1]",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_2px_6px_rgba(15,23,42,0.18)] transition-transform duration-200",
+                      threadAiActive ? "translate-x-[17px]" : "translate-x-[3px]",
+                    ].join(" ")}
+                  />
+                </span>
+                <span>{threadAiActive ? "AI ON" : "AI OFF"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAiNoticeOpen(false)}
+                className="inline-flex h-9 items-center rounded-full px-3 text-[12px] font-semibold text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#1E293B]"
+              >
+                Bağla
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div
+        onFocusCapture={revealAiNotice}
+        onClick={revealAiNotice}
         className={[
           "relative min-h-[66px] w-full min-w-0 overflow-hidden rounded-[23px] border",
           "border-[#D8E4F1]/95",

@@ -721,6 +721,29 @@ export default function Inbox() {
       Boolean(detailSurface.loading && !hasVisibleMessages),
   };
 
+  const selectedThreadAiPaused = Boolean(selectedThread?.handoff_active);
+  const selectedThreadAiEnabled =
+    inboxAutomationControl.enabled === true && !selectedThreadAiPaused;
+  const selectedThreadAiSaving = Boolean(
+    actionState?.isActionPending?.("handoff") ||
+      actionState?.isActionPending?.("release")
+  );
+
+  const handleToggleThreadAi = useCallback(
+    async (nextEnabled) => {
+      const threadId = s(selectedThread?.id);
+      if (!threadId) return;
+
+      if (nextEnabled) {
+        await releaseHandoff(threadId);
+        return;
+      }
+
+      await activateHandoff(threadId);
+    },
+    [activateHandoff, releaseHandoff, selectedThread?.id]
+  );
+
   useEffect(() => {
     function onKeyDown(event) {
       if (event.key === "Escape") setDetailThreadId("");
@@ -857,6 +880,11 @@ export default function Inbox() {
                 setReplyText={setReplyText}
                 onSend={handleSend}
                 onReleaseHandoff={handleRelease}
+                aiReplyEnabled={inboxAutomationControl.enabled}
+                threadAiEnabled={selectedThreadAiEnabled}
+                threadAiPaused={selectedThreadAiPaused}
+                threadAiSaving={selectedThreadAiSaving}
+                onToggleThreadAi={handleToggleThreadAi}
               />
             }
           />

@@ -130,6 +130,8 @@ function buildOptimisticOutboundMessage({
       deliveryStatus: "pending",
       clientMutationId,
       client_mutation_id: clientMutationId,
+              releaseHandoff: false,
+              preserveThreadMode: true,
     },
   };
 }
@@ -742,6 +744,7 @@ export function useInboxData({
             messageType: "text",
             text: trimmed,
             releaseHandoff: false,
+            preserveThreadMode: true,
             clientMutationId,
             meta: {
               source: "inbox_ui",

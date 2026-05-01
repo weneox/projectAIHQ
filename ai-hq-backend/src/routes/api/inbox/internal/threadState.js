@@ -438,7 +438,13 @@ export function buildThreadStateForOutbound({
   const messageText = s(message?.text || "");
   const operatorReply = sender === "agent" || sender === "operator";
   const aiReply = (sender === "ai" || sender === "assistant") && type === "text";
-  const handoffReset = operatorReply;
+  const explicitResumeAutomation = Boolean(
+    meta?.releaseHandoff === true ||
+      meta?.release_handoff === true ||
+      meta?.resumeAutomation === true ||
+      meta?.resume_automation === true
+  );
+  const handoffReset = operatorReply && explicitResumeAutomation;
 
   return {
     thread_id: s(thread?.id || ""),

@@ -181,11 +181,18 @@ export async function persistOutboundMessage({
     storageMessageType || requestedMessageType || "text",
     "text"
   );
+  const originalMeta = normalizeObj(meta);
+  const releaseThreadHandoff = Boolean(
+    originalMeta.releaseHandoff === true ||
+      originalMeta.release_handoff === true ||
+      originalMeta.resumeAutomation === true ||
+      originalMeta.resume_automation === true
+  );
   const deliveryStatus = providerMessageId ? "sent" : "pending";
   const sentAt = nowIso();
 
   const mergedMeta = {
-    ...normalizeObj(meta),
+    ...originalMeta,
     recipientId,
     provider: resolvedProvider,
     originalMessageType: requestedMessageType,
@@ -246,13 +253,13 @@ export async function persistOutboundMessage({
       last_outbound_at = now(),
       external_user_id = coalesce($2::text, external_user_id),
       updated_at = now(),
-      handoff_active = case when $3::text in ('agent','operator') then false else handoff_active end,
-      handoff_reason = case when $3::text in ('agent','operator') then '' else handoff_reason end,
-      handoff_priority = case when $3::text in ('agent','operator') then 'normal' else handoff_priority end,
-      handoff_at = case when $3::text in ('agent','operator') then null else handoff_at end,
-      handoff_by = case when $3::text in ('agent','operator') then null else handoff_by end,
+      handoff_active = case when $3::text in ('agent','operator') and $6::boolean then false else handoff_active end,
+      handoff_reason = case when $3::text in ('agent','operator') and $6::boolean then '' else handoff_reason end,
+      handoff_priority = case when $3::text in ('agent','operator') and $6::boolean then 'normal' else handoff_priority end,
+      handoff_at = case when $3::text in ('agent','operator') and $6::boolean then null else handoff_at end,
+      handoff_by = case when $3::text in ('agent','operator') and $6::boolean then null else handoff_by end,
       meta = case
-        when $3::text in ('agent','operator') then
+        when $3::text in ('agent','operator') and $6::boolean then
           jsonb_set(
             coalesce(meta, '{}'::jsonb),
             '{handoff}',
@@ -263,7 +270,7 @@ export async function persistOutboundMessage({
       end
     where id = $1::uuid
     `,
-    [thread.id, recipientId, senderType, messageType, tenantId]
+    [thread.id, recipientId, senderType, messageType, tenantId, releaseThreadHandoff]
   );
 
   const attemptPayload = buildOutboundAttemptPayload({
