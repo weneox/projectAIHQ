@@ -89,6 +89,75 @@ function resolvePayloadActionType(payload = {}) {
   return "send_message";
 }
 
+function findProviderMessageIdDeep(value, depth = 0) {
+  if (depth > 6 || value == null) return "";
+
+  if (typeof value === "string" || typeof value === "number") {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findProviderMessageIdDeep(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof value !== "object") return "";
+
+  const direct = s(
+    value.message_id ||
+      value.messageId ||
+      value.provider_message_id ||
+      value.providerMessageId ||
+      value.mid ||
+      value.id
+  );
+
+  if (direct) return direct;
+
+  const preferredKeys = [
+    "response",
+    "result",
+    "json",
+    "data",
+    "message",
+    "messages",
+    "entry",
+    "events",
+    "payload",
+  ];
+
+  for (const key of preferredKeys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const found = findProviderMessageIdDeep(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  for (const key of Object.keys(value)) {
+    if (preferredKeys.includes(key)) continue;
+    const found = findProviderMessageIdDeep(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  return "";
+}
+
+function resolveProviderResponse(gateway = {}) {
+  const json = obj(gateway?.json);
+  const result = obj(json?.result);
+  return obj(
+    result?.response ||
+      result?.json ||
+      result?.data ||
+      json?.response ||
+      json?.data ||
+      result ||
+      json
+  );
+}
+
 function resolveTelegramTenantId({ execution = {}, thread = {}, message = {} } = {}) {
   return (
     s(execution?.tenant_id || execution?.tenantId) ||
@@ -129,15 +198,11 @@ function resolveTelegramText({ payload = {}, message = {} } = {}) {
 
 async function deliverMetaOutbound(payload = {}) {
   const gateway = await sendOutboundViaMetaGateway(payload);
-  const providerResult = gateway?.json?.result || gateway?.json || {};
-  const providerResponse =
-    providerResult?.response || providerResult?.json || providerResult || {};
+  const providerResponse = resolveProviderResponse(gateway);
   const providerMessageId =
-    s(
-      providerResponse?.message_id ||
-        providerResponse?.messageId ||
-        providerResponse?.id
-    ) || null;
+    findProviderMessageIdDeep(providerResponse) ||
+    findProviderMessageIdDeep(gateway?.json) ||
+    null;
 
   const actionType = resolvePayloadActionType(payload);
 

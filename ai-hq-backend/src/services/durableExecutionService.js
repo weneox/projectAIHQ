@@ -63,6 +63,56 @@ function resolveExecutionProvider(execution = {}) {
   );
 }
 
+function emitOutboundDeliveryTruth({
+  wsHub,
+  tenantKey = "",
+  threadId = "",
+  message = null,
+  attempt = null,
+  reason = "",
+} = {}) {
+  const safeTenantKey = s(
+    tenantKey ||
+      message?.tenant_key ||
+      message?.tenantKey ||
+      attempt?.tenant_key ||
+      attempt?.tenantKey
+  );
+  const safeThreadId = s(
+    threadId ||
+      message?.thread_id ||
+      message?.threadId ||
+      attempt?.thread_id ||
+      attempt?.threadId
+  );
+
+  if (message?.id) {
+    try {
+      emitRealtimeEvent(wsHub, {
+        type: "inbox.message.updated",
+        audience: "operator",
+        tenantKey: safeTenantKey,
+        threadId: safeThreadId,
+        message,
+        reason,
+      });
+    } catch {}
+  }
+
+  if (attempt?.id) {
+    try {
+      emitRealtimeEvent(wsHub, {
+        type: "inbox.outbound.attempt.updated",
+        audience: "operator",
+        tenantKey: safeTenantKey,
+        threadId: safeThreadId,
+        attempt,
+        reason,
+      });
+    } catch {}
+  }
+}
+
 function classifyChannelOutboundFailure({ execution = {}, delivery = {} } = {}) {
   const provider = resolveExecutionProvider(execution);
 
@@ -525,9 +575,11 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       delivery,
     });
 
+    let updatedAttempt = null;
+
     if (attemptId) {
       if (failure.retryable) {
-        await markOutboundAttemptFailed({
+        updatedAttempt = await markOutboundAttemptFailed({
           db,
           attemptId,
           error: failure.errorMessage,
@@ -536,17 +588,26 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
           retryDelaySeconds: 120,
         });
       } else {
-        await markOutboundAttemptDead(db, attemptId);
+        updatedAttempt = await markOutboundAttemptDead(db, attemptId);
       }
     }
 
-    await updateOutboundMessageDeliveryFailure({
+    const updatedMessage = await updateOutboundMessageDeliveryFailure({
       db,
       messageId: message.id,
       status: failure.retryable ? "failed" : "dead",
       error: failure.errorMessage,
       errorCode: failure.errorCode,
       providerResponse: delivery.providerResponse || delivery.json || {},
+    });
+
+    emitOutboundDeliveryTruth({
+      wsHub,
+      tenantKey,
+      threadId: resolvedThreadId,
+      message: updatedMessage || message,
+      attempt: updatedAttempt,
+      reason: "delivery_failed",
     });
 
     try {
@@ -592,8 +653,10 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   const providerResponse = obj(delivery.providerResponse);
   const providerMessageId = s(delivery.providerMessageId) || null;
 
+  let updatedAttempt = null;
+
   if (attemptId) {
-    await markOutboundAttemptSent({
+    updatedAttempt = await markOutboundAttemptSent({
       db,
       attemptId,
       providerMessageId,
@@ -623,18 +686,17 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
     });
   } catch {}
 
-  try {
-    emitRealtimeEvent(wsHub, {
-      type: "inbox.message.updated",
-      audience: "operator",
-      tenantKey:
-        updatedMessage?.tenant_key ||
-        message?.tenant_key ||
-        execution.tenant_key,
-      threadId: String(updatedMessage?.thread_id || message.thread_id || ""),
-      message: updatedMessage || message,
-    });
-  } catch {}
+  emitOutboundDeliveryTruth({
+    wsHub,
+    tenantKey:
+      updatedMessage?.tenant_key ||
+      message?.tenant_key ||
+      execution.tenant_key,
+    threadId: String(updatedMessage?.thread_id || message.thread_id || ""),
+    message: updatedMessage || message,
+    attempt: updatedAttempt,
+    reason: "delivery_sent",
+  });
 
   return {
     ok: true,
