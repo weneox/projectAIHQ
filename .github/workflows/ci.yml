@@ -40,6 +40,12 @@ jobs:
           - twilio-voice-backend
           - shared-contracts
 
+    env:
+      VITE_API_BASE: https://api.example.com
+      VITE_WS_URL: wss://api.example.com/ws
+      VITE_ENABLE_INTERNAL_ROUTES: "0"
+      VITE_DEBUG_PUSH: "0"
+
     defaults:
       run:
         working-directory: ${{ matrix.workspace }}
@@ -77,3 +83,4 @@ jobs:
               echo "Skipping build for ${{ matrix.workspace }} because its build requires production-like provider secrets or DB/runtime env."
               ;;
           esac
+
