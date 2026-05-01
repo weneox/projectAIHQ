@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import crypto from "crypto";
 import twilio from "twilio";
 import { cfg } from "../config.js";
@@ -369,31 +369,107 @@ function buildDepartmentTransferAck(lang, tenantConfig, departmentKey = "") {
   const label = s(dept?.label || departmentKey || "operator");
   const L = s(lang, "en").toLowerCase();
 
-  if (L === "ru") return `Хорошо, соединяю вас с отделом ${label}.`;
-  if (L === "tr") return `Tamam, sizi ${label} bölümüne bağlıyorum.`;
+  if (L === "ru") return `Ð¥Ð¾Ñ€Ð¾ÑˆÐ¾, ÑÐ¾ÐµÐ´Ð¸Ð½ÑÑŽ Ð²Ð°Ñ Ñ Ð¾Ñ‚Ð´ÐµÐ»Ð¾Ð¼ ${label}.`;
+  if (L === "tr") return `Tamam, sizi ${label} bÃ¶lÃ¼mÃ¼ne baÄŸlÄ±yorum.`;
   if (L === "en") return `Okay, I will connect you to the ${label} team.`;
   if (L === "es") return `De acuerdo, te conecto con el equipo de ${label}.`;
   if (L === "de") return `Okay, ich verbinde Sie mit dem ${label}-Team.`;
-  if (L === "fr") return `D’accord, je vous mets en relation avec l’équipe ${label}.`;
-  return `Yaxşı, sizi ${label} komandası ilə əlaqələndirirəm.`;
+  if (L === "fr") return `Dâ€™accord, je vous mets en relation avec lâ€™Ã©quipe ${label}.`;
+  return `YaxÅŸÄ±, sizi ${label} komandasÄ± ilÉ™ É™laqÉ™lÉ™ndirirÉ™m.`;
 }
 
 function buildFallbackUnavailableReply(lang) {
   const L = s(lang, "en").toLowerCase();
 
-  if (L === "ru") return "Извините, сервис сейчас временно недоступен.";
-  if (L === "tr") return "Üzgünüm, hizmet şu anda geçici olarak kullanılamıyor.";
+  if (L === "ru") return "Ð˜Ð·Ð²Ð¸Ð½Ð¸Ñ‚Ðµ, ÑÐµÑ€Ð²Ð¸Ñ ÑÐµÐ¹Ñ‡Ð°Ñ Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ð¾ Ð½ÐµÐ´Ð¾ÑÑ‚ÑƒÐ¿ÐµÐ½.";
+  if (L === "tr") return "ÃœzgÃ¼nÃ¼m, hizmet ÅŸu anda geÃ§ici olarak kullanÄ±lamÄ±yor.";
   if (L === "en") return "Sorry, the service is temporarily unavailable right now.";
-  if (L === "es") return "Lo siento, el servicio no está disponible temporalmente en este momento.";
-  if (L === "de") return "Entschuldigung, der Dienst ist im Moment vorübergehend nicht verfügbar.";
-  if (L === "fr") return "Désolé, le service est temporairement indisponible pour le moment.";
-  return "Bağışlayın, xidmət hazırda müvəqqəti olaraq əlçatan deyil.";
+  if (L === "es") return "Lo siento, el servicio no estÃ¡ disponible temporalmente en este momento.";
+  if (L === "de") return "Entschuldigung, der Dienst ist im Moment vorÃ¼bergehend nicht verfÃ¼gbar.";
+  if (L === "fr") return "DÃ©solÃ©, le service est temporairement indisponible pour le moment.";
+  return "BaÄŸÄ±ÅŸlayÄ±n, xidmÉ™t hazÄ±rda mÃ¼vÉ™qqÉ™ti olaraq É™lÃ§atan deyil.";
 }
 
 const routeLogger = createStructuredLogger({
   service: "twilio-voice-backend",
   component: "twilio-routes",
 });
+const fallbackRateLimitBuckets = new Map();
+const FALLBACK_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const FALLBACK_RATE_LIMIT_MAX = 20;
+const FALLBACK_RATE_LIMIT_MAX_BUCKETS = 2000;
+
+function getFallbackRateLimitKey(req) {
+  const forwardedFor = s(req?.headers?.["x-forwarded-for"])
+    .split(",")[0]
+    .trim();
+
+  const ip = s(
+    forwardedFor ||
+      req?.ip ||
+      req?.socket?.remoteAddress ||
+      req?.connection?.remoteAddress ||
+      "unknown"
+  );
+
+  const toNumber = s(req?.body?.To || req?.query?.To || req?.body?.Called || req?.query?.Called);
+  return `${ip}:${toNumber || "unknown_to"}`;
+}
+
+function pruneFallbackRateLimitBuckets(now = Date.now()) {
+  if (fallbackRateLimitBuckets.size <= FALLBACK_RATE_LIMIT_MAX_BUCKETS) return;
+
+  for (const [key, bucket] of fallbackRateLimitBuckets.entries()) {
+    if (!bucket || Number(bucket.resetAt || 0) <= now) {
+      fallbackRateLimitBuckets.delete(key);
+    }
+  }
+
+  if (fallbackRateLimitBuckets.size <= FALLBACK_RATE_LIMIT_MAX_BUCKETS) return;
+
+  const overflow = fallbackRateLimitBuckets.size - FALLBACK_RATE_LIMIT_MAX_BUCKETS;
+  let removed = 0;
+  for (const key of fallbackRateLimitBuckets.keys()) {
+    fallbackRateLimitBuckets.delete(key);
+    removed += 1;
+    if (removed >= overflow) break;
+  }
+}
+
+function twilioVoiceFallbackRateLimit(req, res, next) {
+  const now = Date.now();
+  pruneFallbackRateLimitBuckets(now);
+
+  const key = getFallbackRateLimitKey(req);
+  const current = fallbackRateLimitBuckets.get(key);
+
+  const bucket =
+    current && Number(current.resetAt || 0) > now
+      ? current
+      : {
+          count: 0,
+          resetAt: now + FALLBACK_RATE_LIMIT_WINDOW_MS,
+        };
+
+  bucket.count += 1;
+  fallbackRateLimitBuckets.set(key, bucket);
+
+  if (bucket.count <= FALLBACK_RATE_LIMIT_MAX) return next();
+
+  incrementRuntimeMetric("twilio_voice_fallback_rate_limited_total");
+  recordRuntimeSignal({
+    level: "warn",
+    category: "voice_fallback",
+    code: "voice_fallback_rate_limited",
+    reasonCode: "rate_limited",
+    status: 429,
+  });
+
+  return res
+    .status(429)
+    .type("text/xml")
+    .send(createSimpleSayXml("The service is temporarily unavailable."));
+}
 
 export function twilioRouter({ voiceClient = null } = {}) {
   const r = express.Router();
@@ -693,7 +769,7 @@ export function twilioRouter({ voiceClient = null } = {}) {
     }
   });
 
-  r.post("/twilio/voice/fallback", async (req, res) => {
+  r.post("/twilio/voice/fallback", twilioVoiceFallbackRateLimit, async (req, res) => {
     const logger = (req.log || routeLogger).child({ route: "twilio-voice-fallback" });
     try {
       const tenant = await resolveTenantFromRequest(req).catch(() => null);
@@ -732,3 +808,4 @@ export function twilioRouter({ voiceClient = null } = {}) {
 export const __test__ = {
   getTwilioSignatureValidationResult,
 };
+
