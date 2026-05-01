@@ -19,6 +19,7 @@ import {
   createWebsiteDomainVerificationChallenge,
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
+  createWebsiteWidgetTestMessage,
   createWebsiteWidgetWordpressInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
@@ -440,7 +441,7 @@ function WebsiteChatPreviewCard({
             description="Preview does not bypass production safety. Autonomous replies still require approved truth, current runtime, verified install context, and explicit launch approval."
           />
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <Button
               type="button"
               variant="secondary"
@@ -1130,6 +1131,9 @@ export default function WebsiteWidgetDetailDrawer({
   const [verificationOverride, setVerificationOverride] = useState(null);
   const [handoffMessage, setHandoffMessage] = useState("");
   const [handoffPackage, setHandoffPackage] = useState(null);
+  const [testMessageResult, setTestMessageResult] = useState(null);
+  const [testMessageBusy, setTestMessageBusy] = useState(false);
+  const [testMessageError, setTestMessageError] = useState("");
   const [websiteAccessHints, setWebsiteAccessHints] = useState({});
 
   const websiteStatusQueryKey = buildWorkspaceScopedQueryKey(
@@ -1207,6 +1211,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationOverride(null);
       setHandoffMessage("");
       setHandoffPackage(null);
+      setTestMessageResult(null);
       setActivePanel("overview");
 
       handoffMutation.reset();
@@ -1234,6 +1239,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationMessage("Verification status refreshed.");
       setHandoffMessage("");
       setHandoffPackage(null);
+      setTestMessageResult(null);
       setActivePanel("verify");
 
       handoffMutation.reset();
@@ -1256,6 +1262,7 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationMessage("TXT challenge created.");
       setHandoffMessage("");
       setHandoffPackage(null);
+      setTestMessageResult(null);
       setActivePanel("verify");
 
       handoffMutation.reset();
@@ -1282,6 +1289,7 @@ export default function WebsiteWidgetDetailDrawer({
       );
       setHandoffMessage("");
       setHandoffPackage(null);
+      setTestMessageResult(null);
       setActivePanel("verify");
 
       handoffMutation.reset();
@@ -1592,6 +1600,40 @@ export default function WebsiteWidgetDetailDrawer({
     onClose?.();
   }
 
+  async function handleSendWebsiteTestMessage() {
+    setTestMessageBusy(true);
+    setTestMessageError("");
+    setHandoffMessage("");
+
+    try {
+      const payload = await createWebsiteWidgetTestMessage({
+        text: "Salam, bu Website Chat test mesajıdır. Zəhmət olmasa operator/manual reply flow-u yoxlayın.",
+      });
+
+      setTestMessageResult(payload);
+      setHandoffMessage("Website Chat test message was created in Inbox.");
+    } catch (error) {
+      const message = s(
+        error?.details?.message || error?.message,
+        "Could not create Website Chat test message."
+      );
+
+      setTestMessageError(message);
+    } finally {
+      setTestMessageBusy(false);
+    }
+  }
+
+  function handleOpenWebsiteInbox(threadId = "") {
+    const params = new URLSearchParams();
+
+    params.set("channel", "website");
+    if (s(threadId)) {
+      params.set("threadId", s(threadId));
+    }
+
+    window.location.assign(`/inbox?${params.toString()}`);
+  }
   function renderFooterActions() {
     if (activePanel === "settings") {
       return (
@@ -1880,7 +1922,7 @@ export default function WebsiteWidgetDetailDrawer({
 
             <div>
               <FieldLabel>Accent color</FieldLabel>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {ACCENT_OPTIONS.map((option) => (
                   <AccentOption
                     key={option.value}
@@ -2209,6 +2251,11 @@ export default function WebsiteWidgetDetailDrawer({
           {activePanel === "overview" && !statusQuery.isLoading ? (
             <InstallPlanRecommendationCard
               installPlan={effectiveInstallPlan}
+              testMessageResult={testMessageResult}
+              testMessageBusy={testMessageBusy}
+              testMessageError={testMessageError}
+              onSendTestMessage={handleSendWebsiteTestMessage}
+              onOpenInbox={handleOpenWebsiteInbox}
               disabled={!saveAllowed || statusQuery.isLoading || handoffBusy}
               busy={handoffBusy}
               onPrepareDeveloper={handlePrepareDeveloperInstall}
@@ -2230,6 +2277,10 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
+
+
 
 
 
