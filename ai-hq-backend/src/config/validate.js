@@ -1,4 +1,4 @@
-import { cfg, getMetaConnectStartupConfig } from "../config.js";
+﻿import { cfg, getMetaConnectStartupConfig } from "../config.js";
 import {
   createValidationIssue,
   formatValidationFailure,
@@ -104,9 +104,11 @@ export function getConfigIssues() {
     if (!isNonEmpty(cfg?.auth?.adminPasscodeHash)) {
       pushIssue(
         issues,
-        "warning",
+        isProd ? "error" : "warning",
         "auth.adminPasscodeHash",
-        "ADMIN_PANEL_ENABLED=true but ADMIN_PANEL_PASSCODE_HASH is missing.",
+        isProd
+          ? "ADMIN_PANEL_ENABLED=true but ADMIN_PANEL_PASSCODE_HASH is missing in production."
+          : "ADMIN_PANEL_ENABLED=true but ADMIN_PANEL_PASSCODE_HASH is missing.",
         {
           category: "authentication",
           envKeys: ["ADMIN_PANEL_PASSCODE_HASH"],
@@ -582,6 +584,45 @@ export function getConfigIssues() {
     }
   }
 
+  if (
+    isProd &&
+    cfg?.telegram?.enabled &&
+    cfg?.telegram?.strictSecretHeaderVerification !== true
+  ) {
+    pushIssue(
+      issues,
+      "error",
+      "telegram.strictSecretHeaderVerification",
+      "TELEGRAM_STRICT_SECRET_HEADER_VERIFICATION must stay enabled in production.",
+      {
+        category: "providers",
+        envKeys: [
+          "TELEGRAM_ENABLED",
+          "TELEGRAM_STRICT_SECRET_HEADER_VERIFICATION",
+        ],
+      }
+    );
+  }
+
+  if (
+    isProd &&
+    cfg?.telegram?.enabled &&
+    cfg?.telegram?.allowRouteTokenFallback === true
+  ) {
+    pushIssue(
+      issues,
+      "error",
+      "telegram.allowRouteTokenFallback",
+      "TELEGRAM_WEBHOOK_ALLOW_ROUTE_TOKEN_FALLBACK must be disabled in production.",
+      {
+        category: "providers",
+        envKeys: [
+          "TELEGRAM_ENABLED",
+          "TELEGRAM_WEBHOOK_ALLOW_ROUTE_TOKEN_FALLBACK",
+        ],
+      }
+    );
+  }
   if (cfg?.push?.enabled) {
     if (!isNonEmpty(cfg?.push?.vapidPublicKey)) {
       pushIssue(
@@ -720,3 +761,4 @@ export function assertSelectedConfigValid(keys = [], logger = console) {
 
   return report;
 }
+
