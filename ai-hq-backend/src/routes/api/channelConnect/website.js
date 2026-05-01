@@ -1,4 +1,4 @@
-import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
+﻿import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
 import {
   dbGetLatestTenantDomainVerification,
   dbGetTenantDomainVerification,
@@ -15,6 +15,7 @@ import {
   WEBSITE_DOMAIN_VERIFICATION_METHOD,
   WEBSITE_DOMAIN_VERIFICATION_SCOPE,
 } from "../../../services/websiteDomainVerification.js";
+import { buildWebsiteChatInstallPlan } from "../../../services/websiteChatInstallMethods.js";
 import { getNormalizedAuthRole } from "../../../utils/auth.js";
 import { canManageSettings } from "../../../utils/roles.js";
 import {
@@ -887,6 +888,34 @@ function buildWebsiteWidgetStatusPayload(
     verificationSurface,
     launchReadiness
   );
+  const installPlanBase = buildWebsiteChatInstallPlan({
+    websiteUrl: status.websiteUrl,
+    hints: [
+      status.websiteUrl,
+      launchReadiness.targetDomain,
+      status.widgetProvider,
+      status.widgetDisplayName,
+      ...config.allowedOrigins,
+      ...config.allowedDomains,
+    ],
+    access: {
+      developer: launchReadiness.handoffs?.developer?.ready === true,
+      googleTagManager: launchReadiness.handoffs?.gtm?.ready === true,
+      cmsAdmin: launchReadiness.handoffs?.wordpress?.ready === true,
+    },
+  });
+  const installPlan = {
+    ...installPlanBase,
+    availableHandoffs: launchReadiness.handoffs || {},
+    currentReadiness: {
+      status: launchReadiness.status,
+      productionReady: launchReadiness.productionReady === true,
+      testingOnly: launchReadiness.testingOnly === true,
+      testReady: launchReadiness.testReady === true,
+      reasonCode: launchReadiness.reasonCode || "",
+      message: launchReadiness.message || "",
+    },
+  };
 
   return {
     tenantId: s(status.id),
@@ -921,6 +950,7 @@ function buildWebsiteWidgetStatusPayload(
       updatedAt: status.widgetUpdatedAt || null,
     },
     install,
+    installPlan,
     handoffs: launchReadiness.handoffs,
     domainVerification: verificationSurface,
     launchReadiness,
@@ -1529,3 +1559,4 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
     domainVerification
   );
 }
+
