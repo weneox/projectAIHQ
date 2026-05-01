@@ -1,5 +1,9 @@
-function s(value) {
+﻿function s(value) {
   return String(value ?? "").trim();
+}
+
+function lower(value) {
+  return s(value).toLowerCase();
 }
 
 function isRecord(value) {
@@ -81,16 +85,210 @@ function toTimestamp(value) {
 function getMessageTimestamp(message = {}) {
   return toTimestamp(
     message?.sent_at ||
+      message?.sentAt ||
       message?.updated_at ||
-      message?.created_at
+      message?.updatedAt ||
+      message?.created_at ||
+      message?.createdAt
   );
 }
 
 function getAttemptTimestamp(attempt = {}) {
   return toTimestamp(
     attempt?.updated_at ||
-      attempt?.created_at
+      attempt?.updatedAt ||
+      attempt?.sent_at ||
+      attempt?.sentAt ||
+      attempt?.created_at ||
+      attempt?.createdAt
   );
+}
+
+function getMessageMeta(message = {}) {
+  return isRecord(message?.meta) ? message.meta : {};
+}
+
+function getDeliveryMeta(message = {}) {
+  const meta = getMessageMeta(message);
+  return isRecord(meta?.delivery) ? meta.delivery : {};
+}
+
+function getProviderResponse(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+
+  return (
+    attempt?.provider_response ||
+    attempt?.providerResponse ||
+    meta?.providerResponse ||
+    meta?.provider_response ||
+    delivery?.providerResponse ||
+    delivery?.provider_response ||
+    {}
+  );
+}
+
+function findProviderMessageIdDeep(value, depth = 0) {
+  if (depth > 6 || value == null) return "";
+
+  if (typeof value === "string" || typeof value === "number") {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findProviderMessageIdDeep(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (!isRecord(value)) return "";
+
+  const direct = s(
+    value.message_id ||
+      value.messageId ||
+      value.provider_message_id ||
+      value.providerMessageId ||
+      value.mid ||
+      value.id
+  );
+
+  if (direct) return direct;
+
+  const preferredKeys = [
+    "response",
+    "result",
+    "json",
+    "data",
+    "message",
+    "messages",
+    "entry",
+    "events",
+    "payload",
+  ];
+
+  for (const key of preferredKeys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const found = findProviderMessageIdDeep(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  for (const key of Object.keys(value)) {
+    if (preferredKeys.includes(key)) continue;
+    const found = findProviderMessageIdDeep(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  return "";
+}
+
+function getProviderMessageId(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+  const response = getProviderResponse(message, attempt);
+
+  return s(
+    attempt?.provider_message_id ||
+      attempt?.providerMessageId ||
+      message?.external_message_id ||
+      message?.externalMessageId ||
+      delivery?.providerMessageId ||
+      delivery?.provider_message_id ||
+      meta?.providerMessageId ||
+      meta?.provider_message_id ||
+      findProviderMessageIdDeep(response)
+  );
+}
+
+function getDeliveryStatus(message = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+
+  return lower(
+    delivery?.status ||
+      meta?.deliveryStatus ||
+      meta?.delivery_status ||
+      ""
+  );
+}
+
+function getDeliveryFailureText(message = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+
+  return s(
+    delivery?.error ||
+      delivery?.lastError ||
+      delivery?.last_error ||
+      meta?.deliveryError ||
+      meta?.delivery_error ||
+      ""
+  );
+}
+
+function getMessageDeliveryTruth(message = {}, attempt = {}) {
+  const deliveryStatus = getDeliveryStatus(message);
+  const providerMessageId = getProviderMessageId(message, attempt);
+  const delivery = getDeliveryMeta(message);
+
+  if (
+    deliveryStatus === "sent" ||
+    deliveryStatus === "accepted" ||
+    deliveryStatus === "delivered"
+  ) {
+    if (providerMessageId) {
+      return {
+        kind: "message_delivery_confirmed",
+        label: "Sent",
+        detail:
+          "Instagram/Meta accepted this outbound message. This does not mean the customer has read it.",
+        status: "sent",
+        providerMessageId,
+        attempt,
+      };
+    }
+
+    return {
+      kind: "message_delivery_unconfirmed",
+      label: "Delivery unconfirmed",
+      detail:
+        "The message delivery state says sent, but provider message id is missing. Treat as unconfirmed until provider proof is available.",
+      status: "unconfirmed",
+      providerMessageId: "",
+      attempt,
+    };
+  }
+
+  if (
+    deliveryStatus === "failed" ||
+    deliveryStatus === "dead" ||
+    deliveryStatus === "error"
+  ) {
+    return {
+      kind: "message_delivery_failed",
+      label: "Not delivered",
+      detail:
+        getDeliveryFailureText(message) ||
+        "Provider delivery failed or stopped before confirmation.",
+      status: deliveryStatus === "dead" ? "dead" : "failed",
+      providerMessageId: "",
+      attempt,
+    };
+  }
+
+  if (deliveryStatus === "pending" || delivery?.pending === true) {
+    return {
+      kind: "message_delivery_pending",
+      label: "Sending",
+      detail: "Outbound message is queued or waiting for provider confirmation.",
+      status: "sending",
+      providerMessageId: "",
+      attempt,
+    };
+  }
+
+  return null;
 }
 
 export function getMessageAttemptCorrelation(message = {}) {
@@ -110,21 +308,43 @@ export function getAttemptMessageCorrelation(attempt = {}) {
 }
 
 function isPreferredAttempt(candidate, current) {
-  const candidateCount = Number(candidate?.attempt_count || 0);
-  const currentCount = Number(current?.attempt_count || 0);
+  const candidateStatusRank = attemptStatusRank(candidate?.status);
+  const currentStatusRank = attemptStatusRank(current?.status);
+
+  if (candidateStatusRank !== currentStatusRank) {
+    return candidateStatusRank > currentStatusRank;
+  }
+
+  const candidateCount = Number(candidate?.attempt_count || candidate?.attemptCount || 0);
+  const currentCount = Number(current?.attempt_count || current?.attemptCount || 0);
   if (candidateCount !== currentCount) {
     return candidateCount > currentCount;
   }
 
   const candidateUpdatedAt = toTimestamp(
-    candidate?.updated_at || candidate?.created_at
+    candidate?.updated_at || candidate?.updatedAt || candidate?.created_at || candidate?.createdAt
   );
-  const currentUpdatedAt = toTimestamp(current?.updated_at || current?.created_at);
+  const currentUpdatedAt = toTimestamp(
+    current?.updated_at || current?.updatedAt || current?.created_at || current?.createdAt
+  );
   if (candidateUpdatedAt !== currentUpdatedAt) {
     return candidateUpdatedAt > currentUpdatedAt;
   }
 
   return s(candidate?.id) > s(current?.id);
+}
+
+function attemptStatusRank(status = "") {
+  const value = lower(status);
+
+  return {
+    dead: 10,
+    failed: 9,
+    sent: 8,
+    retrying: 7,
+    sending: 6,
+    queued: 5,
+  }[value] || 0;
 }
 
 export function indexAttemptsByMessageCorrelation(attempts = []) {
@@ -147,38 +367,47 @@ export function indexAttemptsByMessageCorrelation(attempts = []) {
   return index;
 }
 
-export function describeAttemptState(item = {}) {
-  const status = s(item?.status).toLowerCase();
-  const attemptCount = Number(item?.attempt_count || 0);
-  const maxAttempts = Number(item?.max_attempts || 0);
+export function describeAttemptState(item = {}, message = {}) {
+  const status = lower(item?.status);
+  const attemptCount = Number(item?.attempt_count || item?.attemptCount || 0);
+  const maxAttempts = Number(item?.max_attempts || item?.maxAttempts || 0);
+  const providerMessageId = getProviderMessageId(message, item);
 
   if (status === "queued") {
     return {
-      label: "Queued locally",
+      label: "Waiting for delivery",
       detail: "Accepted into the outbound queue. Provider delivery has not completed yet.",
     };
   }
 
   if (status === "sending") {
     return {
-      label: "Send in progress",
+      label: "Sending",
       detail: "An outbound attempt is actively trying to hand off to the provider.",
     };
   }
 
   if (status === "sent") {
+    if (!providerMessageId) {
+      return {
+        label: "Delivery unconfirmed",
+        detail:
+          "The attempt is marked sent, but provider message id is missing. Do not assume the customer saw this reply.",
+      };
+    }
+
     return {
       label: "Sent",
       detail:
         attemptCount > 0
-          ? `Delivery succeeded on attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
-          : "Delivery succeeded.",
+          ? `Instagram/Meta accepted this message on attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
+          : "Instagram/Meta accepted this message.",
     };
   }
 
   if (status === "failed") {
     return {
-      label: "Failed",
+      label: "Not delivered",
       detail:
         attemptCount > 0
           ? `Most recent delivery attempt failed${maxAttempts > 0 ? ` on attempt ${attemptCount} of ${maxAttempts}.` : "."}`
@@ -198,7 +427,7 @@ export function describeAttemptState(item = {}) {
 
   if (status === "dead") {
     return {
-      label: "Dead",
+      label: "Not delivered",
       detail:
         maxAttempts > 0
           ? `Automatic delivery stopped after ${attemptCount || maxAttempts} of ${maxAttempts} attempts.`
@@ -213,7 +442,7 @@ export function describeAttemptState(item = {}) {
 }
 
 export function getAttemptStatusTone(status) {
-  const value = s(status).toLowerCase();
+  const value = lower(status);
 
   return {
     queued: "border-stone-200 bg-stone-100 text-stone-700",
@@ -227,54 +456,105 @@ export function getAttemptStatusTone(status) {
 }
 
 export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
+  const direction = lower(message?.direction);
+  if (direction !== "outbound") return null;
+
   const correlations = getCorrelationLookupKeys(
     message?.outbound_attempt_correlation ?? message?.outboundAttemptCorrelation
   );
-  const direction = s(message?.direction).toLowerCase();
-  if (direction !== "outbound") return null;
-
-  if (!correlations.length) {
-    return {
-      kind: "missing_correlation",
-      label: "Authoritative link missing",
-      detail: "This outbound message does not expose the backend correlation needed to bind delivery lineage.",
-      status: "",
-      attempt: null,
-    };
-  }
 
   const attempt =
     correlations
       .map((correlation) => attemptsByCorrelation?.get?.(correlation) || null)
       .find(Boolean) || null;
+
+  const messageDeliveryTruth = getMessageDeliveryTruth(message, attempt);
+
+  if (
+    messageDeliveryTruth &&
+    (
+      messageDeliveryTruth.status === "sent" ||
+      messageDeliveryTruth.status === "failed" ||
+      messageDeliveryTruth.status === "dead" ||
+      messageDeliveryTruth.status === "unconfirmed"
+    )
+  ) {
+    return messageDeliveryTruth;
+  }
+
+  if (!correlations.length) {
+    return (
+      messageDeliveryTruth || {
+        kind: "missing_correlation",
+        label: "Delivery unverified",
+        detail:
+          "This outbound message does not expose the backend correlation needed to bind delivery lineage.",
+        status: "unconfirmed",
+        attempt: null,
+      }
+    );
+  }
+
   if (!attempt) {
+    return (
+      messageDeliveryTruth || {
+        kind: "awaiting_attempt",
+        label: "Waiting for delivery",
+        detail:
+          "The message has an authoritative correlation, but no outbound attempt record is attached yet.",
+        status: "sending",
+        attempt: null,
+      }
+    );
+  }
+
+  const providerMessageId = getProviderMessageId(message, attempt);
+  const attemptStatus = lower(attempt?.status);
+
+  if (attemptStatus === "sent" && providerMessageId) {
     return {
-      kind: "awaiting_attempt",
-      label: "Waiting for attempt truth",
-      detail: "The message has an authoritative correlation, but no outbound attempt record is attached yet.",
-      status: "",
-      attempt: null,
+      kind: "attempt_provider_confirmed",
+      label: "Sent",
+      detail:
+        "Instagram/Meta accepted this outbound message. This does not mean the customer has read it.",
+      status: "sent",
+      attempt,
+      providerMessageId,
+    };
+  }
+
+  if (attemptStatus === "sent" && !providerMessageId) {
+    return {
+      kind: "provider_unconfirmed",
+      label: "Delivery unconfirmed",
+      detail:
+        "The backend has an outbound attempt marked sent, but the provider message id is missing.",
+      status: "unconfirmed",
+      attempt,
+      providerMessageId: "",
     };
   }
 
   const messageTimestamp = getMessageTimestamp(message);
   const attemptTimestamp = getAttemptTimestamp(attempt);
-  if (messageTimestamp > 0 && attemptTimestamp > 0 && attemptTimestamp < messageTimestamp) {
-    return {
-      kind: "stale_attempt",
-      label: "Attempt truth may be stale",
-      detail: "A correlated outbound attempt exists, but its latest recorded state predates this message record. Inspect thread lineage before treating this status as current.",
-      status: s(attempt?.status).toLowerCase(),
-      attempt,
-    };
+
+  if (
+    messageTimestamp > 0 &&
+    attemptTimestamp > 0 &&
+    attemptTimestamp < messageTimestamp &&
+    messageDeliveryTruth
+  ) {
+    return messageDeliveryTruth;
   }
 
-  const state = describeAttemptState(attempt);
+  const state = describeAttemptState(attempt, message);
+
   return {
     kind: "attempt_bound",
     label: state.label,
     detail: state.detail,
-    status: s(attempt?.status).toLowerCase(),
+    status: attemptStatus || "unconfirmed",
     attempt,
+    providerMessageId,
   };
 }
