@@ -1,4 +1,4 @@
-function rowOrNull(r) {
+﻿function rowOrNull(r) {
   return r?.rows?.[0] || null;
 }
 
@@ -74,7 +74,8 @@ export async function dbGetTenantMode(db, tenantKey) {
     `
       select
         t.tenant_key,
-        coalesce(p.publish_policy->>'mode', 'manual') as mode
+        coalesce(p.publish_policy->>'mode', 'manual') as mode,
+        coalesce(p.publish_policy, '{}'::jsonb) as publish_policy
       from tenants t
       left join tenant_ai_policies p
         on p.tenant_id = t.id
@@ -90,9 +91,12 @@ export async function dbGetTenantMode(db, tenantKey) {
   return {
     tenant_key: s(row.tenant_key),
     mode: normalizeTenantMode(row.mode, "manual"),
+    publish_policy:
+      row.publish_policy && typeof row.publish_policy === "object"
+        ? row.publish_policy
+        : {},
   };
 }
-
 export async function dbSetTenantMode(db, tenantKey, mode) {
   if (!db || !tenantKey) return null;
 
@@ -140,3 +144,4 @@ export async function dbSetTenantMode(db, tenantKey, mode) {
     mode: normalizeTenantMode(row.mode, "manual"),
   };
 }
+
