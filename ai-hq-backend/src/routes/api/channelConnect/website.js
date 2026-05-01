@@ -945,6 +945,7 @@ function buildWebsiteWidgetStatusPayload(
       subtitle: config.subtitle,
       accentColor: config.accentColor,
       initialPrompts: config.initialPrompts,
+      installAccessHints: config.installAccessHints,
       websiteUrl: s(status.websiteUrl),
       channelStatus: s(status.widgetChannelStatus),
       updatedAt: status.widgetUpdatedAt || null,
@@ -1559,4 +1560,5 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
     domainVerification
   );
 }
+
 

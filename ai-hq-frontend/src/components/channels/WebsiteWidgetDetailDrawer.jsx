@@ -915,6 +915,7 @@ export default function WebsiteWidgetDetailDrawer({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
       setDraftForm(buildFormState(payload));
+      setWebsiteAccessHints(obj(obj(payload).widget).installAccessHints);
       setStatusMessage("Widget settings saved.");
       setCopyFeedback("");
       setVerificationInput("");
@@ -1012,8 +1013,12 @@ export default function WebsiteWidgetDetailDrawer({
   const payload = statusQuery.data || {};
   const widget = obj(payload.widget);
   const install = obj(payload.install);
+  const serverWebsiteAccessHints = obj(widget.installAccessHints);
+  const selectedWebsiteAccessHints = Object.keys(obj(websiteAccessHints)).length
+    ? obj(websiteAccessHints)
+    : serverWebsiteAccessHints;
   const installPlan = obj(payload.installPlan);
-  const effectiveInstallPlan = mergeInstallPlanWithAccessHints(installPlan, websiteAccessHints);
+  const effectiveInstallPlan = mergeInstallPlanWithAccessHints(installPlan, selectedWebsiteAccessHints);
   const readiness = obj(payload.readiness);
   const launchReadiness = obj(payload.launchReadiness);
   const launchHandoffs = obj(launchReadiness.handoffs);
@@ -1230,6 +1235,7 @@ export default function WebsiteWidgetDetailDrawer({
       allowedOrigins: parseList(form.allowedOrigins),
       allowedDomains: parseList(form.allowedDomains),
       initialPrompts: parseList(form.initialPrompts),
+      installAccessHints: selectedWebsiteAccessHints,
     });
   }
 
@@ -1910,7 +1916,7 @@ export default function WebsiteWidgetDetailDrawer({
             />
           ) : null}          {activePanel === "overview" && !statusQuery.isLoading ? (
             <AccessHelperCard
-              value={websiteAccessHints}
+              value={selectedWebsiteAccessHints}
               onChange={setWebsiteAccessHints}
             />
           ) : null}
@@ -1940,6 +1946,8 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
 
 
 

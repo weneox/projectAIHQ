@@ -1,4 +1,4 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 
 import { cfg } from "../../../config.js";
 import {
@@ -135,6 +135,45 @@ export function normalizeAllowedDomains(config = {}) {
   );
 }
 
+function normalizeInstallAccessHints(config = {}) {
+  const raw = obj(
+    config.installAccessHints ||
+      config.install_access_hints ||
+      config.accessHints ||
+      config.access_hints
+  );
+
+  const allowed = [
+    "cmsAdmin",
+    "googleTagManager",
+    "cloudflare",
+    "developer",
+    "unknown",
+  ];
+
+  const next = {};
+
+  for (const key of allowed) {
+    if (typeof raw[key] === "boolean") {
+      next[key] = raw[key];
+    }
+  }
+
+  if (next.unknown === true) {
+    for (const key of allowed) {
+      next[key] = key === "unknown";
+    }
+  } else if (
+    next.cmsAdmin === true ||
+    next.googleTagManager === true ||
+    next.cloudflare === true ||
+    next.developer === true
+  ) {
+    next.unknown = false;
+  }
+
+  return next;
+}
 function normalizeInitialPrompts(config = {}) {
   return arr(
     config.initialPrompts || config.initial_prompts || config.quickReplies
@@ -174,6 +213,7 @@ export function normalizeWidgetConfig(raw = {}, { defaultEnabled = false } = {})
       config.accentColor || config.accent_color || config.brandColor || config.brand_color
     ),
     initialPrompts: normalizeInitialPrompts(config),
+    installAccessHints: normalizeInstallAccessHints(config),
   };
 }
 
@@ -194,6 +234,7 @@ export function normalizeWidgetConfigForSave(input = {}, tenantKey = "") {
     subtitle: config.subtitle,
     accentColor: config.accentColor,
     initialPrompts: config.initialPrompts,
+    installAccessHints: config.installAccessHints,
   };
 }
 
@@ -522,6 +563,7 @@ export function buildWidgetShell(tenant = {}, automation = {}, runtime = null) {
         : "Leave a message here and the team can take over."),
     accentColor: config.accentColor || "#0f172a",
     initialPrompts: config.initialPrompts,
+    installAccessHints: config.installAccessHints,
   };
 }
 
@@ -563,3 +605,4 @@ export const __test__ = {
   validateWidgetInstallContext,
   widgetStatusAllowsInstall,
 };
+
