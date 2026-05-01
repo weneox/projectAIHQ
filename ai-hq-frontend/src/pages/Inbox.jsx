@@ -1,595 +1,90 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-
-import { getLaunchPosture } from "../api/launch.js";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
-  getSettingsTrustView,
-  saveSettingsTrustPolicyControl,
-} from "../api/trust.js";
-import InboxComposer from "../components/inbox/InboxComposer.jsx";
-import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
-import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
-import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
-import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
-import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
-import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
+  CheckCircle2,
+  MessageSquareText,
+  ShieldAlert,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
+
+import { deriveThreadState } from "../lib/inbox-ui.js";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
-import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
+
+import InboxStatCard from "../components/inbox/InboxStatCard.jsx";
+import InboxThreadCard from "../components/inbox/InboxThreadCard.jsx";
+import InboxToolbar from "../components/inbox/InboxToolbar.jsx";
+import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
+import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
+import InboxComposer from "../components/inbox/InboxComposer.jsx";
+import RetryQueuePanel from "../components/inbox/RetryQueuePanel.jsx";
+import ThreadOutboundAttemptsPanel from "../components/inbox/ThreadOutboundAttemptsPanel.jsx";
+
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getAppSessionContext } from "../lib/appSession.js";
-import { s } from "../lib/appUi.js";
-import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
-import {
-  InlineNotice,
-  LoadingSurface,
-  SlidingDetailOverlay,
-} from "../components/ui/AppShellPrimitives.jsx";
-import Button from "../components/ui/Button.jsx";
+import { areInternalRoutesEnabled } from "../lib/appEntry.js";
 
-const EMPTY_READINESS_STATE = {
-  tenantKey: "",
-  loading: true,
-  error: "",
-  posture: null,
-  truth: {
-    ready: false,
-    status: "unavailable",
-    reasonCode: "launch_posture_unavailable",
-    message: "",
-  },
-  runtime: {
-    ready: false,
-    status: "unavailable",
-    reasonCode: "launch_posture_unavailable",
-    message: "",
-  },
-  overall: {
-    status: "unavailable",
-    launchReady: false,
-    title: "",
-    message: "",
-    primaryAction: { label: "Open channels", path: "/channels" },
-  },
-  channelSummary: {
-    readyCount: 0,
-    connectedCount: 0,
-    deliveryReadyChannelIds: [],
-    selectedChannelId: "",
-  },
-};
-
-const EMPTY_TRUST_STATE = {
-  tenantKey: "",
-  loading: false,
-  trustView: null,
-};
-
-function buildSurfaceNotice(surface = {}) {
-  if (surface?.unavailable) {
-    return {
-      tone: "danger",
-      title: "Inbox unavailable",
-      description: "Inbox operations are temporarily unavailable.",
-    };
-  }
-
-  if (s(surface?.saveError || surface?.error)) {
-    return {
-      tone: "danger",
-      title: "Inbox issue",
-      description: s(surface?.saveError || surface?.error),
-    };
-  }
-
-  return null;
-}
-
-function obj(value, fallback = {}) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : fallback;
-}
-
-function arr(value, fallback = []) {
-  return Array.isArray(value) ? value : fallback;
-}
-
-function n(value, fallback = 0) {
-  const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
-}
-
-function lower(value, fallback = "") {
-  return s(value, fallback).toLowerCase();
-}
-
-function normalizeNoticeAction(
-  action = null,
-  fallback = { label: "Open channels", path: "/channels" }
-) {
-  const source = obj(action);
-  const target = obj(source.target);
-  const label = s(source.label || fallback.label);
-  const path = s(source.path || target.path || fallback.path);
-
-  if (!label && !path) return null;
-
-  return {
-    label: label || fallback.label,
-    path: path || fallback.path,
-  };
-}
-
-function buildReadinessStateFromPosture({
-  tenantKey = "",
-  posture = null,
-  error = "",
-} = {}) {
-  const payload = obj(posture);
-  const unavailable = s(error);
-  const channelSummary = obj(payload.channelSummary);
-
-  return {
-    tenantKey,
-    loading: false,
-    error: unavailable,
-    posture: unavailable ? null : payload,
-    truth: unavailable ? EMPTY_READINESS_STATE.truth : obj(payload.truth),
-    runtime: unavailable ? EMPTY_READINESS_STATE.runtime : obj(payload.runtime),
-    overall: unavailable
-      ? {
-          ...EMPTY_READINESS_STATE.overall,
-          title: "Launch readiness unavailable",
-          message:
-            "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
-        }
-      : obj(payload.overall),
-    channelSummary: {
-      readyCount: unavailable ? 0 : n(channelSummary.readyCount),
-      connectedCount: unavailable ? 0 : n(channelSummary.connectedCount),
-      deliveryReadyChannelIds: unavailable
-        ? []
-        : arr(channelSummary.deliveryReadyChannelIds),
-      selectedChannelId: unavailable ? "" : s(channelSummary.selectedChannelId),
-    },
-  };
-}
-
-async function loadInboxLaunchReadinessState(tenantKey = "") {
-  try {
-    const posture = await getLaunchPosture();
-
-    return buildReadinessStateFromPosture({
-      tenantKey,
-      posture,
-    });
-  } catch (error) {
-    return buildReadinessStateFromPosture({
-      tenantKey,
-      error:
-        s(error?.message) || "Launch readiness could not be loaded.",
-    });
-  }
-}
-
-async function loadInboxTrustState(tenantKey = "") {
-  try {
-    return {
-      tenantKey,
-      loading: false,
-      trustView: await getSettingsTrustView({ limit: 8 }),
-    };
-  } catch {
-    return {
-      tenantKey,
-      loading: false,
-      trustView: null,
-    };
-  }
-}
-
-function buildLaunchReadinessNotice({
-  readinessState = EMPTY_READINESS_STATE,
-  hasDeliveryReadyLaunchChannel = false,
-  truthReady = false,
-  runtimeReady = false,
-  launchReady = false,
-} = {}) {
-  const overall = obj(readinessState.overall);
-  const status = lower(overall.status);
-  const action = normalizeNoticeAction(overall.primaryAction);
-  const postureError = s(readinessState.error);
-
-  if (postureError || status === "unavailable") {
-    return {
-      tone: "warning",
-      title: "Launch readiness unavailable",
-      description:
-        postureError ||
-        s(overall.message) ||
-        "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
-      action,
-    };
-  }
-
-  if (launchReady) return null;
-
-  if (hasDeliveryReadyLaunchChannel && !truthReady) {
-    return {
-      tone: "warning",
-      title: "Truth approval required",
-      description:
-        "A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies.",
-      action,
-    };
-  }
-
-  if (hasDeliveryReadyLaunchChannel && !runtimeReady) {
-    return {
-      tone: "warning",
-      title: "Runtime repair required",
-      description:
-        s(readinessState.runtime?.message) ||
-        "A channel is live, but runtime is not ready yet. Repair runtime before trusting live AI replies.",
-      action,
-    };
-  }
-
-  return {
-    tone: status === "degraded" ? "warning" : "info",
-    title: s(overall.title) || "Launch setup required",
-    description:
-      s(overall.message) ||
-      "Finish launch setup before relying on live inbox replies.",
-    action,
-  };
-}
-
-function resolveInboxPolicyControl(trustView = null) {
-  const controls = trustView?.summary?.policyControls || {};
-  const tenantDefault = controls?.tenantDefault || null;
-  const scopedItems = Array.isArray(controls?.items) ? controls.items : [];
-
-  const inboxControl =
-    scopedItems.find((item) => s(item?.surface).toLowerCase() === "inbox") ||
-    tenantDefault ||
-    null;
-
-  const availableModes = Array.isArray(inboxControl?.availableModes)
-    ? inboxControl.availableModes
-    : [];
-
-  const controlMode = s(
-    inboxControl?.controlMode || "autonomy_enabled"
-  ).toLowerCase();
-
-  const enableRule = availableModes.find(
-    (item) => s(item?.mode).toLowerCase() === "autonomy_enabled"
-  );
-  const disableRule = availableModes.find(
-    (item) => s(item?.mode).toLowerCase() === "operator_only_mode"
-  );
-
-  const labelMap = {
-    autonomy_enabled: "Autonomy enabled",
-    operator_only_mode: "Operator only",
-    human_review_required: "Human review",
-    handoff_preferred: "Handoff preferred",
-    handoff_required: "Handoff required",
-    blocked_until_repair: "Blocked until repair",
-    emergency_stop: "Emergency stop",
-  };
-
-  return {
-    controlMode,
-    enabled: controlMode === "autonomy_enabled",
-    changedAt: s(inboxControl?.changedAt),
-    changedBy: s(inboxControl?.changedBy),
-    policyReason: s(inboxControl?.policyReason),
-    operatorNote: s(inboxControl?.operatorNote),
-    statusLabel:
-      labelMap[controlMode] ||
-      controlMode
-        .replace(/[_-]+/g, " ")
-        .replace(/\b\w/g, (char) => char.toUpperCase()),
-    canEnable: enableRule ? enableRule.allowed === true : true,
-    canDisable: disableRule ? disableRule.allowed === true : true,
-    enableUnavailableReason: s(enableRule?.unavailableReason),
-    disableUnavailableReason: s(disableRule?.unavailableReason),
-  };
-}
-
-function buildInboxAutomationControl({
-  workspaceReady = false,
-  trustLoading = false,
-  trustView = null,
-  mutation = {},
-}) {
-  const resolved = resolveInboxPolicyControl(trustView);
-  const enabled = resolved.enabled;
-  const saving = mutation?.saving === true;
-
-  const targetCanApply = enabled ? resolved.canDisable : resolved.canEnable;
-  const unavailableReason = enabled
-    ? resolved.disableUnavailableReason
-    : resolved.enableUnavailableReason;
-
-  return {
-    loading: !workspaceReady || trustLoading,
-    saving,
-    enabled,
-    controlMode: resolved.controlMode,
-    statusLabel: resolved.statusLabel,
-    disabled:
-      !workspaceReady || trustLoading || saving || targetCanApply === false,
-    disabledReason: unavailableReason,
-    saveError: s(mutation?.error),
-    saveSuccess: s(mutation?.success),
-    changedAt: resolved.changedAt,
-    changedBy: resolved.changedBy,
-    policyReason: resolved.policyReason,
-  };
+function s(value) {
+  return String(value ?? "").trim();
 }
 
 export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const workspace = useWorkspaceTenantKey();
-  const refreshToken = useLaunchSliceRefreshToken(
-    workspace.tenantKey,
-    workspace.ready
-  );
-
+  const showInternalDebug = areInternalRoutesEnabled();
+  const [filter, setFilter] = useState("all");
   const [wsState, setWsState] = useState("idle");
-  const [detailThreadId, setDetailThreadId] = useState("");
-  const [operatorState, setOperatorState] = useState({
-    tenantKey: "",
-    name: "",
-  });
-  const [resolvedReadinessState, setResolvedReadinessState] =
-    useState(EMPTY_READINESS_STATE);
-  const [resolvedTrustState, setResolvedTrustState] =
-    useState(EMPTY_TRUST_STATE);
-  const [automationMutation, setAutomationMutation] = useState({
-    saving: false,
-    error: "",
-    success: "",
-  });
-  const [typingState, setTypingState] = useState({});
+  const [tenantKey, setTenantKey] = useState("");
+  const [operatorName, setOperatorName] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [deepLinkNotice, setDeepLinkNotice] = useState("");
 
-  const requestedThreadId = String(
+  const requestedThreadId = s(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
-  ).trim();
+  );
+  const [pendingThreadId, setPendingThreadId] = useState(requestedThreadId);
 
   useEffect(() => {
-    if (!workspace.ready) return undefined;
-
     let alive = true;
 
     getAppSessionContext()
       .then((next) => {
         if (!alive) return;
-
-        setOperatorState({
-          tenantKey: workspace.tenantKey,
-          name: String(next?.actorName || "operator").trim() || "operator",
-        });
+        setTenantKey(s(next?.tenantKey).toLowerCase());
+        setOperatorName((prev) => prev || s(next?.actorName) || "operator");
       })
       .catch(() => {
         if (!alive) return;
-
-        setOperatorState({
-          tenantKey: workspace.tenantKey,
-          name: "operator",
-        });
+        setOperatorName((prev) => prev || "operator");
       });
 
     return () => {
       alive = false;
     };
-  }, [refreshToken, workspace.ready, workspace.tenantKey]);
-
-
-  useEffect(() => {
-    if (!workspace.ready) return undefined;
-
-    let alive = true;
-
-    loadInboxLaunchReadinessState(workspace.tenantKey).then(
-      (readinessState) => {
-        if (!alive) return;
-        setResolvedReadinessState(readinessState);
-      }
-    );
-
-    return () => {
-      alive = false;
-    };
-  }, [workspace.ready, workspace.tenantKey, refreshToken]);
-
-  useEffect(() => {
-    if (!workspace.ready) return undefined;
-
-    let alive = true;
-
-    loadInboxTrustState(workspace.tenantKey).then((trustState) => {
-      if (!alive) return;
-      setResolvedTrustState(trustState);
-    });
-
-    return () => {
-      alive = false;
-    };
-  }, [workspace.ready, workspace.tenantKey]);
-
-  useEffect(() => {
-    if (!automationMutation.success) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setAutomationMutation((prev) =>
-        prev.success
-          ? {
-              ...prev,
-              success: "",
-            }
-          : prev
-      );
-    }, 2600);
-
-    return () => window.clearTimeout(timer);
-  }, [automationMutation.success]);
-
-  const operatorName = workspace.ready
-    ? (operatorState.tenantKey === workspace.tenantKey
-        ? operatorState.name
-        : "operator") || "operator"
-    : "";
-
-  const readinessState = useMemo(() => {
-    if (!workspace.ready) {
-      return {
-        loading: false,
-        error: "",
-        posture: null,
-        truth: EMPTY_READINESS_STATE.truth,
-        runtime: EMPTY_READINESS_STATE.runtime,
-        overall: EMPTY_READINESS_STATE.overall,
-        channelSummary: EMPTY_READINESS_STATE.channelSummary,
-      };
-    }
-
-    if (resolvedReadinessState.tenantKey !== workspace.tenantKey) {
-      return {
-        loading: true,
-        error: "",
-        posture: null,
-        truth: EMPTY_READINESS_STATE.truth,
-        runtime: EMPTY_READINESS_STATE.runtime,
-        overall: EMPTY_READINESS_STATE.overall,
-        channelSummary: EMPTY_READINESS_STATE.channelSummary,
-      };
-    }
-
-    return {
-      loading: resolvedReadinessState.loading === true,
-      error: s(resolvedReadinessState.error),
-      posture: resolvedReadinessState.posture,
-      truth: resolvedReadinessState.truth,
-      runtime: resolvedReadinessState.runtime,
-      overall: resolvedReadinessState.overall,
-      channelSummary: resolvedReadinessState.channelSummary,
-    };
-  }, [workspace.ready, workspace.tenantKey, resolvedReadinessState]);
-
-  const trustView = useMemo(() => {
-    if (!workspace.ready) return null;
-    if (resolvedTrustState.tenantKey !== workspace.tenantKey) return null;
-    return resolvedTrustState.trustView;
-  }, [workspace.ready, workspace.tenantKey, resolvedTrustState]);
-
-  const inboxAutomationControl = useMemo(
-    () =>
-      buildInboxAutomationControl({
-        workspaceReady: workspace.ready,
-        trustLoading:
-          resolvedTrustState.loading &&
-          resolvedTrustState.tenantKey === workspace.tenantKey,
-        trustView,
-        mutation: automationMutation,
-      }),
-    [
-      workspace.ready,
-      workspace.tenantKey,
-      resolvedTrustState.loading,
-      resolvedTrustState.tenantKey,
-      trustView,
-      automationMutation,
-    ]
-  );
-
-
-  const loadOperationalState = useCallback(async () => {
-    if (!workspace.ready) return;
-
-    setResolvedReadinessState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-      error: "",
-    }));
-
-    setResolvedTrustState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-    }));
-
-    const [readinessState, trustState] = await Promise.all([
-      loadInboxLaunchReadinessState(workspace.tenantKey),
-      loadInboxTrustState(workspace.tenantKey),
-    ]);
-
-    setResolvedReadinessState(readinessState);
-    setResolvedTrustState(trustState);
-  }, [workspace.ready, workspace.tenantKey]);
-
-  async function handleToggleInboxAutonomy(nextEnabled) {
-    if (!workspace.ready) return;
-    if (automationMutation.saving) return;
-
-    setAutomationMutation({
-      saving: true,
-      error: "",
-      success: "",
-    });
-
-    try {
-      await saveSettingsTrustPolicyControl({
-        surface: "inbox",
-        controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
-        policyReason: nextEnabled
-          ? "Inbox AI Autopilot enabled from inbox global control"
-          : "Inbox AI Autopilot disabled from inbox global control",
-        operatorNote: nextEnabled
-          ? "Inbox automatic AI replies enabled globally"
-          : "Inbox automatic AI replies disabled globally",
-      });
-
-      await loadOperationalState();
-
-      setAutomationMutation({
-        saving: false,
-        error: "",
-        success: "",
-      });
-    } catch (error) {
-      setAutomationMutation({
-        saving: false,
-        error:
-          s(error?.message) || "Failed to update inbox AI Autopilot.",
-        success: "",
-      });
-    }
-  }
-
+  }, []);
 
   const {
     threads,
     setThreads,
     messages,
-    messagesThreadId,
     setMessages,
+    messagesThreadId,
+    loadingMessagesThreadId,
     selectedThread,
     setSelectedThread,
+    openThread,
     relatedLead,
     setRelatedLead,
-    surface,
-    detailSurface,
-    leadSurface,
-    actionState,
+    relatedLeadThreadId,
+    loadingLeadThreadId,
+    loadingThreads,
+    loadingMessages,
+    loadingLead,
+    busyAction,
+    error,
+    dbDisabled,
     loadThreads,
-    syncSelected,
     loadThreadDetail,
     loadMessages,
     loadRelatedLead,
@@ -599,43 +94,8 @@ export default function Inbox() {
     releaseHandoff,
     setThreadStatus,
     sendOperatorReply,
-  } = useInboxData({
-    operatorName,
-    tenantKey: workspace.tenantKey,
-    requireTenantScope: true,
-  });
-
-  const threadList = useInboxThreadListSurface({
-    requestedThreadId,
-    threads,
-    selectedThread,
-    setSelectedThread,
-    surface,
-    loadThreads,
-    syncSelected,
-    loadThreadDetail,
-    loadMessages,
-    loadRelatedLead,
-  });
-
-  const {
-    replyText,
-    setReplyText,
-    composerSurface,
-    handleSend,
-    handleRelease,
-  } = useInboxComposerSurface({
-    selectedThread,
-    actionState,
-    surface,
-    sendOperatorReply,
-    releaseHandoff,
-  });
-
-  const threadAttemptSurface = useThreadOutboundAttemptsSurface({
-    threadId: selectedThread?.id || "",
-    actor: operatorName || "operator",
-  });
+    openLeadDetail,
+  } = useInboxData({ filter, operatorName, navigate });
 
   useInboxRealtime({
     selectedThread,
@@ -644,12 +104,85 @@ export default function Inbox() {
     setSelectedThread,
     setMessages,
     loadThreads,
-    syncSelected,
     loadThreadDetail,
     loadRelatedLead,
     setRelatedLead,
-    setTypingState,
   });
+
+  useEffect(() => {
+    setPendingThreadId(requestedThreadId);
+    if (!requestedThreadId) {
+      setDeepLinkNotice("");
+    }
+  }, [requestedThreadId]);
+
+  useEffect(() => {
+    loadThreads(pendingThreadId || requestedThreadId);
+  }, [loadThreads, pendingThreadId, requestedThreadId]);
+
+  useEffect(() => {
+    if (!pendingThreadId || loadingThreads) {
+      return;
+    }
+
+    const matchingThread = threads.find((thread) => s(thread?.id) === pendingThreadId);
+
+    if (matchingThread) {
+      if (s(selectedThread?.id) !== s(matchingThread.id)) {
+        openThread(matchingThread);
+      }
+      setDeepLinkNotice("");
+      setPendingThreadId("");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function hydrateRequestedThread() {
+      try {
+        await Promise.all([
+          loadThreadDetail(pendingThreadId),
+          loadMessages(pendingThreadId),
+          loadRelatedLead(pendingThreadId),
+        ]);
+
+        if (cancelled) return;
+
+        setSelectedThread((current) => {
+          if (s(current?.id) === pendingThreadId) {
+            setDeepLinkNotice("");
+            setPendingThreadId("");
+            return current;
+          }
+
+          setDeepLinkNotice("The requested inbox thread is no longer available.");
+          setPendingThreadId("");
+          return current;
+        });
+      } catch {
+        if (!cancelled) {
+          setDeepLinkNotice("The requested inbox thread could not be opened.");
+          setPendingThreadId("");
+        }
+      }
+    }
+
+    hydrateRequestedThread();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pendingThreadId,
+    loadingThreads,
+    threads,
+    selectedThread?.id,
+    loadThreadDetail,
+    loadMessages,
+    loadRelatedLead,
+    setSelectedThread,
+    openThread,
+  ]);
 
   useEffect(() => {
     if (!requestedThreadId) return;
@@ -657,7 +190,6 @@ export default function Inbox() {
     setSearchParams(
       (prev) => {
         if (prev.get("threadId") === requestedThreadId) return prev;
-
         const next = new URLSearchParams(prev);
         next.set("threadId", requestedThreadId);
         return next;
@@ -666,282 +198,228 @@ export default function Inbox() {
     );
   }, [requestedThreadId, setSearchParams]);
 
-  const selectedThreadSyncKey = useMemo(() => {
-    const thread = obj(selectedThread);
-    const threadId = s(thread.id);
-    if (!threadId) return "";
-
-    return [
-      threadId,
-      s(thread.last_message_at || thread.lastMessageAt),
-      s(thread.last_inbound_at || thread.lastInboundAt),
-      s(thread.last_outbound_at || thread.lastOutboundAt),
-      s(thread.updated_at || thread.updatedAt),
-      String(n(thread.unread_count ?? thread.unreadCount, 0)),
-    ].join("|");
-  }, [selectedThread]);
-
-  const lastSelectedThreadSyncKeyRef = useRef("");
-
   useEffect(() => {
-    const threadId = s(selectedThread?.id);
-
-    if (!threadId) {
-      lastSelectedThreadSyncKeyRef.current = "";
-      return;
+    if (selectedThread?.id) {
+      loadMessages(selectedThread.id);
+      loadRelatedLead(selectedThread.id);
     }
-
-    if (!selectedThreadSyncKey) return;
-    if (lastSelectedThreadSyncKeyRef.current === selectedThreadSyncKey) return;
-
-    lastSelectedThreadSyncKeyRef.current = selectedThreadSyncKey;
-
-    Promise.resolve(
-      syncSelected(threadId, {
-        force: true,
-        reason: "selected_thread_version_changed",
-      })
-    ).catch(() => {
-      // Best-effort detail sync. The visible inbox keeps its current state on failure.
-    });
-  }, [selectedThread?.id, selectedThreadSyncKey, syncSelected]);
-
-  const detailOpen =
-    Boolean(selectedThread?.id) && detailThreadId === selectedThread?.id;
+  }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
   const selectedThreadId = s(selectedThread?.id);
-  const messagesInSync =
+
+  const messagesBelongToSelected =
     !selectedThreadId || s(messagesThreadId) === selectedThreadId;
-  const visibleThreadMessages = messagesInSync ? messages : [];
-  const hasVisibleMessages =
-    Array.isArray(visibleThreadMessages) && visibleThreadMessages.length > 0;
 
-  const detailPanelSurface = {
-    ...detailSurface,
-    loading:
-      Boolean(selectedThreadId && !messagesInSync) ||
-      Boolean(detailSurface.loading && !hasVisibleMessages),
-  };
+  const safeMessages = messagesBelongToSelected ? messages : [];
 
-  const selectedThreadAiPaused = Boolean(selectedThread?.handoff_active);
-  const selectedThreadAiEnabled =
-    inboxAutomationControl.enabled === true && !selectedThreadAiPaused;
-  const selectedThreadAiSaving = Boolean(
-    actionState?.isActionPending?.("handoff") ||
-      actionState?.isActionPending?.("release")
-  );
+  const safeLoadingMessages =
+    Boolean(selectedThreadId) &&
+    (s(loadingMessagesThreadId) === selectedThreadId ||
+      !messagesBelongToSelected ||
+      (loadingMessages && safeMessages.length === 0));
 
-  const handleToggleThreadAi = useCallback(
-    async (nextEnabled) => {
-      const threadId = s(selectedThread?.id);
-      if (!threadId) return;
+  const leadBelongsToSelected =
+    !selectedThreadId || s(relatedLeadThreadId) === selectedThreadId;
 
-      if (nextEnabled) {
-        await releaseHandoff(threadId, { silent: true });
-        return;
-      }
+  const safeRelatedLead = leadBelongsToSelected ? relatedLead : null;
 
-      await activateHandoff(threadId, { silent: true });
-    },
-    [activateHandoff, releaseHandoff, selectedThread?.id]
-  );
+  const safeLoadingLead =
+    Boolean(selectedThreadId) &&
+    (s(loadingLeadThreadId) === selectedThreadId ||
+      !leadBelongsToSelected ||
+      (loadingLead && !safeRelatedLead));
 
-  const threadAutomationControl = useMemo(
-    () => ({
-      enabled: selectedThreadAiEnabled,
-      saving: selectedThreadAiSaving,
-      disabled:
-        !selectedThread?.id ||
-        selectedThreadAiSaving ||
-        inboxAutomationControl.enabled !== true,
-      disabledReason:
-        inboxAutomationControl.enabled !== true
-          ? "Inbox AI Autopilot global olaraq söndürülüb."
-          : selectedThreadAiEnabled
-            ? "AI bu söhbətdə cavab verə bilər."
-            : "Operator rejimi. AI bu söhbətdə cavab vermir.",
-      statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
-      scopeLabel: "Bu söhbətdə AI",
-    }),
-    [
-      inboxAutomationControl.enabled,
-      selectedThread?.id,
-      selectedThreadAiEnabled,
-      selectedThreadAiSaving,
-    ]
-  );
+  const filteredThreads = useMemo(() => {
+    if (filter === "handoff") {
+      return threads.filter((t) => Boolean(t.handoff_active));
+    }
+    if (filter === "open") {
+      return threads.filter((t) => deriveThreadState(t) === "open");
+    }
+    if (filter === "assigned") {
+      return threads.filter((t) => deriveThreadState(t) === "assigned");
+    }
+    if (filter === "resolved") {
+      return threads.filter((t) => {
+        const state = deriveThreadState(t);
+        return state === "resolved" || state === "closed";
+      });
+    }
+    return threads;
+  }, [threads, filter]);
 
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === "Escape") setDetailThreadId("");
+  const stats = useMemo(() => {
+    let open = 0;
+    let aiActive = 0;
+    let handoff = 0;
+    let resolved = 0;
+
+    for (const thread of threads) {
+      const state = deriveThreadState(thread);
+      if (state === "open") open += 1;
+      else if (state === "ai_active") aiActive += 1;
+      else if (state === "handoff" || state === "assigned") handoff += 1;
+      else if (state === "resolved" || state === "closed") resolved += 1;
     }
 
-    if (!detailOpen) return undefined;
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [detailOpen]);
-
-  const hasDeliveryReadyLaunchChannel = useMemo(
-    () =>
-      n(readinessState.channelSummary?.readyCount) > 0 ||
-      arr(readinessState.channelSummary?.deliveryReadyChannelIds).length > 0,
-    [readinessState.channelSummary]
-  );
-
-  const truthReady = useMemo(
-    () =>
-      readinessState.truth?.ready === true &&
-      lower(readinessState.truth?.status) === "ready",
-    [readinessState.truth]
-  );
-
-  const runtimeReady = useMemo(
-    () =>
-      readinessState.runtime?.ready === true &&
-      lower(readinessState.runtime?.status) === "ready",
-    [readinessState.runtime]
-  );
-
-  const launchReady =
-    readinessState.overall?.launchReady === true &&
-    truthReady &&
-    runtimeReady &&
-    hasDeliveryReadyLaunchChannel;
-  const launchReadinessNotice = buildLaunchReadinessNotice({
-    readinessState,
-    hasDeliveryReadyLaunchChannel,
-    truthReady,
-    runtimeReady,
-    launchReady,
-  });
-  const surfaceNotice = buildSurfaceNotice(surface);
-  const inboxInitializing = !workspace.ready || readinessState.loading;
-
-  if (inboxInitializing) {
-    return (
-      <div className="h-full min-h-0 w-full bg-white">
-        <LoadingSurface title="Loading inbox" />
-      </div>
-    );
-  }
+    return { open, aiActive, handoff, resolved };
+  }, [threads]);
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden bg-white">
-      {surfaceNotice || launchReadinessNotice ? (
-        <div className="pointer-events-none absolute left-0 right-0 top-0 z-30 px-4 pt-3">
-          <div className="pointer-events-auto flex flex-col gap-2">
-            {surfaceNotice ? (
-              <InlineNotice
-                tone={surfaceNotice.tone}
-                title={surfaceNotice.title}
-                description={surfaceNotice.description}
-                compact
-              />
-            ) : null}
+    <div className="min-h-screen px-6 pb-6 pt-6 md:px-8">
+      <InboxToolbar
+        operatorName={operatorName}
+        setOperatorName={setOperatorName}
+        wsState={wsState}
+        dbDisabled={dbDisabled}
+        onRefresh={() => loadThreads(selectedThreadId || "")}
+      />
 
-            {launchReadinessNotice ? (
-              <InlineNotice
-                tone={launchReadinessNotice.tone}
-                title={launchReadinessNotice.title}
-                description={launchReadinessNotice.description}
-                action={
-                  launchReadinessNotice.action ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        const path = s(launchReadinessNotice.action?.path);
-                        navigate(path.startsWith("/") ? path : "/channels");
-                      }}
-                    >
-                      {launchReadinessNotice.action.label}
-                    </Button>
-                  ) : null
-                }
-                compact
-              />
-            ) : null}
-          </div>
+      {error ? (
+        <div className="mb-6 rounded-[22px] border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100">
+          {error}
         </div>
       ) : null}
 
-      <div className="grid h-full min-h-0 grid-cols-[420px_minmax(0,1fr)] bg-white">
-        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-white">
-          <InboxThreadListPanel
-            threadList={threadList}
-            selectedThreadId={selectedThread?.id || ""}
-            searchQuery=""
-            launchChannelConnected={hasDeliveryReadyLaunchChannel}
-            automationControl={inboxAutomationControl}
-            onToggleAutomation={handleToggleInboxAutonomy}
-          />
+      {deepLinkNotice ? (
+        <div className="mb-6 rounded-[22px] border border-amber-300/20 bg-amber-300/[0.08] px-4 py-3 text-sm text-amber-100">
+          {deepLinkNotice}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <InboxStatCard label="Open Threads" value={stats.open} icon={MessageSquareText} />
+        <InboxStatCard label="AI Active" value={stats.aiActive} icon={Sparkles} tone="cyan" />
+        <InboxStatCard label="Handoff" value={stats.handoff} icon={ShieldAlert} tone="amber" />
+        <InboxStatCard label="Resolved" value={stats.resolved} icon={CheckCircle2} tone="emerald" />
+      </div>
+
+      <RetryQueuePanel
+        tenantKey={tenantKey}
+        actor={operatorName || "operator"}
+        className="mt-6"
+      />
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <div className="flex flex-col gap-4 border-b border-white/8 pb-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-[18px] font-semibold tracking-[-0.03em] text-white">
+                Active Threads
+              </div>
+              <div className="mt-1 text-sm text-white/46">
+                Real inbox axını və operator handoff vəziyyəti.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {["all", "open", "handoff", "assigned", "resolved"].map((x) => (
+                <button
+                  key={x}
+                  type="button"
+                  onClick={() => setFilter(x)}
+                  className={`rounded-full border px-3.5 py-2 text-[12px] font-medium capitalize transition ${
+                    filter === x
+                      ? x === "handoff"
+                        ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
+                        : "border-white/10 bg-white/[0.04] text-white/78"
+                      : "border-white/10 bg-white/[0.02] text-white/44 hover:border-white/16 hover:bg-white/[0.04] hover:text-white/70"
+                  }`}
+                >
+                  {x}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4">
+            {loadingThreads ? (
+              <div className="rounded-[24px] border border-white/10 bg-black/20 px-4 py-10 text-center text-sm text-white/52">
+                Loading threads...
+              </div>
+            ) : filteredThreads.length === 0 ? (
+              <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 px-4 py-10 text-center">
+                <div className="text-sm font-medium text-white/68">No threads yet</div>
+                <div className="mt-2 text-sm leading-6 text-white/40">
+                  Thread-lər gələndə burada tam status və handoff görünəcək.
+                </div>
+              </div>
+            ) : (
+              filteredThreads.map((thread) => (
+                <InboxThreadCard
+                  key={thread.id}
+                  thread={thread}
+                  selected={selectedThreadId === s(thread.id)}
+                  onOpen={openThread}
+                />
+              ))
+            )}
+          </div>
         </div>
 
-        <div className="min-h-0 overflow-hidden bg-white">
+        <div className="space-y-6">
           <InboxDetailPanel
             selectedThread={selectedThread}
-            messages={visibleThreadMessages}
-            outboundAttempts={threadAttemptSurface.attempts}
-            typingState={typingState}
-            surface={detailPanelSurface}
-            actionState={actionState}
+            messages={safeMessages}
+            loadingMessages={safeLoadingMessages}
+            busyAction={busyAction}
             markRead={markRead}
             assignThread={assignThread}
             activateHandoff={activateHandoff}
+            releaseHandoff={releaseHandoff}
             setThreadStatus={setThreadStatus}
-            onOpenDetails={() => {
-              if (selectedThread?.id) {
-                setDetailThreadId(selectedThread.id);
-              }
-            }}
-            automationControl={threadAutomationControl}
-            onToggleAutomation={handleToggleThreadAi}
-            launchChannelConnected={hasDeliveryReadyLaunchChannel}
-            onOpenChannels={() => navigate("/channels")}
-            composer={
-              <InboxComposer
-                embedded
-                selectedThread={selectedThread}
-                surface={composerSurface}
-                actionState={actionState}
-                replyText={replyText}
-                setReplyText={setReplyText}
-                onSend={handleSend}
-                onReleaseHandoff={handleRelease}
-                aiReplyEnabled={inboxAutomationControl.enabled}
-                threadAiEnabled={selectedThreadAiEnabled}
-                threadAiPaused={selectedThreadAiPaused}
-                threadAiSaving={selectedThreadAiSaving}
-                onToggleThreadAi={handleToggleThreadAi}
-              />
-            }
           />
-        </div>
-      </div>
 
-      {detailOpen ? (
-        <SlidingDetailOverlay
-          open={detailOpen}
-          onClose={() => setDetailThreadId("")}
-          absolute
-          closeLabel="Close conversation details"
-          panelWidthClassName="max-w-[96vw] w-[380px]"
-          className="z-40"
-          backdropClassName="bg-transparent"
-          panelClassName="bg-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.28)]"
-        >
           <InboxLeadPanel
             selectedThread={selectedThread}
-            surface={leadSurface}
-            relatedLead={relatedLead}
-            operatorName={operatorName}
-            tenantKey={workspace.tenantKey}
-            wsState={wsState}
-            onClose={() => setDetailThreadId("")}
+            loadingLead={safeLoadingLead}
+            relatedLead={safeRelatedLead}
+            openLeadDetail={openLeadDetail}
           />
-        </SlidingDetailOverlay>
-      ) : null}
+
+          <InboxComposer
+            replyText={replyText}
+            setReplyText={setReplyText}
+            selectedThread={selectedThread}
+            busyAction={busyAction}
+            sendOperatorReply={() => sendOperatorReply(selectedThread, replyText, setReplyText)}
+            releaseHandoff={releaseHandoff}
+          />
+
+          <ThreadOutboundAttemptsPanel
+            selectedThread={selectedThread}
+            actor={operatorName || "operator"}
+          />
+
+          {showInternalDebug ? (
+            <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                  <UserRound className="h-4 w-4 text-white/72" />
+                </div>
+                <div>
+                  <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+                    Thread Meta
+                  </div>
+                  <div className="mt-1 text-sm text-white/46">
+                    Debug və operator visibility üçün raw məlumat.
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-[22px] border border-dashed border-white/10 bg-black/20 px-4 py-4">
+                {selectedThread ? (
+                  <pre className="overflow-auto text-xs leading-6 text-white/58">
+                    {JSON.stringify(selectedThread, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="text-sm text-white/46">No thread selected.</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

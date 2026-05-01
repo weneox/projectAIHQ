@@ -1,529 +1,290 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useRef, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
-import { getLeadByThreadId } from "../api/leads.js";
-import { useActionState } from "./useActionState.js";
-import { useAsyncSurfaceState } from "./useAsyncSurfaceState.js";
 
-const inboxInflightRequests = new Map();
-
-function withSharedInboxRequest(key, load) {
-  const cacheKey = String(key || "").trim();
-  if (!cacheKey) return load();
-
-  if (inboxInflightRequests.has(cacheKey)) {
-    return inboxInflightRequests.get(cacheKey);
-  }
-
-  const request = Promise.resolve()
-    .then(load)
-    .finally(() => {
-      if (inboxInflightRequests.get(cacheKey) === request) {
-        inboxInflightRequests.delete(cacheKey);
-      }
-    });
-
-  inboxInflightRequests.set(cacheKey, request);
-  return request;
+function s(value) {
+  return String(value ?? "").trim();
 }
 
-function clearSharedInboxRequests(prefix = "") {
-  const needle = String(prefix || "").trim();
-  if (!needle) {
-    inboxInflightRequests.clear();
-    return;
-  }
+export function useInboxData({ filter, operatorName, navigate }) {
+  const actorName = s(operatorName) || "operator";
 
-  for (const key of inboxInflightRequests.keys()) {
-    if (key.startsWith(needle)) {
-      inboxInflightRequests.delete(key);
-    }
-  }
-}
-
-function s(value = "", fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function makeClientMutationId() {
-  return `inbox-ui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function obj(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
-
-function getMessageClientMutationId(message = {}) {
-  const meta = obj(message?.meta);
-  return s(
-    message?.clientMutationId ||
-      message?.client_mutation_id ||
-      meta?.clientMutationId ||
-      meta?.client_mutation_id
-  );
-}
-
-function mergeIfChanged(current, patch) {
-  const base = obj(current);
-  const safePatch = obj(patch);
-
-  let changed = false;
-  const next = { ...base };
-
-  for (const [key, value] of Object.entries(safePatch)) {
-    if (value === undefined) continue;
-
-    if (next[key] !== value) {
-      next[key] = value;
-      changed = true;
-    }
-  }
-
-  return changed ? next : current;
-}
-
-function normalizeApiMessagePayload(response = {}) {
-  return (
-    response?.message ||
-    response?.inboxMessage ||
-    response?.savedMessage ||
-    response?.data?.message ||
-    response?.data?.inboxMessage ||
-    null
-  );
-}
-
-function normalizeApiThreadPayload(response = {}) {
-  return response?.thread || response?.data?.thread || null;
-}
-
-function buildOptimisticOutboundMessage({
-  threadId,
-  tenantKey,
-  actorName,
-  text,
-  clientMutationId,
-}) {
-  const at = nowIso();
-
-  return {
-    id: clientMutationId,
-    thread_id: threadId,
-    tenant_key: tenantKey,
-    direction: "outbound",
-    sender_type: "agent",
-    sender_name: actorName,
-    message_type: "text",
-    text,
-    attachments: [],
-    sent_at: at,
-    created_at: at,
-    is_renderable: true,
-    meta: {
-      source: "inbox_ui",
-      optimistic: true,
-      deliveryStatus: "pending",
-      clientMutationId,
-      client_mutation_id: clientMutationId,
-              releaseHandoff: false,
-              preserveThreadMode: true,
-    },
-  };
-}
-
-function buildAcceptedFallbackMessage(optimisticMessage) {
-  return {
-    ...optimisticMessage,
-    meta: {
-      ...obj(optimisticMessage?.meta),
-      optimistic: false,
-      deliveryStatus: "accepted",
-    },
-  };
-}
-
-function upsertMessageByIdOrClientMutationId(messages, nextMessage) {
-  const safeMessages = Array.isArray(messages) ? messages : [];
-  const nextId = s(nextMessage?.id);
-  const nextClientMutationId = getMessageClientMutationId(nextMessage);
-
-  let replaced = false;
-
-  const nextMessages = safeMessages.map((message) => {
-    const sameId = nextId && s(message?.id) === nextId;
-    const sameClientMutationId =
-      nextClientMutationId &&
-      getMessageClientMutationId(message) === nextClientMutationId;
-
-    if (!sameId && !sameClientMutationId) return message;
-
-    replaced = true;
-    return {
-      ...message,
-      ...nextMessage,
-      meta: {
-        ...obj(message?.meta),
-        ...obj(nextMessage?.meta),
-        optimistic: false,
-      },
-    };
-  });
-
-  if (replaced) return nextMessages;
-  return [...safeMessages, nextMessage];
-}
-
-function removeOptimisticMessage(messages, clientMutationId) {
-  const safeClientMutationId = s(clientMutationId);
-  if (!safeClientMutationId) return messages;
-
-  const safeMessages = Array.isArray(messages) ? messages : [];
-
-  return safeMessages.filter((message) => {
-    const sameId = s(message?.id) === safeClientMutationId;
-    const sameClientMutationId =
-      getMessageClientMutationId(message) === safeClientMutationId;
-
-    return !sameId && !sameClientMutationId;
-  });
-}
-
-function patchThreadPreviewFromMessage(thread, message) {
-  if (!thread?.id || !message?.text) return thread;
-
-  const at = s(message?.sent_at || message?.created_at || nowIso());
-
-  return mergeIfChanged(thread, {
-    last_message_text: message.text,
-    last_message_preview: message.text,
-    last_message_at: at,
-    last_outbound_at: at,
-    updated_at: at,
-  });
-}
-
-function patchThreadListPreview(threads, threadId, message, apiThread = null) {
-  const safeThreads = Array.isArray(threads) ? threads : [];
-  const safeThreadId = s(threadId);
-  if (!safeThreadId) return safeThreads;
-
-  const index = safeThreads.findIndex((thread) => s(thread?.id) === safeThreadId);
-  if (index === -1) return safeThreads;
-
-  const current = safeThreads[index];
-  const patchedFromMessage = patchThreadPreviewFromMessage(current, message);
-  const nextThread = apiThread
-    ? mergeIfChanged(patchedFromMessage, apiThread)
-    : patchedFromMessage;
-
-  if (nextThread === current) return safeThreads;
-
-  const next = safeThreads.slice();
-  next[index] = nextThread;
-  return next;
-}
-
-export function useInboxData({
-  operatorName,
-  tenantKey = "",
-  requireTenantScope = false,
-}) {
-  const actorName = String(operatorName || "").trim() || "operator";
-  const tenantScope = s(tenantKey).toLowerCase();
-  const requestScopePrefix = tenantScope ? `tenant:${tenantScope}:` : "";
-  const actionState = useActionState();
-
-  const [messages, setMessages] = useState([]);
-  const [messagesThreadId, setMessagesThreadId] = useState("");
+  const selectedThreadRef = useRef(null);
   const messagesThreadIdRef = useRef("");
-  const messagesRequestSeqRef = useRef(0);
-  const threadDetailRequestSeqRef = useRef(0);
-  const leadRequestSeqRef = useRef(0);
+  const relatedLeadThreadIdRef = useRef("");
 
-  useEffect(() => {
-    messagesThreadIdRef.current = messagesThreadId;
-  }, [messagesThreadId]);
+  const messagesRequestRef = useRef(0);
+  const leadRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
 
-  const [selectedThread, setSelectedThread] = useState(null);
+  const [threads, setThreads] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [selectedThreadState, setSelectedThreadState] = useState(null);
   const [relatedLead, setRelatedLead] = useState(null);
 
-  const [loadingThreadDetail, setLoadingThreadDetail] = useState(false);
+  const [messagesThreadId, setMessagesThreadId] = useState("");
+  const [loadingMessagesThreadId, setLoadingMessagesThreadId] = useState("");
+
+  const [relatedLeadThreadId, setRelatedLeadThreadId] = useState("");
+  const [loadingLeadThreadId, setLoadingLeadThreadId] = useState("");
+
+  const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingLead, setLoadingLead] = useState(false);
-  const [threadDetailError, setThreadDetailError] = useState("");
-  const [messagesError, setMessagesError] = useState("");
-  const [leadError, setLeadError] = useState("");
+  const [busyAction, setBusyAction] = useState("");
+  const [error, setError] = useState("");
+  const [dbDisabled, setDbDisabled] = useState(false);
 
-  const {
-    data,
-    setData,
-    surface,
-    beginRefresh,
-    succeedRefresh,
-    failRefresh,
-    beginSave,
-    succeedSave,
-    failSave,
-    clearSaveState,
-  } = useAsyncSurfaceState({
-    initialData: {
-      threads: [],
-      dbDisabled: false,
-    },
-  });
+  const commitSelectedThread = useCallback((nextOrUpdater) => {
+    setSelectedThreadState((prev) => {
+      const next =
+        typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater;
 
-  const threads = Array.isArray(data?.threads) ? data.threads : [];
-  const dbDisabled = Boolean(data?.dbDisabled);
-
-  useEffect(() => {
-    clearSharedInboxRequests("tenant:");
-
-    setData({
-      threads: [],
-      dbDisabled: false,
+      selectedThreadRef.current = next || null;
+      return next || null;
     });
+  }, []);
 
-    setMessages([]);
-    setMessagesThreadId("");
-    messagesRequestSeqRef.current += 1;
-    threadDetailRequestSeqRef.current += 1;
-    leadRequestSeqRef.current += 1;
+  const commitMessagesThreadId = useCallback((threadId) => {
+    const safeThreadId = s(threadId);
+    messagesThreadIdRef.current = safeThreadId;
+    setMessagesThreadId(safeThreadId);
+  }, []);
 
-    setSelectedThread(null);
-    setRelatedLead(null);
-    setThreadDetailError("");
-    setMessagesError("");
-    setLeadError("");
-    clearSaveState();
+  const commitRelatedLeadThreadId = useCallback((threadId) => {
+    const safeThreadId = s(threadId);
+    relatedLeadThreadIdRef.current = safeThreadId;
+    setRelatedLeadThreadId(safeThreadId);
+  }, []);
 
-    if (tenantScope) {
-      beginRefresh();
-    }
-  }, [beginRefresh, clearSaveState, setData, tenantScope]);
+  const primeThreadSwitch = useCallback(
+    (thread) => {
+      const nextThreadId = s(thread?.id);
+
+      commitSelectedThread(thread || null);
+
+      if (!nextThreadId) {
+        messagesRequestRef.current += 1;
+        leadRequestRef.current += 1;
+
+        commitMessagesThreadId("");
+        commitRelatedLeadThreadId("");
+
+        setMessages([]);
+        setRelatedLead(null);
+
+        setLoadingMessages(false);
+        setLoadingLead(false);
+
+        setLoadingMessagesThreadId("");
+        setLoadingLeadThreadId("");
+        return;
+      }
+
+      if (messagesThreadIdRef.current !== nextThreadId) {
+        messagesRequestRef.current += 1;
+        commitMessagesThreadId(nextThreadId);
+        setMessages([]);
+        setLoadingMessages(true);
+        setLoadingMessagesThreadId(nextThreadId);
+      }
+
+      if (relatedLeadThreadIdRef.current !== nextThreadId) {
+        leadRequestRef.current += 1;
+        commitRelatedLeadThreadId(nextThreadId);
+        setRelatedLead(null);
+        setLoadingLead(true);
+        setLoadingLeadThreadId(nextThreadId);
+      }
+    },
+    [commitMessagesThreadId, commitRelatedLeadThreadId, commitSelectedThread]
+  );
+
+  const openThread = useCallback(
+    (thread) => {
+      primeThreadSwitch(thread);
+    },
+    [primeThreadSwitch]
+  );
 
   const loadThreads = useCallback(
     async (preferredId = "") => {
-      if (requireTenantScope && !tenantScope) {
-        return null;
-      }
-
       try {
-        beginRefresh();
+        setLoadingThreads(true);
+        setError("");
 
-        const j = await withSharedInboxRequest(
-          `${requestScopePrefix}threads:list`,
-          () => apiGet("/api/inbox/threads")
-        );
+        const qs =
+          filter === "handoff"
+            ? "/api/inbox/threads?handoffOnly=true"
+            : "/api/inbox/threads";
 
+        const j = await apiGet(qs);
         const arr = Array.isArray(j?.threads) ? j.threads : [];
 
-        setData({
-          threads: arr,
-          dbDisabled: Boolean(j?.dbDisabled),
-        });
+        setThreads(arr);
+        setDbDisabled(Boolean(j?.dbDisabled));
 
         if (arr.length > 0) {
-          setSelectedThread((prev) => {
-            const wantedId = preferredId || prev?.id || "";
-            if (wantedId && arr.some((x) => x.id === wantedId)) {
-              return arr.find((x) => x.id === wantedId) || arr[0];
-            }
-            return arr[0];
-          });
-        } else {
-          setSelectedThread(null);
-          setMessages([]);
-          setMessagesThreadId("");
-          messagesRequestSeqRef.current += 1;
-          threadDetailRequestSeqRef.current += 1;
-          leadRequestSeqRef.current += 1;
-          setRelatedLead(null);
-          setThreadDetailError("");
-          setMessagesError("");
-          setLeadError("");
-        }
+          const previousThread = selectedThreadRef.current;
+          const wantedId = s(preferredId) || s(previousThread?.id);
 
-        return succeedRefresh({
-          threads: arr,
-          dbDisabled: Boolean(j?.dbDisabled),
-        });
+          const nextThread =
+            (wantedId && arr.find((x) => s(x?.id) === wantedId)) || arr[0];
+
+          if (s(previousThread?.id) !== s(nextThread?.id)) {
+            primeThreadSwitch(nextThread);
+          } else {
+            commitSelectedThread((current) => ({
+              ...(current || {}),
+              ...(nextThread || {}),
+            }));
+          }
+        } else {
+          primeThreadSwitch(null);
+        }
       } catch (e) {
-        return failRefresh(String(e?.message || e || "Failed to load inbox threads"), {
-          fallbackData: {
-            threads: [],
-            dbDisabled: false,
-          },
-          unavailable: true,
-        });
+        setError(String(e?.message || e));
+      } finally {
+        setLoadingThreads(false);
       }
     },
-    [
-      beginRefresh,
-      failRefresh,
-      requestScopePrefix,
-      requireTenantScope,
-      setData,
-      succeedRefresh,
-      tenantScope,
-    ]
+    [commitSelectedThread, filter, primeThreadSwitch]
   );
 
   const loadThreadDetail = useCallback(
     async (threadId) => {
       const safeThreadId = s(threadId);
-      const requestSeq = threadDetailRequestSeqRef.current + 1;
-      threadDetailRequestSeqRef.current = requestSeq;
-
       if (!safeThreadId) return;
-      if (requireTenantScope && !tenantScope) return;
+
+      const requestId = ++detailRequestRef.current;
 
       try {
-        setLoadingThreadDetail(true);
-        setThreadDetailError("");
-
-        const j = await withSharedInboxRequest(
-          `${requestScopePrefix}threads:detail:${safeThreadId}`,
-          () => apiGet(`/api/inbox/threads/${safeThreadId}`)
-        );
-
-        if (threadDetailRequestSeqRef.current !== requestSeq) return;
+        const j = await apiGet(`/api/inbox/threads/${safeThreadId}`);
+        if (requestId !== detailRequestRef.current) return;
 
         if (j?.thread) {
-          setSelectedThread((current) => {
-            if (s(current?.id) && s(current?.id) !== safeThreadId) return current;
+          setThreads((prev) =>
+            prev.map((t) => (s(t?.id) === safeThreadId ? { ...t, ...j.thread } : t))
+          );
+
+          commitSelectedThread((current) => {
+            const currentId = s(current?.id);
+
+            if (currentId && currentId !== safeThreadId) {
+              return current;
+            }
+
             return j.thread;
           });
-
-          setData((prev) => ({
-            ...prev,
-            threads: (Array.isArray(prev?.threads) ? prev.threads : []).map((t) =>
-              t.id === safeThreadId ? { ...t, ...j.thread } : t
-            ),
-            dbDisabled: Boolean(prev?.dbDisabled),
-          }));
         }
       } catch (e) {
-        if (threadDetailRequestSeqRef.current !== requestSeq) return;
-        setThreadDetailError(String(e?.message || e || "Failed to load thread detail"));
-      } finally {
-        if (threadDetailRequestSeqRef.current === requestSeq) {
-          setLoadingThreadDetail(false);
+        if (requestId === detailRequestRef.current) {
+          setError(String(e?.message || e));
         }
       }
     },
-    [requestScopePrefix, requireTenantScope, setData, tenantScope]
+    [commitSelectedThread]
   );
 
   const loadMessages = useCallback(
     async (threadId) => {
       const safeThreadId = s(threadId);
-      const requestSeq = messagesRequestSeqRef.current + 1;
-      messagesRequestSeqRef.current = requestSeq;
+      const requestId = ++messagesRequestRef.current;
 
       if (!safeThreadId) {
-        setMessagesThreadId("");
+        commitMessagesThreadId("");
         setMessages([]);
         setLoadingMessages(false);
+        setLoadingMessagesThreadId("");
         return;
       }
 
-      if (requireTenantScope && !tenantScope) {
-        setMessagesThreadId("");
-        setMessages([]);
-        setLoadingMessages(false);
-        return;
-      }
+      const sameThread = messagesThreadIdRef.current === safeThreadId;
 
-      const previousMessagesThreadId = s(messagesThreadIdRef.current);
-
-      setMessagesThreadId(safeThreadId);
-
-      if (previousMessagesThreadId !== safeThreadId) {
-        setMessages([]);
-      }
-
+      commitMessagesThreadId(safeThreadId);
       setLoadingMessages(true);
-      setMessagesError("");
+      setLoadingMessagesThreadId(safeThreadId);
+
+      if (!sameThread) {
+        setMessages([]);
+      }
 
       try {
-        const j = await withSharedInboxRequest(
-          `${requestScopePrefix}threads:messages:${safeThreadId}`,
-          () => apiGet(`/api/inbox/threads/${safeThreadId}/messages?limit=200`)
-        );
+        const j = await apiGet(`/api/inbox/threads/${safeThreadId}/messages?limit=200`);
 
-        if (messagesRequestSeqRef.current !== requestSeq) return;
+        if (requestId !== messagesRequestRef.current) return;
+        if (s(selectedThreadRef.current?.id) !== safeThreadId) return;
 
         setMessages(Array.isArray(j?.messages) ? j.messages : []);
+        commitMessagesThreadId(safeThreadId);
       } catch (e) {
-        if (messagesRequestSeqRef.current !== requestSeq) return;
-
-        setMessages([]);
-        setMessagesError(String(e?.message || e || "Failed to load messages"));
+        if (requestId === messagesRequestRef.current) {
+          setMessages([]);
+          commitMessagesThreadId(safeThreadId);
+          setError(String(e?.message || e));
+        }
       } finally {
-        if (messagesRequestSeqRef.current === requestSeq) {
+        if (requestId === messagesRequestRef.current) {
           setLoadingMessages(false);
+          setLoadingMessagesThreadId("");
         }
       }
     },
-    [requestScopePrefix, requireTenantScope, tenantScope]
+    [commitMessagesThreadId]
   );
 
   const loadRelatedLead = useCallback(
     async (threadId) => {
       const safeThreadId = s(threadId);
-      const requestSeq = leadRequestSeqRef.current + 1;
-      leadRequestSeqRef.current = requestSeq;
+      const requestId = ++leadRequestRef.current;
 
       if (!safeThreadId) {
+        commitRelatedLeadThreadId("");
         setRelatedLead(null);
+        setLoadingLead(false);
+        setLoadingLeadThreadId("");
         return;
       }
 
-      if (requireTenantScope && !tenantScope) return;
+      const sameThread = relatedLeadThreadIdRef.current === safeThreadId;
+
+      commitRelatedLeadThreadId(safeThreadId);
+      setLoadingLead(true);
+      setLoadingLeadThreadId(safeThreadId);
+
+      if (!sameThread) {
+        setRelatedLead(null);
+      }
 
       try {
-        setLoadingLead(true);
-        setLeadError("");
+        const j = await apiGet("/api/leads");
+        const arr = Array.isArray(j?.leads) ? j.leads : [];
+        const found = arr.find((x) => s(x?.inbox_thread_id) === safeThreadId);
 
-        const j = await withSharedInboxRequest(
-          `${requestScopePrefix}threads:lead:${safeThreadId}`,
-          () => getLeadByThreadId(safeThreadId)
-        );
+        if (requestId !== leadRequestRef.current) return;
+        if (s(selectedThreadRef.current?.id) !== safeThreadId) return;
 
-        if (leadRequestSeqRef.current !== requestSeq) return;
-
-        setRelatedLead(j?.lead || null);
+        setRelatedLead(found || null);
+        commitRelatedLeadThreadId(safeThreadId);
       } catch (e) {
-        if (leadRequestSeqRef.current !== requestSeq) return;
-
-        setRelatedLead(null);
-        setLeadError(String(e?.message || e || "Failed to load related lead"));
+        if (requestId === leadRequestRef.current) {
+          setRelatedLead(null);
+          commitRelatedLeadThreadId(safeThreadId);
+          setError(String(e?.message || e));
+        }
       } finally {
-        if (leadRequestSeqRef.current === requestSeq) {
+        if (requestId === leadRequestRef.current) {
           setLoadingLead(false);
+          setLoadingLeadThreadId("");
         }
       }
     },
-    [requestScopePrefix, requireTenantScope, tenantScope]
+    [commitRelatedLeadThreadId]
   );
 
   const syncSelected = useCallback(
-    async (threadId, options = {}) => {
+    async (threadId) => {
       const safeThreadId = s(threadId);
       if (!safeThreadId) return;
-
-      const forceFresh = options?.force !== false;
-
-      if (forceFresh) {
-        clearSharedInboxRequests(`${requestScopePrefix}threads:detail:${safeThreadId}`);
-        clearSharedInboxRequests(`${requestScopePrefix}threads:messages:${safeThreadId}`);
-        clearSharedInboxRequests(`${requestScopePrefix}threads:lead:${safeThreadId}`);
-      }
 
       await Promise.all([
         loadThreadDetail(safeThreadId),
@@ -531,347 +292,183 @@ export function useInboxData({
         loadRelatedLead(safeThreadId),
       ]);
     },
-    [loadMessages, loadRelatedLead, loadThreadDetail, requestScopePrefix]
+    [loadMessages, loadRelatedLead, loadThreadDetail]
   );
 
   const markRead = useCallback(
     async (threadId) => {
-      if (!threadId) return;
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
 
       try {
-        beginSave();
-        await actionState.runAction("read", () =>
-          apiPost(`/api/inbox/threads/${threadId}/read`, {})
-        );
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-        await syncSelected(threadId);
-        succeedSave({ message: "Thread marked as read." });
+        setBusyAction("read");
+        await apiPost(`/api/inbox/threads/${safeThreadId}/read`, {});
+        await syncSelected(safeThreadId);
       } catch (e) {
-        failSave(String(e?.message || e || "Failed to mark thread as read"));
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [actionState, beginSave, failSave, requestScopePrefix, succeedSave, syncSelected]
+    [syncSelected]
   );
 
   const assignThread = useCallback(
     async (threadId) => {
-      if (!threadId) return;
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
 
       try {
-        beginSave();
-        await actionState.runAction("assign", () =>
-          apiPost(`/api/inbox/threads/${threadId}/assign`, {
-            assignedTo: actorName,
-            actor: actorName,
-          })
-        );
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-        await loadThreads(threadId);
-        await syncSelected(threadId);
-        succeedSave({ message: "Thread assigned." });
+        setBusyAction("assign");
+        await apiPost(`/api/inbox/threads/${safeThreadId}/assign`, {
+          assignedTo: actorName,
+          actor: actorName,
+        });
+        await loadThreads(safeThreadId);
+        await syncSelected(safeThreadId);
       } catch (e) {
-        failSave(String(e?.message || e || "Failed to assign thread"));
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [
-      actionState,
-      actorName,
-      beginSave,
-      failSave,
-      loadThreads,
-      requestScopePrefix,
-      succeedSave,
-      syncSelected,
-    ]
+    [actorName, loadThreads, syncSelected]
   );
 
   const activateHandoff = useCallback(
-    async (threadId, options = {}) => {
-      if (!threadId) return;
-
-      const silent = options?.silent === true;
+    async (threadId) => {
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
 
       try {
-        beginSave();
-        await actionState.runAction("handoff", () =>
-          apiPost(`/api/inbox/threads/${threadId}/handoff/activate`, {
-            reason: "manual_review",
-            priority: "high",
-            assignedTo: actorName,
-            actor: actorName,
-          })
-        );
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-        await loadThreads(threadId);
-        await syncSelected(threadId);
-        if (silent) {
-          clearSaveState();
-        } else {
-          succeedSave({ message: "Handoff activated." });
-        }
+        setBusyAction("handoff");
+        await apiPost(`/api/inbox/threads/${safeThreadId}/handoff/activate`, {
+          reason: "manual_review",
+          priority: "high",
+          assignedTo: actorName,
+          actor: actorName,
+        });
+        await loadThreads(safeThreadId);
+        await syncSelected(safeThreadId);
       } catch (e) {
-        failSave(String(e?.message || e || "Failed to activate handoff"));
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [
-      actionState,
-      actorName,
-      beginSave,
-      clearSaveState,
-      failSave,
-      loadThreads,
-      requestScopePrefix,
-      succeedSave,
-      syncSelected,
-    ]
+    [actorName, loadThreads, syncSelected]
   );
 
   const releaseHandoff = useCallback(
-    async (threadId, options = {}) => {
-      if (!threadId) return;
-
-      const silent = options?.silent === true;
+    async (threadId) => {
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
 
       try {
-        beginSave();
-        await actionState.runAction("release", () =>
-          apiPost(`/api/inbox/threads/${threadId}/handoff/release`, {
-            actor: actorName,
-          })
-        );
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-        await loadThreads(threadId);
-        await syncSelected(threadId);
-        if (silent) {
-          clearSaveState();
-        } else {
-          succeedSave({ message: "Handoff released." });
-        }
+        setBusyAction("release");
+        await apiPost(`/api/inbox/threads/${safeThreadId}/handoff/release`, {
+          actor: actorName,
+        });
+        await loadThreads(safeThreadId);
+        await syncSelected(safeThreadId);
       } catch (e) {
-        failSave(String(e?.message || e || "Failed to release handoff"));
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [
-      actionState,
-      actorName,
-      beginSave,
-      clearSaveState,
-      failSave,
-      loadThreads,
-      requestScopePrefix,
-      succeedSave,
-      syncSelected,
-    ]
+    [actorName, loadThreads, syncSelected]
   );
 
   const setThreadStatus = useCallback(
     async (threadId, status) => {
-      if (!threadId) return;
+      const safeThreadId = s(threadId);
+      if (!safeThreadId) return;
 
       try {
-        beginSave();
-        await actionState.runAction(status, () =>
-          apiPost(`/api/inbox/threads/${threadId}/status`, {
-            status,
-            actor: actorName,
-          })
-        );
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-        await loadThreads(threadId);
-        await syncSelected(threadId);
-        succeedSave({
-          message: status === "closed" ? "Thread closed." : "Thread resolved.",
+        setBusyAction(status);
+        await apiPost(`/api/inbox/threads/${safeThreadId}/status`, {
+          status,
+          actor: actorName,
         });
+        await loadThreads(safeThreadId);
+        await syncSelected(safeThreadId);
       } catch (e) {
-        failSave(String(e?.message || e || "Failed to update thread status"));
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [
-      actionState,
-      actorName,
-      beginSave,
-      failSave,
-      loadThreads,
-      requestScopePrefix,
-      succeedSave,
-      syncSelected,
-    ]
+    [actorName, loadThreads, syncSelected]
   );
 
   const sendOperatorReply = useCallback(
-    async (threadId, replyText) => {
-      const safeThreadId = s(threadId);
-      const trimmed = s(replyText);
+    async (selectedThreadArg, replyText, setReplyText) => {
+      const safeThreadId = s(selectedThreadArg?.id);
+      const safeReply = s(replyText);
 
-      if (!safeThreadId) return false;
-
-      if (!trimmed) {
-        failSave("Reply text is required");
-        return false;
-      }
-
-      const clientMutationId = makeClientMutationId();
-
-      const optimisticMessage = buildOptimisticOutboundMessage({
-        threadId: safeThreadId,
-        tenantKey: tenantScope,
-        actorName,
-        text: trimmed,
-        clientMutationId,
-      });
+      if (!safeThreadId || !safeReply) return;
 
       try {
-        beginSave();
-        setMessagesThreadId(safeThreadId);
-        setMessagesError("");
-
-        setMessages((prev) => {
-          const activeMessagesThreadId = s(messagesThreadIdRef.current);
-          if (activeMessagesThreadId && activeMessagesThreadId !== safeThreadId) {
-            return prev;
-          }
-
-          return upsertMessageByIdOrClientMutationId(prev, optimisticMessage);
+        setBusyAction("reply");
+        await apiPost(`/api/inbox/threads/${safeThreadId}/messages`, {
+          direction: "outbound",
+          senderType: "agent",
+          operatorName: actorName,
+          messageType: "text",
+          text: safeReply,
+          releaseHandoff: false,
+          meta: {
+            source: "inbox_ui",
+          },
         });
 
-        setSelectedThread((prev) =>
-          prev && prev.id === safeThreadId
-            ? patchThreadPreviewFromMessage(prev, optimisticMessage)
-            : prev
-        );
-
-        setData((prev) => ({
-          ...prev,
-          threads: patchThreadListPreview(
-            Array.isArray(prev?.threads) ? prev.threads : [],
-            safeThreadId,
-            optimisticMessage
-          ),
-          dbDisabled: Boolean(prev?.dbDisabled),
-        }));
-
-        const response = await actionState.runAction("reply", () =>
-          apiPost(`/api/inbox/threads/${safeThreadId}/messages`, {
-            direction: "outbound",
-            senderType: "agent",
-            operatorName: actorName,
-            messageType: "text",
-            text: trimmed,
-            releaseHandoff: false,
-            preserveThreadMode: true,
-            clientMutationId,
-            meta: {
-              source: "inbox_ui",
-              clientMutationId,
-              client_mutation_id: clientMutationId,
-            },
-          })
-        );
-
-        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
-
-        const apiMessage =
-          normalizeApiMessagePayload(response) ||
-          buildAcceptedFallbackMessage(optimisticMessage);
-
-        const apiThread = normalizeApiThreadPayload(response);
-
-        setMessages((prev) =>
-          upsertMessageByIdOrClientMutationId(prev, apiMessage)
-        );
-
-        setSelectedThread((prev) => {
-          if (!prev || prev.id !== safeThreadId) return prev;
-
-          const patched = patchThreadPreviewFromMessage(prev, apiMessage);
-          return apiThread ? mergeIfChanged(patched, apiThread) : patched;
-        });
-
-        setData((prev) => ({
-          ...prev,
-          threads: patchThreadListPreview(
-            Array.isArray(prev?.threads) ? prev.threads : [],
-            safeThreadId,
-            apiMessage,
-            apiThread
-          ),
-          dbDisabled: Boolean(prev?.dbDisabled),
-        }));
-
-        succeedSave({
-          message:
-            "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
-        });
-
-        return true;
+        setReplyText("");
+        await loadThreads(safeThreadId);
+        await syncSelected(safeThreadId);
       } catch (e) {
-        setMessages((prev) => removeOptimisticMessage(prev, clientMutationId));
-
-        failSave(String(e?.message || e || "Failed to send operator reply"));
-        return false;
+        setError(String(e?.message || e));
+      } finally {
+        setBusyAction("");
       }
     },
-    [
-      actionState,
-      actorName,
-      beginSave,
-      failSave,
-      requestScopePrefix,
-      setData,
-      succeedSave,
-      tenantScope,
-    ]
+    [actorName, loadThreads, syncSelected]
+  );
+
+  const openLeadDetail = useCallback(
+    (relatedLeadArg) => {
+      if (!relatedLeadArg?.id) return;
+
+      navigate("/leads", {
+        state: {
+          selectedLeadId: relatedLeadArg.id,
+        },
+      });
+    },
+    [navigate]
   );
 
   return {
     threads,
-    setThreads: (next) =>
-      setData((prev) => ({
-        ...prev,
-        threads:
-          typeof next === "function"
-            ? next(Array.isArray(prev?.threads) ? prev.threads : [])
-            : next,
-        dbDisabled: Boolean(prev?.dbDisabled),
-      })),
+    setThreads,
     messages,
-    messagesThreadId,
     setMessages,
-    selectedThread,
-    setSelectedThread,
+    messagesThreadId,
+    loadingMessagesThreadId,
+    selectedThread: selectedThreadState,
+    setSelectedThread: commitSelectedThread,
+    openThread,
     relatedLead,
     setRelatedLead,
+    relatedLeadThreadId,
+    loadingLeadThreadId,
+    loadingThreads,
+    loadingMessages,
+    loadingLead,
+    busyAction,
+    error,
+    setError,
     dbDisabled,
-    surface: {
-      ...surface,
-      refresh: () => loadThreads(selectedThread?.id || ""),
-      clearSaveState,
-    },
-    detailSurface: {
-      loading: loadingThreadDetail || loadingMessages,
-      error: threadDetailError || messagesError,
-      unavailable: false,
-      ready: Boolean(selectedThread?.id) && !loadingThreadDetail && !loadingMessages,
-      lastUpdated: "",
-      saving: surface.saving,
-      saveError: surface.saveError,
-      saveSuccess: surface.saveSuccess,
-      refresh: selectedThread?.id ? () => syncSelected(selectedThread.id) : null,
-      clearSaveState,
-    },
-    leadSurface: {
-      loading: loadingLead,
-      error: leadError,
-      unavailable: false,
-      ready: Boolean(selectedThread?.id) && !loadingLead,
-      lastUpdated: "",
-      saving: false,
-      saveError: "",
-      saveSuccess: "",
-      refresh: selectedThread?.id ? () => loadRelatedLead(selectedThread.id) : null,
-      clearSaveState: () => {},
-    },
-    actionState,
     loadThreads,
     loadThreadDetail,
     loadMessages,
@@ -883,5 +480,6 @@ export function useInboxData({
     releaseHandoff,
     setThreadStatus,
     sendOperatorReply,
+    openLeadDetail,
   };
 }
