@@ -2,10 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
-import {
-  getSettingsTrustView,
-  saveSettingsTrustPolicyControl,
-} from "../api/trust.js";
+import { getSettingsTrustView } from "../api/trust.js";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
@@ -390,29 +387,6 @@ export default function Inbox() {
     };
   }, [refreshToken, workspace.ready, workspace.tenantKey]);
 
-  const loadOperationalState = useCallback(async () => {
-    if (!workspace.ready) return;
-
-    setResolvedReadinessState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-      error: "",
-    }));
-    setResolvedTrustState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-    }));
-
-    const [readinessState, trustState] = await Promise.all([
-      loadInboxLaunchReadinessState(workspace.tenantKey),
-      loadInboxTrustState(workspace.tenantKey),
-    ]);
-
-    setResolvedReadinessState(readinessState);
-    setResolvedTrustState(trustState);
-  }, [workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
     if (!workspace.ready) return undefined;
@@ -531,46 +505,6 @@ export default function Inbox() {
     ]
   );
 
-  async function handleToggleInboxAutonomy(nextEnabled) {
-    if (!workspace.ready) return;
-    if (automationMutation.saving) return;
-
-    setAutomationMutation({
-      saving: true,
-      error: "",
-      success: "",
-    });
-
-    try {
-      await saveSettingsTrustPolicyControl({
-        surface: "inbox",
-        controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
-        policyReason: nextEnabled
-          ? "Inbox OpenAI autonomy enabled from inbox workspace"
-          : "Inbox OpenAI autonomy disabled from inbox workspace",
-        operatorNote: nextEnabled
-          ? "Inbox automatic OpenAI replies enabled"
-          : "Inbox automatic OpenAI replies disabled",
-      });
-
-      await loadOperationalState();
-
-      setAutomationMutation({
-        saving: false,
-        error: "",
-        success: nextEnabled
-          ? "Inbox automatic replies are enabled."
-          : "Inbox automatic replies are disabled.",
-      });
-    } catch (error) {
-      setAutomationMutation({
-        saving: false,
-        error:
-          s(error?.message) || "Failed to update inbox automation control.",
-        success: "",
-      });
-    }
-  }
 
   const {
     threads,
