@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import { cfg } from "../src/config.js";
@@ -483,6 +483,11 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
     async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
       if (sql === "begin" || sql === "commit") return { rows: [] };
+      if (sql.includes("tenant_ai_policies")) {
+        return {
+          rows: [{ tenant_key: "acme", mode: "auto" }],
+        };
+      }
       if (sql.includes("from tenants")) {
         return {
           rows: [{ id: thread.tenant_id, tenant_key: "acme" }],
@@ -676,8 +681,21 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.ok, true);
   assert.equal(res.body?.intent, "knowledge_answer");
-  assert.equal(res.body?.actions?.[0]?.type, "send_message");
-  assert.equal(res.body?.executionResults?.length, 1);
+
+  // Runtime health is stale, so the AI may classify the message,
+  // but autonomous outbound execution must be blocked.
+  assert.deepEqual(res.body?.actions, []);
+  assert.equal(res.body?.executionResults?.length, 0);
+  assert.equal(res.body?.executionPolicy?.summary?.filteredActionCount, 1);
+  assert.equal(res.body?.executionPolicy?.filteredActionTypes?.[0], "send_message");
+  assert.equal(
+    res.body?.executionPolicy?.summary?.strictestOutcome,
+    "blocked_until_repair"
+  );
+  assert.equal(
+    res.body?.executionPolicy?.summary?.reasonCodes?.includes("runtime_health_restriction"),
+    true
+  );
   assert.equal(Array.isArray(decisionEvents), true);
 });
 
@@ -942,3 +960,5 @@ test("inbox behavior runtime stays in safe general fallback mode without forcing
   assert.equal(typeof send?.text, "string");
   assert.equal(send?.text.length > 0, true);
 });
+
+

@@ -1,0 +1,86 @@
+﻿name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  repository-security:
+    name: Repository security checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Secret scan
+        run: npm run security:secret-scan --if-present
+
+  workspace-smoke:
+    name: Workspace smoke checks
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          - ai-hq-backend
+          - ai-hq-frontend
+          - meta-bot-backend
+          - twilio-voice-backend
+          - shared-contracts
+
+    env:
+      VITE_API_BASE: https://api.example.com
+      VITE_WS_URL: wss://api.example.com/ws
+      VITE_ENABLE_INTERNAL_ROUTES: "0"
+      VITE_DEBUG_PUSH: "0"
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Build code-only workspaces
+        run: |
+          case "${{ matrix.workspace }}" in
+            ai-hq-frontend|shared-contracts)
+              npm run build --if-present
+              ;;
+            *)
+              echo "Skipping build for ${{ matrix.workspace }} because its build requires production-like provider secrets or DB/runtime env."
+              ;;
+          esac
+

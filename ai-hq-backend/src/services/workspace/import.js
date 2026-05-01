@@ -1,5 +1,5 @@
-// src/services/workspace/import.js
-// FINAL v6.2 Ã¢â‚¬â€ session-aware source import orchestration + website partial-review hardening
+﻿// src/services/workspace/import.js
+// FINAL v6.2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â session-aware source import orchestration + website partial-review hardening
 
 import { runSourceSync } from "../sourceSync/index.js";
 import { buildSetupState } from "./setup.js";
@@ -129,6 +129,8 @@ function isMeaningfulValue(value) {
 
 function authorityRankForSourceType(sourceType = "") {
   const x = lower(sourceType);
+
+  if (!x) return 0;
 
   if (x === "manual" || x === "admin" || x === "owner") return 1000;
   if (x === "google_business_profile" || x === "google_business") return 520;
@@ -2271,3 +2273,4 @@ export const __test__ = {
   hasDraftKnowledgeCoverage,
   shouldForcePartialModeFromWarnings,
 };
+
