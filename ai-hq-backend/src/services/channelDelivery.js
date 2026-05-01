@@ -204,8 +204,6 @@ async function deliverMetaOutbound(payload = {}) {
     findProviderMessageIdDeep(gateway?.json) ||
     null;
 
-  const actionType = resolvePayloadActionType(payload);
-
   if (!gateway?.ok) {
     return buildDeliveryFailure({
       error: gateway?.error || "meta delivery failed",
@@ -214,21 +212,6 @@ async function deliverMetaOutbound(payload = {}) {
       json: gateway?.json || null,
       providerResponse,
       providerMessageId,
-    });
-  }
-
-  if (actionType === "send_message" && !providerMessageId) {
-    return buildDeliveryFailure({
-      error:
-        "meta delivery unconfirmed: provider did not return a message id",
-      reasonCode: "meta_delivery_unconfirmed",
-      status:
-        Number(gateway?.status || 0) >= 400
-          ? Number(gateway.status)
-          : 409,
-      json: gateway?.json || null,
-      providerResponse,
-      providerMessageId: null,
     });
   }
 
