@@ -165,6 +165,16 @@ function buildCriticalFacts({ classification = {}, facts = {} } = {}) {
     addFact(out, seen, "Business name", facts.displayName, "name");
   }
 
+  if (intents.includes("business.summary")) {
+    addFact(
+      out,
+      seen,
+      "Business summary",
+      s(facts.summary) || s(facts.industry) || s(facts.displayName),
+      "summary"
+    );
+  }
+
   if (intents.includes("business.pricing")) {
     addFact(out, seen, "Pricing", facts.pricing, "pricing");
   }
@@ -183,6 +193,24 @@ function buildCriticalFacts({ classification = {}, facts = {} } = {}) {
     for (const item of arr(facts.products)) {
       addFact(out, seen, "Product", item, "product");
     }
+  }
+
+  if (intents.includes("business.social")) {
+    for (const item of arr(facts.socialLinks)) {
+      addFact(out, seen, "Social link", item, "url");
+    }
+  }
+
+  if (intents.includes("business.language")) {
+    for (const item of arr(facts.languages)) {
+      addFact(out, seen, "Language", item, "language");
+    }
+  }
+
+  if (intents.includes("behavior.policy")) {
+    addFact(out, seen, "Behavior tone", facts.behavior?.tone, "behavior");
+    addFact(out, seen, "Behavior CTA", facts.behavior?.primaryCta, "behavior");
+    addFact(out, seen, "Behavior handoff", facts.behavior?.handoffPolicy, "behavior");
   }
 
   return out.slice(0, 30);
