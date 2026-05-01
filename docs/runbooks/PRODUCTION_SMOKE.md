@@ -56,3 +56,19 @@ If frontend checks fail:
 2. Verify build command and output directory.
 3. Verify environment variables.
 4. Check DNS and custom domain status.
+## Protected diagnostics routes
+
+`/api/__buildcheck` may be hidden behind the diagnostics guard in production. If it returns `404`, run smoke with one of these tokens:
+
+```bash
+DEBUG_API_TOKEN=... AIHQ_BACKEND_URL=https://your-backend.example.com npm run smoke:production
+```
+
+or:
+
+```bash
+AIHQ_INTERNAL_TOKEN=... AIHQ_BACKEND_URL=https://your-backend.example.com npm run smoke:production
+```
+
+Do not paste these tokens into chat or commit them to the repository.
+
