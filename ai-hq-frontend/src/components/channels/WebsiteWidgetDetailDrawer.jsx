@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -124,7 +124,7 @@ function verificationStateLabel(state = "") {
 function compactValue(value, max = 30) {
   const text = s(value, "Not set");
   if (text.length <= max) return text;
-  return `${text.slice(0, 17)}…${text.slice(-8)}`;
+  return `${text.slice(0, 17)}â€¦${text.slice(-8)}`;
 }
 
 function toneTextClass(tone = "neutral") {
@@ -251,6 +251,257 @@ function buildPosture({
   };
 }
 
+function installMethodDisplay(method = {}) {
+  const id = s(method.id).toLowerCase();
+
+  if (id === "wordpress_plugin") {
+    return {
+      title: "Recommended: WordPress install",
+      actionLabel: "Prepare WordPress package",
+      description:
+        "Best path for WordPress sites. No theme-code editing for the business user.",
+      packageType: "wordpress",
+    };
+  }
+
+  if (id === "google_tag_manager") {
+    return {
+      title: "Recommended: Google Tag Manager",
+      actionLabel: "Prepare GTM package",
+      description:
+        "Best path when the business already uses GTM or can publish through a tag manager.",
+      packageType: "gtm",
+    };
+  }
+
+  if (id === "cloudflare_auto_injection") {
+    return {
+      title: "Recommended: Cloudflare install",
+      actionLabel: "Prepare install package",
+      description:
+        "Best future no-code path for Cloudflare-managed domains. Use a safe handoff package until automatic install is enabled.",
+      packageType: "developer",
+    };
+  }
+
+  if (id === "developer_invite") {
+    return {
+      title: "Recommended: developer handoff",
+      actionLabel: "Prepare developer package",
+      description:
+        "Best path when the site is managed by a freelancer, agency, or technical person.",
+      packageType: "developer",
+    };
+  }
+
+  if (id === "managed_support") {
+    return {
+      title: "Recommended: guided install help",
+      actionLabel: "Prepare install package",
+      description:
+        "Best path when the business does not know who manages the website.",
+      packageType: "developer",
+    };
+  }
+
+  if (id === "manual_snippet") {
+    return {
+      title: "Fallback: manual install",
+      actionLabel: "Prepare developer package",
+      description:
+        "Only use this when a technical person can safely edit the website.",
+      packageType: "developer",
+    };
+  }
+
+  return {
+    title: method.label ? `Recommended: ${method.label}` : "Recommended install path",
+    actionLabel: "Prepare install package",
+    description:
+      method.summary || "Choose the safest available website chat install path.",
+    packageType: "developer",
+  };
+}
+
+function methodEffortLabel(method = {}) {
+  const effort = s(method.userEffort).toLowerCase();
+
+  if (effort === "low") return "Low effort";
+  if (effort === "medium") return "Guided setup";
+  if (effort === "high") return "Technical setup";
+
+  return "Guided setup";
+}
+
+function methodAccessLabels(method = {}) {
+  const labels = [];
+
+  if (method.noCode === true) labels.push("No-code path");
+  if (method.requiresCmsAdmin === true) labels.push("Website admin");
+  if (method.requiresTagManagerAccess === true) labels.push("GTM access");
+  if (method.requiresCloudflareAccess === true) labels.push("Cloudflare access");
+  if (method.requiresDeveloper === true) labels.push("Developer handoff");
+  if (method.requiresCodeAccess === true) labels.push("Code access");
+
+  return labels.length ? labels : ["Safe install"];
+}
+
+function InstallPlanRecommendationCard({
+  installPlan = {},
+  disabled = false,
+  busy = false,
+  onPrepareDeveloper,
+  onPrepareGtm,
+  onPrepareWordpress,
+  onVerify,
+  onSettings,
+}) {
+  const plan = obj(installPlan);
+  const method = obj(plan.recommendedMethod);
+  const methodView = installMethodDisplay(method);
+  const fallbackMethods = arr(plan.fallbackMethods).slice(0, 3);
+  const securityRequirements = arr(plan.securityRequirements).slice(0, 5);
+  const currentReadiness = obj(plan.currentReadiness);
+  const status = s(currentReadiness.status || plan.status, "pending");
+  const readinessMessage = firstText(
+    currentReadiness.message,
+    plan.nextAction?.message,
+    method.summary,
+    methodView.description
+  );
+  const needsVerification =
+    s(currentReadiness.reasonCode).toLowerCase().includes("verification") ||
+    s(status).toLowerCase().includes("blocked");
+
+  function handlePrimaryAction() {
+    if (methodView.packageType === "wordpress") {
+      onPrepareWordpress?.();
+      return;
+    }
+
+    if (methodView.packageType === "gtm") {
+      onPrepareGtm?.();
+      return;
+    }
+
+    onPrepareDeveloper?.();
+  }
+
+  if (!Object.keys(plan).length && !Object.keys(method).length) {
+    return null;
+  }
+
+  return (
+    <SectionCard
+      eyebrow="Recommended install"
+      title={methodView.title}
+      description={readinessMessage}
+      tone={needsVerification ? "warning" : "neutral"}
+    >
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Effort
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              {methodEffortLabel(method)}
+            </div>
+          </div>
+
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Code required
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              {method.requiresCodeAccess === true ? "Only for developer" : "No"}
+            </div>
+          </div>
+
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Security
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              {s(method.securityLevel, "high") === "high" ? "Guarded" : "Review"}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {methodAccessLabels(method).map((label) => (
+            <Badge key={label} tone="neutral" size="sm">
+              {label}
+            </Badge>
+          ))}
+        </div>
+
+        {fallbackMethods.length ? (
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Other safe options
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {fallbackMethods.map((item) => (
+                <Badge key={s(item.id || item.label)} tone="neutral" size="sm">
+                  {s(item.label, item.id)}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {securityRequirements.length ? (
+          <div className="rounded-[16px] border border-line-soft bg-surface px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Security stays on
+            </div>
+            <div className="mt-2 grid gap-2">
+              {securityRequirements.map((item) => (
+                <div
+                  key={s(item.id || item.label)}
+                  className="flex items-start gap-2 text-[12.5px] font-medium leading-5 text-text-muted"
+                >
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" strokeWidth={2.2} />
+                  <span>{s(item.label)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            type="button"
+            fullWidth
+            loading={busy}
+            disabled={disabled || busy}
+            onClick={handlePrimaryAction}
+            leftIcon={<Package className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {methodView.actionLabel}
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            onClick={needsVerification ? onVerify : onSettings}
+            leftIcon={
+              needsVerification ? (
+                <ShieldAlert className="h-4 w-4" strokeWidth={2.1} />
+              ) : (
+                <Settings2 className="h-4 w-4" strokeWidth={2.1} />
+              )
+            }
+          >
+            {needsVerification ? "Verify domain" : "Edit settings"}
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
 function StatusBadge({ tone = "neutral", children }) {
   const safeTone = normalizedTone(tone);
 
@@ -608,6 +859,7 @@ export default function WebsiteWidgetDetailDrawer({
   const payload = statusQuery.data || {};
   const widget = obj(payload.widget);
   const install = obj(payload.install);
+  const installPlan = obj(payload.installPlan);
   const readiness = obj(payload.readiness);
   const launchReadiness = obj(payload.launchReadiness);
   const launchHandoffs = obj(launchReadiness.handoffs);
@@ -1504,6 +1756,18 @@ export default function WebsiteWidgetDetailDrawer({
             />
           ) : null}
 
+          {activePanel === "overview" && !statusQuery.isLoading ? (
+            <InstallPlanRecommendationCard
+              installPlan={installPlan}
+              disabled={!saveAllowed || statusQuery.isLoading || handoffBusy}
+              busy={handoffBusy}
+              onPrepareDeveloper={handlePrepareDeveloperInstall}
+              onPrepareGtm={handlePrepareGtmInstall}
+              onPrepareWordpress={handlePrepareWordpressInstall}
+              onVerify={() => setActivePanel("verify")}
+              onSettings={() => setActivePanel("settings")}
+            />
+          ) : null}
           {mainContent}
         </div>
       </div>
@@ -1516,3 +1780,5 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
