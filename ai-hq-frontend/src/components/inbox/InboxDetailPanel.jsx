@@ -629,8 +629,8 @@ function InboxDetailPanel({
   const conversationTitle = resolveConversationTitle(selectedThread);
   const conversationMetaItems = formatConversationMeta(selectedThread);
   const threadTypingState = obj(typingState?.[currentThreadId]);
-  const customerTypingActive = isTypingActive(threadTypingState.customer);
-  const businessTypingActive = isTypingActive(threadTypingState.business);
+  const customerTypingActive = false;
+  const businessTypingActive = false;
 
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">

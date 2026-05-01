@@ -113,6 +113,117 @@ function emitOutboundDeliveryTruth({
   }
 }
 
+function resolveOutboundPayloadActionType(payload = {}, message = {}) {
+  const meta = obj(payload?.meta);
+  const messageMeta = obj(message?.meta);
+
+  const explicit =
+    lower(meta?.actionType) ||
+    lower(payload?.actionType) ||
+    lower(payload?.action_type);
+
+  if (explicit) return explicit;
+
+  const payloadMessageType =
+    lower(payload?.messageType) ||
+    lower(payload?.message_type) ||
+    lower(meta?.messageType) ||
+    lower(meta?.message_type);
+
+  if (payloadMessageType) return payloadMessageType;
+
+  const originalMessageType =
+    lower(messageMeta?.originalMessageType) ||
+    lower(messageMeta?.original_message_type);
+
+  if (originalMessageType) return originalMessageType;
+
+  return lower(message?.message_type) || "send_message";
+}
+
+function isControlOutboundActionType(actionType = "") {
+  return [
+    "typing",
+    "typing_on",
+    "typing_off",
+    "mark_seen",
+    "send_seen",
+    "seen",
+    "read",
+    "delivery",
+  ].includes(lower(actionType));
+}
+
+function hasRenderableOutboundText(message = {}) {
+  return Boolean(s(message?.text));
+}
+
+function isInternalMetaBridgeError({ failure = {}, delivery = {} } = {}) {
+  const code = lower(
+    failure?.errorCode ||
+      delivery?.reasonCode ||
+      delivery?.errorCode ||
+      delivery?.error_code ||
+      ""
+  );
+
+  const text = lower(
+    failure?.errorMessage ||
+      delivery?.error ||
+      delivery?.message ||
+      ""
+  );
+
+  if (code === "meta_delivery_unconfirmed") return true;
+
+  if (
+    code === "meta_delivery_failed" &&
+    (
+      text.includes("unauthorized") ||
+      text.includes("text_or_attachments_required")
+    )
+  ) {
+    return true;
+  }
+
+  if (text.includes("unauthorized")) return true;
+  if (text.includes("text_or_attachments_required")) return true;
+
+  return false;
+}
+
+function shouldKeepBubbleSentOnMetaInternalError({
+  provider = "",
+  actionType = "",
+  message = {},
+  failure = {},
+  delivery = {},
+} = {}) {
+  if (lower(provider) !== "meta") return false;
+
+  if (isControlOutboundActionType(actionType)) return true;
+
+  return hasRenderableOutboundText(message) &&
+    isInternalMetaBridgeError({ failure, delivery });
+}
+
+function buildInternalMetaBridgeProviderResponse({
+  delivery = {},
+  failure = {},
+  actionType = "",
+} = {}) {
+  return {
+    ...(obj(delivery?.providerResponse)),
+    internalBridgeWarning: true,
+    internalBridgeActionType: s(actionType),
+    internalBridgeErrorCode: s(failure?.errorCode),
+    internalBridgeError: s(failure?.errorMessage),
+    originalDeliveryStatus: Number(delivery?.status || 0),
+    originalDeliveryReasonCode: s(delivery?.reasonCode),
+    originalDeliveryError: s(delivery?.error),
+  };
+}
+
 function classifyChannelOutboundFailure({ execution = {}, delivery = {} } = {}) {
   const provider = resolveExecutionProvider(execution);
 
@@ -574,6 +685,91 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       execution,
       delivery,
     });
+
+    const actionType = resolveOutboundPayloadActionType(payload, message);
+
+    if (
+      shouldKeepBubbleSentOnMetaInternalError({
+        provider,
+        actionType,
+        message,
+        failure,
+        delivery,
+      })
+    ) {
+      const providerResponse = buildInternalMetaBridgeProviderResponse({
+        delivery,
+        failure,
+        actionType,
+      });
+
+      let updatedAttempt = null;
+
+      if (attemptId) {
+        updatedAttempt = await markOutboundAttemptSent({
+          db,
+          attemptId,
+          providerMessageId: delivery?.providerMessageId || null,
+          providerResponse,
+        });
+      }
+
+      const updatedMessage = hasRenderableOutboundText(message)
+        ? await updateOutboundMessageProviderId({
+            db,
+            messageId: message.id,
+            providerMessageId: delivery?.providerMessageId || null,
+            providerResponse,
+          })
+        : message;
+
+      emitOutboundDeliveryTruth({
+        wsHub,
+        tenantKey,
+        threadId: resolvedThreadId,
+        message: updatedMessage || message,
+        attempt: updatedAttempt,
+        reason: "internal_meta_bridge_error_ignored",
+      });
+
+      try {
+        await writeAudit(db, {
+          actor: "system",
+          action: "durable_execution.meta_internal_bridge_error_ignored",
+          objectType: "durable_execution",
+          objectId: execution.id,
+          meta: {
+            threadId: resolvedThreadId,
+            messageId,
+            provider,
+            actionType,
+            errorCode: failure.errorCode,
+            error: failure.errorMessage,
+          },
+        });
+      } catch {}
+
+      logger.warn("durable_execution.meta_internal_bridge_error_ignored", {
+        executionId: execution.id,
+        provider,
+        actionType,
+        errorCode: failure.errorCode,
+        resolvedThreadId,
+      });
+
+      return {
+        ok: true,
+        retryable: false,
+        resultSummary: {
+          provider,
+          actionType,
+          internalBridgeErrorIgnored: true,
+          originalErrorCode: failure.errorCode,
+          originalError: failure.errorMessage,
+          resolvedThreadId,
+        },
+      };
+    }
 
     let updatedAttempt = null;
 

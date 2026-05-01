@@ -113,6 +113,10 @@ function getDeliveryMeta(message = {}) {
   return isRecord(meta?.delivery) ? meta.delivery : {};
 }
 
+function hasRenderableOutboundText(message = {}) {
+  return Boolean(s(message?.text));
+}
+
 function getProviderResponse(message = {}, attempt = {}) {
   const meta = getMessageMeta(message);
   const delivery = getDeliveryMeta(message);
@@ -131,9 +135,7 @@ function getProviderResponse(message = {}, attempt = {}) {
 function findProviderMessageIdDeep(value, depth = 0) {
   if (depth > 6 || value == null) return "";
 
-  if (typeof value === "string" || typeof value === "number") {
-    return "";
-  }
+  if (typeof value === "string" || typeof value === "number") return "";
 
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -213,54 +215,6 @@ function getDeliveryStatus(message = {}) {
   );
 }
 
-function getSeenAt(message = {}, attempt = {}) {
-  const meta = getMessageMeta(message);
-  const delivery = getDeliveryMeta(message);
-  const response = getProviderResponse(message, attempt);
-
-  return s(
-    delivery?.seenAt ||
-      delivery?.seen_at ||
-      delivery?.readAt ||
-      delivery?.read_at ||
-      delivery?.customerSeenAt ||
-      delivery?.customer_seen_at ||
-      delivery?.watermarkAt ||
-      delivery?.watermark_at ||
-      meta?.seenAt ||
-      meta?.seen_at ||
-      meta?.readAt ||
-      meta?.read_at ||
-      attempt?.seen_at ||
-      attempt?.seenAt ||
-      response?.seenAt ||
-      response?.seen_at ||
-      response?.readAt ||
-      response?.read_at ||
-      ""
-  );
-}
-
-function hasSeenProof(message = {}, attempt = {}) {
-  const deliveryStatus = getDeliveryStatus(message);
-  if (["seen", "read", "opened"].includes(deliveryStatus)) return true;
-  return Boolean(getSeenAt(message, attempt));
-}
-
-function getDeliveryFailureText(message = {}) {
-  const meta = getMessageMeta(message);
-  const delivery = getDeliveryMeta(message);
-
-  return s(
-    delivery?.error ||
-      delivery?.lastError ||
-      delivery?.last_error ||
-      meta?.deliveryError ||
-      meta?.delivery_error ||
-      ""
-  );
-}
-
 function getDeliveryErrorCode(message = {}, attempt = {}) {
   const meta = getMessageMeta(message);
   const delivery = getDeliveryMeta(message);
@@ -282,9 +236,88 @@ function getDeliveryErrorCode(message = {}, attempt = {}) {
   );
 }
 
-function isProviderAcceptedWithoutId(message = {}, attempt = {}) {
+function getDeliveryFailureText(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+
+  return s(
+    attempt?.last_error ||
+      attempt?.lastError ||
+      attempt?.error ||
+      attempt?.errorMessage ||
+      delivery?.error ||
+      delivery?.lastError ||
+      delivery?.last_error ||
+      meta?.deliveryError ||
+      meta?.delivery_error ||
+      ""
+  );
+}
+
+function isInternalMetaBridgeError(message = {}, attempt = {}) {
   const code = getDeliveryErrorCode(message, attempt);
-  return code === "meta_delivery_unconfirmed";
+  const text = lower(getDeliveryFailureText(message, attempt));
+
+  if (code === "meta_delivery_unconfirmed") return true;
+
+  if (
+    code === "meta_delivery_failed" &&
+    (text.includes("unauthorized") || text.includes("text_or_attachments_required"))
+  ) {
+    return true;
+  }
+
+  if (text.includes("unauthorized")) return true;
+  if (text.includes("text_or_attachments_required")) return true;
+
+  const response = getProviderResponse(message, attempt);
+  const warning = response?.internalBridgeWarning || response?.internal_bridge_warning;
+  return warning === true;
+}
+
+function buildSentTruth(message = {}, attempt = null, detail = "") {
+  return {
+    kind: "message_sent",
+    label: "Sent",
+    detail:
+      detail ||
+      "This outbound message is treated as sent. Internal non-customer delivery metadata was not allowed to override the visible message status.",
+    status: "sent",
+    providerMessageId: getProviderMessageId(message, attempt || {}),
+    attempt,
+  };
+}
+
+function getSeenAt(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+  const response = getProviderResponse(message, attempt);
+
+  return s(
+    delivery?.seenAt ||
+      delivery?.seen_at ||
+      delivery?.readAt ||
+      delivery?.read_at ||
+      delivery?.customerSeenAt ||
+      delivery?.customer_seen_at ||
+      meta?.seenAt ||
+      meta?.seen_at ||
+      meta?.readAt ||
+      meta?.read_at ||
+      attempt?.seen_at ||
+      attempt?.seenAt ||
+      response?.seenAt ||
+      response?.seen_at ||
+      response?.readAt ||
+      response?.read_at ||
+      ""
+  );
+}
+
+function hasSeenProof(message = {}, attempt = {}) {
+  const deliveryStatus = getDeliveryStatus(message);
+  if (["seen", "read", "opened"].includes(deliveryStatus)) return true;
+  return Boolean(getSeenAt(message, attempt));
 }
 
 function getMessageDeliveryTruth(message = {}, attempt = {}) {
@@ -292,6 +325,18 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
   const providerMessageId = getProviderMessageId(message, attempt);
   const delivery = getDeliveryMeta(message);
   const seenAt = getSeenAt(message, attempt);
+
+  if (!hasRenderableOutboundText(message) && isInternalMetaBridgeError(message, attempt)) {
+    return null;
+  }
+
+  if (hasRenderableOutboundText(message) && isInternalMetaBridgeError(message, attempt)) {
+    return buildSentTruth(
+      message,
+      attempt,
+      "The message is visible as an outbound reply. Internal Meta bridge/control errors were ignored for bubble delivery status."
+    );
+  }
 
   if (hasSeenProof(message, attempt)) {
     return {
@@ -318,8 +363,8 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
         : "message_delivery_provider_accepted",
       label: "Sent",
       detail: providerMessageId
-        ? "Instagram/Meta accepted this outbound message. This does not mean the customer has read it."
-        : "Instagram/Meta accepted this outbound message, but did not expose a provider message id.",
+        ? "Provider accepted this outbound message."
+        : "Provider accepted this outbound message, but did not expose a provider message id.",
       status: "sent",
       providerMessageId,
       attempt,
@@ -331,23 +376,11 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
     deliveryStatus === "dead" ||
     deliveryStatus === "error"
   ) {
-    if (isProviderAcceptedWithoutId(message, attempt)) {
-      return {
-        kind: "message_delivery_provider_accepted_without_id",
-        label: "Sent",
-        detail:
-          "Instagram/Meta accepted this message, but did not return a provider message id.",
-        status: "sent",
-        providerMessageId,
-        attempt,
-      };
-    }
-
     return {
       kind: "message_delivery_failed",
       label: "Not delivered",
       detail:
-        getDeliveryFailureText(message) ||
+        getDeliveryFailureText(message, attempt) ||
         "Provider delivery failed or stopped before confirmation.",
       status: deliveryStatus === "dead" ? "dead" : "failed",
       providerMessageId: "",
@@ -410,19 +443,21 @@ function isPreferredAttempt(candidate, current) {
 
   const candidateCount = Number(candidate?.attempt_count || candidate?.attemptCount || 0);
   const currentCount = Number(current?.attempt_count || current?.attemptCount || 0);
-  if (candidateCount !== currentCount) {
-    return candidateCount > currentCount;
-  }
+  if (candidateCount !== currentCount) return candidateCount > currentCount;
 
   const candidateUpdatedAt = toTimestamp(
-    candidate?.updated_at || candidate?.updatedAt || candidate?.created_at || candidate?.createdAt
+    candidate?.updated_at ||
+      candidate?.updatedAt ||
+      candidate?.created_at ||
+      candidate?.createdAt
   );
   const currentUpdatedAt = toTimestamp(
-    current?.updated_at || current?.updatedAt || current?.created_at || current?.createdAt
+    current?.updated_at ||
+      current?.updatedAt ||
+      current?.created_at ||
+      current?.createdAt
   );
-  if (candidateUpdatedAt !== currentUpdatedAt) {
-    return candidateUpdatedAt > currentUpdatedAt;
-  }
+  if (candidateUpdatedAt !== currentUpdatedAt) return candidateUpdatedAt > currentUpdatedAt;
 
   return s(candidate?.id) > s(current?.id);
 }
@@ -453,6 +488,13 @@ export function describeAttemptState(item = {}, message = {}) {
   const maxAttempts = Number(item?.max_attempts || item?.maxAttempts || 0);
   const providerMessageId = getProviderMessageId(message, item);
 
+  if (hasRenderableOutboundText(message) && isInternalMetaBridgeError(message, item)) {
+    return {
+      label: "Sent",
+      detail: "Internal Meta bridge/control error ignored for visible message status.",
+    };
+  }
+
   if (hasSeenProof(message, item) || status === "seen" || status === "read") {
     return {
       label: "Seen",
@@ -475,20 +517,11 @@ export function describeAttemptState(item = {}, message = {}) {
   }
 
   if (status === "sent") {
-    if (!providerMessageId) {
-      return {
-        label: "Unconfirmed",
-        detail:
-          "The attempt is marked sent, but provider message id is missing. Do not assume the customer saw this reply.",
-      };
-    }
-
     return {
       label: "Sent",
-      detail:
-        attemptCount > 0
-          ? `Instagram/Meta accepted this message on attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
-          : "Instagram/Meta accepted this message.",
+      detail: providerMessageId
+        ? "Provider accepted this message."
+        : "Provider accepted this message; provider id is not available.",
     };
   }
 
@@ -505,10 +538,7 @@ export function describeAttemptState(item = {}, message = {}) {
   if (status === "retrying") {
     return {
       label: "Retrying",
-      detail:
-        attemptCount > 0
-          ? `Retry lineage is active after attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
-          : "Retry lineage is active for this outbound delivery.",
+      detail: "Retry lineage is active for this outbound delivery.",
     };
   }
 
@@ -557,6 +587,14 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
       .map((correlation) => attemptsByCorrelation?.get?.(correlation) || null)
       .find(Boolean) || null;
 
+  if (!hasRenderableOutboundText(message) && isInternalMetaBridgeError(message, attempt)) {
+    return null;
+  }
+
+  if (hasRenderableOutboundText(message) && isInternalMetaBridgeError(message, attempt)) {
+    return buildSentTruth(message, attempt);
+  }
+
   const messageDeliveryTruth = getMessageDeliveryTruth(message, attempt);
 
   if (
@@ -601,22 +639,6 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
   const providerMessageId = getProviderMessageId(message, attempt);
   const attemptStatus = lower(attempt?.status);
 
-  if (
-    (attemptStatus === "failed" || attemptStatus === "dead") &&
-    isProviderAcceptedWithoutId(message, attempt)
-  ) {
-    return {
-      kind: "attempt_provider_accepted_without_id",
-      label: "Sent",
-      detail:
-        "Instagram/Meta accepted this message, but did not return a provider message id.",
-      status: "sent",
-      attempt,
-      providerMessageId,
-    };
-  }
-
-
   if (hasSeenProof(message, attempt) || attemptStatus === "seen" || attemptStatus === "read") {
     return {
       kind: "provider_seen_confirmed",
@@ -636,8 +658,8 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
         : "attempt_provider_accepted",
       label: "Sent",
       detail: providerMessageId
-        ? "Instagram/Meta accepted this outbound message. This does not mean the customer has read it."
-        : "Instagram/Meta accepted this outbound message, but provider message id is not available.",
+        ? "Provider accepted this outbound message."
+        : "Provider accepted this outbound message; provider id is not available.",
       status: "sent",
       attempt,
       providerMessageId,
