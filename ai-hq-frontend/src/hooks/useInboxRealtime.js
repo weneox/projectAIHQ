@@ -295,6 +295,8 @@ export function useInboxRealtime({
   }, [syncSelected]);
 
   useEffect(() => {
+    const typingClearTimers = typingClearTimersRef.current;
+
     function scheduleSelectedThreadSync(threadId = "", reason = "realtime") {
       const safeThreadId = s(threadId);
       if (!safeThreadId) return;
@@ -648,10 +650,10 @@ export function useInboxRealtime({
         selectedThreadSyncTimerRef.current = null;
       }
 
-      for (const timer of typingClearTimersRef.current.values()) {
+      for (const timer of typingClearTimers.values()) {
         window.clearTimeout(timer);
       }
-      typingClearTimersRef.current.clear();
+      typingClearTimers.clear();
     };
   }, [
     setWsState,
