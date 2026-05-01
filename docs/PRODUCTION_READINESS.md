@@ -115,7 +115,9 @@ Before enabling a live tenant:
 
 - [Production Smoke Runbook](runbooks/PRODUCTION_SMOKE.md)
 - [Production Environment Audit Runbook](runbooks/PRODUCTION_ENV_AUDIT.md)
+- [Durable Execution Dead-Letter Runbook](runbooks/DURABLE_EXECUTION_DEAD_LETTER.md)
 - [Tenant Launch Checklist](runbooks/TENANT_LAUNCH_CHECKLIST.md)
 - [Twilio Fallback Hardening Runbook](runbooks/TWILIO_FALLBACK_HARDENING.md)
+
 
 
