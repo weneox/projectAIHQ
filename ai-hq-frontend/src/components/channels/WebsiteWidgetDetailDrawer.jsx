@@ -836,6 +836,65 @@ function InstallPlanRecommendationCard({
       tone={needsVerification ? "warning" : "neutral"}
     >
       <div className="space-y-4">
+
+        <div className="rounded-[18px] border border-line-soft bg-surface-subtle px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Inbox test
+              </div>
+              <div className="mt-1 text-[14px] font-semibold text-text">
+                Prove Website Chat in Inbox
+              </div>
+              <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                Create a setup-test visitor message before installing the widget on a real website.
+              </div>
+            </div>
+
+            <Badge tone={testMessageResult ? "success" : "neutral"} size="sm">
+              {testMessageResult ? "Created" : "Setup test"}
+            </Badge>
+          </div>
+
+          {testMessageError ? (
+            <div className="mt-3">
+              <InlineNotice tone="danger" compact description={testMessageError} />
+            </div>
+          ) : null}
+
+          {testMessageResult ? (
+            <div className="mt-3">
+              <InlineNotice
+                tone="success"
+                compact
+                description="Test message was created in Inbox. Open it and confirm manual reply flow."
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              fullWidth
+              disabled={disabled || testMessageBusy}
+              onClick={onSendTestMessage}
+              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              {testMessageBusy ? "Sending..." : testMessageResult ? "Send again" : "Send test"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              disabled={!testMessageResult?.inbox?.threadId}
+              onClick={() => onOpenInbox?.(testMessageResult?.inbox?.threadId)}
+              leftIcon={<Globe2 className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Open Inbox
+            </Button>
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
