@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 
 import http from "http";
 import express from "express";
@@ -32,6 +32,10 @@ import {
   buildInfo,
   withBuildMeta,
 } from "./src/utils/buildInfo.js";
+import {
+  createStaticAssetOptions,
+  publicAssetGuard,
+} from "./src/utils/staticAssets.js";
 
 import { createDurableExecutionWorker } from "./src/workers/durableExecutionWorker.js";
 import { createDraftScheduleWorker } from "./src/workers/draftScheduleWorker.js";
@@ -280,7 +284,7 @@ async function main() {
     requireSafeDiagnostics(req, res, next, { env: cfg.app.env });
 
   const uploadsDir = path.resolve(process.cwd(), "uploads");
-  app.use("/assets", express.static(uploadsDir, { maxAge: "1h" }));
+  app.use("/assets", publicAssetGuard, express.static(uploadsDir, createStaticAssetOptions({ maxAge: "1h" })));
 
   app.get("/", (_req, res) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -1039,3 +1043,4 @@ main().catch((e) => {
   );
   process.exit(1);
 });
+
