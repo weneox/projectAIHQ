@@ -51,15 +51,11 @@ function InboxComposer({
 }) {
   const textareaRef = useRef(null);
   const autosizeRafRef = useRef(0);
-  const [aiNoticeOpen, setAiNoticeOpen] = useState(false);
+  const [aiNoticeThreadId, setAiNoticeThreadId] = useState("");
 
   const selectedThreadId = trim(selectedThread?.id);
   const hasSelectedThreadProp = selectedThread !== undefined;
   const hasThread = !hasSelectedThreadProp || Boolean(selectedThreadId);
-
-  useEffect(() => {
-    setAiNoticeOpen(false);
-  }, [selectedThreadId]);
 
   const controlled =
     replyText !== undefined ||
@@ -101,11 +97,12 @@ function InboxComposer({
     isActionPending(actionState, "handoff") ||
     isActionPending(actionState, "release");
 
-  const shouldShowAiNotice = aiNoticeOpen && hasThread && globalAiActive;
+  const shouldShowAiNotice =
+    aiNoticeThreadId === selectedThreadId && hasThread && globalAiActive;
 
   function revealAiNotice() {
-    if (!globalAiActive || !hasThread) return;
-    setAiNoticeOpen(true);
+    if (!globalAiActive || !hasThread || !selectedThreadId) return;
+    setAiNoticeThreadId(selectedThreadId);
   }
 
   function handleThreadAiToggle() {
@@ -308,7 +305,7 @@ function InboxComposer({
 
               <button
                 type="button"
-                onClick={() => setAiNoticeOpen(false)}
+                onClick={() => setAiNoticeThreadId("")}
                 className="inline-flex h-9 items-center rounded-full px-3 text-[12px] font-semibold text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#1E293B]"
               >
                 Bağla
