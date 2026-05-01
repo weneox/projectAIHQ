@@ -44,7 +44,8 @@
     "ops:frontend:prod-smoke": "node scripts/frontend-prod-smoke.mjs",
     "ops:postdeploy:verify": "node scripts/postdeploy-verify.mjs",
     "ops:prod-spine:smoke": "node scripts/prod-spine-smoke.mjs",
-    "ops:postdeploy:full": "npm run ops:postdeploy:verify && npm run ops:prod-spine:smoke"
+    "ops:postdeploy:full": "npm run ops:postdeploy:verify && npm run ops:prod-spine:smoke",
+    "smoke:production": "node scripts/production-smoke.mjs"
   },
   "engines": {
     "node": ">=18"
