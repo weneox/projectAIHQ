@@ -416,6 +416,9 @@ export default function InboxDetailHeaderCompact({
     s(automationControl?.disabledReason) ||
     (automationEnabled ? "AI on" : "AI off");
 
+  const automationScopeLabel =
+    s(automationControl?.scopeLabel) || "Bu söhbətdə AI";
+
   const closeHandler = onCloseThread || onMarkClosed;
   const disableActions = !hasThread;
   const unread = Number(unreadCount || 0);
