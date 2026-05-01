@@ -111,3 +111,9 @@ Before enabling a live tenant:
 - [ ] Outbound execution works.
 - [ ] Incident trail remains clean.
 - [ ] Autonomous mode explicitly approved.
+## Related runbooks
+
+- [Production Smoke Runbook](runbooks/PRODUCTION_SMOKE.md)
+- [Tenant Launch Checklist](runbooks/TENANT_LAUNCH_CHECKLIST.md)
+- [Twilio Fallback Hardening Runbook](runbooks/TWILIO_FALLBACK_HARDENING.md)
+
