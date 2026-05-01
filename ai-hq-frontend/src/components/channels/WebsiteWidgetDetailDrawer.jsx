@@ -374,6 +374,159 @@ function platformInstallMeaning(platformId = "") {
   return "AIHQ will use this signal to recommend the safest available install path.";
 }
 
+function WebsiteChatPreviewCard({
+  widget = {},
+  installPlan = {},
+  onSettings,
+  onInstall,
+}) {
+  const safeWidget = obj(widget);
+  const plan = obj(installPlan);
+  const method = obj(plan.recommendedMethod);
+  const readiness = obj(plan.currentReadiness);
+  const prompts = arr(safeWidget.initialPrompts).slice(0, 4);
+  const title = s(safeWidget.title, "Website chat");
+  const subtitle = s(
+    safeWidget.subtitle,
+    "Ask a question or leave a message for the team."
+  );
+  const accentColor = s(safeWidget.accentColor, "#0f172a");
+  const widgetEnabled = safeWidget.enabled === true;
+  const hasWidgetId = Boolean(s(safeWidget.publicWidgetId));
+  const readinessStatus = s(readiness.status || plan.status, "not_configured");
+  const canPreview = widgetEnabled && hasWidgetId;
+
+  return (
+    <SectionCard
+      eyebrow="Preview before install"
+      title="See how Website Chat will feel"
+      description="Preview the customer-facing chat before asking anyone to install it on the website."
+      tone={canPreview ? "neutral" : "warning"}
+    >
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="space-y-3">
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Preview status
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              {canPreview ? "Ready for visual review" : "Configure widget first"}
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              {canPreview
+                ? "This is an in-app preview. Public launch still follows domain/origin, runtime, and manual-first gates."
+                : "Save website chat settings once so AIHQ can issue the public widget ID and preview the final shell."}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={widgetEnabled ? "success" : "warning"} size="sm">
+              {widgetEnabled ? "Widget enabled" : "Widget off"}
+            </Badge>
+            <Badge tone={hasWidgetId ? "success" : "warning"} size="sm">
+              {hasWidgetId ? "Widget ID ready" : "Widget ID missing"}
+            </Badge>
+            <Badge tone="neutral" size="sm">
+              {s(method.label, "Install path pending")}
+            </Badge>
+            <Badge tone="neutral" size="sm">
+              {readinessStatus}
+            </Badge>
+          </div>
+
+          <InlineNotice
+            tone="info"
+            compact
+            description="Preview does not bypass production safety. Autonomous replies still require approved truth, current runtime, verified install context, and explicit launch approval."
+          />
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              onClick={onSettings}
+              leftIcon={<Settings2 className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Edit appearance
+            </Button>
+
+            <Button
+              type="button"
+              fullWidth
+              onClick={onInstall}
+              leftIcon={<Package className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Continue install
+            </Button>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[26px] border border-line-soft bg-white shadow-[0_18px_54px_-42px_rgba(15,23,42,0.45)]">
+          <div className="border-b border-slate-200/80 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-slate-950">
+                  {title}
+                </div>
+                <div className="mt-1 line-clamp-2 text-[12.5px] font-medium leading-5 text-slate-500">
+                  {subtitle}
+                </div>
+              </div>
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                Manual first
+              </span>
+            </div>
+
+            <div
+              className="mt-3 h-1.5 rounded-full"
+              style={{
+                backgroundColor: accentColor,
+                opacity: 0.88,
+              }}
+            />
+          </div>
+
+          <div className="min-h-[260px] bg-slate-50 px-4 py-4">
+            <div className="mr-auto max-w-[86%] rounded-[20px] bg-white px-4 py-3 text-[13px] leading-6 text-slate-800 shadow-sm ring-1 ring-slate-200">
+              Salam! Sizə necə kömək edə bilərik?
+            </div>
+
+            <div className="ml-auto mt-3 max-w-[82%] rounded-[20px] bg-slate-950 px-4 py-3 text-[13px] leading-6 text-white shadow-sm">
+              Qiymətlər və xidmətlər barədə məlumat almaq istəyirəm.
+            </div>
+
+            <div className="mr-auto mt-3 max-w-[86%] rounded-[20px] bg-sky-50 px-4 py-3 text-[13px] leading-6 text-slate-800 shadow-sm ring-1 ring-sky-100">
+              Təşəkkürlər. Operator mesajınızı görə bilər və manual cavab verə bilər.
+            </div>
+
+            {prompts.length ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {prompts.map((prompt) => (
+                  <span
+                    key={prompt}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[11.5px] font-semibold text-slate-600"
+                  >
+                    {prompt}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t border-slate-200/80 bg-white px-4 py-3">
+            <div className="flex items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2 text-[12.5px] text-slate-400">
+              <span>Write your message</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white">
+                Send
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
 function PlatformDetectionCard({ installPlan = {} }) {
   const plan = obj(installPlan);
   const detected = obj(plan.detected);
@@ -2077,6 +2230,8 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
 
 
 
