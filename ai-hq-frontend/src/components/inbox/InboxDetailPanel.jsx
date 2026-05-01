@@ -308,19 +308,6 @@ function FloatingComposerSlot({ children }) {
   );
 }
 
-function isTypingActive(state = {}) {
-  const safe = obj(state);
-  if (safe.active !== true) return false;
-
-  const expiresAt = s(safe.expiresAt || safe.expires_at);
-  if (!expiresAt) return true;
-
-  const expiresMs = new Date(expiresAt).getTime();
-  if (!Number.isFinite(expiresMs)) return true;
-
-  return expiresMs > Date.now();
-}
-
 function TypingIndicatorBubble({ side = "left" }) {
   const incoming = side === "left";
   const dotColor = incoming ? "#8A9AAF" : "rgba(255,255,255,0.94)";
@@ -453,7 +440,6 @@ function InboxDetailPanel({
   selectedThread,
   messages,
   outboundAttempts,
-  typingState = {},
   surface,
   actionState,
   markRead,
@@ -628,7 +614,6 @@ function InboxDetailPanel({
 
   const conversationTitle = resolveConversationTitle(selectedThread);
   const conversationMetaItems = formatConversationMeta(selectedThread);
-  const threadTypingState = obj(typingState?.[currentThreadId]);
   const customerTypingActive = false;
   const businessTypingActive = false;
 
