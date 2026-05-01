@@ -1,4 +1,3 @@
-﻿
 const DEFAULT_TIMEOUT_MS = 8000;
 
 function s(value, fallback = "") {
@@ -18,15 +17,34 @@ function withTimeout(ms = DEFAULT_TIMEOUT_MS) {
   };
 }
 
+function buildSmokeHeaders({ acceptJson = true } = {}) {
+  const headers = {};
+
+  if (acceptJson) {
+    headers.Accept = "application/json";
+  }
+
+  const debugToken = s(process.env.DEBUG_API_TOKEN || process.env.AIHQ_DEBUG_TOKEN);
+  const internalToken = s(process.env.AIHQ_INTERNAL_TOKEN);
+
+  if (debugToken) {
+    headers["x-debug-token"] = debugToken;
+  }
+
+  if (internalToken) {
+    headers["x-internal-token"] = internalToken;
+  }
+
+  return headers;
+}
+
 async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const timeout = withTimeout(timeoutMs);
 
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
+      headers: buildSmokeHeaders(),
       signal: timeout.signal,
     });
 
@@ -108,13 +126,25 @@ function assertRootHealth(response) {
 
 function assertBuildCheck(response) {
   const body = response.body || {};
+  const hasDiagnosticsToken = Boolean(
+    s(process.env.DEBUG_API_TOKEN || process.env.AIHQ_DEBUG_TOKEN || process.env.AIHQ_INTERNAL_TOKEN)
+  );
 
   if (response.status !== 200 || body.ok !== true) {
     return {
       ok: false,
       status: response.status,
-      reason: "buildcheck_failed",
-      details: body,
+      reason:
+        response.status === 404 && !hasDiagnosticsToken
+          ? "buildcheck_hidden_or_auth_required"
+          : "buildcheck_failed",
+      details: {
+        ...body,
+        hint:
+          response.status === 404
+            ? "Provide DEBUG_API_TOKEN or AIHQ_INTERNAL_TOKEN when running production smoke against protected diagnostics routes."
+            : undefined,
+      },
     };
   }
 
@@ -239,4 +269,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
