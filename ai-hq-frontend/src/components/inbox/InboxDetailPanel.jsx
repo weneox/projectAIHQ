@@ -454,6 +454,7 @@ function InboxDetailPanel({
   onOpenChannels = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
+  const canShowConversationSurface = launchChannelConnected || hasThread;
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const currentThreadId = s(selectedThread?.id);
@@ -659,7 +660,7 @@ function InboxDetailPanel({
       />
 
       <div className="relative min-h-0 flex-1">
-        {!launchChannelConnected ? (
+        {!canShowConversationSurface ? (
           <ConnectChannelEmptyState onOpenChannels={onOpenChannels} />
         ) : (
           <>

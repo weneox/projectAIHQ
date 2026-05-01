@@ -791,6 +791,12 @@ export default function InboxThreadListPanel({
     [threadList?.filteredThreads]
   );
 
+  const canShowThreadRail =
+    launchChannelConnected ||
+    baseThreads.length > 0 ||
+    Boolean(s(selectedThreadId)) ||
+    Boolean(s(threadList?.deepLinkNotice));
+
   const channelOptions = useMemo(
     () => buildChannelOptions(baseThreads),
     [baseThreads]
@@ -926,7 +932,7 @@ export default function InboxThreadListPanel({
     });
   }
 
-  if (!launchChannelConnected) {
+  if (!canShowThreadRail) {
     return (
       <section
         aria-labelledby="inbox-thread-list-title"
