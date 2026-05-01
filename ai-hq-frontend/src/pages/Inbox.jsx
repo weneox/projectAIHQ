@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
-import { getSettingsTrustView } from "../api/trust.js";
+import {
+  getSettingsTrustView,
+  saveSettingsTrustPolicyControl,
+} from "../api/trust.js";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
@@ -506,6 +509,71 @@ export default function Inbox() {
   );
 
 
+  const loadOperationalState = useCallback(async () => {
+    if (!workspace.ready) return;
+
+    setResolvedReadinessState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+      error: "",
+    }));
+
+    setResolvedTrustState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+    }));
+
+    const [readinessState, trustState] = await Promise.all([
+      loadInboxLaunchReadinessState(workspace.tenantKey),
+      loadInboxTrustState(workspace.tenantKey),
+    ]);
+
+    setResolvedReadinessState(readinessState);
+    setResolvedTrustState(trustState);
+  }, [workspace.ready, workspace.tenantKey]);
+
+  async function handleToggleInboxAutonomy(nextEnabled) {
+    if (!workspace.ready) return;
+    if (automationMutation.saving) return;
+
+    setAutomationMutation({
+      saving: true,
+      error: "",
+      success: "",
+    });
+
+    try {
+      await saveSettingsTrustPolicyControl({
+        surface: "inbox",
+        controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
+        policyReason: nextEnabled
+          ? "Inbox AI Autopilot enabled from inbox global control"
+          : "Inbox AI Autopilot disabled from inbox global control",
+        operatorNote: nextEnabled
+          ? "Inbox automatic AI replies enabled globally"
+          : "Inbox automatic AI replies disabled globally",
+      });
+
+      await loadOperationalState();
+
+      setAutomationMutation({
+        saving: false,
+        error: "",
+        success: "",
+      });
+    } catch (error) {
+      setAutomationMutation({
+        saving: false,
+        error:
+          s(error?.message) || "Failed to update inbox AI Autopilot.",
+        success: "",
+      });
+    }
+  }
+
+
   const {
     threads,
     setThreads,
@@ -669,11 +737,11 @@ export default function Inbox() {
       if (!threadId) return;
 
       if (nextEnabled) {
-        await releaseHandoff(threadId);
+        await releaseHandoff(threadId, { silent: true });
         return;
       }
 
-      await activateHandoff(threadId);
+      await activateHandoff(threadId, { silent: true });
     },
     [activateHandoff, releaseHandoff, selectedThread?.id]
   );
@@ -805,6 +873,8 @@ export default function Inbox() {
             selectedThreadId={selectedThread?.id || ""}
             searchQuery=""
             launchChannelConnected={hasDeliveryReadyLaunchChannel}
+            automationControl={inboxAutomationControl}
+            onToggleAutomation={handleToggleInboxAutonomy}
           />
         </div>
 

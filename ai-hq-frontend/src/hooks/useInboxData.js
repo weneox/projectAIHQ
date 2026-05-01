@@ -586,8 +586,10 @@ export function useInboxData({
   );
 
   const activateHandoff = useCallback(
-    async (threadId) => {
+    async (threadId, options = {}) => {
       if (!threadId) return;
+
+      const silent = options?.silent === true;
 
       try {
         beginSave();
@@ -602,7 +604,11 @@ export function useInboxData({
         clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
-        succeedSave({ message: "Handoff activated." });
+        if (silent) {
+          clearSaveState();
+        } else {
+          succeedSave({ message: "Handoff activated." });
+        }
       } catch (e) {
         failSave(String(e?.message || e || "Failed to activate handoff"));
       }
@@ -620,8 +626,10 @@ export function useInboxData({
   );
 
   const releaseHandoff = useCallback(
-    async (threadId) => {
+    async (threadId, options = {}) => {
       if (!threadId) return;
+
+      const silent = options?.silent === true;
 
       try {
         beginSave();
@@ -633,7 +641,11 @@ export function useInboxData({
         clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
-        succeedSave({ message: "Handoff released." });
+        if (silent) {
+          clearSaveState();
+        } else {
+          succeedSave({ message: "Handoff released." });
+        }
       } catch (e) {
         failSave(String(e?.message || e || "Failed to release handoff"));
       }
