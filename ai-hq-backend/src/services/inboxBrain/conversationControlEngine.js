@@ -411,3 +411,160 @@ export function buildConversationControlDecision({
   });
 
   const shouldSuppressForOperator = Boolean(handoffState.active);
+  const controlRequestedNoReply = control?.noReplySuggested === true;
+
+  const handoffReplyText = shouldOpenHandoff
+    ? explicitHumanRequest
+      ? buildHumanRouteReply(language)
+      : buildAiEscalationReply(language)
+    : "";
+
+  const candidateReplyText = s(handoffReplyText || reply?.text || "");
+
+  const shouldSendMessage =
+    !shouldSuppressForOperator &&
+    Boolean(candidateReplyText) &&
+    (shouldOpenHandoff ||
+      (reply?.shouldReply === true && !controlRequestedNoReply));
+
+  const mergedDiagnostics = {
+    ...obj(diagnostics),
+    reliability,
+    handoffState,
+    explicitHumanRequest,
+    salesFlow,
+    supportFlow,
+    shouldOpenHandoff,
+    shouldLead,
+    shouldSuppressForOperator,
+    controlRequestedNoReply,
+  };
+
+  const meta = buildControlMeta({
+    tenantKey: resolvedTenantKey,
+    thread,
+    message,
+    channel,
+    reply: {
+      ...reply,
+      text: candidateReplyText,
+      shouldReply: shouldSendMessage,
+    },
+    control,
+    diagnostics: mergedDiagnostics,
+    runtime,
+  });
+
+  const noReplyReason = shouldSendMessage
+    ? ""
+    : buildNoReplyReason({
+        policy,
+        reply,
+        handoffState,
+        reliability,
+        shouldSendMessage,
+        explicitHumanRequest,
+      });
+
+  const actions = [];
+
+  if (shouldSendMessage) {
+    actions.push(
+      sendMessageAction({
+        channel,
+        recipientId: externalUserId,
+        text: candidateReplyText,
+        meta,
+      })
+    );
+  } else {
+    actions.push(
+      noReplyAction({
+        reason: noReplyReason || "reply_suppressed",
+        meta,
+      })
+    );
+  }
+
+  if (shouldLead) {
+    actions.push(
+      createLeadAction({
+        channel,
+        externalUserId,
+        thread,
+        text,
+        intent: s(control?.intent || "general"),
+        meta,
+      })
+    );
+  }
+
+  if (shouldOpenHandoff) {
+    actions.push(
+      handoffAction({
+        channel,
+        externalUserId,
+        thread,
+        reason: resolveHandoffReason({
+          control,
+          explicitHumanRequest,
+          handoffState,
+        }),
+        priority: resolveHandoffPriority({
+          control,
+          explicitHumanRequest,
+          handoffState,
+        }),
+        meta,
+      })
+    );
+  }
+
+  return {
+    ok: true,
+    tenantKey: resolvedTenantKey,
+    channel: s(channel),
+    externalUserId: s(externalUserId),
+    runtime,
+    policy,
+    reply: {
+      ...reply,
+      shouldReply: shouldSendMessage,
+      text: shouldSendMessage ? candidateReplyText : "",
+      language,
+    },
+    control,
+    diagnostics: mergedDiagnostics,
+    reliability,
+    handoffState,
+    actions,
+    decision: {
+      shouldSendMessage,
+      shouldCreateLead: shouldLead,
+      shouldOpenHandoff,
+      shouldSuppressForOperator,
+      controlRequestedNoReply,
+      noReplyReason,
+    },
+  };
+}
+
+export const __test__ = {
+  normalizeLanguage,
+  normalizePriority,
+  normalizeFreeText,
+  hasAny,
+  isSalesAskCategory,
+  isSalesStage,
+  isSalesFlow,
+  looksLikeSupportFlow,
+  detectExplicitHumanRequest,
+  buildHumanRouteReply,
+  buildAiEscalationReply,
+  buildNoReplyReason,
+  shouldCreateLead,
+  shouldStartHandoff,
+  resolveHandoffReason,
+  resolveHandoffPriority,
+  resolveMetaBusinessContext,
+};
