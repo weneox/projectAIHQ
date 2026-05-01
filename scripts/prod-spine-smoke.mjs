@@ -933,16 +933,34 @@ async function runAttempt({
       timeoutMs,
     }))
   );
-  results.push(
-    ...(await verifyWebsiteLane({
-      baseUrl: aihqBaseUrl,
-      internalToken,
-      tenantKey: websiteLaneTenantKey,
-      domain: websiteLaneDomain,
-      timeoutMs,
-      requireWebsiteLane,
-    }))
-  );
+  if (requireWebsiteLane) {
+    results.push(
+      ...(await verifyWebsiteLane({
+        baseUrl: aihqBaseUrl,
+        internalToken,
+        tenantKey: websiteLaneTenantKey,
+        domain: websiteLaneDomain,
+        timeoutMs,
+        requireWebsiteLane,
+      }))
+    );
+  } else {
+    results.push({
+      name: "website_lane_prod_spine",
+      ok: true,
+      skipped: true,
+      warning: Boolean(websiteLaneTenantKey),
+      reason: websiteLaneTenantKey
+        ? "PROD_SPINE_REQUIRE_WEBSITE_LANE=0; tenant-specific Website lane launch gate skipped"
+        : "PROD_SPINE_REQUIRE_WEBSITE_LANE=0; Website lane launch gate skipped",
+      details: {
+        requireWebsiteLane,
+        tenantKeyConfigured: Boolean(websiteLaneTenantKey),
+        domainConfigured: Boolean(websiteLaneDomain),
+        reasonCode: "website_lane_not_required_for_deploy_gate",
+      },
+    });
+  }
 
   const metaResults = await verifySidecar(
     "meta_bot",
