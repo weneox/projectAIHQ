@@ -2277,16 +2277,3 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
