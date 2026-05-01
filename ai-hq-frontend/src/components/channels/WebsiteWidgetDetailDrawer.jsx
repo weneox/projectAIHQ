@@ -335,6 +335,137 @@ function mergeInstallPlanWithAccessHints(installPlan = {}, accessHints = {}) {
   };
 }
 
+function platformTone(platformId = "") {
+  const id = s(platformId).toLowerCase();
+
+  if (!id || id === "custom_or_unknown") return "warning";
+  return "success";
+}
+
+function platformConfidenceLabel(confidence = "") {
+  const value = s(confidence).toLowerCase();
+
+  if (value === "high") return "High confidence";
+  if (value === "medium") return "Medium confidence";
+  if (value === "low") return "Low confidence";
+
+  return "Needs confirmation";
+}
+
+function platformInstallMeaning(platformId = "") {
+  const id = s(platformId).toLowerCase();
+
+  if (id === "wordpress") {
+    return "AIHQ can guide this through the WordPress package path instead of asking the business user to edit theme code.";
+  }
+
+  if (id === "shopify") {
+    return "AIHQ should guide this through a Shopify/app-embed style path when that installer is enabled.";
+  }
+
+  if (["wix", "webflow", "squarespace", "framer", "tilda"].includes(id)) {
+    return "AIHQ should guide this through the website builder admin panel rather than manual source-code editing.";
+  }
+
+  if (id === "custom_or_unknown") {
+    return "AIHQ should prefer developer handoff, managed support, GTM, or Cloudflare before manual code install.";
+  }
+
+  return "AIHQ will use this signal to recommend the safest available install path.";
+}
+
+function PlatformDetectionCard({ installPlan = {} }) {
+  const plan = obj(installPlan);
+  const detected = obj(plan.detected);
+  const website = obj(detected.website);
+  const primaryPlatform = obj(detected.primaryPlatform);
+  const technologies = arr(detected.technologies).slice(0, 6);
+  const platformId = s(primaryPlatform.id, "custom_or_unknown");
+  const platformLabel = s(primaryPlatform.label, "Custom or unknown website");
+  const confidence = platformConfidenceLabel(primaryPlatform.confidence);
+  const tone = platformTone(platformId);
+  const websiteLabel = s(website.href || website.input || website.origin || website.hostname);
+
+  if (!Object.keys(detected).length && !websiteLabel) {
+    return null;
+  }
+
+  return (
+    <SectionCard
+      eyebrow="Website detection"
+      title={platformLabel}
+      description={platformInstallMeaning(platformId)}
+      tone={tone}
+    >
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Website
+            </div>
+            <div className="mt-1 truncate text-[14px] font-semibold text-text" title={websiteLabel}>
+              {websiteLabel || "Not set"}
+            </div>
+          </div>
+
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Confidence
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              {confidence}
+            </div>
+          </div>
+
+          <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Install strategy
+            </div>
+            <div className="mt-1 text-[14px] font-semibold text-text">
+              No-code first
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {technologies.length ? (
+            technologies.map((item) => (
+              <Badge key={s(item.id || item.label)} tone="neutral" size="sm">
+                {s(item.label, item.id)}
+              </Badge>
+            ))
+          ) : (
+            <Badge tone="warning" size="sm">
+              Platform not confirmed
+            </Badge>
+          )}
+
+          {detected.hasGoogleTagManager === true ? (
+            <Badge tone="brand" size="sm">
+              GTM signal
+            </Badge>
+          ) : null}
+
+          {detected.hasCloudflare === true ? (
+            <Badge tone="brand" size="sm">
+              Cloudflare signal
+            </Badge>
+          ) : null}
+        </div>
+
+        <InlineNotice
+          tone={platformId === "custom_or_unknown" ? "info" : "success"}
+          compact
+          description={
+            platformId === "custom_or_unknown"
+              ? "If the business does not know who manages the site, use guided install help or developer handoff before manual snippet."
+              : "Detected platform signals are used only to recommend setup. Domain/origin validation and runtime gates still apply."
+          }
+        />
+      </div>
+    </SectionCard>
+  );
+}
 function AccessHelperCard({ value = {}, onChange }) {
   const selected = obj(value);
 
@@ -1946,6 +2077,7 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
 
 
 
