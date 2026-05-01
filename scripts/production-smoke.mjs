@@ -1,4 +1,4 @@
-
+﻿
 const DEFAULT_TIMEOUT_MS = 8000;
 
 function s(value, fallback = "") {
@@ -239,3 +239,4 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
