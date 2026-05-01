@@ -482,7 +482,7 @@ describe("Inbox", () => {
     expect(screen.getByLabelText(/inbox composer/i)).toBeInTheDocument();
 
     expect(
-      screen.getByText(/automation-status:autonomy enabled/i)
+      screen.getByText(/automation-status:\s*AI ON/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/launch channel required/i)).toBeInTheDocument();
     expect(
