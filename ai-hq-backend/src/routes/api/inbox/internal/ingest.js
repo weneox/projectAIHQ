@@ -1,4 +1,4 @@
-import { okJson, isDbReady } from "../../../../utils/http.js";
+﻿import { okJson, isDbReady } from "../../../../utils/http.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
@@ -19,6 +19,14 @@ import {
 import { loadStrictInboxRuntime } from "./runtime.js";
 import { queueExecutionActions } from "./execution.js";
 import { buildThreadStateForDecision } from "./threadState.js";
+import {
+  applyInboxExecutionPolicyGate,
+  buildExecutionPolicyFilteredDecisionEvent,
+  buildTenantManualModeBrain,
+  buildTenantManualModeDecisionEvent,
+  isAutonomousTenantMode,
+  resolveTenantAutonomyMode,
+} from "./autonomyGates.js";
 import {
   buildDuplicateIngestResponse,
   buildIngestSuccessResponse,
@@ -562,6 +570,106 @@ export function createInboxIngestHandler({
         authority: summarizeRuntimeAuthority(runtime),
       });
 
+      stage = "resolve_tenant_autonomy_mode";
+      const autonomyMode = await resolveTenantAutonomyMode({
+        db: client,
+        tenantKey: input.tenantKey,
+      });
+
+      if (!isAutonomousTenantMode(autonomyMode.mode)) {
+        const manualReasonCode = autonomyMode.defaulted
+          ? autonomyMode.reasonCode
+          : "tenant_mode_manual";
+
+        const manualBrain = buildTenantManualModeBrain({
+          runtime,
+          tenantKey: input.tenantKey,
+          tenantMode: autonomyMode.mode,
+          reasonCode: manualReasonCode,
+        });
+        const manualActions = Array.isArray(manualBrain?.actions)
+          ? manualBrain.actions
+          : [];
+        const manualExecutionPolicy = manualBrain.executionPolicy || null;
+
+        stage = "append_manual_mode_decision_event";
+        await safeAppendDecisionEvent(
+          client,
+          buildTenantManualModeDecisionEvent({
+            tenantId: String(tenant?.id || tenantId),
+            tenantKey: input.tenantKey,
+            channel: input.channel,
+            thread,
+            message,
+            runtime,
+            tenantMode: autonomyMode.mode,
+            reasonCode: manualReasonCode,
+          })
+        );
+
+        stage = "refresh_manual_mode_thread";
+        const manualThread = await refreshThread(client, thread?.id, thread);
+
+        stage = "upsert_manual_mode_thread_state";
+        const manualThreadState = await upsertInboxThreadState(
+          client,
+          buildThreadStateForDecision({
+            thread: manualThread,
+            tenant,
+            tenantKey: input.tenantKey,
+            priorState: priorThreadState,
+            brain: manualBrain,
+            actions: manualActions,
+            leadResults: [],
+            handoffResults: [],
+            executionResults: [],
+          })
+        );
+
+        stage = "commit_manual_mode_transaction";
+        await client.query("COMMIT");
+        client.release();
+        client = null;
+
+        stage = "emit_manual_mode_realtime";
+        emitIngestRealtime({
+          wsHub,
+          threadWasCreated,
+          thread: manualThread,
+          message,
+          executionResults: [],
+          tenantKey: input.tenantKey,
+          tenantId: String(tenant?.id || tenantId),
+        });
+
+        emitTypingRealtime({
+          wsHub,
+          tenantKey: input.tenantKey,
+          tenantId: String(tenant?.id || tenantId),
+          threadId: manualThread?.id || thread?.id,
+          actor: "business",
+          active: false,
+          reason: manualReasonCode,
+        });
+
+        stage = "build_manual_mode_success_response";
+        return okJson(
+          res,
+          buildIngestSuccessResponse({
+            thread: manualThread,
+            threadState: manualThreadState,
+            message,
+            tenant,
+            brain: manualBrain,
+            executionPolicy: manualExecutionPolicy,
+            actions: manualActions,
+            leadResults: [],
+            handoffResults: [],
+            executionResults: [],
+          })
+        );
+      }
+
       stage = "build_inbox_actions";
       const brain = await buildActions({
         text: input.text,
@@ -587,7 +695,21 @@ export function createInboxIngestHandler({
         runtime,
       });
 
-      const actions = Array.isArray(brain?.actions) ? brain.actions : [];
+      const rawActions = Array.isArray(brain?.actions) ? brain.actions : [];
+
+      stage = "apply_inbox_execution_policy";
+      const executionPolicy = applyInboxExecutionPolicyGate({
+        runtime,
+        actions: rawActions,
+        thread,
+        channel: input.channel,
+      });
+      const actions = Array.isArray(executionPolicy?.actions)
+        ? executionPolicy.actions
+        : [];
+
+      brain.actions = actions;
+      brain.executionPolicy = executionPolicy;
 
       logInfo("inbox realtime/control decision", {
         tenantKey: input.tenantKey,
@@ -610,6 +732,22 @@ export function createInboxIngestHandler({
           message,
         })
       );
+
+      if (Number(executionPolicy?.summary?.filteredActionCount || 0) > 0) {
+        stage = "append_execution_policy_filtered_decision_event";
+        await safeAppendDecisionEvent(
+          client,
+          buildExecutionPolicyFilteredDecisionEvent({
+            tenantId: String(tenant?.id || tenantId),
+            tenantKey: input.tenantKey,
+            channel: input.channel,
+            thread,
+            message,
+            runtime,
+            executionPolicy,
+          })
+        );
+      }
 
       stage = "persist_lead_actions";
       const leadResults = await persistLead({
@@ -694,6 +832,7 @@ export function createInboxIngestHandler({
           message,
           tenant,
           brain,
+          executionPolicy,
           actions,
           leadResults,
           handoffResults,
@@ -736,3 +875,5 @@ export const __test__ = {
   mapBrainOutcomeToDecisionEventType,
   buildDecisionEventFromBrain,
 };
+
+
