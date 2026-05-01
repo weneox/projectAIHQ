@@ -286,25 +286,16 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
     deliveryStatus === "accepted" ||
     deliveryStatus === "delivered"
   ) {
-    if (providerMessageId) {
-      return {
-        kind: "message_delivery_confirmed",
-        label: "Sent",
-        detail:
-          "Instagram/Meta accepted this outbound message. This does not mean the customer has read it.",
-        status: "sent",
-        providerMessageId,
-        attempt,
-      };
-    }
-
     return {
-      kind: "message_delivery_unconfirmed",
-      label: "Delivery unconfirmed",
-      detail:
-        "The message delivery state says sent, but provider message id is missing. Treat as unconfirmed until provider proof is available.",
-      status: "unconfirmed",
-      providerMessageId: "",
+      kind: providerMessageId
+        ? "message_delivery_confirmed"
+        : "message_delivery_provider_accepted",
+      label: "Sent",
+      detail: providerMessageId
+        ? "Instagram/Meta accepted this outbound message. This does not mean the customer has read it."
+        : "Instagram/Meta accepted this outbound message, but did not expose a provider message id.",
+      status: "sent",
+      providerMessageId,
       attempt,
     };
   }
@@ -584,27 +575,18 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
     };
   }
 
-  if (attemptStatus === "sent" && providerMessageId) {
+  if (attemptStatus === "sent") {
     return {
-      kind: "attempt_provider_confirmed",
+      kind: providerMessageId
+        ? "attempt_provider_confirmed"
+        : "attempt_provider_accepted",
       label: "Sent",
-      detail:
-        "Instagram/Meta accepted this outbound message. This does not mean the customer has read it.",
+      detail: providerMessageId
+        ? "Instagram/Meta accepted this outbound message. This does not mean the customer has read it."
+        : "Instagram/Meta accepted this outbound message, but provider message id is not available.",
       status: "sent",
       attempt,
       providerMessageId,
-    };
-  }
-
-  if (attemptStatus === "sent" && !providerMessageId) {
-    return {
-      kind: "provider_unconfirmed",
-      label: "Unconfirmed",
-      detail:
-        "The backend has an outbound attempt marked sent, but the provider message id is missing.",
-      status: "unconfirmed",
-      attempt,
-      providerMessageId: "",
     };
   }
 

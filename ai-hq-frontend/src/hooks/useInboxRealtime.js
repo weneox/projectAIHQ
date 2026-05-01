@@ -417,6 +417,21 @@ export function useInboxRealtime({
       }
     }
 
+    function clearTypingActor(threadId = "", actor = "", reason = "message_arrived") {
+      const safeThreadId = s(threadId);
+      const safeActor = s(actor).toLowerCase();
+      if (!safeThreadId || !safeActor) return;
+
+      applyTypingRealtimeUpdate({
+        threadId: safeThreadId,
+        typing: {
+          actor: safeActor,
+          active: false,
+          reason,
+        },
+      });
+    }
+
     function scheduleThreadRefresh(preferredThreadId = "") {
       const safePreferredId = s(preferredThreadId);
 
@@ -517,6 +532,12 @@ export function useInboxRealtime({
 
         const currentSelectedThread = selectedThreadRef.current;
         const selected = s(currentSelectedThread?.id) === threadId;
+
+        clearTypingActor(
+          threadId,
+          isInboundMessage(message) ? "customer" : "business",
+          "message_updated"
+        );
 
         if (selected) {
           setMessages((prev) => upsertRealtimeMessage(prev, message));

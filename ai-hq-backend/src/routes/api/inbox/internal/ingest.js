@@ -469,6 +469,14 @@ export function createInboxIngestHandler({
         );
       }
 
+      stage = "commit_inbound_message";
+      await client.query("COMMIT");
+      client.release();
+      client = null;
+
+      stage = "refresh_committed_inbound_thread";
+      thread = await refreshThread(db, thread.id, thread);
+
       stage = "emit_inbound_accepted_realtime";
       emitInboundAcceptedRealtime({
         wsHub,
@@ -489,6 +497,10 @@ export function createInboxIngestHandler({
         reason: "ai_reply_preparing",
         ttlMs: 12000,
       });
+
+      stage = "begin_decision_transaction";
+      client = await db.connect();
+      await client.query("BEGIN");
 
       stage = "load_recent_messages";
       const recentMessages = await loadRecentMessages(client, thread.id);
@@ -523,6 +535,16 @@ export function createInboxIngestHandler({
           externalThreadId: input.externalThreadId,
           externalUserId: input.externalUserId,
           runtimeResponse: runtimeState.response,
+        });
+
+        emitTypingRealtime({
+          wsHub,
+          tenantKey: input.tenantKey,
+          tenantId,
+          threadId: thread?.id,
+          actor: "business",
+          active: false,
+          reason: "runtime_unavailable",
         });
 
         await rollbackAndRelease(client);

@@ -323,6 +323,7 @@ function isTypingActive(state = {}) {
 
 function TypingIndicatorBubble({ side = "left" }) {
   const incoming = side === "left";
+  const dotColor = incoming ? "#8A9AAF" : "rgba(255,255,255,0.94)";
 
   return (
     <div
@@ -330,15 +331,16 @@ function TypingIndicatorBubble({ side = "left" }) {
         "flex w-full px-3 py-[5px] sm:px-5",
         incoming ? "justify-start" : "justify-end",
       ].join(" ")}
+      aria-live="polite"
     >
       <style>
         {`
-          @keyframes inbox-typing-dot-wave {
-            0%, 80%, 100% {
+          @keyframes inboxTypingDotWave {
+            0%, 72%, 100% {
               transform: translateY(0);
-              opacity: 0.42;
+              opacity: 0.38;
             }
-            35% {
+            34% {
               transform: translateY(-4px);
               opacity: 1;
             }
@@ -348,23 +350,25 @@ function TypingIndicatorBubble({ side = "left" }) {
 
       <div
         className={[
-          "relative inline-flex h-[38px] min-w-[70px] items-center gap-[5px] rounded-[20px] px-[15px]",
+          "inline-flex h-[36px] min-w-[66px] items-center justify-center gap-[5px] rounded-[18px] px-[14px]",
           incoming
-            ? "rounded-bl-[8px] bg-[linear-gradient(180deg,#F8FAFC_0%,#F1F5F9_58%,#E9EEF4_100%)] shadow-[0_20px_36px_-24px_rgba(15,23,42,0.20),0_8px_18px_-14px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.95)]"
-            : "rounded-br-[8px] bg-[linear-gradient(180deg,#56B0FF_0%,#3797F0_52%,#2186E6_100%)] shadow-[0_18px_38px_-24px_rgba(37,99,235,0.48),0_7px_18px_-13px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.32)]",
+            ? "rounded-bl-[8px] bg-white shadow-[0_16px_36px_-25px_rgba(15,23,42,0.28),0_8px_18px_-16px_rgba(15,23,42,0.18),inset_0_0_0_1px_rgba(15,23,42,0.035)]"
+            : "rounded-br-[8px] bg-[linear-gradient(180deg,#4EAAFF_0%,#2F95EF_55%,#1D84E4_100%)] shadow-[0_16px_34px_-22px_rgba(37,99,235,0.48),inset_0_1px_0_rgba(255,255,255,0.34)]",
         ].join(" ")}
         aria-label={incoming ? "Customer is typing" : "Business is typing"}
       >
         {[0, 1, 2].map((item) => (
           <span
             key={item}
-            className={[
-              "block h-[6px] w-[6px] rounded-full",
-              incoming ? "bg-[#8A9AAF]" : "bg-white/92",
-            ].join(" ")}
+            aria-hidden="true"
             style={{
-              animation: "inbox-typing-dot-wave 1.18s ease-in-out infinite",
-              animationDelay: `${item * 0.15}s`,
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              display: "block",
+              background: dotColor,
+              animation: "inboxTypingDotWave 1.16s ease-in-out infinite",
+              animationDelay: `${item * 0.14}s`,
             }}
           />
         ))}
