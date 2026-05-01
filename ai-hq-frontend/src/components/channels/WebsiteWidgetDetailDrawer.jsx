@@ -251,6 +251,158 @@ function buildPosture({
   };
 }
 
+const WEBSITE_ACCESS_OPTIONS = [
+  {
+    id: "cmsAdmin",
+    label: "Website admin panel",
+    description: "WordPress, Shopify, Wix, Webflow, Squarespace, Framer, or similar.",
+  },
+  {
+    id: "googleTagManager",
+    label: "Google Tag Manager",
+    description: "Someone can publish tags through GTM.",
+  },
+  {
+    id: "cloudflare",
+    label: "Cloudflare or DNS",
+    description: "The domain can be managed through Cloudflare or DNS.",
+  },
+  {
+    id: "developer",
+    label: "Developer or freelancer",
+    description: "A technical person can install it for me.",
+  },
+  {
+    id: "unknown",
+    label: "I do not know",
+    description: "Guide me through the safest option.",
+  },
+];
+
+function mergeInstallPlanWithAccessHints(installPlan = {}, accessHints = {}) {
+  const plan = obj(installPlan);
+  const selected = obj(accessHints);
+
+  if (!Object.keys(plan).length) return plan;
+
+  const methods = arr(plan.allMethods);
+  if (!methods.length) return plan;
+
+  function bonus(method = {}) {
+    const id = s(method.id).toLowerCase();
+    let score = Number(method.score || 0);
+
+    if (selected.cmsAdmin && ["wordpress_plugin", "shopify_app", "platform_admin_embed"].includes(id)) {
+      score += 120;
+    }
+
+    if (selected.googleTagManager && id === "google_tag_manager") {
+      score += 140;
+    }
+
+    if (selected.cloudflare && id === "cloudflare_auto_injection") {
+      score += 140;
+    }
+
+    if (selected.developer && id === "developer_invite") {
+      score += 140;
+    }
+
+    if (selected.unknown && id === "managed_support") {
+      score += 160;
+    }
+
+    if (id === "manual_snippet") {
+      score -= 200;
+    }
+
+    return score;
+  }
+
+  const ranked = methods
+    .map((method) => ({
+      ...method,
+      score: bonus(method),
+    }))
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+  return {
+    ...plan,
+    recommendedMethod: ranked[0] || plan.recommendedMethod,
+    fallbackMethods: ranked.slice(1, 5),
+    allMethods: ranked,
+    accessHints: selected,
+  };
+}
+
+function AccessHelperCard({ value = {}, onChange }) {
+  const selected = obj(value);
+
+  function toggle(id) {
+    const next = {
+      ...selected,
+      [id]: !selected[id],
+    };
+
+    if (id === "unknown" && !selected[id]) {
+      for (const option of WEBSITE_ACCESS_OPTIONS) {
+        next[option.id] = option.id === "unknown";
+      }
+    } else if (id !== "unknown" && next[id]) {
+      next.unknown = false;
+    }
+
+    onChange?.(next);
+  }
+
+  return (
+    <SectionCard
+      eyebrow="Install access"
+      title="How can this website be updated?"
+      description="Choose what access you have. AIHQ will recommend the easiest safe install path. You do not need to edit code yourself."
+    >
+      <div className="grid gap-2">
+        {WEBSITE_ACCESS_OPTIONS.map((option) => {
+          const active = selected[option.id] === true;
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => toggle(option.id)}
+              className={cx(
+                "grid grid-cols-[22px_minmax(0,1fr)] gap-3 rounded-[16px] border px-4 py-3 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
+                active
+                  ? "border-[rgba(var(--color-brand),0.34)] bg-brand-soft text-text shadow-[var(--shadow-inset-top)]"
+                  : "border-line-soft bg-surface text-text hover:bg-surface-subtle"
+              )}
+            >
+              <span
+                className={cx(
+                  "mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-[7px] border",
+                  active
+                    ? "border-[rgba(var(--color-brand),0.45)] bg-brand text-white"
+                    : "border-line bg-surface"
+                )}
+              >
+                {active ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : null}
+              </span>
+
+              <span className="min-w-0">
+                <span className="block text-[14px] font-semibold tracking-[var(--tracking-tight-sm)]">
+                  {option.label}
+                </span>
+                <span className="mt-0.5 block text-[12.5px] font-medium leading-5 text-text-muted">
+                  {option.description}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
 function installMethodDisplay(method = {}) {
   const id = s(method.id).toLowerCase();
 
@@ -694,6 +846,7 @@ export default function WebsiteWidgetDetailDrawer({
   const [verificationOverride, setVerificationOverride] = useState(null);
   const [handoffMessage, setHandoffMessage] = useState("");
   const [handoffPackage, setHandoffPackage] = useState(null);
+  const [websiteAccessHints, setWebsiteAccessHints] = useState({});
 
   const websiteStatusQueryKey = buildWorkspaceScopedQueryKey(
     ["website-widget-status"],
@@ -860,6 +1013,7 @@ export default function WebsiteWidgetDetailDrawer({
   const widget = obj(payload.widget);
   const install = obj(payload.install);
   const installPlan = obj(payload.installPlan);
+  const effectiveInstallPlan = mergeInstallPlanWithAccessHints(installPlan, websiteAccessHints);
   const readiness = obj(payload.readiness);
   const launchReadiness = obj(payload.launchReadiness);
   const launchHandoffs = obj(launchReadiness.handoffs);
@@ -1754,11 +1908,17 @@ export default function WebsiteWidgetDetailDrawer({
               title="Loading website widget"
               description="Checking current website chat status."
             />
+          ) : null}          {activePanel === "overview" && !statusQuery.isLoading ? (
+            <AccessHelperCard
+              value={websiteAccessHints}
+              onChange={setWebsiteAccessHints}
+            />
           ) : null}
+
 
           {activePanel === "overview" && !statusQuery.isLoading ? (
             <InstallPlanRecommendationCard
-              installPlan={installPlan}
+              installPlan={effectiveInstallPlan}
               disabled={!saveAllowed || statusQuery.isLoading || handoffBusy}
               busy={handoffBusy}
               onPrepareDeveloper={handlePrepareDeveloperInstall}
@@ -1780,5 +1940,7 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
 
 
