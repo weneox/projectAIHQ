@@ -89,9 +89,16 @@ function resolveExecutionProvider({ provider = "", channel = "", action = {} } =
   return META_PROVIDER;
 }
 
+const CUSTOMER_VISIBLE_EXECUTION_ACTIONS = new Set(["send_message"]);
+const PROVIDER_CONTROL_ACTIONS = new Set(["typing_on", "typing_off", "mark_seen"]);
+
+export function isProviderControlExecutionAction(action = {}) {
+  return PROVIDER_CONTROL_ACTIONS.has(lower(action?.type));
+}
+
 export function supportedExecutionAction(action = {}) {
   const type = lower(action?.type);
-  return ["send_message", "typing_on", "typing_off", "mark_seen"].includes(type);
+  return CUSTOMER_VISIBLE_EXECUTION_ACTIONS.has(type);
 }
 
 export function mapActionToMessageType(action = {}) {
