@@ -10,10 +10,17 @@ export async function answerFromApprovedTruth({
   runtimeGrounding = {},
   profile = {},
   fallbackLanguage = "az",
+  recentMessages = [],
+  conversationContext = {},
+  threadState = null,
 } = {}) {
   const classification = await classifyApprovedTruthIntentWithModel({
     text,
     fallbackLanguage,
+    recentMessages,
+    profile,
+    conversationContext,
+    threadState,
   });
 
   if (!classification.shouldHandle) {

@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
 import { arr, lower, normalizeIsoLanguage, s, uniqStrings } from "./normalize.js";
+import {
+  buildRecentLanguageSample,
+  resolveConversationLanguageHint,
+} from "./languageContext.js";
 
 let openaiSingleton = null;
 
@@ -198,8 +202,19 @@ function normalizeClassifierResult(result = {}, fallbackLanguage = "az") {
 export async function classifyApprovedTruthIntentWithModel({
   text = "",
   fallbackLanguage = "az",
+  recentMessages = [],
+  profile = {},
+  conversationContext = {},
+  threadState = null,
 } = {}) {
   const latestText = s(text);
+  const languageHint = resolveConversationLanguageHint({
+    text: latestText,
+    recentMessages,
+    profile,
+    fallbackLanguage,
+  });
+  const recentConversationSample = buildRecentLanguageSample(recentMessages, 8);
   const openai = ensureOpenAI();
 
   if (!latestText || !openai) {
@@ -225,6 +240,9 @@ export async function classifyApprovedTruthIntentWithModel({
     "Do not infer phone numbers, emails, prices, services, names, addresses, or policies.",
     "The backend will answer using approved business truth only.",
     "Return one or more intents when the customer asks multiple things in the same message.",
+    "Intent ordering rule:",
+    "The intents array must follow the same order as the customer's request.",
+    "The primaryIntent must be the first concrete intent in that ordered intents array.",
     "",
     "Critical principle:",
     "The model may understand intent, but approved truth owns factual answers.",
@@ -251,11 +269,21 @@ export async function classifyApprovedTruthIntentWithModel({
     "- handoff.request: asks for human/operator.",
     "- support.request: reports a support problem.",
     "- unknown: unclear and not safely classifiable.",
+    "",
+    "Language rule:",
+    "Classify the language of the customer reply.",
+    "If the latest customer message is short, ambiguous, borrowed, or only one word, prefer conversationLanguageHint and recentConversationSample.",
+    "Examples of ambiguous short messages include: 'Mail?', 'Phone?', 'Contact?', 'Qiymət?', 'Sayt?', 'Number?'.",
+    "Do not default to English just because a borrowed word such as 'mail' appears in a non-English conversation.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({
     latestCustomerMessage: latestText,
-    task: "Classify intent only. Never answer the customer.",
+    conversationLanguageHint: languageHint,
+    recentConversationSample,
+    conversationContext,
+    threadState,
+    task: "Classify intent and response language only. Never answer the customer.",
   });
 
   try {
