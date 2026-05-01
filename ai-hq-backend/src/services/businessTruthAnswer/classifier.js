@@ -56,6 +56,7 @@ const SAFE_DIRECT_INTENTS = new Set([
   "smalltalk.greeting",
   "smalltalk.gratitude",
   "clarify.unclear",
+  "support.request",
 ]);
 
 function ensureOpenAI() {
@@ -267,7 +268,7 @@ export async function classifyApprovedTruthIntentWithModel({
     "- behavior.policy: asks tone, handoff, operator, CTA, or AI behavior policy.",
     "- sales_interest: interested in buying/starting, but not asking an exact approved fact.",
     "- handoff.request: asks for human/operator.",
-    "- support.request: reports a support problem.",
+    "- support.request: customer is complaining, asking why nobody replied, saying replies are not visible, asking if anyone is there, or reporting a problem.",
     "- unknown: unclear and not safely classifiable.",
     "",
     "Language rule:",
@@ -275,6 +276,10 @@ export async function classifyApprovedTruthIntentWithModel({
     "If the latest customer message is short, ambiguous, borrowed, or only one word, prefer conversationLanguageHint and recentConversationSample.",
     "Examples of ambiguous short messages include: 'Mail?', 'Phone?', 'Contact?', 'Qiymət?', 'Sayt?', 'Number?'.",
     "Do not default to English just because a borrowed word such as 'mail' appears in a non-English conversation.",
+    "",
+    "Conversation recovery rule:",
+    "If the customer complains that there is no reply, asks why nobody answers, asks whether the business is there, or says they cannot see a response, classify as support.request.",
+    "Do not classify those messages as contact.general, clarify.unclear, or unknown unless the message truly asks for a business fact.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({

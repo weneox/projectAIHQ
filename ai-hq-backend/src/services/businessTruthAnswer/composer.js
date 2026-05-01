@@ -205,8 +205,8 @@ function renderIntent({ intent, language, parts, factsUsed, usedFacts, facts }) 
     pushPart({
       parts,
       factsUsed,
-      part: "I am here. Please write what happened, and we will help.",
-      fact: "Support: requested",
+      part: "I am here. Please write what you need me to check.",
+      fact: "Support: recovery acknowledgement",
     });
     return;
   }
