@@ -21,7 +21,6 @@ const REQUIRED_ENV = [
   { name: "AIHQ_FRONTEND_PROD_URL", type: "https_url" },
   { name: "META_BOT_PROD_BASE_URL", type: "https_url" },
   { name: "TWILIO_VOICE_PROD_BASE_URL", type: "https_url" },
-  { name: "WEBSITE_LANE_TENANT_KEY", type: "tenant_key", minLength: 3 },
   { name: "CLOUDFLARE_PAGES_DEPLOY_HOOK", type: "https_url" },
 ];
 
@@ -32,8 +31,6 @@ const RAILWAY_DEPLOY_HOOK_ENV = [
 ];
 
 const REQUIRED_FLAGS = [
-  "POSTDEPLOY_REQUIRE_WEBSITE_LANE",
-  "PROD_SPINE_REQUIRE_WEBSITE_LANE",
   "POSTDEPLOY_STRICT_SIDECARS",
   "PROD_SPINE_STRICT_SIDECARS",
   "AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA",
