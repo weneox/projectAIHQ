@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client.js";
+﻿import { apiGet, apiPost } from "./client.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -79,3 +79,8 @@ export async function createWebsiteWidgetGtmInstallHandoff(payload = {}) {
 export async function createWebsiteWidgetWordpressInstallHandoff(payload = {}) {
   return apiPost("/api/channels/webchat/install-handoff/wordpress", payload);
 }
+export async function createWebsiteWidgetTestMessage(payload = {}) {
+  return apiPost("/api/channels/webchat/test-message", payload);
+}
+
+
