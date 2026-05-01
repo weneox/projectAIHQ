@@ -1,5 +1,5 @@
 // src/services/workspace/import.js
-// FINAL v6.2 — session-aware source import orchestration + website partial-review hardening
+// FINAL v6.2 Ã¢â‚¬â€ session-aware source import orchestration + website partial-review hardening
 
 import { runSourceSync } from "../sourceSync/index.js";
 import { buildSetupState } from "./setup.js";
@@ -129,12 +129,155 @@ function isMeaningfulValue(value) {
 
 function authorityRankForSourceType(sourceType = "") {
   const x = lower(sourceType);
-  if (x === "website") return 300;
-  if (x === "instagram") return 200;
-  if (x === "google_maps") return 100;
-  return 0;
+
+  if (x === "manual" || x === "admin" || x === "owner") return 1000;
+  if (x === "google_business_profile" || x === "google_business") return 520;
+  if (x === "google_places") return 360;
+  if (x === "website") return 320;
+  if (x === "facebook") return 260;
+  if (x === "instagram") return 240;
+  if (x === "linkedin") return 220;
+  if (x === "tiktok") return 180;
+  if (x === "google_maps") return 140;
+
+  return 50;
 }
 
+function normalizeConfidenceScore(value, fallback = 0.55) {
+  if (value == null || value === "") return fallback;
+
+  const raw =
+    typeof value === "object"
+      ? value.confidence ?? value.score ?? value.value ?? value.rating
+      : value;
+
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  if (n > 1 && n <= 100) return Math.max(0, Math.min(1, n / 100));
+  return Math.max(0, Math.min(1, n));
+}
+
+function extractFieldConfidence(profile = {}, field = "") {
+  const confidence = obj(profile.fieldConfidence || profile.field_confidence);
+  const direct = confidence[field];
+
+  if (direct != null) {
+    return normalizeConfidenceScore(direct, 0.55);
+  }
+
+  const snake = field.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+  if (confidence[snake] != null) {
+    return normalizeConfidenceScore(confidence[snake], 0.55);
+  }
+
+  return 0.55;
+}
+
+function extractSourceQualitySignals(contribution = {}) {
+  const profile = obj(contribution.businessProfile);
+  const summary = obj(contribution.sourceSummary);
+  const latestImport = obj(summary.latestImport);
+  const warnings = arr(contribution.warnings);
+  const reviewFlags = arr(profile.reviewFlags || profile.review_flags);
+
+  const connected = Boolean(
+    latestImport.connected ||
+      latestImport.isConnected ||
+      latestImport.ownerConnected ||
+      latestImport.oauthConnected ||
+      summary.connected ||
+      summary.ownerConnected
+  );
+
+  const verified = Boolean(
+    latestImport.verified ||
+      latestImport.isVerified ||
+      latestImport.official ||
+      summary.verified ||
+      summary.official
+  );
+
+  const weakWarningCount = [...warnings, ...reviewFlags].filter((item) => {
+    const x = lower(item);
+    return (
+      x.includes("weak") ||
+      x.includes("partial") ||
+      x.includes("failed") ||
+      x.includes("low_confidence") ||
+      x.includes("polluted")
+    );
+  }).length;
+
+  return {
+    connected,
+    verified,
+    weakWarningCount,
+  };
+}
+
+function sourceAuthorityScoreForContribution(contribution = {}) {
+  const profile = obj(contribution.businessProfile);
+  const summary = obj(contribution.sourceSummary);
+  const latestImport = obj(summary.latestImport);
+  const sourceType = s(latestImport.sourceType || profile.sourceType);
+  const base = authorityRankForSourceType(sourceType);
+  const signals = extractSourceQualitySignals(contribution);
+
+  const connectedBonus = signals.connected ? 80 : 0;
+  const verifiedBonus = signals.verified ? 100 : 0;
+  const weakPenalty = Math.min(140, signals.weakWarningCount * 25);
+
+  return Math.max(0, base + connectedBonus + verifiedBonus - weakPenalty);
+}
+
+function fieldAuthorityScoreForContribution(contribution = {}, field = "") {
+  const profile = obj(contribution.businessProfile);
+  const confidence = extractFieldConfidence(profile, field);
+  return sourceAuthorityScoreForContribution(contribution) + Math.round(confidence * 120);
+}
+
+function isRicherValue(incoming, current) {
+  if (Array.isArray(incoming) || Array.isArray(current)) {
+    return arr(incoming).length > arr(current).length;
+  }
+
+  if (typeof incoming === "object" || typeof current === "object") {
+    return Object.keys(obj(incoming)).length > Object.keys(obj(current)).length;
+  }
+
+  return s(incoming).length > s(current).length + 12;
+}
+
+function shouldReplaceProfileField({
+  currentValue,
+  incomingValue,
+  currentSource = {},
+  incomingSource = {},
+} = {}) {
+  if (!isMeaningfulValue(currentValue)) return true;
+  if (!isMeaningfulValue(incomingValue)) return false;
+
+  const incomingScore = Number(incomingSource.fieldScore || 0);
+  const currentScore = Number(currentSource.fieldScore || currentSource.authorityScore || 0);
+
+  if (incomingScore > currentScore + 8) return true;
+  if (incomingScore + 8 < currentScore) return false;
+
+  const incomingConfidence = Number(incomingSource.confidence || 0);
+  const currentConfidence = Number(currentSource.confidence || 0);
+
+  if (incomingConfidence > currentConfidence + 0.12) return true;
+  if (incomingConfidence + 0.12 < currentConfidence) return false;
+
+  if (
+    lower(incomingSource.sourceType) === lower(currentSource.sourceType) &&
+    incomingScore >= currentScore
+  ) {
+    return true;
+  }
+
+  return isRicherValue(incomingValue, currentValue);
+}
 function buildContributionKey(sourceType = "", sourceUrl = "") {
   return `${lower(sourceType)}|${lower(sourceUrl)}`;
 }
@@ -153,23 +296,22 @@ function mergeProfileWithPrecedence(contributions = []) {
   const out = {};
   const metaKeys = new Set([
     "fieldSources",
+    "field_sources",
     "fieldConfidence",
+    "field_confidence",
     "reviewFlags",
+    "review_flags",
     "reviewRequired",
+    "review_required",
     "sourceType",
+    "source_type",
     "sourceUrl",
+    "source_url",
   ]);
 
-  const sorted = [...arr(contributions)].sort((a, b) => {
-    const aSummary = obj(a.sourceSummary);
-    const bSummary = obj(b.sourceSummary);
-    const aImport = obj(aSummary.latestImport);
-    const bImport = obj(bSummary.latestImport);
-    return (
-      authorityRankForSourceType(aImport.sourceType) -
-      authorityRankForSourceType(bImport.sourceType)
-    );
-  });
+  const sorted = [...arr(contributions)].sort(
+    (a, b) => sourceAuthorityScoreForContribution(a) - sourceAuthorityScoreForContribution(b)
+  );
 
   for (const contribution of sorted) {
     const profile = obj(contribution.businessProfile);
@@ -177,27 +319,22 @@ function mergeProfileWithPrecedence(contributions = []) {
     const latestImport = obj(summary.latestImport);
     const sourceType = s(latestImport.sourceType || profile.sourceType);
     const sourceUrl = s(latestImport.sourceUrl || profile.sourceUrl);
-    const incomingRank = authorityRankForSourceType(sourceType);
+    const sourceAuthorityScore = sourceAuthorityScoreForContribution(contribution);
+    const sourceRank = authorityRankForSourceType(sourceType);
 
     for (const [field, value] of Object.entries(profile)) {
       if (metaKeys.has(field)) continue;
       if (!isMeaningfulValue(value)) continue;
 
-      const currentSource = obj(fieldSources[field]);
-      const currentRank = authorityRankForSourceType(currentSource.sourceType);
-      const shouldReplace =
-        !Object.prototype.hasOwnProperty.call(out, field) ||
-        !isMeaningfulValue(out[field]) ||
-        incomingRank > currentRank ||
-        sourceType === s(currentSource.sourceType);
-
-      if (!shouldReplace) continue;
-
-      out[field] = cloneJson(value, value);
-      fieldSources[field] = {
+      const confidence = extractFieldConfidence(profile, field);
+      const fieldScore = fieldAuthorityScoreForContribution(contribution, field);
+      const incomingSource = {
         sourceType,
         sourceUrl,
-        authorityRank: incomingRank,
+        authorityRank: sourceRank,
+        authorityScore: sourceAuthorityScore,
+        fieldScore,
+        confidence,
         sourceLabel: s(latestImport.sourceLabel || sourceType),
         observedValue:
           Array.isArray(value)
@@ -206,6 +343,19 @@ function mergeProfileWithPrecedence(contributions = []) {
               ? cloneJson(value, value)
               : s(value),
       };
+
+      const currentSource = obj(fieldSources[field]);
+      const shouldReplace = shouldReplaceProfileField({
+        currentValue: out[field],
+        incomingValue: value,
+        currentSource,
+        incomingSource,
+      });
+
+      if (!shouldReplace) continue;
+
+      out[field] = cloneJson(value, value);
+      fieldSources[field] = incomingSource;
     }
   }
 
@@ -214,7 +364,6 @@ function mergeProfileWithPrecedence(contributions = []) {
     fieldSources,
   });
 }
-
 function recomputeDraftFromContributions({
   currentDraft = {},
   contributions = [],
