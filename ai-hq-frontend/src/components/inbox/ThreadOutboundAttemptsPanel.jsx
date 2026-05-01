@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listThreadOutboundAttempts,
   resendOutboundAttempt,
@@ -51,6 +51,7 @@ export default function ThreadOutboundAttemptsPanel({
 }) {
   const requestRef = useRef(0);
   const activeThreadRef = useRef("");
+  const attemptsThreadIdRef = useRef("");
 
   const [attempts, setAttempts] = useState([]);
   const [attemptsThreadId, setAttemptsThreadId] = useState("");
@@ -60,54 +61,63 @@ export default function ThreadOutboundAttemptsPanel({
 
   const threadId = s(selectedThread?.id);
 
-  async function load(targetThreadId = threadId) {
-    const safeThreadId = s(targetThreadId);
-    const requestId = ++requestRef.current;
+  const commitAttemptsThreadId = useCallback((nextThreadId) => {
+    const safeThreadId = s(nextThreadId);
+    attemptsThreadIdRef.current = safeThreadId;
+    setAttemptsThreadId(safeThreadId);
+  }, []);
 
-    activeThreadRef.current = safeThreadId;
+  const load = useCallback(
+    async (targetThreadId) => {
+      const safeThreadId = s(targetThreadId);
+      const requestId = ++requestRef.current;
 
-    if (!safeThreadId) {
-      setAttempts([]);
-      setAttemptsThreadId("");
-      setLoadingThreadId("");
-      setError("");
-      return;
-    }
+      activeThreadRef.current = safeThreadId;
 
-    const sameThread = attemptsThreadId === safeThreadId;
-
-    setLoadingThreadId(safeThreadId);
-    setError("");
-
-    if (!sameThread) {
-      setAttempts([]);
-      setAttemptsThreadId(safeThreadId);
-    }
-
-    try {
-      const res = await listThreadOutboundAttempts(safeThreadId, { limit: 30 });
-
-      if (requestId !== requestRef.current) return;
-      if (activeThreadRef.current !== safeThreadId) return;
-
-      setAttempts(Array.isArray(res?.attempts) ? res.attempts : []);
-      setAttemptsThreadId(safeThreadId);
-    } catch (e) {
-      if (requestId === requestRef.current) {
+      if (!safeThreadId) {
         setAttempts([]);
-        setAttemptsThreadId(safeThreadId);
-        setError(String(e?.message || e));
-      }
-    } finally {
-      if (requestId === requestRef.current) {
+        commitAttemptsThreadId("");
         setLoadingThreadId("");
+        setError("");
+        return;
       }
-    }
-  }
+
+      const sameThread = attemptsThreadIdRef.current === safeThreadId;
+
+      setLoadingThreadId(safeThreadId);
+      setError("");
+
+      if (!sameThread) {
+        setAttempts([]);
+        commitAttemptsThreadId(safeThreadId);
+      }
+
+      try {
+        const res = await listThreadOutboundAttempts(safeThreadId, { limit: 30 });
+
+        if (requestId !== requestRef.current) return;
+        if (activeThreadRef.current !== safeThreadId) return;
+
+        setAttempts(Array.isArray(res?.attempts) ? res.attempts : []);
+        commitAttemptsThreadId(safeThreadId);
+      } catch (e) {
+        if (requestId === requestRef.current) {
+          setAttempts([]);
+          commitAttemptsThreadId(safeThreadId);
+          setError(String(e?.message || e));
+        }
+      } finally {
+        if (requestId === requestRef.current) {
+          setLoadingThreadId("");
+        }
+      }
+    },
+    [commitAttemptsThreadId]
+  );
 
   useEffect(() => {
     load(threadId);
-  }, [threadId]);
+  }, [load, threadId]);
 
   useEffect(() => {
     const onRefresh = (ev) => {
@@ -122,7 +132,7 @@ export default function ThreadOutboundAttemptsPanel({
     return () => {
       window.removeEventListener("inbox:retry-queue-refresh", onRefresh);
     };
-  }, [threadId]);
+  }, [load, threadId]);
 
   async function handleResend(attemptId) {
     if (!attemptId) return;

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   MessageSquareText,
@@ -28,22 +28,37 @@ function s(value) {
   return String(value ?? "").trim();
 }
 
+function deferSetState(setter, value) {
+  const run = () => setter(value);
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(run);
+    return;
+  }
+
+  Promise.resolve().then(run);
+}
+
 export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const showInternalDebug = areInternalRoutesEnabled();
+
+  const requestedThreadId = s(
+    location.state?.selectedThreadId || searchParams.get("threadId") || ""
+  );
+
+  const requestedThreadRef = useRef(requestedThreadId);
+  const hydrationInFlightRef = useRef("");
+  const failedDeepLinkRef = useRef("");
+
   const [filter, setFilter] = useState("all");
   const [wsState, setWsState] = useState("idle");
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [replyText, setReplyText] = useState("");
   const [deepLinkNotice, setDeepLinkNotice] = useState("");
-
-  const requestedThreadId = s(
-    location.state?.selectedThreadId || searchParams.get("threadId") || ""
-  );
-  const [pendingThreadId, setPendingThreadId] = useState(requestedThreadId);
 
   useEffect(() => {
     let alive = true;
@@ -97,6 +112,8 @@ export default function Inbox() {
     openLeadDetail,
   } = useInboxData({ filter, operatorName, navigate });
 
+  const selectedThreadId = s(selectedThread?.id);
+
   useInboxRealtime({
     selectedThread,
     setWsState,
@@ -110,59 +127,88 @@ export default function Inbox() {
   });
 
   useEffect(() => {
-    setPendingThreadId(requestedThreadId);
-    if (!requestedThreadId) {
-      setDeepLinkNotice("");
+    requestedThreadRef.current = requestedThreadId;
+
+    if (failedDeepLinkRef.current && failedDeepLinkRef.current !== requestedThreadId) {
+      failedDeepLinkRef.current = "";
     }
   }, [requestedThreadId]);
 
   useEffect(() => {
-    loadThreads(pendingThreadId || requestedThreadId);
-  }, [loadThreads, pendingThreadId, requestedThreadId]);
+    loadThreads(requestedThreadId);
+  }, [loadThreads, requestedThreadId]);
 
   useEffect(() => {
-    if (!pendingThreadId || loadingThreads) {
+    if (!requestedThreadId) {
+      hydrationInFlightRef.current = "";
+      failedDeepLinkRef.current = "";
+      deferSetState(setDeepLinkNotice, "");
       return;
     }
 
-    const matchingThread = threads.find((thread) => s(thread?.id) === pendingThreadId);
+    if (loadingThreads) {
+      return;
+    }
+
+    if (failedDeepLinkRef.current === requestedThreadId) {
+      return;
+    }
+
+    const matchingThread = threads.find((thread) => s(thread?.id) === requestedThreadId);
 
     if (matchingThread) {
-      if (s(selectedThread?.id) !== s(matchingThread.id)) {
+      failedDeepLinkRef.current = "";
+
+      if (selectedThreadId !== s(matchingThread.id)) {
         openThread(matchingThread);
       }
-      setDeepLinkNotice("");
-      setPendingThreadId("");
+
+      deferSetState(setDeepLinkNotice, "");
       return;
     }
+
+    if (hydrationInFlightRef.current === requestedThreadId) {
+      return;
+    }
+
+    hydrationInFlightRef.current = requestedThreadId;
 
     let cancelled = false;
 
     async function hydrateRequestedThread() {
       try {
-        await Promise.all([
-          loadThreadDetail(pendingThreadId),
-          loadMessages(pendingThreadId),
-          loadRelatedLead(pendingThreadId),
+        const [thread] = await Promise.all([
+          loadThreadDetail(requestedThreadId),
+          loadMessages(requestedThreadId),
+          loadRelatedLead(requestedThreadId),
         ]);
 
-        if (cancelled) return;
+        if (cancelled || requestedThreadRef.current !== requestedThreadId) {
+          return;
+        }
 
-        setSelectedThread((current) => {
-          if (s(current?.id) === pendingThreadId) {
-            setDeepLinkNotice("");
-            setPendingThreadId("");
-            return current;
-          }
+        if (s(thread?.id) === requestedThreadId) {
+          failedDeepLinkRef.current = "";
+          deferSetState(setDeepLinkNotice, "");
+          return;
+        }
 
-          setDeepLinkNotice("The requested inbox thread is no longer available.");
-          setPendingThreadId("");
-          return current;
-        });
+        failedDeepLinkRef.current = requestedThreadId;
+        deferSetState(
+          setDeepLinkNotice,
+          "The requested inbox thread is no longer available."
+        );
       } catch {
-        if (!cancelled) {
-          setDeepLinkNotice("The requested inbox thread could not be opened.");
-          setPendingThreadId("");
+        if (!cancelled && requestedThreadRef.current === requestedThreadId) {
+          failedDeepLinkRef.current = requestedThreadId;
+          deferSetState(
+            setDeepLinkNotice,
+            "The requested inbox thread could not be opened."
+          );
+        }
+      } finally {
+        if (hydrationInFlightRef.current === requestedThreadId) {
+          hydrationInFlightRef.current = "";
         }
       }
     }
@@ -173,14 +219,13 @@ export default function Inbox() {
       cancelled = true;
     };
   }, [
-    pendingThreadId,
+    requestedThreadId,
     loadingThreads,
     threads,
-    selectedThread?.id,
+    selectedThreadId,
     loadThreadDetail,
     loadMessages,
     loadRelatedLead,
-    setSelectedThread,
     openThread,
   ]);
 
@@ -199,13 +244,11 @@ export default function Inbox() {
   }, [requestedThreadId, setSearchParams]);
 
   useEffect(() => {
-    if (selectedThread?.id) {
-      loadMessages(selectedThread.id);
-      loadRelatedLead(selectedThread.id);
+    if (selectedThreadId) {
+      loadMessages(selectedThreadId);
+      loadRelatedLead(selectedThreadId);
     }
-  }, [selectedThread?.id, loadMessages, loadRelatedLead]);
-
-  const selectedThreadId = s(selectedThread?.id);
+  }, [selectedThreadId, loadMessages, loadRelatedLead]);
 
   const messagesBelongToSelected =
     !selectedThreadId || s(messagesThreadId) === selectedThreadId;
