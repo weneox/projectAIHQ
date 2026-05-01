@@ -553,6 +553,7 @@ export async function localizeApprovedTruthAnswer({
   customerText = "",
   classification = {},
   facts = {},
+  repeatContext = {},
 } = {}) {
   const baseReply = s(replyText);
   const language = normalizeIsoLanguage(targetLanguage, "az");
@@ -582,6 +583,7 @@ export async function localizeApprovedTruthAnswer({
 
   const model = pickLocalizerModel();
   const directFactRequest = isDirectFactRequest(classification);
+  const repeatedApprovedFactRequest = repeatContext?.isRepeat === true;
 
   const systemPrompt = [
     "You are a safe multilingual response localizer for a governed business AI system.",
@@ -603,6 +605,9 @@ export async function localizeApprovedTruthAnswer({
     directFactRequest
       ? "The customer asked for a direct fact. Do not add a generic help question or extra CTA."
       : "If helpful, keep the tone polite, but do not add new factual claims.",
+    repeatedApprovedFactRequest
+      ? "Repeat handling rule: the customer is asking for a fact that was already answered earlier. Keep the same facts, but do not repeat the exact same wording. You may naturally say the information is unchanged/still the same in the target language."
+      : "No repeat handling is needed.",
     "If the customer writes in a language not listed anywhere, infer that language and answer in it.",
   ].join("\n");
 
@@ -616,12 +621,24 @@ export async function localizeApprovedTruthAnswer({
       kind: fact.kind,
       key: fact.key,
     })),
+    repeatContext: {
+      repeatedApprovedFactRequest,
+      previousBusinessReply: repeatedApprovedFactRequest
+        ? s(repeatContext?.previousBusinessReply).slice(0, 500)
+        : "",
+      repeatReason: repeatedApprovedFactRequest
+        ? s(repeatContext?.reason)
+        : "",
+    },
     style: {
       tone: "natural_business_chat",
-      maxSentences: directFactRequest ? countSentenceLikeUnits(protectedAnswer) : 2,
+      maxSentences: directFactRequest
+        ? Math.max(1, countSentenceLikeUnits(protectedAnswer))
+        : 2,
       cleanMachineValues: true,
       noInternalLanguage: true,
       noGenericHelpTailForDirectFacts: directFactRequest,
+      avoidExactPreviousWording: repeatedApprovedFactRequest,
     },
   });
 

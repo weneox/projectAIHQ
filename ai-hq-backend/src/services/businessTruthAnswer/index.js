@@ -1,62 +1,29 @@
 ﻿import { classifyApprovedTruthIntentWithModel } from "./classifier.js";
 import { composeApprovedTruthAnswer } from "./composer.js";
 import { localizeApprovedTruthAnswer } from "./localizer.js";
+import { detectConversationRecoveryWithModel } from "./recovery.js";
+import { detectRepeatedApprovedTruthRequest } from "./repeat.js";
 import { resolveApprovedTruthFacts } from "./resolver.js";
 import { validateApprovedTruthAnswer } from "./validator.js";
 import { arr, normalizeIsoLanguage, s } from "./normalize.js";
 
-export async function answerFromApprovedTruth({
-  text = "",
-  runtimeGrounding = {},
-  profile = {},
-  fallbackLanguage = "az",
-  recentMessages = [],
-  conversationContext = {},
-  threadState = null,
+function buildAnswerPayload({
+  classification = {},
+  composed = {},
+  localized = {},
+  source = "approved_truth_answer_engine",
+  extraDiagnostics = {},
 } = {}) {
-  const classification = await classifyApprovedTruthIntentWithModel({
-    text,
-    fallbackLanguage,
-    recentMessages,
-    profile,
-    conversationContext,
-    threadState,
-  });
-
-  if (!classification.shouldHandle) {
-    return null;
-  }
-
-  const facts = resolveApprovedTruthFacts({
-    runtimeGrounding,
-    profile,
-  });
-
-  const composed = composeApprovedTruthAnswer({
-    classification,
-    facts,
-  });
-
-  const localized = await localizeApprovedTruthAnswer({
-    replyText: composed.replyText,
-    targetLanguage: classification.language,
-    customerText: text,
-    classification,
-    facts,
-  });
-
   const finalReplyText = s(localized.replyText || composed.replyText);
   const validation = validateApprovedTruthAnswer({
     replyText: finalReplyText,
   });
 
-  if (!validation.ok) {
-    return null;
-  }
+  if (!validation.ok) return null;
 
   const language = normalizeIsoLanguage(
     localized.language || classification.language,
-    fallbackLanguage
+    "az"
   );
 
   return {
@@ -81,7 +48,7 @@ export async function answerFromApprovedTruth({
     replyStyle: "direct",
     noReply: false,
     shouldReply: true,
-    source: "approved_truth_answer_engine",
+    source,
     diagnostics: {
       intents: arr(classification.intents),
       userMeaning: s(classification.userMeaning),
@@ -89,6 +56,125 @@ export async function answerFromApprovedTruth({
       localized: localized.localized === true,
       localizationReason: s(localized.reason),
       targetLanguage: language,
+      ...extraDiagnostics,
     },
   };
+}
+
+async function answerConversationRecovery({
+  text = "",
+  detection = {},
+  facts = {},
+} = {}) {
+  const classification = {
+    primaryIntent: "support.request",
+    intents: ["support.request"],
+    language: normalizeIsoLanguage(detection.language, "az"),
+    confidence: detection.confidence,
+    needsApprovedTruth: false,
+    userMeaning: "conversation_recovery_or_missing_reply_complaint",
+    shouldHandle: true,
+  };
+
+  const composed = composeApprovedTruthAnswer({
+    classification,
+    facts,
+  });
+
+  const localized = await localizeApprovedTruthAnswer({
+    replyText: composed.replyText,
+    targetLanguage: classification.language,
+    customerText: text,
+    classification,
+    facts,
+  });
+
+  return buildAnswerPayload({
+    classification,
+    composed,
+    localized,
+    source: "conversation_recovery_guard",
+    extraDiagnostics: {
+      recoveryGuard: true,
+      recoveryReason: s(detection.reason),
+    },
+  });
+}
+
+export async function answerFromApprovedTruth({
+  text = "",
+  runtimeGrounding = {},
+  profile = {},
+  fallbackLanguage = "az",
+  recentMessages = [],
+  conversationContext = {},
+  threadState = null,
+} = {}) {
+  const facts = resolveApprovedTruthFacts({
+    runtimeGrounding,
+    profile,
+  });
+
+  const recoveryDetection = await detectConversationRecoveryWithModel({
+    text,
+    fallbackLanguage,
+    recentMessages,
+    profile,
+    conversationContext,
+    threadState,
+  });
+
+  if (recoveryDetection.isRecoveryComplaint) {
+    return answerConversationRecovery({
+      text,
+      detection: recoveryDetection,
+      facts,
+    });
+  }
+
+  const classification = await classifyApprovedTruthIntentWithModel({
+    text,
+    fallbackLanguage,
+    recentMessages,
+    profile,
+    conversationContext,
+    threadState,
+  });
+
+  if (!classification.shouldHandle) {
+    return null;
+  }
+
+  const composed = composeApprovedTruthAnswer({
+    classification,
+    facts,
+  });
+
+  const repeatContext = detectRepeatedApprovedTruthRequest({
+    classification,
+    facts,
+    recentMessages,
+  });
+
+  const localized = await localizeApprovedTruthAnswer({
+    replyText: composed.replyText,
+    targetLanguage: classification.language,
+    customerText: text,
+    classification,
+    facts,
+    repeatContext,
+  });
+
+  return buildAnswerPayload({
+    classification,
+    composed,
+    localized,
+    source: "approved_truth_answer_engine",
+    extraDiagnostics: {
+      repeatDetected: repeatContext.isRepeat === true,
+      repeatReason: s(repeatContext.reason),
+      repeatCoverageScore: repeatContext.coverageScore || 0,
+      repeatPreviousMessageId: s(repeatContext.previousMessageId),
+    },
+  });
 }
