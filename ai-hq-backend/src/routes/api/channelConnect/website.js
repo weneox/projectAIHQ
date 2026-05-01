@@ -1,4 +1,5 @@
-﻿import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
+﻿import crypto from "crypto";
+import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
 import {
   dbGetLatestTenantDomainVerification,
   dbGetTenantDomainVerification,
@@ -27,7 +28,10 @@ import {
   resolveWebsiteWidgetStatus,
   widgetStatusAllowsInstall,
 } from "../websiteWidget/config.js";
-import { auditSafe, getTenantByKey } from "./repository.js";
+import {
+  findOrCreateThreadForIngest,
+  insertInboundMessage,
+} from "../inbox/internal/persistence.js";import { auditSafe, getTenantByKey } from "./repository.js";
 import { getReqActor, getReqTenantKey, s } from "./utils.js";
 
 function obj(value) {
@@ -854,6 +858,104 @@ function buildWebsiteInstallHandoffPayload(
   };
 }
 
+function normalizeWebsiteTestMessageText(value = "") {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "Salam, bu Website Chat test mesajıdır.";
+  return text.slice(0, 1000);
+}
+
+function buildWebsiteTestActor(req = {}) {
+  return {
+    actorId: s(req?.auth?.identityId || req?.user?.id || req?.auth?.userId),
+    actorEmail: s(req?.auth?.email || req?.user?.email),
+    actorRole: s(getNormalizedAuthRole(req), "member"),
+  };
+}
+
+async function createWebsiteChatTestMessage({
+  db,
+  tenant,
+  text = "",
+  actor = {},
+} = {}) {
+  if (!db?.connect) {
+    throw createHttpError("Database is not available.", 503, "db_unavailable");
+  }
+
+  const tenantId = s(tenant?.id);
+  const tenantKey = s(tenant?.tenant_key || tenant?.tenantKey);
+  const messageText = normalizeWebsiteTestMessageText(text);
+  const testId = crypto.randomUUID();
+  const externalThreadId = `website-test:${tenantKey}:setup`;
+  const externalMessageId = `website-test:${testId}`;
+  const now = new Date().toISOString();
+
+  let client = null;
+
+  try {
+    client = await db.connect();
+    await client.query("BEGIN");
+
+    const meta = {
+      source: "website_chat_setup_test",
+      test: true,
+      testId,
+      createdAt: now,
+      actor,
+      websiteChat: {
+        setupTest: true,
+        channel: "website",
+        publicWidgetRuntime: false,
+      },
+    };
+
+    const { thread, threadWasCreated } = await findOrCreateThreadForIngest({
+      client,
+      tenantId,
+      tenantKey,
+      channel: "website",
+      externalThreadId,
+      externalUserId: "website-chat-test-visitor",
+      externalUsername: "website-chat-test",
+      customerName: "Website Chat Test Visitor",
+      meta,
+    });
+
+    const message = await insertInboundMessage({
+      client,
+      threadId: thread.id,
+      tenantKey,
+      externalMessageId,
+      text: messageText,
+      meta: {
+        ...meta,
+        threadWasCreated,
+      },
+      timestamp: Date.now(),
+    });
+
+    await client.query("COMMIT");
+
+    return {
+      testId,
+      thread,
+      message,
+      threadWasCreated,
+    };
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+    }
+
+    throw error;
+  } finally {
+    try {
+      client?.release?.();
+    } catch {}
+  }
+}
 function buildBlockers(launchReadiness = null) {
   return arr(obj(launchReadiness).blockers);
 }
@@ -1559,6 +1661,111 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
     viewerRole,
     domainVerification
   );
+  router.post("/webchat/test-message", async (req, res, next) => {
+    try {
+      const db =
+        req?.app?.locals?.db ||
+        req?.db ||
+        (typeof options !== "undefined" ? options?.db : null) ||
+        (typeof deps !== "undefined" ? deps?.db : null) ||
+        (typeof database !== "undefined" ? database : null);
+
+      const tenantKey = getReqTenantKey(req);
+      const viewerRole = getNormalizedAuthRole(req);
+
+      if (!canManageSettings(viewerRole)) {
+        throw createHttpError(
+          "You do not have permission to send a Website Chat setup test message.",
+          403,
+          "website_test_message_forbidden"
+        );
+      }
+
+      if (!tenantKey) {
+        throw createHttpError(
+          "Tenant is required before sending a Website Chat setup test message.",
+          400,
+          "tenant_required"
+        );
+      }
+
+      const tenant = await getTenantByKey(db, tenantKey);
+      if (!tenant?.id) {
+        throw createHttpError("Tenant not found.", 404, "tenant_not_found");
+      }
+
+      const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+      if (!status?.id) {
+        throw createHttpError(
+          "Website Chat status is not available for this tenant.",
+          404,
+          "website_widget_status_missing"
+        );
+      }
+
+      const config = normalizeWidgetConfig(status.widgetConfig, {
+        defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+      });
+
+      if (!config.publicWidgetId) {
+        throw createHttpError(
+          "Save Website Chat settings once before sending a test message.",
+          409,
+          "website_widget_public_id_missing"
+        );
+      }
+
+      const result = await createWebsiteChatTestMessage({
+        db,
+        tenant,
+        text: req?.body?.text,
+        actor: buildWebsiteTestActor(req),
+      });
+
+      await auditSafe(db, {
+        tenantId: tenant.id,
+        tenantKey,
+        actor: getReqActor(req),
+        action: "website_chat.test_message_created",
+        entityType: "tenant_channel",
+        entityId: status.widgetChannelId || null,
+        metadata: {
+          testId: result.testId,
+          threadId: result.thread?.id || "",
+          messageId: result.message?.id || "",
+          threadWasCreated: result.threadWasCreated === true,
+        },
+      });
+
+      res.json({
+        ok: true,
+        testId: result.testId,
+        thread: {
+          id: result.thread?.id || "",
+          channel: result.thread?.channel || "website",
+          externalThreadId: result.thread?.external_thread_id || "",
+          customerName: result.thread?.customer_name || "Website Chat Test Visitor",
+          status: result.thread?.status || "open",
+          unreadCount: result.thread?.unread_count ?? null,
+        },
+        message: {
+          id: result.message?.id || "",
+          text: result.message?.text || "",
+          direction: result.message?.direction || "inbound",
+          senderType: result.message?.sender_type || "customer",
+          createdAt: result.message?.created_at || null,
+        },
+        inbox: {
+          channel: "website",
+          threadId: result.thread?.id || "",
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 }
+
+
 
 
