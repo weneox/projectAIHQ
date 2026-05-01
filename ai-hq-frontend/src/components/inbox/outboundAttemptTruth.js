@@ -261,6 +261,32 @@ function getDeliveryFailureText(message = {}) {
   );
 }
 
+function getDeliveryErrorCode(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+
+  return lower(
+    attempt?.last_error_code ||
+      attempt?.lastErrorCode ||
+      attempt?.error_code ||
+      attempt?.errorCode ||
+      delivery?.errorCode ||
+      delivery?.error_code ||
+      delivery?.reasonCode ||
+      delivery?.reason_code ||
+      meta?.deliveryErrorCode ||
+      meta?.delivery_error_code ||
+      meta?.errorCode ||
+      meta?.error_code ||
+      ""
+  );
+}
+
+function isProviderAcceptedWithoutId(message = {}, attempt = {}) {
+  const code = getDeliveryErrorCode(message, attempt);
+  return code === "meta_delivery_unconfirmed";
+}
+
 function getMessageDeliveryTruth(message = {}, attempt = {}) {
   const deliveryStatus = getDeliveryStatus(message);
   const providerMessageId = getProviderMessageId(message, attempt);
@@ -305,6 +331,18 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
     deliveryStatus === "dead" ||
     deliveryStatus === "error"
   ) {
+    if (isProviderAcceptedWithoutId(message, attempt)) {
+      return {
+        kind: "message_delivery_provider_accepted_without_id",
+        label: "Sent",
+        detail:
+          "Instagram/Meta accepted this message, but did not return a provider message id.",
+        status: "sent",
+        providerMessageId,
+        attempt,
+      };
+    }
+
     return {
       kind: "message_delivery_failed",
       label: "Not delivered",
@@ -562,6 +600,22 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
 
   const providerMessageId = getProviderMessageId(message, attempt);
   const attemptStatus = lower(attempt?.status);
+
+  if (
+    (attemptStatus === "failed" || attemptStatus === "dead") &&
+    isProviderAcceptedWithoutId(message, attempt)
+  ) {
+    return {
+      kind: "attempt_provider_accepted_without_id",
+      label: "Sent",
+      detail:
+        "Instagram/Meta accepted this message, but did not return a provider message id.",
+      status: "sent",
+      attempt,
+      providerMessageId,
+    };
+  }
+
 
   if (hasSeenProof(message, attempt) || attemptStatus === "seen" || attemptStatus === "read") {
     return {
