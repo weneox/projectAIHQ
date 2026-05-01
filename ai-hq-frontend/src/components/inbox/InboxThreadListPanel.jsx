@@ -10,7 +10,9 @@ import {
   Globe2,
   Inbox,
   MessageCircle,
+  Power,
   Search,
+  Sparkles,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -461,6 +463,167 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
   );
 }
 
+
+function InboxAutopilotControl({
+  automationControl = null,
+  onToggleAutomation,
+  hidden = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  const enabled = Boolean(automationControl?.enabled);
+  const saving = Boolean(automationControl?.saving);
+  const disabled = Boolean(automationControl?.disabled || saving);
+  const statusLabel = enabled ? "ON" : "OFF";
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointer(event) {
+      if (rootRef.current?.contains(event.target)) return;
+      setOpen(false);
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  function handleToggle(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    if (disabled) return;
+    if (typeof onToggleAutomation !== "function") return;
+
+    onToggleAutomation(!enabled);
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className={cx(
+        "relative z-[190] shrink-0 transition-[opacity,transform,width] duration-base ease-premium",
+        hidden
+          ? "pointer-events-none w-0 translate-x-2 opacity-0"
+          : "w-auto translate-x-0 opacity-100"
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        title="Inbox AI Autopilot"
+        className={cx(
+          "inline-flex h-9 items-center gap-2 rounded-[14px] border px-2.5",
+          "bg-white text-[12px] font-semibold shadow-[0_14px_34px_-28px_rgba(15,23,42,0.32)]",
+          "transition-[border-color,background-color,box-shadow,opacity] duration-base ease-premium",
+          enabled
+            ? "border-[rgba(37,99,235,0.22)] text-brand"
+            : "border-line-soft text-text-muted hover:text-text"
+        )}
+      >
+        <Sparkles className="h-[14px] w-[14px]" strokeWidth={2.25} />
+
+        <span className="hidden max-w-[92px] truncate xl:inline">
+          AI Autopilot
+        </span>
+
+        <span
+          onClick={handleToggle}
+          role="switch"
+          aria-checked={enabled}
+          aria-label={enabled ? "Turn off inbox AI" : "Turn on inbox AI"}
+          className={cx(
+            "relative inline-flex h-[20px] w-[34px] items-center rounded-full transition-colors duration-base ease-premium",
+            disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
+            enabled ? "bg-brand" : "bg-slate-300"
+          )}
+        >
+          <span
+            className={cx(
+              "absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_2px_7px_rgba(15,23,42,0.2)] transition-transform duration-base ease-premium",
+              enabled ? "translate-x-[17px]" : "translate-x-[3px]"
+            )}
+          />
+        </span>
+      </button>
+
+      <div
+        className={cx(
+          "absolute right-0 top-[calc(100%+10px)] z-[220] w-[286px] origin-top-right",
+          "transition-[opacity,transform,visibility] duration-base ease-premium",
+          open
+            ? "visible translate-y-0 scale-100 opacity-100"
+            : "invisible pointer-events-none -translate-y-1 scale-[0.985] opacity-0"
+        )}
+      >
+        <div className="overflow-hidden rounded-[22px] border border-line bg-white p-3 shadow-[0_34px_86px_-44px_rgba(15,23,42,0.36),inset_0_1px_0_rgba(255,255,255,0.95)]">
+          <div className="flex items-start gap-3">
+            <div
+              className={cx(
+                "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px]",
+                enabled
+                  ? "bg-brand-soft text-brand"
+                  : "bg-surface-subtle text-text-muted"
+              )}
+            >
+              <Sparkles className="h-[17px] w-[17px]" strokeWidth={2.25} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold tracking-[-0.01em] text-text">
+                Inbox AI Autopilot
+              </div>
+              <div className="mt-1 text-[12px] font-medium leading-5 text-text-muted">
+                {enabled
+                  ? "Bütün inbox üzrə avtomatik AI cavabları aktivdir. Ayrı söhbətləri ayrıca dayandırmaq olar."
+                  : "Inbox üzrə AI cavabları söndürülüb. Heç bir söhbətdə avtomatik cavab getməyəcək."}
+              </div>
+            </div>
+          </div>
+
+          {automationControl?.disabledReason ? (
+            <div className="mt-3 rounded-[14px] bg-warning-soft px-3 py-2 text-[11.5px] font-semibold leading-5 text-warning">
+              {automationControl.disabledReason}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={disabled}
+            className={cx(
+              "mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[14px]",
+              "border text-[12.5px] font-semibold transition-colors duration-base ease-premium",
+              "disabled:cursor-not-allowed disabled:opacity-55",
+              enabled
+                ? "border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                : "border-[rgba(37,99,235,0.18)] bg-brand-soft text-brand hover:bg-[rgba(var(--color-brand),0.12)]"
+            )}
+          >
+            <Power className="h-[14px] w-[14px]" strokeWidth={2.25} />
+            <span>{enabled ? "Turn off inbox AI" : "Turn on inbox AI"}</span>
+          </button>
+
+          <div className="mt-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+            Global · {statusLabel}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HeaderTitle({ hidden }) {
   return (
     <div
@@ -560,6 +723,8 @@ export default function InboxThreadListPanel({
   selectedThreadId = "",
   searchQuery = "",
   launchChannelConnected = true,
+  automationControl = null,
+  onToggleAutomation,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const deferredSearch = useDeferredValue(localSearch);
@@ -802,6 +967,12 @@ export default function InboxThreadListPanel({
                 onClose={handleCloseSearch}
               />
             </div>
+
+            <InboxAutopilotControl
+              automationControl={automationControl}
+              onToggleAutomation={onToggleAutomation}
+              hidden={searchOpen}
+            />
 
             <div className="flex shrink-0 items-center gap-1.5">
               <div className="relative z-[180]" ref={filterAnchorRef}>

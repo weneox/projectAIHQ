@@ -744,6 +744,31 @@ export default function Inbox() {
     [activateHandoff, releaseHandoff, selectedThread?.id]
   );
 
+  const threadAutomationControl = useMemo(
+    () => ({
+      enabled: selectedThreadAiEnabled,
+      saving: selectedThreadAiSaving,
+      disabled:
+        !selectedThread?.id ||
+        selectedThreadAiSaving ||
+        inboxAutomationControl.enabled !== true,
+      disabledReason:
+        inboxAutomationControl.enabled !== true
+          ? "Inbox AI Autopilot global olaraq söndürülüb."
+          : selectedThreadAiEnabled
+            ? "AI bu söhbətdə cavab verə bilər."
+            : "Operator rejimi. AI bu söhbətdə cavab vermir.",
+      statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
+      scopeLabel: "Bu söhbətdə AI",
+    }),
+    [
+      inboxAutomationControl.enabled,
+      selectedThread?.id,
+      selectedThreadAiEnabled,
+      selectedThreadAiSaving,
+    ]
+  );
+
   useEffect(() => {
     function onKeyDown(event) {
       if (event.key === "Escape") setDetailThreadId("");
@@ -866,8 +891,8 @@ export default function Inbox() {
                 setDetailThreadId(selectedThread.id);
               }
             }}
-            automationControl={inboxAutomationControl}
-            onToggleAutomation={handleToggleInboxAutonomy}
+            automationControl={threadAutomationControl}
+            onToggleAutomation={handleToggleThreadAi}
             launchChannelConnected={hasDeliveryReadyLaunchChannel}
             onOpenChannels={() => navigate("/channels")}
             composer={

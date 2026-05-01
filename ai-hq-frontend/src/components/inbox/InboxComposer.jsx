@@ -91,7 +91,7 @@ function InboxComposer({
   );
 
   const globalAiActive = aiReplyEnabled === true;
-  const threadAiActive = threadAiEnabled === true && threadAiPaused !== true;
+  const threadAiActive = aiReplyEnabled === true && threadAiEnabled === true && threadAiPaused !== true;
   const threadAiSwitchPending =
     threadAiSaving === true ||
     isActionPending(actionState, "handoff") ||

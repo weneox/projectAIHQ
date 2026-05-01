@@ -560,7 +560,20 @@ export default function InboxDetailHeaderCompact({
             mouseEnterDelay={0.06}
             overlayInnerStyle={tooltipStyle}
           >
-            <span className="inline-flex h-[34px] w-[42px] items-center justify-center">
+            <span
+              className={cx(
+                "inline-flex h-[34px] items-center gap-2 rounded-[14px] border px-2.5",
+                "bg-white shadow-[0_13px_30px_-26px_rgba(15,23,42,0.34)]",
+                "transition-[border-color,background-color,opacity] duration-base ease-premium",
+                automationEnabled
+                  ? "border-[rgba(var(--color-brand),0.22)] text-brand"
+                  : "border-line-soft text-text-muted"
+              )}
+            >
+              <span className="hidden max-w-[112px] truncate text-[11.5px] font-semibold tracking-[-0.01em] lg:inline">
+                {automationScopeLabel}
+              </span>
+
               <Switch
                 className="inbox-detail-header-ai-switch"
                 size="small"
@@ -578,6 +591,10 @@ export default function InboxDetailHeaderCompact({
                   }
                 }}
               />
+
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]">
+                {automationEnabled ? "ON" : "OFF"}
+              </span>
             </span>
           </Tooltip>
 
