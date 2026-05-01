@@ -956,6 +956,99 @@ async function createWebsiteChatTestMessage({
     } catch {}
   }
 }
+export async function createWebsiteWidgetTestMessage({ db, req }) {
+  const tenantKey = getReqTenantKey(req);
+  const viewerRole = getNormalizedAuthRole(req);
+
+  if (!canManageSettings(viewerRole)) {
+    throw createHttpError(
+      "You do not have permission to send a Website Chat setup test message.",
+      403,
+      "website_test_message_forbidden"
+    );
+  }
+
+  if (!tenantKey) {
+    throw createHttpError(
+      "Tenant is required before sending a Website Chat setup test message.",
+      400,
+      "tenant_required"
+    );
+  }
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found.", 404, "tenant_not_found");
+  }
+
+  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+  if (!status?.id) {
+    throw createHttpError(
+      "Website Chat status is not available for this tenant.",
+      404,
+      "website_widget_status_missing"
+    );
+  }
+
+  const config = normalizeWidgetConfig(status.widgetConfig, {
+    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+  });
+
+  if (!config.publicWidgetId) {
+    throw createHttpError(
+      "Save Website Chat settings once before sending a test message.",
+      409,
+      "website_widget_public_id_missing"
+    );
+  }
+
+  const result = await createWebsiteChatTestMessage({
+    db,
+    tenant,
+    text: req?.body?.text,
+    actor: buildWebsiteTestActor(req),
+  });
+
+  await auditSafe(db, {
+    tenantId: tenant.id,
+    tenantKey,
+    actor: getReqActor(req),
+    action: "website_chat.test_message_created",
+    entityType: "tenant_channel",
+    entityId: status.widgetChannelId || null,
+    metadata: {
+      testId: result.testId,
+      threadId: result.thread?.id || "",
+      messageId: result.message?.id || "",
+      threadWasCreated: result.threadWasCreated === true,
+    },
+  });
+
+  return {
+    testId: result.testId,
+    thread: {
+      id: result.thread?.id || "",
+      channel: result.thread?.channel || "website",
+      externalThreadId: result.thread?.external_thread_id || "",
+      customerName:
+        result.thread?.customer_name || "Website Chat Test Visitor",
+      status: result.thread?.status || "open",
+      unreadCount: result.thread?.unread_count ?? null,
+    },
+    message: {
+      id: result.message?.id || "",
+      text: result.message?.text || "",
+      direction: result.message?.direction || "inbound",
+      senderType: result.message?.sender_type || "customer",
+      createdAt: result.message?.created_at || null,
+    },
+    inbox: {
+      channel: "website",
+      threadId: result.thread?.id || "",
+    },
+  };
+}
+
 function buildBlockers(launchReadiness = null) {
   return arr(obj(launchReadiness).blockers);
 }
@@ -1661,109 +1754,7 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
     viewerRole,
     domainVerification
   );
-  router.post("/webchat/test-message", async (req, res, next) => {
-    try {
-      const db =
-        req?.app?.locals?.db ||
-        req?.db ||
-        (typeof options !== "undefined" ? options?.db : null) ||
-        (typeof deps !== "undefined" ? deps?.db : null) ||
-        (typeof database !== "undefined" ? database : null);
 
-      const tenantKey = getReqTenantKey(req);
-      const viewerRole = getNormalizedAuthRole(req);
-
-      if (!canManageSettings(viewerRole)) {
-        throw createHttpError(
-          "You do not have permission to send a Website Chat setup test message.",
-          403,
-          "website_test_message_forbidden"
-        );
-      }
-
-      if (!tenantKey) {
-        throw createHttpError(
-          "Tenant is required before sending a Website Chat setup test message.",
-          400,
-          "tenant_required"
-        );
-      }
-
-      const tenant = await getTenantByKey(db, tenantKey);
-      if (!tenant?.id) {
-        throw createHttpError("Tenant not found.", 404, "tenant_not_found");
-      }
-
-      const status = await resolveWebsiteWidgetStatus(db, tenantKey);
-      if (!status?.id) {
-        throw createHttpError(
-          "Website Chat status is not available for this tenant.",
-          404,
-          "website_widget_status_missing"
-        );
-      }
-
-      const config = normalizeWidgetConfig(status.widgetConfig, {
-        defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
-      });
-
-      if (!config.publicWidgetId) {
-        throw createHttpError(
-          "Save Website Chat settings once before sending a test message.",
-          409,
-          "website_widget_public_id_missing"
-        );
-      }
-
-      const result = await createWebsiteChatTestMessage({
-        db,
-        tenant,
-        text: req?.body?.text,
-        actor: buildWebsiteTestActor(req),
-      });
-
-      await auditSafe(db, {
-        tenantId: tenant.id,
-        tenantKey,
-        actor: getReqActor(req),
-        action: "website_chat.test_message_created",
-        entityType: "tenant_channel",
-        entityId: status.widgetChannelId || null,
-        metadata: {
-          testId: result.testId,
-          threadId: result.thread?.id || "",
-          messageId: result.message?.id || "",
-          threadWasCreated: result.threadWasCreated === true,
-        },
-      });
-
-      res.json({
-        ok: true,
-        testId: result.testId,
-        thread: {
-          id: result.thread?.id || "",
-          channel: result.thread?.channel || "website",
-          externalThreadId: result.thread?.external_thread_id || "",
-          customerName: result.thread?.customer_name || "Website Chat Test Visitor",
-          status: result.thread?.status || "open",
-          unreadCount: result.thread?.unread_count ?? null,
-        },
-        message: {
-          id: result.message?.id || "",
-          text: result.message?.text || "",
-          direction: result.message?.direction || "inbound",
-          senderType: result.message?.sender_type || "customer",
-          createdAt: result.message?.created_at || null,
-        },
-        inbox: {
-          channel: "website",
-          threadId: result.thread?.id || "",
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
 }
 
 

@@ -28,6 +28,7 @@ import {
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
   createWebsiteWidgetWordpressInstallHandoff,
+  createWebsiteWidgetTestMessage,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
@@ -284,6 +285,26 @@ export function channelConnectRoutes({ db }) {
           res,
           err,
           "Failed to check website domain verification",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/test-message",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await createWebsiteWidgetTestMessage({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to create Website Chat setup test message",
           {
             reasonCode: err?.reasonCode || null,
           }
