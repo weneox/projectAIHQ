@@ -22,7 +22,9 @@ import { buildThreadStateForDecision } from "./threadState.js";
 import {
   buildDuplicateIngestResponse,
   buildIngestSuccessResponse,
+  emitInboundAcceptedRealtime,
   emitIngestRealtime,
+  emitTypingRealtime,
 } from "./responses.js";
 
 function s(v, d = "") {
@@ -467,6 +469,27 @@ export function createInboxIngestHandler({
         );
       }
 
+      stage = "emit_inbound_accepted_realtime";
+      emitInboundAcceptedRealtime({
+        wsHub,
+        threadWasCreated,
+        thread,
+        message,
+        tenantKey: input.tenantKey,
+        tenantId,
+      });
+
+      emitTypingRealtime({
+        wsHub,
+        tenantKey: input.tenantKey,
+        tenantId,
+        threadId: thread?.id,
+        actor: "business",
+        active: true,
+        reason: "ai_reply_preparing",
+        ttlMs: 12000,
+      });
+
       stage = "load_recent_messages";
       const recentMessages = await loadRecentMessages(client, thread.id);
 
@@ -630,6 +653,16 @@ export function createInboxIngestHandler({
         tenantId: String(tenant?.id || tenantId),
       });
 
+      emitTypingRealtime({
+        wsHub,
+        tenantKey: input.tenantKey,
+        tenantId: String(tenant?.id || tenantId),
+        threadId: normalizedThread?.id || thread?.id,
+        actor: "business",
+        active: false,
+        reason: "ai_reply_complete",
+      });
+
       stage = "build_success_response";
       return okJson(
         res,
@@ -646,6 +679,18 @@ export function createInboxIngestHandler({
         })
       );
     } catch (error) {
+      try {
+        emitTypingRealtime({
+          wsHub,
+          tenantKey: input?.tenantKey,
+          tenantId,
+          threadId: thread?.id,
+          actor: "business",
+          active: false,
+          reason: `ingest_failed:${stage}`,
+        });
+      } catch {}
+
       if (client) await rollbackAndRelease(client);
 
       return okJson(

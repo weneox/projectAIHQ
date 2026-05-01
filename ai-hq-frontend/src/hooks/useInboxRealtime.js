@@ -271,6 +271,7 @@ export function useInboxRealtime({
   loadThreads,
   syncSelected,
   setRelatedLead,
+  setTypingState = null,
 }) {
   const selectedThreadRef = useRef(selectedThread);
   const loadThreadsRef = useRef(loadThreads);
@@ -279,6 +280,7 @@ export function useInboxRealtime({
   const selectedThreadSyncTimerRef = useRef(null);
   const selectedThreadSyncReasonRef = useRef("");
   const threadRefreshPreferredIdRef = useRef("");
+  const typingClearTimersRef = useRef(new Map());
 
   useEffect(() => {
     selectedThreadRef.current = selectedThread;
@@ -320,6 +322,99 @@ export function useInboxRealtime({
       }, SELECTED_THREAD_SYNC_DEBOUNCE_MS);
     }
 
+    function clearTypingTimer(key = "") {
+      const safeKey = s(key);
+      if (!safeKey) return;
+
+      const existing = typingClearTimersRef.current.get(safeKey);
+      if (existing) {
+        window.clearTimeout(existing);
+        typingClearTimersRef.current.delete(safeKey);
+      }
+    }
+
+    function applyTypingRealtimeUpdate(payload = {}) {
+      if (typeof setTypingState !== "function") return;
+
+      const threadId = resolveThreadId(payload);
+      if (!threadId) return;
+
+      const typing = obj(payload?.typing);
+      const actor = s(typing?.actor || payload?.actor || "business").toLowerCase() || "business";
+      const active = typing?.active === true || payload?.active === true;
+      const key = `${threadId}:${actor}`;
+      const now = Date.now();
+      const expiresAt = s(typing?.expiresAt || typing?.expires_at);
+      const expiresMs = expiresAt ? new Date(expiresAt).getTime() : 0;
+      const safeExpiresAt =
+        active && Number.isFinite(expiresMs) && expiresMs > now
+          ? expiresAt
+          : active
+            ? new Date(now + 9000).toISOString()
+            : "";
+
+      clearTypingTimer(key);
+
+      setTypingState((current) => {
+        const previous = obj(current);
+        const previousThread = obj(previous[threadId]);
+
+        const nextThread = {
+          ...previousThread,
+          [actor]: {
+            active,
+            actor,
+            reason: s(typing?.reason || payload?.reason),
+            updatedAt: s(typing?.updatedAt || typing?.updated_at) || new Date(now).toISOString(),
+            expiresAt: safeExpiresAt || null,
+          },
+        };
+
+        if (!active) {
+          nextThread[actor] = {
+            ...nextThread[actor],
+            active: false,
+            expiresAt: null,
+          };
+        }
+
+        return {
+          ...previous,
+          [threadId]: nextThread,
+        };
+      });
+
+      if (active && safeExpiresAt) {
+        const delay = Math.max(800, new Date(safeExpiresAt).getTime() - now);
+
+        const timer = window.setTimeout(() => {
+          typingClearTimersRef.current.delete(key);
+
+          setTypingState((current) => {
+            const previous = obj(current);
+            const previousThread = obj(previous[threadId]);
+            const previousActorState = obj(previousThread[actor]);
+
+            if (!previousActorState.active) return previous;
+
+            return {
+              ...previous,
+              [threadId]: {
+                ...previousThread,
+                [actor]: {
+                  ...previousActorState,
+                  active: false,
+                  expiresAt: null,
+                },
+              },
+            };
+          });
+        }, delay);
+
+        typingClearTimersRef.current.set(key, timer);
+      }
+    }
+
     function scheduleThreadRefresh(preferredThreadId = "") {
       const safePreferredId = s(preferredThreadId);
 
@@ -354,6 +449,11 @@ export function useInboxRealtime({
 
     const unsubscribeEvents = realtimeStore.subscribeEvents(({ type, payload }) => {
       if (!type) return;
+
+      if (type === "inbox.typing.updated") {
+        applyTypingRealtimeUpdate(payload);
+        return;
+      }
 
       if (type === "inbox.thread.created" || type === "inbox.thread.updated") {
         const thread = payload?.thread;
@@ -547,6 +647,11 @@ export function useInboxRealtime({
         window.clearTimeout(selectedThreadSyncTimerRef.current);
         selectedThreadSyncTimerRef.current = null;
       }
+
+      for (const timer of typingClearTimersRef.current.values()) {
+        window.clearTimeout(timer);
+      }
+      typingClearTimersRef.current.clear();
     };
   }, [
     setWsState,
@@ -554,5 +659,6 @@ export function useInboxRealtime({
     setSelectedThread,
     setMessages,
     setRelatedLead,
+    setTypingState,
   ]);
 }

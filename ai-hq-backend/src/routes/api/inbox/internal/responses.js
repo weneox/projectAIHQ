@@ -105,6 +105,83 @@ export function buildOutboundSuccessResponse({
   };
 }
 
+export function emitTypingRealtime({
+  wsHub,
+  tenantKey = "",
+  tenantId = "",
+  threadId = "",
+  actor = "business",
+  active = false,
+  reason = "",
+  ttlMs = 9000,
+} = {}) {
+  const safeThreadId = s(threadId);
+  if (!safeThreadId) return;
+
+  const safeActor = s(actor || "business").toLowerCase() || "business";
+  const now = Date.now();
+
+  try {
+    emitRealtimeEvent(wsHub, {
+      type: "inbox.typing.updated",
+      audience: "operator",
+      tenantKey,
+      tenantId,
+      threadId: safeThreadId,
+      typing: {
+        actor: safeActor,
+        active: active === true,
+        reason: s(reason),
+        updatedAt: new Date(now).toISOString(),
+        expiresAt:
+          active === true
+            ? new Date(now + Math.max(1500, Number(ttlMs || 9000))).toISOString()
+            : null,
+      },
+    });
+  } catch {}
+}
+
+export function emitInboundAcceptedRealtime({
+  wsHub,
+  threadWasCreated = false,
+  thread,
+  message,
+  tenantKey = "",
+  tenantId = "",
+} = {}) {
+  if (!thread?.id || !message?.id) return;
+
+  try {
+    emitRealtimeEvent(wsHub, {
+      type: threadWasCreated ? "inbox.thread.created" : "inbox.thread.updated",
+      audience: "operator",
+      tenantKey: thread?.tenant_key || tenantKey,
+      tenantId: thread?.tenant_id || tenantId,
+      thread,
+      reason: "inbound_accepted",
+    });
+  } catch {}
+
+  try {
+    emitRealtimeEvent(wsHub, {
+      type: "inbox.message.created",
+      audience: "operator",
+      tenantKey: message?.tenant_key || thread?.tenant_key || tenantKey,
+      tenantId: thread?.tenant_id || tenantId,
+      threadId: thread?.id,
+      message: {
+        ...message,
+        meta: {
+          ...(message?.meta && typeof message.meta === "object" ? message.meta : {}),
+          realtimePhase: "inbound_accepted",
+        },
+      },
+      reason: "inbound_accepted",
+    });
+  } catch {}
+}
+
 export function emitIngestRealtime({
   wsHub,
   threadWasCreated,

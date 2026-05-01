@@ -308,6 +308,71 @@ function FloatingComposerSlot({ children }) {
   );
 }
 
+function isTypingActive(state = {}) {
+  const safe = obj(state);
+  if (safe.active !== true) return false;
+
+  const expiresAt = s(safe.expiresAt || safe.expires_at);
+  if (!expiresAt) return true;
+
+  const expiresMs = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresMs)) return true;
+
+  return expiresMs > Date.now();
+}
+
+function TypingIndicatorBubble({ side = "left" }) {
+  const incoming = side === "left";
+
+  return (
+    <div
+      className={[
+        "flex w-full px-3 py-[5px] sm:px-5",
+        incoming ? "justify-start" : "justify-end",
+      ].join(" ")}
+    >
+      <style>
+        {`
+          @keyframes inbox-typing-dot-wave {
+            0%, 80%, 100% {
+              transform: translateY(0);
+              opacity: 0.42;
+            }
+            35% {
+              transform: translateY(-4px);
+              opacity: 1;
+            }
+          }
+        `}
+      </style>
+
+      <div
+        className={[
+          "relative inline-flex h-[38px] min-w-[70px] items-center gap-[5px] rounded-[20px] px-[15px]",
+          incoming
+            ? "rounded-bl-[8px] bg-[linear-gradient(180deg,#F8FAFC_0%,#F1F5F9_58%,#E9EEF4_100%)] shadow-[0_20px_36px_-24px_rgba(15,23,42,0.20),0_8px_18px_-14px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.95)]"
+            : "rounded-br-[8px] bg-[linear-gradient(180deg,#56B0FF_0%,#3797F0_52%,#2186E6_100%)] shadow-[0_18px_38px_-24px_rgba(37,99,235,0.48),0_7px_18px_-13px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.32)]",
+        ].join(" ")}
+        aria-label={incoming ? "Customer is typing" : "Business is typing"}
+      >
+        {[0, 1, 2].map((item) => (
+          <span
+            key={item}
+            className={[
+              "block h-[6px] w-[6px] rounded-full",
+              incoming ? "bg-[#8A9AAF]" : "bg-white/92",
+            ].join(" ")}
+            style={{
+              animation: "inbox-typing-dot-wave 1.18s ease-in-out infinite",
+              animationDelay: `${item * 0.15}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EmptyConversationState() {
   return (
     <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
@@ -384,6 +449,7 @@ function InboxDetailPanel({
   selectedThread,
   messages,
   outboundAttempts,
+  typingState = {},
   surface,
   actionState,
   markRead,
@@ -558,6 +624,9 @@ function InboxDetailPanel({
 
   const conversationTitle = resolveConversationTitle(selectedThread);
   const conversationMetaItems = formatConversationMeta(selectedThread);
+  const threadTypingState = obj(typingState?.[currentThreadId]);
+  const customerTypingActive = isTypingActive(threadTypingState.customer);
+  const businessTypingActive = isTypingActive(threadTypingState.business);
 
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)]">
@@ -651,6 +720,14 @@ function InboxDetailPanel({
                             enableInspect={false}
                           />
                         ))}
+
+                        {customerTypingActive ? (
+                          <TypingIndicatorBubble side="left" />
+                        ) : null}
+
+                        {businessTypingActive ? (
+                          <TypingIndicatorBubble side="right" />
+                        ) : null}
                       </div>
                     )}
                   </div>

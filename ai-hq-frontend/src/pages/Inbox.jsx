@@ -356,6 +356,7 @@ export default function Inbox() {
     error: "",
     success: "",
   });
+  const [typingState, setTypingState] = useState({});
 
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
@@ -645,6 +646,7 @@ export default function Inbox() {
     loadThreadDetail,
     loadRelatedLead,
     setRelatedLead,
+    setTypingState,
   });
 
   useEffect(() => {
@@ -829,6 +831,7 @@ export default function Inbox() {
             selectedThread={selectedThread}
             messages={visibleThreadMessages}
             outboundAttempts={threadAttemptSurface.attempts}
+            typingState={typingState}
             surface={detailPanelSurface}
             actionState={actionState}
             markRead={markRead}
