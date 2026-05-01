@@ -1,4 +1,4 @@
-// src/utils/http.js
+﻿// src/utils/http.js
 import { PUBLIC_BASE_URL } from "../config.js";
 
 export function safeStr(x) {
@@ -6,15 +6,22 @@ export function safeStr(x) {
 }
 
 // Proxy arxasında düzgün baseUrl (Railway üçün)
-export function getBaseUrl(req) {
+export function getBaseUrl(req = {}) {
   if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
 
-  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "https")
+  const headers = req?.headers || {};
+  const forwardedProto =
+    headers["x-forwarded-proto"] ||
+    headers["x-forwarded-protocol"] ||
+    headers["x-url-scheme"];
+
+  const requestProtocol = req?.socket ? req.protocol : "";
+  const proto = (forwardedProto || requestProtocol || "https")
     .toString()
     .split(",")[0]
     .trim();
 
-  const host = (req.headers["x-forwarded-host"] || req.headers.host || "")
+  const host = (headers["x-forwarded-host"] || headers.host || "")
     .toString()
     .split(",")[0]
     .trim();

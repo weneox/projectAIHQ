@@ -1,4 +1,4 @@
-name: Release Gate
+﻿name: Release Gate
 
 on:
   push:
@@ -169,6 +169,7 @@ jobs:
       OPENAI_REALTIME_MODEL: gpt-4o-realtime-preview
       OPENAI_REALTIME_VOICE: alloy
       ADMIN_SESSION_SECRET: ci-admin-session-secret
+      ADMIN_PANEL_PASSCODE_HASH: ci-admin-passcode-hash
       USER_SESSION_SECRET: ci-user-session-secret
       AIHQ_INTERNAL_TOKEN: ci-internal-token
       DEBUG_API_TOKEN: ci-debug-token
@@ -774,3 +775,4 @@ jobs:
             echo "- \`docs/runbooks/schema-migration-safety.md\`"
             echo "- \`docs/runbooks/production-rollback.md\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
