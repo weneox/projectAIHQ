@@ -85,6 +85,17 @@ function normalizeContext(req, tenantKey, tenantId) {
   };
 }
 
+
+function resolveInternalOutboundActionType(messageType = "") {
+  const type = lower(messageType);
+
+  if (type === "typing_on") return "typing_on";
+  if (type === "typing_off") return "typing_off";
+  if (type === "mark_seen" || type === "send_seen") return "mark_seen";
+
+  return "send_message";
+}
+
 export function internalOutboundRoutes() {
   const r = express.Router();
 
@@ -155,19 +166,20 @@ export function internalOutboundRoutes() {
         },
       };
 
-      const exec = await executeMetaActions(
-        [
-          {
-            type: "send_message",
-            channel,
-            recipientId,
-            text,
-            attachments,
-            meta: actionMeta,
-          },
-        ],
-        context
-      );
+      const outboundActionType = resolveInternalOutboundActionType(messageType);
+      const outboundAction = {
+        type: outboundActionType,
+        channel,
+        recipientId,
+        meta: actionMeta,
+      };
+
+      if (outboundActionType === "send_message") {
+        outboundAction.text = text;
+        outboundAction.attachments = attachments;
+      }
+
+      const exec = await executeMetaActions([outboundAction], context);
 
       const result = Array.isArray(exec?.results) ? exec.results[0] || null : null;
 

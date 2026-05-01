@@ -16,6 +16,17 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+const META_SENDER_ACTION_MESSAGE_TYPES = new Set([
+  "typing_on",
+  "typing_off",
+  "mark_seen",
+  "send_seen",
+]);
+
+function isMetaSenderActionMessageType(value = "") {
+  return META_SENDER_ACTION_MESSAGE_TYPES.has(lower(value));
+}
+
 function ok(value) {
   return { ok: true, value };
 }
@@ -154,7 +165,11 @@ export function validateMetaInternalOutboundRequest(input = {}) {
     return fail("recipient_id_required");
   }
 
-  if (!value.text && attachments.length === 0) {
+  if (
+    !value.text &&
+    attachments.length === 0 &&
+    !isMetaSenderActionMessageType(value.messageType)
+  ) {
     return fail("text_or_attachments_required");
   }
 
