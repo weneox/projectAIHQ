@@ -1,4 +1,4 @@
-import { dbGetTenantMode } from "../../../../db/helpers/tenants.js";
+﻿import { dbGetTenantMode } from "../../../../db/helpers/tenants.js";
 import { applyExecutionPolicyToActions } from "../../../../services/executionPolicy.js";
 
 function s(v, d = "") {
@@ -76,6 +76,42 @@ function resolveRuntimeProjectionId(runtime = {}) {
   );
 }
 
+function resolveAutonomousLaunchGate(row = {}) {
+  const policy = obj(row?.publish_policy || row?.publishPolicy);
+  const launchApproval = obj(policy.launchApproval || policy.launch_approval);
+  const launchGate = obj(policy.launchGate || policy.launch_gate);
+
+  const approved =
+    policy.launchApproved === true ||
+    policy.launch_approved === true ||
+    launchApproval.approved === true ||
+    launchApproval.status === "approved" ||
+    launchGate.approved === true ||
+    launchGate.status === "approved";
+
+  return {
+    approved,
+    reasonCode: approved
+      ? "autonomous_launch_gate_approved"
+      : "autonomous_launch_gate_required",
+    approvedBy: s(
+      policy.launchApprovedBy ||
+        policy.launch_approved_by ||
+        launchApproval.approvedBy ||
+        launchApproval.approved_by ||
+        launchGate.approvedBy ||
+        launchGate.approved_by
+    ),
+    approvedAt: s(
+      policy.launchApprovedAt ||
+        policy.launch_approved_at ||
+        launchApproval.approvedAt ||
+        launchApproval.approved_at ||
+        launchGate.approvedAt ||
+        launchGate.approved_at
+    ),
+  };
+}
 function buildNoReplyAction({
   reasonCode = "",
   tenantMode = "manual",
@@ -96,14 +132,26 @@ function buildNoReplyAction({
 export async function resolveTenantAutonomyMode({ db, tenantKey = "" } = {}) {
   try {
     const row = await dbGetTenantMode(db, tenantKey);
+    const requestedMode = normalizeTenantMode(row?.mode, "manual");
+    const launchGate = resolveAutonomousLaunchGate(row);
+    const mode =
+      requestedMode === "auto" && launchGate.approved !== true
+        ? "manual"
+        : requestedMode;
 
     return {
-      mode: normalizeTenantMode(row?.mode, "manual"),
+      mode,
+      requestedMode,
       tenantKey: s(row?.tenant_key || tenantKey).toLowerCase(),
       resolved: Boolean(row),
       defaulted: !row,
+      launchGate,
       reasonCode: row
-        ? "tenant_mode_resolved"
+        ? mode === "auto"
+          ? "tenant_mode_resolved"
+          : requestedMode === "auto"
+            ? launchGate.reasonCode
+            : "tenant_mode_resolved"
         : "tenant_mode_missing_default_manual",
     };
   } catch (error) {
@@ -360,4 +408,6 @@ export const __test__ = {
   normalizeTenantMode,
   summarizeRuntimeAuthority,
   buildNoReplyAction,
+  resolveAutonomousLaunchGate,
 };
+

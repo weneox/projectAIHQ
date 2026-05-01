@@ -485,7 +485,7 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
       if (sql === "begin" || sql === "commit") return { rows: [] };
       if (sql.includes("tenant_ai_policies")) {
         return {
-          rows: [{ tenant_key: "acme", mode: "auto" }],
+          rows: [{ tenant_key: "acme", mode: "auto", publish_policy: { launchApproved: true } }],
         };
       }
       if (sql.includes("from tenants")) {
@@ -960,5 +960,7 @@ test("inbox behavior runtime stays in safe general fallback mode without forcing
   assert.equal(typeof send?.text, "string");
   assert.equal(send?.text.length > 0, true);
 });
+
+
 
 
