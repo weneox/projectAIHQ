@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Loader2,
+  RotateCw,
+} from "lucide-react";
 
 import { normalizeReplayTrace } from "../../lib/replayTrace.js";
 import InboxReplayTraceCard from "./InboxReplayTraceCard.jsx";
@@ -234,20 +243,51 @@ function EliteBubble({ side = "left", text, sentAt }) {
 function normalizeOutboundTruthLabel(truth = {}) {
   const status = s(truth?.status).toLowerCase();
 
+  if (status === "seen" || status === "read") return "Seen";
   if (status === "sent") return "Sent";
-  if (status === "queued") return "Sending";
+  if (status === "queued") return "Waiting";
   if (status === "sending") return "Sending";
   if (status === "retrying") return "Retrying";
   if (status === "failed") return "Not delivered";
   if (status === "dead") return "Not delivered";
-  if (status === "unconfirmed") return "Delivery unconfirmed";
+  if (status === "unconfirmed") return "Unconfirmed";
 
   const kind = s(truth?.kind).toLowerCase();
-  if (kind === "awaiting_attempt") return "Waiting for delivery";
-  if (kind === "missing_correlation") return "Delivery unverified";
-  if (kind === "stale_attempt") return "Delivery stale";
+  if (kind === "awaiting_attempt") return "Waiting";
+  if (kind === "missing_correlation") return "Unverified";
+  if (kind === "stale_attempt") return "Stale";
 
-  return s(truth?.label) || "Delivery unverified";
+  return s(truth?.label) || "Unverified";
+}
+
+function OutboundStatusIcon({ status }) {
+  const value = s(status).toLowerCase();
+
+  if (value === "seen" || value === "read") {
+    return <CheckCheck className="h-[13px] w-[13px]" strokeWidth={2.25} />;
+  }
+
+  if (value === "sent") {
+    return <Check className="h-[13px] w-[13px]" strokeWidth={2.35} />;
+  }
+
+  if (value === "queued") {
+    return <Clock3 className="h-[12.5px] w-[12.5px]" strokeWidth={2.1} />;
+  }
+
+  if (value === "sending") {
+    return <Loader2 className="h-[12.5px] w-[12.5px] animate-spin" strokeWidth={2.1} />;
+  }
+
+  if (value === "retrying") {
+    return <RotateCw className="h-[12.5px] w-[12.5px]" strokeWidth={2.1} />;
+  }
+
+  if (value === "failed" || value === "dead" || value === "unconfirmed") {
+    return <AlertTriangle className="h-[12.5px] w-[12.5px]" strokeWidth={2.1} />;
+  }
+
+  return <Clock3 className="h-[12.5px] w-[12.5px]" strokeWidth={2.1} />;
 }
 
 function OutboundDeliveryTruth({ truth }) {
@@ -258,24 +298,28 @@ function OutboundDeliveryTruth({ truth }) {
   const detail = s(truth?.detail);
 
   const tone =
-    status === "sent"
-      ? "border-emerald-200/80 bg-emerald-50/80 text-emerald-700"
-      : status
-        ? getAttemptStatusTone(status)
-        : "border-amber-200 bg-amber-50 text-amber-800";
+    status === "seen" || status === "read"
+      ? "border-emerald-200/70 bg-emerald-50/75 text-emerald-700"
+      : status === "sent"
+        ? "border-sky-200/70 bg-sky-50/75 text-sky-700"
+        : status
+          ? getAttemptStatusTone(status)
+          : "border-amber-200 bg-amber-50 text-amber-800";
 
   return (
     <div className="mt-1.5 flex justify-end pr-1">
       <span
         title={detail || label}
         className={[
-          "inline-flex max-w-[260px] items-center rounded-full border px-2 py-[3px]",
+          "inline-flex max-w-[260px] items-center gap-1.5 rounded-full border px-2 py-[3px]",
           "text-[10.5px] font-semibold leading-none tracking-[-0.01em]",
           "shadow-[0_8px_18px_-16px_rgba(15,23,42,0.22)]",
+          "transition-colors duration-200",
           tone,
         ].join(" ")}
       >
-        {label}
+        <OutboundStatusIcon status={status} />
+        <span>{label}</span>
       </span>
     </div>
   );

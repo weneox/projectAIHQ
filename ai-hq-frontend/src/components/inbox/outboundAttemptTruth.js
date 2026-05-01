@@ -213,6 +213,40 @@ function getDeliveryStatus(message = {}) {
   );
 }
 
+function getSeenAt(message = {}, attempt = {}) {
+  const meta = getMessageMeta(message);
+  const delivery = getDeliveryMeta(message);
+  const response = getProviderResponse(message, attempt);
+
+  return s(
+    delivery?.seenAt ||
+      delivery?.seen_at ||
+      delivery?.readAt ||
+      delivery?.read_at ||
+      delivery?.customerSeenAt ||
+      delivery?.customer_seen_at ||
+      delivery?.watermarkAt ||
+      delivery?.watermark_at ||
+      meta?.seenAt ||
+      meta?.seen_at ||
+      meta?.readAt ||
+      meta?.read_at ||
+      attempt?.seen_at ||
+      attempt?.seenAt ||
+      response?.seenAt ||
+      response?.seen_at ||
+      response?.readAt ||
+      response?.read_at ||
+      ""
+  );
+}
+
+function hasSeenProof(message = {}, attempt = {}) {
+  const deliveryStatus = getDeliveryStatus(message);
+  if (["seen", "read", "opened"].includes(deliveryStatus)) return true;
+  return Boolean(getSeenAt(message, attempt));
+}
+
 function getDeliveryFailureText(message = {}) {
   const meta = getMessageMeta(message);
   const delivery = getDeliveryMeta(message);
@@ -231,6 +265,21 @@ function getMessageDeliveryTruth(message = {}, attempt = {}) {
   const deliveryStatus = getDeliveryStatus(message);
   const providerMessageId = getProviderMessageId(message, attempt);
   const delivery = getDeliveryMeta(message);
+  const seenAt = getSeenAt(message, attempt);
+
+  if (hasSeenProof(message, attempt)) {
+    return {
+      kind: "message_delivery_seen",
+      label: "Seen",
+      detail: seenAt
+        ? `Customer read/seen proof received at ${seenAt}.`
+        : "Customer read/seen proof was received from the provider.",
+      status: "seen",
+      providerMessageId,
+      seenAt,
+      attempt,
+    };
+  }
 
   if (
     deliveryStatus === "sent" ||
@@ -307,6 +356,21 @@ export function getAttemptMessageCorrelation(attempt = {}) {
   );
 }
 
+function attemptStatusRank(status = "") {
+  const value = lower(status);
+
+  return {
+    seen: 11,
+    read: 11,
+    dead: 10,
+    failed: 9,
+    sent: 8,
+    retrying: 7,
+    sending: 6,
+    queued: 5,
+  }[value] || 0;
+}
+
 function isPreferredAttempt(candidate, current) {
   const candidateStatusRank = attemptStatusRank(candidate?.status);
   const currentStatusRank = attemptStatusRank(current?.status);
@@ -332,19 +396,6 @@ function isPreferredAttempt(candidate, current) {
   }
 
   return s(candidate?.id) > s(current?.id);
-}
-
-function attemptStatusRank(status = "") {
-  const value = lower(status);
-
-  return {
-    dead: 10,
-    failed: 9,
-    sent: 8,
-    retrying: 7,
-    sending: 6,
-    queued: 5,
-  }[value] || 0;
 }
 
 export function indexAttemptsByMessageCorrelation(attempts = []) {
@@ -373,9 +424,16 @@ export function describeAttemptState(item = {}, message = {}) {
   const maxAttempts = Number(item?.max_attempts || item?.maxAttempts || 0);
   const providerMessageId = getProviderMessageId(message, item);
 
+  if (hasSeenProof(message, item) || status === "seen" || status === "read") {
+    return {
+      label: "Seen",
+      detail: "The customer has seen/read this message according to provider proof.",
+    };
+  }
+
   if (status === "queued") {
     return {
-      label: "Waiting for delivery",
+      label: "Waiting",
       detail: "Accepted into the outbound queue. Provider delivery has not completed yet.",
     };
   }
@@ -390,7 +448,7 @@ export function describeAttemptState(item = {}, message = {}) {
   if (status === "sent") {
     if (!providerMessageId) {
       return {
-        label: "Delivery unconfirmed",
+        label: "Unconfirmed",
         detail:
           "The attempt is marked sent, but provider message id is missing. Do not assume the customer saw this reply.",
       };
@@ -447,7 +505,9 @@ export function getAttemptStatusTone(status) {
   return {
     queued: "border-stone-200 bg-stone-100 text-stone-700",
     sending: "border-blue-200 bg-blue-50 text-blue-700",
-    sent: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    sent: "border-sky-200 bg-sky-50 text-sky-700",
+    seen: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    read: "border-emerald-200 bg-emerald-50 text-emerald-700",
     failed: "border-amber-200 bg-amber-50 text-amber-700",
     retrying: "border-violet-200 bg-violet-50 text-violet-700",
     dead: "border-rose-200 bg-rose-50 text-rose-700",
@@ -473,6 +533,7 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
   if (
     messageDeliveryTruth &&
     (
+      messageDeliveryTruth.status === "seen" ||
       messageDeliveryTruth.status === "sent" ||
       messageDeliveryTruth.status === "failed" ||
       messageDeliveryTruth.status === "dead" ||
@@ -486,7 +547,7 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
     return (
       messageDeliveryTruth || {
         kind: "missing_correlation",
-        label: "Delivery unverified",
+        label: "Unverified",
         detail:
           "This outbound message does not expose the backend correlation needed to bind delivery lineage.",
         status: "unconfirmed",
@@ -499,7 +560,7 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
     return (
       messageDeliveryTruth || {
         kind: "awaiting_attempt",
-        label: "Waiting for delivery",
+        label: "Waiting",
         detail:
           "The message has an authoritative correlation, but no outbound attempt record is attached yet.",
         status: "sending",
@@ -510,6 +571,18 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
 
   const providerMessageId = getProviderMessageId(message, attempt);
   const attemptStatus = lower(attempt?.status);
+
+  if (hasSeenProof(message, attempt) || attemptStatus === "seen" || attemptStatus === "read") {
+    return {
+      kind: "provider_seen_confirmed",
+      label: "Seen",
+      detail: "The customer has seen/read this message according to provider proof.",
+      status: "seen",
+      attempt,
+      providerMessageId,
+      seenAt: getSeenAt(message, attempt),
+    };
+  }
 
   if (attemptStatus === "sent" && providerMessageId) {
     return {
@@ -526,7 +599,7 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
   if (attemptStatus === "sent" && !providerMessageId) {
     return {
       kind: "provider_unconfirmed",
-      label: "Delivery unconfirmed",
+      label: "Unconfirmed",
       detail:
         "The backend has an outbound attempt marked sent, but the provider message id is missing.",
       status: "unconfirmed",
