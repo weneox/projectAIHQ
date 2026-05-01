@@ -1,4 +1,4 @@
-﻿import { dbGetTenantMode } from "../../../../db/helpers/tenants.js";
+import { dbGetTenantMode } from "../../../../db/helpers/tenants.js";
 import { applyExecutionPolicyToActions } from "../../../../services/executionPolicy.js";
 
 function s(v, d = "") {

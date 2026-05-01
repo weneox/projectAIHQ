@@ -1,4 +1,4 @@
-﻿import { okJson, isDbReady } from "../../../../utils/http.js";
+import { okJson, isDbReady } from "../../../../utils/http.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
@@ -875,5 +875,3 @@ export const __test__ = {
   mapBrainOutcomeToDecisionEventType,
   buildDecisionEventFromBrain,
 };
-
-
