@@ -520,42 +520,39 @@ function InboxAutopilotControl({
     >
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        title="Inbox AI Autopilot"
+        onClick={handleToggle}
+        disabled={disabled}
+        role="switch"
+        aria-checked={enabled}
+        aria-label={enabled ? "Turn off inbox AI" : "Turn on inbox AI"}
+        title={enabled ? "AI ON" : "AI OFF"}
         className={cx(
-          "inline-flex h-9 items-center gap-2 rounded-[14px] border px-2.5",
-          "bg-white text-[12px] font-semibold shadow-[0_14px_34px_-28px_rgba(15,23,42,0.32)]",
-          "transition-[border-color,background-color,box-shadow,opacity] duration-base ease-premium",
+          "relative inline-flex h-[30px] w-[66px] shrink-0 items-center rounded-full border",
+          "transition-[background-color,border-color,opacity] duration-base ease-premium",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)] focus-visible:ring-offset-2",
+          disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
           enabled
-            ? "border-[rgba(37,99,235,0.22)] text-brand"
-            : "border-line-soft text-text-muted hover:text-text"
+            ? "border-[rgba(var(--color-brand),0.34)] bg-brand text-white"
+            : "border-[rgba(148,163,184,0.28)] bg-slate-300 text-white"
         )}
       >
-        <Sparkles className="h-[14px] w-[14px]" strokeWidth={2.25} />
-
-        <span className="hidden max-w-[92px] truncate xl:inline">
-          AI Autopilot
+        <span
+          className={cx(
+            "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-[10px] font-bold uppercase leading-none tracking-[0.08em]",
+            enabled ? "left-2" : "right-2"
+          )}
+        >
+          {enabled ? "ON" : "OFF"}
         </span>
 
         <span
-          onClick={handleToggle}
-          role="switch"
-          aria-checked={enabled}
-          aria-label={enabled ? "Turn off inbox AI" : "Turn on inbox AI"}
+          aria-hidden="true"
           className={cx(
-            "relative inline-flex h-[20px] w-[34px] items-center rounded-full transition-colors duration-base ease-premium",
-            disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
-            enabled ? "bg-brand" : "bg-slate-300"
+            "absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-[0_5px_12px_-6px_rgba(15,23,42,0.55)]",
+            "transition-transform duration-base ease-premium",
+            enabled ? "translate-x-[39px]" : "translate-x-[3px]"
           )}
-        >
-          <span
-            className={cx(
-              "absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_2px_7px_rgba(15,23,42,0.2)] transition-transform duration-base ease-premium",
-              enabled ? "translate-x-[17px]" : "translate-x-[3px]"
-            )}
-          />
-        </span>
+        />
       </button>
 
       <div
@@ -586,8 +583,8 @@ function InboxAutopilotControl({
               </div>
               <div className="mt-1 text-[12px] font-medium leading-5 text-text-muted">
                 {enabled
-                  ? "Bütün inbox üzrə avtomatik AI cavabları aktivdir. Ayrı söhbətləri ayrıca dayandırmaq olar."
-                  : "Inbox üzrə AI cavabları söndürülüb. Heç bir söhbətdə avtomatik cavab getməyəcək."}
+                  ? "BÃ¼tÃ¼n inbox Ã¼zrÉ™ avtomatik AI cavablarÄ± aktivdir. AyrÄ± sÃ¶hbÉ™tlÉ™ri ayrÄ±ca dayandÄ±rmaq olar."
+                  : "Inbox Ã¼zrÉ™ AI cavablarÄ± sÃ¶ndÃ¼rÃ¼lÃ¼b. HeÃ§ bir sÃ¶hbÉ™tdÉ™ avtomatik cavab getmÉ™yÉ™cÉ™k."}
               </div>
             </div>
           </div>
@@ -616,7 +613,7 @@ function InboxAutopilotControl({
           </button>
 
           <div className="mt-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Global · {statusLabel}
+            Global Â· {statusLabel}
           </div>
         </div>
       </div>

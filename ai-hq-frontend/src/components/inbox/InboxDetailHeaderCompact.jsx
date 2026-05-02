@@ -398,7 +398,7 @@ export default function InboxDetailHeaderCompact({
 
   const displayName = resolveTitle({ title, thread });
   const resolvedMetaItems = resolveMetaItems({ metaItems, thread });
-  const meta = resolvedMetaItems.join(" • ");
+  const meta = resolvedMetaItems.join(" â€¢ ");
 
   const automationEnabled = automationControl
     ? Boolean(automationControl.enabled)
@@ -412,12 +412,10 @@ export default function InboxDetailHeaderCompact({
       !launchChannelConnected
   );
 
-  const automationLabel =
-    s(automationControl?.disabledReason) ||
-    (automationEnabled ? "AI on" : "AI off");
+  const automationLabel = automationEnabled ? "AI on" : "AI off";
 
   const automationScopeLabel =
-    s(automationControl?.scopeLabel) || "Bu söhbətdə AI";
+    s(automationControl?.scopeLabel) || "Bu sÃ¶hbÉ™tdÉ™ AI";
 
   const closeHandler = onCloseThread || onMarkClosed;
   const disableActions = !hasThread;
@@ -466,28 +464,51 @@ export default function InboxDetailHeaderCompact({
           }
 
           .inbox-detail-header-ai-switch.ant-switch {
-            min-width: 40px !important;
-            height: 22px !important;
-            background: rgb(203, 213, 225) !important;
+            min-width: 66px !important;
+            width: 66px !important;
+            height: 28px !important;
+            background: rgba(203, 213, 225, 0.96) !important;
+            border: 1px solid rgba(148, 163, 184, 0.28) !important;
             box-shadow: none !important;
+            border-radius: 999px !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch:hover {
-            background: rgb(203, 213, 225) !important;
+            background: rgba(203, 213, 225, 0.98) !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked {
             background: rgb(var(--color-brand)) !important;
+            border-color: rgba(var(--color-brand), 0.34) !important;
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked:hover {
             background: rgb(var(--color-brand-strong)) !important;
           }
 
+          .inbox-detail-header-ai-switch .ant-switch-inner {
+            font-size: 10px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+            line-height: 26px !important;
+          }
+
+          .inbox-detail-header-ai-switch.ant-switch-checked .ant-switch-inner {
+            padding-inline-start: 8px !important;
+            padding-inline-end: 24px !important;
+          }
+
+          .inbox-detail-header-ai-switch.ant-switch:not(.ant-switch-checked) .ant-switch-inner {
+            padding-inline-start: 24px !important;
+            padding-inline-end: 8px !important;
+          }
+
           .inbox-detail-header-ai-switch .ant-switch-handle {
-            width: 18px !important;
-            height: 18px !important;
+            width: 22px !important;
+            height: 22px !important;
             top: 2px !important;
+            inset-inline-start: 2px !important;
           }
 
           .inbox-detail-header-ai-switch .ant-switch-handle::before {
@@ -496,9 +517,8 @@ export default function InboxDetailHeaderCompact({
           }
 
           .inbox-detail-header-ai-switch.ant-switch-checked .ant-switch-handle {
-            inset-inline-start: calc(100% - 20px) !important;
+            inset-inline-start: calc(100% - 24px) !important;
           }
-
           .inbox-detail-header-overflow {
             padding: 0 !important;
           }
@@ -563,42 +583,25 @@ export default function InboxDetailHeaderCompact({
             mouseEnterDelay={0.06}
             overlayInnerStyle={tooltipStyle}
           >
-            <span
-              className={cx(
-                "inline-flex h-[34px] items-center gap-2 rounded-[14px] border px-2.5",
-                "bg-white shadow-[0_13px_30px_-26px_rgba(15,23,42,0.34)]",
-                "transition-[border-color,background-color,opacity] duration-base ease-premium",
-                automationEnabled
-                  ? "border-[rgba(var(--color-brand),0.22)] text-brand"
-                  : "border-line-soft text-text-muted"
-              )}
-            >
-              <span className="hidden max-w-[112px] truncate text-[11.5px] font-semibold tracking-[-0.01em] lg:inline">
-                {automationScopeLabel}
-              </span>
+            <Switch
+              className="inbox-detail-header-ai-switch"
+              size="small"
+              checkedChildren="ON"
+              unCheckedChildren="OFF"
+              checked={automationEnabled}
+              disabled={automationDisabled}
+              loading={automationSaving}
+              onChange={(checked) => {
+                if (typeof onToggleAutomation === "function") {
+                  onToggleAutomation(checked);
+                  return;
+                }
 
-              <Switch
-                className="inbox-detail-header-ai-switch"
-                size="small"
-                checked={automationEnabled}
-                disabled={automationDisabled}
-                loading={automationSaving}
-                onChange={(checked) => {
-                  if (typeof onToggleAutomation === "function") {
-                    onToggleAutomation(checked);
-                    return;
-                  }
-
-                  if (typeof onToggleAutoReply === "function") {
-                    onToggleAutoReply(checked);
-                  }
-                }}
-              />
-
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.08em]">
-                {automationEnabled ? "ON" : "OFF"}
-              </span>
-            </span>
+                if (typeof onToggleAutoReply === "function") {
+                  onToggleAutoReply(checked);
+                }
+              }}
+            />
           </Tooltip>
 
           <div className="h-[18px] w-px bg-line-soft" />
