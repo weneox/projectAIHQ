@@ -1654,7 +1654,7 @@ export default function WebsiteWidgetDetailDrawer({
     statusQuery.refetch();
   }
 
-  function handleClose() {
+  function _handleClose() {
     setDraftForm(null);
     setStatusMessage("");
     setCopyFeedback("");
@@ -2369,6 +2369,7 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
 
 
 

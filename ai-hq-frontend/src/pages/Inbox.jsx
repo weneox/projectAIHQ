@@ -45,7 +45,7 @@ const EMPTY_READINESS_STATE = {
   },
   overall: {
     status: "unavailable",
-    launchReady: false,
+    _launchReady: false,
     title: "",
     message: "",
     primaryAction: { label: "Open channels", path: "/channels" },
@@ -103,7 +103,7 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
-function isSetupTestInboxThread(thread = null) {
+function _isSetupTestInboxThread(thread = null) {
   const source = obj(thread);
   const meta = obj(source.meta);
 
@@ -224,12 +224,12 @@ async function loadInboxTrustState(tenantKey = "") {
   }
 }
 
-function buildLaunchReadinessNotice({
+function _buildLaunchReadinessNotice({
   readinessState = EMPTY_READINESS_STATE,
   hasDeliveryReadyLaunchChannel = false,
   truthReady = false,
   runtimeReady = false,
-  launchReady = false,
+  _launchReady = false,
 } = {}) {
   const overall = obj(readinessState.overall);
   const status = lower(overall.status);
@@ -248,7 +248,7 @@ function buildLaunchReadinessNotice({
     };
   }
 
-  if (launchReady) return null;
+  if (_launchReady) return null;
 
   if (hasDeliveryReadyLaunchChannel && !truthReady) {
     return {
@@ -839,8 +839,8 @@ export default function Inbox() {
     [readinessState.runtime]
   );
 
-  const launchReady =
-    readinessState.overall?.launchReady === true &&
+  const _launchReady =
+    readinessState.overall?._launchReady === true &&
     truthReady &&
     runtimeReady &&
     hasDeliveryReadyLaunchChannel;
@@ -975,4 +975,7 @@ export default function Inbox() {
     </div>
   );
 }
+
+
+
 

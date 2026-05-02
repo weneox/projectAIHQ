@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Dropdown, Switch, Tooltip } from "antd";
 import {
   Ban,
@@ -398,7 +398,7 @@ export default function InboxDetailHeaderCompact({
 
   const displayName = resolveTitle({ title, thread });
   const resolvedMetaItems = resolveMetaItems({ metaItems, thread });
-  const meta = resolvedMetaItems.join(" â€¢ ");
+  const meta = resolvedMetaItems.join(" Ã¢â‚¬Â¢ ");
 
   const automationEnabled = automationControl
     ? Boolean(automationControl.enabled)
@@ -414,8 +414,8 @@ export default function InboxDetailHeaderCompact({
 
   const automationLabel = automationEnabled ? "AI on" : "AI off";
 
-  const automationScopeLabel =
-    s(automationControl?.scopeLabel) || "Bu sÃ¶hbÉ™tdÉ™ AI";
+  const _automationScopeLabel =
+    s(automationControl?.scopeLabel) || "Bu sÃƒÂ¶hbÃ‰â„¢tdÃ‰â„¢ AI";
 
   const closeHandler = onCloseThread || onMarkClosed;
   const disableActions = !hasThread;
@@ -637,3 +637,4 @@ export default function InboxDetailHeaderCompact({
     </>
   );
 }
+
