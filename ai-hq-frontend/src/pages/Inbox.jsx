@@ -45,7 +45,7 @@ const EMPTY_READINESS_STATE = {
   },
   overall: {
     status: "unavailable",
-    _launchReady: false,
+    launchReady: false,
     title: "",
     message: "",
     primaryAction: { label: "Open channels", path: "/channels" },
@@ -224,12 +224,12 @@ async function loadInboxTrustState(tenantKey = "") {
   }
 }
 
-function _buildLaunchReadinessNotice({
+function buildLaunchReadinessNotice({
   readinessState = EMPTY_READINESS_STATE,
   hasDeliveryReadyLaunchChannel = false,
   truthReady = false,
   runtimeReady = false,
-  _launchReady = false,
+  launchReady = false,
 } = {}) {
   const overall = obj(readinessState.overall);
   const status = lower(overall.status);
@@ -248,7 +248,7 @@ function _buildLaunchReadinessNotice({
     };
   }
 
-  if (_launchReady) return null;
+  if (launchReady) return null;
 
   if (hasDeliveryReadyLaunchChannel && !truthReady) {
     return {
@@ -838,13 +838,19 @@ export default function Inbox() {
       lower(readinessState.runtime?.status) === "ready",
     [readinessState.runtime]
   );
-
-  const _launchReady =
-    readinessState.overall?._launchReady === true &&
+  const launchReady =
+    readinessState.overall?.launchReady === true &&
     truthReady &&
     runtimeReady &&
     hasDeliveryReadyLaunchChannel;
-  const visibleLaunchReadinessNotice = null;
+
+  const visibleLaunchReadinessNotice = buildLaunchReadinessNotice({
+    readinessState,
+    hasDeliveryReadyLaunchChannel,
+    truthReady,
+    runtimeReady,
+    launchReady,
+  });
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
@@ -975,6 +981,7 @@ export default function Inbox() {
     </div>
   );
 }
+
 
 
 
