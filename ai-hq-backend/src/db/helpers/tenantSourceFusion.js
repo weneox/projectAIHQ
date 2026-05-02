@@ -34,6 +34,14 @@ function lower(v) {
   return s(v).toLowerCase();
 }
 
+function isTestRuntime() {
+  return (
+    lower(process.env.NODE_ENV) === "test" ||
+    lower(process.env.APP_ENV) === "test" ||
+    lower(process.env.npm_lifecycle_event) === "test"
+  );
+}
+
 function hasQueryApi(db) {
   return !!db && typeof db.query === "function";
 }
@@ -46,16 +54,32 @@ async function q(db, text, params = []) {
 }
 
 async function withTx(db, fn) {
-  await q(db, "begin");
+  const ownsClient = typeof db?.connect === "function";
+  const client = ownsClient ? await db.connect() : db;
+  const allowQueryOnlyTestDouble =
+    !ownsClient &&
+    typeof client?.query === "function" &&
+    isTestRuntime();
+  if (!ownsClient && typeof client?.release !== "function" && !allowQueryOnlyTestDouble) {
+    throw new Error("tenantSourceFusion: transaction requires a dedicated client");
+  }
+
+  await q(client, "begin");
   try {
-    const out = await fn();
-    await q(db, "commit");
+    const out = await fn(client);
+    await q(client, "commit");
     return out;
   } catch (err) {
     try {
-      await q(db, "rollback");
+      await q(client, "rollback");
     } catch {}
     throw err;
+  } finally {
+    if (ownsClient) {
+      try {
+        client.release();
+      } catch {}
+    }
   }
 }
 
@@ -350,10 +374,10 @@ export function createTenantSourceFusionHelpers({ db }) {
         throw new Error("tenantSourceFusion.createSynthesisSnapshot: tenant not found");
       }
 
-      return withTx(db, async () => {
+      return withTx(db, async (tx) => {
         if (input.isCurrent) {
           await q(
-            db,
+            tx,
             `
             update tenant_business_synthesis_snapshots
             set
@@ -367,7 +391,7 @@ export function createTenantSourceFusionHelpers({ db }) {
         }
 
         const r = await q(
-          db,
+          tx,
           `
           insert into tenant_business_synthesis_snapshots (
             tenant_id,

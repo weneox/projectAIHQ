@@ -579,7 +579,7 @@ export function inboxHandlers({ db, wsHub }) {
         messages
           .filter((message) => lower(message?.direction) === "outbound")
           .map((message) => message.id),
-        { threadId }
+        { threadId, tenantKey }
       );
 
       const hydratedMessages = messages.map((message) =>
@@ -1097,6 +1097,7 @@ export function inboxHandlers({ db, wsHub }) {
           `
           insert into inbox_messages (
             thread_id,
+            tenant_id,
             tenant_key,
             direction,
             sender_type,
@@ -1109,14 +1110,15 @@ export function inboxHandlers({ db, wsHub }) {
           )
           values (
             $1::uuid,
-            $2::text,
+            $2::uuid,
             $3::text,
             $4::text,
             $5::text,
             $6::text,
             $7::text,
-            $8::jsonb,
+            $8::text,
             $9::jsonb,
+            $10::jsonb,
             now()
           )
           returning
@@ -1136,6 +1138,7 @@ export function inboxHandlers({ db, wsHub }) {
           `,
           [
             threadId,
+            tenantId,
             tenantKey,
             direction,
             senderType,
@@ -1173,8 +1176,9 @@ export function inboxHandlers({ db, wsHub }) {
             updated_at = now()
           where id = $1::uuid
             and tenant_key = $4::text
+            and tenant_id = $6::uuid
           `,
-          [threadId, direction, releaseHandoff, tenantKey, buildHandoffMeta(false)]
+          [threadId, direction, releaseHandoff, tenantKey, buildHandoffMeta(false), tenantId]
         );
 
         correlatedMessage = withMessageOutboundAttemptCorrelation(message, null);

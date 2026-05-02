@@ -1,7 +1,40 @@
 import { deepFix, fixText } from "../../utils/textFix.js";
+import { getTenantContext } from "../tenantContext.js";
 
 function clean(v) {
   return String(v || "").trim();
+}
+
+function lower(v) {
+  return clean(v).toLowerCase();
+}
+
+function tenantScope(input = {}, startIndex = 2) {
+  const context = getTenantContext() || {};
+  const tenantId = clean(input.tenantId || input.tenant_id || context.tenantId);
+  const tenantKey = lower(input.tenantKey || input.tenant_key || context.tenantKey);
+
+  if (!tenantId && !tenantKey) {
+    const error = new Error("job access requires tenant context");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
+  if (tenantId) {
+    return {
+      tenantId,
+      tenantKey,
+      clause: `tenant_id = $${startIndex}::uuid`,
+      values: [tenantId],
+    };
+  }
+
+  return {
+    tenantId,
+    tenantKey,
+    clause: `tenant_key = $${startIndex}::text`,
+    values: [tenantKey],
+  };
 }
 
 function normalizeJobRow(row) {
@@ -14,13 +47,19 @@ function normalizeJobRow(row) {
   return normalized;
 }
 
-export async function dbGetJobById(db, id, { forUpdate = false } = {}) {
+export async function dbGetJobById(
+  db,
+  id,
+  { forUpdate = false, tenantId = "", tenantKey = "", allowSystemLookup = false } = {}
+) {
+  const scope = allowSystemLookup ? null : tenantScope({ tenantId, tenantKey });
   const q = await db.query(
     `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
      from jobs
      where id = $1::uuid
+       ${scope ? `and ${scope.clause}` : ""}
      limit 1${forUpdate ? " for update" : ""}`,
-    [id]
+    scope ? [id, ...scope.values] : [id]
   );
 
   return normalizeJobRow(q.rows?.[0] || null);
@@ -30,16 +69,18 @@ export async function dbGetLatestJobByProposalAndType(
   db,
   proposalId,
   type,
-  { forUpdate = false } = {}
+  { forUpdate = false, tenantId = "", tenantKey = "" } = {}
 ) {
+  const scope = tenantScope({ tenantId, tenantKey }, 3);
   const q = await db.query(
     `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
      from jobs
      where proposal_id = $1::uuid
        and type = $2::text
+       and ${scope.clause}
      order by created_at desc
      limit 1${forUpdate ? " for update" : ""}`,
-    [proposalId, type]
+    [proposalId, type, ...scope.values]
   );
 
   return normalizeJobRow(q.rows?.[0] || null);
@@ -53,13 +94,14 @@ export async function dbCreateJob(db, {
   status = "queued",
   input = {},
 }) {
+  const scope = tenantScope({ tenantId, tenantKey });
   const q = await db.query(
     `insert into jobs (tenant_id, tenant_key, proposal_id, type, status, input)
      values ($1::uuid, $2::text, $3::uuid, $4::text, $5::text, $6::jsonb)
      returning id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at`,
     [
-      tenantId || null,
-      clean(tenantKey) || null,
+      scope.tenantId || tenantId || null,
+      scope.tenantKey || clean(tenantKey) || null,
       proposalId || null,
       type,
       status,
@@ -71,6 +113,7 @@ export async function dbCreateJob(db, {
 }
 
 export async function dbUpdateJob(db, id, patch) {
+  const scope = tenantScope(patch || {}, 7);
   const status = patch?.status ?? null;
   const output = patch?.output ?? null;
   const error = patch?.error ?? null;
@@ -85,6 +128,7 @@ export async function dbUpdateJob(db, id, patch) {
          started_at = case when $5::timestamptz is null then started_at else $5::timestamptz end,
          finished_at = case when $6::timestamptz is null then finished_at else $6::timestamptz end
      where id = $1::uuid
+       and ${scope.clause}
      returning id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at`,
     [
       id,
@@ -93,6 +137,7 @@ export async function dbUpdateJob(db, id, patch) {
       error ? fixText(String(error)) : error,
       started,
       finished,
+      ...scope.values,
     ]
   );
 

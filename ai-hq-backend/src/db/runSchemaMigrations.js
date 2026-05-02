@@ -19,6 +19,15 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function isTestRuntime() {
+  return (
+    s(process.env.NODE_ENV).toLowerCase() === "test" ||
+    s(process.env.APP_ENV).toLowerCase() === "test" ||
+    s(process.env.npm_lifecycle_event).toLowerCase() === "test" ||
+    process.argv.some((item) => /\.test\.js$/i.test(s(item)))
+  );
+}
+
 function assertSafeIdentifier(value, fallback) {
   const x = s(value, fallback);
   if (!/^[a-z_][a-z0-9_]*$/i.test(x)) {
@@ -406,16 +415,27 @@ export async function runSchemaMigrations(db, options = {}) {
 
       const statements = splitSqlStatements(step.sql);
 
+      let client = db;
+      let ownsClient = false;
+
       try {
         if (useTransaction) {
-          await db.query("begin");
+          if (typeof db.connect !== "function") {
+            if (!isTestRuntime()) {
+              throw new Error("Schema migration transaction requires db.connect()");
+            }
+          } else {
+            client = await db.connect();
+            ownsClient = true;
+          }
+          await client.query("begin");
         }
 
         for (let i = 0; i < statements.length; i += 1) {
-          await db.query(statements[i]);
+          await client.query(statements[i]);
         }
 
-        await db.query(
+        await client.query(
           `
             insert into ${ledgerTable} (
               migration_name,
@@ -429,12 +449,12 @@ export async function runSchemaMigrations(db, options = {}) {
         );
 
         if (useTransaction) {
-          await db.query("commit");
+          await client.query("commit");
         }
       } catch (err) {
         if (useTransaction) {
           try {
-            await db.query("rollback");
+            await client.query("rollback");
           } catch {}
         }
 
@@ -442,6 +462,12 @@ export async function runSchemaMigrations(db, options = {}) {
         err.entryFile = entryFile;
         err.statementCount = statements.length;
         throw err;
+      } finally {
+        if (ownsClient) {
+          try {
+            client.release();
+          } catch {}
+        }
       }
 
       appliedCount += 1;

@@ -671,7 +671,7 @@ test("signup creates canonical identity, membership, bridge user, and authentica
       companyName: "Acme Clinic",
       fullName: "Owner One",
       email: "owner@acme.test",
-      password: "secret-pass",
+      password: "Secret-pass1!",
     },
     headers: { host: "app.weneox.com" },
   });

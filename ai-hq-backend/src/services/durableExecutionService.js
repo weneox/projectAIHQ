@@ -13,6 +13,7 @@ import {
   getMessageById,
   getThreadById,
   refreshThread,
+  getOutboundAttemptById,
   markOutboundAttemptDead,
   markOutboundAttemptFailed,
   markOutboundAttemptSent,
@@ -565,22 +566,23 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   const executionThreadId = s(execution.thread_id || metadata.threadId);
   const provider = resolveExecutionProvider(execution);
   const tenantKey = s(execution.tenant_key || metadata.tenantKey || "");
+  const tenantId = s(execution.tenant_id || metadata.tenantId || "");
 
-  const message = await getMessageById(db, messageId, tenantKey);
+  const message = await getMessageById(db, messageId, { tenantId, tenantKey });
   const messageThreadId = s(message?.thread_id);
   let resolvedThreadId = executionThreadId || messageThreadId || "";
 
-  let thread = await getThreadById(db, resolvedThreadId, tenantKey);
+  let thread = await getThreadById(db, resolvedThreadId, { tenantId, tenantKey });
 
   if (!thread && messageThreadId && messageThreadId !== resolvedThreadId) {
-    thread = await getThreadById(db, messageThreadId, tenantKey);
+    thread = await getThreadById(db, messageThreadId, { tenantId, tenantKey });
     if (thread) {
       resolvedThreadId = messageThreadId;
     }
   }
 
   if (!thread && messageThreadId) {
-    thread = await refreshThread(db, messageThreadId, null, tenantKey);
+    thread = await refreshThread(db, messageThreadId, null, { tenantId, tenantKey });
     if (thread) {
       resolvedThreadId = messageThreadId;
     }
@@ -663,6 +665,68 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         messageThreadId,
         resolvedThreadId,
         tenantKey,
+      },
+    };
+  }
+
+  const existingAttempt = attemptId
+    ? await getOutboundAttemptById(db, attemptId, tenantKey)
+    : null;
+  const messageDelivery = obj(message?.meta?.delivery);
+  const alreadySentProviderMessageId = s(
+    existingAttempt?.provider_message_id ||
+      message?.external_message_id ||
+      messageDelivery?.providerMessageId ||
+      messageDelivery?.provider_message_id
+  );
+  const alreadySent =
+    lower(existingAttempt?.status) === "sent" ||
+    Boolean(message?.sent_at) ||
+    Boolean(alreadySentProviderMessageId);
+
+  if (alreadySent) {
+    let updatedAttempt = existingAttempt;
+    if (attemptId && lower(existingAttempt?.status) !== "sent") {
+      updatedAttempt = await markOutboundAttemptSent({
+        db,
+        attemptId,
+        tenantKey,
+        providerMessageId: alreadySentProviderMessageId || null,
+        providerResponse: {
+          duplicateSuppressed: true,
+          reason: "message_already_sent",
+          executionId: execution.id,
+        },
+      });
+    }
+
+    emitOutboundDeliveryTruth({
+      wsHub,
+      tenantKey,
+      threadId: resolvedThreadId,
+      message,
+      attempt: updatedAttempt,
+      reason: "delivery_already_sent",
+    });
+
+    logger.warn("durable_execution.channel.duplicate_suppressed", {
+      executionId: execution.id,
+      provider,
+      tenantKey,
+      messageId,
+      attemptId,
+      providerMessageId: alreadySentProviderMessageId,
+      resolvedThreadId,
+    });
+
+    return {
+      ok: true,
+      retryable: false,
+      resultSummary: {
+        provider,
+        providerMessageId: alreadySentProviderMessageId,
+        duplicateSuppressed: true,
+        resolvedThreadId,
       },
     };
   }

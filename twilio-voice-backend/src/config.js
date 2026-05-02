@@ -58,9 +58,16 @@ export const cfg = {
   TWILIO_TWIML_APP_SID: s(process.env.TWILIO_TWIML_APP_SID),
   TWILIO_AUTH_TOKEN: s(process.env.TWILIO_AUTH_TOKEN),
   TWILIO_CALLER_ID: s(process.env.TWILIO_CALLER_ID),
+  TWILIO_STREAM_TOKEN_TTL_SECONDS: n(
+    process.env.TWILIO_STREAM_TOKEN_TTL_SECONDS,
+    300
+  ),
 
   AIHQ_BASE_URL: s(process.env.AIHQ_BASE_URL).replace(/\/+$/, ""),
-  AIHQ_INTERNAL_TOKEN: s(process.env.AIHQ_INTERNAL_TOKEN),
+  AIHQ_INTERNAL_TOKEN:
+    s(process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE) ||
+    s(process.env.AIHQ_INTERNAL_TWILIO_VOICE_TOKEN) ||
+    s(process.env.AIHQ_INTERNAL_TOKEN),
   AIHQ_INTERNAL_SERVICE: s(
     process.env.AIHQ_INTERNAL_SERVICE,
     "twilio-voice-backend"

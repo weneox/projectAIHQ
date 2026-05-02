@@ -177,6 +177,12 @@ export async function persistOutboundMessage({
   createAttempt = createOutboundAttempt,
   enqueueOutboundExecution = enqueueChannelOutboundExecution,
 }) {
+  if (!tenantId || !tenantKey) {
+    const error = new Error("persistOutboundMessage requires tenant identity");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
   const resolvedProvider = resolveExecutionProvider({ provider, channel });
   const autoDeliveredProvider =
     resolvedProvider === WEBSITE_WIDGET_PROVIDER && !s(externalMessageId);
@@ -218,27 +224,28 @@ export async function persistOutboundMessage({
   const inserted = await client.query(
     `
     insert into inbox_messages (
-      thread_id, tenant_key, direction, sender_type, external_message_id,
-      message_type, text, attachments, meta, sent_at
+      thread_id, tenant_id, tenant_key, direction, sender_type, external_message_id,
+      message_type, text, attachments, sent_at, meta
     )
     values (
-      $1::uuid, $2::text, 'outbound', $3::text, $4::text,
-      $5::text, $6::text, $7::jsonb, $8::jsonb, $9::timestamptz
+      $1::uuid, $2::uuid, $3::text, 'outbound', $4::text, $5::text,
+      $6::text, $7::text, $8::jsonb, $9::timestamptz, $10::jsonb
     )
     returning
-      id, thread_id, tenant_key, direction, sender_type,
+      id, thread_id, tenant_id, tenant_key, direction, sender_type,
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
     `,
     [
       thread.id,
+      tenantId,
       tenantKey,
       senderType,
       providerMessageId,
       messageType,
       text,
       JSON.stringify(Array.isArray(attachments) ? attachments : []),
-      JSON.stringify(mergedMeta),
       sentAt,
+      JSON.stringify(mergedMeta),
     ]
   );
 
@@ -277,8 +284,9 @@ export async function persistOutboundMessage({
         else coalesce(meta, '{}'::jsonb)
       end
     where id = $1::uuid
+      and tenant_key = $7::text
     `,
-    [thread.id, recipientId, senderType, messageType, tenantId, releaseThreadHandoff]
+    [thread.id, recipientId, senderType, messageType, tenantId, releaseThreadHandoff, tenantKey]
   );
 
   const attemptPayload = buildOutboundAttemptPayload({
@@ -303,6 +311,10 @@ export async function persistOutboundMessage({
     recipientId,
     text,
   });
+  attemptPayload.meta = {
+    ...(attemptPayload.meta || {}),
+    idempotencyKey,
+  };
 
   const attempt = await createAttempt({
     db: client,

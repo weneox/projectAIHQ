@@ -13,6 +13,7 @@ import {
 import { cfg } from "./src/config.js";
 import { twilioRouter } from "./src/routes/twilio.js";
 import { attachRealtimeBridge } from "./src/services/realtimeBridge.js";
+import { verifyTwilioStreamRequest } from "./src/services/streamAuth.js";
 import { createReporters } from "./src/services/reporting.js";
 import { checkAihqOperationalBootReadiness } from "./src/services/bootReadiness.js";
 import {
@@ -167,6 +168,18 @@ if (!startupSmoke) {
   const wss = new WebSocketServer({
     server,
     path: "/twilio/stream",
+    verifyClient(info, done) {
+      const result = verifyTwilioStreamRequest(info?.req || {});
+      if (result.ok) {
+        info.req.aihqStreamAuth = result.payload;
+        return done(true);
+      }
+      logger.warn("voice.stream.upgrade_rejected", {
+        error: result.error,
+        status: Number(result.status || 401),
+      });
+      return done(false, Number(result.status || 401), result.error || "Unauthorized");
+    },
   });
 
   const reporters = createReporters({

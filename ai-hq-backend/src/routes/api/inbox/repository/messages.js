@@ -3,6 +3,10 @@ import { resolveTenantKey } from "../../../../tenancy/index.js";
 import { getTenantContext } from "../../../../db/tenantContext.js";
 import { normalizeMessage } from "../shared.js";
 
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
 function contextTenantKey() {
   return resolveTenantKey(getTenantContext()?.tenantKey || "");
 }
@@ -71,24 +75,51 @@ export async function findExistingOutboundMessage({
   return normalizeMessage(result.rows?.[0] || null);
 }
 
+function normalizeMessageScope(scope = "") {
+  if (typeof scope === "string") {
+    return {
+      tenantKey: resolveTenantKey(scope) || contextTenantKey(),
+      tenantId: s(getTenantContext()?.tenantId || ""),
+    };
+  }
+
+  return {
+    tenantKey:
+      resolveTenantKey(scope?.tenantKey || scope?.tenant_key || "") ||
+      contextTenantKey(),
+    tenantId: s(scope?.tenantId || scope?.tenant_id || getTenantContext()?.tenantId || ""),
+  };
+}
+
 export async function getMessageById(db, messageId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
 
-  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
-  if (!resolvedTenantKey && isGuardedDb(db)) return null;
+  const scope = normalizeMessageScope(tenantKey);
+  if (!scope.tenantKey && !scope.tenantId && isGuardedDb(db)) return null;
+
+  const values = [messageId];
+  let tenantWhere = "";
+  if (scope.tenantId) {
+    values.push(scope.tenantId);
+    tenantWhere += ` and tenant_id = $${values.length}::uuid`;
+  }
+  if (scope.tenantKey) {
+    values.push(scope.tenantKey);
+    tenantWhere += ` and tenant_key = $${values.length}::text`;
+  }
 
   const result = await db.query(
     `
     select
-      id, thread_id, tenant_key, direction, sender_type,
+      id, thread_id, tenant_id, tenant_key, direction, sender_type,
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
     from inbox_messages
     where id = $1::uuid
-      ${resolvedTenantKey ? "and tenant_key = $2::text" : ""}
+      ${tenantWhere}
     limit 1
     `,
-    resolvedTenantKey ? [messageId, resolvedTenantKey] : [messageId]
+    values
   );
 
   return normalizeMessage(result.rows?.[0] || null);

@@ -3,6 +3,10 @@ import { deepFix } from "../utils/textFix.js";
 import { pollMediaJob } from "../services/media/mediaExecutionRunner.js";
 import { createLogger } from "../utils/logger.js";
 import {
+  runWithSystemDbContext,
+  runWithTenantContext,
+} from "../db/tenantContext.js";
+import {
   markWorkerStarted,
   markWorkerStopped,
   recordRuntimeSignal,
@@ -46,21 +50,33 @@ export function createMediaJobWorker({ db }) {
     touchWorkerHeartbeat("media-job-worker", getState());
 
     try {
-      const q = await db.query(
-        `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
-         from jobs
-         where status = 'running'
-           and type in ('video.generate','assembly.render')
-         order by created_at asc
-         limit $1`,
-        [Number(cfg?.workers?.mediaJobWorkerBatchSize || 10)]
+      const q = await runWithSystemDbContext(
+        "media_job_worker_claim",
+        () => db.query(
+          `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
+           from jobs
+           where status = 'running'
+             and tenant_id is not null
+             and nullif(btrim(tenant_key), '') is not null
+             and type in ('video.generate','assembly.render')
+           order by created_at asc
+           limit $1`,
+          [Number(cfg?.workers?.mediaJobWorkerBatchSize || 10)]
+        )
       );
 
       for (const row of q.rows || []) {
         try {
           row.input = deepFix(row.input || {});
           row.output = deepFix(row.output || {});
-          await pollMediaJob({ db, job: row });
+          await runWithTenantContext(
+            {
+              tenantId: String(row.tenant_id || ""),
+              tenantKey: String(row.tenant_key || ""),
+              source: "worker.media-job",
+            },
+            () => pollMediaJob({ db, job: row })
+          );
           lastCompletedAt = new Date().toISOString();
           lastOutcome = "processed";
           lastHeartbeatAt = lastCompletedAt;

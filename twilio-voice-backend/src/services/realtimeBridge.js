@@ -12,6 +12,10 @@ import {
 } from "./realtimeBridge.core.js";
 import { getTenantVoiceConfig } from "./tenantConfig.js";
 import { createAihqVoiceClient } from "./aihqVoiceClient.js";
+import {
+  verifyTwilioStartPayload,
+  verifyTwilioStreamRequest,
+} from "./streamAuth.js";
 import { cfg } from "../config.js";
 import { s, sendTwilioMedia, getBridgeEnv } from "./bridge/shared.js";
 import { incrementRuntimeMetric, recordRuntimeSignal } from "./runtimeObservability.js";
@@ -317,8 +321,20 @@ export function attachRealtimeBridge({
   }
 
   wss.on("connection", (twilioWs, req) => {
+    const streamAuth = req?.aihqStreamAuth
+      ? { ok: true, payload: req.aihqStreamAuth }
+      : verifyTwilioStreamRequest(req);
+    if (!streamAuth.ok) {
+      logger.warn("voice.bridge.twilio.auth_failed", {
+        error: streamAuth.error,
+        status: Number(streamAuth.status || 401),
+      });
+      twilioWs.close(1008, "unauthorized");
+      return;
+    }
+
     logger.info("voice.bridge.twilio.connected", {
-      url: req?.url || null,
+      url: String(req?.url || "").split("?")[0] || null,
       ua: req?.headers?.["user-agent"] || null,
       xfwd: req?.headers?.["x-forwarded-for"] || null,
     });
@@ -1440,6 +1456,19 @@ export function attachRealtimeBridge({
         fromNumber = msg.start?.customParameters?.From || msg.start?.from || null;
         toNumber = msg.start?.customParameters?.To || null;
         tenantKey = msg.start?.customParameters?.TenantKey || null;
+
+        const startAuth = verifyTwilioStartPayload(streamAuth.payload, msg.start || {});
+        if (!startAuth.ok) {
+          logger.warn("voice.bridge.twilio.start_rejected", {
+            streamSid,
+            callSid,
+            tenantKey,
+            error: startAuth.error,
+            mismatches: startAuth.mismatches || [],
+          });
+          twilioWs.close(1008, "unauthorized");
+          return;
+        }
 
         logger.info("voice.bridge.twilio.start", {
           streamSid,

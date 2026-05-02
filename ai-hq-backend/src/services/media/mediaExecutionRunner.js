@@ -1,6 +1,7 @@
 import { cfg } from "../../config.js";
 import { deepFix } from "../../utils/textFix.js";
 import { dbUpdateJob } from "../../db/helpers/jobs.js";
+import { getTenantContext } from "../../db/tenantContext.js";
 import { elevenlabsGenerateSpeech } from "./elevenlabsVoice.js";
 import {
   cloudinaryUploadBuffer,
@@ -102,12 +103,22 @@ async function postExecutionCallback({ jobId, status, result = {}, error = "" })
 }
 
 async function getJobById(db, jobId) {
+  const context = getTenantContext() || {};
+  const tenantId = clean(context.tenantId);
+  const tenantKey = clean(context.tenantKey).toLowerCase();
+  if (!tenantId && !tenantKey) {
+    const error = new Error("media job lookup requires tenant context");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+  const tenantClause = tenantId ? "tenant_id = $2::uuid" : "tenant_key = $2::text";
   const q = await db.query(
     `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
      from jobs
      where id = $1::uuid
+       and ${tenantClause}
      limit 1`,
-    [jobId]
+    [jobId, tenantId || tenantKey]
   );
 
   const row = q.rows?.[0] || null;

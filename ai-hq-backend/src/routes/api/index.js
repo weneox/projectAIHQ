@@ -39,9 +39,9 @@ import { threadsRoutes } from "./threads/index.js";
 import { chatRoutes } from "./chat/index.js";
 import { debateRoutes } from "./debate/index.js";
 import { debugRoutes } from "./debug/index.js";
-import { leadsRoutes } from "./leads/index.js";
+import { leadsInternalRoutes, leadsRoutes } from "./leads/index.js";
 import { launchInternalRoutes, launchRoutes } from "./launch/index.js";
-import { commentsRoutes } from "./comments/index.js";
+import { commentsInternalRoutes, commentsRoutes } from "./comments/index.js";
 import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
 import { teamRoutes } from "./team/index.js";
@@ -70,6 +70,8 @@ function isInternalBypassPath(req) {
     path === "/tenants/resolve-channel" ||
     path === "/inbox/ingest" ||
     path === "/inbox/outbound" ||
+    path === "/comments/ingest" ||
+    path === "/leads/ingest" ||
     path.startsWith("/internal/voice/") ||
     path.startsWith("/internal/runtime-signals/") ||
     path.startsWith("/internal/executions/")
@@ -364,6 +366,8 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   // bunlar session guard-dan əvvəl qalmalıdır
   r.use("/", healthRoutes({ db }));
   r.use("/", inboxInternalRoutes({ db, wsHub }));
+  r.use("/", commentsInternalRoutes({ db, wsHub }));
+  r.use("/", leadsInternalRoutes({ db, wsHub }));
   r.use("/", voiceInternalRoutes({ db, wsHub }));
   r.use("/", launchInternalRoutes({ db }));
   r.use("/", channelConnectPublicRoutes({ db, wsHub }));

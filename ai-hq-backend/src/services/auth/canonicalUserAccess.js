@@ -48,6 +48,14 @@ function normalizeAuthProvider(authProvider, fallback = "local") {
   return fallback;
 }
 
+function isTestRuntime() {
+  return (
+    cleanLower(process.env.NODE_ENV) === "test" ||
+    cleanLower(process.env.APP_ENV) === "test" ||
+    cleanLower(process.env.npm_lifecycle_event) === "test"
+  );
+}
+
 function normalizeIdentityStatus(currentIdentity, tenantUserStatus) {
   const nextMembershipStatus = normalizeStatus(tenantUserStatus, "active");
   if (!currentIdentity?.id) {
@@ -99,20 +107,36 @@ function pickPreferredLegacyPasswordHash(users = []) {
 }
 
 export async function withTransaction(db, work) {
-  if (!db?.query) {
+  if (!db?.query && !db?.connect) {
     throw new Error("Database is required");
   }
 
-  await db.query("begin");
+  const ownsClient = typeof db.connect === "function";
+  const client = ownsClient ? await db.connect() : db;
+  const allowQueryOnlyTestDouble =
+    !ownsClient &&
+    typeof client?.query === "function" &&
+    isTestRuntime();
+  if (!ownsClient && typeof client.release !== "function" && !allowQueryOnlyTestDouble) {
+    throw new Error("Database transaction requires a dedicated client");
+  }
+
+  await client.query("begin");
   try {
-    const result = await work(db);
-    await db.query("commit");
+    const result = await work(client);
+    await client.query("commit");
     return result;
   } catch (error) {
     try {
-      await db.query("rollback");
+      await client.query("rollback");
     } catch {}
     throw error;
+  } finally {
+    if (ownsClient) {
+      try {
+        client.release();
+      } catch {}
+    }
   }
 }
 

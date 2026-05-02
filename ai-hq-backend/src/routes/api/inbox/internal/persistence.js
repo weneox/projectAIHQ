@@ -120,10 +120,11 @@ function choosePreferredCustomerName({
 async function getExistingInboundMessageForInsert({
   client,
   threadId,
+  tenantId,
   tenantKey,
   externalMessageId,
 }) {
-  if (!threadId || !tenantKey || !externalMessageId) return null;
+  if (!threadId || !tenantId || !tenantKey || !externalMessageId) return null;
 
   const existing = await client.query(
     `
@@ -135,10 +136,11 @@ async function getExistingInboundMessageForInsert({
       and thread_id = $2::uuid
       and direction = 'inbound'
       and external_message_id = $3::text
+      and tenant_id = $4::uuid
     order by created_at desc
     limit 1
     `,
-    [tenantKey, threadId, externalMessageId]
+    [tenantKey, threadId, externalMessageId, tenantId]
   );
 
   return normalizeMessage(existing.rows?.[0] || null);
@@ -148,6 +150,7 @@ async function patchExistingThreadIdentity({
   client,
   thread,
   tenantId,
+  tenantKey,
   externalUserId,
   externalUsername,
   customerName,
@@ -192,6 +195,7 @@ async function patchExistingThreadIdentity({
       meta = coalesce(meta, '{}'::jsonb) || $6::jsonb,
       updated_at = now()
     where id = $1::uuid
+      and tenant_key = $8::text
     returning ${INBOX_THREAD_SELECT_COLUMNS}
     `,
     [
@@ -202,6 +206,7 @@ async function patchExistingThreadIdentity({
       nextCustomerName,
       safeJson(nextMeta),
       Boolean(bumpInboundCounters),
+      tenantKey,
     ]
   );
 
@@ -219,6 +224,12 @@ export async function findOrCreateThreadForIngest({
   customerName,
   meta,
 }) {
+  if (!tenantId || !tenantKey) {
+    const error = new Error("findOrCreateThreadForIngest requires tenant identity");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
   let thread = null;
   let threadWasCreated = false;
 
@@ -296,6 +307,7 @@ export async function findOrCreateThreadForIngest({
           client,
           thread,
           tenantId,
+          tenantKey,
           externalUserId: incomingIdentity.externalUserId,
           externalUsername: incomingIdentity.externalUsername,
           customerName: incomingIdentity.customerName,
@@ -309,6 +321,7 @@ export async function findOrCreateThreadForIngest({
       client,
       thread,
       tenantId,
+      tenantKey,
       externalUserId: incomingIdentity.externalUserId,
       externalUsername: incomingIdentity.externalUsername,
       customerName: incomingIdentity.customerName,
@@ -326,24 +339,31 @@ export async function findOrCreateThreadForIngest({
 export async function insertInboundMessage({
   client,
   threadId,
+  tenantId,
   tenantKey,
   externalMessageId,
   text,
   meta,
   timestamp,
 }) {
+  if (!tenantId || !tenantKey) {
+    const error = new Error("insertInboundMessage requires tenant identity");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
   let insertedMessage;
   try {
     insertedMessage = await client.query(
       `
       insert into inbox_messages (
-        thread_id, tenant_key, direction, sender_type, external_message_id,
+        thread_id, tenant_id, tenant_key, direction, sender_type, external_message_id,
         message_type, text, attachments, meta, sent_at
       )
       values (
-        $1::uuid, $2::text, 'inbound', 'customer', $3::text,
-        'text', $4::text, '[]'::jsonb, $5::jsonb,
-        coalesce(to_timestamp($6::double precision / 1000.0), now())
+        $1::uuid, $2::uuid, $3::text, 'inbound', 'customer', $4::text,
+        'text', $5::text, '[]'::jsonb, $6::jsonb,
+        coalesce(to_timestamp($7::double precision / 1000.0), now())
       )
       returning
         id, thread_id, tenant_id, tenant_key, direction, sender_type,
@@ -351,6 +371,7 @@ export async function insertInboundMessage({
       `,
       [
         threadId,
+        tenantId,
         tenantKey,
         externalMessageId,
         text,
@@ -364,6 +385,7 @@ export async function insertInboundMessage({
     const existing = await getExistingInboundMessageForInsert({
       client,
       threadId,
+      tenantId,
       tenantKey,
       externalMessageId,
     });
@@ -380,7 +402,14 @@ export async function insertInboundMessage({
   return normalizeMessage(insertedMessage.rows?.[0] || null);
 }
 
-export async function loadRecentMessages(client, threadId, limit = 8) {
+export async function loadRecentMessages(client, threadId, tenantKey, limit = 8) {
+  const resolvedTenantKey = cleanText(tenantKey);
+  if (!resolvedTenantKey) {
+    const error = new Error("loadRecentMessages requires tenant key");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
   const recentMessagesQuery = await client.query(
     `
     select
@@ -388,10 +417,11 @@ export async function loadRecentMessages(client, threadId, limit = 8) {
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
     from inbox_messages
     where thread_id = $1::uuid
+      and tenant_key = $2::text
     order by sent_at desc, created_at desc
     limit ${Number(limit) || 8}
     `,
-    [threadId]
+    [threadId, resolvedTenantKey]
   );
 
   return sortMessagesChronologically(

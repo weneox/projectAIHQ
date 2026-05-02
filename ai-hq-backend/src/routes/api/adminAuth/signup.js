@@ -5,6 +5,7 @@ import {
   getUserCookieName,
   hashUserPassword,
   isUserAuthConfigured,
+  validateStrongUserPassword,
   userCookieOptions,
   clearUserCookie,
   checkLoginRateLimit,
@@ -154,6 +155,28 @@ export function userSignupRoutes({
 
     if (!companyName) {
       return res.status(400).json({ ok: false, error: "companyName is required" });
+    }
+
+    const passwordStrength = validateStrongUserPassword(password, {
+      email,
+      companyName,
+    });
+    if (!passwordStrength.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: "password does not meet strength requirements",
+        code: "weak_password",
+        requirements: [
+          "minimum_length",
+          "lowercase_required",
+          "uppercase_required",
+          "number_required",
+          "symbol_required",
+          "must_not_contain_email",
+          "must_not_contain_company",
+        ],
+        failures: passwordStrength.failures,
+      });
     }
 
     try {

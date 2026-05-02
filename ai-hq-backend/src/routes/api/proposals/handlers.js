@@ -17,6 +17,7 @@ import {
   dbGetLatestJobByProposalAndType,
   dbUpdateJob,
 } from "../../../db/helpers/jobs.js";
+import { setTenantContext } from "../../../db/tenantContext.js";
 
 import {
   normalizeRequestedStatus,
@@ -349,6 +350,12 @@ export async function proposalDecisionHandler(
     clean(req.auth?.tenantId || req.auth?.tenant_id || req.body?.tenantId || "") || null;
 
   const automation = pickAutomationMeta(req);
+  setTenantContext({
+    tenantId: requestTenantId || "",
+    tenantKey: requestTenantKey,
+    requestId: req.requestId,
+    source: "proposals.decision",
+  });
 
   if (!id) {
     return okJson(res, { ok: false, error: "proposalId required" });
@@ -378,6 +385,12 @@ export async function proposalDecisionHandler(
     if (!tenantContext.ok) {
       return res.status(tenantContext.statusCode).json(tenantContext.payload);
     }
+    setTenantContext({
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      requestId: req.requestId,
+      source: "proposals.decision",
+    });
 
     const latestDraftJob = await dbGetLatestJobByProposalAndType(
       db,

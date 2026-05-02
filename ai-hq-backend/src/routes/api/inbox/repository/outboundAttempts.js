@@ -88,9 +88,11 @@ export async function getOutboundAttemptById(db, attemptId, tenantKey = "") {
   return toAttempt(result.rows?.[0] || null);
 }
 
-export async function findLatestAttemptByMessageId(db, messageId) {
+export async function findLatestAttemptByMessageId(db, messageId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return null;
 
   const result = await db.query(
     `
@@ -101,10 +103,11 @@ export async function findLatestAttemptByMessageId(db, messageId) {
       last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
     where message_id = $1::uuid
+      and tenant_key = $2::text
     order by created_at desc
     limit 1
     `,
-    [messageId]
+    [messageId, resolvedTenantKey]
   );
 
   return toAttempt(result.rows?.[0] || null);
@@ -113,9 +116,11 @@ export async function findLatestAttemptByMessageId(db, messageId) {
 export async function listOutboundAttemptCorrelationsByMessageIds(
   db,
   messageIds = [],
-  { threadId = null } = {}
+  { threadId = null, tenantKey = "" } = {}
 ) {
   if (!isDbReady(db)) return new Map();
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return new Map();
 
   const normalizedMessageIds = Array.isArray(messageIds)
     ? messageIds.filter((messageId) => isUuid(messageId))
@@ -124,12 +129,12 @@ export async function listOutboundAttemptCorrelationsByMessageIds(
   if (!normalizedMessageIds.length) return new Map();
   if (threadId && !isUuid(threadId)) return new Map();
 
-  const values = [normalizedMessageIds];
-  let where = `where message_id = any($1::uuid[])`;
+  const values = [normalizedMessageIds, resolvedTenantKey];
+  let where = `where message_id = any($1::uuid[]) and tenant_key = $2::text`;
 
   if (threadId) {
     values.push(threadId);
-    where += ` and thread_id = $2::uuid`;
+    where += ` and thread_id = $${values.length}::uuid`;
   }
 
   const attemptResult = await db.query(
@@ -253,6 +258,7 @@ export async function listRetryableOutboundAttempts(db, limit = 50) {
       last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
     where status in ('queued','failed','retrying')
+      and nullif(btrim(tenant_key), '') is not null
       and coalesce(next_retry_at, now()) <= now()
       and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
     order by coalesce(next_retry_at, created_at) asc, created_at asc

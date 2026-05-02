@@ -4,6 +4,7 @@ import { dbGetProposalById } from "../../../db/helpers/proposals.js";
 import { dbCreateJob } from "../../../db/helpers/jobs.js";
 import { dbCreateNotification } from "../../../db/helpers/notifications.js";
 import { dbAudit } from "../../../db/helpers/audit.js";
+import { getTenantContext } from "../../../db/tenantContext.js";
 import {
   dbGetLatestDraftLikeByProposal,
   dbGetLatestApprovedDraftByProposal,
@@ -78,6 +79,15 @@ export async function getDbProposalById(db, id) {
 
 export async function updateDbProposalDecision(db, id, { decision, by, reason, automationMode }) {
   const nextStatus = decision === "rejected" ? "rejected" : "in_progress";
+  const context = getTenantContext() || {};
+  const tenantId = String(context.tenantId || "").trim();
+  const tenantKey = String(context.tenantKey || "").trim().toLowerCase();
+  if (!tenantId && !tenantKey) {
+    const error = new Error("proposal decision requires tenant context");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+  const tenantClause = tenantId ? "tenant_id = $5::uuid" : "tenant_key = $5::text";
 
   const updated = await db.query(
     `update proposals
@@ -86,12 +96,14 @@ export async function updateDbProposalDecision(db, id, { decision, by, reason, a
          decision_by = $2::text,
          payload = (coalesce(payload,'{}'::jsonb) || $3::jsonb)
      where id::text = $1::text
+       and ${tenantClause}
      returning tenant_id, tenant_key, id, thread_id, agent, type, status, title, payload, created_at, decided_at, decision_by`,
     [
       id,
       by,
       deepFix({ decision, reason, automationMode }),
       nextStatus,
+      tenantId || tenantKey,
     ]
   );
 

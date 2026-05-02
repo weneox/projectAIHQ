@@ -6,6 +6,10 @@ import { resolveTenantFromRequest } from "../services/tenantResolver.js";
 import { getTenantVoiceConfig } from "../services/tenantConfig.js";
 import { createAihqVoiceClient } from "../services/aihqVoiceClient.js";
 import {
+  appendTwilioStreamToken,
+  createTwilioStreamToken,
+} from "../services/streamAuth.js";
+import {
   contactUnavailableReply,
   pickLang,
   makeI18n,
@@ -210,7 +214,7 @@ function requireInternalToken(req, res, next) {
   return next();
 }
 
-function createVoiceResponseXml({ wsUrl, from, to, tenantKey }) {
+function createVoiceResponseXml({ wsUrl, from, to, tenantKey, callSid }) {
   const vr = new twilio.twiml.VoiceResponse();
   const connect = vr.connect();
   const stream = connect.stream({ url: wsUrl });
@@ -228,6 +232,11 @@ function createVoiceResponseXml({ wsUrl, from, to, tenantKey }) {
   stream.parameter({
     name: "TenantKey",
     value: s(tenantKey),
+  });
+
+  stream.parameter({
+    name: "CallSid",
+    value: s(callSid),
   });
 
   return vr.toString();
@@ -615,12 +624,20 @@ export function twilioRouter({ voiceClient = null } = {}) {
       const from = s(req.body?.From || req.query?.From);
       const to = s(req.body?.To || req.query?.To || req.body?.Called || req.query?.Called);
       const tenantKey = s(tenantConfig?.tenantKey);
+      const callSid = s(req.body?.CallSid || req.query?.CallSid);
+      const streamToken = createTwilioStreamToken({
+        tenantKey,
+        from,
+        to,
+        callSid,
+      });
 
       const xml = createVoiceResponseXml({
-        wsUrl,
+        wsUrl: appendTwilioStreamToken(wsUrl, streamToken),
         from,
         to,
         tenantKey,
+        callSid,
       });
 
       void syncWebhookAccepted({
@@ -769,7 +786,7 @@ export function twilioRouter({ voiceClient = null } = {}) {
     }
   });
 
-  r.post("/twilio/voice/fallback", twilioVoiceFallbackRateLimit, async (req, res) => {
+  r.post("/twilio/voice/fallback", requireTwilioSignature, twilioVoiceFallbackRateLimit, async (req, res) => {
     const logger = (req.log || routeLogger).child({ route: "twilio-voice-fallback" });
     try {
       const tenant = await resolveTenantFromRequest(req).catch(() => null);

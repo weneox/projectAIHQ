@@ -54,12 +54,18 @@ export async function enforceTenantQuota({ db, req, res, profile = null } = {}) 
   try {
     snapshot = await getTenantUsageSnapshot(db, { tenantId, tenantKey });
   } catch (error) {
-    req?.log?.warn?.("tenant.quota.snapshot_failed", {
+    req?.log?.error?.("tenant.quota.snapshot_failed_closed", {
       tenantId,
       tenantKey,
       error: s(error?.message || error),
     });
-    return { ok: true, skipped: true, reason: "quota_snapshot_failed" };
+    return {
+      ok: false,
+      status: 503,
+      code: "tenant_quota_unavailable",
+      error: "Tenant quota could not be validated",
+      reason: "quota_snapshot_failed",
+    };
   }
   const checks = [
     buildQuotaEnvelope({
@@ -174,11 +180,17 @@ export function createTenantUsageAndQuotaMiddleware({ db }) {
     try {
       quotaResult = await enforceTenantQuota({ db, req, res, profile });
     } catch (error) {
-      req.log?.warn?.("tenant.quota.check_failed", {
+      req.log?.error?.("tenant.quota.check_failed_closed", {
         tenantId,
         tenantKey,
         error: s(error?.message || error),
       });
+      quotaResult = {
+        ok: false,
+        status: 503,
+        code: "tenant_quota_unavailable",
+        error: "Tenant quota could not be validated",
+      };
     }
 
     if (quotaResult?.ok === false) {
@@ -202,7 +214,7 @@ export function createTenantUsageAndQuotaMiddleware({ db }) {
         durationMs,
       });
 
-      if (res.statusCode >= 500) return;
+      if (res.statusCode < 200 || res.statusCode >= 400) return;
 
       recordTenantUsage(db, {
         tenantId,

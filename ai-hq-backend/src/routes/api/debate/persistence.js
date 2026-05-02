@@ -5,7 +5,7 @@ import {
   statusForMode,
 } from "./utils.js";
 
-export async function persistUserDebateMessage({ db, threadId, message, mode, tenantId, formatHint }) {
+export async function persistUserDebateMessage({ db, threadId, message, mode, tenantId, tenantKey, formatHint }) {
   assertDbReady(db);
 
   await db.query(
@@ -17,7 +17,7 @@ export async function persistUserDebateMessage({ db, threadId, message, mode, te
   await db.query(
     `insert into messages (thread_id, role, agent_key, content, meta)
      values ($1::uuid, 'user', null, $2::text, $3::jsonb)`,
-    [threadId, message, { mode, tenantId, formatHint: formatHint || null }]
+    [threadId, message, { mode, tenantId, tenantKey, formatHint: formatHint || null }]
   );
 }
 
@@ -29,9 +29,10 @@ export async function persistAssistantDebateMessage({
   agentNotes,
   mode,
   tenantId,
+  tenantKey,
   formatHint,
 }) {
-  const messageMeta = { agentNotes, mode, tenantId, formatHint: formatHint || null };
+  const messageMeta = { agentNotes, mode, tenantId, tenantKey, formatHint: formatHint || null };
   assertDbReady(db);
 
   const q = await db.query(
@@ -56,6 +57,8 @@ export async function persistDebateProposalAndContent({
   wsHub,
   threadId,
   mode,
+  tenantId,
+  tenantKey,
   proposalPayload,
 }) {
   let proposal = null;
@@ -72,12 +75,17 @@ export async function persistDebateProposalAndContent({
   const status = statusForMode(mode);
   const type = String(payload.type || mode || "draft");
   assertDbReady(db);
+  if (!tenantId || !tenantKey) {
+    const error = new Error("debate proposal requires tenant context");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
 
   const q2 = await db.query(
-    `insert into proposals (thread_id, agent, type, status, title, payload)
-     values ($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::jsonb)
-     returning id, thread_id, agent, type, status, title, payload, created_at, decided_at, decision_by`,
-    [threadId, "debate", type, status, title, payload]
+    `insert into proposals (tenant_id, tenant_key, thread_id, agent, type, status, title, payload)
+     values ($1::uuid, $2::text, $3::uuid, $4::text, $5::text, $6::text, $7::text, $8::jsonb)
+     returning tenant_id, tenant_key, id, thread_id, agent, type, status, title, payload, created_at, decided_at, decision_by`,
+    [tenantId, tenantKey, threadId, "debate", type, status, title, payload]
   );
 
   proposal = q2.rows?.[0] || null;

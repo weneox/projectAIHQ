@@ -57,6 +57,7 @@ export function createDebateHandlers({ db, wsHub }) {
         message,
         mode,
         tenantId,
+        tenantKey,
         formatHint,
       });
 
@@ -87,6 +88,7 @@ export function createDebateHandlers({ db, wsHub }) {
         agentNotes,
         mode,
         tenantId,
+        tenantKey,
         formatHint,
       });
 
@@ -95,6 +97,8 @@ export function createDebateHandlers({ db, wsHub }) {
         wsHub,
         threadId,
         mode,
+        tenantId,
+        tenantKey,
         proposalPayload: out?.proposal,
       });
 

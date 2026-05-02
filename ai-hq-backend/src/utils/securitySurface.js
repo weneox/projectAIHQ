@@ -131,7 +131,9 @@ export function shouldAllowDiagnosticsRequest(req, env = cfg.app.env) {
 
   return (
     getDebugTokenAuthResult(req).ok ||
-    getInternalTokenAuthResult(req).ok
+    getInternalTokenAuthResult(req, {
+      allowedAudiences: ["aihq-backend.diagnostics"],
+    }).ok
   );
 }
 

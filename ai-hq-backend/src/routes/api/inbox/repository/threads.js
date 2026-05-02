@@ -159,17 +159,37 @@ async function fetchThreadRow(db, whereSql, values = []) {
   return result.rows?.[0] || null;
 }
 
+function normalizeThreadScope(scope = "") {
+  if (typeof scope === "string") {
+    return {
+      tenantKey: resolveTenantKey(scope) || resolveTenantKey(getTenantContext()?.tenantKey || ""),
+      tenantId: String(getTenantContext()?.tenantId || "").trim(),
+    };
+  }
+
+  return {
+    tenantKey:
+      resolveTenantKey(scope?.tenantKey || scope?.tenant_key || "") ||
+      resolveTenantKey(getTenantContext()?.tenantKey || ""),
+    tenantId: String(scope?.tenantId || scope?.tenant_id || getTenantContext()?.tenantId || "").trim(),
+  };
+}
+
 export async function refreshThread(db, threadId, fallback = null, tenantKey = "") {
   if (!threadId || !isUuid(threadId)) return fallback;
 
-  const resolvedTenantKey =
-    resolveTenantKey(tenantKey) || resolveTenantKey(getTenantContext()?.tenantKey || "");
+  const scope = normalizeThreadScope(tenantKey);
   const values = [threadId];
   let where = `where t.id = $1::uuid`;
 
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and t.tenant_key = $2::text`;
+  if (scope.tenantId) {
+    values.push(scope.tenantId);
+    where += ` and t.tenant_id = $${values.length}::uuid`;
+  }
+
+  if (scope.tenantKey) {
+    values.push(scope.tenantKey);
+    where += ` and t.tenant_key = $${values.length}::text`;
   }
 
   const row = await fetchThreadRow(db, where, values);
@@ -180,13 +200,24 @@ export async function getThreadById(db, threadId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!threadId || !isUuid(threadId)) return null;
 
-  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const scope = normalizeThreadScope(tenantKey);
+  if (!scope.tenantId && !scope.tenantKey) {
+    const error = new Error("getThreadById requires tenant context");
+    error.code = "TENANT_CONTEXT_REQUIRED";
+    throw error;
+  }
+
   const values = [threadId];
   let where = `where t.id = $1::uuid`;
 
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and t.tenant_key = $2::text`;
+  if (scope.tenantId) {
+    values.push(scope.tenantId);
+    where += ` and t.tenant_id = $${values.length}::uuid`;
+  }
+
+  if (scope.tenantKey) {
+    values.push(scope.tenantKey);
+    where += ` and t.tenant_key = $${values.length}::text`;
   }
 
   const row = await fetchThreadRow(db, where, values);

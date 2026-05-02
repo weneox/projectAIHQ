@@ -203,6 +203,54 @@ export function getConfigIssues() {
     );
   }
 
+  if (isProd && !isNonEmpty(cfg?.security?.aihqInternalMetaBotToken)) {
+    pushIssue(
+      issues,
+      "error",
+      "security.aihqInternalMetaBotToken",
+      "AIHQ_INTERNAL_TOKEN_META_BOT is required in production for scoped Meta sidecar access.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN_META_BOT", "AIHQ_INTERNAL_META_BOT_TOKEN"],
+      }
+    );
+  } else if (isProd && s(cfg?.security?.aihqInternalMetaBotToken).length < 24) {
+    pushIssue(
+      issues,
+      "error",
+      "security.aihqInternalMetaBotToken",
+      "AIHQ_INTERNAL_TOKEN_META_BOT must be at least 24 characters in production.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN_META_BOT", "AIHQ_INTERNAL_META_BOT_TOKEN"],
+      }
+    );
+  }
+
+  if (isProd && !isNonEmpty(cfg?.security?.aihqInternalTwilioVoiceToken)) {
+    pushIssue(
+      issues,
+      "error",
+      "security.aihqInternalTwilioVoiceToken",
+      "AIHQ_INTERNAL_TOKEN_TWILIO_VOICE is required in production for scoped Twilio voice sidecar access.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN_TWILIO_VOICE", "AIHQ_INTERNAL_TWILIO_VOICE_TOKEN"],
+      }
+    );
+  } else if (isProd && s(cfg?.security?.aihqInternalTwilioVoiceToken).length < 24) {
+    pushIssue(
+      issues,
+      "error",
+      "security.aihqInternalTwilioVoiceToken",
+      "AIHQ_INTERNAL_TOKEN_TWILIO_VOICE must be at least 24 characters in production.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN_TWILIO_VOICE", "AIHQ_INTERNAL_TWILIO_VOICE_TOKEN"],
+      }
+    );
+  }
+
   if (
     env !== "test" &&
     (cfg?.security?.debugRoutesEnabled || env === "production") &&

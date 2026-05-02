@@ -32,6 +32,8 @@ const TENANT_SCOPED_TABLES = [
   "leads",
   "lead_events",
   "notifications",
+  "jobs",
+  "proposals",
   "push_subscriptions",
   "tenant_ai_policies",
   "tenant_lifecycle_events",

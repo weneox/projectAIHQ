@@ -40,12 +40,30 @@ export function createInboxOutboundHandler({ db, wsHub }) {
     let client = null;
 
     try {
+      const requestedTenantKey = String(req.body?.tenantKey || req.body?.tenant_key || "").trim();
+      if (!requestedTenantKey) {
+        return okJson(res, { ok: false, error: "tenantKey required" });
+      }
+      const tenantRow = await resolveTenantRow(db, requestedTenantKey);
+      const resolvedTenantId = String(tenantRow?.id || "").trim();
+      if (!resolvedTenantId) {
+        return okJson(res, {
+          ok: false,
+          error: "tenant not found",
+          details: { tenantKey: requestedTenantKey, threadId },
+        });
+      }
+
       setTenantContext({
-        tenantKey: String(req.body?.tenantKey || req.body?.tenant_key || "").trim(),
+        tenantId: resolvedTenantId,
+        tenantKey: requestedTenantKey,
         requestId: req.requestId,
         source: "internal.inbox.outbound",
       });
-      const existingThread = await getThreadById(db, threadId);
+      const existingThread = await getThreadById(db, threadId, {
+        tenantId: resolvedTenantId,
+        tenantKey: requestedTenantKey,
+      });
       if (!existingThread) {
         return okJson(res, { ok: false, error: "thread not found" });
       }
@@ -53,6 +71,9 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       const input = parseOutboundRequest(req, existingThread);
       const validation = validateOutboundRequest(input);
       if (!validation.ok) return okJson(res, validation.response);
+      if (String(input.tenantKey || "").toLowerCase() !== requestedTenantKey.toLowerCase()) {
+        return okJson(res, { ok: false, error: "tenant/thread mismatch" });
+      }
       setTenantContext({
         tenantId: existingThread?.tenant_id || "",
         tenantKey: input.tenantKey,
@@ -72,7 +93,7 @@ export function createInboxOutboundHandler({ db, wsHub }) {
           const correlations = await listOutboundAttemptCorrelationsByMessageIds(
             db,
             [existingMessage.id],
-            { threadId }
+            { threadId, tenantKey: input.tenantKey }
           );
           return okJson(
             res,
@@ -82,7 +103,11 @@ export function createInboxOutboundHandler({ db, wsHub }) {
                 existingMessage,
                 correlations.get(existingMessage.id) || null
               ),
-              attempt: await findLatestAttemptByMessageId(db, existingMessage.id),
+              attempt: await findLatestAttemptByMessageId(
+                db,
+                existingMessage.id,
+                input.tenantKey
+              ),
               threadState: await getInboxThreadState(db, threadId),
             })
           );
@@ -92,8 +117,7 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       client = await db.connect();
       await client.query("BEGIN");
 
-      const tenantRow = await resolveTenantRow(client, input.tenantKey);
-      const tenantId = String(existingThread?.tenant_id || tenantRow?.id || "").trim();
+      const tenantId = String(existingThread?.tenant_id || resolvedTenantId).trim();
       setTenantContext({
         tenantId,
         tenantKey: input.tenantKey,
@@ -182,7 +206,10 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         enqueueExecution: !input.externalMessageId,
       });
 
-      const normalizedThread = await refreshThread(client, threadId, existingThread);
+      const normalizedThread = await refreshThread(client, threadId, existingThread, {
+        tenantId,
+        tenantKey: input.tenantKey,
+      });
       const priorThreadState = await getInboxThreadState(client, threadId);
       const nextThreadState = await upsertInboxThreadState(
         client,

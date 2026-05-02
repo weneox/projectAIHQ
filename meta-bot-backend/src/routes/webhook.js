@@ -6,7 +6,6 @@ import {
   forwardToAiHq,
   forwardCommentToAiHq,
 } from "../services/aihqClient.js";
-import { executeMetaActions } from "../services/actionExecutor.js";
 import { resolveTenantContextFromMetaEvent } from "../services/tenantResolver.js";
 import { resolveMetaProfileForInbound } from "../services/metaProfileLookup.js";
 import {
@@ -1163,34 +1162,12 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     return;
   }
 
-  const threadId = extractThreadIdFromAihqResponse(out?.json);
-  const exec = await executeMetaActions(actions, {
-    channel: lower(enrichedEvent?.channel || "instagram") || "instagram",
-    recipientId: s(enrichedEvent?.recipientId),
-    userId: s(enrichedEvent?.userId),
-    tenantKey: resolvedTenantKey,
-    tenantId: resolvedTenantId,
-    threadId,
-    pageId: s(enrichedEvent?.pageId),
-    igUserId: s(enrichedEvent?.igUserId),
-    meta: {
-      tenantKey: resolvedTenantKey,
-      tenantId: resolvedTenantId,
-      threadId,
-      pageId: s(enrichedEvent?.pageId),
-      igUserId: s(enrichedEvent?.igUserId),
-      recipientId: s(enrichedEvent?.recipientId),
-      requestId: s(requestContext?.requestId),
-      correlationId: s(requestContext?.correlationId),
-      dedupeKey: dedupe.key,
-    },
-  });
-
-  requestLogger.info("meta.webhook.actions.executed", {
+  requestLogger.info("meta.webhook.actions.queued_by_aihq", {
     ...baseTrace,
     resolvedTenantKey,
-    threadId,
-    execution: summarizeExec(exec),
+    threadId: extractThreadIdFromAihqResponse(out?.json),
+    actionCount: actions.length,
+    executionPath: "aihq_durable_queue",
   });
 }
 
@@ -1266,35 +1243,11 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     return;
   }
 
-  const exec = await executeMetaActions(actions, {
-    channel: lower(enrichedEvent?.channel || "instagram") || "instagram",
-    recipientId: s(enrichedEvent?.recipientId),
-    userId: s(enrichedEvent?.userId),
-    externalCommentId: s(enrichedEvent?.externalCommentId),
-    commentId: s(enrichedEvent?.externalCommentId),
-    tenantKey: resolvedTenantKey,
-    tenantId: resolvedTenantId,
-    pageId: s(enrichedEvent?.pageId),
-    igUserId: s(enrichedEvent?.igUserId),
-    meta: {
-      tenantKey: resolvedTenantKey,
-      tenantId: resolvedTenantId,
-      pageId: s(enrichedEvent?.pageId),
-      igUserId: s(enrichedEvent?.igUserId),
-      recipientId: s(enrichedEvent?.recipientId),
-      externalCommentId: s(enrichedEvent?.externalCommentId),
-      externalParentCommentId: s(enrichedEvent?.externalParentCommentId),
-      externalPostId: s(enrichedEvent?.externalPostId),
-      requestId: s(requestContext?.requestId),
-      correlationId: s(requestContext?.correlationId),
-      dedupeKey: dedupe.key,
-    },
-  });
-
-  requestLogger.info("meta.webhook.comment_actions.executed", {
+  requestLogger.info("meta.webhook.comment_actions.queued_by_aihq", {
     ...baseTrace,
     resolvedTenantKey,
-    execution: summarizeExec(exec),
+    actionCount: actions.length,
+    executionPath: "aihq_durable_queue",
   });
 }
 

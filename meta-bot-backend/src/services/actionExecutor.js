@@ -36,6 +36,41 @@ function normalizeActions(input) {
   return Array.isArray(input) ? input : [];
 }
 
+const sentProviderIdempotencyKeys = new Map();
+const PROVIDER_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+const PROVIDER_IDEMPOTENCY_MAX_KEYS = 10000;
+
+function pruneProviderIdempotencyKeys(now = Date.now()) {
+  if (sentProviderIdempotencyKeys.size <= PROVIDER_IDEMPOTENCY_MAX_KEYS) {
+    return;
+  }
+
+  for (const [key, item] of sentProviderIdempotencyKeys.entries()) {
+    if (!item?.expiresAt || item.expiresAt <= now) {
+      sentProviderIdempotencyKeys.delete(key);
+    }
+  }
+
+  while (sentProviderIdempotencyKeys.size > PROVIDER_IDEMPOTENCY_MAX_KEYS) {
+    const first = sentProviderIdempotencyKeys.keys().next().value;
+    if (!first) break;
+    sentProviderIdempotencyKeys.delete(first);
+  }
+}
+
+function pickProviderIdempotencyKey(action = {}, ctx = {}, meta = {}) {
+  return s(
+    action?.idempotencyKey ||
+      action?.idempotency_key ||
+      meta?.idempotencyKey ||
+      meta?.idempotency_key ||
+      ctx?.idempotencyKey ||
+      ctx?.idempotency_key ||
+      ctx?.meta?.idempotencyKey ||
+      ctx?.meta?.idempotency_key
+  );
+}
+
 function okResult({ type, channel, meta = null, response = null }) {
   return {
     type: s(type || "unknown"),
@@ -321,6 +356,28 @@ async function runSendMessage({ action, ctx, channel, recipientId, meta, sender 
   const tenantId = pickTenantId(action, ctx) || null;
   const pageId = pickPageId(action, ctx);
   const igUserId = pickIgUserId(action, ctx);
+  const idempotencyKey = pickProviderIdempotencyKey(action, ctx, meta);
+
+  pruneProviderIdempotencyKeys();
+  if (idempotencyKey && sentProviderIdempotencyKeys.has(idempotencyKey)) {
+    const previous = sentProviderIdempotencyKeys.get(idempotencyKey);
+    logger.warn("meta.action.send_message.duplicate_suppressed", {
+      tenantKey,
+      threadId: s(meta?.threadId || ctx?.threadId || ""),
+      recipientId,
+      idempotencyKey,
+    });
+    return okResult({
+      type: "send_message",
+      channel,
+      meta: {
+        ...meta,
+        duplicateSuppressed: true,
+        idempotencyKey,
+      },
+      response: previous?.response || null,
+    });
+  }
 
   const out = await sender({
     recipientId,
@@ -336,6 +393,13 @@ async function runSendMessage({ action, ctx, channel, recipientId, meta, sender 
   const skipAck = shouldSkipOutboundAck(action, ctx);
 
   if (out.ok) {
+    if (idempotencyKey) {
+      sentProviderIdempotencyKeys.set(idempotencyKey, {
+        response: out.json || null,
+        expiresAt: Date.now() + PROVIDER_IDEMPOTENCY_TTL_MS,
+      });
+    }
+
     if (!skipAck) {
       outboundAck = await ackOutboundToAiHq({
         action,

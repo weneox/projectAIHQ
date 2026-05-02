@@ -825,7 +825,7 @@ test(
       "meta.webhook.text.received",
       "meta.webhook.forward.started",
       "meta.webhook.text.forwarded",
-      "meta.webhook.actions.executed",
+      "meta.webhook.actions.queued_by_aihq",
     ];
 
     let lastIndex = -1;

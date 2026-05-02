@@ -249,7 +249,8 @@ test("outbound attempt correlation lookup groups lineage by message id without h
         "44444444-4444-4444-8444-444444444444",
         "55555555-5555-4555-8555-555555555555",
       ]);
-      assert.equal(params[1], "66666666-6666-4666-8666-666666666666");
+      assert.equal(params[1], "acme");
+      assert.equal(params[2], "66666666-6666-4666-8666-666666666666");
 
       if (sql.includes("from inbox_outbound_attempts")) {
         return {
@@ -287,7 +288,10 @@ test("outbound attempt correlation lookup groups lineage by message id without h
       "44444444-4444-4444-8444-444444444444",
       "55555555-5555-4555-8555-555555555555",
     ],
-    { threadId: "66666666-6666-4666-8666-666666666666" }
+    {
+      threadId: "66666666-6666-4666-8666-666666666666",
+      tenantKey: "acme",
+    }
   );
 
   assert.deepEqual(correlations.get("44444444-4444-4444-8444-444444444444"), {

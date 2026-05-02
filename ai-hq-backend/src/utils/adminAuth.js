@@ -1080,6 +1080,31 @@ export function hashUserPassword(password) {
   return `s2u:${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
+export function validateStrongUserPassword(password, { email = "", companyName = "" } = {}) {
+  const value = String(password || "");
+  const lowerValue = value.toLowerCase();
+  const emailLocal = s(email).split("@")[0]?.toLowerCase() || "";
+  const company = s(companyName).toLowerCase();
+
+  const failures = [];
+  if (value.length < 12) failures.push("minimum_length");
+  if (!/[a-z]/.test(value)) failures.push("lowercase_required");
+  if (!/[A-Z]/.test(value)) failures.push("uppercase_required");
+  if (!/[0-9]/.test(value)) failures.push("number_required");
+  if (!/[^A-Za-z0-9]/.test(value)) failures.push("symbol_required");
+  if (emailLocal && emailLocal.length >= 4 && lowerValue.includes(emailLocal)) {
+    failures.push("must_not_contain_email");
+  }
+  if (company && company.length >= 4 && lowerValue.includes(company)) {
+    failures.push("must_not_contain_company");
+  }
+
+  return {
+    ok: failures.length === 0,
+    failures,
+  };
+}
+
 export function verifyUserPassword(password, storedHash) {
   try {
     const input = s(password);

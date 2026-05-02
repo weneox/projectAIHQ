@@ -546,6 +546,7 @@ export function createInboxIngestHandler({
       message = await insertInboundMessage({
         client,
         threadId: thread.id,
+        tenantId,
         tenantKey: input.tenantKey,
         externalMessageId: input.externalMessageId,
         text: input.text,
@@ -595,7 +596,7 @@ export function createInboxIngestHandler({
       client = null;
 
       stage = "refresh_committed_inbound_thread";
-      thread = await refreshThread(db, thread.id, thread);
+      thread = await refreshThread(db, thread.id, thread, input.tenantKey);
 
       stage = "emit_inbound_accepted_realtime";
       emitInboundAcceptedRealtime({
@@ -623,7 +624,7 @@ export function createInboxIngestHandler({
       await client.query("BEGIN");
 
       stage = "load_recent_messages";
-      const recentMessages = await loadRecentMessages(client, thread.id);
+      const recentMessages = await loadRecentMessages(client, thread.id, input.tenantKey);
 
       stage = "load_prior_thread_state";
       const priorThreadState = await getInboxThreadState(client, thread.id);

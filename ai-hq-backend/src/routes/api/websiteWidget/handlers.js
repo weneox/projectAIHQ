@@ -1134,6 +1134,7 @@ async function processWebsiteWidgetMessage({
     const message = await insertInboundMessage({
       client,
       threadId: thread.id,
+      tenantId: tenant.id,
       tenantKey: tenant.tenantKey,
       externalMessageId,
       text,
@@ -1147,7 +1148,7 @@ async function processWebsiteWidgetMessage({
       timestamp: Date.now(),
     });
 
-    const recentMessages = await loadRecentMessages(client, thread.id);
+    const recentMessages = await loadRecentMessages(client, thread.id, tenant.tenantKey);
     const priorThreadState = await getInboxThreadState(client, thread.id);
     const runtimeState = await loadStrictInboxRuntime({
       client,
@@ -1377,9 +1378,11 @@ async function processWebsiteWidgetMessage({
           updated_at
         from inbox_threads
         where id = $1::uuid
+          and tenant_id = $2::uuid
+          and tenant_key = $3::text
         limit 1
         `,
-        [thread.id]
+        [thread.id, tenant.id, tenant.tenantKey]
       );
 
       finalThread =

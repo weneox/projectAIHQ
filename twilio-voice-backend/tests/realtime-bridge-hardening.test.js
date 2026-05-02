@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { attachRealtimeBridge, __test__ } from "../src/services/realtimeBridge.js";
 import { listRuntimeSignals, resetRuntimeMetrics } from "../src/services/runtimeObservability.js";
+import { cfg } from "../src/config.js";
+import { createTwilioStreamToken } from "../src/services/streamAuth.js";
 
 function waitForTick() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -238,7 +240,20 @@ async function startInboundStream(wss, twilioWs, {
   to = "+15550000002",
   tenantKey = "acme",
 } = {}) {
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
+  if (!cfg.TWILIO_AUTH_TOKEN) {
+    cfg.TWILIO_AUTH_TOKEN = "test-twilio-stream-secret";
+  }
+  const streamToken = createTwilioStreamToken({
+    tenantKey,
+    from,
+    to,
+    callSid,
+  });
+
+  wss.emit("connection", twilioWs, {
+    headers: {},
+    url: `/twilio/stream?streamToken=${encodeURIComponent(streamToken)}`,
+  });
   twilioWs.emit(
     "message",
     Buffer.from(
@@ -350,27 +365,12 @@ test("bridge fails closed before realtime connect when tenant config is unavaila
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ123",
-          callSid: "CA123",
-          customParameters: {
-            From: "+15550000001",
-            To: "+15550000002",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ123",
+    callSid: "CA123",
+    from: "+15550000001",
+    to: "+15550000002",
+  });
   await waitForTick();
 
   assert.equal(FakeOpenAIWebSocket.instances.length, 0);
@@ -407,27 +407,12 @@ test("bridge reports twilio websocket errors as failed, not completed", async ()
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ456",
-          callSid: "CA456",
-          customParameters: {
-            From: "+15550000003",
-            To: "+15550000004",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ456",
+    callSid: "CA456",
+    from: "+15550000003",
+    to: "+15550000004",
+  });
   twilioWs.emit("error", new Error("socket exploded"));
   await waitForTick();
   await waitForTick();
@@ -462,27 +447,12 @@ test("bridge finalizes only once when twilio stop is followed by websocket close
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ789",
-          callSid: "CA789",
-          customParameters: {
-            From: "+15550000005",
-            To: "+15550000006",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ789",
+    callSid: "CA789",
+    from: "+15550000005",
+    to: "+15550000006",
+  });
   twilioWs.emit("message", Buffer.from(JSON.stringify({ event: "stop" }), "utf8"));
   await waitForTick();
   await waitForTick();
@@ -590,27 +560,12 @@ test("bridge writes inbound call/session direction metadata truthfully", async (
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ901",
-          callSid: "CA901",
-          customParameters: {
-            From: "+15550000007",
-            To: "+15550000008",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ901",
+    callSid: "CA901",
+    from: "+15550000007",
+    to: "+15550000008",
+  });
 
   assert.equal(voiceClient.calls.upsertSession.length, 1);
   assert.equal(voiceClient.calls.upsertSession[0]?.direction, "inbound");
@@ -643,27 +598,12 @@ test("bridge promotes session to bot_active only after realtime session is ready
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ903",
-          callSid: "CA903",
-          customParameters: {
-            From: "+15550000011",
-            To: "+15550000012",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ903",
+    callSid: "CA903",
+    from: "+15550000011",
+    to: "+15550000012",
+  });
   assert.equal(
     voiceClient.calls.upsertSession.at(-1)?.sessionStatus,
     "bot_silent"
@@ -709,27 +649,12 @@ test("bridge emits reconnect lifecycle signals and distinguishes retry churn fro
   });
   const twilioWs = new FakeSocket();
 
-  wss.emit("connection", twilioWs, { headers: {}, url: "/twilio/stream" });
-  twilioWs.emit(
-    "message",
-    Buffer.from(
-      JSON.stringify({
-        event: "start",
-        start: {
-          streamSid: "MZ902",
-          callSid: "CA902",
-          customParameters: {
-            From: "+15550000009",
-            To: "+15550000010",
-            TenantKey: "acme",
-          },
-        },
-      }),
-      "utf8"
-    )
-  );
-
-  await waitForTick();
+  await startInboundStream(wss, twilioWs, {
+    streamSid: "MZ902",
+    callSid: "CA902",
+    from: "+15550000009",
+    to: "+15550000010",
+  });
   assert.equal(FakeOpenAIWebSocket.instances.length, 1);
 
   FakeOpenAIWebSocket.instances[0].close(1011, "upstream reset");

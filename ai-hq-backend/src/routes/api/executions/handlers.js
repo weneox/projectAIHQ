@@ -38,6 +38,10 @@ import {
 } from "../../../db/helpers/content.js";
 import { dbCreateNotification } from "../../../db/helpers/notifications.js";
 import { dbAudit } from "../../../db/helpers/audit.js";
+import {
+  runWithSystemDbContext,
+  setTenantContext,
+} from "../../../db/tenantContext.js";
 
 import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
@@ -89,6 +93,16 @@ import {
 } from "./status.js";
 
 import { buildNotificationCopy, buildPushCopy } from "./notify.js";
+
+function isTestRuntime() {
+  const env = (value) => String(value ?? "").trim().toLowerCase();
+  return (
+    env(process.env.NODE_ENV) === "test" ||
+    env(process.env.APP_ENV) === "test" ||
+    env(process.env.npm_lifecycle_event) === "test" ||
+    process.argv.some((item) => /\.test\.js$/i.test(env(item)))
+  );
+}
 
 function normalizeDurableExecutionRow(row = {}) {
   if (!row || typeof row !== "object") return null;
@@ -613,13 +627,15 @@ export async function getDurableExecutionById(req, res, { db }) {
 }
 
 export async function retryDurableExecution(req, res, { db, wsHub }) {
-  const helpers = createDurableExecutionHelpers({ db });
   const id = String(req.params.id || "").trim();
   const tenantId = String(getAuthTenantId(req) || "").trim();
   const tenantKey = String(getAuthTenantKey(req) || "").trim();
   const actor = String(getAuthActor(req) || "system").trim();
 
   if (!id) return okJson(res, { ok: false, error: "executionId required" });
+
+  let client = null;
+  let ownsClient = false;
 
   try {
     if (!isDbReady(db)) {
@@ -629,10 +645,18 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       );
     }
 
-    await db.query("begin");
+    ownsClient = typeof db.connect === "function";
+    if (!ownsClient && !isTestRuntime()) {
+      throw new Error("Durable execution retry transaction requires db.connect()");
+    }
+    client = ownsClient ? await db.connect() : db;
+    await client.query("begin");
+    const helpers = createDurableExecutionHelpers({ db: client });
     const execution = await helpers.getExecutionById(id);
     if (!execution) {
-      await db.query("rollback");
+      await client.query("rollback");
+      if (ownsClient) client.release();
+      client = null;
       return okJson(res, { ok: false, error: "not found" });
     }
 
@@ -640,7 +664,9 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       (tenantId && String(execution.tenant_id || "") !== tenantId) ||
       (!tenantId && tenantKey && String(execution.tenant_key || "").toLowerCase() !== tenantKey.toLowerCase())
     ) {
-      await db.query("rollback");
+      await client.query("rollback");
+      if (ownsClient) client.release();
+      client = null;
       return okJson(res, { ok: false, error: "not found" });
     }
 
@@ -650,7 +676,9 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
     });
 
     if (!retried) {
-      await db.query("rollback");
+      await client.query("rollback");
+      if (ownsClient) client.release();
+      client = null;
       return okJson(res, {
         ok: false,
         error: "execution_not_retryable",
@@ -660,14 +688,16 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
     let comment = null;
     if (String(retried.action_type || "").trim().toLowerCase() === "meta.comment.reply") {
       const recovered = await requeueMetaCommentReplyExecution({
-        db,
+        db: client,
         wsHub,
         execution: retried,
         requestedBy: actor,
       });
 
       if (!recovered.ok) {
-        await db.query("rollback");
+        await client.query("rollback");
+        if (ownsClient) client.release();
+        client = null;
         return okJson(res, {
           ok: false,
           error: "execution_retry_sync_failed",
@@ -681,7 +711,7 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       comment = recovered.comment || null;
     }
 
-    await dbAudit(db, actor, "durable_execution.manual_retry", "durable_execution", id, {
+    await dbAudit(client, actor, "durable_execution.manual_retry", "durable_execution", id, {
       tenantId: retried.tenant_id || tenantId || null,
       tenantKey: retried.tenant_key || tenantKey || null,
       executionId: id,
@@ -691,7 +721,9 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       requestedAt: new Date().toISOString(),
     });
 
-    await db.query("commit");
+    await client.query("commit");
+    if (ownsClient) client.release();
+    client = null;
 
     req.log?.info?.("durable_execution.manual_retry", {
       executionId: id,
@@ -701,7 +733,8 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       nextStatus: retried.status,
     });
 
-    const auditTrail = await helpers.listExecutionAuditTrail(id, {
+    const readHelpers = createDurableExecutionHelpers({ db });
+    const auditTrail = await readHelpers.listExecutionAuditTrail(id, {
       tenantId,
       tenantKey,
       limit: 20,
@@ -714,9 +747,14 @@ export async function retryDurableExecution(req, res, { db, wsHub }) {
       auditTrail,
     });
   } catch (e) {
-    try {
-      await db.query("rollback");
-    } catch {}
+    if (client) {
+      try {
+        await client.query("rollback");
+      } catch {}
+      try {
+        client.release();
+      } catch {}
+    }
     return okJson(res, {
       ok: false,
       error: "Error",
@@ -843,7 +881,21 @@ async function handleExecutionCallbackDb({
   finished_at,
   callbackFingerprint,
 }) {
-  const existingJob = await dbGetJobById(db, jobId, { forUpdate: true });
+  const callbackTenantId = pickTenantIdFromResult(result);
+  const callbackTenantKey = clean(result?.tenantKey || result?.tenant_key || "");
+  const existingJob =
+    callbackTenantId || callbackTenantKey
+      ? await dbGetJobById(db, jobId, {
+          forUpdate: true,
+          tenantId: callbackTenantId,
+          tenantKey: callbackTenantKey,
+        })
+      : await runWithSystemDbContext("execution_callback_job_lookup", () =>
+          dbGetJobById(db, jobId, {
+            forUpdate: true,
+            allowSystemLookup: true,
+          })
+        );
   if (!existingJob) {
     return {
       ok: false,
@@ -910,10 +962,15 @@ async function handleExecutionCallbackDb({
   }
 
   const jt = jobTypeLc(existingJob.type);
-  const tenantId = pickTenantIdFromResult(result);
+  const tenantId = clean(existingJob.tenant_id || pickTenantIdFromResult(result) || "") || null;
   const tenantKey =
     clean(existingJob.tenant_key || result?.tenantKey || result?.tenant_key || "") ||
     null;
+  setTenantContext({
+    tenantId: clean(existingJob.tenant_id || tenantId || ""),
+    tenantKey: clean(tenantKey || callbackTenantKey || ""),
+    source: "execution.callback",
+  });
   const jobInput = deepFix(existingJob.input || {});
   const proposalId =
     String(existingJob.proposal_id || result?.proposalId || result?.proposal_id || "").trim() ||

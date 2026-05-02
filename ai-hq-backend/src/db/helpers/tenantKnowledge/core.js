@@ -21,6 +21,14 @@ export async function q(db, text, params = []) {
   return db.query(text, params);
 }
 
+function isTestRuntime() {
+  return (
+    s(process.env.NODE_ENV).toLowerCase() === "test" ||
+    s(process.env.APP_ENV).toLowerCase() === "test" ||
+    s(process.env.npm_lifecycle_event).toLowerCase() === "test"
+  );
+}
+
 export async function resolveTenantIdentity(db, { tenantId, tenantKey }) {
   const id = s(tenantId);
   const key = s(tenantKey);
@@ -88,14 +96,22 @@ export async function withTx(db, fn) {
     }
   }
 
-  await q(db, "begin");
+  const allowQueryOnlyTestDouble =
+    typeof db?.query === "function" &&
+    isTestRuntime();
+  if (typeof db?.release !== "function" && !allowQueryOnlyTestDouble) {
+    throw new Error("tenantKnowledge: transaction requires a dedicated client");
+  }
+
+  const client = db;
+  await q(client, "begin");
   try {
-    const out = await fn(db);
-    await q(db, "commit");
+    const out = await fn(client);
+    await q(client, "commit");
     return out;
   } catch (err) {
     try {
-      await q(db, "rollback");
+      await q(client, "rollback");
     } catch {}
     throw err;
   }

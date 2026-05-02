@@ -21,6 +21,10 @@ import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
 import {
+  runWithSystemDbContext,
+  runWithTenantContext,
+} from "../db/tenantContext.js";
+import {
   markWorkerStarted,
   markWorkerStopped,
   recordRuntimeSignal,
@@ -179,7 +183,12 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     messageId: s(attempt?.message_id),
   });
 
-  const message = await getMessageById(db, attempt.message_id);
+  const tenantScope = {
+    tenantKey: attempt?.tenant_key,
+    source: "worker.outbound-retry",
+  };
+
+  const message = await getMessageById(db, attempt.message_id, tenantScope);
   if (!message) {
     await markOutboundAttemptFailed({
       db,
@@ -197,11 +206,12 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
       error: "message not found",
       errorCode: "message_missing",
       providerResponse: {},
+      tenantKey: attempt?.tenant_key,
     });
     return;
   }
 
-  const thread = await getThreadById(db, attempt.thread_id);
+  const thread = await getThreadById(db, attempt.thread_id, tenantScope);
   if (!thread) {
     await markOutboundAttemptFailed({
       db,
@@ -219,6 +229,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
       error: "thread not found",
       errorCode: "thread_missing",
       providerResponse: {},
+      tenantKey: attempt?.tenant_key,
     });
     return;
   }
@@ -281,6 +292,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
       error: failure.errorMessage,
       errorCode: failure.errorCode,
       providerResponse: delivery.providerResponse || delivery.json || {},
+      tenantKey: attempt?.tenant_key,
     });
 
     try {
@@ -338,6 +350,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     messageId: message.id,
     providerMessageId,
     providerResponse,
+    tenantKey: attempt?.tenant_key,
   });
 
   try {
@@ -375,7 +388,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     const correlations = await listOutboundAttemptCorrelationsByMessageIds(
       db,
       [message.id],
-      { threadId: message.thread_id }
+      { threadId: message.thread_id, tenantKey: attempt?.tenant_key || message?.tenant_key }
     );
     const correlatedMessage = withMessageOutboundAttemptCorrelation(
       updatedMessage || message,
@@ -432,13 +445,22 @@ export function startOutboundRetryWorker({ db, wsHub }) {
     touchWorkerHeartbeat("outbound-retry-worker", getState());
 
     try {
-      const attempts = await listRetryableOutboundAttempts(db, workerCfg.batchSize);
+      const attempts = await runWithSystemDbContext(
+        "outbound_retry_worker_claim",
+        () => listRetryableOutboundAttempts(db, workerCfg.batchSize)
+      );
 
       for (const attempt of attempts) {
         if (stopped) break;
 
         try {
-          await processAttempt({ db, wsHub, attempt, workerCfg });
+          await runWithTenantContext(
+            {
+              tenantKey: attempt?.tenant_key,
+              source: "worker.outbound-retry",
+            },
+            () => processAttempt({ db, wsHub, attempt, workerCfg })
+          );
           lastCompletedAt = new Date().toISOString();
           lastOutcome = "processed";
           lastHeartbeatAt = lastCompletedAt;

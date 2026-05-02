@@ -365,7 +365,10 @@ export function ingestCommentHandler({
   }
 
   return async function ingestComment(req, res) {
-    const internalAuth = getInternalTokenAuthResult(req);
+    const internalAuth = getInternalTokenAuthResult(req, {
+      allowedServices: ["meta-bot-backend"],
+      allowedAudiences: ["aihq-backend.comments.ingest"],
+    });
     if (!internalAuth.ok) {
       return res.status(
         internalAuth.code === "internal_token_not_configured" ? 500 : 401

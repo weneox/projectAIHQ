@@ -22,3 +22,9 @@ export function commentsRoutes({ db, wsHub }) {
 
   return r;
 }
+
+export function commentsInternalRoutes({ db, wsHub }) {
+  const r = express.Router();
+  r.post("/comments/ingest", requireWebhookIngestionRateLimit, ingestCommentHandler({ db, wsHub }));
+  return r;
+}

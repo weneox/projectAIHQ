@@ -22,3 +22,10 @@ export function leadsRoutes({ db, wsHub }) {
 
   return r;
 }
+
+export function leadsInternalRoutes({ db, wsHub }) {
+  const r = express.Router();
+  const h = createLeadHandlers({ db, wsHub });
+  r.post("/leads/ingest", h.ingestLead);
+  return r;
+}

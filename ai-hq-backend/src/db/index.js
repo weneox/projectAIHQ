@@ -59,6 +59,18 @@ export function getDb() {
   return db;
 }
 
+function boolFromEnv(value, fallback) {
+  const raw = s(value).toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  return fallback;
+}
+
+function isProdLikeEnv() {
+  const env = s(cfg?.app?.env || process.env.APP_ENV || process.env.NODE_ENV || "production").toLowerCase();
+  return !["", "development", "dev", "test"].includes(env);
+}
+
 export function getWorkerDb() {
   return workerDb || db;
 }
@@ -103,6 +115,10 @@ export async function initDb(options = {}) {
   }
 
   const useSsl = shouldUseSsl(url);
+  const sslRejectUnauthorized = boolFromEnv(
+    process.env.DB_SSL_REJECT_UNAUTHORIZED,
+    isProdLikeEnv()
+  );
   const {
     poolMax,
     idleTimeoutMillis,
@@ -114,7 +130,7 @@ export async function initDb(options = {}) {
     max: poolMax,
     idleTimeoutMillis,
     connectionTimeoutMillis,
-    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    ...(useSsl ? { ssl: { rejectUnauthorized: sslRejectUnauthorized } } : {}),
   });
 
   try {

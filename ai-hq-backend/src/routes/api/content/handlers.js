@@ -3,6 +3,7 @@ import { okJson, isDbReady, isUuid, nowIso } from "../../../utils/http.js";
 import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
 import { dbGetJobById, dbUpdateJob } from "../../../db/helpers/jobs.js";
+import { setTenantContext } from "../../../db/tenantContext.js";
 import {
   buildRuntimeAuthorityFailurePayload,
   getTenantBrainRuntime,
@@ -481,6 +482,12 @@ export async function feedbackHandler(
   const actor = pickActionActor(req, "ceo");
   const automation = pickAutomationMeta(req);
   const dbReady = isDbReady(db);
+  setTenantContext({
+    tenantId: requestTenantId,
+    tenantKey: requestTenantKey,
+    requestId: req.requestId,
+    source: "content.revise",
+  });
 
   if (!id) return okJson(res, { ok: false, error: "contentId required" });
   if (!feedbackText) return okJson(res, { ok: false, error: "feedbackText required" });
@@ -514,6 +521,12 @@ export async function feedbackHandler(
     if (!tenantContext.ok) {
       return res.status(tenantContext.statusCode).json(tenantContext.payload);
     }
+    setTenantContext({
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      requestId: req.requestId,
+      source: "content.revise",
+    });
 
     const replayAttempt = await evaluateReplayAttempt({
       db,
@@ -743,6 +756,12 @@ export async function approveHandler(
   const actor = pickActionActor(req, "ceo");
   const automation = pickAutomationMeta(req);
   const dbReady = isDbReady(db);
+  setTenantContext({
+    tenantId: requestTenantId,
+    tenantKey: requestTenantKey,
+    requestId: req.requestId,
+    source: "content.approve",
+  });
 
   if (!id) return okJson(res, { ok: false, error: "contentId required" });
   if (dbReady && !isUuid(id)) {
@@ -802,6 +821,12 @@ export async function approveHandler(
     if (!tenantContext.ok) {
       return res.status(tenantContext.statusCode).json(tenantContext.payload);
     }
+    setTenantContext({
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      requestId: req.requestId,
+      source: "content.approve",
+    });
 
     if (cleanText(row.status).toLowerCase() === "asset.requested") {
       const replayAttempt = await evaluateReplayAttempt({
@@ -1464,6 +1489,12 @@ export async function publishHandler(
   const actor = pickActionActor(req, "ceo");
   const automation = pickAutomationMeta(req);
   const dbReady = isDbReady(db);
+  setTenantContext({
+    tenantId: requestTenantId,
+    tenantKey: requestTenantKey,
+    requestId: req.requestId,
+    source: "content.publish",
+  });
 
   if (!id) return okJson(res, { ok: false, error: "contentId required" });
   if (dbReady && !isUuid(id)) {
@@ -1529,6 +1560,12 @@ export async function publishHandler(
     if (!tenantContext.ok) {
       return res.status(tenantContext.statusCode).json(tenantContext.payload);
     }
+    setTenantContext({
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      requestId: req.requestId,
+      source: "content.publish",
+    });
 
     const runtimeResolved = await resolveRuntimeBehavior({
       db,

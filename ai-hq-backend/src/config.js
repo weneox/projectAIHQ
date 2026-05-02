@@ -268,11 +268,11 @@ export const cfg = {
     debugRoutesEnabled: b(process.env.DEBUG_ROUTES_ENABLED, false),
     aihqInternalToken: s(process.env.AIHQ_INTERNAL_TOKEN, ""),
     aihqInternalMetaBotToken: s(
-      process.env.AIHQ_INTERNAL_TOKEN_META_BOT,
+      process.env.AIHQ_INTERNAL_TOKEN_META_BOT || process.env.AIHQ_INTERNAL_META_BOT_TOKEN,
       ""
     ),
     aihqInternalTwilioVoiceToken: s(
-      process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE,
+      process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE || process.env.AIHQ_INTERNAL_TWILIO_VOICE_TOKEN,
       ""
     ),
     cronSecret: s(process.env.CRON_SECRET, ""),
