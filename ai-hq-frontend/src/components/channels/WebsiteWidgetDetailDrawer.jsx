@@ -6,6 +6,7 @@ import {
   Code2,
   Copy,
   Globe2,
+  Info,
   Package,
   RefreshCw,
   Save,
@@ -38,6 +39,7 @@ import Badge from "../ui/Badge.jsx";
 import Input, { Textarea } from "../ui/Input.jsx";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import ChannelIcon from "./ChannelIcon.jsx";
+import websiteGlobeIcon from "../../assets/channels/globe.png";
 
 const ACCENT_OPTIONS = [
   { label: "Blue", value: "#2e60ff", preview: "#2e60ff" },
@@ -401,7 +403,7 @@ function WebsiteChatPreviewCard({
     <SectionCard
       eyebrow="Preview before install"
       title="See how Website Chat will feel"
-      description="Preview the customer-facing chat before asking anyone to install it on the website."
+      description="Preview before install."
       tone={canPreview ? "neutral" : "warning"}
     >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -644,7 +646,7 @@ function AccessHelperCard({ value = {}, onChange }) {
     <SectionCard
       eyebrow="Install access"
       title="How can this website be updated?"
-      description="Choose what access you have. AIHQ will recommend the easiest safe install path. You do not need to edit code yourself."
+      description="Choose your access. Details are inside each info icon."
     >
       <div className="grid gap-2">
         {WEBSITE_ACCESS_OPTIONS.map((option) => {
@@ -656,7 +658,7 @@ function AccessHelperCard({ value = {}, onChange }) {
               type="button"
               onClick={() => toggle(option.id)}
               className={cx(
-                "grid grid-cols-[22px_minmax(0,1fr)] gap-3 rounded-[16px] border px-4 py-3 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
+                "grid grid-cols-[20px_minmax(0,1fr)] gap-2.5 rounded-[15px] border px-3.5 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
                 active
                   ? "border-[rgba(var(--color-brand),0.34)] bg-brand-soft text-text shadow-[var(--shadow-inset-top)]"
                   : "border-line-soft bg-surface text-text hover:bg-surface-subtle"
@@ -664,13 +666,13 @@ function AccessHelperCard({ value = {}, onChange }) {
             >
               <span
                 className={cx(
-                  "mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-[7px] border",
+                  "mt-[1px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border",
                   active
                     ? "border-[rgba(var(--color-brand),0.45)] bg-brand text-white"
                     : "border-line bg-surface"
                 )}
               >
-                {active ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : null}
+                {active ? <Check className="h-3 w-3" strokeWidth={2.6} /> : null}
               </span>
 
               <span className="min-w-0">
@@ -2014,8 +2016,11 @@ export default function WebsiteWidgetDetailDrawer({
                   }))
                 }
                 placeholder="https://example.com"
-                rows={3}
+               
                 appearance="quiet"
+              
+                rows={2}
+                className="website-chat-textarea website-chat-textarea--two"
               />
             </div>
 
@@ -2030,8 +2035,11 @@ export default function WebsiteWidgetDetailDrawer({
                   }))
                 }
                 placeholder="example.com"
-                rows={3}
+               
                 appearance="quiet"
+              
+                rows={2}
+                className="website-chat-textarea website-chat-textarea--two"
               />
             </div>
 
@@ -2046,8 +2054,11 @@ export default function WebsiteWidgetDetailDrawer({
                   }))
                 }
                 placeholder="Pricing&#10;Book an appointment&#10;Talk to support"
-                rows={4}
+               
                 appearance="quiet"
+              
+                rows={3}
+                className="website-chat-textarea website-chat-textarea--three"
               />
             </div>
           </div>
@@ -2232,36 +2243,53 @@ export default function WebsiteWidgetDetailDrawer({
       aria-hidden={!open}
       className="flex h-full min-h-0 w-full flex-col overflow-visible border-l border-line-soft bg-surface shadow-panel"
     >
-      <header className="relative z-40 shrink-0 overflow-visible border-b border-line-soft bg-surface py-5 pl-6 pr-24 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_64px] items-start gap-x-4 gap-y-2 overflow-visible">
-          <div className="row-span-2 shrink-0 pt-0.5">
-            <ChannelIcon channel={channel} size="lg" />
-          </div>
+      <header className="shrink-0 border-b border-line-soft bg-surface px-6 py-2.5">
+  <div className="flex items-center justify-between gap-4">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <img src={websiteGlobeIcon} alt="" aria-hidden="true" draggable="false" className="h-[44px] w-[44px] shrink-0 object-contain" />
 
-          <div className="min-w-0 self-center">
-            <div className="truncate text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              {channel?.name || "Website chat"}
-            </div>
-          </div>
+      <div className="min-w-0">
+        <h2 className="truncate text-[20px] font-semibold leading-[1.04] tracking-[var(--tracking-tight-lg)] text-text">
+          Website chat
+        </h2>
 
-          <button
-            type="button"
-            aria-label="Close website details"
-            onClick={handleClose}
-            className="absolute right-7 top-5 z-50 inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-line-soft bg-surface text-text shadow-[0_14px_34px_-24px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-[background-color,border-color,box-shadow,color] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
+        <div className="mt-1 flex min-w-0 items-center">
+          <span
+            className={cx(
+              "inline-flex h-[22px] max-w-full items-center gap-1.5 rounded-[9px] border px-2.5 text-[12px] font-semibold leading-none tracking-[var(--tracking-tight-sm)] shadow-[var(--shadow-inset-top)]",
+              posture.tone === "success"
+                ? "border-[rgba(var(--color-success),0.32)] bg-success-soft text-success"
+                : posture.tone === "danger"
+                  ? "border-[rgba(var(--color-danger),0.32)] bg-danger-soft text-danger"
+                  : posture.tone === "warning"
+                    ? "border-[rgba(var(--color-warning),0.32)] bg-warning-soft text-warning"
+                    : "border-line-soft bg-surface-subtle text-text-muted"
+            )}
           >
-            <X className="h-4.5 w-4.5" strokeWidth={2.25} />
-          </button>
-
-          <div className="min-w-0 self-start">
-            <StatusBadge tone={activeTone}>
-              {posture.title || "Website chat"}
-            </StatusBadge>
-          </div>
+            <span
+              className={cx(
+                "h-1.5 w-1.5 shrink-0 rounded-full",
+                dotClass(posture.tone)
+              )}
+            />
+            <span className="truncate whitespace-nowrap">{posture.title}</span>
+          </span>
         </div>
-      </header>
+      </div>
+    </div>
 
-      <div className="shrink-0 border-b border-line-soft bg-surface px-6 py-3">
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label="Close website chat details"
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line-soft bg-surface text-text-muted shadow-[var(--shadow-inset-top)] transition-[background-color,border-color,color,box-shadow] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
+    >
+      <X className="h-[18px] w-[18px]" strokeWidth={2.1} />
+    </button>
+  </div>
+</header>
+
+      <div className="website-drawer-tabs shrink-0 border-b border-line-soft bg-surface px-6 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <PanelTab
             active={activePanel === "overview"}
@@ -2341,3 +2369,16 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

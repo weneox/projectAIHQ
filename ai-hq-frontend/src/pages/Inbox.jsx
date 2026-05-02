@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
@@ -792,12 +792,12 @@ export default function Inbox() {
         inboxAutomationControl.enabled !== true,
       disabledReason:
         inboxAutomationControl.enabled !== true
-          ? "Inbox AI Autopilot global olaraq söndürülüb."
+          ? "Inbox AI Autopilot global olaraq sÃ¶ndÃ¼rÃ¼lÃ¼b."
           : selectedThreadAiEnabled
-            ? "AI bu söhbətdə cavab verə bilər."
-            : "Operator rejimi. AI bu söhbətdə cavab vermir.",
+            ? "AI bu sÃ¶hbÉ™tdÉ™ cavab verÉ™ bilÉ™r."
+            : "Operator rejimi. AI bu sÃ¶hbÉ™tdÉ™ cavab vermir.",
       statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
-      scopeLabel: "Bu söhbətdə AI",
+      scopeLabel: "Bu sÃ¶hbÉ™tdÉ™ AI",
     }),
     [
       inboxAutomationControl.enabled,
@@ -844,16 +844,7 @@ export default function Inbox() {
     truthReady &&
     runtimeReady &&
     hasDeliveryReadyLaunchChannel;
-  const launchReadinessNotice = buildLaunchReadinessNotice({
-    readinessState,
-    hasDeliveryReadyLaunchChannel,
-    truthReady,
-    runtimeReady,
-    launchReady,
-  });
-  const visibleLaunchReadinessNotice = isSetupTestInboxThread(selectedThread)
-    ? null
-    : launchReadinessNotice;
+  const visibleLaunchReadinessNotice = null;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
@@ -984,3 +975,4 @@ export default function Inbox() {
     </div>
   );
 }
+

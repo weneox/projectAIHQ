@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Clock3, MessageCircle, Send, UserCheck } from "lucide-react";
 
 import globeLogo from "../../assets/channels/globe.png";
@@ -271,8 +271,9 @@ function HandoffMark() {
 export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const name = resolveSafeDisplayName(thread);
   const preview = resolvePreview(thread);
+  const setupTest = isSetupTestThread(thread);
   const visiblePreview = setupTest
-    ? "Private setup test · no real visitor"
+    ? "Private setup test Â· no real visitor"
     : preview;
   const unreadCount = Number(thread?.unread_count || 0);
   const timeLabel = formatRelativeTime(
@@ -281,8 +282,6 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const avatarUrl = resolveAvatarUrl(thread);
   const channelKey = resolveChannelKey(thread);
   const handoffActive = resolveHandoffActive(thread);
-  const setupTest = isSetupTestThread(thread);
-
   const avatarKey = `${s(thread?.id)}:${avatarUrl}`;
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
   const avatarFailed = failedAvatarKey === avatarKey;

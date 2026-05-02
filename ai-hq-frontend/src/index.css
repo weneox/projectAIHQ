@@ -1485,3 +1485,177 @@ select:-webkit-autofill:active {
     scroll-behavior: auto !important;
   }
 }
+
+/* Website Chat drawer compact tabs */
+.website-drawer-tabs {
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--color-surface), 0.98),
+      rgba(var(--color-surface-muted), 0.74)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.045);
+}
+
+.website-drawer-tabs > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.website-drawer-tabs button {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 13px !important;
+  background: transparent;
+  color: rgb(var(--color-text-muted));
+  font-size: 12.5px !important;
+  font-weight: 620 !important;
+  line-height: 1 !important;
+  letter-spacing: var(--tracking-tight-sm);
+  box-shadow: none !important;
+  transition:
+    background-color var(--motion-base) var(--motion-premium),
+    color var(--motion-base) var(--motion-premium),
+    box-shadow var(--motion-base) var(--motion-premium);
+}
+
+.website-drawer-tabs button svg {
+  width: 15px !important;
+  height: 15px !important;
+  stroke-width: 2.05;
+}
+
+.website-drawer-tabs button:hover {
+  background: rgba(var(--color-surface-subtle), 0.9);
+  color: rgb(var(--color-text));
+}
+
+.website-drawer-tabs button[data-active="true"] {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--color-line-soft)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 22px -20px rgba(15, 23, 42, 0.28) !important;
+}
+
+/* Website Chat drawer compact panels */
+.website-drawer-tabs ~ div {
+  padding: 14px 18px 90px !important;
+}
+
+.website-drawer-tabs ~ div .ui-card {
+  --ui-card-radius: 18px;
+  box-shadow:
+    0 18px 40px -34px rgba(15, 23, 42, 0.28),
+    0 8px 18px -18px rgba(15, 23, 42, 0.1);
+}
+
+.website-drawer-tabs ~ div .ui-card__inner {
+  padding: 16px 18px !important;
+}
+
+.website-drawer-tabs ~ div .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px !important;
+}
+
+.website-drawer-tabs ~ div .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 10px !important;
+}
+
+.website-drawer-tabs ~ div [class*="rounded-[16px]"] {
+  border-radius: 14px !important;
+}
+
+.website-drawer-tabs ~ div [class*="rounded-[18px]"] {
+  border-radius: 15px !important;
+}
+
+.website-drawer-tabs ~ div [class*="px-4"][class*="py-3"] {
+  padding: 10px 13px !important;
+}
+
+.website-drawer-tabs ~ div [class*="text-[11px]"][class*="uppercase"] {
+  font-size: 10.5px !important;
+  letter-spacing: 0.105em !important;
+}
+
+.website-drawer-tabs ~ div [class*="text-[12.5px]"][class*="leading-5"] {
+  font-size: 12px !important;
+  line-height: 1.42 !important;
+}
+
+.website-drawer-tabs ~ div .ui-button__inner {
+  height: 42px;
+  font-size: 13px;
+}
+
+.website-drawer-tabs ~ div .ui-badge {
+  min-height: 24px;
+}
+
+/* Website Chat drawer compact textareas */
+.website-chat-textarea {
+  --field-textarea-min: 0px !important;
+  overflow: visible !important;
+}
+
+.website-chat-textarea .ui-field-inner {
+  overflow: visible !important;
+}
+
+.website-chat-textarea .ui-textarea-wrap {
+  padding: 9px 12px !important;
+}
+
+.website-chat-textarea textarea.ui-textarea-control {
+  min-height: 0 !important;
+  resize: vertical !important;
+  overflow: auto !important;
+  line-height: 1.42 !important;
+}
+
+.website-chat-textarea--two textarea.ui-textarea-control {
+  min-height: 52px !important;
+}
+
+.website-chat-textarea--three textarea.ui-textarea-control {
+  min-height: 72px !important;
+}
+
+/* Website Chat compact info + light snippet */
+.ui-info-tip {
+  cursor: help;
+}
+
+.ui-info-tip svg {
+  pointer-events: none;
+}
+
+.website-drawer-tabs ~ div pre,
+.website-drawer-tabs ~ div code,
+.website-drawer-tabs ~ div [class*="snippet"],
+.website-drawer-tabs ~ div [class*="code"] {
+  background: rgb(var(--color-surface-subtle)) !important;
+  color: rgb(var(--color-text-muted)) !important;
+  border-color: rgb(var(--color-line-soft)) !important;
+  box-shadow: none !important;
+}
+
+.website-drawer-tabs ~ div [class*="snippet"] * ,
+.website-drawer-tabs ~ div [class*="code"] * {
+  color: inherit !important;
+}
+
+.website-drawer-tabs ~ div .ui-card__description {
+  max-width: 72ch;
+}
+
