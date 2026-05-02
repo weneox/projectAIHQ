@@ -1,4 +1,4 @@
-import { getDefaultTenantKey, resolveTenantKey } from "../../../../tenancy/index.js";
+import { resolveTenantKey } from "../../../../tenancy/index.js";
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { toAttempt } from "./shared.js";
 import { buildOutboundAttemptCorrelation, s } from "../shared.js";
@@ -11,7 +11,7 @@ export async function createOutboundAttempt({
   db,
   messageId,
   threadId,
-  tenantKey = getDefaultTenantKey(),
+  tenantKey = "",
   channel = "instagram",
   provider = "meta",
   recipientId = null,
@@ -23,6 +23,7 @@ export async function createOutboundAttempt({
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
   if (!threadId || !isUuid(threadId)) return null;
+  if (!resolveTenantKey(tenantKey)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
   const result = await db.query(
@@ -60,13 +61,9 @@ export async function getOutboundAttemptById(db, attemptId, tenantKey = "") {
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
-  const values = [attemptId];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $2::text`;
-  }
+  if (!resolvedTenantKey) return null;
+  const values = [attemptId, resolvedTenantKey];
+  const where = `where id = $1::uuid and tenant_key = $2::text`;
 
   const result = await db.query(
     `
@@ -207,13 +204,9 @@ export async function listOutboundAttemptsByThread(db, threadId, limit = 100, te
   if (!threadId || !isUuid(threadId)) return [];
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
-  const values = [threadId];
-  let where = `where a.thread_id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and a.tenant_key = $2::text`;
-  }
+  if (!resolvedTenantKey) return [];
+  const values = [threadId, resolvedTenantKey];
+  const where = `where a.thread_id = $1::uuid and a.tenant_key = $2::text`;
 
   values.push(Number(limit || 100));
 
@@ -270,13 +263,9 @@ export async function markOutboundAttemptSending(db, attemptId, tenantKey = "") 
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
-  const values = [attemptId];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $2::text`;
-  }
+  if (!resolvedTenantKey) return null;
+  const values = [attemptId, resolvedTenantKey];
+  const where = `where id = $1::uuid and tenant_key = $2::text`;
 
   const result = await db.query(
     `
@@ -314,13 +303,10 @@ export async function markOutboundAttemptSent({
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return null;
   const values = [attemptId, providerMessageId, JSON.stringify(providerResponse || {})];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $4::text`;
-  }
+  values.push(resolvedTenantKey);
+  const where = `where id = $1::uuid and tenant_key = $4::text`;
 
   const result = await db.query(
     `
@@ -361,6 +347,7 @@ export async function markOutboundAttemptFailed({
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return null;
   const existing = await getOutboundAttemptById(db, attemptId, resolvedTenantKey);
   if (!existing) return null;
 
@@ -377,12 +364,8 @@ export async function markOutboundAttemptFailed({
     String(errorCode || ""),
     Number(retryDelaySeconds || 120),
   ];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $7::text`;
-  }
+  values.push(resolvedTenantKey);
+  const where = `where id = $1::uuid and tenant_key = $7::text`;
 
   const result = await db.query(
     `
@@ -421,13 +404,10 @@ export async function scheduleOutboundRetry({
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return null;
   const values = [attemptId, Number(retryDelaySeconds || 120)];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $3::text`;
-  }
+  values.push(resolvedTenantKey);
+  const where = `where id = $1::uuid and tenant_key = $3::text`;
 
   const result = await db.query(
     `
@@ -454,13 +434,9 @@ export async function markOutboundAttemptDead(db, attemptId, tenantKey = "") {
   if (!attemptId || !isUuid(attemptId)) return null;
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
-  const values = [attemptId];
-  let where = `where id = $1::uuid`;
-
-  if (resolvedTenantKey) {
-    values.push(resolvedTenantKey);
-    where += ` and tenant_key = $2::text`;
-  }
+  if (!resolvedTenantKey) return null;
+  const values = [attemptId, resolvedTenantKey];
+  const where = `where id = $1::uuid and tenant_key = $2::text`;
 
   const result = await db.query(
     `
@@ -482,13 +458,26 @@ export async function markOutboundAttemptDead(db, attemptId, tenantKey = "") {
 
 export async function getOutboundAttemptsSummary(
   db,
-  tenantKey = getDefaultTenantKey()
+  tenantKey = ""
 ) {
   const resolvedTenantKey = resolveTenantKey(tenantKey);
 
   if (!isDbReady(db)) {
     return {
       tenantKey: resolvedTenantKey,
+      queued: 0,
+      sending: 0,
+      sent: 0,
+      failed: 0,
+      retrying: 0,
+      dead: 0,
+      total: 0,
+    };
+  }
+
+  if (!resolvedTenantKey) {
+    return {
+      tenantKey: "",
       queued: 0,
       sending: 0,
       sent: 0,
@@ -530,11 +519,12 @@ export async function getOutboundAttemptsSummary(
 
 export async function listFailedOutboundAttempts(
   db,
-  { tenantKey = getDefaultTenantKey(), limit = 50, status = "" } = {}
+  { tenantKey = "", limit = 50, status = "" } = {}
 ) {
   if (!isDbReady(db)) return [];
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return [];
   const allowed = new Set(["failed", "retrying", "dead", "queued", "sending", "sent"]);
   const useStatus = allowed.has(String(status || "").trim()) ? String(status).trim() : "";
   const values = [resolvedTenantKey];

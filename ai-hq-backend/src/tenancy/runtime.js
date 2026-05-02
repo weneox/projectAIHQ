@@ -1,6 +1,6 @@
 // src/tenancy/runtime.js
 
-import { getDefaultTenantKey, resolveTenantKey } from "./index.js";
+import { resolveTenantKey } from "./index.js";
 
 function s(v, d = "") {
   const x = String(v ?? "").trim();
@@ -35,7 +35,7 @@ function normalizeTenantRuntime(tenant) {
   const features = asObj(t.features);
 
   return {
-    tenantKey: s(t.tenant_key || t.tenantKey, getDefaultTenantKey()),
+    tenantKey: s(t.tenant_key || t.tenantKey),
     name: s(t.name),
     active: b(t.active, true),
     timezone: s(t.timezone, "Asia/Baku"),

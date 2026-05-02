@@ -1,7 +1,6 @@
 import express from "express";
 
 import { buildLaunchPosture } from "../../../services/launch/posture.js";
-import { getDefaultTenantKey } from "../../../tenancy/index.js";
 import { createInternalTokenGuard } from "../../../utils/auth.js";
 import { okJson } from "../../../utils/http.js";
 
@@ -14,8 +13,7 @@ function resolveInternalTenantKey(req = {}) {
     s(req.query?.tenantKey) ||
     s(req.query?.tenant_key) ||
     s(req.headers?.["x-tenant-key"]) ||
-    s(req.headers?.["x-tenant"]) ||
-    getDefaultTenantKey()
+    s(req.headers?.["x-tenant"])
   ).toLowerCase();
 }
 
@@ -80,6 +78,15 @@ export function launchInternalRoutes({ db }) {
     requireLaunchPostureInternal,
     async (req, res) => {
       try {
+        if (!resolveInternalTenantKey(req)) {
+          return res.status(400).json({
+            ok: false,
+            error: "tenantKey required",
+            code: "missing_tenant_context",
+            requestId: req.requestId || null,
+          });
+        }
+
         const payload = await buildLaunchPosture({
           db,
           req: attachInternalLaunchActor(req),

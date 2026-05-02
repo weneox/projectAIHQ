@@ -234,7 +234,7 @@ test("website widget install token fails closed for rejected origins", async () 
 
   await issueWidgetInstallToken(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 403);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_origin_mismatch");
   assert.deepEqual(findLoggedEvent(logEntries, "website.widget.launch.blocked"), {
@@ -300,7 +300,7 @@ test("website widget install token respects tenant config disable state", async 
 
   await issueWidgetInstallToken(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 403);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_widget_disabled");
 });
@@ -340,7 +340,7 @@ test("website widget install token blocks public launch until domain ownership i
 
   await issueWidgetInstallToken(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 403);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_domain_verification_required");
 });
@@ -457,7 +457,7 @@ test("website widget bootstrap blocks public launch when domain ownership is not
 
   await bootstrapWebsiteWidget(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 403);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_domain_verification_required");
   const event = findLoggedEvent(logEntries, "website.widget.bootstrap.failed");
@@ -831,7 +831,7 @@ test("website widget message logs a structured failure when the public session t
 
   await postWebsiteWidgetMessage(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 401);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "website_widget_session_invalid");
   const event = findLoggedEvent(logEntries, "website.widget.message.failed");

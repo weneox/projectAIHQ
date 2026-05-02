@@ -66,7 +66,7 @@ export function buildRequestLogContext(req = {}) {
       s(req.ip || req.socket?.remoteAddress),
     tenantId: s(req.auth?.tenantId || req.user?.tenantId || req.tenantId),
     tenantKey: s(req.auth?.tenantKey || req.user?.tenantKey || req.tenantKey),
-    userId: s(req.auth?.user?.id || req.user?.id),
+    userId: s(req.auth?.userId || req.auth?.user?.id || req.user?.id),
   });
 }
 
@@ -150,9 +150,14 @@ export function requestContextMiddleware({ logger = createLogger({ service: "ai-
     req.log.info("http.request.started");
 
     res.on("finish", () => {
+      const finishedContext = buildRequestLogContext(req);
       req.log.info("http.request.completed", {
+        endpoint: s(req.route?.path || req.path || req.originalUrl || req.url),
         statusCode: res.statusCode,
         durationMs: Math.max(0, Date.now() - startedAt),
+        tenantId: finishedContext.tenantId,
+        tenantKey: finishedContext.tenantKey,
+        userId: finishedContext.userId,
       });
     });
 

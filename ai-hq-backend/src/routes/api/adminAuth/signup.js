@@ -7,6 +7,8 @@ import {
   isUserAuthConfigured,
   userCookieOptions,
   clearUserCookie,
+  checkLoginRateLimit,
+  registerFailedLoginAttempt,
 } from "../../../utils/adminAuth.js";
 import { setNoStore, s, lower, getIp } from "./utils.js";
 import { dbGetTenantByKey, dbUpsertTenantAiPolicy, dbUpsertTenantCore, dbUpsertTenantProfile } from "../../../db/helpers/settings.js";
@@ -21,6 +23,10 @@ import {
 } from "../../../services/auth/canonicalUserAccess.js";
 import { isLikelyEmail, isReservedTenantKey, slugTenantKey, validTenantKey } from "../tenants/utils.js";
 import { markIdentityLogin, markUserLogin } from "./repository.js";
+
+const SIGNUP_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const SIGNUP_RATE_LIMIT_BLOCK_MS = 60 * 60 * 1000;
+const SIGNUP_RATE_LIMIT_MAX_ATTEMPTS = 3;
 
 function normalizeTenantKeySeed(value = "") {
   const seed = slugTenantKey(value);
@@ -52,6 +58,54 @@ async function reserveUniqueTenantKey(db, companyName = "", explicitTenantKey = 
   throw new Error("Unable to reserve a unique workspace key");
 }
 
+function buildSignupRateLimitScopes(email, ip) {
+  return [
+    `signup:ip:${s(ip || "unknown").toLowerCase()}`,
+    `signup:email:${lower(email)}`,
+  ];
+}
+
+async function checkSignupRateLimit(db, { email, ip }) {
+  const scopes = buildSignupRateLimitScopes(email, ip);
+
+  for (const scopeKey of scopes) {
+    const result = await checkLoginRateLimit(db, {
+      actorType: "user",
+      scopeKey,
+      ip,
+      windowMs: SIGNUP_RATE_LIMIT_WINDOW_MS,
+      maxAttempts: SIGNUP_RATE_LIMIT_MAX_ATTEMPTS,
+    });
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        scopeKey,
+        resetAt: result.resetAt,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function recordSignupAttempt(db, { email, ip }) {
+  const scopes = buildSignupRateLimitScopes(email, ip);
+
+  await Promise.allSettled(
+    scopes.map((scopeKey) =>
+      registerFailedLoginAttempt(db, {
+        actorType: "user",
+        scopeKey,
+        ip,
+        windowMs: SIGNUP_RATE_LIMIT_WINDOW_MS,
+        maxAttempts: SIGNUP_RATE_LIMIT_MAX_ATTEMPTS,
+        blockMs: SIGNUP_RATE_LIMIT_BLOCK_MS,
+      })
+    )
+  );
+}
+
 export function userSignupRoutes({
   db,
   resolveWorkspaceState = loadActiveWorkspaceContract,
@@ -81,6 +135,7 @@ export function userSignupRoutes({
     const companyName = s(req.body?.companyName || req.body?.company_name);
     const websiteUrl = s(req.body?.websiteUrl || req.body?.website_url);
     const explicitTenantKey = s(req.body?.tenantKey || req.body?.tenant_key).toLowerCase();
+    const ip = getIp(req);
 
     if (!email) {
       return res.status(400).json({ ok: false, error: "email is required" });
@@ -99,6 +154,27 @@ export function userSignupRoutes({
     }
 
     try {
+      const rateLimit = await checkSignupRateLimit(db, { email, ip });
+      if (!rateLimit.ok) {
+        if (rateLimit.resetAt) {
+          res.setHeader(
+            "Retry-After",
+            String(Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000)))
+          );
+        }
+
+        return res.status(429).json({
+          ok: false,
+          error: "Too many signup attempts",
+          code: "signup_rate_limited",
+          retryAt: rateLimit.resetAt
+            ? new Date(rateLimit.resetAt).toISOString()
+            : null,
+        });
+      }
+
+      await recordSignupAttempt(db, { email, ip });
+
       const existing = await ensureCanonicalAndLegacyAccessForEmail(db, { email });
       const legacyUsers = await listLegacyTenantUsersByEmail(db, { email });
       if (existing?.identity?.id || legacyUsers.length) {
@@ -129,10 +205,11 @@ export function userSignupRoutes({
           status: "active",
           password_hash: hashUserPassword(password),
           auth_provider: "local",
-          email_verified: true,
+          email_verified: false,
           permissions: {},
           meta: {
             signupCreated: true,
+            emailVerificationRequired: true,
           },
         });
 
@@ -201,6 +278,7 @@ export function userSignupRoutes({
           email: created.identity.primary_email || created.identity.normalized_email,
           fullName: created.user.full_name || "",
           role: created.user.role,
+          emailVerified: false,
           tenantId: created.tenant.id,
           tenantKey: created.tenant.tenant_key,
           companyName: created.tenant.company_name || "",

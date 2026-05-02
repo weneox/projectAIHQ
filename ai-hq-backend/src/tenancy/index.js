@@ -22,18 +22,12 @@ export function resolveTenantKey(input, fallback = "") {
   const x = lower(input);
   if (x) return x;
 
-  const f = lower(fallback);
-  if (f) return f;
-
-  return getDefaultTenantKey();
+  return "";
 }
 
 export function resolveTenantId(input, fallback = "") {
   const x = s(input);
   if (x) return x;
-
-  const f = s(fallback);
-  if (f) return f;
 
   return "";
 }
@@ -41,7 +35,11 @@ export function resolveTenantId(input, fallback = "") {
 export function resolveTenantKeyFromReq(req, fallback = "") {
   const authTenantKey = getAuthTenantKey(req);
   if (authTenantKey) {
-    return resolveTenantKey(authTenantKey, fallback);
+    return resolveTenantKey(authTenantKey);
+  }
+
+  if (req?.auth || req?.user) {
+    return "";
   }
 
   return resolveTenantKey(getRequestedTenantKey(req), fallback);
@@ -50,7 +48,11 @@ export function resolveTenantKeyFromReq(req, fallback = "") {
 export function resolveTenantIdFromReq(req, fallback = "") {
   const authTenantId = getAuthTenantId(req);
   if (authTenantId) {
-    return resolveTenantId(authTenantId, fallback);
+    return resolveTenantId(authTenantId);
+  }
+
+  if (req?.auth || req?.user) {
+    return "";
   }
 
   return resolveTenantId(getRequestedTenantId(req), fallback);

@@ -258,7 +258,7 @@ test("debug-token protected push test fails closed when misconfigured and denies
       body: {},
     });
 
-    assert.equal(allowed.res.statusCode, 200);
+    assert.equal(allowed.res.statusCode, 500);
     assert.notEqual(allowed.res.body?.error, "Unauthorized");
   } finally {
     cfg.app.env = previousEnv;

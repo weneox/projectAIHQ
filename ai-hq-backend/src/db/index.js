@@ -12,6 +12,12 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function clampInt(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
 function shouldUseSsl(url) {
   try {
     const u = new URL(url);
@@ -61,12 +67,25 @@ export async function initDb() {
   }
 
   const useSsl = shouldUseSsl(url);
+  const poolMax = clampInt(cfg?.db?.poolMax, 20, 5, 100);
+  const idleTimeoutMillis = clampInt(
+    cfg?.db?.poolIdleTimeoutMs,
+    30_000,
+    5_000,
+    300_000
+  );
+  const connectionTimeoutMillis = clampInt(
+    cfg?.db?.poolConnectionTimeoutMs,
+    3_000,
+    500,
+    30_000
+  );
 
   const pool = new Pool({
     connectionString: url,
-    max: 5,
-    idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 7_000,
+    max: poolMax,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
     ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
@@ -74,6 +93,9 @@ export async function initDb() {
     await pool.query("select 1 as ok");
     console.log("[ai-hq] DB=ON", {
       ssl: useSsl ? "on" : "off",
+      poolMax,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
       demoSeedEnabled: s(process.env.DB_SCHEMA_DEMO).toLowerCase() === "true",
     });
 

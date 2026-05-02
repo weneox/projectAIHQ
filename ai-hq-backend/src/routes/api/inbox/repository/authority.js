@@ -1,8 +1,5 @@
 import { isDbReady, isUuid } from "../../../../utils/http.js";
-import {
-  getDefaultTenantKey,
-  resolveTenantKey,
-} from "../../../../tenancy/index.js";
+import { resolveTenantKey } from "../../../../tenancy/index.js";
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
@@ -233,9 +230,8 @@ export async function getTenantByKey(
 ) {
   if (!isDbReady(db)) return null;
 
-  const resolvedTenantKey = resolveTenantKey(
-    tenantKey || getDefaultTenantKey()
-  );
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  if (!resolvedTenantKey) return null;
 
   try {
     const runtime = await runtimeLoader({

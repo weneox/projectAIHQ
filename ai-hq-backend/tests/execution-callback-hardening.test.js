@@ -514,7 +514,7 @@ test("execution callback rolls back job and content truth when later persistence
       },
     });
 
-    assert.equal(result.res.statusCode, 200);
+    assert.equal(result.res.statusCode, 500);
     assert.equal(result.res.body?.ok, false);
     assert.equal(db.jobs.get("11111111-1111-4111-8111-111111111111")?.status, "queued");
     assert.equal(db.content.get("33333333-3333-4333-8333-333333333333")?.status, "scene.queued");

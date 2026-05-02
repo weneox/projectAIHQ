@@ -360,7 +360,8 @@ test("outbound attempt sending only claims retry-eligible rows", async () => {
 
   const attempt = await markOutboundAttemptSending(
     db,
-    "33333333-3333-4333-8333-333333333333"
+    "33333333-3333-4333-8333-333333333333",
+    "acme"
   );
 
   assert.equal(attempt?.status, "sending");

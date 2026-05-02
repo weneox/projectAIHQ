@@ -1,4 +1,4 @@
-import { getDefaultTenantKey, resolveTenantKey } from "../../tenancy/index.js";
+import { resolveTenantKey } from "../../tenancy/index.js";
 import {
   createRuntimeAuthorityError,
   isRuntimeAuthorityError,
@@ -16,7 +16,7 @@ import {
 } from "./shared.js";
 
 export function getResolvedTenantKey(tenantKey) {
-  return resolveTenantKey(tenantKey, getDefaultTenantKey());
+  return resolveTenantKey(tenantKey);
 }
 
 export function normalizeServiceCatalogEntry(item) {

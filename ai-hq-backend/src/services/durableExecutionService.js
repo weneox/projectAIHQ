@@ -199,12 +199,7 @@ function shouldKeepBubbleSentOnMetaInternalError({
   failure = {},
   delivery = {},
 } = {}) {
-  if (lower(provider) !== "meta") return false;
-
-  if (isControlOutboundActionType(actionType)) return true;
-
-  return hasRenderableOutboundText(message) &&
-    isInternalMetaBridgeError({ failure, delivery });
+  return false;
 }
 
 function buildInternalMetaBridgeProviderResponse({
@@ -615,6 +610,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       await markOutboundAttemptFailed({
         db,
         attemptId,
+        tenantKey,
         error: missingMessage,
         errorCode: missing,
         providerResponse: {
@@ -709,6 +705,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         updatedAttempt = await markOutboundAttemptSent({
           db,
           attemptId,
+          tenantKey,
           providerMessageId: delivery?.providerMessageId || null,
           providerResponse,
         });
@@ -778,13 +775,14 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         updatedAttempt = await markOutboundAttemptFailed({
           db,
           attemptId,
+          tenantKey,
           error: failure.errorMessage,
           errorCode: failure.errorCode,
           providerResponse: delivery.providerResponse || delivery.json || {},
           retryDelaySeconds: 120,
         });
       } else {
-        updatedAttempt = await markOutboundAttemptDead(db, attemptId);
+        updatedAttempt = await markOutboundAttemptDead(db, attemptId, tenantKey);
       }
     }
 
@@ -855,6 +853,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
     updatedAttempt = await markOutboundAttemptSent({
       db,
       attemptId,
+      tenantKey,
       providerMessageId,
       providerResponse,
     });

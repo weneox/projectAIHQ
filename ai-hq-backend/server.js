@@ -909,7 +909,9 @@ async function main() {
     return res.status(404).json({
       ok: false,
       error: "Not found",
+      code: "not_found",
       path: req.path,
+      requestId: req.requestId || null,
     });
   });
 
@@ -919,6 +921,9 @@ async function main() {
     (req?.log || logger).error("http.request.failed", err, {
       path: req?.originalUrl || req?.url || "",
       method: req?.method || "",
+      requestId: req?.requestId || null,
+      tenantId: s(req?.auth?.tenantId || req?.tenantId),
+      tenantKey: s(req?.auth?.tenantKey || req?.tenantKey),
     });
 
     if (msg.toLowerCase().includes("cors")) {
@@ -926,7 +931,9 @@ async function main() {
       return res.status(403).json({
         ok: false,
         error: msg,
+        code: "cors_blocked",
         origin: req.headers.origin || null,
+        requestId: req.requestId || null,
       });
     }
 
@@ -934,6 +941,8 @@ async function main() {
     return res.status(500).json({
       ok: false,
       error: "Server error",
+      code: "server_error",
+      requestId: req.requestId || null,
       details: cfg.app.env !== "production" ? msg : undefined,
     });
   });

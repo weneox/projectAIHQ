@@ -9,6 +9,10 @@ import {
   loadUserSessionFromRequest,
   requireTrustedBrowserOriginForCookieAuth,
 } from "../../utils/adminAuth.js";
+import {
+  getRequestedTenantId,
+  getRequestedTenantKey,
+} from "../../utils/auth.js";
 import { isDbReady, serviceUnavailableJson } from "../../utils/http.js";
 import { hasFeature } from "../../config/features.js";
 import { shouldEnableDebugRoutes } from "../../utils/securitySurface.js";
@@ -94,6 +98,81 @@ function mapSessionPayloadToUser(payload = {}) {
   };
 }
 
+function collectClientTenantOverrides(req) {
+  const tenantIds = [
+    getRequestedTenantId(req),
+    s(req?.body?.tenantId),
+    s(req?.body?.tenant_id),
+    s(req?.query?.tenantId),
+    s(req?.query?.tenant_id),
+    s(req?.headers?.["x-tenant-id"]),
+  ]
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  const tenantKeys = [
+    getRequestedTenantKey(req),
+    s(req?.body?.tenantKey),
+    s(req?.body?.tenant_key),
+    s(req?.query?.tenantKey),
+    s(req?.query?.tenant_key),
+    s(req?.headers?.["x-tenant-key"]),
+  ]
+    .map((item) => s(item).toLowerCase())
+    .filter(Boolean);
+
+  return {
+    tenantIds: [...new Set(tenantIds)],
+    tenantKeys: [...new Set(tenantKeys)],
+  };
+}
+
+function enforceAuthenticatedTenantContextMiddleware(req, res, next) {
+  const tenantId = s(req?.auth?.tenantId);
+  const tenantKey = s(req?.auth?.tenantKey).toLowerCase();
+
+  if (!tenantId || !tenantKey) {
+    clearUserCookie(res);
+    return res.status(401).json({
+      ok: false,
+      error: "Unauthorized",
+      code: "missing_authenticated_tenant_context",
+      requestId: req.requestId || null,
+    });
+  }
+
+  const { tenantIds, tenantKeys } = collectClientTenantOverrides(req);
+  const mismatchedTenantId = tenantIds.find((item) => item !== tenantId);
+  const mismatchedTenantKey = tenantKeys.find((item) => item !== tenantKey);
+
+  if (mismatchedTenantId || mismatchedTenantKey) {
+    req.log?.warn?.("auth.tenant_override_blocked", {
+      tenantId,
+      tenantKey,
+      requestedTenantId: mismatchedTenantId || "",
+      requestedTenantKey: mismatchedTenantKey || "",
+      endpoint: req.originalUrl || req.url || "",
+    });
+
+    return res.status(403).json({
+      ok: false,
+      error: "Forbidden",
+      code: "tenant_context_mismatch",
+      requestId: req.requestId || null,
+    });
+  }
+
+  req.tenantId = tenantId;
+  req.tenantKey = tenantKey;
+  req.tenant = {
+    id: tenantId,
+    tenant_id: tenantId,
+    tenant_key: tenantKey,
+  };
+
+  return next();
+}
+
 async function requireUserSessionMiddleware(req, res, next) {
   if (isInternalBypassPath(req)) {
     return next();
@@ -104,18 +183,38 @@ async function requireUserSessionMiddleware(req, res, next) {
   });
   const payload = session?.payload || null;
 
-  if (!session?.ok || !payload) {
+  if (!session?.ok || !payload || !payload.tenantId || !payload.tenantKey) {
     clearUserCookie(res);
     return res.status(401).json({
       ok: false,
       error: "Unauthorized",
       reason: session?.error || "invalid session",
+      code: !payload?.tenantId || !payload?.tenantKey
+        ? "missing_authenticated_tenant_context"
+        : "invalid_session",
+      requestId: req.requestId || null,
     });
   }
 
   req.adminSession = null;
   req.auth = mapSessionPayloadToAuth(payload);
   req.user = mapSessionPayloadToUser(payload);
+  req.tenantId = req.auth.tenantId;
+  req.tenantKey = req.auth.tenantKey;
+  req.tenant = {
+    id: req.auth.tenantId,
+    tenant_id: req.auth.tenantId,
+    tenant_key: req.auth.tenantKey,
+  };
+
+  if (req.log?.child) {
+    req.log = req.log.child({
+      tenantId: req.auth.tenantId,
+      tenantKey: req.auth.tenantKey,
+      userId: req.auth.userId,
+      role: req.auth.role,
+    });
+  }
 
   return next();
 }
@@ -151,6 +250,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 
   // authenticated app routes
   r.use(requireUserSessionMiddleware);
+  r.use(enforceAuthenticatedTenantContextMiddleware);
   r.use(createRequireOperationalDbMiddleware({ db }));
 
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
@@ -215,4 +315,6 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 
 export const __test__ = {
   createRequireOperationalDbMiddleware,
+  enforceAuthenticatedTenantContextMiddleware,
+  requireUserSessionMiddleware,
 };

@@ -1187,7 +1187,7 @@ test("comments ingest fails closed when strict runtime authority is unavailable"
 
     await handler(req, res);
 
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 503);
     assert.equal(res.body?.ok, false);
     assert.equal(res.body?.error, "runtime_authority_unavailable");
     assert.equal(res.body?.details?.service, "comments.ingest");
@@ -1418,7 +1418,7 @@ test("inbox ingest fails closed when strict runtime authority is unavailable", a
       },
     });
 
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 503);
     assert.equal(res.body?.ok, false);
     assert.equal(res.body?.error, "runtime_authority_unavailable");
     assert.equal(res.body?.details?.service, "inbox.ingest");

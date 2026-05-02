@@ -244,7 +244,7 @@ test("chat handler fails closed when strict runtime authority is unavailable", a
   await postChat(req, res);
 
   assert.equal(kernelCalled, false);
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 503);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "runtime_authority_unavailable");
   assert.equal(res.body?.details?.authority?.required, true);

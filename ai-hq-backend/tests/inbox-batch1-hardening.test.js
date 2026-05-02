@@ -142,7 +142,7 @@ test("inbox thread status mutation fails closed when the uuid is outside the aut
 
   assert.equal(sawScopedLookup, true);
   assert.equal(sawScopedUpdate, false);
-  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.res.statusCode, 404);
   assert.equal(result.res.body?.ok, false);
   assert.equal(result.res.body?.error, "thread not found");
 });

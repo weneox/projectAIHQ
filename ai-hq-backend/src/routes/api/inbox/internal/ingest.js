@@ -101,7 +101,6 @@ function buildIngestFailurePayload({
       threadId: s(thread?.id),
       messageId: s(message?.id),
       tenantId: s(tenantId),
-      stack: s(error?.stack),
     },
     actions: [],
   };

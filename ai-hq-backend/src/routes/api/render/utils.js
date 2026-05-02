@@ -1,5 +1,5 @@
 import { fixText } from "../../../utils/textFix.js";
-import { getDefaultTenantKey, resolveTenantKey } from "../../../tenancy/index.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
 
 export function asObj(x) {
   return x && typeof x === "object" && !Array.isArray(x) ? x : {};
@@ -14,7 +14,7 @@ export function clean(x) {
 }
 
 export function resolveTenant(v) {
-  return resolveTenantKey(v, getDefaultTenantKey());
+  return resolveTenantKey(v);
 }
 
 export function pickAspectRatioFromFormat(format) {
@@ -37,11 +37,5 @@ export function normalizeFormat(v) {
 }
 
 export function resolveRenderTenantKey(body, defaultTenantKey) {
-  return (
-    fixText(
-      resolveTenant(
-        clean(body?.tenantKey || body?.tenantId || defaultTenantKey)
-      )
-    ) || defaultTenantKey
-  );
+  return fixText(resolveTenant(clean(body?.tenantKey || body?.tenantId)));
 }

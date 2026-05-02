@@ -1,5 +1,5 @@
 import { deepFix, fixText } from "../../../utils/textFix.js";
-import { resolveTenantKey, getDefaultTenantKey } from "../../../tenancy/index.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
 
 export function s(v) {
   return String(v ?? "").trim();
@@ -11,7 +11,7 @@ export function num(v, fallback = 0) {
 }
 
 export function getResolvedTenantKey(tenantKey) {
-  return resolveTenantKey(tenantKey, getDefaultTenantKey());
+  return resolveTenantKey(tenantKey);
 }
 
 export function normalizePriority(v) {

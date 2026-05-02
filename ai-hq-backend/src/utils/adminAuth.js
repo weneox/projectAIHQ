@@ -310,6 +310,21 @@ async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
     }
 
     const payload = normalizeUserSessionPayload(row);
+    if (
+      !payload?.identityId ||
+      !payload?.membershipId ||
+      !payload?.tenantId ||
+      !payload?.tenantKey ||
+      !payload?.userId ||
+      !payload?.email
+    ) {
+      return { ok: false, error: "invalid session payload" };
+    }
+
+    if (payload.exp && nowSec() >= Number(payload.exp)) {
+      return { ok: false, error: "session expired" };
+    }
+
     if (touch) {
       await touchUserSession(db, payload?.sessionId);
     }
@@ -376,6 +391,8 @@ async function touchUserSession(db, sessionId = "") {
       update auth_identity_sessions
       set last_seen_at = now()
       where id = $1
+        and revoked_at is null
+        and expires_at > now()
       `,
       [id],
       1200
@@ -393,6 +410,8 @@ async function touchAdminSession(db, sessionId = "") {
       update admin_auth_sessions
       set last_seen_at = now()
       where id = $1
+        and revoked_at is null
+        and expires_at > now()
       `,
       [id],
       1200
@@ -1066,6 +1085,18 @@ export function verifyUserPassword(password, storedHash) {
 }
 
 export async function createUserSessionRecord(db, user = {}, meta = {}) {
+  const identityId = s(user.identity_id || user.identityId);
+  const tenantId = s(user.tenant_id || user.tenantId || user.active_tenant_id);
+  const membershipId = s(
+    user.membership_id || user.membershipId || user.active_membership_id
+  );
+
+  if (!identityId || !tenantId || !membershipId) {
+    const err = new Error("user session requires identity, tenant, and membership context");
+    err.code = "INVALID_SESSION_CONTEXT";
+    throw err;
+  }
+
   const token = createUserSessionToken(user, meta);
   const ttlMs = ttlHoursToMs(cfg.auth.userSessionTtlHours, 24 * 7);
   const expiresAt = addMs(nowDate(), ttlMs).toISOString();
@@ -1087,9 +1118,9 @@ export async function createUserSessionRecord(db, user = {}, meta = {}) {
     values ($1,$2,$3,$4,$5,$6,$7,$8,now())
     `,
     [
-      s(user.identity_id || user.identityId),
-      s(user.tenant_id || user.tenantId || user.active_tenant_id),
-      s(user.membership_id || user.membershipId || user.active_membership_id),
+      identityId,
+      tenantId,
+      membershipId,
       hashSessionToken(token),
       Number(user.session_version ?? user.sessionVersion ?? 1),
       s(meta.ip),
@@ -1137,6 +1168,7 @@ export async function revokeUserSessionByToken(db, token = "") {
     set revoked_at = now(), last_seen_at = now()
     where session_token_hash = $1
       and revoked_at is null
+      and expires_at > now()
     `,
     [hashSessionToken(raw)],
     1500

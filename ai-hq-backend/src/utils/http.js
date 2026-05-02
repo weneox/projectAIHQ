@@ -59,7 +59,75 @@ function sendJson(res, statusCode, payload) {
   return payload;
 }
 
+function statusFromFailurePayload(payload = {}) {
+  const explicit = Number(payload?.statusCode || payload?.status || 0);
+  if (explicit >= 400 && explicit <= 599) return explicit;
+
+  const code = lower(payload?.code || payload?.reasonCode || payload?.error || "");
+  const message = lower(payload?.error || payload?.message || payload?.reason || "");
+  const combined = `${code} ${message}`;
+
+  if (
+    /\bunauthorized\b|invalid_session|invalid session|missing session|session not found|session_lookup|auth db/.test(
+      combined
+    )
+  ) {
+    return combined.includes("misconfigured") ? 500 : 401;
+  }
+  if (/session_invalid|invalid token|invalid_token/.test(combined)) return 401;
+  if (/runtime_authority_unavailable|runtime unavailable/.test(combined)) return 503;
+  if (/origin_mismatch|verification_required|disabled/.test(combined)) return 403;
+  if (/forbidden|csrf|not_allowed|mismatch|blocked/.test(combined)) return 403;
+  if (/db_unavailable|db unavailable|database unavailable|db disabled/.test(combined)) {
+    return 503;
+  }
+  if (/not found/.test(combined)) return 404;
+  if (/required|invalid|must be|missing|bad request/.test(combined)) return 400;
+  if (/timeout|unavailable|retry/.test(combined)) return 503;
+
+  return 500;
+}
+
+function normalizeFailurePayload(res, payload = {}) {
+  if (!payload || payload.ok !== false) return payload;
+
+  const requestId = s(res?.req?.requestId || res?.req?.headers?.["x-request-id"]);
+  const details = payload.details && typeof payload.details === "object"
+    ? { ...payload.details }
+    : payload.details;
+
+  if (details && typeof details === "object") {
+    delete details.stack;
+  }
+
+  const out = {
+    ok: false,
+    error: s(payload.error || payload.message || "Request failed"),
+    code: s(payload.code || payload.reasonCode || ""),
+    ...payload,
+    ...(details !== payload.details ? { details } : {}),
+  };
+
+  delete out.status;
+  delete out.statusCode;
+  delete out.stack;
+
+  if (requestId && !out.requestId) {
+    out.requestId = requestId;
+  }
+
+  return out;
+}
+
 export function okJson(res, payload) {
+  if (payload?.ok === false) {
+    return sendJson(
+      res,
+      statusFromFailurePayload(payload),
+      normalizeFailurePayload(res, payload)
+    );
+  }
+
   return sendJson(res, 200, payload);
 }
 
@@ -68,10 +136,13 @@ export function serviceUnavailableJson(
   error = "database unavailable",
   extra = {}
 ) {
+  const requestId = s(res?.req?.requestId || res?.req?.headers?.["x-request-id"]);
+
   return sendJson(res, 503, {
     ok: false,
     error,
     code: "DB_UNAVAILABLE",
+    ...(requestId ? { requestId } : {}),
     ...extra,
   });
 }

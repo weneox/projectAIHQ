@@ -1,7 +1,7 @@
 // src/services/inboxPolicy.js
 // FINAL v4.2 — tenant-safe + strict policy normalization + telegram first-class
 
-import { getDefaultTenantKey, resolveTenantKey } from "../tenancy/index.js";
+import { resolveTenantKey } from "../tenancy/index.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -321,10 +321,7 @@ export function getInboxPolicy({ tenantKey, channel, tenant = null } = {}) {
   const ch = normalizeInboxChannel(channel);
   const timezone =
     s(tenant?.timezone || getDefaultTimezone()) || getDefaultTimezone();
-  const resolvedTenantKey = resolveTenantKey(
-    tenantKey || tenant?.tenant_key,
-    getDefaultTenantKey()
-  );
+  const resolvedTenantKey = resolveTenantKey(tenantKey || tenant?.tenant_key);
   const channelAllowed = !ch || policy.allowedChannels.includes(ch);
   const telegramControlsDisabled = ch === "telegram";
 

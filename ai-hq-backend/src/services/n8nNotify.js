@@ -1,5 +1,5 @@
 import { cfg } from "../config.js";
-import { getDefaultTenantKey, resolveTenantKey } from "../tenancy/index.js";
+import { resolveTenantKey } from "../tenancy/index.js";
 import { deepFix } from "../utils/textFix.js";
 import { absoluteCallbackUrl } from "../utils/url.js";
 import { buildPromptBundle } from "./promptBundle.js";
@@ -224,8 +224,7 @@ function pickTenantKey(extra = {}, proposal = null) {
     extra.tenantKey ||
       extra.tenant_key ||
       proposal?.tenant_key ||
-      proposal?.tenantKey,
-    getDefaultTenantKey()
+      proposal?.tenantKey
   );
 }
 

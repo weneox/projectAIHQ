@@ -184,6 +184,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     await markOutboundAttemptFailed({
       db,
       attemptId: attempt.id,
+      tenantKey: attempt?.tenant_key,
       error: "message not found",
       errorCode: "message_missing",
       providerResponse: {},
@@ -205,6 +206,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     await markOutboundAttemptFailed({
       db,
       attemptId: attempt.id,
+      tenantKey: attempt?.tenant_key,
       error: "thread not found",
       errorCode: "thread_missing",
       providerResponse: {},
@@ -222,7 +224,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
   }
 
   const provider = resolveAttemptProvider({ attempt, thread, message });
-  const sending = await markOutboundAttemptSending(db, attempt.id);
+  const sending = await markOutboundAttemptSending(db, attempt.id, attempt?.tenant_key);
   if (!sending?.id) return;
 
   try {
@@ -264,12 +266,13 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
       ? await markOutboundAttemptFailed({
           db,
           attemptId: attempt.id,
+          tenantKey: attempt?.tenant_key,
           error: failure.errorMessage,
           errorCode: failure.errorCode,
           providerResponse: delivery.providerResponse || delivery.json || {},
           retryDelaySeconds: 120,
         })
-      : await markOutboundAttemptDead(db, attempt.id);
+      : await markOutboundAttemptDead(db, attempt.id, attempt?.tenant_key);
 
     await updateOutboundMessageDeliveryFailure({
       db,
@@ -325,6 +328,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
   const sent = await markOutboundAttemptSent({
     db,
     attemptId: attempt.id,
+    tenantKey: attempt?.tenant_key,
     providerMessageId,
     providerResponse,
   });

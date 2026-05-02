@@ -217,6 +217,9 @@ export const cfg = {
     url: s(process.env.DATABASE_URL, ""),
     migrateTx: b(process.env.DB_MIGRATE_TX, true),
     autoMigrateOnStartup: b(process.env.DB_AUTO_MIGRATE_ON_STARTUP, false),
+    poolMax: n(process.env.DB_POOL_MAX, 20),
+    poolIdleTimeoutMs: n(process.env.DB_POOL_IDLE_TIMEOUT_MS, 30_000),
+    poolConnectionTimeoutMs: n(process.env.DB_POOL_CONNECTION_TIMEOUT_MS, 3_000),
   },
 
   operational: {

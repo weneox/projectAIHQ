@@ -686,7 +686,10 @@ test("signup creates canonical identity, membership, bridge user, and authentica
   assert.equal(db.authSessions.size, 1);
   const identity = Array.from(db.identities.values())[0];
   assert.equal(identity.normalized_email, "owner@acme.test");
+  assert.equal(identity.email_verified, false);
   assert.ok(identity.password_hash.startsWith("s2u:"));
+  const user = Array.from(db.users.values())[0];
+  assert.equal(user.email_verified, false);
 });
 
 test("login repairs a legacy-only user into canonical identity auth and succeeds", async () => {

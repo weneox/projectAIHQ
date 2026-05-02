@@ -1,4 +1,4 @@
-import { getDefaultTenantKey, resolveTenantKey } from "../../tenancy/index.js";
+import { resolveTenantKey } from "../../tenancy/index.js";
 
 export function s(value) {
   return String(value ?? "").trim();
@@ -87,7 +87,7 @@ export function fixMojibake(input) {
 }
 
 export function getResolvedTenantKey(tenantKey) {
-  return resolveTenantKey(tenantKey, getDefaultTenantKey());
+  return resolveTenantKey(tenantKey);
 }
 
 export function normalizeWhitespace(text) {
