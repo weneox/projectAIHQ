@@ -825,14 +825,14 @@ export default function Inbox() {
     [readinessState.channelSummary]
   );
 
-  const truthReady = useMemo(
+  const _truthReady = useMemo(
     () =>
       readinessState.truth?.ready === true &&
       lower(readinessState.truth?.status) === "ready",
     [readinessState.truth]
   );
 
-  const runtimeReady = useMemo(
+  const _runtimeReady = useMemo(
     () =>
       readinessState.runtime?.ready === true &&
       lower(readinessState.runtime?.status) === "ready",
@@ -969,6 +969,7 @@ export default function Inbox() {
     </div>
   );
 }
+
 
 
 
