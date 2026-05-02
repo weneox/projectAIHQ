@@ -1,6 +1,7 @@
 import express from "express";
 
 import { requireUserSession } from "../../../utils/adminAuth.js";
+import { createLogger } from "../../../utils/logger.js";
 import {
   ok,
   bad,
@@ -33,6 +34,11 @@ import {
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
 } from "./website.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "channel-connect-routes",
+});
 
 function respondRouteError(res, err, fallbackMessage, extra = {}) {
   const status = Number(err?.status || 500);
@@ -102,7 +108,7 @@ export function channelConnectRoutes({ db }) {
       return ok(res, result?.payload || {});
     } catch (err) {
       const stateRaw = s(req.query?.state || "");
-      console.error("META_CALLBACK_ROUTE_ERROR_V1", {
+      log.error("meta.callback.route_error", {
         hasCode: Boolean(s(req.query?.code || "")),
         hasErrorQuery: Boolean(
           req.query?.error || req.query?.error_code || req.query?.error_message

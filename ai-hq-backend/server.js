@@ -12,16 +12,19 @@ import { printFeatureReport } from "./src/config/featureReport.js";
 import {
   initDb,
   getDb,
+  getWorkerDb,
   migrate,
   getMigrationStatus,
   decideStartupMigrationPolicy,
   closeDb,
 } from "./src/db/index.js";
+import { runWithSystemDbContext } from "./src/db/tenantContext.js";
 import { createWsHub } from "./src/wsHub.js";
 import { apiRouter } from "./src/routes/api.js";
 import { adminAuthRoutes } from "./src/routes/api/adminAuth/index.js";
 import { buildRootHealthResponse } from "./src/routes/api/health/builders.js";
 import { createLogger, requestContextMiddleware } from "./src/utils/logger.js";
+import { apiResponseStandardMiddleware } from "./src/utils/apiResponse.js";
 import {
   buildAllowedCorsOrigins,
   isAllowedOrigin,
@@ -184,6 +187,7 @@ function createAuditLogger(db) {
 
 async function main() {
   const processWorkerCapable = cfg.app.processRole !== "web";
+  const processApiCapable = cfg.app.processRole !== "worker";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
   validateAndLogMetaConnectConfig(logger);
   assertConfigValid(console);
@@ -275,6 +279,7 @@ async function main() {
   app.use(express.json({ limit: "8mb" }));
   app.use(express.urlencoded({ extended: false }));
   app.use(requestContextMiddleware({ logger }));
+  app.use(apiResponseStandardMiddleware);
   app.use((req, res, next) => {
     attachBuildHeaders(res);
     next();
@@ -645,7 +650,10 @@ async function main() {
   });
 
   try {
-    await initDb();
+    await initDb({ poolRole: "api" });
+    if (processWorkerCapable) {
+      await initDb({ poolRole: "worker" });
+    }
 
     if (getDb()) {
       configureRuntimeSignalPersistence((incident) =>
@@ -658,20 +666,28 @@ async function main() {
         })
       );
 
-      const pruneOutcome = await pruneRuntimeIncidentTrail({
-        db: getDb(),
-        retainDays: runtimeIncidentRetentionPolicy.retainDays,
-        maxRows: runtimeIncidentRetentionPolicy.maxRows,
-      });
+      const pruneOutcome = await runWithSystemDbContext(
+        "runtime_incident_prune_startup",
+        () =>
+          pruneRuntimeIncidentTrail({
+            db: getDb(),
+            retainDays: runtimeIncidentRetentionPolicy.retainDays,
+            maxRows: runtimeIncidentRetentionPolicy.maxRows,
+          })
+      );
       logger.info("runtime_incident_trail.pruned", pruneOutcome);
 
       const pruneTimer = setInterval(async () => {
         try {
-          const outcome = await pruneRuntimeIncidentTrail({
-            db: getDb(),
-            retainDays: runtimeIncidentRetentionPolicy.retainDays,
-            maxRows: runtimeIncidentRetentionPolicy.maxRows,
-          });
+          const outcome = await runWithSystemDbContext(
+            "runtime_incident_prune_timer",
+            () =>
+              pruneRuntimeIncidentTrail({
+                db: getDb(),
+                retainDays: runtimeIncidentRetentionPolicy.retainDays,
+                maxRows: runtimeIncidentRetentionPolicy.maxRows,
+              })
+          );
 
           if (
             Number(outcome.deletedByAge || 0) > 0 ||
@@ -690,7 +706,10 @@ async function main() {
 
       pruneTimer.unref?.();
 
-      const migrationStatus = await getMigrationStatus();
+      const migrationStatus = await runWithSystemDbContext(
+        "schema_migration_status",
+        () => getMigrationStatus()
+      );
       const pendingMigrations = Array.isArray(migrationStatus?.pending)
         ? migrationStatus.pending.map((item) => s(item?.name)).filter(Boolean)
         : [];
@@ -765,9 +784,13 @@ async function main() {
       });
 
     try {
-      const readinessSummary = await getOperationalReadinessSummary(db, {
-        enforced: enforceOperationalReadiness,
-      });
+      const readinessSummary = await runWithSystemDbContext(
+        "startup_operational_readiness",
+        () =>
+          getOperationalReadinessSummary(db, {
+            enforced: enforceOperationalReadiness,
+          })
+      );
 
       const hasTenantScopedOperationalBlockers =
         hasOperationalReadinessBlockers(readinessSummary);
@@ -811,8 +834,10 @@ async function main() {
 
   const dbDisabled = !db;
   const audit = createAuditLogger(db);
+  const workerDb = getWorkerDb();
 
   app.locals.db = db;
+  app.locals.workerDb = workerDb;
   app.locals.operationalReadinessStartup = startupOperationalReadiness;
 
   const server = http.createServer(app);
@@ -868,23 +893,23 @@ async function main() {
   );
 
   const durableExecutionWorker = createDurableExecutionWorker({
-    db,
+    db: workerDb,
     wsHub,
   });
   app.locals.durableExecutionWorker = durableExecutionWorker;
 
   const sourceSyncWorker = createSourceSyncWorker({
-    db,
+    db: workerDb,
   });
   app.locals.sourceSyncWorker = sourceSyncWorker;
 
   const draftScheduleWorker = createDraftScheduleWorker({
-    db,
+    db: workerDb,
   });
   app.locals.draftScheduleWorker = draftScheduleWorker;
 
   const mediaJobWorker = createMediaJobWorker({
-    db,
+    db: workerDb,
   });
   app.locals.mediaJobWorker = mediaJobWorker;
 
@@ -955,6 +980,7 @@ async function main() {
       hasDb,
       processRole: cfg.app.processRole,
       processWorkerCapable,
+      processApiCapable,
       corsOrigin: cfg.urls.corsOrigin,
       allowedOrigins,
       sourceSyncWorkerEnabled: !!cfg.workers.sourceSyncWorkerEnabled,

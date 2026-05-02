@@ -5,6 +5,12 @@ import {
   loadUserSessionFromRequest,
   getUserCookieName,
 } from "../../../utils/adminAuth.js";
+import { createLogger } from "../../../utils/logger.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "admin-auth-utils",
+});
 
 export function s(v, d = "") {
   return String(v ?? d).trim();
@@ -72,7 +78,10 @@ export async function queryDbWithTimeout(db, queryText, params = [], { timeoutMs
       s(err?.code).toUpperCase() === "QUERY_TIMEOUT" ||
       /timeout|timed out/i.test(s(err?.message))
     ) {
-      console.error(`[${queryLabel}] timed out after ${queryTimeoutMs}ms`);
+      log.error("auth.db.timeout", {
+        queryLabel,
+        timeoutMs: queryTimeoutMs,
+      });
       err.code = "AUTH_DB_TIMEOUT";
       throw err;
     }

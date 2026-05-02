@@ -1,5 +1,6 @@
 import express from "express";
 import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
+import { requireWebhookIngestionRateLimit } from "../../../utils/rateLimit.js";
 import {
   ingestCommentHandler,
   listCommentsHandler,
@@ -12,7 +13,7 @@ import {
 export function commentsRoutes({ db, wsHub }) {
   const r = express.Router();
 
-  r.post("/comments/ingest", ingestCommentHandler({ db, wsHub }));
+  r.post("/comments/ingest", requireWebhookIngestionRateLimit, ingestCommentHandler({ db, wsHub }));
   r.get("/comments", requireOperatorSurfaceAccess, listCommentsHandler({ db }));
   r.get("/comments/:id", requireOperatorSurfaceAccess, getCommentHandler({ db }));
   r.post("/comments/:id/review", reviewCommentHandler({ db, wsHub }));

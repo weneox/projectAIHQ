@@ -1,6 +1,15 @@
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { resolveTenantKey } from "../../../../tenancy/index.js";
+import { getTenantContext } from "../../../../db/tenantContext.js";
 import { normalizeMessage } from "../shared.js";
+
+function contextTenantKey() {
+  return resolveTenantKey(getTenantContext()?.tenantKey || "");
+}
+
+function isGuardedDb(db) {
+  return db?.__tenantGuardedDb === true;
+}
 
 export async function findExistingInboundMessage({
   db,
@@ -62,9 +71,12 @@ export async function findExistingOutboundMessage({
   return normalizeMessage(result.rows?.[0] || null);
 }
 
-export async function getMessageById(db, messageId) {
+export async function getMessageById(db, messageId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
     `
@@ -73,9 +85,10 @@ export async function getMessageById(db, messageId) {
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
     from inbox_messages
     where id = $1::uuid
+      ${resolvedTenantKey ? "and tenant_key = $2::text" : ""}
     limit 1
     `,
-    [messageId]
+    resolvedTenantKey ? [messageId, resolvedTenantKey] : [messageId]
   );
 
   return normalizeMessage(result.rows?.[0] || null);
@@ -86,9 +99,12 @@ export async function updateOutboundMessageProviderId({
   messageId,
   providerMessageId,
   providerResponse = {},
+  tenantKey = "",
 }) {
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
+  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
     `
@@ -98,6 +114,7 @@ export async function updateOutboundMessageProviderId({
       sent_at = coalesce(sent_at, now()),
       meta = coalesce(meta, '{}'::jsonb) || $3::jsonb
     where id = $1::uuid
+      ${resolvedTenantKey ? "and tenant_key = $4::text" : ""}
     returning
       id, thread_id, tenant_key, direction, sender_type,
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
@@ -115,6 +132,7 @@ export async function updateOutboundMessageProviderId({
           updatedAt: new Date().toISOString(),
         },
       }),
+      ...(resolvedTenantKey ? [resolvedTenantKey] : []),
     ]
   );
 
@@ -128,9 +146,12 @@ export async function updateOutboundMessageDeliveryFailure({
   error = "send failed",
   errorCode = "",
   providerResponse = {},
+  tenantKey = "",
 }) {
   if (!isDbReady(db)) return null;
   if (!messageId || !isUuid(messageId)) return null;
+  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const normalizedStatus = String(status || "").trim().toLowerCase() === "dead"
     ? "dead"
@@ -142,6 +163,7 @@ export async function updateOutboundMessageDeliveryFailure({
     set
       meta = coalesce(meta, '{}'::jsonb) || $2::jsonb
     where id = $1::uuid
+      ${resolvedTenantKey ? "and tenant_key = $3::text" : ""}
     returning
       id, thread_id, tenant_key, direction, sender_type,
       external_message_id, message_type, text, attachments, meta, sent_at, created_at
@@ -159,6 +181,7 @@ export async function updateOutboundMessageDeliveryFailure({
           updatedAt: new Date().toISOString(),
         },
       }),
+      ...(resolvedTenantKey ? [resolvedTenantKey] : []),
     ]
   );
 

@@ -1,3 +1,10 @@
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "decision-events",
+});
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -65,7 +72,7 @@ function canUseQuery(db) {
 
 function logSafeDecisionEventFailure(error, input = {}, savepointUsed = false) {
   try {
-    console.warn("[ai-hq] safeAppendDecisionEvent failed", {
+    log.warn("decision_event.append.failed", {
       message: s(error?.message || error),
       code: s(error?.code),
       reasonCode: s(error?.reasonCode),

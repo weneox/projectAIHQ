@@ -1,3 +1,10 @@
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "async-tasks",
+});
+
 function safeTaskName(value = "") {
   return String(value || "task").trim() || "task";
 }
@@ -35,10 +42,10 @@ export function dispatchDetachedTask(taskName, run) {
     Promise.resolve()
       .then(runner)
       .catch((err) => {
-        console.error(
-          `[async-task] ${label} failed:`,
-          String(err?.message || err)
-        );
+        log.error("async_task.failed", {
+          taskName: label,
+          error: String(err?.message || err),
+        });
       });
   });
 }

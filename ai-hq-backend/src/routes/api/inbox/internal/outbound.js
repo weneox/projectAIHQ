@@ -1,4 +1,5 @@
 import { okJson, isDbReady, isUuid } from "../../../../utils/http.js";
+import { setTenantContext } from "../../../../db/tenantContext.js";
 import {
   findExistingOutboundMessage,
   findLatestAttemptByMessageId,
@@ -37,6 +38,11 @@ export function createInboxOutboundHandler({ db, wsHub }) {
     let client = null;
 
     try {
+      setTenantContext({
+        tenantKey: String(req.body?.tenantKey || req.body?.tenant_key || "").trim(),
+        requestId: req.requestId,
+        source: "internal.inbox.outbound",
+      });
       const existingThread = await getThreadById(db, threadId);
       if (!existingThread) {
         return okJson(res, { ok: false, error: "thread not found" });
@@ -45,6 +51,12 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       const input = parseOutboundRequest(req, existingThread);
       const validation = validateOutboundRequest(input);
       if (!validation.ok) return okJson(res, validation.response);
+      setTenantContext({
+        tenantId: existingThread?.tenant_id || "",
+        tenantKey: input.tenantKey,
+        requestId: req.requestId,
+        source: "internal.inbox.outbound",
+      });
 
       if (input.externalMessageId) {
         const existingMessage = await findExistingOutboundMessage({
@@ -80,6 +92,12 @@ export function createInboxOutboundHandler({ db, wsHub }) {
 
       const tenantRow = await resolveTenantRow(client, input.tenantKey);
       const tenantId = String(existingThread?.tenant_id || tenantRow?.id || "").trim();
+      setTenantContext({
+        tenantId,
+        tenantKey: input.tenantKey,
+        requestId: req.requestId,
+        source: "internal.inbox.outbound",
+      });
       if (!tenantId) {
         await rollbackAndRelease(client);
         client = null;

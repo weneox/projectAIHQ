@@ -4,6 +4,7 @@ import express from "express";
 import { cfg } from "../../../config.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { isDbReady } from "../../../utils/http.js";
+import { createLogger } from "../../../utils/logger.js";
 import { resolveTelegramUserAvatar } from "../../../utils/telegram.js";
 import { createInboxIngestHandler } from "../inbox/internal.js";
 import { validateIngestRequest } from "../inbox/internal/request.js";
@@ -22,6 +23,10 @@ import { lower, s } from "./utils.js";
 const TELEGRAM_PROVIDER = "telegram";
 const TELEGRAM_CHANNEL = "telegram";
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
+const webhookLog = createLogger({
+  service: "ai-hq-backend",
+  component: "channel-connect-public",
+});
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -110,14 +115,14 @@ function logWebhookEvent(level = "info", event = "", req, extra = {}) {
   const payload = buildWebhookDebugMeta(req, extra);
 
   if (level === "error") {
-    console.error(event, payload);
+    webhookLog.error(event, payload);
     return;
   }
   if (level === "warn") {
-    console.warn(event, payload);
+    webhookLog.warn(event, payload);
     return;
   }
-  console.info(event, payload);
+  webhookLog.info(event, payload);
 }
 
 function buildTelegramCustomerName(from = {}) {

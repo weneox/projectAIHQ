@@ -1,9 +1,20 @@
 import { isDbReady } from "../../../../utils/http.js";
 import { resolveTenantKey } from "../../../../tenancy/index.js";
+import { getTenantContext } from "../../../../db/tenantContext.js";
 import { normalizeComment } from "../utils.js";
 
-export async function getCommentById(db, id) {
+function contextTenantKey() {
+  return resolveTenantKey(getTenantContext()?.tenantKey || "");
+}
+
+function isGuardedDb(db) {
+  return db?.__tenantGuardedDb === true;
+}
+
+export async function getCommentById(db, id, tenantKey = "") {
   if (!isDbReady(db)) return null;
+  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
     `
@@ -13,9 +24,10 @@ export async function getCommentById(db, id) {
       classification, raw, created_at, updated_at
     from comments
     where id = $1::uuid
+      ${resolvedTenantKey ? "and tenant_key = $2::text" : ""}
     limit 1
     `,
-    [id]
+    resolvedTenantKey ? [id, resolvedTenantKey] : [id]
   );
 
   return normalizeComment(result.rows?.[0] || null);
@@ -108,8 +120,10 @@ export async function insertComment(db, payload) {
   return normalizeComment(result.rows?.[0] || null);
 }
 
-export async function updateCommentState(db, id, nextClassification, nextRaw) {
+export async function updateCommentState(db, id, nextClassification, nextRaw, tenantKey = "") {
   if (!isDbReady(db)) return null;
+  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
     `
@@ -119,12 +133,18 @@ export async function updateCommentState(db, id, nextClassification, nextRaw) {
       raw = $3::jsonb,
       updated_at = now()
     where id = $1::uuid
+      ${resolvedTenantKey ? "and tenant_key = $4::text" : ""}
     returning
       id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
       tenant_id, external_post_id, external_user_id, external_username, customer_name, text,
       classification, raw, created_at, updated_at
     `,
-    [id, JSON.stringify(nextClassification || {}), JSON.stringify(nextRaw || {})]
+    [
+      id,
+      JSON.stringify(nextClassification || {}),
+      JSON.stringify(nextRaw || {}),
+      ...(resolvedTenantKey ? [resolvedTenantKey] : []),
+    ]
   );
 
   return normalizeComment(result.rows?.[0] || null);

@@ -2,6 +2,7 @@
 
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { createLogger } from "../../utils/logger.js";
 import { normalizePromptInput } from "../../services/promptInput.js";
 import { buildPromptBundle } from "../../services/promptBundle.js";
 import { normalizeIndustryKey } from "../../prompts/industries/index.js";
@@ -18,6 +19,10 @@ import { normalizeDraftProposalObject } from "./contentDraft.normalize.js";
 export const DEBATE_ENGINE_VERSION = "final-v10.0-multitenant-industry-aware";
 
 const DEFAULT_AGENTS = ["orion", "nova", "atlas", "echo"];
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "debate-core",
+});
 
 function ensureOpenAI() {
   const key = String(cfg.OPENAI_API_KEY || "").trim();
@@ -475,7 +480,7 @@ function logRawIfEmpty(kind, agentId, resp, text) {
   if (String(text || "").trim()) return;
   if (!cfg.DEBUG_DEBATE_RAW) return;
   try {
-    console.warn("[debate] EMPTY_TEXT", {
+    log.warn("debate.empty_text", {
       kind,
       agentId,
       status: resp?.status,
@@ -521,7 +526,7 @@ async function askAgent({
   let text = extractText(resp);
 
   if (cfg.DEBUG_DEBATE_RAW) {
-    console.log("[debate] agent", {
+    log.info("debate.agent_response", {
       agentId,
       status: resp?.status || null,
       id: resp?.id || null,

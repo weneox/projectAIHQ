@@ -32,6 +32,7 @@ import {
   buildReplyRaw,
   emitCommentUpdatedRealtime,
 } from "../routes/api/comments/handlers/shared.js";
+import { processCommentWebhookJob } from "../routes/api/comments/handlers/ingest.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
@@ -565,7 +566,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   const provider = resolveExecutionProvider(execution);
   const tenantKey = s(execution.tenant_key || metadata.tenantKey || "");
 
-  const message = await getMessageById(db, messageId);
+  const message = await getMessageById(db, messageId, tenantKey);
   const messageThreadId = s(message?.thread_id);
   let resolvedThreadId = executionThreadId || messageThreadId || "";
 
@@ -627,6 +628,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       await updateOutboundMessageDeliveryFailure({
         db,
         messageId,
+        tenantKey,
         status: "failed",
         error: missingMessage,
         errorCode: missing,
@@ -715,6 +717,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         ? await updateOutboundMessageProviderId({
             db,
             messageId: message.id,
+            tenantKey,
             providerMessageId: delivery?.providerMessageId || null,
             providerResponse,
           })
@@ -789,6 +792,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
     const updatedMessage = await updateOutboundMessageDeliveryFailure({
       db,
       messageId: message.id,
+      tenantKey,
       status: failure.retryable ? "failed" : "dead",
       error: failure.errorMessage,
       errorCode: failure.errorCode,
@@ -862,6 +866,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   const updatedMessage = await updateOutboundMessageProviderId({
     db,
     messageId: message.id,
+    tenantKey,
     providerMessageId,
     providerResponse,
   });
@@ -991,7 +996,8 @@ export async function processMetaCommentReplyExecution({
     s(payload?.actions?.[0]?.text) ||
     s(payload?.actions?.[0]?.meta?.replyText);
 
-  const comment = await getCommentById(db, commentId);
+  const tenantKey = s(execution?.tenant_key || payload?.tenantKey);
+  const comment = await getCommentById(db, commentId, tenantKey);
   if (!comment) {
     return {
       ok: false,
@@ -1036,7 +1042,8 @@ export async function processMetaCommentReplyExecution({
       db,
       comment.id,
       nextClassification,
-      nextRaw
+      nextRaw,
+      tenantKey
     );
 
     emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
@@ -1119,7 +1126,8 @@ export async function processMetaCommentReplyExecution({
     db,
     comment.id,
     nextClassification,
-    nextRaw
+    nextRaw,
+    tenantKey
   );
 
   emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
@@ -1173,7 +1181,8 @@ export async function requeueMetaCommentReplyExecution({
     };
   }
 
-  const comment = await getCommentById(db, commentId);
+  const tenantKey = s(execution?.tenant_key || payload?.tenantKey);
+  const comment = await getCommentById(db, commentId, tenantKey);
   if (!comment) {
     return {
       ok: false,
@@ -1233,7 +1242,8 @@ export async function requeueMetaCommentReplyExecution({
     db,
     comment.id,
     nextClassification,
-    nextRaw
+    nextRaw,
+    tenantKey
   );
 
   emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
@@ -1277,6 +1287,14 @@ export async function processDurableExecution({ db, wsHub, execution }) {
 
   if (execution?.action_type === "meta.comment.reply") {
     return processMetaCommentReplyExecution({ db, wsHub, execution, logger });
+  }
+
+  if (execution?.action_type === "comments.webhook.process") {
+    return processCommentWebhookJob({
+      db,
+      wsHub,
+      payload: obj(execution.payload_summary),
+    });
   }
 
   if (s(execution?.action_type).startsWith("voice.sync.")) {

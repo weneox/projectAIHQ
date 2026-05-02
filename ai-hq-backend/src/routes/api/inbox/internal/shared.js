@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { fixText } from "../../../../utils/textFix.js";
+import { createLogger } from "../../../../utils/logger.js";
 import { s } from "../shared.js";
 
 export const INBOX_THREAD_SELECT_COLUMNS = `
@@ -30,10 +31,14 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "inbox-internal",
+});
+
 export function logInfo(message, data = null) {
   try {
-    if (data) console.log(`[ai-hq] ${message}`, data);
-    else console.log(`[ai-hq] ${message}`);
+    log.info(String(message || "inbox.internal.event"), data || {});
   } catch {}
 }
 

@@ -26,6 +26,8 @@ function mode(v, d = "manual") {
 function processRole(v, d = "all") {
   const x = String(v ?? "").trim().toLowerCase();
   if (x === "web") return "web";
+  if (x === "worker") return "worker";
+  if (x === "all") return "all";
   return d;
 }
 
@@ -218,6 +220,34 @@ export const cfg = {
     migrateTx: b(process.env.DB_MIGRATE_TX, true),
     autoMigrateOnStartup: b(process.env.DB_AUTO_MIGRATE_ON_STARTUP, false),
     poolMax: n(process.env.DB_POOL_MAX, 20),
+    apiPool: {
+      max: n(
+        process.env.API_DB_POOL_MAX,
+        n(process.env.DB_API_POOL_MAX, n(process.env.DB_POOL_MAX, 20))
+      ),
+      idleTimeoutMs: n(
+        process.env.API_DB_POOL_IDLE_TIMEOUT_MS,
+        n(process.env.DB_POOL_IDLE_TIMEOUT_MS, 30_000)
+      ),
+      connectionTimeoutMs: n(
+        process.env.API_DB_POOL_CONNECTION_TIMEOUT_MS,
+        n(process.env.DB_POOL_CONNECTION_TIMEOUT_MS, 3_000)
+      ),
+    },
+    workerPool: {
+      max: n(
+        process.env.WORKER_DB_POOL_MAX,
+        n(process.env.DB_WORKER_POOL_MAX, 10)
+      ),
+      idleTimeoutMs: n(
+        process.env.WORKER_DB_POOL_IDLE_TIMEOUT_MS,
+        n(process.env.DB_POOL_IDLE_TIMEOUT_MS, 30_000)
+      ),
+      connectionTimeoutMs: n(
+        process.env.WORKER_DB_POOL_CONNECTION_TIMEOUT_MS,
+        n(process.env.DB_POOL_CONNECTION_TIMEOUT_MS, 3_000)
+      ),
+    },
     poolIdleTimeoutMs: n(process.env.DB_POOL_IDLE_TIMEOUT_MS, 30_000),
     poolConnectionTimeoutMs: n(process.env.DB_POOL_CONNECTION_TIMEOUT_MS, 3_000),
   },
@@ -308,6 +338,14 @@ export const cfg = {
       process.env.EXECUTION_CALLBACK_RATE_LIMIT_MAX_REQUESTS,
       120
     ),
+    authWindowMs: n(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+    authMaxRequests: n(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, 20),
+    signupWindowMs: n(process.env.SIGNUP_RATE_LIMIT_WINDOW_MS, 60 * 60 * 1000),
+    signupMaxRequests: n(process.env.SIGNUP_RATE_LIMIT_MAX_REQUESTS, 8),
+    aiWindowMs: n(process.env.AI_RATE_LIMIT_WINDOW_MS, 60 * 1000),
+    aiMaxRequests: n(process.env.AI_RATE_LIMIT_MAX_REQUESTS, 30),
+    webhookWindowMs: n(process.env.WEBHOOK_RATE_LIMIT_WINDOW_MS, 60 * 1000),
+    webhookMaxRequests: n(process.env.WEBHOOK_RATE_LIMIT_MAX_REQUESTS, 300),
   },
 
   tenant: {

@@ -4,9 +4,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createLogger } from "../../utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "industry-prompts",
+});
 
 function s(v) {
   return String(v ?? "").trim();
@@ -38,10 +43,10 @@ function readTextFile(filename) {
   try {
     return fs.readFileSync(path.join(__dirname, filename), "utf8");
   } catch (err) {
-    console.error(
-      `[prompts/industries] failed to read ${filename}:`,
-      err?.message || err
-    );
+    log.error("industry_prompt.read_failed", {
+      filename,
+      error: String(err?.message || err),
+    });
     return "";
   }
 }

@@ -90,7 +90,7 @@ export function getCommentHandler({ db, getComment = getCommentById }) {
         return;
       }
 
-      const comment = await getComment(db, id);
+      const comment = await getComment(db, id, tenantKey);
       if (comment && tenantKey && s(comment.tenant_key) !== tenantKey) {
         return okJson(res, { ok: false, error: "comment not found" });
       }

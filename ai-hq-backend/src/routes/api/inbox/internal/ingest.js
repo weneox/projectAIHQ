@@ -1,4 +1,6 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
+import { setTenantContext } from "../../../../db/tenantContext.js";
+import { createLogger } from "../../../../utils/logger.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
@@ -34,6 +36,11 @@ import {
   emitIngestRealtime,
   emitTypingRealtime,
 } from "./responses.js";
+
+const ingestLog = createLogger({
+  service: "ai-hq-backend",
+  component: "inbox-ingest",
+});
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -124,7 +131,7 @@ function logIngestFailure({
   });
 
   try {
-    console.error("[ai-hq] inbox ingest failed", payload.details);
+    ingestLog.error("inbox.ingest.failed", payload.details || {});
   } catch {}
 
   return payload;
@@ -368,6 +375,11 @@ export function createInboxIngestHandler({
     const input = parseIngestRequest(req);
     const validation = validateIngestRequest(input);
     if (!validation.ok) return okJson(res, validation.response);
+    setTenantContext({
+      tenantKey: input.tenantKey,
+      requestId: req.requestId,
+      source: "internal.inbox.ingest",
+    });
 
     let client = null;
     let stage = "start";
@@ -395,6 +407,12 @@ export function createInboxIngestHandler({
       stage = "resolve_tenant";
       const tenantRow = await resolveTenantRow(client, input.tenantKey);
       tenantId = String(tenantRow?.id || "").trim();
+      setTenantContext({
+        tenantId,
+        tenantKey: input.tenantKey,
+        requestId: req.requestId,
+        source: "internal.inbox.ingest",
+      });
 
       if (!tenantId) {
         await rollbackAndRelease(client);

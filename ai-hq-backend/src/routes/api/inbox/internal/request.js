@@ -1,5 +1,6 @@
 import { fixText } from "../../../../utils/textFix.js";
 import { resolveTenantKeyFromReq } from "../../../../tenancy/index.js";
+import { inboundWebhookIdempotencyKey } from "../../../../utils/idempotency.js";
 import { clamp, s, toInt } from "../shared.js";
 import { lower, normalizeObj } from "./shared.js";
 import { isControlMessageType, normalizeInboxMessageType } from "./execution.js";
@@ -248,9 +249,20 @@ export function parseIngestRequest(req) {
     req.body?.timestamp || req.body?.message?.timestamp || req.body?.receivedAt
   );
 
+  const idempotencyKey = inboundWebhookIdempotencyKey({
+    tenantKey,
+    channel,
+    provider,
+    externalThreadId,
+    externalMessageId,
+    eventType: "inbox_message",
+  });
+
   return {
     tenantKey,
     channel,
+    provider,
+    idempotencyKey,
     externalThreadId,
     externalUserId,
     externalUsername,
@@ -275,6 +287,7 @@ export function parseIngestRequest(req) {
             defaultPlatformForChannel(channel)
         ) || defaultPlatformForChannel(channel),
       channel,
+      idempotencyKey,
       timestamp,
       raw,
       from,

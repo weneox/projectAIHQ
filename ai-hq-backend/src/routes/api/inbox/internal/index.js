@@ -1,5 +1,6 @@
 import express from "express";
 import { createInternalTokenGuard } from "../../../../utils/auth.js";
+import { requireWebhookIngestionRateLimit } from "../../../../utils/rateLimit.js";
 import { getTenantBrainRuntime } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
 import { createInboxIngestHandler } from "./ingest.js";
 import { createInboxOutboundHandler } from "./outbound.js";
@@ -24,6 +25,7 @@ export function inboxInternalRoutes({
 
   router.post(
     "/inbox/ingest",
+    requireWebhookIngestionRateLimit,
     requireMetaInboxIngest,
     createInboxIngestHandler({
       db,
@@ -37,6 +39,7 @@ export function inboxInternalRoutes({
 
   router.post(
     "/inbox/outbound",
+    requireWebhookIngestionRateLimit,
     requireMetaInboxOutbound,
     createInboxOutboundHandler({ db, wsHub })
   );

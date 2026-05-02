@@ -1,4 +1,5 @@
 import express from "express";
+import { createLogger } from "../../../utils/logger.js";
 import {
   dbListTenantChannels,
   dbUpsertTenantChannel,
@@ -33,6 +34,11 @@ import {
   buildVoiceOperationalSaveInput,
 } from "./builders.js";
 
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "settings-operational-routes",
+});
+
 function isMissingSchemaError(error) {
   const code = s(error?.code).toUpperCase();
   const message = s(error?.message).toLowerCase();
@@ -56,7 +62,8 @@ async function runOptionalOperatorRead(step, work, fallbackValue) {
       throw error;
     }
 
-    console.warn(`[settings.operational] optional read unavailable: ${step}`, {
+    log.warn("settings.operational.optional_read.unavailable", {
+      step,
       code: error?.code || null,
       message: error?.message || String(error),
     });

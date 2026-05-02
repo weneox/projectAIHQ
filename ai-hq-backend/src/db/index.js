@@ -5,8 +5,14 @@ import {
   describeSchemaMigrations,
   runSchemaMigrations,
 } from "./runSchemaMigrations.js";
+import {
+  createTenantGuardedDb,
+  runWithSystemDbContext,
+} from "./tenantContext.js";
+import { createLogger } from "../utils/logger.js";
 
 const { Pool } = pg;
+const logger = createLogger({ service: "ai-hq-backend", component: "db" });
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -47,12 +53,41 @@ function shouldUseSsl(url) {
 // import { db } from "../../index.js";
 // işləsin
 export let db = null;
+export let workerDb = null;
 
 export function getDb() {
   return db;
 }
 
-export async function initDb() {
+export function getWorkerDb() {
+  return workerDb || db;
+}
+
+function resolvePoolSettings(poolRole = "api") {
+  const role = s(poolRole || "api").toLowerCase() === "worker" ? "worker" : "api";
+  const roleCfg = role === "worker" ? cfg?.db?.workerPool : cfg?.db?.apiPool;
+  const legacyMax = cfg?.db?.poolMax;
+
+  return {
+    poolRole: role,
+    poolMax: clampInt(roleCfg?.max ?? legacyMax, role === "worker" ? 10 : 20, 1, 100),
+    idleTimeoutMillis: clampInt(
+      roleCfg?.idleTimeoutMs ?? cfg?.db?.poolIdleTimeoutMs,
+      30_000,
+      5_000,
+      300_000
+    ),
+    connectionTimeoutMillis: clampInt(
+      roleCfg?.connectionTimeoutMs ?? cfg?.db?.poolConnectionTimeoutMs,
+      3_000,
+      500,
+      30_000
+    ),
+  };
+}
+
+export async function initDb(options = {}) {
+  const poolRole = s(options.poolRole || "api").toLowerCase() === "worker" ? "worker" : "api";
   const url = s(
     cfg?.DATABASE_URL ||
       cfg?.databaseUrl ||
@@ -61,25 +96,18 @@ export async function initDb() {
   );
 
   if (!url) {
-    console.error("[ai-hq] DATABASE_URL is missing");
-    db = null;
+    logger.error("db.url.missing", null, { poolRole });
+    if (poolRole === "worker") workerDb = null;
+    else db = null;
     return null;
   }
 
   const useSsl = shouldUseSsl(url);
-  const poolMax = clampInt(cfg?.db?.poolMax, 20, 5, 100);
-  const idleTimeoutMillis = clampInt(
-    cfg?.db?.poolIdleTimeoutMs,
-    30_000,
-    5_000,
-    300_000
-  );
-  const connectionTimeoutMillis = clampInt(
-    cfg?.db?.poolConnectionTimeoutMs,
-    3_000,
-    500,
-    30_000
-  );
+  const {
+    poolMax,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
+  } = resolvePoolSettings(poolRole);
 
   const pool = new Pool({
     connectionString: url,
@@ -90,26 +118,31 @@ export async function initDb() {
   });
 
   try {
-    await pool.query("select 1 as ok");
-    console.log("[ai-hq] DB=ON", {
+    await runWithSystemDbContext("db_bootstrap", () => pool.query("select 1 as ok"));
+    logger.info("db.connected", {
       ssl: useSsl ? "on" : "off",
+      poolRole,
       poolMax,
       idleTimeoutMillis,
       connectionTimeoutMillis,
       demoSeedEnabled: s(process.env.DB_SCHEMA_DEMO).toLowerCase() === "true",
     });
 
-    db = pool;
-    return pool;
+    const guardedPool = createTenantGuardedDb(pool, { poolRole });
+    if (poolRole === "worker") workerDb = guardedPool;
+    else db = guardedPool;
+    return guardedPool;
   } catch (e) {
-    console.error("[ai-hq] DB connect failed", {
+    logger.error("db.connect.failed", e, {
+      poolRole,
       code: e?.code || null,
       message: String(e?.message || e),
     });
     try {
       await pool.end();
     } catch {}
-    db = null;
+    if (poolRole === "worker") workerDb = null;
+    else db = null;
     return null;
   }
 }
@@ -129,14 +162,16 @@ export async function migrate(options = {}) {
   );
 
   try {
-    console.log("[db-migrate] start", { entryFile, withDemoSeed });
+    logger.info("db.migrate.started", { entryFile, withDemoSeed });
 
-    const result = await runSchemaMigrations(db, {
-      entryFile,
-      useTransaction: cfg?.db?.migrateTx !== false,
-    });
+    const result = await runWithSystemDbContext("schema_migration", () =>
+      runSchemaMigrations(db, {
+        entryFile,
+        useTransaction: cfg?.db?.migrateTx !== false,
+      })
+    );
 
-    console.log("[db-migrate] done", {
+    logger.info("db.migrate.completed", {
       entryFile,
       statementCount: result?.statementCount || 0,
       appliedCount: result?.appliedCount || 0,
@@ -153,7 +188,7 @@ export async function migrate(options = {}) {
       ledgerTable: result?.ledgerTable || "schema_migrations",
     };
   } catch (e) {
-    console.error("[db-migrate] failed", {
+    logger.error("db.migrate.failed", e, {
       entryFile,
       migrationName: e?.migrationName || null,
       code: e?.code || null,
@@ -190,7 +225,9 @@ export async function getMigrationStatus(options = {}) {
     withDemoSeed ? "index.demo.sql" : "index.base.sql"
   );
 
-  return describeSchemaMigrations(db, { entryFile });
+  return runWithSystemDbContext("schema_migration_status", () =>
+    describeSchemaMigrations(db, { entryFile })
+  );
 }
 
 export function decideStartupMigrationPolicy({
@@ -231,9 +268,11 @@ export function decideStartupMigrationPolicy({
 }
 
 export async function closeDb() {
-  if (!db) return;
+  const pools = [workerDb, db].filter(Boolean);
+  if (!pools.length) return;
   try {
-    await db.end();
+    await Promise.allSettled([...new Set(pools)].map((pool) => pool.end()));
   } catch {}
+  workerDb = null;
   db = null;
 }

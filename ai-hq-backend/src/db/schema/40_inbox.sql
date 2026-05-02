@@ -357,6 +357,7 @@ create table if not exists inbox_outbound_attempts (
   provider text not null default 'meta',
   recipient_id text,
   provider_message_id text,
+  idempotency_key text,
 
   payload jsonb not null default '{}'::jsonb,
   provider_response jsonb not null default '{}'::jsonb,
@@ -384,6 +385,7 @@ alter table inbox_outbound_attempts add column if not exists channel text defaul
 alter table inbox_outbound_attempts add column if not exists provider text default 'meta';
 alter table inbox_outbound_attempts add column if not exists recipient_id text;
 alter table inbox_outbound_attempts add column if not exists provider_message_id text;
+alter table inbox_outbound_attempts add column if not exists idempotency_key text;
 alter table inbox_outbound_attempts add column if not exists payload jsonb default '{}'::jsonb;
 alter table inbox_outbound_attempts add column if not exists provider_response jsonb default '{}'::jsonb;
 alter table inbox_outbound_attempts add column if not exists status text default 'queued';
@@ -485,6 +487,10 @@ end$$;
 create unique index if not exists uq_inbox_outbound_attempts_provider_message_id
   on inbox_outbound_attempts(provider, provider_message_id)
   where provider_message_id is not null;
+
+create unique index if not exists uq_inbox_outbound_attempts_idempotency
+  on inbox_outbound_attempts(tenant_key, provider, idempotency_key)
+  where idempotency_key is not null;
 
 create index if not exists idx_inbox_outbound_attempts_message
   on inbox_outbound_attempts(message_id, created_at desc);

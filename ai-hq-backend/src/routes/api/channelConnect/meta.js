@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
 import { cfg } from "../../../config.js";
+import { createLogger } from "../../../utils/logger.js";
 import { createTenantSourcesHelpers } from "../../../db/helpers/tenantSources.js";
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import {
@@ -30,6 +31,11 @@ import {
   auditSafe,
 } from "./repository.js";
 import { getTenantCapability } from "../../../services/tenantEntitlements.js";
+
+const metaLog = createLogger({
+  service: "ai-hq-backend",
+  component: "channel-connect-meta",
+});
 
 export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "pages_show_list",
@@ -149,7 +155,7 @@ function epochSecondsToIso(value) {
 }
 
 function createSafeLogger(baseLogger, childContext = null) {
-  const root = baseLogger && typeof baseLogger === "object" ? baseLogger : null;
+  const root = baseLogger && typeof baseLogger === "object" ? baseLogger : metaLog;
 
   let active = root;
   if (childContext && root && typeof root.child === "function") {
@@ -1189,7 +1195,7 @@ async function discoverMetaPagesForUserToken({
 }
 
 async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
-  console.log("META_CONNECT_USER_TOKEN_ENRICH_V2", {
+  metaLog.info("meta.connect.user_token_enrich", {
     pageId: s(pageId),
     fields: META_PAGE_DISCOVERY_FIELDS_USER_TOKEN,
   });
@@ -3067,7 +3073,7 @@ export async function handleMetaCallback({
     stage: "callback",
   });
 
-  console.error("META_CALLBACK_ENTER_V3", {
+  callbackLog.info("meta.connect.callback.enter", {
     hasCode: Boolean(code),
     hasErrorQuery: Boolean(error || errorCode || errorMessage),
     errorCode: cleanNullable(errorCode),
@@ -3155,7 +3161,7 @@ export async function handleMetaCallback({
       META_CONNECT_DIAGNOSTIC_SECRET_KEY,
     ]);
   } catch (error) {
-    console.error("META_CALLBACK_PRECLEANUP_FAILED_V1", {
+    actorLog.warn("meta.connect.precleanup.failed", {
       tenantKey: tenant?.tenant_key,
       error: s(error?.message || error),
     });
@@ -3169,7 +3175,7 @@ export async function handleMetaCallback({
   try {
     tokenJson = await exchangeCodeForUserTokenFn(code);
   } catch (error) {
-    console.error("META_CALLBACK_TOKEN_EXCHANGE_FAILED_V1", {
+    actorLog.error("meta.connect.token_exchange.failed", {
       tenantKey: tenant?.tenant_key,
       error: s(error?.message || error),
     });
@@ -3180,7 +3186,7 @@ export async function handleMetaCallback({
     throw error;
   }
   const userAccessToken = s(tokenJson?.access_token);
-  console.error("META_CALLBACK_TOKEN_EXCHANGED_V3", {
+  actorLog.info("meta.connect.token_exchanged.detail", {
     tenantKey: tenant?.tenant_key,
     hasUserAccessToken: Boolean(userAccessToken),
     tokenType: cleanNullable(tokenJson?.token_type),
@@ -3213,7 +3219,7 @@ export async function handleMetaCallback({
   }
 
   const permissionCheckedAt = new Date().toISOString();
-  console.error("META_CALLBACK_BEFORE_DISCOVERY_V3", {
+  actorLog.info("meta.connect.before_discovery", {
     tenantKey: tenant?.tenant_key,
   });
 
@@ -3243,7 +3249,7 @@ export async function handleMetaCallback({
       }),
     ]);
   } catch (error) {
-    console.error("META_CALLBACK_PROMISE_ALL_FAILED_V3", {
+    actorLog.error("meta.connect.discovery.failed", {
       tenantKey: tenant?.tenant_key,
       message: error?.message,
       stack: error?.stack,
@@ -3251,7 +3257,7 @@ export async function handleMetaCallback({
     throw error;
   }
 
-  console.error("META_CALLBACK_AFTER_DISCOVERY_V3", {
+  actorLog.info("meta.connect.after_discovery", {
     tenantKey: tenant?.tenant_key,
     metaUserId: s(metaUserProfile?.id),
     pageCount: Array.isArray(pageDiscoveryResult?.pages)
@@ -3476,7 +3482,7 @@ export async function handleMetaCallback({
   }
 
   const selected = candidates[0];
-  console.error("META_CALLBACK_BEFORE_CONNECT_V3", {
+  actorLog.info("meta.connect.before_connect", {
     tenantKey: tenant?.tenant_key,
     candidateCount: Array.isArray(candidates) ? candidates.length : -1,
     selectedPageId: s(selected?.pageId),

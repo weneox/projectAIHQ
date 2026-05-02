@@ -5,7 +5,13 @@ import { absoluteCallbackUrl } from "../utils/url.js";
 import { buildPromptBundle } from "./promptBundle.js";
 import { normalizePromptInput } from "./promptInput.js";
 import { postToN8n } from "../utils/n8n.js";
+import { createLogger } from "../utils/logger.js";
 import { buildContentBehaviorProfile } from "./contentBehaviorRuntime.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "n8n-notify",
+});
 
 function clean(x) {
   return String(x || "").trim();
@@ -599,7 +605,11 @@ export async function notifyN8n(event, proposal, extra = {}) {
   const workflowHint = pickWorkflowHint(event, { ...extra, action });
 
   if (!url) {
-    console.log(`[n8n] skipped: no webhook url for ${mappedEvent}`);
+    log.info("n8n.dispatch.skipped", {
+      mappedEvent,
+      action,
+      reasonCode: "webhook_url_missing",
+    });
     return {
       ok: false,
       attempted: false,
@@ -732,9 +742,16 @@ export async function notifyN8n(event, proposal, extra = {}) {
     const info = r?.ok ? `ok ${r.status || ""}` : `fail ${r.status || r.error || ""}`;
     const preview = buildResponsePreview(r?.data);
 
-    console.log(
-      `[n8n] event=${mappedEvent} action=${action || "-"} workflow=${workflowHint} url=${url} -> ${info} ${preview}`
-    );
+    log.info("n8n.dispatch.completed", {
+      mappedEvent,
+      action,
+      workflowHint,
+      webhookUrl: url,
+      outcome: r?.ok ? "accepted" : "failed",
+      statusCode: Number.isFinite(Number(r?.status)) ? Number(r.status) : null,
+      responsePreview: preview,
+      info,
+    });
 
     return {
       ok: !!r?.ok,
@@ -755,7 +772,13 @@ export async function notifyN8n(event, proposal, extra = {}) {
     };
   } catch (e) {
     const error = clean(String(e?.message || e)) || "dispatch_failed";
-    console.log("[n8n] error", error);
+    log.error("n8n.dispatch.exception", {
+      mappedEvent,
+      action,
+      workflowHint,
+      webhookUrl: url,
+      error,
+    });
     return {
       ok: false,
       attempted: true,

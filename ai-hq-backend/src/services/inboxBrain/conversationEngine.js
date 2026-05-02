@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { createLogger } from "../../utils/logger.js";
 import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import { buildPromptBundle } from "../promptBundle.js";
 import {
@@ -35,6 +36,11 @@ import {
 } from "./messages.js";
 import { composeTenantAwareReply } from "./replyComposer.js";
 import { answerFromApprovedTruth } from "../businessTruthAnswer/index.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "inbox-conversation-engine",
+});
 
 let openaiSingleton = null;
 
@@ -100,19 +106,19 @@ function safeJsonPreview(value, max = 900) {
 
 function logConversationEngine(event = "", payload = {}) {
   try {
-    console.info(`[ai-hq] conversation engine ${event}`, payload);
+    log.info(`conversation_engine.${event || "event"}`, payload);
   } catch {}
 }
 
 function logConversationEngineWarn(event = "", payload = {}) {
   try {
-    console.warn(`[ai-hq] conversation engine ${event}`, payload);
+    log.warn(`conversation_engine.${event || "warn"}`, payload);
   } catch {}
 }
 
 function logConversationEngineError(event = "", payload = {}) {
   try {
-    console.error(`[ai-hq] conversation engine ${event}`, payload);
+    log.error(`conversation_engine.${event || "error"}`, payload);
   } catch {}
 }
 
@@ -2225,7 +2231,7 @@ export async function runTenantAwareConversationEngine({
 
 
   try {
-    console.info("[ai-hq] truth_contact_debug_probe", {
+    log.info("truth_contact_debug_probe", {
       displayName: runtimeGrounding?.displayName || "",
       groundingPrimaryPhone: runtimeGrounding?.contactGrounding?.primaryPhone || "",
       groundingPhones: runtimeGrounding?.contactGrounding?.contactPhones || [],

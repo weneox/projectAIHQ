@@ -9,6 +9,7 @@ import { resolveTenantKeyFromReq } from "../../../../tenancy/index.js";
 import { emitRealtimeEvent } from "../../../../realtime/events.js";
 import { writeAudit } from "../../../../utils/auditLog.js";
 import { buildExecutionPolicySurfaceSummary } from "../../../../services/executionPolicy.js";
+import { inboundWebhookIdempotencyKey } from "../../../../utils/idempotency.js";
 import {
   s,
   safeJson,
@@ -256,11 +257,20 @@ export function parseIngestRequest(req) {
   const timestampMs = normalizeTimestampMs(req.body?.timestamp);
   const raw = safeJson(req.body?.raw, {});
 
+  const idempotencyKey = inboundWebhookIdempotencyKey({
+    tenantKey,
+    channel,
+    provider: source,
+    externalCommentId,
+    eventType: "comment",
+  });
+
   return {
     tenantKey,
     source,
     platform,
     channel,
+    idempotencyKey,
     externalCommentId,
     externalParentCommentId,
     externalPostId,

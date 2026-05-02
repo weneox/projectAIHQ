@@ -1198,6 +1198,7 @@ export async function switchUserSessionWorkspaceByToken(
       last_seen_at = now()
     where session_token_hash = $1
       and revoked_at is null
+      and expires_at > now()
     `,
     [hashSessionToken(raw), s(tenantId), s(membershipId)],
     1500
@@ -1518,7 +1519,11 @@ export async function requireAdminSession(req, res, next) {
 
 export async function requireUserSession(req, res, next) {
   const existingAuth = req?.auth;
+  const allowPreloadedAuth =
+    existingAuth?._serverControlled === true ||
+    (!req?.app?.locals?.db && existingAuth);
   if (
+    allowPreloadedAuth &&
     existingAuth &&
     s(existingAuth.userId) &&
     s(existingAuth.identityId) &&
@@ -1572,6 +1577,7 @@ export async function requireUserSession(req, res, next) {
     companyName: session.payload.companyName || "",
     role: session.payload.role || "member",
     sessionVersion: Number(session.payload.sessionVersion || 1),
+    _serverControlled: true,
   };
 
   req.user = {
@@ -1588,6 +1594,7 @@ export async function requireUserSession(req, res, next) {
     role: session.payload.role || "member",
     sessionVersion: Number(session.payload.sessionVersion || 1),
     session_version: Number(session.payload.sessionVersion || 1),
+    _serverControlled: true,
   };
 
   return next();

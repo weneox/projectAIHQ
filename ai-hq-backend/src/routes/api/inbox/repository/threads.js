@@ -1,5 +1,6 @@
 import { resolveTenantKey } from "../../../../tenancy/index.js";
 import { isDbReady, isUuid } from "../../../../utils/http.js";
+import { getTenantContext } from "../../../../db/tenantContext.js";
 import { normalizeThread } from "../shared.js";
 import { getOutboundAttemptsSummary } from "./outboundAttempts.js";
 
@@ -161,7 +162,8 @@ async function fetchThreadRow(db, whereSql, values = []) {
 export async function refreshThread(db, threadId, fallback = null, tenantKey = "") {
   if (!threadId || !isUuid(threadId)) return fallback;
 
-  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const resolvedTenantKey =
+    resolveTenantKey(tenantKey) || resolveTenantKey(getTenantContext()?.tenantKey || "");
   const values = [threadId];
   let where = `where t.id = $1::uuid`;
 

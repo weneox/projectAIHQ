@@ -3,6 +3,7 @@ import crypto from "crypto";
 import {
   enqueueChannelOutboundExecution,
 } from "../../../../services/durableExecutionService.js";
+import { outboundDeliveryIdempotencyKey } from "../../../../utils/idempotency.js";
 import { createOutboundAttempt } from "../repository.js";
 import { normalizeMessage, s } from "../shared.js";
 import { lower, normalizeArr, normalizeObj, nowIso } from "./shared.js";
@@ -293,6 +294,15 @@ export async function persistOutboundMessage({
     attachments,
     meta: mergedMeta,
   });
+  const idempotencyKey = outboundDeliveryIdempotencyKey({
+    tenantKey,
+    provider: resolvedProvider,
+    channel,
+    threadId: thread.id,
+    messageId: message.id,
+    recipientId,
+    text,
+  });
 
   const attempt = await createAttempt({
     db: client,
@@ -302,6 +312,7 @@ export async function persistOutboundMessage({
     channel,
     provider: resolvedProvider,
     recipientId,
+    idempotencyKey,
     payload: attemptPayload,
     status: providerMessageId ? "sent" : "queued",
     maxAttempts,

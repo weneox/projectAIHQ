@@ -14,6 +14,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createLogger } from "../utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +40,10 @@ function resolvePromptRoot() {
 
 const ROOT = resolvePromptRoot();
 const cache = new Map();
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "prompts",
+});
 
 function clean(x) {
   return String(x || "").trim();
@@ -63,7 +68,7 @@ function readRel(relPath) {
   const full = path.resolve(ROOT, rel);
 
   if (!isSafeInsideRoot(full)) {
-    console.error("[prompts] blocked unsafe path:", rel);
+    log.error("prompts.path.blocked", { rel });
     return "";
   }
 
@@ -71,7 +76,7 @@ function readRel(relPath) {
 
   try {
     if (!fs.existsSync(full)) {
-      console.error("[prompts] missing file:", full);
+      log.warn("prompts.file.missing", { path: full });
       cache.set(full, "");
       return "";
     }
@@ -80,7 +85,10 @@ function readRel(relPath) {
     cache.set(full, txt);
     return txt;
   } catch (e) {
-    console.error("[prompts] read error:", full, String(e?.message || e));
+    log.error("prompts.file.read_failed", {
+      path: full,
+      error: String(e?.message || e),
+    });
     cache.set(full, "");
     return "";
   }

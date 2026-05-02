@@ -78,8 +78,88 @@ export function applyInMemoryRateLimit(
   return res.status(429).json({
     ok: false,
     error: "Too many requests",
+    code: `${s(policyName, "global")}_rate_limited`,
     reason: `${s(policyName, "global")}_rate_limited`,
+    requestId: req?.requestId || null,
     retryAfterMs,
+    rateLimit: {
+      policy: s(policyName, "global"),
+      subject: subjectKey,
+      limit,
+      remaining: 0,
+      resetAt: new Date(Number(bucket.resetAt || now)).toISOString(),
+      retryAfterMs,
+    },
+  });
+}
+
+export function createRateLimitMiddleware({
+  policyName = "global",
+  windowMs = 60_000,
+  maxRequests = 60,
+  keyFn = null,
+} = {}) {
+  return function rateLimitMiddleware(req, res, next) {
+    return applyInMemoryRateLimit(req, res, next, {
+      policyName,
+      windowMs,
+      maxRequests,
+      keyFn: keyFn || ((request) => getRequestIp(request)),
+    });
+  };
+}
+
+function keyByIpAndBody(req, bodyKeys = []) {
+  const parts = [getRequestIp(req)];
+  for (const key of bodyKeys) {
+    const value = s(req?.body?.[key]).toLowerCase();
+    if (value) parts.push(`${key}:${value}`);
+  }
+  return parts.join("|");
+}
+
+export function requireAuthEndpointRateLimit(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    policyName: "auth",
+    windowMs: cfg?.rateLimit?.authWindowMs,
+    maxRequests: cfg?.rateLimit?.authMaxRequests,
+    keyFn: (request) => keyByIpAndBody(request, ["email"]),
+  });
+}
+
+export function requireSignupRateLimit(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    policyName: "signup",
+    windowMs: cfg?.rateLimit?.signupWindowMs,
+    maxRequests: cfg?.rateLimit?.signupMaxRequests,
+    keyFn: (request) => keyByIpAndBody(request, ["email", "tenantKey", "tenant_key"]),
+  });
+}
+
+export function requireAiExecutionRateLimit(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    policyName: "ai_execution",
+    windowMs: cfg?.rateLimit?.aiWindowMs,
+    maxRequests: cfg?.rateLimit?.aiMaxRequests,
+    keyFn: (request) =>
+      s(request?.auth?.tenantId || request?.auth?.tenantKey || request?.tenantKey) ||
+      getRequestIp(request),
+  });
+}
+
+export function requireWebhookIngestionRateLimit(req, res, next) {
+  return applyInMemoryRateLimit(req, res, next, {
+    policyName: "webhook_ingestion",
+    windowMs: cfg?.rateLimit?.webhookWindowMs,
+    maxRequests: cfg?.rateLimit?.webhookMaxRequests,
+    keyFn: (request) =>
+      [
+        getRequestIp(request),
+        s(request?.body?.tenantKey || request?.body?.tenant_key).toLowerCase(),
+        s(request?.body?.channel || request?.body?.platform).toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join("|"),
   });
 }
 

@@ -2,6 +2,12 @@
 // FINAL v2.0.0 — tenant settings helpers (workspace-safe + frontend-compatible)
 
 import { buildTenantEntitlements } from "../../services/tenantEntitlements.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "settings-db-helper",
+});
 
 function isMissingSchemaError(error) {
   const code = cleanString(error?.code).toUpperCase();
@@ -26,7 +32,8 @@ async function queryOptionalWorkspaceSlice(db, query, params, fallback, label) {
       throw error;
     }
 
-    console.warn(`[settings] optional workspace slice unavailable: ${label}`, {
+    log.warn("settings.optional_workspace_slice.unavailable", {
+      label,
       code: error?.code || null,
       message: error?.message || String(error),
     });

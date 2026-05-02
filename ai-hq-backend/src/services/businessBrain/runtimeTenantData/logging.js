@@ -1,7 +1,14 @@
 import { s } from "../runtimeShared.js";
+import { createLogger, emitConsoleSpyEvent } from "../../../utils/logger.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "runtime-tenant-data",
+});
 
 function logDbStepError(step, tenant, error) {
-  console.error(`[runtimeTenantData] ${step} failed`, {
+  const payload = {
+    step,
     tenantId: s(tenant?.id),
     tenantKey: s(tenant?.tenant_key),
     message: error?.message || String(error),
@@ -13,6 +20,21 @@ function logDbStepError(step, tenant, error) {
     table: error?.table || null,
     column: error?.column || null,
     stack: error?.stack || null,
+  };
+
+  if (
+    emitConsoleSpyEvent(
+      "error",
+      `[runtimeTenantData] ${step} failed`,
+      payload
+    )
+  ) {
+    return;
+  }
+
+  log.error("runtime_tenant_data.step.failed", {
+    step,
+    ...payload,
   });
 }
 

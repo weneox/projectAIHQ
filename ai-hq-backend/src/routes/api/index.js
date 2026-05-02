@@ -13,9 +13,14 @@ import {
   getRequestedTenantId,
   getRequestedTenantKey,
 } from "../../utils/auth.js";
+import {
+  buildTenantContextFromRequest,
+  setTenantContext,
+} from "../../db/tenantContext.js";
 import { isDbReady, serviceUnavailableJson } from "../../utils/http.js";
 import { hasFeature } from "../../config/features.js";
 import { shouldEnableDebugRoutes } from "../../utils/securitySurface.js";
+import { requireAiExecutionRateLimit } from "../../utils/rateLimit.js";
 
 import { healthRoutes } from "./health/index.js";
 import { tenantsRoutes } from "./tenants/index.js";
@@ -73,18 +78,23 @@ function isInternalBypassPath(req) {
 function mapSessionPayloadToAuth(payload = {}) {
   return {
     userId: payload.userId,
+    identityId: payload.identityId,
+    membershipId: payload.membershipId,
     tenantId: payload.tenantId,
     tenantKey: payload.tenantKey,
     email: payload.email,
     fullName: payload.fullName || "",
     role: payload.role || "member",
     sessionVersion: Number(payload.sessionVersion || 1),
+    _serverControlled: true,
   };
 }
 
 function mapSessionPayloadToUser(payload = {}) {
   return {
     id: payload.userId,
+    identityId: payload.identityId,
+    membershipId: payload.membershipId,
     tenantId: payload.tenantId,
     tenantKey: payload.tenantKey,
     tenant_id: payload.tenantId,
@@ -95,6 +105,7 @@ function mapSessionPayloadToUser(payload = {}) {
     role: payload.role || "member",
     sessionVersion: Number(payload.sessionVersion || 1),
     session_version: Number(payload.sessionVersion || 1),
+    _serverControlled: true,
   };
 }
 
@@ -125,6 +136,96 @@ function collectClientTenantOverrides(req) {
     tenantIds: [...new Set(tenantIds)],
     tenantKeys: [...new Set(tenantKeys)],
   };
+}
+
+function collectClientIdentityOverrides(req) {
+  const body = req?.body && typeof req.body === "object" ? req.body : {};
+  const query = req?.query && typeof req.query === "object" ? req.query : {};
+  const headers = req?.headers || {};
+
+  return {
+    userIds: [
+      body.userId,
+      body.user_id,
+      query.userId,
+      query.user_id,
+      headers["x-user-id"],
+    ]
+      .map((item) => s(item))
+      .filter(Boolean),
+    identityIds: [
+      body.identityId,
+      body.identity_id,
+      query.identityId,
+      query.identity_id,
+      headers["x-identity-id"],
+    ]
+      .map((item) => s(item))
+      .filter(Boolean),
+    membershipIds: [
+      body.membershipId,
+      body.membership_id,
+      query.membershipId,
+      query.membership_id,
+      headers["x-membership-id"],
+    ]
+      .map((item) => s(item))
+      .filter(Boolean),
+    roleOverrides: [
+      headers["x-user-role"],
+      headers["x-role"],
+      query.authRole,
+      query.auth_role,
+      body.authRole,
+      body.auth_role,
+    ]
+      .map((item) => s(item).toLowerCase())
+      .filter(Boolean),
+    authObjects: [body.auth, body.session, body.user].filter(
+      (value) => value && typeof value === "object"
+    ),
+  };
+}
+
+function enforceServerControlledIdentityMiddleware(req, res, next) {
+  const auth = req.auth || {};
+  const overrides = collectClientIdentityOverrides(req);
+  const mismatchedUserId = overrides.userIds.find((value) => value !== s(auth.userId));
+  const mismatchedIdentityId = overrides.identityIds.find(
+    (value) => value !== s(auth.identityId)
+  );
+  const mismatchedMembershipId = overrides.membershipIds.find(
+    (value) => value !== s(auth.membershipId)
+  );
+  const roleOverride = overrides.roleOverrides[0] || "";
+
+  if (
+    mismatchedUserId ||
+    mismatchedIdentityId ||
+    mismatchedMembershipId ||
+    roleOverride ||
+    overrides.authObjects.length
+  ) {
+    req.log?.warn?.("auth.identity_override_blocked", {
+      userId: s(auth.userId),
+      identityId: s(auth.identityId),
+      membershipId: s(auth.membershipId),
+      attemptedUserId: mismatchedUserId || "",
+      attemptedIdentityId: mismatchedIdentityId || "",
+      attemptedMembershipId: mismatchedMembershipId || "",
+      attemptedRole: roleOverride,
+      endpoint: req.originalUrl || req.url || "",
+    });
+
+    return res.status(403).json({
+      ok: false,
+      error: "Forbidden",
+      code: "client_identity_override_rejected",
+      requestId: req.requestId || null,
+    });
+  }
+
+  return next();
 }
 
 function enforceAuthenticatedTenantContextMiddleware(req, res, next) {
@@ -169,6 +270,7 @@ function enforceAuthenticatedTenantContextMiddleware(req, res, next) {
     tenant_id: tenantId,
     tenant_key: tenantKey,
   };
+  setTenantContext(buildTenantContextFromRequest(req));
 
   return next();
 }
@@ -250,6 +352,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 
   // authenticated app routes
   r.use(requireUserSessionMiddleware);
+  r.use(enforceServerControlledIdentityMiddleware);
   r.use(enforceAuthenticatedTenantContextMiddleware);
   r.use(createRequireOperationalDbMiddleware({ db }));
 
@@ -264,6 +367,11 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   if (shouldEnableDebugRoutes()) {
     r.use("/", debugRoutes());
   }
+  r.use("/chat", requireAiExecutionRateLimit);
+  r.use("/debate", requireAiExecutionRateLimit);
+  r.use("/executions", requireAiExecutionRateLimit);
+  r.use("/media", requireAiExecutionRateLimit);
+  r.use("/render", requireAiExecutionRateLimit);
   r.use("/", mediaRoutes({ db }));
 
   if (hasFeature("media.render")) {
@@ -316,5 +424,6 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 export const __test__ = {
   createRequireOperationalDbMiddleware,
   enforceAuthenticatedTenantContextMiddleware,
+  enforceServerControlledIdentityMiddleware,
   requireUserSessionMiddleware,
 };

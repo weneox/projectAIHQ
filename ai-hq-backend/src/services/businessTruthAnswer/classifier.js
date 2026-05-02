@@ -1,10 +1,16 @@
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { createLogger } from "../../utils/logger.js";
 import { arr, lower, normalizeIsoLanguage, s, uniqStrings } from "./normalize.js";
 import {
   buildRecentLanguageSample,
   resolveConversationLanguageHint,
 } from "./languageContext.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "business-truth-classifier",
+});
 
 let openaiSingleton = null;
 
@@ -321,7 +327,7 @@ export async function classifyApprovedTruthIntentWithModel({
     );
   } catch (err) {
     try {
-      console.warn("[ai-hq] approved truth intent classifier failed", {
+      log.warn("approved_truth.intent_classifier.failed", {
         model,
         message: err?.message || String(err),
       });

@@ -792,7 +792,10 @@ export async function executionCallback(req, res, { db, wsHub }) {
 
     for (const mediaJobId of committed?.postCommit?.mediaJobIds || []) {
       runMediaJobNow({ db, jobId: mediaJobId }).catch((e) => {
-        console.error("[media-runner] start failed:", String(e?.message || e));
+        req.log?.error?.("media_runner.start.failed", {
+          jobId: mediaJobId,
+          error: String(e?.message || e),
+        });
       });
     }
 

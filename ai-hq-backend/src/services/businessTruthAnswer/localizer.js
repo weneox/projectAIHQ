@@ -1,6 +1,12 @@
 ﻿import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { createLogger } from "../../utils/logger.js";
 import { arr, normalizeIsoLanguage, s, uniqStrings } from "./normalize.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "business-truth-localizer",
+});
 
 let openaiSingleton = null;
 
@@ -732,7 +738,7 @@ export async function localizeApprovedTruthAnswer({
     };
   } catch (error) {
     try {
-      console.warn("[ai-hq] approved truth localization failed", {
+      log.warn("approved_truth.localization.failed", {
         model,
         language,
         message: error?.message || String(error),

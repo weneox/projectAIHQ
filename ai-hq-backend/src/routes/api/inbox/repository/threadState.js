@@ -1,12 +1,27 @@
 import { isDbReady, isUuid } from "../../../../utils/http.js";
+import { getTenantContext } from "../../../../db/tenantContext.js";
 import { s } from "../shared.js";
 import { normalizeInboxThreadState, normalizeJsonObject } from "./shared.js";
 
 export async function getInboxThreadState(db, threadId) {
   if (!isDbReady(db)) return null;
   if (!threadId || !isUuid(threadId)) return null;
+  const context = getTenantContext() || {};
+  const tenantKey = s(context.tenantKey);
+  const tenantId = s(context.tenantId);
+  if (!tenantKey && !tenantId && db?.__tenantGuardedDb === true) return null;
 
   try {
+    const values = [threadId];
+    let tenantWhere = "";
+    if (tenantId) {
+      values.push(tenantId);
+      tenantWhere = `and tenant_id = $2::uuid`;
+    } else if (tenantKey) {
+      values.push(tenantKey);
+      tenantWhere = `and tenant_key = $2::text`;
+    }
+
     const result = await db.query(
       `
       select
@@ -18,9 +33,10 @@ export async function getInboxThreadState(db, threadId) {
         awaiting_customer_answer_to, last_decision_meta, created_at, updated_at
       from inbox_thread_state
       where thread_id = $1::uuid
+        ${tenantWhere}
       limit 1
       `,
-      [threadId]
+      values
     );
 
     return normalizeInboxThreadState(result.rows?.[0] || null);

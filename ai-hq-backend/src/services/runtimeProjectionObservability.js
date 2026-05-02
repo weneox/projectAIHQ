@@ -1,3 +1,10 @@
+import { createLogger, emitConsoleSpyEvent } from "../utils/logger.js";
+
+const fallbackLog = createLogger({
+  service: "ai-hq-backend",
+  component: "runtime-projection-observability",
+});
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -149,13 +156,19 @@ function logEvent(logger, level = "info", event = "", payload = {}, error = null
     }
   } catch {}
 
-  const writer =
-    typeof console?.[level] === "function"
-      ? console[level].bind(console)
-      : console.log.bind(console);
-
   if (level === "error" && error) {
-    writer(safeEvent, {
+    if (
+      emitConsoleSpyEvent(level, safeEvent, {
+        ...safePayload,
+        errorClass: s(error?.name || error?.constructor?.name || "Error"),
+        errorMessage: s(error?.message || error),
+        errorCode: s(error?.code || error?.reasonCode),
+      })
+    ) {
+      return;
+    }
+
+    fallbackLog.error(safeEvent, {
       ...safePayload,
       errorClass: s(error?.name || error?.constructor?.name || "Error"),
       errorMessage: s(error?.message || error),
@@ -164,7 +177,10 @@ function logEvent(logger, level = "info", event = "", payload = {}, error = null
     return;
   }
 
-  writer(safeEvent, safePayload);
+  if (emitConsoleSpyEvent(level, safeEvent, safePayload)) return;
+
+  const fallbackMethod = typeof fallbackLog[level] === "function" ? level : "info";
+  fallbackLog[fallbackMethod](safeEvent, safePayload);
 }
 
 const runtimeProjectionHealthState = new Map();

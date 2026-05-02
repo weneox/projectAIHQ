@@ -4,6 +4,10 @@ import { adminSessionRoutes } from "./session.js";
 import { adminLoginRoutes } from "./admin.js";
 import { userSignupRoutes } from "./signup.js";
 import { userLoginRoutes } from "./user.js";
+import {
+  requireAuthEndpointRateLimit,
+  requireSignupRateLimit,
+} from "../../../utils/rateLimit.js";
 
 export function adminAuthRoutes({ db, wsHub } = {}) {
   const r = express.Router();
@@ -14,6 +18,10 @@ export function adminAuthRoutes({ db, wsHub } = {}) {
   // own public handlers.
   r.use("/admin-auth", requireTrustedBrowserOriginForCookieAuth);
   r.use("/auth", requireTrustedBrowserOriginForCookieAuth);
+  r.use("/admin-auth/login", requireAuthEndpointRateLimit);
+  r.use("/auth/login", requireAuthEndpointRateLimit);
+  r.use("/auth/select-workspace", requireAuthEndpointRateLimit);
+  r.use("/auth/signup", requireSignupRateLimit);
 
   r.use(adminSessionRoutes({ db, wsHub }));
   r.use(adminLoginRoutes({ db, wsHub }));

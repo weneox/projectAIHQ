@@ -1,10 +1,16 @@
 ﻿import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { createLogger } from "../../utils/logger.js";
 import { arr, normalizeIsoLanguage, s } from "./normalize.js";
 import {
   buildRecentLanguageSample,
   resolveConversationLanguageHint,
 } from "./languageContext.js";
+
+const log = createLogger({
+  service: "ai-hq-backend",
+  component: "business-truth-recovery",
+});
 
 let openaiSingleton = null;
 
@@ -189,7 +195,7 @@ export async function detectConversationRecoveryWithModel({
     );
   } catch (error) {
     try {
-      console.warn("[ai-hq] conversation recovery detector failed", {
+      log.warn("approved_truth.recovery_detector.failed", {
         model,
         message: error?.message || String(error),
       });

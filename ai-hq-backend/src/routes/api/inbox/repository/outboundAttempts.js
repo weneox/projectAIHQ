@@ -15,6 +15,7 @@ export async function createOutboundAttempt({
   channel = "instagram",
   provider = "meta",
   recipientId = null,
+  idempotencyKey = "",
   payload = {},
   status = "queued",
   maxAttempts = 5,
@@ -30,11 +31,15 @@ export async function createOutboundAttempt({
     `
     insert into inbox_outbound_attempts (
       message_id, thread_id, tenant_key, channel, provider,
-      recipient_id, payload, status, max_attempts, next_retry_at
+      recipient_id, payload, status, max_attempts, next_retry_at, idempotency_key
     )
-    values ($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::jsonb,$8::text,$9::int,$10::timestamptz)
+    values ($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::jsonb,$8::text,$9::int,$10::timestamptz,nullif($11::text,''))
+    on conflict (tenant_key, provider, idempotency_key)
+      where idempotency_key is not null
+    do update set
+      payload = inbox_outbound_attempts.payload
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_key, channel, provider, recipient_id, idempotency_key,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
@@ -50,6 +55,7 @@ export async function createOutboundAttempt({
       status,
       Number(maxAttempts || 5),
       nextRetryAt || null,
+      idempotencyKey,
     ]
   );
 

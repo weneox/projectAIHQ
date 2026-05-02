@@ -6,6 +6,7 @@ import {
   processDurableExecution,
 } from "../services/durableExecutionService.js";
 import { createLogger } from "../utils/logger.js";
+import { runWithTenantContext } from "../db/tenantContext.js";
 import {
   markWorkerStarted,
   markWorkerStopped,
@@ -132,11 +133,20 @@ export function createDurableExecutionWorker({ db, wsHub }) {
           attemptCount: Number(claimed.attempt_count || 0),
         });
 
-        const result = await processDurableExecution({
-          db,
-          wsHub,
-          execution: claimed,
-        }).catch((err) => ({
+        const result = await runWithTenantContext(
+          {
+            tenantId: claimed.tenant_id,
+            tenantKey: claimed.tenant_key,
+            source: "durable_execution_worker",
+            requestId: s(claimed.correlation_ids?.requestId),
+          },
+          () =>
+            processDurableExecution({
+              db,
+              wsHub,
+              execution: claimed,
+            })
+        ).catch((err) => ({
           ok: false,
           retryable: true,
           errorCode: s(err?.code || "execution_failed"),
@@ -145,11 +155,20 @@ export function createDurableExecutionWorker({ db, wsHub }) {
           resultSummary: {},
         }));
 
-        const finalized = await finalizeDurableExecution({
-          db,
-          execution: claimed,
-          result,
-        });
+        const finalized = await runWithTenantContext(
+          {
+            tenantId: claimed.tenant_id,
+            tenantKey: claimed.tenant_key,
+            source: "durable_execution_worker",
+            requestId: s(claimed.correlation_ids?.requestId),
+          },
+          () =>
+            finalizeDurableExecution({
+              db,
+              execution: claimed,
+              result,
+            })
+        );
 
         const event = result?.ok
           ? "durable_execution.succeeded"
