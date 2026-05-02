@@ -7,7 +7,11 @@ import {
   dbUpsertTenantAgent,
 } from "../../../db/helpers/settings.js";
 
-import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
+import {
+  clearTenantCache,
+  dbGetTenantByKey,
+} from "../../../db/helpers/tenants.js";
+import { runWithSystemDbContext } from "../../../db/tenantContext.js";
 
 import {
   dbCreateTenantUser,
@@ -64,6 +68,13 @@ export async function dbListTenants(db, opts = {}) {
         plan_key,
         status,
         active,
+        lifecycle_status,
+        billing_status,
+        trial_ends_at,
+        suspended_at,
+        suspension_reason,
+        deleted_at,
+        deletion_reason,
         onboarding_completed_at,
         created_at,
         updated_at
@@ -112,6 +123,35 @@ export async function dbPatchTenantByKey(db, tenantKey, input = {}) {
       : current.market_region,
     plan_key: cleanLower(input.plan_key, current.plan_key || "starter"),
     status: cleanLower(input.status, current.status || "active"),
+    lifecycle_status: cleanLower(
+      input.lifecycle_status || input.lifecycleStatus,
+      current.lifecycle_status || current.status || "active"
+    ),
+    billing_status: cleanLower(
+      input.billing_status || input.billingStatus,
+      current.billing_status || "unconfigured"
+    ),
+    trial_ends_at: Object.prototype.hasOwnProperty.call(input, "trial_ends_at")
+      ? cleanNullableString(input.trial_ends_at)
+      : Object.prototype.hasOwnProperty.call(input, "trialEndsAt")
+        ? cleanNullableString(input.trialEndsAt)
+        : current.trial_ends_at,
+    suspended_at: Object.prototype.hasOwnProperty.call(input, "suspended_at")
+      ? cleanNullableString(input.suspended_at)
+      : current.suspended_at,
+    suspension_reason: Object.prototype.hasOwnProperty.call(input, "suspension_reason")
+      ? cleanNullableString(input.suspension_reason)
+      : Object.prototype.hasOwnProperty.call(input, "suspensionReason")
+        ? cleanNullableString(input.suspensionReason)
+        : current.suspension_reason,
+    deleted_at: Object.prototype.hasOwnProperty.call(input, "deleted_at")
+      ? cleanNullableString(input.deleted_at)
+      : current.deleted_at,
+    deletion_reason: Object.prototype.hasOwnProperty.call(input, "deletion_reason")
+      ? cleanNullableString(input.deletion_reason)
+      : Object.prototype.hasOwnProperty.call(input, "deletionReason")
+        ? cleanNullableString(input.deletionReason)
+        : current.deletion_reason,
     active: Object.prototype.hasOwnProperty.call(input, "active")
       ? asBool(input.active, true)
       : current.active,
@@ -138,7 +178,14 @@ export async function dbPatchTenantByKey(db, tenantKey, input = {}) {
         plan_key = $10,
         status = $11,
         active = $12,
-        onboarding_completed_at = $13
+        onboarding_completed_at = $13,
+        lifecycle_status = $14,
+        billing_status = $15,
+        trial_ends_at = $16,
+        suspended_at = $17,
+        suspension_reason = $18,
+        deleted_at = $19,
+        deletion_reason = $20
       where lower(tenant_key) = lower($1)
       returning *
     `,
@@ -156,10 +203,149 @@ export async function dbPatchTenantByKey(db, tenantKey, input = {}) {
       allowed.status,
       allowed.active,
       allowed.onboarding_completed_at,
+      allowed.lifecycle_status,
+      allowed.billing_status,
+      allowed.trial_ends_at,
+      allowed.suspended_at,
+      allowed.suspension_reason,
+      allowed.deleted_at,
+      allowed.deletion_reason,
     ]
   );
 
-  return rowOrNull(q);
+  const updated = rowOrNull(q);
+  if (updated?.tenant_key) clearTenantCache(updated.tenant_key);
+  return updated;
+}
+
+const TENANT_LIFECYCLE_STATUSES = new Set([
+  "creating",
+  "trial",
+  "active",
+  "suspended",
+  "deleting",
+  "deleted",
+  "archived",
+]);
+
+function normalizeLifecycleStatus(status = "", fallback = "active") {
+  const value = cleanLower(status, fallback);
+  return TENANT_LIFECYCLE_STATUSES.has(value) ? value : fallback;
+}
+
+function mapLifecycleToTenantStatus(status = "active") {
+  if (status === "creating") return "trial";
+  if (status === "deleting") return "archived";
+  return status;
+}
+
+function isLifecycleActive(status = "active") {
+  return status === "creating" || status === "trial" || status === "active";
+}
+
+export async function dbSetTenantLifecycleStatus(
+  db,
+  tenantKey,
+  {
+    status = "",
+    actor = "system",
+    reason = "",
+    requestId = "",
+    meta = {},
+  } = {}
+) {
+  if (!db || !tenantKey) return null;
+
+  return runWithSystemDbContext("tenant_lifecycle_update", async () => {
+    const current = await dbGetTenantByKey(db, tenantKey);
+    if (!current?.id) return null;
+
+    const nextLifecycle = normalizeLifecycleStatus(
+      status,
+      current.lifecycle_status || current.status || "active"
+    );
+    const nextTenantStatus = mapLifecycleToTenantStatus(nextLifecycle);
+    const active = isLifecycleActive(nextLifecycle);
+    const now = new Date().toISOString();
+
+    const q = await db.query(
+      `
+      update tenants
+      set
+        status = $2,
+        lifecycle_status = $3,
+        active = $4,
+        suspended_at = case when $3 = 'suspended' then coalesce(suspended_at, $5::timestamptz) else suspended_at end,
+        suspension_reason = case when $3 = 'suspended' then nullif($6::text, '') else suspension_reason end,
+        deleted_at = case when $3 = 'deleted' then coalesce(deleted_at, $5::timestamptz) else deleted_at end,
+        deletion_reason = case when $3 = 'deleted' then nullif($6::text, '') else deletion_reason end,
+        billing_status = case
+          when $3 = 'trial' then 'trialing'
+          when $3 = 'suspended' then 'suspended'
+          when $3 = 'deleted' then 'closed'
+          when billing_status in ('', 'unconfigured') or billing_status is null then 'active'
+          else billing_status
+        end,
+        updated_at = now()
+      where lower(tenant_key) = lower($1)
+      returning *
+      `,
+      [
+        cleanLower(tenantKey),
+        nextTenantStatus,
+        nextLifecycle,
+        active,
+        now,
+        cleanNullableString(reason) || "",
+      ]
+    );
+
+    const updated = rowOrNull(q);
+    if (!updated?.id) return null;
+
+    await db.query(
+      `
+      insert into tenant_lifecycle_events (
+        tenant_id,
+        tenant_key,
+        actor,
+        action,
+        status_from,
+        status_to,
+        reason,
+        meta,
+        request_id
+      )
+      values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
+      `,
+      [
+        updated.id,
+        updated.tenant_key,
+        cleanString(actor, "system"),
+        `tenant.${nextLifecycle}`,
+        cleanLower(current.lifecycle_status || current.status || ""),
+        nextLifecycle,
+        cleanNullableString(reason),
+        JSON.stringify(meta && typeof meta === "object" ? meta : {}),
+        cleanNullableString(requestId),
+      ]
+    );
+
+    if (!active) {
+      await db.query(
+        `
+        update auth_identity_sessions
+        set revoked_at = now(), last_seen_at = now()
+        where active_tenant_id = $1
+          and revoked_at is null
+        `,
+        [updated.id]
+      );
+    }
+
+    clearTenantCache(updated.tenant_key);
+    return updated;
+  });
 }
 
 export async function dbResolveTenantChannel(
@@ -207,10 +393,14 @@ export async function dbResolveTenantChannel(
         t.market_region,
         t.plan_key,
         t.status as tenant_status,
-        t.active as tenant_active
+        t.active as tenant_active,
+        t.lifecycle_status as tenant_lifecycle_status,
+        t.billing_status as tenant_billing_status
       from tenant_channels tc
       join tenants t on t.id = tc.tenant_id
       where tc.channel_type = $1
+        and t.active = true
+        and t.status not in ('suspended', 'archived', 'deleted')
         and (
           ($2::text is not null and tc.external_page_id = $2)
           or ($3::text is not null and tc.external_user_id = $3)

@@ -1,6 +1,7 @@
 import archiver from "archiver";
 import { requireInternalToken } from "../../../utils/auth.js";
 import { requireAdminSession, hashUserPassword } from "../../../utils/adminAuth.js";
+import { writeTenantLifecycleEvent } from "../../../db/helpers/tenantLifecycle.js";
 
 import {
   dbExportTenantBundle,
@@ -47,6 +48,7 @@ import {
   dbListTenants,
   dbPatchTenantByKey,
   dbResolveTenantChannel,
+  dbSetTenantLifecycleStatus,
   dbSetTenantUserStatus,
   dbUpdateTenantUser,
   dbUpsertTenantAgent,
@@ -115,6 +117,8 @@ export function createTenantsHandlers({ db }) {
           plan_key: match.plan_key,
           status: match.tenant_status,
           active: match.tenant_active,
+          lifecycle_status: match.tenant_lifecycle_status || match.tenant_status,
+          billing_status: match.tenant_billing_status || "unconfigured",
         },
         channelConfig: {
           id: match.id,
@@ -698,6 +702,20 @@ export function createTenantsHandlers({ db }) {
         companyName: tenantCore.company_name,
         ownerEmail: ownerInput.user_email,
       });
+      await writeTenantLifecycleEvent(db, {
+        tenantId: tenantCore.id,
+        tenantKey: tenantCore.tenant_key,
+        actor,
+        action: "tenant.created",
+        statusFrom: "",
+        statusTo: tenantCore.lifecycle_status || tenantCore.status || "active",
+        reason: "admin_create",
+        requestId: req.requestId,
+        meta: {
+          companyName: tenantCore.company_name,
+          planKey: tenantCore.plan_key || "starter",
+        },
+      });
 
       const settings = await dbGetWorkspaceSettings(db, tenantCore.tenant_key);
 
@@ -820,6 +838,71 @@ export function createTenantsHandlers({ db }) {
     }
   }
 
+  async function changeTenantLifecycle(req, res, nextStatus, action) {
+    try {
+      if (!ensureDb(res, db)) return;
+
+      const actor = getActor(req);
+      const tenantKey = slugTenantKey(req.params.key);
+      if (!tenantKey) return bad(res, "tenant key is required");
+
+      const current = await dbGetTenantByKey(db, tenantKey);
+      if (!current?.id) {
+        return res.status(404).json({ ok: false, error: "Tenant not found" });
+      }
+
+      const body = asJsonObj(req.body, {});
+      const reason = cleanNullableString(body.reason || body.suspensionReason || body.deletionReason);
+      const updated = await dbSetTenantLifecycleStatus(db, tenantKey, {
+        status: nextStatus,
+        actor,
+        reason,
+        requestId: req.requestId,
+        meta: {
+          tenantKey,
+          previousStatus: current.status,
+          previousLifecycleStatus: current.lifecycle_status || current.status,
+        },
+      });
+
+      if (!updated?.id) {
+        return serverErr(res, "Tenant lifecycle update failed");
+      }
+
+      await auditSafe(db, actor, action, "tenant", updated.id, {
+        tenantId: updated.id,
+        tenantKey: updated.tenant_key,
+        status: updated.status,
+        lifecycleStatus: updated.lifecycle_status || updated.status,
+        reason,
+        requestId: req.requestId || null,
+      });
+
+      const settings = await dbGetWorkspaceSettings(db, updated.tenant_key);
+      return ok(res, settings || { tenant: updated });
+    } catch (err) {
+      return serverErr(res, err?.message || "Failed to update tenant lifecycle");
+    }
+  }
+
+  async function suspendTenant(req, res) {
+    return changeTenantLifecycle(req, res, "suspended", "tenant.suspended");
+  }
+
+  async function resumeTenant(req, res) {
+    return changeTenantLifecycle(req, res, "active", "tenant.resumed");
+  }
+
+  async function deleteTenant(req, res) {
+    return changeTenantLifecycle(req, res, "deleted", "tenant.deleted");
+  }
+
+  async function setTenantLifecycle(req, res) {
+    const status = cleanLower(req.body?.status || req.body?.lifecycleStatus || "");
+    if (!status) return bad(res, "status is required");
+    return changeTenantLifecycle(req, res, status, "tenant.lifecycle.updated");
+  }
+
   return {
     requireAdmin,
     requireInternal: requireInternalToken,
@@ -838,5 +921,9 @@ export function createTenantsHandlers({ db }) {
     exportTenantZip,
     createTenant,
     patchTenant,
+    suspendTenant,
+    resumeTenant,
+    deleteTenant,
+    setTenantLifecycle,
   };
 }

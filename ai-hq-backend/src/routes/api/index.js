@@ -21,6 +21,7 @@ import { isDbReady, serviceUnavailableJson } from "../../utils/http.js";
 import { hasFeature } from "../../config/features.js";
 import { shouldEnableDebugRoutes } from "../../utils/securitySurface.js";
 import { requireAiExecutionRateLimit } from "../../utils/rateLimit.js";
+import { createTenantUsageAndQuotaMiddleware } from "../../services/tenantQuota.js";
 
 import { healthRoutes } from "./health/index.js";
 import { tenantsRoutes } from "./tenants/index.js";
@@ -59,7 +60,7 @@ function s(v, d = "") {
 function normalizePath(req) {
   const raw = s(req?.originalUrl || req?.url || req?.path || "");
   const noQuery = raw.split("?")[0] || "";
-  return noQuery.replace(/^\/api/, "") || "/";
+  return noQuery.replace(/^\/api(?:\/v1)?/, "") || "/";
 }
 
 function isInternalBypassPath(req) {
@@ -82,6 +83,10 @@ function mapSessionPayloadToAuth(payload = {}) {
     membershipId: payload.membershipId,
     tenantId: payload.tenantId,
     tenantKey: payload.tenantKey,
+    planKey: payload.planKey || "starter",
+    tenantStatus: payload.tenantStatus || "active",
+    tenantActive: payload.tenantActive !== false,
+    billingStatus: payload.billingStatus || "unconfigured",
     email: payload.email,
     fullName: payload.fullName || "",
     role: payload.role || "member",
@@ -99,6 +104,14 @@ function mapSessionPayloadToUser(payload = {}) {
     tenantKey: payload.tenantKey,
     tenant_id: payload.tenantId,
     tenant_key: payload.tenantKey,
+    planKey: payload.planKey || "starter",
+    plan_key: payload.planKey || "starter",
+    tenantStatus: payload.tenantStatus || "active",
+    tenant_status: payload.tenantStatus || "active",
+    tenantActive: payload.tenantActive !== false,
+    tenant_active: payload.tenantActive !== false,
+    billingStatus: payload.billingStatus || "unconfigured",
+    billing_status: payload.billingStatus || "unconfigured",
     email: payload.email,
     fullName: payload.fullName || "",
     full_name: payload.fullName || "",
@@ -269,6 +282,10 @@ function enforceAuthenticatedTenantContextMiddleware(req, res, next) {
     id: tenantId,
     tenant_id: tenantId,
     tenant_key: tenantKey,
+    plan_key: req.auth?.planKey || "starter",
+    status: req.auth?.tenantStatus || "active",
+    active: req.auth?.tenantActive !== false,
+    billing_status: req.auth?.billingStatus || "unconfigured",
   };
   setTenantContext(buildTenantContextFromRequest(req));
 
@@ -307,6 +324,10 @@ async function requireUserSessionMiddleware(req, res, next) {
     id: req.auth.tenantId,
     tenant_id: req.auth.tenantId,
     tenant_key: req.auth.tenantKey,
+    plan_key: req.auth.planKey || "starter",
+    status: req.auth.tenantStatus || "active",
+    active: req.auth.tenantActive !== false,
+    billing_status: req.auth.billingStatus || "unconfigured",
   };
 
   if (req.log?.child) {
@@ -315,6 +336,8 @@ async function requireUserSessionMiddleware(req, res, next) {
       tenantKey: req.auth.tenantKey,
       userId: req.auth.userId,
       role: req.auth.role,
+      planKey: req.auth.planKey,
+      tenantStatus: req.auth.tenantStatus,
     });
   }
 
@@ -355,6 +378,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use(enforceServerControlledIdentityMiddleware);
   r.use(enforceAuthenticatedTenantContextMiddleware);
   r.use(createRequireOperationalDbMiddleware({ db }));
+  r.use(createTenantUsageAndQuotaMiddleware({ db }));
 
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
   r.use("/", launchRoutes({ db }));

@@ -2,7 +2,9 @@
 // FINAL v2.0.0 — tenant settings helpers (workspace-safe + frontend-compatible)
 
 import { buildTenantEntitlements } from "../../services/tenantEntitlements.js";
+import { getCommercialPlan } from "../../services/commercialPlans.js";
 import { createLogger } from "../../utils/logger.js";
+import { clearTenantCache } from "./tenants.js";
 
 const log = createLogger({
   service: "ai-hq-backend",
@@ -119,6 +121,16 @@ function normalizeTenantRow(row) {
     plan_key: cleanString(row.plan_key || "starter"),
     status: cleanLower(row.status || "active", "active"),
     active: typeof row.active === "boolean" ? row.active : true,
+    lifecycle_status: cleanLower(
+      row.lifecycle_status || row.status || "active",
+      "active"
+    ),
+    billing_status: cleanLower(row.billing_status || "unconfigured", "unconfigured"),
+    trial_ends_at: row.trial_ends_at || null,
+    suspended_at: row.suspended_at || null,
+    suspension_reason: cleanString(row.suspension_reason),
+    deleted_at: row.deleted_at || null,
+    deletion_reason: cleanString(row.deletion_reason),
     onboarding_completed_at: row.onboarding_completed_at || null,
     created_at: row.created_at || null,
     updated_at: row.updated_at || null,
@@ -335,6 +347,7 @@ export async function dbGetWorkspaceSettings(db, tenantKey) {
   return {
     tenant,
     entitlements: buildTenantEntitlements(tenant),
+    commercialPlan: getCommercialPlan(tenant.plan_key),
     profile: normalizeProfileRow(rowOrNull(profileQ)),
     aiPolicy: normalizeAiPolicyRow(rowOrNull(policyQ)),
     channels: rows(channelsQ).map(normalizeChannelRow),
@@ -367,6 +380,24 @@ export async function dbUpsertTenantCore(db, tenantKey, input = {}) {
   if (!enabledLanguages.length) enabledLanguages = ["az"];
 
   const marketRegion = cleanNullableString(input.market_region);
+  const hasPlanKey = Object.prototype.hasOwnProperty.call(input, "plan_key");
+  const hasStatus = Object.prototype.hasOwnProperty.call(input, "status");
+  const hasLifecycleStatus = Object.prototype.hasOwnProperty.call(
+    input,
+    "lifecycle_status"
+  );
+  const hasBillingStatus = Object.prototype.hasOwnProperty.call(
+    input,
+    "billing_status"
+  );
+  const planKey = hasPlanKey ? cleanLower(input.plan_key, "starter") : null;
+  const status = hasStatus ? cleanLower(input.status, "active") : null;
+  const lifecycleStatus = hasLifecycleStatus
+    ? cleanLower(input.lifecycle_status, status || "active")
+    : null;
+  const billingStatus = hasBillingStatus
+    ? cleanLower(input.billing_status, "unconfigured")
+    : null;
 
   const q = await db.query(
     `
@@ -383,6 +414,8 @@ export async function dbUpsertTenantCore(db, tenantKey, input = {}) {
         plan_key,
         status,
         active,
+        lifecycle_status,
+        billing_status,
         onboarding_completed_at
       )
       values (
@@ -395,9 +428,11 @@ export async function dbUpsertTenantCore(db, tenantKey, input = {}) {
         $7,
         $8::jsonb,
         $9,
-        'starter',
-        'active',
+        coalesce(nullif($10::text, ''), 'starter'),
+        coalesce(nullif($11::text, ''), 'active'),
         true,
+        coalesce(nullif($12::text, ''), coalesce(nullif($11::text, ''), 'active')),
+        coalesce(nullif($13::text, ''), 'unconfigured'),
         null
       )
       on conflict (tenant_key) do update
@@ -409,7 +444,11 @@ export async function dbUpsertTenantCore(db, tenantKey, input = {}) {
         timezone = excluded.timezone,
         default_language = excluded.default_language,
         enabled_languages = excluded.enabled_languages,
-        market_region = excluded.market_region
+        market_region = excluded.market_region,
+        plan_key = coalesce(nullif($10::text, ''), tenants.plan_key),
+        status = coalesce(nullif($11::text, ''), tenants.status),
+        lifecycle_status = coalesce(nullif($12::text, ''), tenants.lifecycle_status),
+        billing_status = coalesce(nullif($13::text, ''), tenants.billing_status)
       returning *
     `,
     [
@@ -422,10 +461,16 @@ export async function dbUpsertTenantCore(db, tenantKey, input = {}) {
       defaultLanguage,
       json(enabledLanguages, ["az"]),
       marketRegion,
+      planKey,
+      status,
+      lifecycleStatus,
+      billingStatus,
     ]
   );
 
-  return normalizeTenantRow(rowOrNull(q));
+  const tenant = normalizeTenantRow(rowOrNull(q));
+  if (tenant?.tenant_key) clearTenantCache(tenant.tenant_key);
+  return tenant;
 }
 
 export async function dbUpsertTenantProfile(db, tenantId, input = {}) {

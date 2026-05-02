@@ -490,6 +490,78 @@ export function recordSourceSyncOutcome({ outcome = "" } = {}) {
   }
 }
 
+export function recordHttpRequestMetric({
+  tenantId = "",
+  tenantKey = "",
+  route = "",
+  method = "",
+  status = 0,
+  durationMs = 0,
+} = {}) {
+  const statusCode = n(status, 0);
+  const statusClass = statusCode > 0 ? `${Math.floor(statusCode / 100)}xx` : "unknown";
+  const labels = {
+    tenant_key: tenantKey,
+    route,
+    method,
+    status_class: statusClass,
+  };
+
+  incrementCounter("http_requests_total", labels);
+  incrementCounter("http_request_duration_ms_sum", labels, Math.max(1, n(durationMs, 0)));
+  incrementCounter("http_request_duration_ms_count", labels);
+
+  if (statusCode >= 500) {
+    incrementCounter("http_request_errors_total", labels);
+    recordRecent("http_request_errors_recent_total", labels);
+    pushRecentEvent({
+      level: "error",
+      category: "http",
+      code: "http_request_error",
+      reasonCode: statusClass,
+      tenantId: s(tenantId),
+      tenantKey: s(tenantKey),
+      context: {
+        route: s(route),
+        method: s(method),
+        status: statusCode,
+        durationMs: n(durationMs, 0),
+      },
+    });
+  }
+}
+
+export function recordQuotaRejection({
+  tenantId = "",
+  tenantKey = "",
+  planKey = "",
+  metric = "",
+  route = "",
+} = {}) {
+  const labels = {
+    tenant_key: tenantKey,
+    plan_key: planKey,
+    metric,
+    route,
+  };
+
+  incrementCounter("tenant_quota_rejections_total", labels);
+  recordRecent("tenant_quota_rejections_recent_total", labels);
+  pushRecentEvent({
+    level: "warn",
+    category: "quota",
+    code: "tenant_quota_rejected",
+    reasonCode: s(metric || "quota_exceeded"),
+    tenantId: s(tenantId),
+    tenantKey: s(tenantKey),
+    context: {
+      planKey: s(planKey),
+      metric: s(metric),
+      route: s(route),
+    },
+  });
+}
+
 export function recordRuntimeSignal({
   level = "info",
   category = "",
@@ -650,6 +722,36 @@ export function buildDurableOperationalStatus({
     });
   }
 
+  const httpErrorSpikeCount = countRecent("http_request_errors_recent_total", {
+    withinMs: cfg?.observability?.recentSignalWindowMs,
+  });
+  if (
+    httpErrorSpikeCount >=
+    Math.max(1, n(cfg?.observability?.httpErrorSpikeAttentionCount, 20))
+  ) {
+    alerts.push({
+      code: "http_error_spike",
+      status: "attention",
+      message: "Recent HTTP 5xx volume is above the attention threshold.",
+      value: httpErrorSpikeCount,
+    });
+  }
+
+  const quotaRejectionCount = countRecent("tenant_quota_rejections_recent_total", {
+    withinMs: cfg?.observability?.recentSignalWindowMs,
+  });
+  if (
+    quotaRejectionCount >=
+    Math.max(1, n(cfg?.observability?.quotaRejectionAttentionCount, 10))
+  ) {
+    alerts.push({
+      code: "quota_rejection_spike",
+      status: "attention",
+      message: "Repeated quota rejections were observed recently.",
+      value: quotaRejectionCount,
+    });
+  }
+
   return {
     status: alerts.length ? "attention" : "ok",
     alerts,
@@ -658,6 +760,8 @@ export function buildDurableOperationalStatus({
     recentSignals: {
       realtimeAuthFailures: realtimeAuthFailureCount,
       sourceSyncAttentionEvents: sourceSyncAttentionCount,
+      httpRequestErrors: httpErrorSpikeCount,
+      tenantQuotaRejections: quotaRejectionCount,
     },
     workers: {
       durableExecution: {

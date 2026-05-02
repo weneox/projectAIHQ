@@ -5,6 +5,7 @@ import {
   isAllowedOrigin,
   normalizeOriginValue,
 } from "./securitySurface.js";
+import { runWithSystemDbContext } from "../db/tenantContext.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -111,11 +112,13 @@ async function authQuery(db, queryText, params = [], timeoutMs = 2500) {
     throw err;
   }
 
-  return db.query({
-    text: queryText,
-    values: params,
-    query_timeout: getQueryTimeoutMs(timeoutMs),
-  });
+  return runWithSystemDbContext("auth_session_query", () =>
+    db.query({
+      text: queryText,
+      values: params,
+      query_timeout: getQueryTimeoutMs(timeoutMs),
+    })
+  );
 }
 
 function normalizeRateLimitScope(scope = "") {
@@ -214,6 +217,10 @@ function normalizeUserSessionPayload(row = {}) {
     userId: s(row.user_id || row.tenant_user_id || row.legacy_user_id || row.identity_id),
     tenantId: s(row.tenant_id),
     tenantKey: s(row.tenant_key).toLowerCase(),
+    planKey: s(row.plan_key || "starter").toLowerCase(),
+    tenantStatus: s(row.tenant_status || "active").toLowerCase(),
+    tenantActive: row.tenant_active !== false,
+    billingStatus: s(row.billing_status || "unconfigured").toLowerCase(),
     email: s(row.user_email).toLowerCase(),
     fullName: s(row.full_name),
     role: s(row.role || "member").toLowerCase(),
@@ -270,7 +277,11 @@ async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
         tu.id as tenant_user_id,
         tu.id as user_id,
         tu.full_name,
-        tu.status as user_status
+        tu.status as user_status,
+        t.plan_key,
+        t.status as tenant_status,
+        t.active as tenant_active,
+        t.billing_status
       from auth_identity_sessions s
       join auth_identities i on i.id = s.identity_id
       join auth_identity_memberships m
@@ -294,6 +305,8 @@ async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
         and s.expires_at > now()
         and i.status in ('active', 'invited')
         and m.status = 'active'
+        and t.active = true
+        and t.status not in ('suspended', 'archived', 'deleted')
       limit 1
       `,
       [hashSessionToken(token)],
@@ -307,6 +320,13 @@ async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
 
     if (s(row.user_status) && s(row.user_status) !== "active") {
       return { ok: false, error: "user inactive" };
+    }
+
+    if (
+      row.tenant_active === false ||
+      ["suspended", "archived", "deleted"].includes(s(row.tenant_status).toLowerCase())
+    ) {
+      return { ok: false, error: "tenant inactive", code: "TENANT_INACTIVE" };
     }
 
     const payload = normalizeUserSessionPayload(row);
@@ -1541,6 +1561,14 @@ export async function requireUserSession(req, res, next) {
         tenantKey: s(existingAuth.tenantKey),
         tenant_id: s(existingAuth.tenantId),
         tenant_key: s(existingAuth.tenantKey),
+        planKey: s(existingAuth.planKey || "starter"),
+        plan_key: s(existingAuth.planKey || "starter"),
+        tenantStatus: s(existingAuth.tenantStatus || "active"),
+        tenant_status: s(existingAuth.tenantStatus || "active"),
+        tenantActive: existingAuth.tenantActive !== false,
+        tenant_active: existingAuth.tenantActive !== false,
+        billingStatus: s(existingAuth.billingStatus || "unconfigured"),
+        billing_status: s(existingAuth.billingStatus || "unconfigured"),
         email: s(existingAuth.email),
         fullName: s(existingAuth.fullName || ""),
         full_name: s(existingAuth.fullName || ""),
@@ -1572,6 +1600,10 @@ export async function requireUserSession(req, res, next) {
     membershipId: session.payload.membershipId,
     tenantId: session.payload.tenantId,
     tenantKey: session.payload.tenantKey,
+    planKey: session.payload.planKey || "starter",
+    tenantStatus: session.payload.tenantStatus || "active",
+    tenantActive: session.payload.tenantActive !== false,
+    billingStatus: session.payload.billingStatus || "unconfigured",
     email: session.payload.email,
     fullName: session.payload.fullName || "",
     companyName: session.payload.companyName || "",
@@ -1588,6 +1620,14 @@ export async function requireUserSession(req, res, next) {
     tenantKey: session.payload.tenantKey,
     tenant_id: session.payload.tenantId,
     tenant_key: session.payload.tenantKey,
+    planKey: session.payload.planKey || "starter",
+    plan_key: session.payload.planKey || "starter",
+    tenantStatus: session.payload.tenantStatus || "active",
+    tenant_status: session.payload.tenantStatus || "active",
+    tenantActive: session.payload.tenantActive !== false,
+    tenant_active: session.payload.tenantActive !== false,
+    billingStatus: session.payload.billingStatus || "unconfigured",
+    billing_status: session.payload.billingStatus || "unconfigured",
     email: session.payload.email,
     fullName: session.payload.fullName || "",
     full_name: session.payload.fullName || "",

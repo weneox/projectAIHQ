@@ -39,6 +39,7 @@
 \i ./90_backfill_tenant_ids.sql
 \i ./91_data_repairs.sql
 \i ./92_durable_execution_control_plane.sql
+\i ./93_commercial_saas_foundation.sql
 \i ./93_runtime_incident_trail.sql
 \i ./94_operational_data_backfill_correction.sql
 \i ./97_inbox_thread_latest_message_index.sql

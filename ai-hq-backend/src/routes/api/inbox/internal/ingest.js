@@ -1,9 +1,11 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
 import { setTenantContext } from "../../../../db/tenantContext.js";
 import { createLogger } from "../../../../utils/logger.js";
+import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
+import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
 import { applyHandoffActions, persistLeadActions } from "../mutations.js";
 import {
   findExistingInboundMessage,
@@ -426,6 +428,78 @@ export function createInboxIngestHandler({
         });
       }
 
+      req.auth = {
+        ...(req.auth || {}),
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        _serverControlled: true,
+      };
+
+      const quota = await enforceTenantQuota({
+        db: client,
+        req,
+        res,
+        profile: {
+          metric: "webhook_events",
+          cost: 1,
+          class: "webhook_ingestion",
+        },
+      });
+      if (quota?.ok === false) {
+        await rollbackAndRelease(client);
+        client = null;
+        return res.status(quota.status || 429).json({
+          ok: false,
+          error: quota.error || "Tenant quota exceeded",
+          code: quota.code || "tenant_quota_exceeded",
+          requestId: req.requestId || null,
+          quota: quota.quota,
+        });
+      }
+
+      await recordTenantUsage(client, {
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        metric: "api_calls",
+        quantity: 1,
+        source: "inbox.ingest",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          externalThreadId: input.externalThreadId,
+          externalMessageId: input.externalMessageId,
+        },
+      }).catch((error) => {
+        ingestLog.warn("inbox.usage.api_call_record_failed", {
+          tenantId,
+          tenantKey: input.tenantKey,
+          error: String(error?.message || error),
+        });
+      });
+
+      await recordTenantUsage(client, {
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        metric: "webhook_events",
+        quantity: 1,
+        source: "inbox.ingest",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          externalThreadId: input.externalThreadId,
+          externalMessageId: input.externalMessageId,
+        },
+      }).catch((error) => {
+        ingestLog.warn("inbox.usage.webhook_record_failed", {
+          tenantId,
+          tenantKey: input.tenantKey,
+          error: String(error?.message || error),
+        });
+      });
+
       stage = "find_or_create_thread";
       const threadResult = await findOrCreateThreadForIngest({
         client,
@@ -477,6 +551,27 @@ export function createInboxIngestHandler({
         text: input.text,
         meta: input.meta,
         timestamp: input.timestamp,
+      });
+
+      await recordTenantUsage(client, {
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        metric: "messages_in",
+        quantity: 1,
+        source: "inbox.ingest",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          threadId: thread?.id || "",
+          messageId: message?.id || "",
+        },
+      }).catch((error) => {
+        ingestLog.warn("inbox.usage.message_in_record_failed", {
+          tenantId,
+          tenantKey: input.tenantKey,
+          error: String(error?.message || error),
+        });
       });
 
       if (message?.duplicate) {

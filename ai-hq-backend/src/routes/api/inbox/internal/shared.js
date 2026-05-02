@@ -48,9 +48,11 @@ export async function resolveTenantRow(client, tenantKey = "") {
 
   const result = await client.query(
     `
-    select id, tenant_key, company_name, timezone
+    select id, tenant_key, company_name, timezone, plan_key, status, active
     from tenants
     where tenant_key = $1::text
+      and active = true
+      and status not in ('suspended', 'archived', 'deleted')
     limit 1
     `,
     [key]

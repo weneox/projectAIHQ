@@ -1,11 +1,14 @@
 import { okJson } from "../../../../utils/http.js";
 import { getInternalTokenAuthResult } from "../../../../utils/auth.js";
 import { setTenantContext } from "../../../../db/tenantContext.js";
+import { createLogger } from "../../../../utils/logger.js";
 import { deepFix } from "../../../../utils/textFix.js";
 import { classifyComment } from "../../../../services/commentBrain.js";
 import { enqueueQueueJob } from "../../../../services/queue.js";
+import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import { createDurableExecutionHelpers } from "../../../../db/helpers/durableExecutions.js";
 import { buildExecutionIdempotencyKey } from "../../../../services/durableExecutionCore.js";
+import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
 import { createLeadFromComment } from "../lead.js";
 import {
   getCommentById,
@@ -23,6 +26,11 @@ import {
   validateIngestRequest,
   writeCommentAudit,
 } from "./shared.js";
+
+const commentsIngestLog = createLogger({
+  service: "ai-hq-backend",
+  component: "comments-ingest",
+});
 
 function queuedClassification(input = {}) {
   return {
@@ -249,7 +257,31 @@ export async function processCommentWebhookJob({
       comment: updatedComment,
       classification,
     });
-  } catch {}
+  } catch (error) {
+    commentsIngestLog.warn("comment.lead_creation.failed", {
+      tenantKey: input.tenantKey,
+      commentId: updatedComment?.id || "",
+      externalCommentId: input.externalCommentId,
+      requestId: input.requestId || "",
+      error: String(error?.message || error || "lead_creation_failed"),
+    });
+
+    await writeCommentAudit(
+      db,
+      {
+        tenantId: tenant?.id || updatedComment?.tenant_id || "",
+        tenantKey: input.tenantKey,
+        actor: "system",
+        action: "comment.lead_creation_failed",
+        objectType: "comment",
+        objectId: String(updatedComment?.id || ""),
+        meta: {
+          error: String(error?.message || error || "lead_creation_failed"),
+        },
+      },
+      auditWriter
+    );
+  }
 
   const actions = buildActions({
     tenantKey: input.tenantKey,
@@ -302,9 +334,16 @@ export function ingestCommentHandler({
         wsHub,
         tenantKey: input.tenantKey,
         comment,
-        classification: comment.classification || {},
+          classification: comment.classification || {},
+        });
+    } catch (error) {
+      commentsIngestLog.warn("comment.duplicate_lead_creation.failed", {
+        tenantKey: input.tenantKey,
+        commentId: comment?.id || "",
+        externalCommentId: input.externalCommentId,
+        error: String(error?.message || error || "lead_creation_failed"),
       });
-    } catch {}
+    }
 
     const actions = buildActions({
       tenantKey: input.tenantKey,
@@ -371,6 +410,75 @@ export function ingestCommentHandler({
         tenantKey: input.tenantKey,
         requestId: req.requestId,
         source: "internal.comments.ingest",
+      });
+      req.auth = {
+        ...(req.auth || {}),
+        tenantId: tenant?.id || "",
+        tenantKey: input.tenantKey,
+        planKey: tenant?.plan_key || "starter",
+        _serverControlled: true,
+      };
+
+      const quota = await enforceTenantQuota({
+        db,
+        req,
+        res,
+        profile: {
+          metric: "webhook_events",
+          cost: 1,
+          class: "webhook_ingestion",
+        },
+      });
+      if (quota?.ok === false) {
+        return res.status(quota.status || 429).json({
+          ok: false,
+          error: quota.error || "Tenant quota exceeded",
+          code: quota.code || "tenant_quota_exceeded",
+          requestId: req.requestId || null,
+          quota: quota.quota,
+        });
+      }
+
+      await recordTenantUsage(db, {
+        tenantId: tenant?.id || "",
+        tenantKey: input.tenantKey,
+        planKey: tenant?.plan_key || "starter",
+        metric: "api_calls",
+        quantity: 1,
+        source: "comments.ingest",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          externalCommentId: input.externalCommentId,
+        },
+      }).catch((error) => {
+        commentsIngestLog.warn("comment.usage_record_failed", {
+          tenantId: tenant?.id || "",
+          tenantKey: input.tenantKey,
+          metric: "api_calls",
+          error: String(error?.message || error),
+        });
+      });
+
+      await recordTenantUsage(db, {
+        tenantId: tenant?.id || "",
+        tenantKey: input.tenantKey,
+        planKey: tenant?.plan_key || "starter",
+        metric: "webhook_events",
+        quantity: 1,
+        source: "comments.ingest",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          externalCommentId: input.externalCommentId,
+        },
+      }).catch((error) => {
+        commentsIngestLog.warn("comment.usage_record_failed", {
+          tenantId: tenant?.id || "",
+          tenantKey: input.tenantKey,
+          metric: "webhook_events",
+          error: String(error?.message || error),
+        });
       });
 
       const existing = await getExistingComment(
@@ -466,11 +574,18 @@ export function ingestCommentHandler({
           lead = await createLead({
             db,
             wsHub,
+          tenantKey: input.tenantKey,
+          comment,
+          classification,
+        });
+        } catch (error) {
+          commentsIngestLog.warn("comment.compat_lead_creation.failed", {
             tenantKey: input.tenantKey,
-            comment,
-            classification,
+            commentId: comment?.id || "",
+            externalCommentId: input.externalCommentId,
+            error: String(error?.message || error || "lead_creation_failed"),
           });
-        } catch {}
+        }
         compatibility = {
           classification,
           lead,
@@ -530,6 +645,12 @@ export function ingestCommentHandler({
         tenant: buildCommentTenantSummary(tenant),
       });
     } catch (e) {
+      commentsIngestLog.error("comment.ingest.failed", e, {
+        tenantKey: input?.tenantKey || "",
+        channel: input?.channel || "",
+        externalCommentId: input?.externalCommentId || "",
+        requestId: req.requestId || "",
+      });
       return okJson(res, {
         ok: false,
         error: "Error",

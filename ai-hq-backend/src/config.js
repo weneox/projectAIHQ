@@ -348,6 +348,22 @@ export const cfg = {
     webhookMaxRequests: n(process.env.WEBHOOK_RATE_LIMIT_MAX_REQUESTS, 300),
   },
 
+  commercial: {
+    quotaEnforcementMode: s(process.env.QUOTA_ENFORCEMENT_MODE, "enforce"),
+    freeDailyApiCalls: n(process.env.FREE_DAILY_API_CALLS, 2_000),
+    freeDailyAiUnits: n(process.env.FREE_DAILY_AI_UNITS, 150),
+    freeDailyMessages: n(process.env.FREE_DAILY_MESSAGES, 250),
+    freeDailyWebhooks: n(process.env.FREE_DAILY_WEBHOOKS, 1_000),
+    basicDailyApiCalls: n(process.env.BASIC_DAILY_API_CALLS, 20_000),
+    basicDailyAiUnits: n(process.env.BASIC_DAILY_AI_UNITS, 2_000),
+    basicDailyMessages: n(process.env.BASIC_DAILY_MESSAGES, 5_000),
+    basicDailyWebhooks: n(process.env.BASIC_DAILY_WEBHOOKS, 20_000),
+    proDailyApiCalls: n(process.env.PRO_DAILY_API_CALLS, 100_000),
+    proDailyAiUnits: n(process.env.PRO_DAILY_AI_UNITS, 15_000),
+    proDailyMessages: n(process.env.PRO_DAILY_MESSAGES, 50_000),
+    proDailyWebhooks: n(process.env.PRO_DAILY_WEBHOOKS, 150_000),
+  },
+
   tenant: {
     defaultTenantKey: s(process.env.DEFAULT_TENANT_KEY, "default"),
     dailyPublishHourLocal: n(process.env.DAILY_PUBLISH_HOUR_LOCAL, 10),
@@ -710,6 +726,14 @@ export const cfg = {
     sourceSyncAttentionCount: n(
       process.env.OBS_SOURCE_SYNC_ATTENTION_COUNT,
       3
+    ),
+    httpErrorSpikeAttentionCount: n(
+      process.env.OBS_HTTP_ERROR_SPIKE_ATTENTION_COUNT,
+      20
+    ),
+    quotaRejectionAttentionCount: n(
+      process.env.OBS_QUOTA_REJECTION_ATTENTION_COUNT,
+      10
     ),
   },
 

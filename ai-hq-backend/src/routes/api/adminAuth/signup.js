@@ -23,6 +23,9 @@ import {
 } from "../../../services/auth/canonicalUserAccess.js";
 import { isLikelyEmail, isReservedTenantKey, slugTenantKey, validTenantKey } from "../tenants/utils.js";
 import { markIdentityLogin, markUserLogin } from "./repository.js";
+import { setTenantContext } from "../../../db/tenantContext.js";
+import { writeAudit } from "../../../utils/auditLog.js";
+import { writeTenantLifecycleEvent } from "../../../db/helpers/tenantLifecycle.js";
 
 const SIGNUP_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const SIGNUP_RATE_LIMIT_BLOCK_MS = 60 * 60 * 1000;
@@ -190,6 +193,16 @@ export function userSignupRoutes({
         const tenant = await dbUpsertTenantCore(tx, tenantKey, {
           tenant_key: tenantKey,
           company_name: companyName,
+          plan_key: "free",
+          status: "trial",
+          lifecycle_status: "trial",
+          billing_status: "trialing",
+        });
+        setTenantContext({
+          tenantId: tenant.id,
+          tenantKey,
+          requestId: req.requestId,
+          source: "auth.signup",
         });
 
         await dbUpsertTenantProfile(tx, tenant.id, {
@@ -266,6 +279,34 @@ export function userSignupRoutes({
       await Promise.allSettled([
         markIdentityLogin(db, created.identity.id),
         markUserLogin(db, created.user.id),
+        writeAudit(db, {
+          tenantId: created.tenant.id,
+          tenantKey: created.tenant.tenant_key,
+          requestId: req.requestId,
+          actor: "user_signup",
+          action: "tenant.signup.created",
+          objectType: "tenant",
+          objectId: created.tenant.id,
+          meta: {
+            email,
+            planKey: created.tenant.plan_key || "free",
+            billingStatus: created.tenant.billing_status || "trialing",
+          },
+        }),
+        writeTenantLifecycleEvent(db, {
+          tenantId: created.tenant.id,
+          tenantKey: created.tenant.tenant_key,
+          actor: "user_signup",
+          action: "tenant.created",
+          statusFrom: "",
+          statusTo: created.tenant.lifecycle_status || created.tenant.status || "trial",
+          reason: "self_service_signup",
+          requestId: req.requestId,
+          meta: {
+            email,
+            planKey: created.tenant.plan_key || "free",
+          },
+        }),
       ]);
 
       return res.status(201).json({

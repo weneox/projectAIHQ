@@ -1,4 +1,8 @@
-﻿function rowOrNull(r) {
+import { createTtlCache } from "../../utils/cache.js";
+
+const tenantCache = createTtlCache({ ttlMs: 30_000, maxEntries: 1000 });
+
+function rowOrNull(r) {
   return r?.rows?.[0] || null;
 }
 
@@ -22,6 +26,14 @@ function normalizeTenantMode(v, fallback = "manual") {
 
 export async function dbGetTenantByKey(db, tenantKey) {
   if (!db || !tenantKey) return null;
+  const key = lower(tenantKey);
+  if (!key) return null;
+
+  const cacheKey = `tenant:${key}`;
+  if (db?.__tenantGuardedDb === true) {
+    const cached = tenantCache.get(cacheKey);
+    if (cached) return cached;
+  }
 
   const q = await db.query(
     `
@@ -30,10 +42,20 @@ export async function dbGetTenantByKey(db, tenantKey) {
       where lower(tenant_key) = lower($1)
       limit 1
     `,
-    [s(tenantKey)]
+    [key]
   );
 
-  return rowOrNull(q);
+  const tenant = rowOrNull(q);
+  if (tenant && db?.__tenantGuardedDb === true) {
+    tenantCache.set(cacheKey, tenant);
+  }
+  return tenant;
+}
+
+export function clearTenantCache(tenantKey = "") {
+  const key = lower(tenantKey);
+  if (!key) return false;
+  return tenantCache.del(`tenant:${key}`);
 }
 
 export async function dbListTenants(db, opts = {}) {

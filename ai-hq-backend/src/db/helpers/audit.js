@@ -1,4 +1,10 @@
-﻿import { deepFix, fixText } from "../../utils/textFix.js";
+import { deepFix, fixText } from "../../utils/textFix.js";
+import { createLogger } from "../../utils/logger.js";
+
+const auditLog = createLogger({
+  service: "ai-hq-backend",
+  component: "audit-db-helper",
+});
 
 function cleanText(v, fallback = null) {
   const s = fixText(v == null ? "" : String(v)).trim();
@@ -65,6 +71,7 @@ export function normalizeAuditRow(row = {}) {
     id: cleanText(row?.id, ""),
     tenantId: cleanText(row?.tenant_id || meta?.tenantId || meta?.tenant_id, null),
     tenantKey: cleanLower(row?.tenant_key || meta?.tenantKey || meta?.tenant_key, ""),
+    requestId: cleanText(row?.request_id || meta?.requestId || meta?.request_id, null),
     actor: cleanText(row?.actor, "system"),
     action: cleanText(row?.action, "unknown.action"),
     objectType: cleanText(row?.object_type, "unknown"),
@@ -87,6 +94,10 @@ export async function dbAudit(db, actor, action, objectType, objectId, meta = {}
       cleanText(safeMeta.tenantKey) ||
       cleanText(safeMeta.tenant_key) ||
       null;
+    const requestId =
+      cleanText(safeMeta.requestId) ||
+      cleanText(safeMeta.request_id) ||
+      null;
 
     await db.query(
       `insert into audit_log (
@@ -96,9 +107,10 @@ export async function dbAudit(db, actor, action, objectType, objectId, meta = {}
         action,
         object_type,
         object_id,
-        meta
+        meta,
+        request_id
       )
-      values ($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::jsonb)`,
+      values ($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::jsonb, $8::text)`,
       [
         tenantId,
         tenantKey,
@@ -107,9 +119,19 @@ export async function dbAudit(db, actor, action, objectType, objectId, meta = {}
         cleanText(objectType, "unknown"),
         objectId == null ? null : String(objectId),
         safeMeta,
+        requestId,
       ]
     );
-  } catch {}
+  } catch (error) {
+    auditLog.warn("audit.db_write.failed", {
+      actor: cleanText(actor, "system"),
+      action: cleanText(action, "unknown.action"),
+      objectType: cleanText(objectType, "unknown"),
+      objectId: objectId == null ? "" : String(objectId),
+      errorMessage: cleanText(error?.message || error, "audit write failed"),
+      code: cleanText(error?.code, ""),
+    });
+  }
 }
 
 export async function dbListAuditEntries(

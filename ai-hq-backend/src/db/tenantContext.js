@@ -34,6 +34,7 @@ const TENANT_SCOPED_TABLES = [
   "notifications",
   "push_subscriptions",
   "tenant_ai_policies",
+  "tenant_lifecycle_events",
   "tenant_business_capabilities",
   "tenant_business_profiles",
   "tenant_channel_secrets",
@@ -55,6 +56,7 @@ const TENANT_SCOPED_TABLES = [
   "tenant_source_runs",
   "tenant_sources",
   "tenant_truth_versions",
+  "tenant_usage_daily",
   "tenant_users",
   "workspace_import_jobs",
 ];

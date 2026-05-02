@@ -35,7 +35,8 @@ export async function writeAudit(db, entry = {}) {
         action,
         object_type,
         object_id,
-        meta
+        meta,
+        request_id
       )
       values (
         nullif($1::text, '')::uuid,
@@ -44,9 +45,10 @@ export async function writeAudit(db, entry = {}) {
         $4::text,
         $5::text,
         $6::text,
-        $7::jsonb
+        $7::jsonb,
+        nullif($8::text, '')
       )
-      returning id, tenant_id, tenant_key, actor, action, object_type, object_id, meta, created_at
+      returning id, tenant_id, tenant_key, request_id, actor, action, object_type, object_id, meta, created_at
       `,
       [
         tenantId || "",
@@ -59,6 +61,7 @@ export async function writeAudit(db, entry = {}) {
           ...meta,
           ...(requestId ? { requestId } : {}),
         }),
+        requestId || "",
       ]
     );
 
@@ -101,7 +104,7 @@ export async function writeAudit(db, entry = {}) {
       objectId: s(entry.objectId),
       tenantId: s(entry.tenantId || entry.tenant_id),
       tenantKey: s(entry.tenantKey || entry.tenant_key),
-      error: s(error?.message || error),
+      errorMessage: s(error?.message || error),
       code: s(error?.code),
     });
     return null;

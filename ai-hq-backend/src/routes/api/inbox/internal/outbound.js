@@ -1,5 +1,7 @@
 import { okJson, isDbReady, isUuid } from "../../../../utils/http.js";
 import { setTenantContext } from "../../../../db/tenantContext.js";
+import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
+import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import {
   findExistingOutboundMessage,
   findLatestAttemptByMessageId,
@@ -108,6 +110,56 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         });
       }
 
+      req.auth = {
+        ...(req.auth || {}),
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        _serverControlled: true,
+      };
+
+      const quota = await enforceTenantQuota({
+        db: client,
+        req,
+        res,
+        profile: {
+          metric: "messages_out",
+          cost: 1,
+          class: "outbound_message",
+        },
+      });
+      if (quota?.ok === false) {
+        await rollbackAndRelease(client);
+        client = null;
+        return res.status(quota.status || 429).json({
+          ok: false,
+          error: quota.error || "Tenant quota exceeded",
+          code: quota.code || "tenant_quota_exceeded",
+          requestId: req.requestId || null,
+          quota: quota.quota,
+        });
+      }
+
+      await recordTenantUsage(client, {
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        metric: "api_calls",
+        quantity: 1,
+        source: "inbox.outbound",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          threadId,
+        },
+      }).catch((error) => {
+        logInfo("inbox outbound api usage record failed", {
+          tenantId,
+          tenantKey: input.tenantKey,
+          error: String(error?.message || error),
+        });
+      });
+
       const delivery = await persistOutboundMessage({
         client,
         thread: existingThread,
@@ -149,6 +201,28 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       client.release();
       client = null;
 
+      await recordTenantUsage(db, {
+        tenantId,
+        tenantKey: input.tenantKey,
+        planKey: tenantRow?.plan_key || "starter",
+        metric: "messages_out",
+        quantity: 1,
+        source: "inbox.outbound",
+        requestId: req.requestId,
+        meta: {
+          channel: input.channel,
+          threadId,
+          messageId: delivery.message?.id || "",
+          attemptId: delivery.attempt?.id || "",
+        },
+      }).catch((error) => {
+        logInfo("inbox outbound usage record failed", {
+          tenantId,
+          tenantKey: input.tenantKey,
+          error: String(error?.message || error),
+        });
+      });
+
       emitOutboundRealtime({
         wsHub,
         thread: normalizedThread,
@@ -175,6 +249,10 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       );
     } catch (error) {
       if (client) await rollbackAndRelease(client);
+      logInfo("inbox outbound failed", {
+        threadId,
+        error: String(error?.message || error),
+      });
       return okJson(res, {
         ok: false,
         error: "Error",

@@ -9,6 +9,11 @@ function isNonEmpty(v) {
   return String(v ?? "").trim().length > 0;
 }
 
+function s(v, d = "") {
+  const out = String(v ?? "").trim();
+  return out || String(d ?? "").trim();
+}
+
 function isValidDatabaseUrl(value) {
   const raw = String(value ?? "").trim();
   if (!raw) return false;
@@ -143,6 +148,19 @@ export function getConfigIssues() {
     );
   }
 
+  if (isProd && isNonEmpty(cfg?.auth?.userSessionSecret) && s(cfg.auth.userSessionSecret).length < 32) {
+    pushIssue(
+      issues,
+      "error",
+      "auth.userSessionSecret",
+      "USER_SESSION_SECRET must be at least 32 characters in production.",
+      {
+        category: "authentication",
+        envKeys: ["USER_SESSION_SECRET"],
+      }
+    );
+  }
+
   if (
     isProd &&
     !isNonEmpty(cfg?.auth?.sessionCookieDomain) &&
@@ -165,6 +183,19 @@ export function getConfigIssues() {
       isDbRequiredAppEnv(env)
         ? "AIHQ_INTERNAL_TOKEN is required outside test environments."
         : "AIHQ_INTERNAL_TOKEN is missing.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN"],
+      }
+    );
+  }
+
+  if (isProd && isNonEmpty(cfg?.security?.aihqInternalToken) && s(cfg.security.aihqInternalToken).length < 24) {
+    pushIssue(
+      issues,
+      "error",
+      "security.aihqInternalToken",
+      "AIHQ_INTERNAL_TOKEN must be at least 24 characters in production.",
       {
         category: "internal-access",
         envKeys: ["AIHQ_INTERNAL_TOKEN"],
@@ -224,6 +255,46 @@ export function getConfigIssues() {
       "operational.enforceReadinessOnStartup",
       "ENFORCE_OPERATIONAL_READINESS_ON_STARTUP=false disables startup blocking when operational blockers are present."
     );
+  }
+
+  const quotaMode = s(cfg?.commercial?.quotaEnforcementMode || "").toLowerCase();
+  if (!["enforce", "monitor", "off"].includes(quotaMode)) {
+    pushIssue(
+      issues,
+      "error",
+      "commercial.quotaEnforcementMode",
+      "QUOTA_ENFORCEMENT_MODE must be one of enforce, monitor, or off.",
+      {
+        category: "commercial",
+        envKeys: ["QUOTA_ENFORCEMENT_MODE"],
+      }
+    );
+  } else if (isProd && quotaMode !== "enforce") {
+    pushIssue(
+      issues,
+      "error",
+      "commercial.quotaEnforcementMode",
+      "QUOTA_ENFORCEMENT_MODE must be enforce in production.",
+      {
+        category: "commercial",
+        envKeys: ["QUOTA_ENFORCEMENT_MODE"],
+      }
+    );
+  }
+
+  for (const [key, value] of Object.entries(cfg?.commercial || {})) {
+    if (key === "quotaEnforcementMode") continue;
+    if (n(value, 0) <= 0) {
+      pushIssue(
+        issues,
+        "error",
+        `commercial.${key}`,
+        `${key} must be greater than 0.`,
+        {
+          category: "commercial",
+        }
+      );
+    }
   }
 
   const hasAnyAiProvider =

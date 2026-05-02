@@ -34,6 +34,14 @@ export function buildTenantCoreInput(body = {}) {
   const marketRegion = cleanNullableString(
     tenant.market_region || tenant.marketRegion
   );
+  const planKey = cleanLower(tenant.plan_key || tenant.planKey || "starter");
+  const status = cleanLower(tenant.status || "active");
+  const lifecycleStatus = cleanLower(
+    tenant.lifecycle_status || tenant.lifecycleStatus || status || "active"
+  );
+  const billingStatus = cleanLower(
+    tenant.billing_status || tenant.billingStatus || "unconfigured"
+  );
 
   return {
     tenant_key: tenantKey,
@@ -45,6 +53,10 @@ export function buildTenantCoreInput(body = {}) {
     default_language: defaultLanguage,
     enabled_languages: enabledLanguages,
     market_region: marketRegion,
+    plan_key: planKey,
+    status,
+    lifecycle_status: lifecycleStatus,
+    billing_status: billingStatus,
   };
 }
 

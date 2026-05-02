@@ -8,6 +8,36 @@ function isPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
 }
 
+const SENSITIVE_LOG_KEY_RE =
+  /(^|[_-])(password|passcode|token|secret|authorization|cookie|credential|api[_-]?key)($|[_-])/i;
+
+function isSensitiveLogKey(key = "") {
+  const normalized = String(key || "").trim();
+  if (!normalized) return false;
+  if (SENSITIVE_LOG_KEY_RE.test(`_${normalized}_`)) return true;
+  const compact = normalized.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  if (/(password|passcode|token|secret|authorization|cookie|credential|apikey)/.test(compact)) {
+    return true;
+  }
+  return /^(authorization|cookie|set-cookie)$/i.test(normalized);
+}
+
+function sanitizeForLog(value, depth = 0) {
+  if (depth > 6) return "[MaxDepth]";
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map((item) => sanitizeForLog(item, depth + 1));
+  }
+  if (!isPlainObject(value)) return value;
+
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    out[key] = isSensitiveLogKey(key)
+      ? "[REDACTED]"
+      : sanitizeForLog(raw, depth + 1);
+  }
+  return out;
+}
+
 function compactObject(input = {}) {
   const out = {};
 
@@ -77,10 +107,10 @@ export function createStructuredLogEntry({
   data = {},
   error = null,
 } = {}) {
-  const merged = {
+  const merged = sanitizeForLog({
     ...compactObject(context),
     ...compactObject(data),
-  };
+  });
 
   return compactObject({
     ts: new Date().toISOString(),
@@ -197,4 +227,6 @@ export function requestContextMiddleware({ logger = createLogger({ service: "ai-
 export const __test__ = {
   buildRequestLogContext,
   createStructuredLogEntry,
+  isSensitiveLogKey,
+  sanitizeForLog,
 };

@@ -25,6 +25,7 @@ import { adminAuthRoutes } from "./src/routes/api/adminAuth/index.js";
 import { buildRootHealthResponse } from "./src/routes/api/health/builders.js";
 import { createLogger, requestContextMiddleware } from "./src/utils/logger.js";
 import { apiResponseStandardMiddleware } from "./src/utils/apiResponse.js";
+import { apiVersionMiddleware } from "./src/utils/apiVersioning.js";
 import {
   buildAllowedCorsOrigins,
   isAllowedOrigin,
@@ -280,6 +281,7 @@ async function main() {
   app.use(express.urlencoded({ extended: false }));
   app.use(requestContextMiddleware({ logger }));
   app.use(apiResponseStandardMiddleware);
+  app.use(apiVersionMiddleware);
   app.use((req, res, next) => {
     attachBuildHeaders(res);
     next();
@@ -880,7 +882,18 @@ async function main() {
     );
   });
 
+  app.use("/api/v1", adminAuthRoutes({ db, wsHub }));
   app.use("/api", adminAuthRoutes({ db, wsHub }));
+
+  app.use(
+    "/api/v1",
+    apiRouter({
+      db,
+      wsHub,
+      audit,
+      dbDisabled,
+    })
+  );
 
   app.use(
     "/api",
