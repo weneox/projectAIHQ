@@ -125,7 +125,7 @@ function verificationStateLabel(state = "") {
 function compactValue(value, max = 30) {
   const text = s(value, "Not set");
   if (text.length <= max) return text;
-  return `${text.slice(0, 17)}â€¦${text.slice(-8)}`;
+  return `${text.slice(0, 17)}…${text.slice(-8)}`;
 }
 
 function toneTextClass(tone = "neutral") {
@@ -193,7 +193,7 @@ function buildPosture({
   if (!s(widget.publicWidgetId)) {
     return {
       tone: "warning",
-      title: "Widget ID missing",
+      title: "Save settings",
       summary: "Save settings once to create the public widget ID.",
       next: "Save settings",
       icon: ShieldAlert,
@@ -203,12 +203,12 @@ function buildPosture({
   if (productionBlocked) {
     return {
       tone: verificationState === "failed" ? "danger" : "warning",
-      title: "Domain needs verification",
+      title: "Verify domain",
       summary: firstText(
         developerHandoff.blockingMessage,
         launchReadiness.message,
         verificationSurface.message,
-        "Verify DNS ownership before public install."
+        "Verify the domain before public install."
       ),
       next: "Verify domain",
       icon: ShieldAlert,
@@ -411,11 +411,11 @@ function WebsiteChatPreviewCard({
               Preview status
             </div>
             <div className="mt-1 text-[14px] font-semibold text-text">
-              {canPreview ? "Ready for visual review" : "Configure widget first"}
+              {canPreview ? "Preview ready" : "Save settings first"}
             </div>
             <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
               {canPreview
-                ? "This is an in-app preview. Public launch still follows domain/origin, runtime, and manual-first gates."
+                ? "This is a safe in-app preview. Public launch still requires domain verification and runtime readiness."
                 : "Save website chat settings once so AIHQ can issue the public widget ID and preview the final shell."}
             </div>
           </div>
@@ -425,10 +425,10 @@ function WebsiteChatPreviewCard({
               {widgetEnabled ? "Widget enabled" : "Widget off"}
             </Badge>
             <Badge tone={hasWidgetId ? "success" : "warning"} size="sm">
-              {hasWidgetId ? "Widget ID ready" : "Widget ID missing"}
+              {hasWidgetId ? "Widget ID ready" : "Save settings"}
             </Badge>
             <Badge tone="neutral" size="sm">
-              {s(method.label, "Install path pending")}
+              {s(method.label, "Install path selected")}
             </Badge>
             <Badge tone="neutral" size="sm">
               {readinessStatus}
@@ -438,7 +438,7 @@ function WebsiteChatPreviewCard({
           <InlineNotice
             tone="info"
             compact
-            description="Preview does not bypass production safety. Autonomous replies still require approved truth, current runtime, verified install context, and explicit launch approval."
+            description="Preview is safe and private. Public launch still requires domain verification, approved truth, runtime readiness, and manual-first approval."
           />
 
           <div className="grid gap-2 sm:grid-cols-3">
@@ -612,8 +612,8 @@ function PlatformDetectionCard({ installPlan = {} }) {
           compact
           description={
             platformId === "custom_or_unknown"
-              ? "If the business does not know who manages the site, use guided install help or developer handoff before manual snippet."
-              : "Detected platform signals are used only to recommend setup. Domain/origin validation and runtime gates still apply."
+              ? "If access is unclear, use guided install help or developer handoff."
+              : "Detected signals only guide setup. Domain verification still controls public launch."
           }
         />
       </div>
@@ -1913,10 +1913,10 @@ export default function WebsiteWidgetDetailDrawer({
           description={
             snippetAvailable
               ? "Copy this script into the customer website when you are ready."
-              : "Save settings first to create an install snippet."
+              : "Verify domain before copying the production snippet."
           }
         >
-          <CodeBox value={install.embedSnippet} empty="Snippet is not available yet." />
+          <CodeBox value={install.embedSnippet} empty="Production snippet is locked until domain verification is complete." />
         </SectionCard>
       </>
     );

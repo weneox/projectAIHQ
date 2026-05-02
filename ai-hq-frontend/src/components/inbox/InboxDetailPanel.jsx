@@ -215,6 +215,29 @@ function isRenderableConversationMessage(message = {}) {
   return Boolean(s(message?.text));
 }
 
+function isSetupTestThread(thread = {}) {
+  const meta = obj(thread?.meta);
+  const channel = lower(
+    thread?.channel ||
+      thread?.channel_type ||
+      thread?.provider ||
+      thread?.source_type
+  );
+  const externalThreadId = lower(thread?.external_thread_id || thread?.externalThreadId);
+  const customerName = lower(thread?.customer_name || thread?.display_name || thread?.displayName);
+  const source = lower(meta.source || meta.testSource || meta.origin);
+
+  return (
+    ["website", "webchat", "web"].includes(channel) &&
+    (
+      externalThreadId.startsWith("website-test:") ||
+      customerName.includes("website chat test visitor") ||
+      source === "website_chat_setup_test" ||
+      source === "website_chat_test"
+    )
+  );
+}
+
 function ConnectChannelEmptyState({ onOpenChannels }) {
   return (
     <div className="flex h-full min-h-[420px] items-center justify-center px-8 py-10">
@@ -454,6 +477,7 @@ function InboxDetailPanel({
   onOpenChannels = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
+  const setupTestThread = isSetupTestThread(selectedThread);
   const canShowConversationSurface = launchChannelConnected || hasThread;
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
@@ -658,6 +682,17 @@ function InboxDetailPanel({
         }}
         disabledMap={disabledMap}
       />
+
+      {setupTestThread ? (
+        <div className="shrink-0 border-b border-line-soft bg-brand-soft px-5 py-3">
+          <div className="text-[12.5px] font-semibold text-brand">
+            Setup test mode
+          </div>
+          <div className="mt-0.5 text-[12px] font-medium leading-5 text-text-muted">
+            Manual reply preview only. No real website visitor will receive this message.
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1">
         {!canShowConversationSurface ? (

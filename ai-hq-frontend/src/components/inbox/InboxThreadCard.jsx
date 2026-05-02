@@ -180,6 +180,24 @@ function isWebsiteChannel(channel = "") {
   ].includes(normalized);
 }
 
+function isSetupTestThread(thread = {}) {
+  const meta = thread?.meta && typeof thread.meta === "object" ? thread.meta : {};
+  const channel = resolveChannelKey(thread);
+  const externalThreadId = lower(thread?.external_thread_id || thread?.externalThreadId);
+  const customerName = lower(thread?.customer_name || thread?.display_name || thread?.displayName);
+  const source = lower(meta.source || meta.testSource || meta.origin);
+
+  return (
+    isWebsiteChannel(channel) &&
+    (
+      externalThreadId.startsWith("website-test:") ||
+      customerName.includes("website chat test visitor") ||
+      source === "website_chat_setup_test" ||
+      source === "website_chat_test"
+    )
+  );
+}
+
 function ChannelMark({ channel }) {
   const normalized = normalizeChannelKey(channel);
 
@@ -253,6 +271,9 @@ function HandoffMark() {
 export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const name = resolveSafeDisplayName(thread);
   const preview = resolvePreview(thread);
+  const visiblePreview = setupTest
+    ? "Private setup test · no real visitor"
+    : preview;
   const unreadCount = Number(thread?.unread_count || 0);
   const timeLabel = formatRelativeTime(
     thread?.last_message_at || thread?.updated_at || thread?.created_at
@@ -260,6 +281,7 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const avatarUrl = resolveAvatarUrl(thread);
   const channelKey = resolveChannelKey(thread);
   const handoffActive = resolveHandoffActive(thread);
+  const setupTest = isSetupTestThread(thread);
 
   const avatarKey = `${s(thread?.id)}:${avatarUrl}`;
   const [failedAvatarKey, setFailedAvatarKey] = useState("");
@@ -329,6 +351,12 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
               </span>
 
               {handoffActive ? <HandoffMark /> : null}
+
+              {setupTest ? (
+                <span className="ml-2 inline-flex shrink-0 items-center rounded-[7px] border border-[rgba(var(--color-brand),0.16)] bg-brand-soft px-2 py-[3px] text-[10px] font-bold uppercase tracking-[0.12em] text-brand">
+                  Setup test
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -349,7 +377,7 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
         </div>
 
         <div className="mt-1 line-clamp-2 pr-2 text-[13px] font-medium leading-5 text-text-muted transition-colors duration-base ease-premium">
-          {preview}
+          {visiblePreview}
         </div>
       </div>
     </button>
