@@ -103,6 +103,42 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
+function isSetupTestInboxThread(thread = null) {
+  const source = obj(thread);
+  const meta = obj(source.meta);
+
+  const channel = lower(
+    source.channel ||
+      source.channel_type ||
+      source.provider ||
+      source.source_type
+  );
+
+  const externalThreadId = lower(
+    source.external_thread_id || source.externalThreadId
+  );
+
+  const customerName = lower(
+    source.customer_name ||
+      source.customerName ||
+      source.display_name ||
+      source.displayName
+  );
+
+  const metaSource = lower(meta.source || meta.testSource || meta.origin);
+  const websiteChannel = ["website", "webchat", "web"].includes(channel);
+
+  if (!websiteChannel) return false;
+
+  return (
+    externalThreadId.startsWith("website-test:") ||
+    customerName.includes("website chat test visitor") ||
+    metaSource === "website_chat_setup_test" ||
+    metaSource === "website_chat_test"
+  );
+}
+
+
 function normalizeNoticeAction(
   action = null,
   fallback = { label: "Open channels", path: "/channels" }
@@ -815,6 +851,9 @@ export default function Inbox() {
     runtimeReady,
     launchReady,
   });
+  const visibleLaunchReadinessNotice = isSetupTestInboxThread(selectedThread)
+    ? null
+    : launchReadinessNotice;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
@@ -828,7 +867,7 @@ export default function Inbox() {
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-white">
-      {surfaceNotice || launchReadinessNotice ? (
+      {surfaceNotice || visibleLaunchReadinessNotice ? (
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-30 px-4 pt-3">
           <div className="pointer-events-auto flex flex-col gap-2">
             {surfaceNotice ? (
@@ -840,22 +879,22 @@ export default function Inbox() {
               />
             ) : null}
 
-            {launchReadinessNotice ? (
+            {visibleLaunchReadinessNotice ? (
               <InlineNotice
-                tone={launchReadinessNotice.tone}
-                title={launchReadinessNotice.title}
-                description={launchReadinessNotice.description}
+                tone={visibleLaunchReadinessNotice.tone}
+                title={visibleLaunchReadinessNotice.title}
+                description={visibleLaunchReadinessNotice.description}
                 action={
-                  launchReadinessNotice.action ? (
+                  visibleLaunchReadinessNotice.action ? (
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        const path = s(launchReadinessNotice.action?.path);
+                        const path = s(visibleLaunchReadinessNotice.action?.path);
                         navigate(path.startsWith("/") ? path : "/channels");
                       }}
                     >
-                      {launchReadinessNotice.action.label}
+                      {visibleLaunchReadinessNotice.action.label}
                     </Button>
                   ) : null
                 }
