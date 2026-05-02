@@ -8,7 +8,10 @@ import { enqueueQueueJob } from "../../../../services/queue.js";
 import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import { createDurableExecutionHelpers } from "../../../../db/helpers/durableExecutions.js";
 import { buildExecutionIdempotencyKey } from "../../../../services/durableExecutionCore.js";
-import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
+import {
+  commitTenantUsageReservation,
+  releaseTenantUsageReservation,
+} from "../../../../db/helpers/tenantUsage.js";
 import { createLeadFromComment } from "../lead.js";
 import {
   getCommentById,
@@ -384,13 +387,27 @@ export function ingestCommentHandler({
     const input = parseIngestRequest(req);
     const validation = validateIngestRequest(input);
     if (!validation.ok) {
-      return okJson(res, validation.response);
+      return res.status(400).json(validation.response);
     }
     setTenantContext({
       tenantKey: input.tenantKey,
       requestId: req.requestId,
       source: "internal.comments.ingest",
     });
+
+    let quotaReservation = null;
+    let quotaCommitted = false;
+    async function commitQuota(meta = {}) {
+      if (!quotaReservation || quotaCommitted) return;
+      await commitTenantUsageReservation(db, {
+        ...quotaReservation,
+        meta: {
+          ...(quotaReservation.meta || {}),
+          ...meta,
+        },
+      });
+      quotaCommitted = true;
+    }
 
     try {
       if (!ensureCommentsDb(res, db)) {
@@ -404,7 +421,7 @@ export function ingestCommentHandler({
         getRuntime,
       });
       if (!runtimeState.ok) {
-        return okJson(res, runtimeState.response);
+        return res.status(runtimeState.response?.status || 503).json(runtimeState.response);
       }
 
       const { tenant, runtime } = runtimeState;
@@ -441,48 +458,7 @@ export function ingestCommentHandler({
           quota: quota.quota,
         });
       }
-
-      await recordTenantUsage(db, {
-        tenantId: tenant?.id || "",
-        tenantKey: input.tenantKey,
-        planKey: tenant?.plan_key || "starter",
-        metric: "api_calls",
-        quantity: 1,
-        source: "comments.ingest",
-        requestId: req.requestId,
-        meta: {
-          channel: input.channel,
-          externalCommentId: input.externalCommentId,
-        },
-      }).catch((error) => {
-        commentsIngestLog.warn("comment.usage_record_failed", {
-          tenantId: tenant?.id || "",
-          tenantKey: input.tenantKey,
-          metric: "api_calls",
-          error: String(error?.message || error),
-        });
-      });
-
-      await recordTenantUsage(db, {
-        tenantId: tenant?.id || "",
-        tenantKey: input.tenantKey,
-        planKey: tenant?.plan_key || "starter",
-        metric: "webhook_events",
-        quantity: 1,
-        source: "comments.ingest",
-        requestId: req.requestId,
-        meta: {
-          channel: input.channel,
-          externalCommentId: input.externalCommentId,
-        },
-      }).catch((error) => {
-        commentsIngestLog.warn("comment.usage_record_failed", {
-          tenantId: tenant?.id || "",
-          tenantKey: input.tenantKey,
-          metric: "webhook_events",
-          error: String(error?.message || error),
-        });
-      });
+      quotaReservation = quota?.reservation || null;
 
       const existing = await getExistingComment(
         db,
@@ -492,6 +468,11 @@ export function ingestCommentHandler({
       );
 
       if (existing) {
+        await commitQuota({
+          channel: input.channel,
+          externalCommentId: input.externalCommentId,
+          duplicate: true,
+        });
         return okJson(
           res,
           await buildDuplicateResponse({
@@ -527,6 +508,11 @@ export function ingestCommentHandler({
       });
 
       if (comment?.duplicate) {
+        await commitQuota({
+          channel: input.channel,
+          externalCommentId: input.externalCommentId,
+          duplicate: true,
+        });
         return okJson(
           res,
           await buildDuplicateResponse({
@@ -628,6 +614,13 @@ export function ingestCommentHandler({
         maxAttempts: 5,
       });
 
+      await commitQuota({
+        channel: input.channel,
+        externalCommentId: input.externalCommentId,
+        commentId: comment?.id || "",
+        queueId: queued?.id || "",
+      });
+
       return okJson(res, {
         ok: true,
         accepted: true,
@@ -648,15 +641,24 @@ export function ingestCommentHandler({
         tenant: buildCommentTenantSummary(tenant),
       });
     } catch (e) {
+      if (quotaReservation && !quotaCommitted) {
+        await releaseTenantUsageReservation(db, quotaReservation).catch((releaseError) => {
+          commentsIngestLog.warn("comment.quota_reservation_release_failed", {
+            tenantKey: input?.tenantKey || "",
+            externalCommentId: input?.externalCommentId || "",
+            error: String(releaseError?.message || releaseError),
+          });
+        });
+      }
       commentsIngestLog.error("comment.ingest.failed", e, {
         tenantKey: input?.tenantKey || "",
         channel: input?.channel || "",
         externalCommentId: input?.externalCommentId || "",
         requestId: req.requestId || "",
       });
-      return okJson(res, {
+      return res.status(500).json({
         ok: false,
-        error: "Error",
+        error: "comment_ingest_failed",
         details: { message: String(e?.message || e) },
       });
     }

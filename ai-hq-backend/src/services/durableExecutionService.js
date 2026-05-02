@@ -14,12 +14,18 @@ import {
   getThreadById,
   refreshThread,
   getOutboundAttemptById,
+  markOutboundAttemptSending,
   markOutboundAttemptDead,
   markOutboundAttemptFailed,
   markOutboundAttemptSent,
   updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
 } from "../routes/api/inbox/repository.js";
+import {
+  markExternalSideEffectFailed,
+  markExternalSideEffectSent,
+  reserveExternalSideEffect,
+} from "../db/helpers/externalIdempotency.js";
 import {
   getCommentById,
   updateCommentState,
@@ -269,6 +275,55 @@ function classifyChannelOutboundFailure({ execution = {}, delivery = {} } = {}) 
           : "meta_gateway_failure")
     ),
   };
+}
+
+function deliveryState(message = {}) {
+  const meta = obj(message?.meta);
+  const delivery = obj(meta?.delivery);
+  return lower(
+    delivery?.status ||
+      message?.delivery_status ||
+      message?.status ||
+      ""
+  );
+}
+
+function messageLooksSent(message = {}, providerMessageId = "") {
+  const state = deliveryState(message);
+  if (state === "sent") return true;
+  if (providerMessageId) return true;
+  if (["pending", "failed", "retrying", "reserved"].includes(state)) return false;
+  return lower(message?.direction) === "outbound" && Boolean(message?.sent_at);
+}
+
+function failureHasUnknownProviderOutcome({ failure = {}, delivery = {} } = {}) {
+  const status = Number(failure?.status ?? delivery?.status ?? 0);
+  const text = lower(
+    failure?.errorMessage ||
+      delivery?.error ||
+      delivery?.reasonCode ||
+      ""
+  );
+
+  return (
+    status === 0 ||
+    text.includes("timeout") ||
+    text.includes("network") ||
+    text.includes("aborted") ||
+    text.includes("fetch failed")
+  );
+}
+
+function sideEffectKeyForExecution({ execution = {}, payload = {}, attempt = {}, fallback = "" } = {}) {
+  const meta = obj(payload?.meta);
+  return s(
+    execution?.idempotency_key ||
+      attempt?.idempotency_key ||
+      meta?.idempotencyKey ||
+      meta?.idempotency_key ||
+      fallback ||
+      (execution?.id ? `durable_execution:${execution.id}` : "")
+  );
 }
 
 export function buildMetaOutboundExecutionInput({
@@ -681,8 +736,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
   );
   const alreadySent =
     lower(existingAttempt?.status) === "sent" ||
-    Boolean(message?.sent_at) ||
-    Boolean(alreadySentProviderMessageId);
+    messageLooksSent(message, alreadySentProviderMessageId);
 
   if (alreadySent) {
     let updatedAttempt = existingAttempt;
@@ -731,6 +785,123 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
     };
   }
 
+  const reservedAttempt = attemptId
+    ? await markOutboundAttemptSending(db, attemptId, tenantKey)
+    : existingAttempt;
+
+  if (attemptId && !reservedAttempt?.id) {
+    const latestAttempt = await getOutboundAttemptById(db, attemptId, tenantKey);
+    if (lower(latestAttempt?.status) === "sent") {
+      return {
+        ok: true,
+        retryable: false,
+        resultSummary: {
+          provider,
+          duplicateSuppressed: true,
+          reason: "attempt_already_sent",
+          resolvedThreadId,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      retryable: false,
+      errorCode: "outbound_attempt_not_reservable",
+      errorMessage: "outbound attempt could not be reserved for delivery",
+      classification: "idempotency_reserved",
+      resultSummary: {
+        provider,
+        attemptStatus: lower(latestAttempt?.status),
+        resolvedThreadId,
+      },
+    };
+  }
+
+  const sideEffectIdempotencyKey = sideEffectKeyForExecution({
+    execution,
+    payload,
+    attempt: reservedAttempt || existingAttempt || {},
+    fallback: `${provider}:${message.id}`,
+  });
+  const sideEffectReservation = await reserveExternalSideEffect(db, {
+    tenantId,
+    tenantKey,
+    provider,
+    actionType: execution.action_type,
+    idempotencyKey: sideEffectIdempotencyKey,
+    executionId: execution.id,
+    attemptId: attemptId || "",
+    leaseToken: execution.lease_token,
+  });
+
+  if (!sideEffectReservation.acquired) {
+    const record = sideEffectReservation.record || {};
+    if (lower(record.state) === "sent") {
+      const providerResponse = obj(record.provider_response);
+      const providerMessageId = s(record.provider_message_id) || null;
+      let updatedAttempt = existingAttempt;
+
+      if (attemptId) {
+        updatedAttempt = await markOutboundAttemptSent({
+          db,
+          attemptId,
+          tenantKey,
+          providerMessageId,
+          providerResponse: {
+            ...providerResponse,
+            duplicateSuppressed: true,
+            reason: "external_idempotency_sent",
+            executionId: execution.id,
+          },
+        });
+      }
+
+      const updatedMessage = await updateOutboundMessageProviderId({
+        db,
+        messageId: message.id,
+        tenantKey,
+        providerMessageId,
+        providerResponse,
+      });
+
+      emitOutboundDeliveryTruth({
+        wsHub,
+        tenantKey,
+        threadId: resolvedThreadId,
+        message: updatedMessage || message,
+        attempt: updatedAttempt,
+        reason: "external_idempotency_sent",
+      });
+
+      return {
+        ok: true,
+        retryable: false,
+        resultSummary: {
+          provider,
+          providerMessageId: s(providerMessageId),
+          duplicateSuppressed: true,
+          idempotencyKey: sideEffectIdempotencyKey,
+          resolvedThreadId,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      retryable: false,
+      errorCode: "external_side_effect_already_reserved",
+      errorMessage: "external side effect idempotency key is already reserved",
+      classification: "idempotency_reserved",
+      resultSummary: {
+        provider,
+        idempotencyKey: sideEffectIdempotencyKey,
+        idempotencyState: lower(record.state),
+        resolvedThreadId,
+      },
+    };
+  }
+
   const delivery = await deliverChannelOutbound({
     db,
     execution: {
@@ -763,6 +934,16 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
         delivery,
         failure,
         actionType,
+      });
+
+      await markExternalSideEffectSent(db, {
+        tenantKey,
+        provider,
+        actionType: execution.action_type,
+        idempotencyKey: sideEffectIdempotencyKey,
+        leaseToken: sideEffectReservation.leaseToken,
+        providerMessageId: delivery?.providerMessageId || "",
+        providerResponse,
       });
 
       let updatedAttempt = null;
@@ -835,10 +1016,40 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       };
     }
 
+    const providerOutcomeUnknown = failureHasUnknownProviderOutcome({
+      failure,
+      delivery,
+    });
+    const retryableDelivery = Boolean(failure.retryable && !providerOutcomeUnknown);
+
+    await markExternalSideEffectFailed(db, {
+      tenantKey,
+      provider,
+      actionType: execution.action_type,
+      idempotencyKey: sideEffectIdempotencyKey,
+      leaseToken: sideEffectReservation.leaseToken,
+      retryable: retryableDelivery,
+      retryDelaySeconds: 120,
+      errorCode: providerOutcomeUnknown
+        ? "provider_outcome_unknown"
+        : failure.errorCode,
+      errorMessage: providerOutcomeUnknown
+        ? `provider outcome unknown: ${failure.errorMessage}`
+        : failure.errorMessage,
+      providerResponse: delivery.providerResponse || delivery.json || {},
+    });
+
+    if (providerOutcomeUnknown) {
+      failure.retryable = false;
+      failure.errorCode = "provider_outcome_unknown";
+      failure.errorMessage = `provider outcome unknown: ${failure.errorMessage}`;
+      failure.classification = "provider_outcome_unknown";
+    }
+
     let updatedAttempt = null;
 
     if (attemptId) {
-      if (failure.retryable) {
+      if (retryableDelivery) {
         updatedAttempt = await markOutboundAttemptFailed({
           db,
           attemptId,
@@ -857,7 +1068,7 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       db,
       messageId: message.id,
       tenantKey,
-      status: failure.retryable ? "failed" : "dead",
+      status: retryableDelivery ? "failed" : "dead",
       error: failure.errorMessage,
       errorCode: failure.errorCode,
       providerResponse: delivery.providerResponse || delivery.json || {},
@@ -893,14 +1104,14 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
       executionId: execution.id,
       provider,
       status: failure.status,
-      retryable: failure.retryable,
+      retryable: retryableDelivery,
       errorCode: failure.errorCode,
       resolvedThreadId,
     });
 
     return {
       ok: false,
-      retryable: failure.retryable,
+      retryable: retryableDelivery,
       errorCode: failure.errorCode,
       errorMessage: failure.errorMessage,
       classification: failure.classification,
@@ -914,6 +1125,16 @@ async function processChannelOutboundExecution({ db, wsHub, execution, logger })
 
   const providerResponse = obj(delivery.providerResponse);
   const providerMessageId = s(delivery.providerMessageId) || null;
+
+  await markExternalSideEffectSent(db, {
+    tenantKey,
+    provider,
+    actionType: execution.action_type,
+    idempotencyKey: sideEffectIdempotencyKey,
+    leaseToken: sideEffectReservation.leaseToken,
+    providerMessageId,
+    providerResponse,
+  });
 
   let updatedAttempt = null;
 
@@ -1055,6 +1276,12 @@ export async function processMetaCommentReplyExecution({
   const commentId = s(metadata.commentId || execution.target_id);
   const actor = s(metadata.actor || "operator");
   const approved = Boolean(metadata.approved !== false);
+  const actionType = s(
+    execution?.action_type ||
+      payload?.actionType ||
+      payload?.action_type ||
+      "meta.comment.reply"
+  );
   const replyText =
     s(metadata.replyText) ||
     s(payload?.actions?.[0]?.text) ||
@@ -1073,10 +1300,125 @@ export async function processMetaCommentReplyExecution({
     };
   }
 
-  const gateway = await sendCommentActions(payload);
+  const existingReply = obj(comment?.classification?.reply || comment?.raw?.reply);
+  const existingDeliveryStatus = lower(
+    existingReply?.deliveryStatus ||
+      existingReply?.delivery_status ||
+      existingReply?.status
+  );
+  if (existingDeliveryStatus === "sent") {
+    return {
+      ok: true,
+      retryable: false,
+      resultSummary: {
+        commentId: comment.id,
+        duplicateSuppressed: true,
+        reason: "comment_reply_already_sent",
+      },
+    };
+  }
+
+  const commentSideEffectKey = sideEffectKeyForExecution({
+    execution,
+    payload,
+    fallback: `meta.comment.reply:${comment.id}:${replyText}`,
+  });
+  const commentSideEffectReservation = await reserveExternalSideEffect(db, {
+    tenantId: execution?.tenant_id || comment?.tenant_id || "",
+    tenantKey,
+    provider: "meta",
+    actionType,
+    idempotencyKey: commentSideEffectKey,
+    executionId: execution.id,
+    leaseToken: execution.lease_token,
+  });
+
+  if (!commentSideEffectReservation.acquired) {
+    const record = commentSideEffectReservation.record || {};
+    if (lower(record.state) === "sent") {
+      return {
+        ok: true,
+        retryable: false,
+        resultSummary: {
+          commentId: comment.id,
+          providerMessageId: s(record.provider_message_id),
+          duplicateSuppressed: true,
+          idempotencyKey: commentSideEffectKey,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      retryable: false,
+      errorCode: "external_side_effect_already_reserved",
+      errorMessage: "external side effect idempotency key is already reserved",
+      classification: "idempotency_reserved",
+      resultSummary: {
+        commentId: comment.id,
+        idempotencyKey: commentSideEffectKey,
+        idempotencyState: lower(record.state),
+      },
+    };
+  }
+
+  const sendPayload = {
+    ...payload,
+    idempotencyKey: commentSideEffectKey,
+    context: {
+      ...obj(payload.context),
+      idempotencyKey: commentSideEffectKey,
+      meta: {
+        ...obj(payload.context?.meta),
+        idempotencyKey: commentSideEffectKey,
+      },
+    },
+    actions: Array.isArray(payload.actions)
+      ? payload.actions.map((action) => ({
+          ...action,
+          idempotencyKey: s(action?.idempotencyKey || action?.idempotency_key || commentSideEffectKey),
+          meta: {
+            ...obj(action?.meta),
+            idempotencyKey: s(
+              action?.meta?.idempotencyKey ||
+                action?.meta?.idempotency_key ||
+                action?.idempotencyKey ||
+                action?.idempotency_key ||
+                commentSideEffectKey
+            ),
+          },
+        }))
+      : [],
+  };
+
+  const gateway = await sendCommentActions(sendPayload);
   if (!gateway.ok) {
     const failure = classifyMetaGatewayFailure(gateway);
-    const deliveryStatus = failure.retryable ? "failed" : "dead";
+    const providerOutcomeUnknown = failureHasUnknownProviderOutcome({
+      failure,
+      delivery: gateway,
+    });
+    const retryableDelivery = Boolean(failure.retryable && !providerOutcomeUnknown);
+    if (providerOutcomeUnknown) {
+      failure.retryable = false;
+      failure.errorCode = "provider_outcome_unknown";
+      failure.errorMessage = `provider outcome unknown: ${failure.errorMessage}`;
+      failure.classification = "provider_outcome_unknown";
+    }
+    const deliveryStatus = retryableDelivery ? "failed" : "dead";
+
+    await markExternalSideEffectFailed(db, {
+      tenantKey,
+      provider: "meta",
+      actionType,
+      idempotencyKey: commentSideEffectKey,
+      leaseToken: commentSideEffectReservation.leaseToken,
+      retryable: retryableDelivery,
+      retryDelaySeconds: 120,
+      errorCode: failure.errorCode,
+      errorMessage: failure.errorMessage,
+      providerResponse: gateway.json || {},
+    });
 
     const nextClassification = mergeClassificationForReply(comment.classification, {
       replyText,
@@ -1139,7 +1481,7 @@ export async function processMetaCommentReplyExecution({
 
     return {
       ok: false,
-      retryable: failure.retryable,
+      retryable: retryableDelivery,
       errorCode: failure.errorCode,
       errorMessage: failure.errorMessage,
       classification: failure.classification,
@@ -1159,6 +1501,16 @@ export async function processMetaCommentReplyExecution({
         providerResponse?.messageId ||
         providerResponse?.id
     ) || null;
+
+  await markExternalSideEffectSent(db, {
+    tenantKey,
+    provider: "meta",
+    actionType,
+    idempotencyKey: commentSideEffectKey,
+    leaseToken: commentSideEffectReservation.leaseToken,
+    providerMessageId,
+    providerResponse,
+  });
 
   const nextClassification = mergeClassificationForReply(comment.classification, {
     replyText,

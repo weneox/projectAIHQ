@@ -1,6 +1,8 @@
 import { okJson, isDbReady, isUuid } from "../../../../utils/http.js";
 import { setTenantContext } from "../../../../db/tenantContext.js";
-import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
+import {
+  commitTenantUsageReservation,
+} from "../../../../db/helpers/tenantUsage.js";
 import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import {
   findExistingOutboundMessage,
@@ -30,24 +32,24 @@ export function createInboxOutboundHandler({ db, wsHub }) {
     });
 
     if (!isDbReady(db)) {
-      return okJson(res, { ok: false, error: "db disabled", dbDisabled: true });
+      return res.status(503).json({ ok: false, error: "db disabled", dbDisabled: true });
     }
 
     const threadId = String(req.body?.threadId || "").trim();
-    if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
-    if (!isUuid(threadId)) return okJson(res, { ok: false, error: "threadId must be uuid" });
+    if (!threadId) return res.status(400).json({ ok: false, error: "threadId required" });
+    if (!isUuid(threadId)) return res.status(400).json({ ok: false, error: "threadId must be uuid" });
 
     let client = null;
 
     try {
       const requestedTenantKey = String(req.body?.tenantKey || req.body?.tenant_key || "").trim();
       if (!requestedTenantKey) {
-        return okJson(res, { ok: false, error: "tenantKey required" });
+        return res.status(400).json({ ok: false, error: "tenantKey required" });
       }
       const tenantRow = await resolveTenantRow(db, requestedTenantKey);
       const resolvedTenantId = String(tenantRow?.id || "").trim();
       if (!resolvedTenantId) {
-        return okJson(res, {
+        return res.status(404).json({
           ok: false,
           error: "tenant not found",
           details: { tenantKey: requestedTenantKey, threadId },
@@ -65,14 +67,14 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         tenantKey: requestedTenantKey,
       });
       if (!existingThread) {
-        return okJson(res, { ok: false, error: "thread not found" });
+        return res.status(404).json({ ok: false, error: "thread not found" });
       }
 
       const input = parseOutboundRequest(req, existingThread);
       const validation = validateOutboundRequest(input);
-      if (!validation.ok) return okJson(res, validation.response);
+      if (!validation.ok) return res.status(400).json(validation.response);
       if (String(input.tenantKey || "").toLowerCase() !== requestedTenantKey.toLowerCase()) {
-        return okJson(res, { ok: false, error: "tenant/thread mismatch" });
+        return res.status(403).json({ ok: false, error: "tenant/thread mismatch" });
       }
       setTenantContext({
         tenantId: existingThread?.tenant_id || "",
@@ -127,7 +129,7 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       if (!tenantId) {
         await rollbackAndRelease(client);
         client = null;
-        return okJson(res, {
+        return res.status(404).json({
           ok: false,
           error: "tenant not found",
           details: { tenantKey: input.tenantKey, threadId },
@@ -163,26 +165,6 @@ export function createInboxOutboundHandler({ db, wsHub }) {
           quota: quota.quota,
         });
       }
-
-      await recordTenantUsage(client, {
-        tenantId,
-        tenantKey: input.tenantKey,
-        planKey: tenantRow?.plan_key || "starter",
-        metric: "api_calls",
-        quantity: 1,
-        source: "inbox.outbound",
-        requestId: req.requestId,
-        meta: {
-          channel: input.channel,
-          threadId,
-        },
-      }).catch((error) => {
-        logInfo("inbox outbound api usage record failed", {
-          tenantId,
-          tenantKey: input.tenantKey,
-          error: String(error?.message || error),
-        });
-      });
 
       const delivery = await persistOutboundMessage({
         client,
@@ -224,31 +206,20 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         })
       );
 
-      await client.query("COMMIT");
-      client.release();
-      client = null;
-
-      await recordTenantUsage(db, {
-        tenantId,
-        tenantKey: input.tenantKey,
-        planKey: tenantRow?.plan_key || "starter",
-        metric: "messages_out",
-        quantity: 1,
-        source: "inbox.outbound",
-        requestId: req.requestId,
+      await commitTenantUsageReservation(client, {
+        ...(quota?.reservation || {}),
         meta: {
+          ...(quota?.reservation?.meta || {}),
           channel: input.channel,
           threadId,
           messageId: delivery.message?.id || "",
           attemptId: delivery.attempt?.id || "",
         },
-      }).catch((error) => {
-        logInfo("inbox outbound usage record failed", {
-          tenantId,
-          tenantKey: input.tenantKey,
-          error: String(error?.message || error),
-        });
       });
+
+      await client.query("COMMIT");
+      client.release();
+      client = null;
 
       emitOutboundRealtime({
         wsHub,
@@ -280,9 +251,9 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         threadId,
         error: String(error?.message || error),
       });
-      return okJson(res, {
+      return res.status(500).json({
         ok: false,
-        error: "Error",
+        error: "inbox_outbound_failed",
         details: { message: String(error?.message || error) },
       });
     }

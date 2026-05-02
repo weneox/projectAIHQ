@@ -5,7 +5,10 @@ import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
-import { recordTenantUsage } from "../../../../db/helpers/tenantUsage.js";
+import {
+  commitTenantUsageReservation,
+  recordTenantUsage,
+} from "../../../../db/helpers/tenantUsage.js";
 import { applyHandoffActions, persistLeadActions } from "../mutations.js";
 import {
   findExistingInboundMessage,
@@ -376,7 +379,7 @@ export function createInboxIngestHandler({
 
     const input = parseIngestRequest(req);
     const validation = validateIngestRequest(input);
-    if (!validation.ok) return okJson(res, validation.response);
+    if (!validation.ok) return res.status(400).json(validation.response);
     setTenantContext({
       tenantKey: input.tenantKey,
       requestId: req.requestId,
@@ -392,7 +395,7 @@ export function createInboxIngestHandler({
     try {
       stage = "db_ready_check";
       if (!isDbReady(db)) {
-        return okJson(res, {
+        return res.status(503).json({
           ok: false,
           error: "db disabled",
           dbDisabled: true,
@@ -420,7 +423,7 @@ export function createInboxIngestHandler({
         await rollbackAndRelease(client);
         client = null;
 
-        return okJson(res, {
+        return res.status(404).json({
           ok: false,
           error: "tenant not found",
           details: { tenantKey: input.tenantKey },
@@ -458,48 +461,6 @@ export function createInboxIngestHandler({
         });
       }
 
-      await recordTenantUsage(client, {
-        tenantId,
-        tenantKey: input.tenantKey,
-        planKey: tenantRow?.plan_key || "starter",
-        metric: "api_calls",
-        quantity: 1,
-        source: "inbox.ingest",
-        requestId: req.requestId,
-        meta: {
-          channel: input.channel,
-          externalThreadId: input.externalThreadId,
-          externalMessageId: input.externalMessageId,
-        },
-      }).catch((error) => {
-        ingestLog.warn("inbox.usage.api_call_record_failed", {
-          tenantId,
-          tenantKey: input.tenantKey,
-          error: String(error?.message || error),
-        });
-      });
-
-      await recordTenantUsage(client, {
-        tenantId,
-        tenantKey: input.tenantKey,
-        planKey: tenantRow?.plan_key || "starter",
-        metric: "webhook_events",
-        quantity: 1,
-        source: "inbox.ingest",
-        requestId: req.requestId,
-        meta: {
-          channel: input.channel,
-          externalThreadId: input.externalThreadId,
-          externalMessageId: input.externalMessageId,
-        },
-      }).catch((error) => {
-        ingestLog.warn("inbox.usage.webhook_record_failed", {
-          tenantId,
-          tenantKey: input.tenantKey,
-          error: String(error?.message || error),
-        });
-      });
-
       stage = "find_or_create_thread";
       const threadResult = await findOrCreateThreadForIngest({
         client,
@@ -527,6 +488,16 @@ export function createInboxIngestHandler({
 
         if (existingMessage) {
           stage = "commit_duplicate_existing_message";
+          await commitTenantUsageReservation(client, {
+            ...(quota?.reservation || {}),
+            meta: {
+              ...(quota?.reservation?.meta || {}),
+              channel: input.channel,
+              externalThreadId: input.externalThreadId,
+              externalMessageId: input.externalMessageId,
+              duplicate: true,
+            },
+          });
           await client.query("COMMIT");
           client.release();
           client = null;
@@ -591,6 +562,17 @@ export function createInboxIngestHandler({
       }
 
       stage = "commit_inbound_message";
+      await commitTenantUsageReservation(client, {
+        ...(quota?.reservation || {}),
+        meta: {
+          ...(quota?.reservation?.meta || {}),
+          channel: input.channel,
+          externalThreadId: input.externalThreadId,
+          externalMessageId: input.externalMessageId,
+          threadId: thread?.id || "",
+          messageId: message?.id || "",
+        },
+      });
       await client.query("COMMIT");
       client.release();
       client = null;
@@ -670,7 +652,7 @@ export function createInboxIngestHandler({
 
         await rollbackAndRelease(client);
         client = null;
-        return okJson(res, runtimeState.response);
+        return res.status(runtimeState.response?.status || 503).json(runtimeState.response);
       }
 
       const { tenant, runtime } = runtimeState;
@@ -967,8 +949,7 @@ export function createInboxIngestHandler({
 
       if (client) await rollbackAndRelease(client);
 
-      return okJson(
-        res,
+      return res.status(500).json(
         logIngestFailure({
           stage,
           error,

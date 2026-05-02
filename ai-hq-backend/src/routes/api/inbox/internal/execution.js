@@ -203,7 +203,7 @@ export async function persistOutboundMessage({
       originalMeta.resume_automation === true
   );
   const deliveryStatus = providerMessageId ? "sent" : "pending";
-  const sentAt = nowIso();
+  const sentAt = providerMessageId ? nowIso() : null;
 
   const mergedMeta = {
     ...originalMeta,
@@ -320,13 +320,14 @@ export async function persistOutboundMessage({
     db: client,
     messageId: message.id,
     threadId: thread.id,
+    tenantId,
     tenantKey,
     channel,
     provider: resolvedProvider,
     recipientId,
     idempotencyKey,
     payload: attemptPayload,
-    status: providerMessageId ? "sent" : "queued",
+    status: providerMessageId ? "sent" : "pending",
     maxAttempts,
     nextRetryAt: providerMessageId ? null : nowIso(),
   });

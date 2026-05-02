@@ -20,6 +20,10 @@ import {
   recordSourceSyncOutcome,
   touchWorkerHeartbeat,
 } from "../observability/runtimeSignals.js";
+import {
+  runWithSystemDbContext,
+  runWithTenantContext,
+} from "../db/tenantContext.js";
 
 function s(value = "") {
   return String(value ?? "").trim();
@@ -253,11 +257,15 @@ export function createSourceSyncWorker({ db }) {
 
     try {
       for (let i = 0; i < cfgWorker.batchSize; i += 1) {
-        const claimedRun = await sources.claimNextSyncRun({
-          runnerKey,
-          leaseToken: buildWorkerRunnerKey("source-sync-lease"),
-          leaseMs: cfgWorker.leaseMs,
-        });
+        const claimedRun = await runWithSystemDbContext(
+          "source_sync_worker_claim",
+          () =>
+            sources.claimNextSyncRun({
+              runnerKey,
+              leaseToken: buildWorkerRunnerKey("source-sync-lease"),
+              leaseMs: cfgWorker.leaseMs,
+            })
+        );
 
         if (!claimedRun?.id) break;
         lastClaimAt = new Date().toISOString();
@@ -283,11 +291,20 @@ export function createSourceSyncWorker({ db }) {
 
         try {
           runLogger.info("source_sync.execution.started");
-          result = await processClaimedSyncRun({
-            db,
-            claimedRun,
-            runnerKey,
-          });
+          result = await runWithTenantContext(
+            {
+              tenantId: s(claimedRun.tenant_id),
+              tenantKey: s(claimedRun.tenant_key),
+              source: "source_sync_worker",
+              requestId: s(claimedRun.metadata_json?.requestId),
+            },
+            () =>
+              processClaimedSyncRun({
+                db,
+                claimedRun,
+                runnerKey,
+              })
+          );
         } catch (err) {
           result = {
             ok: false,
@@ -302,12 +319,21 @@ export function createSourceSyncWorker({ db }) {
           result?.ok === false || lower(result?.mode || "") === "error";
 
         if (isError) {
-          const resolution = await handleRetryableFailure({
-            db,
-            run: claimedRun,
-            resultOrError: result,
-            requestedBy: s(claimedRun.requested_by) || runnerKey,
-          });
+          const resolution = await runWithTenantContext(
+            {
+              tenantId: s(claimedRun.tenant_id),
+              tenantKey: s(claimedRun.tenant_key),
+              source: "source_sync_worker",
+              requestId: s(claimedRun.metadata_json?.requestId),
+            },
+            () =>
+              handleRetryableFailure({
+                db,
+                run: claimedRun,
+                resultOrError: result,
+                requestedBy: s(claimedRun.requested_by) || runnerKey,
+              })
+          );
 
           if (resolution?.terminal) {
             recordSourceSyncOutcome({ outcome: "error" });

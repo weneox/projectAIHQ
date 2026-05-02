@@ -42,6 +42,7 @@ import {
   runWithSystemDbContext,
   setTenantContext,
 } from "../../../db/tenantContext.js";
+import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
 
 import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
@@ -327,11 +328,24 @@ export async function enqueueVoiceSyncExecutionRequest(req, res, { db }) {
       });
     }
 
+    let tenantId = clean(checked.value.tenantId);
+    const tenantKey = lower(checked.value.tenantKey);
+    if (!tenantId) {
+      const tenant = await dbGetTenantByKey(db, tenantKey);
+      tenantId = clean(tenant?.id);
+      if (!tenantId) {
+        return res.status(404).json({
+          ok: false,
+          error: "tenant_not_found",
+        });
+      }
+    }
+
     const execution = await enqueueVoiceSyncExecution({
       db,
       actionType: checked.value.actionType,
-      tenantId: checked.value.tenantId,
-      tenantKey: checked.value.tenantKey,
+      tenantId,
+      tenantKey,
       providerCallSid:
         checked.value.payload?.providerCallSid || checked.value.payload?.callSid || "",
       payload: checked.value.payload,

@@ -68,6 +68,12 @@ test("quota enforcement returns a metadata-rich 429 decision", async () => {
           ],
         };
       }
+      if (/insert into tenant_usage_daily/i.test(text) && /reserved_/i.test(text)) {
+        return { rows: [] };
+      }
+      if (/insert into tenant_usage_daily/i.test(text) && /quota_rejections/i.test(text)) {
+        return { rows: [{ id: "quota-rejection-row" }] };
+      }
       return { rows: [{ id: "usage-row" }] };
     },
   };

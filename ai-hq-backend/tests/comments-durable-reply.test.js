@@ -18,6 +18,7 @@ function createCommentDb(commentRow) {
       raw: commentRow.raw || {},
     },
     auditEntries: [],
+    sideEffects: new Map(),
   };
 
   return {
@@ -27,6 +28,61 @@ function createCommentDb(commentRow) {
 
       if (text.includes("from comments") && text.includes("where id = $1::uuid")) {
         return { rows: [state.comment] };
+      }
+
+      if (text.includes("insert into external_idempotency_keys")) {
+        const key = [params[1], params[2], params[3], params[4]].join("|");
+        const row = {
+          id: `side-effect-${state.sideEffects.size + 1}`,
+          tenant_id: params[0],
+          tenant_key: params[1],
+          provider: params[2],
+          action_type: params[3],
+          idempotency_key: params[4],
+          execution_id: params[5],
+          attempt_id: params[6],
+          state: "reserved",
+          lease_token: params[7],
+          provider_message_id: null,
+          provider_response: {},
+          error_code: null,
+          error_message: null,
+          acquired: true,
+        };
+        state.sideEffects.set(key, row);
+        return { rows: [row] };
+      }
+
+      if (text.includes("from external_idempotency_keys")) {
+        const key = [params[0], params[1], params[2], params[3]].join("|");
+        return { rows: [state.sideEffects.get(key)].filter(Boolean) };
+      }
+
+      if (text.includes("update external_idempotency_keys") && text.includes("state = 'sent'")) {
+        const key = [params[0], params[1], params[2], params[3]].join("|");
+        const row = {
+          ...(state.sideEffects.get(key) || {}),
+          state: "sent",
+          provider_message_id: params[4] || null,
+          provider_response: params[5] ? JSON.parse(params[5]) : {},
+          lease_token: null,
+        };
+        state.sideEffects.set(key, row);
+        return { rows: [row] };
+      }
+
+      if (text.includes("update external_idempotency_keys") && text.includes("state = case")) {
+        const key = [params[0], params[1], params[2], params[3]].join("|");
+        const row = {
+          ...(state.sideEffects.get(key) || {}),
+          state: params[4] ? "retrying" : "failed",
+          provider_response: params[8] ? JSON.parse(params[8]) : {},
+          error_code: params[6],
+          error_message: params[7],
+          lease_token: null,
+        };
+        state.sideEffects.set(key, row);
+        return { rows: [row] };
       }
 
       if (text.includes("update comments")) {

@@ -86,6 +86,74 @@ function createDecisionEventDb() {
   };
 }
 
+function createQuotaReadyDb() {
+  return {
+    async query(input, values = []) {
+      const text = String(input?.text || input || "").trim().toLowerCase();
+      const params = Array.isArray(input?.values) ? input.values : values;
+
+      if (text.includes("insert into tenant_usage_daily")) {
+        return {
+          rows: [
+            {
+              tenant_id: params[0],
+              tenant_key: params[1],
+              usage_date: params[2],
+              api_calls: 0,
+              webhook_events: 0,
+              reserved_api_calls: 1,
+              reserved_webhook_events: 1,
+            },
+          ],
+        };
+      }
+
+      if (text.includes("update tenant_usage_daily")) {
+        return {
+          rows: [
+            {
+              tenant_id: params[0],
+              usage_date: params[1],
+              api_calls: 1,
+              webhook_events: 1,
+              reserved_api_calls: 0,
+              reserved_webhook_events: 0,
+            },
+          ],
+        };
+      }
+
+      if (text.includes("insert into durable_executions")) {
+        return {
+          rows: [
+            {
+              id: params[0],
+              tenant_id: params[1],
+              tenant_key: params[2],
+              channel: params[3],
+              provider: params[4],
+              action_type: params[5],
+              target_type: params[6],
+              target_id: params[7],
+              idempotency_key: params[11],
+              payload_summary: JSON.parse(params[12]),
+              safe_metadata: JSON.parse(params[13]),
+              correlation_ids: JSON.parse(params[14]),
+              status: "pending",
+              max_attempts: params[15],
+              next_retry_at: params[16],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    },
+  };
+}
+
 test("comments ingest dedupes existing comments while keeping strict runtime authority explicit", async () => {
   const previousInternalToken = cfg.security.aihqInternalToken;
   const calls = [];
@@ -94,7 +162,7 @@ test("comments ingest dedupes existing comments while keeping strict runtime aut
     cfg.security.aihqInternalToken = "internal-secret";
 
     const handler = ingestCommentHandler({
-      db: { query: async () => ({ rows: [] }) },
+      db: createQuotaReadyDb(),
       wsHub: null,
       getRuntime: async (input) => {
         calls.push(input);
@@ -161,7 +229,7 @@ test("comments ingest persists new comments and keeps audit/realtime hooks intac
     cfg.security.aihqInternalToken = "internal-secret";
 
     const handler = ingestCommentHandler({
-      db: { query: async () => ({ rows: [] }) },
+      db: createQuotaReadyDb(),
       wsHub: { name: "hub" },
       getRuntime: async () => ({
         tenant: {
@@ -243,7 +311,7 @@ test("comments ingest treats insert-time unique collisions as canonical duplicat
     cfg.security.aihqInternalToken = "internal-secret";
 
     const handler = ingestCommentHandler({
-      db: { query: async () => ({ rows: [] }) },
+      db: createQuotaReadyDb(),
       wsHub: { name: "hub" },
       getRuntime: async () => ({
         tenant: {

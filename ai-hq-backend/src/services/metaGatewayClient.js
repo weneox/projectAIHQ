@@ -40,6 +40,18 @@ function normalizePayload(input = {}) {
   };
 }
 
+function pickIdempotencyKey(payload = {}) {
+  const meta = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload.meta || {}
+    : {};
+  return s(
+    payload?.idempotencyKey ||
+      payload?.idempotency_key ||
+      meta?.idempotencyKey ||
+      meta?.idempotency_key
+  );
+}
+
 function getMetaGatewayConfig() {
   return {
     base: trimSlash(process.env.META_GATEWAY_BASE_URL || ""),
@@ -75,11 +87,13 @@ export async function sendOutboundViaMetaGateway(payload) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const idempotencyKey = pickIdempotencyKey(checked.value);
     const res = await fetch(`${base}/internal/outbound/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         Accept: "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         ...(token ? { "x-internal-token": token } : {}),
       },
       body: JSON.stringify(checked.value),
@@ -142,11 +156,13 @@ export async function sendCommentActionsViaMetaGateway(payload) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const idempotencyKey = pickIdempotencyKey(checked.value.body || payload || {});
     const res = await fetch(`${base}/internal/comment-actions/execute`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         Accept: "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         ...(token ? { "x-internal-token": token } : {}),
       },
       body: JSON.stringify(checked.value.body),

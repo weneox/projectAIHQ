@@ -96,6 +96,22 @@ function resolveInternalOutboundActionType(messageType = "") {
   return "send_message";
 }
 
+function pickIdempotencyKey(req) {
+  return s(
+    req.headers["idempotency-key"] ||
+      req.headers["x-idempotency-key"] ||
+      req.body?.idempotencyKey ||
+      req.body?.idempotency_key ||
+      req.body?.meta?.idempotencyKey ||
+      req.body?.meta?.idempotency_key ||
+      req.body?.context?.idempotencyKey ||
+      req.body?.context?.idempotency_key ||
+      req.body?.context?.meta?.idempotencyKey ||
+      req.body?.context?.meta?.idempotency_key ||
+      ""
+  );
+}
+
 export function internalOutboundRoutes() {
   const r = express.Router();
 
@@ -125,6 +141,7 @@ export function internalOutboundRoutes() {
     const messageType = checked.value.messageType;
     const attachments = checked.value.attachments;
     const meta = checked.value.meta;
+    const idempotencyKey = pickIdempotencyKey(req);
 
     try {
       req.log?.info("meta.internal_outbound.send.requested", {
@@ -144,6 +161,7 @@ export function internalOutboundRoutes() {
         skipOutboundAck: true,
         internalOutbound: true,
         alreadyTrackedInAiHq: true,
+        idempotencyKey,
       };
 
       const context = {
@@ -163,6 +181,7 @@ export function internalOutboundRoutes() {
           skipOutboundAck: true,
           internalOutbound: true,
           alreadyTrackedInAiHq: true,
+          idempotencyKey,
         },
       };
 
@@ -222,7 +241,34 @@ export function internalOutboundRoutes() {
     const tenantKey = checked.value.tenantKey || pickTenantKey(req);
     const tenantId = checked.value.tenantId || pickTenantId(req);
     const actions = normalizeActions(checked.value.actions);
+    const idempotencyKey = pickIdempotencyKey(req);
     const context = normalizeContext(req, tenantKey, tenantId);
+    context.idempotencyKey = idempotencyKey;
+    context.meta = {
+      ...(context.meta || {}),
+      idempotencyKey,
+    };
+    const actionsWithIdempotency = actions.map((action, index) => {
+      const actionKey = s(
+        action?.meta?.idempotencyKey ||
+          action?.meta?.idempotency_key ||
+          action?.idempotencyKey ||
+          action?.idempotency_key ||
+          (idempotencyKey
+            ? actions.length === 1
+              ? idempotencyKey
+              : `${idempotencyKey}:${index}`
+            : "")
+      );
+      return {
+        ...action,
+        idempotencyKey: actionKey,
+        meta: {
+          ...(isObject(action?.meta) ? action.meta : {}),
+          idempotencyKey: actionKey,
+        },
+      };
+    });
 
     try {
       req.log?.info("meta.internal_comment_actions.requested", {
@@ -230,7 +276,7 @@ export function internalOutboundRoutes() {
         tenantId,
         actionCount: actions.length,
       });
-      const exec = await executeMetaActions(actions, context);
+      const exec = await executeMetaActions(actionsWithIdempotency, context);
 
       return res.status(exec?.ok ? 200 : 502).json({
         ok: Boolean(exec?.ok),

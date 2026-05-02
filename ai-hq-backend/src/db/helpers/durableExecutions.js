@@ -85,6 +85,12 @@ function normalizeListStatus(status = "") {
 
 export function createDurableExecutionHelpers({ db }) {
   async function enqueueExecution(input = {}) {
+    if (!s(input.tenantId) || !s(input.tenantKey)) {
+      const err = new Error("durable execution requires tenant identity");
+      err.code = "TENANT_CONTEXT_REQUIRED";
+      throw err;
+    }
+
     const payloadSummary = obj(input.payloadSummary);
     const safeMetadata = obj(input.safeMetadata);
     const correlationIds = obj(input.correlationIds);
@@ -145,7 +151,7 @@ export function createDurableExecutionHelpers({ db }) {
       [
         id,
         s(input.tenantId),
-        s(input.tenantKey || "default").toLowerCase(),
+        s(input.tenantKey).toLowerCase(),
         s(input.channel || "system").toLowerCase(),
         s(input.provider || "internal").toLowerCase(),
         s(input.actionType),
@@ -396,6 +402,8 @@ export function createDurableExecutionHelpers({ db }) {
         select id
         from durable_executions
         where status = any($1::text[])
+          and tenant_id is not null
+          and nullif(btrim(tenant_key), '') is not null
           and (
             (status in ('pending', 'retryable') and coalesce(next_retry_at, now()) <= now())
             or (status = 'in_progress' and coalesce(lease_expires_at, now()) <= now())

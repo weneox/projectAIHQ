@@ -1210,6 +1210,14 @@ test("comments ingest succeeds when approved projected runtime is available", as
       async query(text) {
         const sql = String(text || "").toLowerCase();
 
+        if (sql.includes("insert into tenant_usage_daily")) {
+          return { rows: [{}] };
+        }
+
+        if (sql.includes("update tenant_usage_daily")) {
+          return { rows: [{}] };
+        }
+
         if (sql.includes("from comments") && sql.includes("external_comment_id")) {
           return { rows: [] };
         }
@@ -1331,6 +1339,14 @@ test("inbox ingest fails closed when strict runtime authority is unavailable", a
           sql === "rollback" ||
           sql === "commit"
         ) {
+          return { rows: [{}] };
+        }
+
+        if (sql.includes("insert into tenant_usage_daily")) {
+          return { rows: [{}] };
+        }
+
+        if (sql.includes("update tenant_usage_daily")) {
           return { rows: [{}] };
         }
 
@@ -1473,6 +1489,14 @@ test("inbox ingest succeeds when approved projected runtime is available", async
           sql === "rollback" ||
           sql === "commit"
         ) {
+          return { rows: [{}] };
+        }
+
+        if (sql.includes("insert into tenant_usage_daily")) {
+          return { rows: [{}] };
+        }
+
+        if (sql.includes("update tenant_usage_daily")) {
           return { rows: [{}] };
         }
 

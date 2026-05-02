@@ -42,6 +42,17 @@ class FakeDurableExecutionDb {
       return { rows: [] };
     }
 
+    if (text.includes("from tenants") && text.includes("tenant_key")) {
+      return {
+        rows: [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            tenant_key: params[0] || "acme",
+          },
+        ],
+      };
+    }
+
     if (text.startsWith("insert into durable_executions")) {
       const key = [params[2], params[4], params[5], params[11]].join("|");
       const existingId = this.idempotency.get(key);

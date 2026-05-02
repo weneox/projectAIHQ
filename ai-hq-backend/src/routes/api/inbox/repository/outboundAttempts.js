@@ -11,13 +11,14 @@ export async function createOutboundAttempt({
   db,
   messageId,
   threadId,
+  tenantId = "",
   tenantKey = "",
   channel = "instagram",
   provider = "meta",
   recipientId = null,
   idempotencyKey = "",
   payload = {},
-  status = "queued",
+  status = "pending",
   maxAttempts = 5,
   nextRetryAt = null,
 }) {
@@ -30,23 +31,24 @@ export async function createOutboundAttempt({
   const result = await db.query(
     `
     insert into inbox_outbound_attempts (
-      message_id, thread_id, tenant_key, channel, provider,
+      message_id, thread_id, tenant_id, tenant_key, channel, provider,
       recipient_id, payload, status, max_attempts, next_retry_at, idempotency_key
     )
-    values ($1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::jsonb,$8::text,$9::int,$10::timestamptz,nullif($11::text,''))
+    values ($1::uuid,$2::uuid,nullif($3::text,'')::uuid,$4::text,$5::text,$6::text,$7::text,$8::jsonb,$9::text,$10::int,$11::timestamptz,nullif($12::text,''))
     on conflict (tenant_key, provider, idempotency_key)
       where idempotency_key is not null
     do update set
       payload = inbox_outbound_attempts.payload
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id, idempotency_key,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id, idempotency_key,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     [
       messageId,
       threadId,
+      tenantId,
       resolvedTenantKey,
       channel,
       provider,
@@ -74,10 +76,10 @@ export async function getOutboundAttemptById(db, attemptId, tenantKey = "") {
   const result = await db.query(
     `
     select
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
     ${where}
     limit 1
@@ -97,10 +99,10 @@ export async function findLatestAttemptByMessageId(db, messageId, tenantKey = ""
   const result = await db.query(
     `
     select
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
     where message_id = $1::uuid
       and tenant_key = $2::text
@@ -224,10 +226,10 @@ export async function listOutboundAttemptsByThread(db, threadId, limit = 100, te
   const result = await db.query(
     `
     select
-      a.id, a.message_id, a.thread_id, a.tenant_key, a.channel, a.provider, a.recipient_id,
+      a.id, a.message_id, a.thread_id, a.tenant_id, a.tenant_key, a.channel, a.provider, a.recipient_id,
       a.provider_message_id, a.payload, a.provider_response, a.status, a.attempt_count, a.max_attempts,
       a.queued_at, a.first_attempt_at, a.last_attempt_at, a.next_retry_at, a.sent_at,
-      a.last_error, a.last_error_code, a.created_at, a.updated_at,
+      a.reservation_token, a.reserved_until, a.last_error, a.last_error_code, a.created_at, a.updated_at,
       m.text as message_text, m.sender_type, m.message_type
     from inbox_outbound_attempts a
     left join inbox_messages m on m.id = a.message_id
@@ -252,12 +254,12 @@ export async function listRetryableOutboundAttempts(db, limit = 50) {
   const result = await db.query(
     `
     select
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
-    where status in ('queued','failed','retrying')
+    where status in ('pending','queued','failed','retrying')
       and nullif(btrim(tenant_key), '') is not null
       and coalesce(next_retry_at, now()) <= now()
       and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
@@ -283,20 +285,22 @@ export async function markOutboundAttemptSending(db, attemptId, tenantKey = "") 
     `
     update inbox_outbound_attempts
     set
-      status = 'sending',
+      status = 'reserved',
       attempt_count = coalesce(attempt_count, 0) + 1,
       first_attempt_at = coalesce(first_attempt_at, now()),
       last_attempt_at = now(),
       next_retry_at = null,
+      reservation_token = gen_random_uuid()::text,
+      reserved_until = now() + interval '2 minutes',
       updated_at = now()
     ${where}
-      and status in ('queued','failed','retrying')
+      and status in ('pending','queued','failed','retrying')
       and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     values
   );
@@ -329,16 +333,18 @@ export async function markOutboundAttemptSent({
       provider_response = coalesce($3::jsonb, '{}'::jsonb),
       sent_at = now(),
       next_retry_at = null,
+      reservation_token = null,
+      reserved_until = null,
       last_error = null,
       last_error_code = null,
       updated_at = now()
     ${where}
-      and status in ('queued','sending','failed','retrying')
+      and status in ('pending','queued','reserved','sending','failed','retrying')
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     values
   );
@@ -391,14 +397,16 @@ export async function markOutboundAttemptFailed({
         when $2::text = 'dead' then null
         else now() + make_interval(secs => $6::int)
       end,
+      reservation_token = null,
+      reserved_until = null,
       updated_at = now()
     ${where}
-      and status in ('queued','sending','failed','retrying')
+      and status in ('pending','queued','reserved','sending','failed','retrying')
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     values
   );
@@ -427,13 +435,15 @@ export async function scheduleOutboundRetry({
     set
       status = 'retrying',
       next_retry_at = now() + make_interval(secs => $2::int),
+      reservation_token = null,
+      reserved_until = null,
       updated_at = now()
     ${where}
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     values
   );
@@ -453,14 +463,14 @@ export async function markOutboundAttemptDead(db, attemptId, tenantKey = "") {
   const result = await db.query(
     `
     update inbox_outbound_attempts
-    set status = 'dead', next_retry_at = null, updated_at = now()
+    set status = 'dead', next_retry_at = null, reservation_token = null, reserved_until = null, updated_at = now()
     ${where}
-      and status in ('queued','sending','failed','retrying')
+      and status in ('pending','queued','reserved','sending','failed','retrying')
     returning
-      id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
+      id, message_id, thread_id, tenant_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
-      last_error, last_error_code, created_at, updated_at
+      reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     `,
     values
   );
@@ -503,8 +513,8 @@ export async function getOutboundAttemptsSummary(
   const result = await db.query(
     `
     select
-      count(*) filter (where status = 'queued')::int as queued,
-      count(*) filter (where status = 'sending')::int as sending,
+      count(*) filter (where status in ('pending','queued'))::int as queued,
+      count(*) filter (where status in ('reserved','sending'))::int as sending,
       count(*) filter (where status = 'sent')::int as sent,
       count(*) filter (where status = 'failed')::int as failed,
       count(*) filter (where status = 'retrying')::int as retrying,
@@ -537,7 +547,7 @@ export async function listFailedOutboundAttempts(
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
   if (!resolvedTenantKey) return [];
-  const allowed = new Set(["failed", "retrying", "dead", "queued", "sending", "sent"]);
+  const allowed = new Set(["failed", "retrying", "dead", "queued", "pending", "sending", "reserved", "sent"]);
   const useStatus = allowed.has(String(status || "").trim()) ? String(status).trim() : "";
   const values = [resolvedTenantKey];
   let where = `where a.tenant_key = $1::text`;
@@ -554,10 +564,10 @@ export async function listFailedOutboundAttempts(
   const result = await db.query(
     `
     select
-      a.id, a.message_id, a.thread_id, a.tenant_key, a.channel, a.provider, a.recipient_id,
+      a.id, a.message_id, a.thread_id, a.tenant_id, a.tenant_key, a.channel, a.provider, a.recipient_id,
       a.provider_message_id, a.payload, a.provider_response, a.status, a.attempt_count, a.max_attempts,
       a.queued_at, a.first_attempt_at, a.last_attempt_at, a.next_retry_at, a.sent_at,
-      a.last_error, a.last_error_code, a.created_at, a.updated_at,
+      a.reservation_token, a.reserved_until, a.last_error, a.last_error_code, a.created_at, a.updated_at,
       m.text as message_text, m.sender_type, m.message_type,
       t.external_username, t.external_user_id, t.customer_name
     from inbox_outbound_attempts a

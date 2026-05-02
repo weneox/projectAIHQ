@@ -1,22 +1,13 @@
 import { cfg } from "../config.js";
-import { deliverChannelOutbound } from "../services/channelDelivery.js";
-import {
-  classifyMetaGatewayFailure,
-  classifyTelegramDeliveryFailure,
-} from "../services/durableExecutionCore.js";
+import { enqueueChannelOutboundExecution } from "../services/durableExecutionService.js";
 import {
   getMessageById,
   getThreadById,
-  listOutboundAttemptCorrelationsByMessageIds,
   listRetryableOutboundAttempts,
-  markOutboundAttemptDead,
   markOutboundAttemptFailed,
-  markOutboundAttemptSending,
-  markOutboundAttemptSent,
+  scheduleOutboundRetry,
   updateOutboundMessageDeliveryFailure,
-  updateOutboundMessageProviderId,
 } from "../routes/api/inbox/repository.js";
-import { withMessageOutboundAttemptCorrelation } from "../routes/api/inbox/shared.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
@@ -85,54 +76,6 @@ function resolveRecipientId({ attempt = {}, thread = {}, message = {} } = {}) {
     s(thread?.external_user_id) ||
     ""
   );
-}
-
-function classifyDeliveryFailure({ provider = "", delivery = {} } = {}) {
-  try {
-    if (provider === TELEGRAM_PROVIDER) {
-      const failure = classifyTelegramDeliveryFailure(delivery);
-      return {
-        retryable: Boolean(failure?.retryable),
-        status: Number(failure?.status ?? delivery?.status ?? 0),
-        errorCode: s(
-          failure?.errorCode || delivery?.reasonCode || "telegram_delivery_failed"
-        ),
-        errorMessage: s(failure?.errorMessage || delivery?.error || "telegram send failed"),
-        classification: s(failure?.classification || "telegram_delivery_failure"),
-      };
-    }
-
-    const failure = classifyMetaGatewayFailure(delivery);
-    return {
-      retryable: Boolean(failure?.retryable),
-      status: Number(failure?.status ?? delivery?.status ?? 0),
-      errorCode: s(
-        failure?.errorCode || delivery?.reasonCode || String(delivery?.status || "")
-      ),
-      errorMessage: s(failure?.errorMessage || delivery?.error || "gateway send failed"),
-      classification: s(failure?.classification || "meta_gateway_failure"),
-    };
-  } catch {
-    const status = Number(delivery?.status || 0);
-    const reasonCode = s(delivery?.reasonCode || "delivery_failed");
-    const errorMessage = s(delivery?.error || "delivery failed");
-    const retryable =
-      status === 0 ||
-      status === 429 ||
-      status >= 500 ||
-      reasonCode === "telegram_rate_limited" ||
-      reasonCode === "telegram_request_timeout" ||
-      reasonCode === "telegram_network_error" ||
-      reasonCode === "telegram_upstream_unavailable";
-
-    return {
-      retryable,
-      status,
-      errorCode: reasonCode,
-      errorMessage,
-      classification: "delivery_failure",
-    };
-  }
 }
 
 function buildLegacyOutboundPayload({
@@ -235,19 +178,7 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
   }
 
   const provider = resolveAttemptProvider({ attempt, thread, message });
-  const sending = await markOutboundAttemptSending(db, attempt.id, attempt?.tenant_key);
-  if (!sending?.id) return;
-
-  try {
-    emitRealtimeEvent(wsHub, {
-      type: "inbox.outbound.attempt.updated",
-      audience: "operator",
-      tenantKey: sending?.tenant_key || attempt?.tenant_key,
-      attempt: sending,
-    });
-  } catch {}
-
-  const payload = buildLegacyOutboundPayload({
+  const durablePayload = buildLegacyOutboundPayload({
     attempt,
     thread,
     message,
@@ -255,122 +186,50 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     defaultTenantKey: workerCfg?.defaultTenantKey,
   });
 
-  const delivery = await deliverChannelOutbound({
+  const queued = await enqueueChannelOutboundExecution({
     db,
-    execution: {
+    tenantId: thread?.tenant_id || message?.tenant_id || "",
+    tenantKey: attempt?.tenant_key || message?.tenant_key || "",
+    channel: attempt?.channel || thread?.channel || "",
+    provider,
+    threadId: attempt?.thread_id || "",
+    messageId: attempt?.message_id || "",
+    payload: durablePayload,
+    safeMetadata: {
       provider,
-      tenant_id: thread?.tenant_id || message?.tenant_id || "",
-      tenant_key: attempt?.tenant_key || message?.tenant_key || "",
-      channel: attempt?.channel || thread?.channel || "",
-      thread_id: attempt?.thread_id || "",
-      message_id: attempt?.message_id || "",
+      inboxOutboundAttemptId: s(attempt?.id),
+      threadId: s(attempt?.thread_id),
+      messageId: s(attempt?.message_id),
+      recipientId: resolveRecipientId({ attempt, thread, message }),
+      legacyOutboundRetryBridge: true,
     },
-    payload,
-    message,
-    thread,
+    correlationIds: {
+      threadId: s(attempt?.thread_id),
+      messageId: s(attempt?.message_id),
+      outboundAttemptId: s(attempt?.id),
+      legacyOutboundRetryBridge: true,
+    },
+    maxAttempts: Math.max(1, Number(attempt?.max_attempts || 5)),
   });
 
-  if (!delivery.ok) {
-    const failure = classifyDeliveryFailure({ provider, delivery });
-
-    const failed = failure.retryable
-      ? await markOutboundAttemptFailed({
-          db,
-          attemptId: attempt.id,
-          tenantKey: attempt?.tenant_key,
-          error: failure.errorMessage,
-          errorCode: failure.errorCode,
-          providerResponse: delivery.providerResponse || delivery.json || {},
-          retryDelaySeconds: 120,
-        })
-      : await markOutboundAttemptDead(db, attempt.id, attempt?.tenant_key);
-
-    await updateOutboundMessageDeliveryFailure({
-      db,
-      messageId: message.id,
-      status: failure.retryable ? "failed" : "dead",
-      error: failure.errorMessage,
-      errorCode: failure.errorCode,
-      providerResponse: delivery.providerResponse || delivery.json || {},
-      tenantKey: attempt?.tenant_key,
-    });
-
-    try {
-      await writeAudit(db, {
-        actor: "system",
-        action: "inbox.outbound.worker_failed",
-        objectType: "inbox_outbound_attempt",
-        objectId: String(attempt.id),
-        meta: {
-          provider,
-          threadId: String(attempt.thread_id || ""),
-          messageId: String(attempt.message_id || ""),
-          status: String(failed?.status || ""),
-          gatewayStatus: Number(delivery?.status || 0),
-          error: String(failure.errorMessage || ""),
-          errorCode: String(failure.errorCode || ""),
-        },
-      });
-    } catch {}
-
-    logger.warn("outbound_retry.attempt_failed", {
-      provider,
-      status: failure.status,
-      retryable: failure.retryable,
-      classification: failure.classification,
-      error: s(failure.errorMessage || ""),
-      errorCode: s(failure.errorCode || ""),
-    });
-
-    try {
-      emitRealtimeEvent(wsHub, {
-        type: "inbox.outbound.attempt.updated",
-        audience: "operator",
-        tenantKey: failed?.tenant_key || attempt?.tenant_key,
-        attempt: failed,
-      });
-    } catch {}
-
-    return;
-  }
-
-  const providerResponse = obj(delivery.providerResponse);
-  const providerMessageId = s(delivery.providerMessageId) || null;
-
-  const sent = await markOutboundAttemptSent({
+  const deferred = await scheduleOutboundRetry({
     db,
     attemptId: attempt.id,
     tenantKey: attempt?.tenant_key,
-    providerMessageId,
-    providerResponse,
-  });
-
-  const updatedMessage = await updateOutboundMessageProviderId({
-    db,
-    messageId: message.id,
-    providerMessageId,
-    providerResponse,
-    tenantKey: attempt?.tenant_key,
+    retryDelaySeconds: 3600,
   });
 
   try {
-    logger.info("outbound_retry.attempt_sent", {
-      provider,
-      providerMessageId: s(providerMessageId),
-      providerStatus: Number(delivery?.status || 0),
-    });
-
     await writeAudit(db, {
       actor: "system",
-      action: "inbox.outbound.worker_sent",
+      action: "inbox.outbound.deferred_to_durable_execution",
       objectType: "inbox_outbound_attempt",
       objectId: String(attempt.id),
       meta: {
         provider,
         threadId: String(attempt.thread_id || ""),
         messageId: String(attempt.message_id || ""),
-        providerMessageId: String(providerMessageId || ""),
-        providerStatus: Number(delivery?.status || 0),
+        durableExecutionId: String(queued?.id || ""),
       },
     });
   } catch {}
@@ -379,32 +238,15 @@ async function processAttempt({ db, wsHub, attempt, workerCfg }) {
     emitRealtimeEvent(wsHub, {
       type: "inbox.outbound.attempt.updated",
       audience: "operator",
-      tenantKey: sent?.tenant_key || attempt?.tenant_key,
-      attempt: sent,
+      tenantKey: deferred?.tenant_key || attempt?.tenant_key,
+      attempt: deferred || attempt,
     });
   } catch {}
 
-  try {
-    const correlations = await listOutboundAttemptCorrelationsByMessageIds(
-      db,
-      [message.id],
-      { threadId: message.thread_id, tenantKey: attempt?.tenant_key || message?.tenant_key }
-    );
-    const correlatedMessage = withMessageOutboundAttemptCorrelation(
-      updatedMessage || message,
-      correlations.get(message.id) || null
-    );
-    emitRealtimeEvent(wsHub, {
-      type: "inbox.message.updated",
-      audience: "operator",
-      tenantKey:
-        correlatedMessage?.tenant_key ||
-        message?.tenant_key ||
-        attempt?.tenant_key,
-      threadId: String(correlatedMessage?.thread_id || message.thread_id || ""),
-      message: correlatedMessage,
-    });
-  } catch {}
+  logger.info("outbound_retry.deferred_to_durable_execution", {
+    provider,
+    durableExecutionId: s(queued?.id),
+  });
 }
 
 export function startOutboundRetryWorker({ db, wsHub }) {

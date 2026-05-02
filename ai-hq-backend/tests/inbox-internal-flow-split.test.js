@@ -122,6 +122,7 @@ test("inbox ingest duplicate handling short-circuits before runtime and brain or
       if (sql === "begin" || sql === "commit") return { rows: [] };
       if (sql.includes("from tenant_usage_daily")) return { rows: [] };
       if (sql.includes("insert into tenant_usage_daily")) return { rows: [{}] };
+      if (sql.includes("update tenant_usage_daily")) return { rows: [{}] };
       if (sql.includes("from tenants")) {
         return {
           rows: [
@@ -244,6 +245,7 @@ test("inbox ingest treats insert-time unique collisions as canonical duplicates"
       if (sql === "begin" || sql === "rollback") return { rows: [] };
       if (sql.includes("from tenant_usage_daily")) return { rows: [] };
       if (sql.includes("insert into tenant_usage_daily")) return { rows: [{}] };
+      if (sql.includes("update tenant_usage_daily")) return { rows: [{}] };
       if (sql.includes("from tenants")) {
         return { rows: [{ id: thread.tenant_id, tenant_key: "acme" }] };
       }
@@ -489,6 +491,7 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
       if (sql === "begin" || sql === "commit") return { rows: [] };
       if (sql.includes("from tenant_usage_daily")) return { rows: [] };
       if (sql.includes("insert into tenant_usage_daily")) return { rows: [{}] };
+      if (sql.includes("update tenant_usage_daily")) return { rows: [{}] };
       if (sql.includes("tenant_ai_policies")) {
         return {
           rows: [{ tenant_key: "acme", mode: "auto", publish_policy: { launchApproved: true } }],

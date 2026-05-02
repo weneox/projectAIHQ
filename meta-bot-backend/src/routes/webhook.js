@@ -1104,7 +1104,7 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
       ...summarizeInbound(ev),
       dedupeKey: dedupe.key,
     });
-    return;
+    return { ok: true, duplicate: true };
   }
 
   const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
@@ -1114,7 +1114,11 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
       error: tenantCtx.error,
       dedupeKey: dedupe.key,
     });
-    return;
+    return {
+      ok: false,
+      status: 424,
+      error: tenantCtx.error || "tenant_resolution_failed",
+    };
   }
 
   const enrichedEvent = await enrichInboundEventProfile(ev, tenantCtx, requestLogger);
@@ -1150,7 +1154,11 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
       error: s(out?.error),
       responsePreview: safeJsonPreview(out?.json),
     });
-    return;
+    return {
+      ok: false,
+      status: Number(out?.status || 502),
+      error: s(out?.error || "aihq_forward_failed"),
+    };
   }
 
   const actions = extractActionsFromAihqResponse(out?.json);
@@ -1159,7 +1167,7 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
       ...baseTrace,
       resolvedTenantKey,
     });
-    return;
+    return { ok: true, queued: false };
   }
 
   requestLogger.info("meta.webhook.actions.queued_by_aihq", {
@@ -1169,6 +1177,7 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     actionCount: actions.length,
     executionPath: "aihq_durable_queue",
   });
+  return { ok: true, queued: true };
 }
 
 async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
@@ -1185,7 +1194,7 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
       ...summarizeInbound(ev),
       dedupeKey: dedupe.key,
     });
-    return;
+    return { ok: true, duplicate: true };
   }
 
   const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
@@ -1195,7 +1204,11 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
       error: tenantCtx.error,
       dedupeKey: dedupe.key,
     });
-    return;
+    return {
+      ok: false,
+      status: 424,
+      error: tenantCtx.error || "tenant_resolution_failed",
+    };
   }
 
   const enrichedEvent = await enrichInboundEventProfile(ev, tenantCtx, requestLogger);
@@ -1231,7 +1244,11 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
       error: s(out?.error),
       responsePreview: safeJsonPreview(out?.json),
     });
-    return;
+    return {
+      ok: false,
+      status: Number(out?.status || 502),
+      error: s(out?.error || "aihq_forward_failed"),
+    };
   }
 
   const actions = extractActionsFromAihqResponse(out?.json);
@@ -1240,7 +1257,7 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
       ...baseTrace,
       resolvedTenantKey,
     });
-    return;
+    return { ok: true, queued: false };
   }
 
   requestLogger.info("meta.webhook.comment_actions.queued_by_aihq", {
@@ -1249,6 +1266,7 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     actionCount: actions.length,
     executionPath: "aihq_durable_queue",
   });
+  return { ok: true, queued: true };
 }
 
 function verifyWebhookChallenge(req, res) {
@@ -1291,6 +1309,8 @@ async function receiveWebhook(req, res) {
     object: s(body?.object || ""),
   });
 
+  const failures = [];
+
   for (const ev of events) {
     const safeEvent = normalizeObj(ev);
 
@@ -1305,12 +1325,26 @@ async function receiveWebhook(req, res) {
 
     try {
       if (lower(safeEvent?.eventType) === "comment") {
-        await handleSupportedCommentEvent(safeEvent, body, requestContext);
+        const result = await handleSupportedCommentEvent(safeEvent, body, requestContext);
+        if (result?.ok === false) {
+          failures.push({
+            eventType: "comment",
+            status: Number(result.status || 502),
+            error: s(result.error || "comment_event_failed"),
+          });
+        }
         continue;
       }
 
       if (lower(safeEvent?.eventType) === "text") {
-        await handleSupportedTextEvent(safeEvent, body, requestContext);
+        const result = await handleSupportedTextEvent(safeEvent, body, requestContext);
+        if (result?.ok === false) {
+          failures.push({
+            eventType: "text",
+            status: Number(result.status || 502),
+            error: s(result.error || "text_event_failed"),
+          });
+        }
         continue;
       }
 
@@ -1320,12 +1354,32 @@ async function receiveWebhook(req, res) {
         ...summarizeInbound(safeEvent),
       });
     } catch (error) {
+      failures.push({
+        eventType: s(safeEvent?.eventType || "unknown"),
+        status: 500,
+        error: s(error?.message || error || "event_unhandled_error"),
+      });
       logger.error("meta.webhook.event.unhandled_error", error, {
         requestId: requestContext.requestId,
         correlationId: requestContext.correlationId,
         ...summarizeInbound(safeEvent),
       });
     }
+  }
+
+  if (failures.length) {
+    const failureStatus = Number(failures[0]?.status || 502);
+    const status =
+      Number.isFinite(failureStatus) && failureStatus >= 400 && failureStatus <= 599
+        ? failureStatus
+        : 502;
+    return res.status(status).json({
+      ok: false,
+      received: false,
+      events: events.length,
+      failedEvents: failures.length,
+      failures,
+    });
   }
 
   return res.status(200).json({

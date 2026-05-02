@@ -441,7 +441,10 @@ test("meta webhook fails closed before automation when projected runtime authori
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 424);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.failedEvents, 1);
+  assert.equal(res.body?.failures?.[0]?.error, "runtime_authority_unavailable");
   assert.equal(seenUrls.length, 1);
   assert.match(seenUrls[0], /\/api\/tenants\/resolve-channel\?/);
 });

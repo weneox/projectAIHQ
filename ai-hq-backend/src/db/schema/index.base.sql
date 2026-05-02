@@ -47,3 +47,4 @@
 \i ./99_inbox_threads_telegram_channel_check_patch.sql
 \i ./100_inbox_threads_allow_telegram_channel.sql
 \i ./101_tenant_decision_events.sql
+\i ./102_distributed_idempotency_and_quota_reservations.sql

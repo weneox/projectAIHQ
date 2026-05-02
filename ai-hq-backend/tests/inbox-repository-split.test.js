@@ -200,15 +200,16 @@ test("outbound attempt persistence module still keeps payload and tenant routing
             id: "33333333-3333-4333-8333-333333333333",
             message_id: params[0],
             thread_id: params[1],
-            tenant_key: params[2],
-            channel: params[3],
-            provider: params[4],
-            recipient_id: params[5],
-            payload: params[6] ? JSON.parse(params[6]) : {},
+            tenant_id: params[2],
+            tenant_key: params[3],
+            channel: params[4],
+            provider: params[5],
+            recipient_id: params[6],
+            payload: params[7] ? JSON.parse(params[7]) : {},
             provider_response: {},
-            status: params[7],
+            status: params[8],
             attempt_count: 0,
-            max_attempts: params[8],
+            max_attempts: params[9],
             queued_at: "2026-03-27T00:00:00.000Z",
             created_at: "2026-03-27T00:00:00.000Z",
             updated_at: "2026-03-27T00:00:00.000Z",
@@ -351,7 +352,7 @@ test("outbound attempt sending only claims retry-eligible rows", async () => {
             message_id: "44444444-4444-4444-8444-444444444444",
             thread_id: "55555555-5555-4555-8555-555555555555",
             tenant_key: "acme",
-            status: "sending",
+            status: "reserved",
             attempt_count: 1,
             max_attempts: 5,
             payload: {},
@@ -368,8 +369,8 @@ test("outbound attempt sending only claims retry-eligible rows", async () => {
     "acme"
   );
 
-  assert.equal(attempt?.status, "sending");
-  assert.match(capturedSql, /status in \('queued','failed','retrying'\)/);
+  assert.equal(attempt?.status, "reserved");
+  assert.match(capturedSql, /status in \('pending','queued','failed','retrying'\)/);
   assert.match(capturedSql, /attempt_count, 0\) < coalesce\(max_attempts, 5\)/);
 });
 

@@ -1170,13 +1170,17 @@ export function createTenantSourcesHelpers({ db }) {
         with claimable as (
           select id
           from tenant_source_sync_runs
-          where (
-            status = 'queued'
-            and coalesce(next_retry_at, now()) <= now()
-          ) or (
-            status = 'running'
-            and lease_expires_at is not null
-            and lease_expires_at <= now()
+          where nullif(tenant_key, '') is not null
+          and tenant_id is not null
+          and (
+            (
+              status = 'queued'
+              and coalesce(next_retry_at, now()) <= now()
+            ) or (
+              status = 'running'
+              and lease_expires_at is not null
+              and lease_expires_at <= now()
+            )
           )
           order by
             case when status = 'queued' then 0 else 1 end,

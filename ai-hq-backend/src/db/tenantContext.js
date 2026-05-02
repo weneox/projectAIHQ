@@ -25,6 +25,7 @@ const tenantContextStorage = new AsyncLocalStorage();
 
 const TENANT_SCOPED_TABLES = [
   "comments",
+  "external_idempotency_keys",
   "inbox_threads",
   "inbox_messages",
   "inbox_thread_state",
@@ -55,6 +56,7 @@ const TENANT_SCOPED_TABLES = [
   "tenant_setup_review_events",
   "tenant_setup_review_sessions",
   "tenant_source_artifacts",
+  "tenant_source_sync_runs",
   "tenant_source_runs",
   "tenant_sources",
   "tenant_truth_versions",
