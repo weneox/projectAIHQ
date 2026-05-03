@@ -51,6 +51,35 @@ const PHASE_TWO_SURFACES = [
   "whatsapp",
 ];
 
+export const DEFAULT_INTERNAL_SERVICE = "meta-bot-backend";
+
+export function buildInternalServiceHeaders({
+  internalToken = "",
+  audience = "",
+  internalService = DEFAULT_INTERNAL_SERVICE,
+  acceptJson = false,
+} = {}) {
+  const headers = {};
+
+  if (acceptJson) {
+    headers.accept = "application/json";
+  }
+
+  if (s(internalToken)) {
+    headers["x-internal-token"] = s(internalToken);
+  }
+
+  if (s(audience)) {
+    headers["x-internal-audience"] = s(audience);
+  }
+
+  if (s(internalService)) {
+    headers["x-internal-service"] = s(internalService);
+  }
+
+  return headers;
+}
+
 export function buildLaunchPostureUrl(
   baseUrl = "",
   { internal = true, tenantKey = "", tenantId = "" } = {}
@@ -97,28 +126,15 @@ export function buildLaunchPostureHeaders({
   internalToken = "",
   sessionCookie = "",
   audience = "aihq-backend.launch-posture",
-  internalService = "meta-bot-backend",
+  internalService = DEFAULT_INTERNAL_SERVICE,
   internal = true,
 } = {}) {
-  const headers = {
-    accept: "application/json",
-  };
-
-  if (internal && s(internalToken)) {
-    headers["x-internal-token"] = s(internalToken);
-  }
-
-  if (internal && s(audience)) {
-    headers["x-internal-audience"] = s(audience);
-  }
-
-  if (internal && s(internalService)) {
-    headers["x-internal-service"] = s(internalService);
-  }
-
-  if (internal && s(internalService)) {
-    headers["x-internal-service"] = s(internalService);
-  }
+  const headers = buildInternalServiceHeaders({
+    internalToken: internal ? internalToken : "",
+    audience: internal ? audience : "",
+    internalService: internal ? internalService : "",
+    acceptJson: true,
+  });
 
   if (s(sessionCookie)) {
     headers.cookie = s(sessionCookie);

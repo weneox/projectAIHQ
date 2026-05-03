@@ -131,7 +131,7 @@ Required for `neox-frontend` production / CI build:
 Required for production post-deploy launch-lane smoke:
 
 - `AIHQ_PROD_BASE_URL`
-- `AIHQ_PROD_INTERNAL_TOKEN`
+- `AIHQ_PROD_INTERNAL_TOKEN_META_BOT`
 - `WEBSITE_LANE_TENANT_KEY`
 - optionally `WEBSITE_LANE_DOMAIN`
 - `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1`

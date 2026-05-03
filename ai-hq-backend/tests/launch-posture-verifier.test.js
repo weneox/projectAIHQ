@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildInternalServiceHeaders,
   buildLaunchPostureHeaders,
   buildLaunchPostureUrl,
   classifyLaunchPosture,
@@ -81,6 +82,17 @@ test("launch posture verifier builds internal route URL and headers by default",
     "x-internal-service": "meta-bot-backend",
   });
   assert.deepEqual(
+    buildInternalServiceHeaders({
+      internalToken: "secret",
+      audience: "aihq-backend.diagnostics",
+    }),
+    {
+      "x-internal-token": "secret",
+      "x-internal-audience": "aihq-backend.diagnostics",
+      "x-internal-service": "meta-bot-backend",
+    }
+  );
+  assert.deepEqual(
     buildLaunchPostureHeaders({
       internal: false,
       sessionCookie: "aihq_user=session-token",
@@ -130,4 +142,3 @@ test("launch posture verifier rejects phase-2 surface leaks", () => {
   assert.ok(result.details.leakedSurfaces.includes("voice"));
   assert.ok(result.details.leakedSurfaces.includes("gmail"));
 });
-

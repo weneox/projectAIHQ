@@ -160,11 +160,25 @@ function summarizeWorkerFleet(json = {}) {
 
 function summarizeIncidents(json = {}) {
   const incidents = json?.incidents || json?.operational?.incidents || {};
+  const active = incidents?.active || incidents?.current || {};
   return {
-    status: s(incidents.status),
-    total: n(incidents.total),
-    errorCount: n(incidents.errorCount),
-    warnCount: n(incidents.warnCount),
+    status: s(incidents.activeStatus || active.status || incidents.status),
+    total: n(active.total ?? incidents.activeTotal ?? incidents.total),
+    errorCount: n(
+      active.errorCount ?? incidents.activeErrorCount ?? incidents.errorCount
+    ),
+    warnCount: n(
+      active.warnCount ?? incidents.activeWarnCount ?? incidents.warnCount
+    ),
+    activeWindowStartedAt: s(
+      incidents.activeWindowStartedAt ||
+        incidents.windowStartedAt ||
+        incidents.window?.startedAt
+    ),
+    historyStatus: s(incidents.history?.status || incidents.historicalStatus),
+    historyErrorCount: n(
+      incidents.history?.errorCount ?? incidents.historicalErrorCount
+    ),
   };
 }
 
@@ -322,6 +336,9 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         requiredUnavailableCount: workers.requiredUnavailableCount,
         incidentStatus: incidents.status,
         incidentErrorCount: incidents.errorCount,
+        incidentActiveWindowStartedAt: incidents.activeWindowStartedAt,
+        incidentHistoryStatus: incidents.historyStatus,
+        incidentHistoryErrorCount: incidents.historyErrorCount,
         failOnDegraded,
       },
       health.status

@@ -300,6 +300,7 @@ test("app launch posture route remains app-authenticated even with internal toke
       headers: {
         host: "api.example.test",
         "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
         "x-internal-audience": "aihq-backend.launch-posture",
       },
       protocol: "https",
@@ -363,6 +364,83 @@ test("internal launch posture route rejects missing and wrong internal token", a
   }
 });
 
+test("internal launch posture route requires scoped Meta service token in production", async () => {
+  const previousAppEnv = cfg.app.env;
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousProcessAppEnv = process.env.APP_ENV;
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+
+  try {
+    cfg.app.env = "production";
+    process.env.NODE_ENV = "production";
+    process.env.APP_ENV = "production";
+    cfg.security.aihqInternalToken = "global-internal-secret";
+    cfg.security.aihqInternalMetaBotToken = "meta-scoped-secret";
+
+    const router = apiRouter({
+      db: null,
+      wsHub: { broadcast() {} },
+      audit: null,
+      dbDisabled: true,
+    });
+
+    const globalToken = await invokeRouter(
+      router,
+      "get",
+      "/internal/launch/posture",
+      {
+        headers: {
+          host: "api.example.test",
+          "x-internal-token": "global-internal-secret",
+          "x-internal-service": "meta-bot-backend",
+          "x-internal-audience": "aihq-backend.launch-posture",
+        },
+        query: { tenantKey: "acme" },
+        protocol: "https",
+      }
+    );
+
+    const scopedToken = await invokeRouter(
+      router,
+      "get",
+      "/internal/launch/posture",
+      {
+        headers: {
+          host: "api.example.test",
+          "x-internal-token": "meta-scoped-secret",
+          "x-internal-service": "meta-bot-backend",
+          "x-internal-audience": "aihq-backend.launch-posture",
+        },
+        query: { tenantKey: "acme" },
+        protocol: "https",
+      }
+    );
+
+    assert.equal(globalToken.res.statusCode, 403);
+    assert.equal(
+      globalToken.res.body?.reason,
+      "scoped internal service token required"
+    );
+    assert.equal(scopedToken.res.statusCode, 200);
+    assert.equal(scopedToken.res.body?.version, "launch_posture_v1");
+  } finally {
+    cfg.app.env = previousAppEnv;
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousProcessAppEnv === undefined) {
+      delete process.env.APP_ENV;
+    } else {
+      process.env.APP_ENV = previousProcessAppEnv;
+    }
+  }
+});
+
 test("internal launch posture route returns launch posture contract with valid internal token", async () => {
   const previousInternalToken = cfg.security.aihqInternalToken;
 
@@ -384,6 +462,7 @@ test("internal launch posture route returns launch posture contract with valid i
         headers: {
           host: "api.example.test",
           "x-internal-token": "internal-secret",
+          "x-internal-service": "meta-bot-backend",
           "x-internal-audience": "aihq-backend.launch-posture",
         },
         query: { tenantKey: "acme" },

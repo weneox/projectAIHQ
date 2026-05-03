@@ -1,3 +1,6 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
 import {
   buildMissingWebsiteLaneTenantKeyResult,
   buildWebsiteLaneHeaders,
@@ -5,6 +8,7 @@ import {
   classifyWebsiteLaneHealth,
 } from "./website-lane-verifier.mjs";
 import {
+  buildInternalServiceHeaders,
   buildLaunchPostureHeaders,
   buildLaunchPostureUrl,
   classifyLaunchPosture,
@@ -177,13 +181,29 @@ function summarizeWorkerFleet(json = {}) {
   };
 }
 
-function summarizeIncidents(json = {}) {
+export function summarizeIncidents(json = {}) {
   const incidents = json?.incidents || json?.operational?.incidents || {};
+  const active = incidents?.active || incidents?.current || {};
   return {
-    status: s(incidents.status).toLowerCase(),
-    total: n(incidents.total),
-    errorCount: n(incidents.errorCount),
-    warnCount: n(incidents.warnCount),
+    status: s(
+      incidents.activeStatus || active.status || incidents.status
+    ).toLowerCase(),
+    total: n(active.total ?? incidents.activeTotal ?? incidents.total),
+    errorCount: n(
+      active.errorCount ?? incidents.activeErrorCount ?? incidents.errorCount
+    ),
+    warnCount: n(
+      active.warnCount ?? incidents.activeWarnCount ?? incidents.warnCount
+    ),
+    activeWindowStartedAt: s(
+      incidents.activeWindowStartedAt ||
+        incidents.windowStartedAt ||
+        incidents.window?.startedAt
+    ),
+    historyStatus: s(incidents.history?.status || incidents.historicalStatus),
+    historyErrorCount: n(
+      incidents.history?.errorCount ?? incidents.historicalErrorCount
+    ),
   };
 }
 
@@ -333,7 +353,7 @@ function getRequiredEnvIssues({
   return issues;
 }
 
-function classifyAihqReadiness(readiness = {}) {
+export function classifyAihqReadiness(readiness = {}) {
   const blockerReasonCodes = uniqStrings(readiness.blockerReasonCodes || []);
   const fatalBlockerReasonCodes = blockerReasonCodes.filter(
     (code) => !TOLERABLE_AIHQ_READINESS_BLOCKER_CODES.has(code)
@@ -363,6 +383,22 @@ function classifyAihqReadiness(readiness = {}) {
   };
 }
 
+export function isAihqDegradedForAcceptance({
+  status = "",
+  readinessPolicy = {},
+  workers = {},
+  incidents = {},
+} = {}) {
+  const degradedFromReadiness =
+    s(status).toLowerCase() === "degraded" && !readinessPolicy.tolerableOnly;
+
+  return (
+    degradedFromReadiness ||
+    s(workers.status).toLowerCase() === "degraded" ||
+    s(incidents.status).toLowerCase() === "degraded"
+  );
+}
+
 async function verifyAihqBuildIdentity({
   baseUrl,
   internalToken,
@@ -390,7 +426,12 @@ async function verifyAihqBuildIdentity({
     ];
   }
 
-  const headers = internalToken ? { "x-internal-token": internalToken } : {};
+  const headers = internalToken
+    ? buildInternalServiceHeaders({
+        internalToken,
+        audience: "aihq-backend.diagnostics",
+      })
+    : {};
   let lastResponse = null;
   let lastUrl = "";
 
@@ -475,11 +516,12 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
 
   const degradedFromReadiness =
     status === "degraded" && !readinessPolicy.tolerableOnly;
-
-  const degraded =
-    degradedFromReadiness ||
-    workers.status === "degraded" ||
-    incidents.status === "degraded";
+  const degraded = isAihqDegradedForAcceptance({
+    status,
+    readinessPolicy,
+    workers,
+    incidents,
+  });
 
   return [
     buildResult(
@@ -542,6 +584,9 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         requiredUnavailableCount: workers.requiredUnavailableCount,
         incidentStatus: incidents.status,
         incidentErrorCount: incidents.errorCount,
+        incidentActiveWindowStartedAt: incidents.activeWindowStartedAt,
+        incidentHistoryStatus: incidents.historyStatus,
+        incidentHistoryErrorCount: incidents.historyErrorCount,
         failOnDegraded,
       },
       health.status
@@ -1096,7 +1141,16 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((error) => {
-  printLine("FAIL", "prod_spine_smoke", s(error?.message || error));
-  process.exit(1);
-});
+function isDirectRun(metaUrl = "") {
+  return (
+    Boolean(process.argv[1]) &&
+    pathToFileURL(path.resolve(process.argv[1])).href === metaUrl
+  );
+}
+
+if (isDirectRun(import.meta.url)) {
+  main().catch((error) => {
+    printLine("FAIL", "prod_spine_smoke", s(error?.message || error));
+    process.exit(1);
+  });
+}

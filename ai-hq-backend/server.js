@@ -58,7 +58,7 @@ import {
   listRecentRuntimeIncidents,
   pruneRuntimeIncidentTrail,
   persistRuntimeIncident,
-  summarizeRuntimeIncidents,
+  summarizeRuntimeIncidentHealthWindow,
 } from "./src/services/runtimeIncidentTrail.js";
 import { createDurableExecutionHelpers } from "./src/db/helpers/durableExecutions.js";
 import {
@@ -232,6 +232,8 @@ async function main() {
       "Content-Type",
       "Authorization",
       "x-internal-token",
+      "x-internal-service",
+      "x-internal-audience",
       "x-webhook-token",
       "x-callback-token",
       "x-debug-token",
@@ -426,6 +428,17 @@ async function main() {
       warnCount: 0,
       latestOccurredAt: "",
       sinceHours: 6,
+      scope: "current_runtime",
+      activeWindowStartedAt: buildInfo.startedAt,
+      history: {
+        status: "clear",
+        total: 0,
+        errorCount: 0,
+        warnCount: 0,
+        latestOccurredAt: "",
+        sinceHours: 6,
+        staleBeforeActiveWindowCount: 0,
+      },
       services: [],
       reasonCodes: [],
     };
@@ -509,9 +522,13 @@ async function main() {
         limit: 10,
         sinceHours: 6,
       });
-      const incidentSummary = summarizeRuntimeIncidents(recentIncidents, {
-        sinceHours: 6,
-      });
+      const incidentSummary = summarizeRuntimeIncidentHealthWindow(
+        recentIncidents,
+        {
+          activeWindowStartedAt: buildInfo.startedAt,
+          sinceHours: 6,
+        }
+      );
 
       out.operational = {
         status: operational.status,

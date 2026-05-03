@@ -5,7 +5,7 @@ Run this immediately after a production deploy.
 ## Required environment
 
 - `AIHQ_BASE_URL`
-- `AIHQ_INTERNAL_TOKEN` for internal health/smoke headers
+- `AIHQ_INTERNAL_TOKEN` for internal smoke headers; in GitHub Actions this maps from the scoped `AIHQ_PROD_INTERNAL_TOKEN_META_BOT` secret and is sent with `x-internal-service: meta-bot-backend`
 - `AIHQ_FRONTEND_PROD_URL` for deployed AI HQ frontend browser smoke
 - `AIHQ_EXPECTED_RELEASE_SHA` for deployed backend/frontend build identity checks; GitHub Actions sets this to `github.sha`
 - optionally `AIHQ_LAUNCH_POSTURE_TENANT_KEY`; defaults to `WEBSITE_LANE_TENANT_KEY` for the internal launch posture smoke
@@ -30,7 +30,7 @@ website lane, and frontend release SHA checks still run and fail closed.
 The backend verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
 The frontend browser smoke fails closed if `AIHQ_FRONTEND_PROD_URL` is missing or is not an `http(s)` URL.
 In production CI, set `AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA=1`. Set `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1` only when backend deployment is actually expected, currently when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`; missing or mismatched `AIHQ_EXPECTED_RELEASE_SHA` then fails closed for the backend instead of proving only that an older backend deployment is healthy.
-The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with `AIHQ_INTERNAL_TOKEN`, so CI does not depend on expiring browser user sessions.
+The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with the scoped Meta service token and `x-internal-audience: aihq-backend.launch-posture`, so CI does not depend on expiring browser user sessions.
 If an app session cookie/token is supplied, the verifier also checks `GET /api/launch/posture` as an optional app-route verification.
 In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. In production CI, set `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` so a missing tenant key fails closed instead of producing false launch confidence.
 In production CI, set `POSTDEPLOY_STRICT_SIDECARS=1` and `PROD_SPINE_STRICT_SIDECARS=1`; missing Meta or Twilio sidecar base URLs then fail closed.

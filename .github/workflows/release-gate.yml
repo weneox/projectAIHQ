@@ -353,7 +353,7 @@ jobs:
       - name: Run production placeholder guard
         env:
           AIHQ_PROD_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
-          AIHQ_PROD_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_PROD_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
           META_BOT_PROD_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_PROD_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
@@ -653,7 +653,7 @@ jobs:
       - name: Validate production verification secrets
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
-          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
           META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
@@ -672,7 +672,7 @@ jobs:
           }
 
           require_secret "AIHQ_PROD_BASE_URL" "$AIHQ_BASE_URL"
-          require_secret "AIHQ_PROD_INTERNAL_TOKEN" "$AIHQ_INTERNAL_TOKEN"
+          require_secret "AIHQ_PROD_INTERNAL_TOKEN_META_BOT" "$AIHQ_INTERNAL_TOKEN"
           require_secret "AIHQ_FRONTEND_PROD_URL" "$AIHQ_FRONTEND_PROD_URL"
           require_secret "META_BOT_PROD_BASE_URL" "$META_BOT_BASE_URL"
           require_secret "TWILIO_VOICE_PROD_BASE_URL" "$TWILIO_VOICE_BASE_URL"
@@ -703,7 +703,7 @@ jobs:
         id: prod_spine_smoke
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
-          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
           AIHQ_LAUNCH_POSTURE_TENANT_KEY: ${{ secrets.AIHQ_LAUNCH_POSTURE_TENANT_KEY }}
           AIHQ_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
@@ -726,7 +726,7 @@ jobs:
         id: postdeploy_verify
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
-          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_LAUNCH_POSTURE_TENANT_KEY: ${{ secrets.AIHQ_LAUNCH_POSTURE_TENANT_KEY }}
           AIHQ_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
           AIHQ_USER_SESSION_TOKEN: ${{ secrets.AIHQ_PROD_USER_SESSION_TOKEN }}

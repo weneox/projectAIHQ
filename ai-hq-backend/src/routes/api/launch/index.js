@@ -70,6 +70,7 @@ export function launchRoutes({ db }) {
 export function launchInternalRoutes({ db }) {
   const r = express.Router();
   const requireLaunchPostureInternal = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
     allowedAudiences: ["aihq-backend.launch-posture"],
   });
 

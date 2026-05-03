@@ -167,7 +167,7 @@ GitHub Actions stores production secrets under these names and maps them into th
 - `RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK` only when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
 - `RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK` only when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`
 - `AIHQ_PROD_BASE_URL` -> `AIHQ_BASE_URL`
-- `AIHQ_PROD_INTERNAL_TOKEN` -> `AIHQ_INTERNAL_TOKEN`
+- `AIHQ_PROD_INTERNAL_TOKEN_META_BOT` -> `AIHQ_INTERNAL_TOKEN` for scoped smoke requests with `x-internal-service: meta-bot-backend`
 - `AIHQ_FRONTEND_PROD_URL` for the deployed AI HQ frontend browser smoke
 - `AIHQ_EXPECTED_RELEASE_SHA` set by GitHub Actions to `github.sha`; do not store this as a long-lived secret
 - `AIHQ_RELEASE_SHA` optional platform/build env override when the host does not expose its own commit SHA

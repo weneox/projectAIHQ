@@ -24,6 +24,7 @@ test("website lane verifier builds a scoped health URL and internal headers", ()
   assert.deepEqual(headers, {
     "x-internal-token": "token-1",
     "x-internal-audience": "aihq-backend.health.website-lane",
+    "x-internal-service": "meta-bot-backend",
   });
 });
 

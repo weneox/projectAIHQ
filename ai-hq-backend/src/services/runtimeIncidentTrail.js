@@ -8,6 +8,30 @@ function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
+function toTimeMs(value = "") {
+  const ms = Date.parse(s(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function normalizeIncidentList(incidents = []) {
+  return Array.isArray(incidents)
+    ? incidents.filter((item) => item && typeof item === "object")
+    : [];
+}
+
+function isIncidentAtOrAfter(incident = {}, windowStartedAt = "") {
+  const windowMs = toTimeMs(windowStartedAt);
+  if (windowMs === null) return true;
+
+  const occurredMs = toTimeMs(
+    incident.occurredAt ||
+      incident.occurred_at ||
+      incident.createdAt ||
+      incident.created_at
+  );
+  return occurredMs !== null && occurredMs >= windowMs;
+}
+
 export async function persistRuntimeIncident({ db, incident = {} } = {}) {
   if (!db?.query) return null;
   const helpers = createRuntimeIncidentHelpers({ db });
@@ -68,9 +92,7 @@ export async function pruneRuntimeIncidentTrail({
 }
 
 export function summarizeRuntimeIncidents(incidents = [], { sinceHours = 0 } = {}) {
-  const list = Array.isArray(incidents)
-    ? incidents.filter((item) => item && typeof item === "object")
-    : [];
+  const list = normalizeIncidentList(incidents);
   const errorCount = list.filter(
     (item) => lower(item.severity) === "error"
   ).length;
@@ -90,5 +112,37 @@ export function summarizeRuntimeIncidents(incidents = [], { sinceHours = 0 } = {
     reasonCodes: Array.from(
       new Set(list.map((item) => s(item.reasonCode)).filter(Boolean))
     ).slice(0, 10),
+  };
+}
+
+export function summarizeRuntimeIncidentHealthWindow(
+  incidents = [],
+  { activeWindowStartedAt = "", sinceHours = 0 } = {}
+) {
+  const list = normalizeIncidentList(incidents);
+  const activeList = s(activeWindowStartedAt)
+    ? list.filter((incident) =>
+        isIncidentAtOrAfter(incident, activeWindowStartedAt)
+      )
+    : list;
+  const activeSummary = summarizeRuntimeIncidents(activeList, { sinceHours });
+  const recentSummary = summarizeRuntimeIncidents(list, { sinceHours });
+
+  return {
+    ...activeSummary,
+    scope: s(activeWindowStartedAt) ? "current_runtime" : "recent_window",
+    activeWindowStartedAt: s(activeWindowStartedAt),
+    history: {
+      status: recentSummary.status,
+      total: recentSummary.total,
+      errorCount: recentSummary.errorCount,
+      warnCount: recentSummary.warnCount,
+      latestOccurredAt: recentSummary.latestOccurredAt,
+      sinceHours: recentSummary.sinceHours,
+      staleBeforeActiveWindowCount: Math.max(
+        0,
+        list.length - activeList.length
+      ),
+    },
   };
 }

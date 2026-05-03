@@ -17,7 +17,7 @@ function printLine(prefix, message, details = "") {
 
 const REQUIRED_ENV = [
   { name: "AIHQ_PROD_BASE_URL", type: "https_url" },
-  { name: "AIHQ_PROD_INTERNAL_TOKEN", type: "secret", minLength: 16 },
+  { name: "AIHQ_PROD_INTERNAL_TOKEN_META_BOT", type: "secret", minLength: 16 },
   { name: "AIHQ_FRONTEND_PROD_URL", type: "https_url" },
   { name: "META_BOT_PROD_BASE_URL", type: "https_url" },
   { name: "TWILIO_VOICE_PROD_BASE_URL", type: "https_url" },

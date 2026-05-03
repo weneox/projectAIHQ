@@ -1,3 +1,8 @@
+import {
+  DEFAULT_INTERNAL_SERVICE,
+  buildInternalServiceHeaders,
+} from "./launch-posture-verifier.mjs";
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -48,18 +53,13 @@ export function buildWebsiteLaneHealthUrl(
 export function buildWebsiteLaneHeaders({
   internalToken = "",
   audience = "aihq-backend.health.website-lane",
+  internalService = DEFAULT_INTERNAL_SERVICE,
 } = {}) {
-  const headers = {};
-
-  if (s(internalToken)) {
-    headers["x-internal-token"] = s(internalToken);
-  }
-
-  if (s(audience)) {
-    headers["x-internal-audience"] = s(audience);
-  }
-
-  return headers;
+  return buildInternalServiceHeaders({
+    internalToken,
+    audience,
+    internalService,
+  });
 }
 
 export function buildMissingWebsiteLaneTenantKeyResult({
