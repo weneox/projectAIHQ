@@ -172,6 +172,10 @@ jobs:
       ADMIN_PANEL_PASSCODE_HASH: ci-admin-passcode-hash
       USER_SESSION_SECRET: ${{ format('ci_user_session_secret_{0}_{1}_minimum_32_chars', github.run_id, github.run_attempt) }}
       AIHQ_INTERNAL_TOKEN: ${{ format('ci_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
+      AIHQ_INTERNAL_TOKEN_META_BOT: ${{ format('ci_meta_bot_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
+      AIHQ_INTERNAL_META_BOT_TOKEN: ${{ format('ci_meta_bot_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
+      AIHQ_INTERNAL_TOKEN_TWILIO_VOICE: ${{ format('ci_twilio_voice_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
+      AIHQ_INTERNAL_TWILIO_VOICE_TOKEN: ${{ format('ci_twilio_voice_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
       DEBUG_API_TOKEN: ci-debug-token
       CRON_SECRET: ci-cron-secret
       TENANT_SECRET_MASTER_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
