@@ -462,6 +462,7 @@ export function inboxHandlers({ db, wsHub }) {
   r.get("/inbox/threads/:id", async (req, res) => {
     const threadId = s(req.params.id);
     const tenantKey = getScopedTenantKey(req);
+    const tenantId = getScopedTenantId(req);
 
     if (!threadId) {
       return okJson(res, { ok: false, error: "threadId required" });
@@ -975,6 +976,7 @@ export function inboxHandlers({ db, wsHub }) {
   r.post("/inbox/threads/:id/messages", async (req, res) => {
     const threadId = s(req.params.id);
     const tenantKey = getScopedTenantKey(req);
+    const tenantId = getScopedTenantId(req);
     const direction = lower(req.body?.direction || "inbound") || "inbound";
     const senderType = lower(req.body?.senderType || "customer") || "customer";
     const externalMessageId =

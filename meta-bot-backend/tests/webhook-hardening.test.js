@@ -9,7 +9,7 @@ process.env.AIHQ_INTERNAL_TOKEN = "internal-meta-token";
 process.env.AIHQ_BASE_URL =
   process.env.AIHQ_BASE_URL || "https://aihq.example.test";
 
-const { readMetaWebhookAppSecret, signMetaBody } = await import("../src/config.js");
+const { AIHQ_INTERNAL_TOKEN, readMetaWebhookAppSecret, signMetaBody } = await import("../src/config.js");
 const { registerWebhookRoutes } = await import("../src/routes/webhook.js");
 const { internalOutboundRoutes } = await import("../src/routes/internal.outbound.js");
 const {
@@ -349,7 +349,7 @@ test("malformed internal outbound payload is rejected", async () => {
   const router = internalOutboundRoutes();
   const { res } = await invokeHandler(router, "post", "/internal/outbound/send", {
     headers: {
-      "x-internal-token": "internal-meta-token",
+      "x-internal-token": AIHQ_INTERNAL_TOKEN,
     },
     body: {
       tenantKey: "acme",

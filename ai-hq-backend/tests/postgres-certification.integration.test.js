@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -177,10 +177,15 @@ test(
       // reconcileStaleTenantUsageReservations uses FOR UPDATE SKIP LOCKED which
       // cannot see rows locked by the current transaction. We commit the usage
       // row first via a dedicated connection, run the reconciler, then clean up.
-      await client.query(
-        "update tenant_usage_daily set reserved_api_calls = 3, updated_at = now() - interval '1 hour' where tenant_id = $1::uuid",
-        [tenantA.id]
-      );
+      await client.query("alter table tenant_usage_daily disable trigger user");
+      try {
+        await client.query(
+          "update tenant_usage_daily set reserved_api_calls = 3, updated_at = now() - interval '1 hour' where tenant_id = $1::uuid",
+          [tenantA.id]
+        );
+      } finally {
+        await client.query("alter table tenant_usage_daily enable trigger user");
+      }
       await client.query("commit");
 
       const reconcileClient = await pool.connect();

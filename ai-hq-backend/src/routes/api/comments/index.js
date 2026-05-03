@@ -16,9 +16,9 @@ export function commentsRoutes({ db, wsHub }) {
   r.post("/comments/ingest", requireWebhookIngestionRateLimit, ingestCommentHandler({ db, wsHub }));
   r.get("/comments", requireOperatorSurfaceAccess, listCommentsHandler({ db }));
   r.get("/comments/:id", requireOperatorSurfaceAccess, getCommentHandler({ db }));
-  r.post("/comments/:id/review", reviewCommentHandler({ db, wsHub }));
-  r.post("/comments/:id/reply", replyCommentHandler({ db, wsHub }));
-  r.post("/comments/:id/ignore", ignoreCommentHandler({ db, wsHub }));
+  r.post("/comments/:id/review", requireOperatorSurfaceAccess, reviewCommentHandler({ db, wsHub }));
+  r.post("/comments/:id/reply", requireOperatorSurfaceAccess, replyCommentHandler({ db, wsHub }));
+  r.post("/comments/:id/ignore", requireOperatorSurfaceAccess, ignoreCommentHandler({ db, wsHub }));
 
   return r;
 }
