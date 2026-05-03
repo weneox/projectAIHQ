@@ -4,6 +4,7 @@ import {
   getOperationalReadinessSummary,
   withOperationalReadinessContext,
 } from "../../../services/operationalReadiness.js";
+import { runWithSystemDbContext } from "../../../db/tenantContext.js";
 import { isDbReady } from "../../../utils/http.js";
 import { shouldEnableDebugRoutes } from "../../../utils/securitySurface.js";
 
@@ -29,9 +30,11 @@ export async function resolveOperationalReadinessForHealth({
   }
 
   const enforced = startupOperationalReadiness?.enforced === true;
-  return getOperationalReadinessSummary(db, {
-    enforced,
-  });
+  return runWithSystemDbContext("health_operational_readiness", () =>
+    getOperationalReadinessSummary(db, {
+      enforced,
+    })
+  );
 }
 
 export async function buildHealthCore({
