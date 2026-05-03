@@ -3,7 +3,6 @@ import "dotenv/config";
 import { assertConfigValid } from "../src/config/validate.js";
 import { closeDb, getDb, initDb } from "../src/db/index.js";
 import { runWithSystemDbContext } from "../src/db/tenantContext.js";
-import { runWithSystemDbContext } from "../src/db/tenantContext.js";
 import {
   getOperationalReadinessSummary,
   hasOperationalReadinessBlockers,
