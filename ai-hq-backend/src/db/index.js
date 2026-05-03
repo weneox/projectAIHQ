@@ -25,10 +25,21 @@ function clampInt(value, fallback, min, max) {
 }
 
 function shouldUseSsl(url) {
+  const explicitDbSsl = s(process.env.DB_SSL).toLowerCase();
+  if (["0", "false", "no", "n", "off", "disable", "disabled"].includes(explicitDbSsl)) {
+    return false;
+  }
+  if (["1", "true", "yes", "y", "on", "require", "required"].includes(explicitDbSsl)) {
+    return true;
+  }
+
   try {
     const u = new URL(url);
 
     const sslmode = s(u.searchParams.get("sslmode")).toLowerCase();
+    if (["disable", "disabled", "false", "off"].includes(sslmode)) {
+      return false;
+    }
     if (
       sslmode === "require" ||
       sslmode === "verify-full" ||
@@ -38,6 +49,9 @@ function shouldUseSsl(url) {
     }
 
     const host = s(u.hostname).toLowerCase();
+    if (host.endsWith(".railway.internal")) return false;
+    if (host.includes("railway.internal")) return false;
+
     if (host.includes("railway")) return true;
     if (host.includes("render")) return true;
     if (host.includes("supabase")) return true;
