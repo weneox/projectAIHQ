@@ -116,6 +116,10 @@ export function buildLaunchPostureHeaders({
     headers["x-internal-service"] = s(internalService);
   }
 
+  if (internal && s(internalService)) {
+    headers["x-internal-service"] = s(internalService);
+  }
+
   if (s(sessionCookie)) {
     headers.cookie = s(sessionCookie);
   }
