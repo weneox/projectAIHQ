@@ -466,10 +466,14 @@ test("route-level internal tenant resolve rejects missing internal token", async
 test("route-level internal tenant resolve fails closed when internal auth is misconfigured", async () => {
   const previousEnv = cfg.app.env;
   const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+  const previousTwilioToken = cfg.security.aihqInternalTwilioVoiceToken;
 
   try {
     cfg.app.env = "development";
     cfg.security.aihqInternalToken = "";
+    cfg.security.aihqInternalMetaBotToken = "";
+    cfg.security.aihqInternalTwilioVoiceToken = "";
 
     const router = tenantInternalRoutes({
       db: new FakeTenantInternalDb(),
@@ -512,6 +516,8 @@ test("route-level internal tenant resolve fails closed when internal auth is mis
   } finally {
     cfg.app.env = previousEnv;
     cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+    cfg.security.aihqInternalTwilioVoiceToken = previousTwilioToken;
   }
 });
 

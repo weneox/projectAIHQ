@@ -66,10 +66,14 @@ test("config validation rejects wildcard cors origin in production", () => {
 test("config validation requires AIHQ_INTERNAL_TOKEN outside test", () => {
   const previousEnv = cfg.app.env;
   const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+  const previousTwilioToken = cfg.security.aihqInternalTwilioVoiceToken;
 
   try {
     cfg.app.env = "development";
     cfg.security.aihqInternalToken = "";
+    cfg.security.aihqInternalMetaBotToken = "";
+    cfg.security.aihqInternalTwilioVoiceToken = "";
 
     const issue = getConfigIssues().find(
       (item) => item.key === "security.aihqInternalToken"
@@ -78,6 +82,8 @@ test("config validation requires AIHQ_INTERNAL_TOKEN outside test", () => {
   } finally {
     cfg.app.env = previousEnv;
     cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+    cfg.security.aihqInternalTwilioVoiceToken = previousTwilioToken;
   }
 });
 
@@ -155,10 +161,14 @@ test("provider secret sanitization strips raw values by default", () => {
 test("internal auth is fail-closed outside test and explicit in test", () => {
   const previousEnv = cfg.app.env;
   const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+  const previousTwilioToken = cfg.security.aihqInternalTwilioVoiceToken;
 
   try {
     cfg.app.env = "development";
     cfg.security.aihqInternalToken = "";
+    cfg.security.aihqInternalMetaBotToken = "";
+    cfg.security.aihqInternalTwilioVoiceToken = "";
 
     const denied = getInternalTokenAuthResult({
       headers: {},
@@ -180,6 +190,8 @@ test("internal auth is fail-closed outside test and explicit in test", () => {
   } finally {
     cfg.app.env = previousEnv;
     cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+    cfg.security.aihqInternalTwilioVoiceToken = previousTwilioToken;
   }
 });
 
