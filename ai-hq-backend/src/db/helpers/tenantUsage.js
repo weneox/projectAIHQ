@@ -143,8 +143,11 @@ function combineReservations(items = []) {
 }
 
 async function withOptionalTransaction(db, fn) {
-  if (db && typeof db.connect === "function") {
+  const isPool = db && typeof db.connect === "function" && db.release === undefined;
+
+  if (isPool) {
     const client = await db.connect();
+
     try {
       await client.query("BEGIN");
       const result = await fn(client);
@@ -156,10 +159,11 @@ async function withOptionalTransaction(db, fn) {
       } catch {}
       throw error;
     } finally {
-      client.release?.();
+      client.release();
     }
   }
 
+  // already client case (NO connect, NO BEGIN/COMMIT)
   return fn(db);
 }
 
