@@ -22,10 +22,21 @@ function createMockRes() {
     statusCode: 200,
     body: null,
     headers: {},
+    locals: {},
     finished: false,
+    req: null,
     setHeader(key, value) {
-      this.headers[key] = value;
+      this.headers[String(key).toLowerCase()] = value;
       return this;
+    },
+    getHeader(key) {
+      return this.headers[String(key).toLowerCase()];
+    },
+    header(key, value) {
+      return this.setHeader(key, value);
+    },
+    set(key, value) {
+      return this.setHeader(key, value);
     },
     status(code) {
       this.statusCode = code;
@@ -38,6 +49,11 @@ function createMockRes() {
     },
     send(payload) {
       this.body = payload;
+      this.finished = true;
+      return this;
+    },
+    end(payload) {
+      this.body = payload ?? this.body;
       this.finished = true;
       return this;
     },
@@ -55,20 +71,47 @@ async function invokeRoute(router, method, path, req = {}) {
 
   const handlers = layer.route.stack.map((item) => item.handle);
   const res = createMockRes();
+  const requestHeaders = {
+    host: "api.example.test",
+    origin: "https://app.example.test",
+    referer: "https://app.example.test/inbox",
+    "user-agent": "aihq-integration-test",
+    ...(req.headers || {}),
+  };
+
   const fullReq = {
     method: method.toUpperCase(),
     path,
     originalUrl: path,
     url: path,
-    headers: {},
+    baseUrl: "",
+    protocol: "https",
+    secure: true,
+    hostname: "api.example.test",
+    ip: "127.0.0.1",
+    headers: requestHeaders,
     query: {},
     body: {},
     params: {},
     auth: {},
     user: {},
+    cookies: {},
+    signedCookies: {},
     app: { locals: {} },
+    get(name) {
+      return this.headers[String(name || "").toLowerCase()];
+    },
+    header(name) {
+      return this.get(name);
+    },
     ...req,
   };
+
+  fullReq.headers = {
+    ...requestHeaders,
+    ...(fullReq.headers || {}),
+  };
+  res.req = fullReq;
 
   async function runAt(index) {
     if (index >= handlers.length || res.finished) return;
@@ -258,13 +301,20 @@ test(
           tenantKey,
           tenantId: tenant.id,
           role: "operator",
+          normalizedRole: "operator",
           email: "operator@inbox.test",
+          actor: "operator@inbox.test",
+          userId: "operator-user-id",
+          _serverControlled: true,
         },
         user: {
           tenantKey,
           tenantId: tenant.id,
           role: "operator",
+          normalizedRole: "operator",
           email: "operator@inbox.test",
+          actor: "operator@inbox.test",
+          userId: "operator-user-id",
         },
       });
 
