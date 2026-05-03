@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { assertConfigValid } from "../src/config/validate.js";
 import { closeDb, getDb, initDb } from "../src/db/index.js";
+import { runWithSystemDbContext } from "../src/db/tenantContext.js";
 import {
   getOperationalReadinessSummary,
   hasOperationalReadinessBlockers,
@@ -16,7 +17,10 @@ async function main() {
     throw new Error("DATABASE_URL is required to check operational readiness");
   }
 
-  const summary = await getOperationalReadinessSummary(db);
+  const summary = await runWithSystemDbContext(
+    "operational_readiness_check",
+    () => getOperationalReadinessSummary(db)
+  );
   console.log("[operational-readiness] summary", JSON.stringify(summary, null, 2));
 
   if (hasOperationalReadinessBlockers(summary)) {
