@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -37,7 +37,7 @@ let pool = null;
 
 test.before(async () => {
   if (!hasRealDb()) return;
-  pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+  pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
   await runSchemaMigrations(pool);
 });
 
@@ -174,16 +174,30 @@ test(
       });
       assert.equal(reconciled.find((item) => item.id === sideEffect.record.id)?.state, "retrying");
 
+      // reconcileStaleTenantUsageReservations uses FOR UPDATE SKIP LOCKED which
+      // cannot see rows locked by the current transaction. We commit the usage
+      // row first via a dedicated connection, run the reconciler, then clean up.
       await client.query(
         "update tenant_usage_daily set reserved_api_calls = 3, updated_at = now() - interval '1 hour' where tenant_id = $1::uuid",
         [tenantA.id]
       );
-      const quotaRows = await reconcileStaleTenantUsageReservations(client, {
-        olderThanMinutes: 30,
-      });
+      await client.query("commit");
+
+      const reconcileClient = await pool.connect();
+      let quotaRows = [];
+      try {
+        quotaRows = await reconcileStaleTenantUsageReservations(reconcileClient, {
+          olderThanMinutes: 30,
+        });
+      } finally {
+        reconcileClient.release();
+      }
+
       assert.equal(quotaRows.find((item) => String(item.tenant_id) === tenantA.id)?.reserved_api_calls, 0);
 
-      await client.query("rollback");
+      // Clean up tenant rows created outside the rolled-back transaction
+      await pool.query("delete from tenants where tenant_key like 'cert-%'");
+
     } finally {
       client.release();
     }
