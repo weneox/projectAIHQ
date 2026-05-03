@@ -9,7 +9,7 @@
     "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests",
     "build": "npm run validate:env && npm run lint",
-    "test": "node --import ../scripts/workspace-module-loader.mjs --test"
+    "test": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1"
   },
   "engines": {
     "node": ">=18"
