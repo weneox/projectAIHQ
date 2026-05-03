@@ -170,8 +170,8 @@ jobs:
       OPENAI_REALTIME_VOICE: alloy
       ADMIN_SESSION_SECRET: ci-admin-session-secret
       ADMIN_PANEL_PASSCODE_HASH: ci-admin-passcode-hash
-      USER_SESSION_SECRET: ci_user_session_secret_32_chars_minimum
-      AIHQ_INTERNAL_TOKEN: ci_internal_token_24_chars_minimum
+      USER_SESSION_SECRET: ${{ format('ci_user_session_secret_{0}_{1}_minimum_32_chars', github.run_id, github.run_attempt) }}
+      AIHQ_INTERNAL_TOKEN: ${{ format('ci_internal_token_{0}_{1}_minimum_24_chars', github.run_id, github.run_attempt) }}
       DEBUG_API_TOKEN: ci-debug-token
       CRON_SECRET: ci-cron-secret
       TENANT_SECRET_MASTER_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
