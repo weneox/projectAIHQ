@@ -219,6 +219,18 @@ jobs:
 
       - name: Validate environment
         run: npm run validate:env
+        env:
+          NODE_ENV: production
+          USER_SESSION_SECRET: ci_user_session_secret_32_chars_minimum
+          AIHQ_INTERNAL_TOKEN: ci_internal_token_24_chars_minimum
+          AIHQ_INTERNAL_TOKEN_META_BOT: ci_meta_bot_internal_token_24_chars_min
+          AIHQ_INTERNAL_TOKEN_TWILIO_VOICE: ci_twilio_voice_internal_token_24_chars_min
+        env:
+          NODE_ENV: production
+          USER_SESSION_SECRET: ci_user_session_secret_32_chars_minimum
+          AIHQ_INTERNAL_TOKEN: ci_internal_token_24_chars_minimum
+          AIHQ_INTERNAL_TOKEN_META_BOT: ci_meta_bot_internal_token_24_chars_min
+          AIHQ_INTERNAL_TOKEN_TWILIO_VOICE: ci_twilio_voice_internal_token_24_chars_min
 
       - name: Apply AI HQ migrations
         env:
