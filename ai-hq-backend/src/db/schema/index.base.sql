@@ -1,4 +1,4 @@
-\i ./00_extensions.sql
+﻿\i ./00_extensions.sql
 \i ./01_shared_functions.sql
 
 \i ./10_tenants.sql
@@ -40,7 +40,6 @@
 \i ./91_data_repairs.sql
 \i ./92_durable_execution_control_plane.sql
 \i ./93_commercial_saas_foundation.sql
-\i ./93_runtime_incident_trail.sql
 \i ./94_operational_data_backfill_correction.sql
 \i ./97_inbox_thread_latest_message_index.sql
 \i ./98_website_domain_verifications.sql
@@ -48,3 +47,5 @@
 \i ./100_inbox_threads_allow_telegram_channel.sql
 \i ./101_tenant_decision_events.sql
 \i ./102_distributed_idempotency_and_quota_reservations.sql
+\i ./103_runtime_incident_trail.sql
+\i ./104_inbox_delivery_truth.sql

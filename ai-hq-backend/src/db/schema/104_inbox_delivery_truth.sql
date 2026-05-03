@@ -1,4 +1,4 @@
--- src/db/schema/93_inbox_delivery_truth.sql
+﻿-- src/db/schema/104_inbox_delivery_truth.sql
 
 alter table inbox_messages
   alter column sent_at drop not null;

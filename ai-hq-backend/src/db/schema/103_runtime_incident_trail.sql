@@ -1,4 +1,4 @@
-create table if not exists runtime_incidents (
+﻿create table if not exists runtime_incidents (
   id uuid primary key default gen_random_uuid(),
   service text not null,
   area text not null,
