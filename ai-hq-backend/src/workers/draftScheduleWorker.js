@@ -1,4 +1,5 @@
 import { createLogger } from "../utils/logger.js";
+import { runWithSystemDbContext } from "../db/tenantContext.js";
 import {
   markWorkerStarted,
   markWorkerStopped,
@@ -264,7 +265,9 @@ export function createDraftScheduleWorker({ db }) {
     touchWorkerHeartbeat("draft-schedule-worker", getState());
 
     try {
-      const rows = await listTenantSchedules(db);
+      const rows = await runWithSystemDbContext("draft_schedule_worker_list_tenant_schedules", () =>
+        listTenantSchedules(db)
+      );
 
       for (const row of rows) {
         const schedule = normalizeSchedule(row, cfg);
