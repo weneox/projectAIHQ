@@ -612,9 +612,11 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
+    expect(
+      await screen.findByText(/launch-channel-connected:no/i)
+    ).toBeInTheDocument();
     expect(screen.queryByText(/launch readiness unavailable/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/posture unavailable/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/launch-channel-connected:no/i)).toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
