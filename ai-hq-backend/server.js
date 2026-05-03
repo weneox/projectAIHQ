@@ -1,4 +1,4 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 
 import http from "http";
 import express from "express";
@@ -190,6 +190,7 @@ async function main() {
   const processWorkerCapable = cfg.app.processRole !== "web";
   const processApiCapable = cfg.app.processRole !== "worker";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
+  const runtimeStartedAt = new Date().toISOString();
   validateAndLogMetaConnectConfig(logger);
   assertConfigValid(console);
   printFeatureReport(console);
@@ -604,7 +605,7 @@ async function main() {
 
     out.unavailable = out.status === "unavailable";
     out.degraded = out.status === "degraded";
-    out.ok = out.status === "ready";
+    out.ok = out.status !== "unavailable";
     out.summary.message =
       out.status === "ready"
         ? "Readiness, worker fleet, and recent incident signals are currently healthy."
