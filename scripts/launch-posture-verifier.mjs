@@ -97,6 +97,7 @@ export function buildLaunchPostureHeaders({
   internalToken = "",
   sessionCookie = "",
   audience = "aihq-backend.launch-posture",
+  internalService = "prod-spine-smoke",
   internal = true,
 } = {}) {
   const headers = {
@@ -109,6 +110,10 @@ export function buildLaunchPostureHeaders({
 
   if (internal && s(audience)) {
     headers["x-internal-audience"] = s(audience);
+  }
+
+  if (internal && s(internalService)) {
+    headers["x-internal-service"] = s(internalService);
   }
 
   if (s(sessionCookie)) {
