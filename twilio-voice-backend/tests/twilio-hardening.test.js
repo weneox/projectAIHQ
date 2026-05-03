@@ -4,7 +4,11 @@ import twilio from "twilio";
 import { validateServiceHealthEnvelope } from "@aihq/shared-contracts/health";
 
 process.env.PUBLIC_BASE_URL = "https://voice.example.test";
-process.env.AIHQ_INTERNAL_TOKEN = "voice-internal-token";
+process.env.AIHQ_INTERNAL_TOKEN = process.env.AIHQ_INTERNAL_TOKEN || "voice-internal-token";
+process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE =
+  process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE ||
+  process.env.AIHQ_INTERNAL_TWILIO_VOICE_TOKEN ||
+  process.env.AIHQ_INTERNAL_TOKEN;
 process.env.AIHQ_BASE_URL = "https://aihq.example.test";
 process.env.TWILIO_AUTH_TOKEN = "twilio-auth-token-placeholder";
 process.env.TWILIO_ACCOUNT_SID = "AC_PLACEHOLDER_FOR_TESTS";
@@ -12,6 +16,8 @@ process.env.TWILIO_API_KEY = "SK_PLACEHOLDER_FOR_TESTS";
 process.env.TWILIO_API_SECRET = "twilio-api-secret-placeholder";
 process.env.TWILIO_TWIML_APP_SID = "AP_PLACEHOLDER_FOR_TESTS";
 
+const { cfg } = await import("../src/config.js");
+const TEST_AIHQ_INTERNAL_TOKEN = cfg.AIHQ_INTERNAL_TOKEN;
 const { twilioRouter } = await import("../src/routes/twilio.js");
 const { resolveTenantFromRequest } = await import("../src/services/tenantResolver.js");
 const {
@@ -291,7 +297,7 @@ test("boot readiness blocks prod-like startup when AI HQ reports operational blo
       checkAihqOperationalBootReadiness({
         fetchFn: global.fetch,
         baseUrl: "https://aihq.example.test",
-        internalToken: "voice-internal-token",
+        internalToken: TEST_AIHQ_INTERNAL_TOKEN,
         appEnv: "production",
         requireOnBoot: true,
       }),
@@ -352,7 +358,7 @@ test("boot readiness can report converged blocker reason codes without throwing"
   const readiness = await checkAihqOperationalBootReadiness({
     fetchFn: global.fetch,
     baseUrl: "https://aihq.example.test",
-    internalToken: "voice-internal-token",
+    internalToken: TEST_AIHQ_INTERNAL_TOKEN,
     appEnv: "production",
     requireOnBoot: true,
     throwOnBlocked: false,
@@ -393,7 +399,7 @@ test("boot readiness fails closed when AI HQ readiness contract is malformed", a
   const readiness = await checkAihqOperationalBootReadiness({
     fetchFn: global.fetch,
     baseUrl: "https://aihq.example.test",
-    internalToken: "voice-internal-token",
+    internalToken: TEST_AIHQ_INTERNAL_TOKEN,
     appEnv: "production",
     requireOnBoot: true,
     throwOnBlocked: false,
@@ -464,7 +470,7 @@ test("voice AI HQ client forwards request and correlation headers", async () => 
       };
     },
     baseUrl: "https://aihq.example.test",
-    internalToken: "voice-internal-token",
+    internalToken: TEST_AIHQ_INTERNAL_TOKEN,
   });
 
   const out = await client.updateSessionState(
@@ -541,7 +547,7 @@ test("voice durable incident client posts sanitized incident payload to AI HQ", 
       };
     },
     baseUrl: "https://aihq.example.test",
-    internalToken: "voice-internal-token",
+    internalToken: TEST_AIHQ_INTERNAL_TOKEN,
   });
 
   const result = await client.recordIncident({
@@ -658,7 +664,7 @@ test("allowed flows work with correct auth and signature", async () => {
 
   const tokenResult = await invokeHandler(router, "post", "/twilio/token", {
     headers: {
-      "x-internal-token": "voice-internal-token",
+      "x-internal-token": TEST_AIHQ_INTERNAL_TOKEN,
     },
     body: {
       tenantKey: "acme",
