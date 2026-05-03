@@ -122,6 +122,16 @@ export function createStructuredLogEntry({
     tenant_id: s(merged.tenant_id || merged.tenantId),
     tenant_key: s(merged.tenant_key || merged.tenantKey),
     user_id: s(merged.user_id || merged.userId),
+    operation_type: s(merged.operation_type || merged.operationType || merged.operation || event),
+    execution_state: s(
+      merged.execution_state ||
+        merged.executionState ||
+        merged.nextStatus ||
+        merged.status_to ||
+        merged.statusTo ||
+        merged.status ||
+        ""
+    ),
     route: s(merged.route || merged.endpoint || merged.path),
     status: merged.status ?? merged.statusCode,
     duration: merged.duration ?? merged.durationMs,

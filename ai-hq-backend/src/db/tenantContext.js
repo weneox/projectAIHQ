@@ -289,4 +289,6 @@ export const __test__ = {
   hasTenantPredicate,
   isSystemOnlyQuery,
   valuesContainTenant,
+  TENANT_SCOPED_TABLES,
+  SYSTEM_LEVEL_TABLES,
 };

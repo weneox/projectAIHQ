@@ -1,12 +1,13 @@
 import { cfg } from "../config.js";
 import { createDurableExecutionHelpers } from "../db/helpers/durableExecutions.js";
+import { reconcileExpiredExternalSideEffectReservations } from "../db/helpers/externalIdempotency.js";
 import { buildWorkerRunnerKey } from "../services/asyncTasks.js";
 import {
   finalizeDurableExecution,
   processDurableExecution,
 } from "../services/durableExecutionService.js";
 import { createLogger } from "../utils/logger.js";
-import { runWithTenantContext } from "../db/tenantContext.js";
+import { runWithSystemDbContext, runWithTenantContext } from "../db/tenantContext.js";
 import {
   markWorkerStarted,
   markWorkerStopped,
@@ -96,6 +97,24 @@ export function createDurableExecutionWorker({ db, wsHub }) {
 
     try {
       const helpers = createDurableExecutionHelpers({ db });
+      const reconciledSideEffects = await runWithSystemDbContext(
+        "durable_execution_worker_reconcile_external_idempotency",
+        () =>
+          reconcileExpiredExternalSideEffectReservations(db, {
+            limit: settings.batchSize,
+          })
+      );
+
+      for (const record of reconciledSideEffects) {
+        logger.warn("durable_execution.external_idempotency_lease_expired", {
+          tenantKey: s(record?.tenant_key),
+          provider: s(record?.provider),
+          actionType: s(record?.action_type),
+          executionId: s(record?.execution_id),
+          operationType: "external_idempotency.recovery",
+          executionState: s(record?.state),
+        });
+      }
 
       for (let i = 0; i < settings.batchSize; i += 1) {
         const claimed = await helpers.claimNextExecution({

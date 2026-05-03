@@ -11,6 +11,7 @@
     "dev": "node --watch --import ../scripts/workspace-module-loader.mjs server.js",
     "migration:safety-preflight": "node scripts/migration-safety-preflight.mjs",
     "migrate": "node --import ../scripts/workspace-module-loader.mjs scripts/migrate.js",
+    "test:db:bootstrap": "node --import ../scripts/workspace-module-loader.mjs scripts/bootstrap-test-db.mjs",
     "backfill:operational-data": "node --import ../scripts/workspace-module-loader.mjs scripts/backfill-operational-data.mjs",
     "repair:canonical-auth": "node --import ../scripts/workspace-module-loader.mjs scripts/repair-canonical-auth.mjs",
     "check:operational-readiness": "node --import ../scripts/workspace-module-loader.mjs scripts/check-operational-readiness.mjs",
@@ -22,7 +23,8 @@
     "test:integration:db:ops": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/operational-channel-integration.test.js",
     "test:integration:db:website": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/website-widget-production-lane.test.js",
     "test:integration:db:inbox": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/inbox-operator-lane.integration.test.js",
-    "test:integration:db": "npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox"
+    "test:integration:db:certification": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/postgres-certification.integration.test.js",
+    "test:integration:db": "npm run test:integration:db:certification && npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",

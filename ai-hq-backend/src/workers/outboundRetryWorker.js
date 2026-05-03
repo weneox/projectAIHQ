@@ -4,6 +4,7 @@ import {
   getMessageById,
   getThreadById,
   listRetryableOutboundAttempts,
+  expireStaleOutboundReservations,
   markOutboundAttemptFailed,
   scheduleOutboundRetry,
   updateOutboundMessageDeliveryFailure,
@@ -11,6 +12,7 @@ import {
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
+import { reconcileStaleTenantUsageReservations } from "../db/helpers/tenantUsage.js";
 import {
   runWithSystemDbContext,
   runWithTenantContext,
@@ -292,7 +294,47 @@ export function startOutboundRetryWorker({ db, wsHub }) {
         () => listRetryableOutboundAttempts(db, workerCfg.batchSize)
       );
 
-      for (const attempt of attempts) {
+      const expiredReservations = await runWithSystemDbContext(
+        "outbound_retry_worker_expire_stale_reservations",
+        () => expireStaleOutboundReservations(db, { limit: workerCfg.batchSize })
+      );
+
+      for (const expired of expiredReservations) {
+        logger.warn("outbound_retry.reservation_expired", {
+          tenantKey: s(expired?.tenant_key),
+          attemptId: s(expired?.id),
+          threadId: s(expired?.thread_id),
+          messageId: s(expired?.message_id),
+          operationType: "outbound_retry.recovery",
+          executionState: s(expired?.status),
+        });
+      }
+
+      const reconciledQuotaRows = await runWithSystemDbContext(
+        "outbound_retry_worker_reconcile_quota_reservations",
+        () =>
+          reconcileStaleTenantUsageReservations(db, {
+            limit: workerCfg.batchSize,
+          })
+      );
+
+      for (const row of reconciledQuotaRows) {
+        logger.warn("tenant_quota.reservation_reconciled", {
+          tenantId: s(row?.tenant_id),
+          tenantKey: s(row?.tenant_key),
+          operationType: "quota.reservation_reconciliation",
+          executionState: "released",
+        });
+      }
+
+      const attemptsById = new Map();
+      for (const attempt of [...expiredReservations, ...attempts]) {
+        if (attempt?.id && !attemptsById.has(attempt.id)) {
+          attemptsById.set(attempt.id, attempt);
+        }
+      }
+
+      for (const attempt of attemptsById.values()) {
         if (stopped) break;
 
         try {

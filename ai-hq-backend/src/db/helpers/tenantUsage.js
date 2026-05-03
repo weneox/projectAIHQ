@@ -351,6 +351,49 @@ export async function releaseTenantUsageReservation(db, reservation = {}) {
   );
 }
 
+export async function reconcileStaleTenantUsageReservations(
+  db,
+  { olderThanMinutes = 30, limit = 100 } = {}
+) {
+  if (!db || typeof db.query !== "function") return [];
+
+  const minutes = Math.max(5, n(olderThanMinutes, 30));
+  const result = await db.query(
+    `
+    with stale as (
+      select tenant_id, usage_date
+      from tenant_usage_daily
+      where (
+          coalesce(reserved_api_calls, 0) > 0
+          or coalesce(reserved_ai_units, 0) > 0
+          or coalesce(reserved_messages_in, 0) > 0
+          or coalesce(reserved_messages_out, 0) > 0
+          or coalesce(reserved_webhook_events, 0) > 0
+        )
+        and coalesce(updated_at, created_at, now()) < now() - make_interval(mins => $1::int)
+      order by updated_at asc nulls first, created_at asc
+      for update skip locked
+      limit $2::int
+    )
+    update tenant_usage_daily u
+    set
+      reserved_api_calls = 0,
+      reserved_ai_units = 0,
+      reserved_messages_in = 0,
+      reserved_messages_out = 0,
+      reserved_webhook_events = 0,
+      updated_at = now()
+    from stale
+    where u.tenant_id = stale.tenant_id
+      and u.usage_date = stale.usage_date
+    returning u.*
+    `,
+    [minutes, Math.max(1, n(limit, 100))]
+  );
+
+  return result.rows || [];
+}
+
 export async function getTenantUsageSnapshot(
   db,
   { tenantId = "", tenantKey = "", usageDate = null } = {}

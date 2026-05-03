@@ -1,5 +1,6 @@
 import { resolveTenantKey } from "../../../../tenancy/index.js";
 import { isDbReady, isUuid } from "../../../../utils/http.js";
+import { recordOutboundFinality } from "../../../../observability/runtimeSignals.js";
 import { toAttempt } from "./shared.js";
 import { buildOutboundAttemptCorrelation, s } from "../shared.js";
 
@@ -259,7 +260,10 @@ export async function listRetryableOutboundAttempts(db, limit = 50) {
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       reservation_token, reserved_until, last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
-    where status in ('pending','queued','failed','retrying')
+    where (
+        status in ('pending','queued','failed','retrying')
+        or (status in ('reserved','sending') and coalesce(reserved_until, now()) <= now())
+      )
       and nullif(btrim(tenant_key), '') is not null
       and coalesce(next_retry_at, now()) <= now()
       and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
@@ -267,6 +271,53 @@ export async function listRetryableOutboundAttempts(db, limit = 50) {
     limit $1::int
     `,
     [Number(limit || 50)]
+  );
+
+  return (result.rows || []).map(toAttempt);
+}
+
+export async function expireStaleOutboundReservations(
+  db,
+  { reservedBefore = null, limit = 100 } = {}
+) {
+  if (!isDbReady(db)) return [];
+
+  const result = await db.query(
+    `
+    with stale as (
+      select id
+      from inbox_outbound_attempts
+      where status in ('reserved','sending')
+        and nullif(btrim(tenant_key), '') is not null
+        and coalesce(reserved_until, now()) <= coalesce($1::timestamptz, now())
+      order by coalesce(reserved_until, updated_at, created_at) asc
+      for update skip locked
+      limit $2::int
+    )
+    update inbox_outbound_attempts a
+    set
+      status = case
+        when coalesce(a.attempt_count, 0) >= coalesce(a.max_attempts, 5) then 'dead'
+        else 'retrying'
+      end,
+      next_retry_at = case
+        when coalesce(a.attempt_count, 0) >= coalesce(a.max_attempts, 5) then null
+        else now()
+      end,
+      reservation_token = null,
+      reserved_until = null,
+      last_error = coalesce(a.last_error, 'outbound reservation expired before finalization'),
+      last_error_code = coalesce(a.last_error_code, 'outbound_reservation_expired'),
+      updated_at = now()
+    from stale
+    where a.id = stale.id
+    returning
+      a.id, a.message_id, a.thread_id, a.tenant_id, a.tenant_key, a.channel, a.provider, a.recipient_id,
+      a.provider_message_id, a.payload, a.provider_response, a.status, a.attempt_count, a.max_attempts,
+      a.queued_at, a.first_attempt_at, a.last_attempt_at, a.next_retry_at, a.sent_at,
+      a.reservation_token, a.reserved_until, a.last_error, a.last_error_code, a.created_at, a.updated_at
+    `,
+    [reservedBefore || null, Math.max(1, Number(limit || 100))]
   );
 
   return (result.rows || []).map(toAttempt);
@@ -349,7 +400,17 @@ export async function markOutboundAttemptSent({
     values
   );
 
-  return toAttempt(result.rows?.[0] || null);
+  const attempt = toAttempt(result.rows?.[0] || null);
+  if (attempt) {
+    recordOutboundFinality({
+      tenantId: attempt.tenant_id,
+      tenantKey: attempt.tenant_key,
+      provider: attempt.provider,
+      channel: attempt.channel,
+      status: "sent",
+    });
+  }
+  return attempt;
 }
 
 export async function markOutboundAttemptFailed({
@@ -411,7 +472,18 @@ export async function markOutboundAttemptFailed({
     values
   );
 
-  return toAttempt(result.rows?.[0] || null);
+  const attempt = toAttempt(result.rows?.[0] || null);
+  if (attempt && ["failed", "dead"].includes(String(attempt.status || ""))) {
+    recordOutboundFinality({
+      tenantId: attempt.tenant_id,
+      tenantKey: attempt.tenant_key,
+      provider: attempt.provider,
+      channel: attempt.channel,
+      status: attempt.status,
+      errorCode: attempt.last_error_code,
+    });
+  }
+  return attempt;
 }
 
 export async function scheduleOutboundRetry({
@@ -475,7 +547,18 @@ export async function markOutboundAttemptDead(db, attemptId, tenantKey = "") {
     values
   );
 
-  return toAttempt(result.rows?.[0] || null);
+  const attempt = toAttempt(result.rows?.[0] || null);
+  if (attempt) {
+    recordOutboundFinality({
+      tenantId: attempt.tenant_id,
+      tenantKey: attempt.tenant_key,
+      provider: attempt.provider,
+      channel: attempt.channel,
+      status: "dead",
+      errorCode: attempt.last_error_code,
+    });
+  }
+  return attempt;
 }
 
 export async function getOutboundAttemptsSummary(

@@ -562,6 +562,65 @@ export function recordQuotaRejection({
   });
 }
 
+export function recordOutboundFinality({
+  tenantId = "",
+  tenantKey = "",
+  provider = "",
+  channel = "",
+  status = "",
+  errorCode = "",
+} = {}) {
+  const normalizedStatus = lower(status || "unknown");
+  const labels = {
+    tenant_key: tenantKey,
+    provider,
+    channel,
+    status: normalizedStatus,
+    error_code: errorCode,
+  };
+
+  incrementCounter("outbound_attempts_finalized_total", labels);
+  if (["failed", "dead", "expired"].includes(normalizedStatus)) {
+    recordRecent("outbound_attempt_failures_recent_total", labels);
+    pushRecentEvent({
+      level: "warn",
+      category: "outbound",
+      code: "outbound_attempt_finalized_failure",
+      reasonCode: s(errorCode || normalizedStatus),
+      tenantId: s(tenantId),
+      tenantKey: s(tenantKey),
+      context: {
+        provider: s(provider),
+        channel: s(channel),
+        status: normalizedStatus,
+      },
+    });
+  }
+}
+
+export function recordWebhookIngestionFailure({
+  tenantId = "",
+  tenantKey = "",
+  channel = "",
+  reasonCode = "",
+} = {}) {
+  const labels = {
+    tenant_key: tenantKey,
+    channel,
+    reason_code: reasonCode,
+  };
+  incrementCounter("webhook_ingestion_failures_total", labels);
+  recordRecent("webhook_ingestion_failures_recent_total", labels);
+  pushRecentEvent({
+    level: "warn",
+    category: "webhook",
+    code: "webhook_ingestion_failure",
+    reasonCode: s(reasonCode || "ingestion_failed"),
+    tenantId: s(tenantId),
+    tenantKey: s(tenantKey),
+  });
+}
+
 export function recordRuntimeSignal({
   level = "info",
   category = "",

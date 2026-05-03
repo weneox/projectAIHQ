@@ -288,6 +288,57 @@ export async function markExternalSideEffectFailed(
   return normalize(result.rows?.[0] || null);
 }
 
+export async function reconcileExpiredExternalSideEffectReservations(
+  db,
+  { provider = "", actionType = "", limit = 100 } = {}
+) {
+  const values = [];
+  const filters = [
+    "state = 'reserved'",
+    "coalesce(lease_expires_at, now()) <= now()",
+  ];
+
+  if (s(provider)) {
+    values.push(lower(provider));
+    filters.push(`provider = $${values.length}::text`);
+  }
+
+  if (s(actionType)) {
+    values.push(s(actionType));
+    filters.push(`action_type = $${values.length}::text`);
+  }
+
+  values.push(Math.max(1, n(limit, 100)));
+
+  const result = await db.query(
+    `
+    with expired as (
+      select id
+      from external_idempotency_keys
+      where ${filters.join(" and ")}
+      order by lease_expires_at asc, updated_at asc
+      for update skip locked
+      limit $${values.length}::int
+    )
+    update external_idempotency_keys x
+    set
+      state = 'retrying',
+      lease_token = null,
+      lease_expires_at = now(),
+      error_code = coalesce(x.error_code, 'external_side_effect_lease_expired'),
+      error_message = coalesce(x.error_message, 'external side effect reservation lease expired before finalization'),
+      updated_at = now()
+    from expired
+    where x.id = expired.id
+      and x.state = 'reserved'
+    returning x.*
+    `,
+    values
+  );
+
+  return (result.rows || []).map(normalize).filter(Boolean);
+}
+
 export const __test__ = {
   normalize,
 };
