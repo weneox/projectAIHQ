@@ -340,7 +340,7 @@ test(
         }
       );
 
-      assert.equal(createThreadCall.res.statusCode, 200);
+      assert.equal(createThreadCall.res.statusCode, 200, JSON.stringify(createThreadCall.res.body));
       assert.equal(createThreadCall.res.body?.ok, true);
 
       const threadId = s(createThreadCall.res.body?.thread?.id);
@@ -367,7 +367,7 @@ test(
         }
       );
 
-      assert.equal(inboundMessageCall.res.statusCode, 200);
+      assert.equal(inboundMessageCall.res.statusCode, 200, JSON.stringify(inboundMessageCall.res.body));
       assert.equal(inboundMessageCall.res.body?.ok, true);
       assert.equal(
         s(inboundMessageCall.res.body?.message?.text),
@@ -404,7 +404,7 @@ test(
         }
       );
 
-      assert.equal(outboundReplyCall.res.statusCode, 200);
+      assert.equal(outboundReplyCall.res.statusCode, 200, JSON.stringify(outboundReplyCall.res.body));
       assert.equal(outboundReplyCall.res.body?.ok, true);
       assert.equal(
         s(outboundReplyCall.res.body?.message?.text),
