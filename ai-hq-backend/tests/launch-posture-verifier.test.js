@@ -78,7 +78,7 @@ test("launch posture verifier builds internal route URL and headers by default",
     accept: "application/json",
     "x-internal-token": "secret",
     "x-internal-audience": "aihq-backend.launch-posture",
-    "x-internal-service": "prod-spine-smoke",
+    "x-internal-service": "meta-bot-backend",
   });
   assert.deepEqual(
     buildLaunchPostureHeaders({
