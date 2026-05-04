@@ -159,7 +159,32 @@ async function fetchThreadRow(db, whereSql, values = []) {
   return result.rows?.[0] || null;
 }
 
+function assertScopeMatchesContext(scope = {}) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return;
+
+  const contextTenantId = String(context.tenantId || "").trim();
+  const contextTenantKey = resolveTenantKey(context.tenantKey || "");
+  const explicitTenantId = String(scope?.tenantId || scope?.tenant_id || "").trim();
+  const explicitTenantKey = resolveTenantKey(scope?.tenantKey || scope?.tenant_key || "");
+
+  if (contextTenantId && explicitTenantId && contextTenantId !== explicitTenantId) {
+    const err = new Error("inbox thread tenant scope mismatch");
+    err.code = "TENANT_SCOPE_MISMATCH";
+    throw err;
+  }
+
+  if (contextTenantKey && explicitTenantKey && contextTenantKey !== explicitTenantKey) {
+    const err = new Error("inbox thread tenant scope mismatch");
+    err.code = "TENANT_SCOPE_MISMATCH";
+    throw err;
+  }
+}
 function normalizeThreadScope(scope = "") {
+  if (typeof scope !== "string") {
+    assertScopeMatchesContext(scope || {});
+  }
+
   if (typeof scope === "string") {
     return {
       tenantKey: resolveTenantKey(scope) || resolveTenantKey(getTenantContext()?.tenantKey || ""),
