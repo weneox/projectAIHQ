@@ -288,7 +288,29 @@ export async function reserveTenantUsageQuota(
   };
 }
 
+function assertReservationMatchesTenantContext(reservation = {}) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return;
+
+  const contextTenantId = s(context.tenantId);
+  const contextTenantKey = lower(context.tenantKey);
+  const reservationTenantId = s(reservation.tenantId);
+  const reservationTenantKey = lower(reservation.tenantKey);
+
+  if (contextTenantId && reservationTenantId && contextTenantId !== reservationTenantId) {
+    const err = new Error("tenant usage reservation tenant mismatch");
+    err.code = "TENANT_USAGE_RESERVATION_TENANT_MISMATCH";
+    throw err;
+  }
+
+  if (contextTenantKey && reservationTenantKey && contextTenantKey !== reservationTenantKey) {
+    const err = new Error("tenant usage reservation tenant mismatch");
+    err.code = "TENANT_USAGE_RESERVATION_TENANT_MISMATCH";
+    throw err;
+  }
+}
 async function applyReservation(client, reservation = {}, mode = "commit") {
+  assertReservationMatchesTenantContext(reservation);
   const id = s(reservation.tenantId);
   const dateKey = s(reservation.usageDate);
   const items = combineReservations(reservation.items);
