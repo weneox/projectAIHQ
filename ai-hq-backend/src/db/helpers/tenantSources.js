@@ -4,6 +4,8 @@
 // Tenant Sources helper layer
 // ============================================================
 
+import { getTenantContext } from "../tenantContext.js";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -42,6 +44,30 @@ function iso(v) {
 
 function lower(v) {
   return s(v).toLowerCase();
+}
+
+function activeTenantPredicate(startIndex = 2) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return { clause: "", values: [] };
+
+  const tenantId = s(context.tenantId);
+  const tenantKey = lower(context.tenantKey);
+
+  if (tenantId) {
+    return {
+      clause: `tenant_id = $${startIndex}`,
+      values: [tenantId],
+    };
+  }
+
+  if (tenantKey) {
+    return {
+      clause: `tenant_key = $${startIndex}`,
+      values: [tenantKey],
+    };
+  }
+
+  return { clause: "", values: [] };
 }
 
 function hasQueryApi(db) {
@@ -366,15 +392,17 @@ export function createTenantSourcesHelpers({ db }) {
     },
 
     async getSourceById(sourceId) {
+      const tenantScope = activeTenantPredicate(2);
       const r = await q(
         db,
         `
         select *
         from tenant_sources
         where id = $1
+          ${tenantScope.clause ? `and ${tenantScope.clause}` : ""}
         limit 1
         `,
-        [s(sourceId)]
+        [s(sourceId), ...tenantScope.values]
       );
       return rowToSource(r.rows[0]);
     },
@@ -676,6 +704,46 @@ export function createTenantSourcesHelpers({ db }) {
           ? sanitizeSourceUrl(patch.sourceUrl)
           : sanitizeSourceUrl(current.source_url);
 
+      const values = [
+        s(sourceId),
+        s(patch.displayName, current.display_name),
+        normalizeSourceStatus(patch.status ?? current.status),
+        normalizeAuthStatus(patch.authStatus ?? current.auth_status),
+        normalizeSyncStatus(patch.syncStatus ?? current.sync_status),
+        normalizeConnectionMode(patch.connectionMode ?? current.connection_mode),
+        normalizeAccessScope(patch.accessScope ?? current.access_scope),
+        safeSourceUrl,
+        s(patch.externalAccountId, current.external_account_id),
+        s(patch.externalPageId, current.external_page_id),
+        s(patch.externalUsername, current.external_username),
+        typeof patch.isEnabled === "boolean" ? patch.isEnabled : current.is_enabled,
+        typeof patch.isPrimary === "boolean" ? patch.isPrimary : current.is_primary,
+        JSON.stringify(
+          patch.permissionsJson !== undefined
+            ? obj(patch.permissionsJson, {})
+            : current.permissions_json
+        ),
+        JSON.stringify(
+          patch.settingsJson !== undefined
+            ? obj(patch.settingsJson, {})
+            : current.settings_json
+        ),
+        JSON.stringify(
+          patch.metadataJson !== undefined
+            ? obj(patch.metadataJson, {})
+            : current.metadata_json
+        ),
+        patch.lastConnectedAt ?? current.last_connected_at,
+        patch.lastSyncStartedAt ?? current.last_sync_started_at,
+        patch.lastSyncFinishedAt ?? current.last_sync_finished_at,
+        patch.lastSuccessfulSyncAt ?? current.last_successful_sync_at,
+        patch.lastErrorAt ?? current.last_error_at,
+        s(patch.lastErrorCode, current.last_error_code),
+        s(patch.lastErrorMessage, current.last_error_message),
+        s(patch.updatedBy, current.updated_by),
+      ];
+      const tenantScope = activeTenantPredicate(values.length + 1);
+
       const r = await q(
         db,
         `
@@ -706,46 +774,10 @@ export function createTenantSourcesHelpers({ db }) {
           updated_by = $24,
           updated_at = now()
         where id = $1
+          ${tenantScope.clause ? `and ${tenantScope.clause}` : ""}
         returning *
         `,
-        [
-          s(sourceId),
-          s(patch.displayName, current.display_name),
-          normalizeSourceStatus(patch.status ?? current.status),
-          normalizeAuthStatus(patch.authStatus ?? current.auth_status),
-          normalizeSyncStatus(patch.syncStatus ?? current.sync_status),
-          normalizeConnectionMode(patch.connectionMode ?? current.connection_mode),
-          normalizeAccessScope(patch.accessScope ?? current.access_scope),
-          safeSourceUrl,
-          s(patch.externalAccountId, current.external_account_id),
-          s(patch.externalPageId, current.external_page_id),
-          s(patch.externalUsername, current.external_username),
-          typeof patch.isEnabled === "boolean" ? patch.isEnabled : current.is_enabled,
-          typeof patch.isPrimary === "boolean" ? patch.isPrimary : current.is_primary,
-          JSON.stringify(
-            patch.permissionsJson !== undefined
-              ? obj(patch.permissionsJson, {})
-              : current.permissions_json
-          ),
-          JSON.stringify(
-            patch.settingsJson !== undefined
-              ? obj(patch.settingsJson, {})
-              : current.settings_json
-          ),
-          JSON.stringify(
-            patch.metadataJson !== undefined
-              ? obj(patch.metadataJson, {})
-              : current.metadata_json
-          ),
-          patch.lastConnectedAt ?? current.last_connected_at,
-          patch.lastSyncStartedAt ?? current.last_sync_started_at,
-          patch.lastSyncFinishedAt ?? current.last_sync_finished_at,
-          patch.lastSuccessfulSyncAt ?? current.last_successful_sync_at,
-          patch.lastErrorAt ?? current.last_error_at,
-          s(patch.lastErrorCode, current.last_error_code),
-          s(patch.lastErrorMessage, current.last_error_message),
-          s(patch.updatedBy, current.updated_by),
-        ]
+        [...values, ...tenantScope.values]
       );
 
       return rowToSource(r.rows[0]);
@@ -927,15 +959,17 @@ export function createTenantSourcesHelpers({ db }) {
     },
 
     async getSyncRunById(runId) {
+      const tenantScope = activeTenantPredicate(2);
       const r = await q(
         db,
         `
         select *
         from tenant_source_sync_runs
         where id = $1
+          ${tenantScope.clause ? `and ${tenantScope.clause}` : ""}
         limit 1
         `,
-        [s(runId)]
+        [s(runId), ...tenantScope.values]
       );
       return rowToSyncRun(r.rows[0]);
     },
@@ -995,6 +1029,62 @@ export function createTenantSourcesHelpers({ db }) {
       const current = await this.getSyncRunById(runId);
       if (!current) return null;
 
+      const values = [
+        s(runId),
+        normalizeRunType(patch.runType ?? current.run_type),
+        normalizeTriggerType(patch.triggerType ?? current.trigger_type),
+        normalizeRunStatus(patch.status ?? current.status),
+        patch.startedAt ?? current.started_at,
+        patch.finishedAt ?? current.finished_at,
+        Math.max(0, n(patch.durationMs, current.duration_ms)),
+        JSON.stringify(
+          patch.inputSummaryJson !== undefined
+            ? obj(patch.inputSummaryJson, {})
+            : current.input_summary_json
+        ),
+        JSON.stringify(
+          patch.extractionSummaryJson !== undefined
+            ? obj(patch.extractionSummaryJson, {})
+            : current.extraction_summary_json
+        ),
+        JSON.stringify(
+          patch.resultSummaryJson !== undefined
+            ? obj(patch.resultSummaryJson, {})
+            : current.result_summary_json
+        ),
+        Math.max(0, n(patch.pagesScanned, current.pages_scanned)),
+        Math.max(0, n(patch.recordsScanned, current.records_scanned)),
+        Math.max(0, n(patch.candidatesCreated, current.candidates_created)),
+        Math.max(0, n(patch.itemsPromoted, current.items_promoted)),
+        Math.max(0, n(patch.conflictsFound, current.conflicts_found)),
+        Math.max(0, n(patch.warningsCount, current.warnings_count)),
+        Math.max(0, n(patch.errorsCount, current.errors_count)),
+        s(patch.errorCode, current.error_code),
+        s(patch.errorMessage, current.error_message),
+        JSON.stringify(
+          patch.logsJson !== undefined ? arr(patch.logsJson, []) : current.logs_json
+        ),
+        s(patch.requestedBy, current.requested_by),
+        s(patch.runnerKey, current.runner_key),
+        s(patch.reviewSessionId, current.review_session_id) || null,
+        JSON.stringify(
+          patch.metadataJson !== undefined
+            ? obj(patch.metadataJson, {})
+            : current.metadata_json
+        ),
+        JSON.stringify(
+          patch.metaJson !== undefined ? obj(patch.metaJson, {}) : current.meta_json
+        ),
+        Math.max(0, n(patch.attemptCount, current.attempt_count)),
+        Math.max(1, n(patch.maxAttempts, current.max_attempts || 3)),
+        patch.lastAttemptAt ?? current.last_attempt_at,
+        patch.nextRetryAt ?? current.next_retry_at,
+        s(patch.leaseToken, current.lease_token),
+        patch.leaseExpiresAt ?? current.lease_expires_at,
+        s(patch.claimedBy, current.claimed_by),
+      ];
+      const tenantScope = activeTenantPredicate(values.length + 1);
+
       const r = await q(
         db,
         `
@@ -1033,64 +1123,10 @@ export function createTenantSourcesHelpers({ db }) {
           claimed_by = $32,
           updated_at = now()
         where id = $1
+          ${tenantScope.clause ? `and ${tenantScope.clause}` : ""}
         returning *
         `,
-        [
-          s(runId),
-          normalizeRunType(patch.runType ?? current.run_type),
-          normalizeTriggerType(patch.triggerType ?? current.trigger_type),
-          normalizeRunStatus(patch.status ?? current.status),
-          patch.startedAt ?? current.started_at,
-          patch.finishedAt ?? current.finished_at,
-          Math.max(0, n(patch.durationMs, current.duration_ms)),
-          JSON.stringify(
-            patch.inputSummaryJson !== undefined
-              ? obj(patch.inputSummaryJson, {})
-              : current.input_summary_json
-          ),
-          JSON.stringify(
-            patch.extractionSummaryJson !== undefined
-              ? obj(patch.extractionSummaryJson, {})
-              : current.extraction_summary_json
-          ),
-          JSON.stringify(
-            patch.resultSummaryJson !== undefined
-              ? obj(patch.resultSummaryJson, {})
-              : current.result_summary_json
-          ),
-          Math.max(0, n(patch.pagesScanned, current.pages_scanned)),
-          Math.max(0, n(patch.recordsScanned, current.records_scanned)),
-          Math.max(0, n(patch.candidatesCreated, current.candidates_created)),
-          Math.max(0, n(patch.itemsPromoted, current.items_promoted)),
-          Math.max(0, n(patch.conflictsFound, current.conflicts_found)),
-          Math.max(0, n(patch.warningsCount, current.warnings_count)),
-          Math.max(0, n(patch.errorsCount, current.errors_count)),
-          s(patch.errorCode, current.error_code),
-          s(patch.errorMessage, current.error_message),
-          JSON.stringify(
-            patch.logsJson !== undefined ? arr(patch.logsJson, []) : current.logs_json
-          ),
-          s(patch.requestedBy, current.requested_by),
-          s(patch.runnerKey, current.runner_key),
-          s(patch.reviewSessionId, current.review_session_id) || null,
-          JSON.stringify(
-            patch.metadataJson !== undefined
-              ? obj(patch.metadataJson, {})
-              : current.metadata_json
-          ),
-          JSON.stringify(
-            patch.metaJson !== undefined
-              ? obj(patch.metaJson, {})
-              : current.meta_json
-          ),
-          Math.max(0, n(patch.attemptCount, current.attempt_count)),
-          Math.max(1, n(patch.maxAttempts, current.max_attempts || 3)),
-          patch.lastAttemptAt ?? current.last_attempt_at,
-          patch.nextRetryAt ?? current.next_retry_at,
-          s(patch.leaseToken, current.lease_token),
-          patch.leaseExpiresAt ?? current.lease_expires_at,
-          s(patch.claimedBy, current.claimed_by),
-        ]
+        [...values, ...tenantScope.values]
       );
 
       return rowToSyncRun(r.rows[0]);
@@ -1481,13 +1517,15 @@ export function createTenantSourcesHelpers({ db }) {
       const current = await this.getSourceById(sourceId);
       if (!current) return false;
 
+      const tenantScope = activeTenantPredicate(2);
       await q(
         db,
         `
         delete from tenant_sources
         where id = $1
+          ${tenantScope.clause ? `and ${tenantScope.clause}` : ""}
         `,
-        [s(sourceId)]
+        [s(sourceId), ...tenantScope.values]
       );
 
       return true;

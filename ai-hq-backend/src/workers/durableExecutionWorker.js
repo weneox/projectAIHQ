@@ -52,14 +52,22 @@ function workerConfig() {
   };
 }
 
-export function createDurableExecutionWorker({ db, wsHub }) {
+export function createDurableExecutionWorker({
+  db,
+  wsHub,
+  logger: injectedLogger = null,
+  processExecution = processDurableExecution,
+  finalizeExecution = finalizeDurableExecution,
+} = {}) {
   const settings = workerConfig();
   const workerId = buildWorkerRunnerKey("durable-execution-worker");
-  const logger = createLogger({
-    service: "ai-hq-backend",
-    component: "durable-execution-worker",
-    workerId,
-  });
+  const logger =
+    injectedLogger ||
+    createLogger({
+      service: "ai-hq-backend",
+      component: "durable-execution-worker",
+      workerId,
+    });
 
   let timer = null;
   let stopped = false;
@@ -117,11 +125,18 @@ export function createDurableExecutionWorker({ db, wsHub }) {
       }
 
       for (let i = 0; i < settings.batchSize; i += 1) {
-        const claimed = await helpers.claimNextExecution({
-          workerId,
-          leaseToken: buildWorkerRunnerKey("durable-execution-lease"),
-          leaseMs: settings.leaseMs,
-        });
+        // durable_executions is the system-owned control-plane queue. It stores
+        // tenant references only so claimed payload execution can enter the
+        // real tenant context below.
+        const claimed = await runWithSystemDbContext(
+          "durable_execution_worker_claim",
+          () =>
+            helpers.claimNextExecution({
+              workerId,
+              leaseToken: buildWorkerRunnerKey("durable-execution-lease"),
+              leaseMs: settings.leaseMs,
+            })
+        );
 
         if (!claimed?.id) break;
 
@@ -135,13 +150,17 @@ export function createDurableExecutionWorker({ db, wsHub }) {
           recovered: Number(claimed.attempt_count || 0) > 1,
         });
 
-        await helpers.createAttemptStart({
-          executionId: claimed.id,
-          attemptNumber: claimed.attempt_count,
-          statusFrom: claimed.attempt_count > 1 ? "retryable" : "pending",
-          leaseToken: claimed.lease_token,
-          correlationIds: claimed.correlation_ids,
-        });
+        await runWithSystemDbContext(
+          "durable_execution_worker_attempt_start",
+          () =>
+            helpers.createAttemptStart({
+              executionId: claimed.id,
+              attemptNumber: claimed.attempt_count,
+              statusFrom: claimed.attempt_count > 1 ? "retryable" : "pending",
+              leaseToken: claimed.lease_token,
+              correlationIds: claimed.correlation_ids,
+            })
+        );
 
         logger.info("durable_execution.claimed", {
           executionId: claimed.id,
@@ -160,7 +179,7 @@ export function createDurableExecutionWorker({ db, wsHub }) {
             requestId: s(claimed.correlation_ids?.requestId),
           },
           () =>
-            processDurableExecution({
+            processExecution({
               db,
               wsHub,
               execution: claimed,
@@ -174,15 +193,10 @@ export function createDurableExecutionWorker({ db, wsHub }) {
           resultSummary: {},
         }));
 
-        const finalized = await runWithTenantContext(
-          {
-            tenantId: claimed.tenant_id,
-            tenantKey: claimed.tenant_key,
-            source: "durable_execution_worker",
-            requestId: s(claimed.correlation_ids?.requestId),
-          },
+        const finalized = await runWithSystemDbContext(
+          "durable_execution_worker_finalize_control_plane",
           () =>
-            finalizeDurableExecution({
+            finalizeExecution({
               db,
               execution: claimed,
               result,
@@ -213,6 +227,7 @@ export function createDurableExecutionWorker({ db, wsHub }) {
         touchWorkerHeartbeat("durable-execution-worker", getState());
       }
     } catch (err) {
+      lastOutcome = "tick_failed";
       logger.error("durable_execution.tick.failed", err);
     } finally {
       running = false;
@@ -250,5 +265,6 @@ export function createDurableExecutionWorker({ db, wsHub }) {
     },
 
     getState,
+    runOnce: tick,
   };
 }

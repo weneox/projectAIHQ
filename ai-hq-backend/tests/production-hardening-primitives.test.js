@@ -4,10 +4,13 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import {
   assertTenantQueryAllowed,
+  createTenantGuardedDb,
   runWithTenantContext,
   runWithSystemDbContext,
   __test__ as tenantContextTests,
 } from "../src/db/tenantContext.js";
+import { createTenantSourcesHelpers } from "../src/db/helpers/tenantSources.js";
+import { markSetupReviewSessionProcessing } from "../src/db/helpers/tenantSetupReview.js";
 import { createStructuredLogEntry } from "../src/utils/logger.js";
 import {
   expireStaleOutboundReservations,
@@ -104,6 +107,220 @@ test("tenant DB guard allows explicit system DB contexts", () => {
       true
     );
   });
+});
+
+test("durable execution control-plane scans require explicit system context", () => {
+  const queueClaimSql = `
+    with candidate as (
+      select id
+      from durable_executions
+      where status = any($1::text[])
+        and tenant_id is not null
+        and nullif(btrim(tenant_key), '') is not null
+      for update skip locked
+      limit 1
+    )
+    update durable_executions d
+    set status = 'in_progress'
+    from candidate
+    where d.id = candidate.id
+    returning d.*
+  `;
+
+  assert.throws(
+    () => assertTenantQueryAllowed(queueClaimSql, [["pending", "retryable"]]),
+    /tenant context/i
+  );
+
+  runWithSystemDbContext("durable_worker_claim_test", () => {
+    assert.equal(
+      assertTenantQueryAllowed(queueClaimSql, [["pending", "retryable"]]),
+      true
+    );
+  });
+});
+
+test("source sync worker helpers bind active tenant context for ID-based tenant rows", async () => {
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const sourceId = "22222222-2222-4222-8222-222222222222";
+  const runId = "33333333-3333-4333-8333-333333333333";
+  const seen = [];
+
+  const db = createTenantGuardedDb({
+    async query(sql, params = []) {
+      const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+      seen.push({ text, params });
+
+      if (text.includes("from tenant_sources")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        assert.deepEqual(params, [sourceId, tenantId]);
+        return {
+          rows: [
+            {
+              id: sourceId,
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              source_type: "website",
+              source_key: "website:acme",
+              display_name: "Acme Website",
+              status: "connected",
+              auth_status: "authorized",
+              sync_status: "idle",
+            },
+          ],
+        };
+      }
+
+      if (text.startsWith("update tenant_sources")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$25/i);
+        assert.equal(params[0], sourceId);
+        assert.equal(params[24], tenantId);
+        return {
+          rows: [
+            {
+              id: sourceId,
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              source_type: "website",
+              source_key: "website:acme",
+              display_name: "Acme Website",
+              status: "connected",
+              auth_status: "authorized",
+              sync_status: "syncing",
+            },
+          ],
+        };
+      }
+
+      if (text.includes("from tenant_source_sync_runs")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        assert.deepEqual(params, [runId, tenantId]);
+        return {
+          rows: [
+            {
+              id: runId,
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              source_id: sourceId,
+              run_type: "sync",
+              trigger_type: "manual",
+              status: "running",
+              attempt_count: 1,
+              max_attempts: 3,
+            },
+          ],
+        };
+      }
+
+      if (text.startsWith("update tenant_source_sync_runs")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$33/i);
+        assert.equal(params[0], runId);
+        assert.equal(params[32], tenantId);
+        return {
+          rows: [
+            {
+              id: runId,
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              source_id: sourceId,
+              run_type: "sync",
+              trigger_type: "manual",
+              status: "success",
+              attempt_count: 1,
+              max_attempts: 3,
+            },
+          ],
+        };
+      }
+
+      throw new Error(`unexpected source sync query: ${text}`);
+    },
+  });
+  const sources = createTenantSourcesHelpers({ db });
+
+  await runWithTenantContext({ tenantId, tenantKey: "acme" }, async () => {
+    await sources.markSourceSyncStarted(sourceId, { updatedBy: "source-sync-worker" });
+    await sources.markSyncRunFinished(runId, { status: "success" });
+  });
+
+  assert.equal(seen.length, 4);
+});
+
+test("setup review status helpers bind active tenant context for source sync review rows", async () => {
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const sessionId = "44444444-4444-4444-8444-444444444444";
+  const seen = [];
+
+  const client = createTenantGuardedDb({
+    async query(sql, params = []) {
+      const text = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+      seen.push({ text, params });
+
+      if (text.startsWith("select * from public.tenant_setup_review_sessions")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        assert.deepEqual(params, [sessionId, tenantId]);
+        return {
+          rows: [
+            {
+              id: sessionId,
+              tenant_id: tenantId,
+              status: "draft",
+              mode: "setup",
+              current_step: "source_sync",
+            },
+          ],
+        };
+      }
+
+      if (text.startsWith("update public.tenant_setup_review_sessions")) {
+        assert.match(text, /where id = \$\d+\s+and tenant_id = \$\d+/i);
+        assert.equal(params.at(-2), sessionId);
+        assert.equal(params.at(-1), tenantId);
+        return {
+          rows: [
+            {
+              id: sessionId,
+              tenant_id: tenantId,
+              status: "processing",
+              mode: "setup",
+              current_step: "source_sync",
+            },
+          ],
+        };
+      }
+
+      if (text.startsWith("insert into public.tenant_setup_review_events")) {
+        assert.equal(params[0], sessionId);
+        assert.equal(params[1], tenantId);
+        return {
+          rows: [
+            {
+              id: "55555555-5555-4555-8555-555555555555",
+              session_id: sessionId,
+              tenant_id: tenantId,
+              event_type: params[2],
+              payload: JSON.parse(params[3] || "{}"),
+            },
+          ],
+        };
+      }
+
+      throw new Error(`unexpected setup review query: ${text}`);
+    },
+  });
+
+  await runWithTenantContext({ tenantId, tenantKey: "acme" }, () =>
+    markSetupReviewSessionProcessing(
+      sessionId,
+      {
+        currentStep: "source_sync",
+        payload: { runId: "run-1" },
+      },
+      client
+    )
+  );
+
+  assert.equal(seen.length, 3);
 });
 
 test("critical multi-tenant tables are registered as tenant-scoped", () => {

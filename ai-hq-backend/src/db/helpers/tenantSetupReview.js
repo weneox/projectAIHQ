@@ -18,6 +18,7 @@ import {
   loadTenantCanonicalGraph,
   buildTenantRuntimeProjection,
 } from "./tenantRuntimeProjection.js";
+import { getTenantContext } from "../tenantContext.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -75,6 +76,19 @@ function isUuid(value = "") {
 function safeUuidOrNull(value = null) {
   const x = s(value);
   return isUuid(x) ? x : null;
+}
+
+function activeTenantIdPredicate(startIndex = 2) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return { clause: "", values: [] };
+
+  const tenantId = s(context.tenantId);
+  if (!tenantId) return { clause: "", values: [] };
+
+  return {
+    clause: `tenant_id = $${startIndex}`,
+    values: [tenantId],
+  };
 }
 
 function mergeJsonState(currentValue = {}, patchValue = {}) {
@@ -408,14 +422,16 @@ export async function getSetupReviewSessionById(sessionId, client = null) {
   if (!sid) return null;
 
   const run = async (cx) => {
+    const tenantScope = activeTenantIdPredicate(2);
     const { rows } = await cx.query(
       `
         SELECT *
         FROM public.tenant_setup_review_sessions
         WHERE id = $1
+          ${tenantScope.clause ? `AND ${tenantScope.clause}` : ""}
         LIMIT 1
       `,
-      [sid]
+      [sid, ...tenantScope.values]
     );
     return rows?.[0] ? normalizeSessionRow(rows[0]) : null;
   };
@@ -813,16 +829,19 @@ export async function updateSetupReviewSession(
   }
 
   const run = async (cx) => {
+    const idIndex = i;
     values.push(sid);
+    const tenantScope = activeTenantIdPredicate(idIndex + 1);
 
     const { rows } = await cx.query(
       `
         UPDATE public.tenant_setup_review_sessions
         SET ${updates.join(", ")}
-        WHERE id = $${i}
+        WHERE id = $${idIndex}
+          ${tenantScope.clause ? `AND ${tenantScope.clause}` : ""}
         RETURNING *
       `,
-      values
+      [...values, ...tenantScope.values]
     );
 
     return rows?.[0] ? normalizeSessionRow(rows[0]) : null;
