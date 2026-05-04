@@ -18,6 +18,20 @@
       "acceptedRiskAllowed": false
     },
     {
+      "id": "P0-001-ENV",
+      "item": "Deployed Meta bot service is explicitly classified as production/staging",
+      "owner": "DevOps / Security",
+      "status": "BLOCKED",
+      "evidence": "Release Gate uses APP_ENV=production and NODE_ENV=production in .github/workflows/release-gate.yml. Deployment-provider runtime evidence is still required.",
+      "reasonMissing": "No provider evidence has been attached showing the deployed meta-bot-backend service runs with APP_ENV=production or APP_ENV=staging and NODE_ENV=production. A public/staging deployment running as development could otherwise use the local META_APP_SECRET fallback and is not launch-ready.",
+      "date": "2026-05-04",
+      "approver": "TBD",
+      "blocksLimitedLaunch": true,
+      "blocksPaidLaunch": true,
+      "blocksPublicLaunch": true,
+      "acceptedRiskAllowed": false
+    },
+    {
       "id": "P0-002",
       "item": "Lead mutation routes require operator-level authorization or stricter",
       "owner": "Backend / Security",

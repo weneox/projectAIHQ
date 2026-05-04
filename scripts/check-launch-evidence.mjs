@@ -8,6 +8,16 @@ const TARGET_BLOCK_FIELDS = {
   paid: "blocksPaidLaunch",
   public: "blocksPublicLaunch",
 };
+const REQUIRED_LAUNCH_EVIDENCE_ITEMS = {
+  "P0-001-ENV": {
+    item: "Deployed Meta bot service is explicitly classified as production/staging",
+    requiredBlocks: [
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ],
+  },
+};
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultEvidencePath = path.join(
@@ -49,6 +59,7 @@ export function validateLaunchEvidence(evidence, { target = "limited" } = {}) {
   }
 
   const ids = new Set();
+  const itemsById = new Map();
 
   for (const item of evidence.items) {
     const label = describeItem(item);
@@ -76,6 +87,7 @@ export function validateLaunchEvidence(evidence, { target = "limited" } = {}) {
         errors.push(`Duplicate launch evidence id "${item.id}".`);
       }
       ids.add(item.id);
+      itemsById.set(item.id, item);
     }
 
     if (!VALID_STATUSES.has(item.status)) {
@@ -107,6 +119,24 @@ export function validateLaunchEvidence(evidence, { target = "limited" } = {}) {
       errors.push(
         `${label} blocks ${normalizedTarget} launch and is still ${item.status}.`
       );
+    }
+  }
+
+  for (const [id, requirement] of Object.entries(REQUIRED_LAUNCH_EVIDENCE_ITEMS)) {
+    const item = itemsById.get(id);
+    if (!item) {
+      errors.push(
+        `Missing required launch evidence item "${id}" (${requirement.item}).`
+      );
+      continue;
+    }
+
+    for (const field of requirement.requiredBlocks) {
+      if (item[field] !== true) {
+        errors.push(
+          `${id} must set ${field}=true because deployment environment classification proof is required before every launch target.`
+        );
+      }
     }
   }
 

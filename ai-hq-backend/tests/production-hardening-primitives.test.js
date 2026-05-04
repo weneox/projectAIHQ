@@ -34,6 +34,7 @@ import {
 } from "../src/utils/idempotency.js";
 import { buildQueueIdempotencyKey } from "../src/services/queue.js";
 import { __test__ as apiRouteTests } from "../src/routes/api/index.js";
+import { validateLaunchEvidence } from "../../scripts/check-launch-evidence.mjs";
 
 function createMockRes() {
   return {
@@ -839,6 +840,8 @@ test("release gate requires Website lane smoke for production deployment", () =>
   assert.doesNotMatch(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
   assert.doesNotMatch(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
   assert.match(workflow, /LAUNCH_GATE_TARGET:\s*public/);
+  assert.match(workflow, /APP_ENV:\s*production/);
+  assert.match(workflow, /NODE_ENV:\s*production/);
   assert.match(workflow, /npm run launch:evidence:check/);
   assert.match(workflow, /Strict website lane tenant smoke \| \\`true\\`/);
 });
@@ -875,12 +878,48 @@ test("production launch evidence keeps external P0 proof blocked until attached"
 
   assert.equal(byId.get("P0-001")?.status, "BLOCKED");
   assert.equal(byId.get("P0-001")?.blocksPublicLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-001-ENV")?.blocksLimitedLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.blocksPaidLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.blocksPublicLaunch, true);
+  assert.match(byId.get("P0-001-ENV")?.reasonMissing || "", /APP_ENV=production/);
+  assert.match(byId.get("P0-001-ENV")?.reasonMissing || "", /development/);
   assert.equal(byId.get("P0-004")?.status, "BLOCKED");
   assert.equal(byId.get("P0-004")?.blocksLimitedLaunch, true);
   assert.equal(byId.get("P0-005")?.status, "BLOCKED");
   assert.equal(byId.get("P0-005")?.blocksPaidLaunch, true);
   assert.equal(byId.get("P0-006")?.status, "BLOCKED");
   assert.equal(byId.get("P0-006")?.blocksPublicLaunch, true);
+});
+
+test("launch evidence gate requires deployment environment classification proof", () => {
+  const evidence = JSON.parse(
+    readFileSync(
+      new URL("../../docs/launch/production-launch-evidence.json", import.meta.url),
+      "utf8"
+    )
+  );
+  const evidenceWithoutEnvClassification = {
+    ...evidence,
+    items: evidence.items
+      .filter((item) => item.id !== "P0-001-ENV")
+      .map((item) => ({
+        ...item,
+        status: "READY",
+        evidence: item.evidence || "test evidence",
+        reasonMissing: "",
+        approver: "test",
+      })),
+  };
+
+  for (const target of ["limited", "paid", "public"]) {
+    const result = validateLaunchEvidence(evidenceWithoutEnvClassification, {
+      target,
+    });
+
+    assert.equal(result.ok, false, target);
+    assert.match(result.errors.join("\n"), /P0-001-ENV/, target);
+  }
 });
 
 test("outbound retry query includes expired reserved/sending recovery path", async () => {

@@ -41,6 +41,11 @@ For `npm run validate:env` at the repo root, the smallest practical local set is
 - `TWILIO_TWIML_APP_SID=...`
 - `TWILIO_AUTH_TOKEN=...`
 
+These values are local-only. Production and staging provider environments must
+set `APP_ENV=production` or `APP_ENV=staging` and `NODE_ENV=production`. Do not
+ship a public/staging deployment with `APP_ENV=development`; that can make
+development-only compatibility paths look safe when they are not launch-ready.
+
 ## Optional features you can disable locally
 
 If you do not need an optional feature in local development, disable it instead of inventing fake-looking production config:
@@ -71,6 +76,9 @@ explicit `META_WEBHOOK_APP_SECRET` name.
 
 Do not rely on `META_APP_SECRET` for production Meta webhook verification.
 `META_APP_SECRET` is retained only as a local/dev/test legacy fallback.
+Launch evidence must include provider proof that the deployed Meta bot service
+is classified as production/staging before any controlled pilot or public
+release is approved. Do not include secret values in that evidence.
 
 ## Validation commands
 

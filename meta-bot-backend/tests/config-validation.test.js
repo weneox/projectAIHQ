@@ -61,6 +61,8 @@ test(
       assert.equal(secretConfig.resolvedSecret, "fallback-secret");
       assert.equal(secretConfig.resolvedSource, "META_APP_SECRET");
       assert.equal(secretConfig.mismatch, false);
+      assert.equal(secretConfig.prodLike, false);
+      assert.equal(secretConfig.fallbackDisallowed, false);
     } finally {
       restoreEnv(envSnapshot);
     }

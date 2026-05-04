@@ -43,10 +43,17 @@ Every launch evidence item must include:
 As of 2026-05-04:
 
 - Limited controlled unpaid pilot is blocked by missing production secret
-  evidence, backup/restore proof, and production sign-off.
+  evidence, deployment environment classification proof, backup/restore proof,
+  and production sign-off.
 - Paid pilot is blocked by the same technical evidence plus missing paid launch
   terms.
 - Public launch is blocked by all remaining external proof items.
+
+The Meta bot deployment classification proof must show that the provider
+runtime uses `APP_ENV=production` or `APP_ENV=staging` and `NODE_ENV=production`.
+Do not attach secret values. Evidence should be a provider config screenshot,
+release log, or signed ops record that shows variable names and environment
+classification only.
 
 Do not change `BLOCKED` to `READY` based on intention, memory, screenshots
 without context, or verbal approval. Attach the evidence link or runbook output
