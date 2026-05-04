@@ -45,12 +45,17 @@ These values are local-only. Production and staging provider environments must
 set `APP_ENV=production` or `APP_ENV=staging` and `NODE_ENV=production`. Do not
 ship a public/staging deployment with `APP_ENV=development`; that can make
 development-only compatibility paths look safe when they are not launch-ready.
+Production and staging also default to the v1 launch surface
+(`AIHQ_V1_LAUNCH_SURFACE=1`), which freezes legacy/non-v1 backend and frontend
+surfaces unless a non-launch environment explicitly disables that gate.
 
 ## Optional features you can disable locally
 
 If you do not need an optional feature in local development, disable it instead of inventing fake-looking production config:
 
+- v1 launch surface in local-only experiments: `AIHQ_V1_LAUNCH_SURFACE=0`
 - Admin panel: `ADMIN_PANEL_ENABLED=0`
+- Admin frontend routes: `VITE_ENABLE_ADMIN_ROUTES=0`
 - Web push: `PUSH_ENABLED=0`
 - Media worker: `MEDIA_JOB_WORKER_ENABLED=0`
 - Tenant Telegram channel connect: `TELEGRAM_ENABLED=0`

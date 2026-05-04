@@ -223,10 +223,12 @@ test("execution callback denies invalid token and preserves valid configured flo
 test("debug-token protected push test fails closed when misconfigured and denies invalid token", async () => {
   const previousEnv = cfg.app.env;
   const previousDebugToken = cfg.security.debugApiToken;
+  const previousPushEnabled = cfg.push.enabled;
 
   try {
     cfg.app.env = "development";
     cfg.security.debugApiToken = "";
+    cfg.push.enabled = true;
 
     const router = pushRoutes({ db: null, wsHub: null });
 
@@ -263,5 +265,6 @@ test("debug-token protected push test fails closed when misconfigured and denies
   } finally {
     cfg.app.env = previousEnv;
     cfg.security.debugApiToken = previousDebugToken;
+    cfg.push.enabled = previousPushEnabled;
   }
 });

@@ -46,6 +46,21 @@ function prodDefaultBool(v, fallbackProd = true) {
   return prodLike ? fallbackProd : false;
 }
 
+function prodOffDefaultBool(v, fallbackNonProd = true) {
+  const raw = String(v ?? "").trim().toLowerCase();
+  if (raw) {
+    if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+    if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  }
+
+  const env = s(
+    process.env.APP_ENV,
+    process.env.NODE_ENV || "production"
+  ).toLowerCase();
+  const prodLike = !["", "development", "dev", "test"].includes(env);
+  return prodLike ? false : fallbackNonProd;
+}
+
 function fingerprintSecret(secret = "") {
   const safeSecret = s(secret);
   return safeSecret
@@ -259,6 +274,13 @@ export const cfg = {
     ),
   },
 
+  launch: {
+    v1SurfaceEnabled: prodDefaultBool(
+      process.env.AIHQ_V1_LAUNCH_SURFACE,
+      true
+    ),
+  },
+
   ws: {
     authToken: s(process.env.WS_AUTH_TOKEN, ""),
   },
@@ -280,7 +302,7 @@ export const cfg = {
   },
 
   auth: {
-    adminPanelEnabled: b(process.env.ADMIN_PANEL_ENABLED, true),
+    adminPanelEnabled: prodOffDefaultBool(process.env.ADMIN_PANEL_ENABLED, true),
 
     adminPasscodeHash: s(process.env.ADMIN_PANEL_PASSCODE_HASH, ""),
     adminSessionSecret: s(process.env.ADMIN_SESSION_SECRET, ""),
@@ -511,7 +533,7 @@ export const cfg = {
   },
 
   telegram: {
-    enabled: b(process.env.TELEGRAM_ENABLED, true),
+    enabled: prodOffDefaultBool(process.env.TELEGRAM_ENABLED, true),
     apiBaseUrl: s(
       process.env.TELEGRAM_API_BASE_URL,
       "https://api.telegram.org"
@@ -539,7 +561,7 @@ export const cfg = {
   },
 
   push: {
-    enabled: b(process.env.PUSH_ENABLED, true),
+    enabled: prodOffDefaultBool(process.env.PUSH_ENABLED, true),
     vapidPublicKey: s(process.env.VAPID_PUBLIC_KEY, ""),
     vapidPrivateKey: s(process.env.VAPID_PRIVATE_KEY, ""),
     vapidSubject: s(
@@ -675,7 +697,7 @@ export const cfg = {
       60_000
     ),
 
-    draftScheduleWorkerEnabled: b(
+    draftScheduleWorkerEnabled: prodOffDefaultBool(
       process.env.DRAFT_SCHEDULE_WORKER_ENABLED,
       true
     ),
@@ -684,7 +706,7 @@ export const cfg = {
       60_000
     ),
 
-    mediaJobWorkerEnabled: b(
+    mediaJobWorkerEnabled: prodOffDefaultBool(
       process.env.MEDIA_JOB_WORKER_ENABLED,
       true
     ),

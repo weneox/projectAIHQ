@@ -253,10 +253,12 @@ test("notifications stay restricted to operator-governance roles because the fee
 test("tenant roles are not conflated with global admin session routes", async () => {
   const previousCors = cfg.urls.corsOrigin;
   const previousPublicBaseUrl = cfg.urls.publicBaseUrl;
+  const previousAdminPanelEnabled = cfg.auth.adminPanelEnabled;
 
   try {
     cfg.urls.corsOrigin = "https://app.example.com";
     cfg.urls.publicBaseUrl = "https://app.example.com";
+    cfg.auth.adminPanelEnabled = true;
 
     const router = apiRouter({
       db: null,
@@ -286,5 +288,6 @@ test("tenant roles are not conflated with global admin session routes", async ()
   } finally {
     cfg.urls.corsOrigin = previousCors;
     cfg.urls.publicBaseUrl = previousPublicBaseUrl;
+    cfg.auth.adminPanelEnabled = previousAdminPanelEnabled;
   }
 });

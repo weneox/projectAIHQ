@@ -359,16 +359,153 @@ export function createRequireOperationalDbMiddleware({ db, env = cfg.app.env }) 
   };
 }
 
+export function createFrozenSurfaceMiddleware(surface) {
+  return function frozenSurfaceMiddleware(req, res) {
+    return res.status(404).json({
+      ok: false,
+      error: "Not found",
+      code: "surface_frozen",
+      surface,
+      requestId: req.requestId || null,
+    });
+  };
+}
+
+function mountFrozenWhenDisabled(router, featurePath, paths, surface = featurePath) {
+  if (hasFeature(featurePath)) return true;
+
+  for (const path of paths) {
+    router.use(path, createFrozenSurfaceMiddleware(surface));
+  }
+
+  return false;
+}
+
 export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   const r = express.Router();
 
   // public + internal bypass routes
   // bunlar session guard-dan əvvəl qalmalıdır
   r.use("/", healthRoutes({ db }));
+  const commentsEnabled = mountFrozenWhenDisabled(
+    r,
+    "inbox.comments",
+    ["/comments"],
+    "comments"
+  );
+  const leadsEnabled = mountFrozenWhenDisabled(
+    r,
+    "inbox.leads",
+    ["/leads"],
+    "leads"
+  );
+  const voiceEnabled = mountFrozenWhenDisabled(
+    r,
+    "channels.voice",
+    ["/voice", "/settings/voice", "/settings/operational/voice", "/internal/voice"],
+    "voice"
+  );
+  const mediaEnabled = mountFrozenWhenDisabled(
+    r,
+    "media.mediaWorker",
+    ["/media"],
+    "media"
+  );
+  const renderEnabled = mountFrozenWhenDisabled(
+    r,
+    "media.render",
+    ["/render"],
+    "render"
+  );
+  const pushEnabled = mountFrozenWhenDisabled(
+    r,
+    "channels.push",
+    ["/push"],
+    "push"
+  );
+  mountFrozenWhenDisabled(
+    r,
+    "channels.telegram",
+    ["/channels/telegram", "/settings/operational/channels/telegram"],
+    "telegram"
+  );
+  const agentsEnabled = mountFrozenWhenDisabled(
+    r,
+    "core.agents",
+    ["/agents", "/settings/agents"],
+    "agents"
+  );
+  const teamEnabled = mountFrozenWhenDisabled(
+    r,
+    "core.team",
+    ["/team", "/settings/team"],
+    "team"
+  );
+  mountFrozenWhenDisabled(
+    r,
+    "core.adminPanel",
+    ["/settings/secrets"],
+    "admin"
+  );
+  const notificationsEnabled = mountFrozenWhenDisabled(
+    r,
+    "core.notifications",
+    ["/notifications"],
+    "notifications"
+  );
+  const contentEnabled = mountFrozenWhenDisabled(
+    r,
+    "content.content",
+    ["/content"],
+    "content"
+  );
+  const proposalsEnabled = mountFrozenWhenDisabled(
+    r,
+    "content.propose",
+    ["/proposals"],
+    "proposals"
+  );
+  const executionsEnabled = mountFrozenWhenDisabled(
+    r,
+    "workflows.executions",
+    ["/executions", "/internal/executions"],
+    "executions"
+  );
+  const debateEnabled = mountFrozenWhenDisabled(
+    r,
+    "content.debate",
+    ["/debate"],
+    "debate"
+  );
+  const incidentsEnabled = mountFrozenWhenDisabled(
+    r,
+    "ops.incidents",
+    ["/incidents", "/internal/runtime-signals"],
+    "incidents"
+  );
+  const threadsEnabled = mountFrozenWhenDisabled(
+    r,
+    "inbox.comments",
+    ["/threads"],
+    "threads"
+  );
+  const chatEnabled = mountFrozenWhenDisabled(
+    r,
+    "content.analyze",
+    ["/chat"],
+    "chat"
+  );
+
   r.use("/", inboxInternalRoutes({ db, wsHub }));
-  r.use("/", commentsInternalRoutes({ db, wsHub }));
-  r.use("/", leadsInternalRoutes({ db, wsHub }));
-  r.use("/", voiceInternalRoutes({ db, wsHub }));
+  if (commentsEnabled) {
+    r.use("/", commentsInternalRoutes({ db, wsHub }));
+  }
+  if (leadsEnabled) {
+    r.use("/", leadsInternalRoutes({ db, wsHub }));
+  }
+  if (voiceEnabled) {
+    r.use("/", voiceInternalRoutes({ db, wsHub }));
+  }
   r.use("/", launchInternalRoutes({ db }));
   r.use("/", channelConnectPublicRoutes({ db, wsHub }));
   r.use("/", websiteWidgetRoutes({ db, wsHub }));
@@ -388,39 +525,61 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use("/", launchRoutes({ db }));
 
   r.use("/", modeRoutes({ db, wsHub }));
-  r.use("/", agentsRoutes());
+  if (agentsEnabled) {
+    r.use("/", agentsRoutes());
+  }
   r.use("/", settingsRoutes({ db }));
   r.use("/", channelConnectRoutes({ db }));
-  r.use("/", teamRoutes({ db }));
+  if (teamEnabled) {
+    r.use("/", teamRoutes({ db }));
+  }
   if (shouldEnableDebugRoutes()) {
     r.use("/", debugRoutes());
   }
-  r.use("/chat", requireAiExecutionRateLimit);
-  r.use("/debate", requireAiExecutionRateLimit);
-  r.use("/executions", requireAiExecutionRateLimit);
-  r.use("/media", requireAiExecutionRateLimit);
-  r.use("/render", requireAiExecutionRateLimit);
-  r.use("/", mediaRoutes({ db }));
-
-  if (hasFeature("media.render")) {
+  if (chatEnabled) {
+    r.use("/chat", requireAiExecutionRateLimit);
+  }
+  if (debateEnabled) {
+    r.use("/debate", requireAiExecutionRateLimit);
+  }
+  if (executionsEnabled) {
+    r.use("/executions", requireAiExecutionRateLimit);
+  }
+  if (mediaEnabled) {
+    r.use("/media", requireAiExecutionRateLimit);
+    r.use("/", mediaRoutes({ db }));
+  }
+  if (renderEnabled) {
+    r.use("/render", requireAiExecutionRateLimit);
     r.use("/", renderRoutes());
   }
 
-  if (hasFeature("channels.push")) {
+  if (pushEnabled) {
     r.use("/", pushRoutes({ db, wsHub }));
   }
 
-  r.use("/", notificationsRoutes({ db, wsHub }));
-  r.use("/", contentRoutes({ db, wsHub }));
-  r.use("/", proposalsRoutes({ db, wsHub }));
-  r.use("/", executionsRoutes({ db, wsHub }));
-  r.use("/", chatRoutes({ db, wsHub }));
-
-  if (hasFeature("content.debate")) {
+  if (notificationsEnabled) {
+    r.use("/", notificationsRoutes({ db, wsHub }));
+  }
+  if (contentEnabled) {
+    r.use("/", contentRoutes({ db, wsHub }));
+  }
+  if (proposalsEnabled) {
+    r.use("/", proposalsRoutes({ db, wsHub }));
+  }
+  if (executionsEnabled) {
+    r.use("/", executionsRoutes({ db, wsHub }));
+  }
+  if (chatEnabled) {
+    r.use("/", chatRoutes({ db, wsHub }));
+  }
+  if (debateEnabled) {
     r.use("/", debateRoutes({ db, wsHub }));
   }
 
-  r.use("/", threadsRoutes({ db }));
+  if (threadsEnabled) {
+    r.use("/", threadsRoutes({ db }));
+  }
 
   if (hasFeature("inbox.inbox")) {
     r.use("/", inboxRoutes({ db, wsHub }));
@@ -434,22 +593,27 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
     r.use("/", commentsRoutes({ db, wsHub }));
   }
 
-  r.use("/", incidentsRoutes({ db }));
+  if (incidentsEnabled) {
+    r.use("/", incidentsRoutes({ db }));
+  }
 
-  r.use(
-    "/",
-    voiceRoutes({
-      db,
-      dbDisabled,
-      audit,
-      wsHub,
-    })
-  );
+  if (voiceEnabled) {
+    r.use(
+      "/",
+      voiceRoutes({
+        db,
+        dbDisabled,
+        audit,
+        wsHub,
+      })
+    );
+  }
 
   return r;
 }
 
 export const __test__ = {
+  createFrozenSurfaceMiddleware,
   createRequireOperationalDbMiddleware,
   enforceAuthenticatedTenantContextMiddleware,
   enforceServerControlledIdentityMiddleware,

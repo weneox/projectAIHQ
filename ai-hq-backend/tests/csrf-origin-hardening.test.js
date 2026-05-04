@@ -186,11 +186,15 @@ test("api router protects user and admin cookie mutations while leaving internal
   const previousCors = cfg.urls.corsOrigin;
   const previousPublicBaseUrl = cfg.urls.publicBaseUrl;
   const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousAdminPanelEnabled = cfg.auth.adminPanelEnabled;
+  const previousV1SurfaceEnabled = cfg.launch.v1SurfaceEnabled;
 
   try {
     cfg.urls.corsOrigin = "https://app.example.com";
     cfg.urls.publicBaseUrl = "https://app.example.com";
     cfg.security.aihqInternalToken = "internal-secret";
+    cfg.auth.adminPanelEnabled = true;
+    cfg.launch.v1SurfaceEnabled = false;
 
     const router = apiRouter({
       db: null,
@@ -260,6 +264,8 @@ test("api router protects user and admin cookie mutations while leaving internal
     cfg.urls.corsOrigin = previousCors;
     cfg.urls.publicBaseUrl = previousPublicBaseUrl;
     cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.auth.adminPanelEnabled = previousAdminPanelEnabled;
+    cfg.launch.v1SurfaceEnabled = previousV1SurfaceEnabled;
   }
 });
 

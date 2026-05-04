@@ -45,6 +45,9 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "incidents",
 ];
 
+const ADMIN_ROUTES_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADMIN_ROUTES === "1";
+
 function withSuspense(element) {
   return <Suspense fallback={null}>{element}</Suspense>;
 }
@@ -158,6 +161,37 @@ function renderLegacyLaunchFreezeRedirects() {
   );
 }
 
+function renderAdminRoutes() {
+  if (!ADMIN_ROUTES_ENABLED) {
+    return (
+      <>
+        <Route path="/admin/login" element={<Navigate to="/" replace />} />
+        <Route path="/admin/*" element={<Navigate to="/" replace />} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
+
+      <Route
+        path="/admin"
+        element={
+          <AdminRouteGuard>
+            <AdminShell />
+          </AdminRouteGuard>
+        }
+      >
+        <Route index element={<Navigate to="/admin/tenants" replace />} />
+        <Route path="tenants" element={withSuspense(<AdminTenants />)} />
+        <Route path="team" element={withSuspense(<AdminTeam />)} />
+        <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
+      </Route>
+    </>
+  );
+}
+
 export default function App() {
   const rootEntryElement = (
     <UserRouteGuard>
@@ -186,21 +220,7 @@ export default function App() {
           element={withSuspense(<PublicWebsiteWidget />)}
         />
 
-        <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
-
-        <Route
-          path="/admin"
-          element={
-            <AdminRouteGuard>
-              <AdminShell />
-            </AdminRouteGuard>
-          }
-        >
-          <Route index element={<Navigate to="/admin/tenants" replace />} />
-          <Route path="tenants" element={withSuspense(<AdminTenants />)} />
-          <Route path="team" element={withSuspense(<AdminTeam />)} />
-          <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
-        </Route>
+        {renderAdminRoutes()}
 
         <Route path="/select-workspace" element={selectWorkspaceEntryElement} />
         <Route path="/" element={rootEntryElement} />

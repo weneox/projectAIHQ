@@ -76,62 +76,82 @@ export function getProviderState() {
 
 export function getFeatureFlags() {
   const providers = getProviderState();
+  const v1LaunchSurface = Boolean(cfg.launch?.v1SurfaceEnabled);
+  const aiProviderReady =
+    providers.ai.openai || providers.ai.gemini || providers.ai.anthropic;
+  const mediaProviderReady =
+    providers.media.runway ||
+    providers.media.pika ||
+    providers.media.elevenlabs ||
+    providers.media.creatomate;
 
   return {
     core: {
       auth: true,
-      adminPanel: cfg.auth.adminPanelEnabled,
+      adminPanel: cfg.auth.adminPanelEnabled && !v1LaunchSurface,
       db: providers.db.enabled,
       ws: providers.ws.enabled,
       auditLog: true,
-      team: true,
+      agents: !v1LaunchSurface,
+      team: !v1LaunchSurface,
       tenants: true,
       settings: true,
+      notifications: !v1LaunchSurface,
+      mode: true,
     },
 
     inbox: {
       inbox: true,
-      leads: true,
-      comments: true,
+      leads: !v1LaunchSurface,
+      comments: !v1LaunchSurface,
       metaConnect: providers.meta.oauth,
       metaDm: providers.meta.gateway || providers.meta.pageAccess,
       outboundRetry: cfg.workers.outboundRetryEnabled,
     },
 
     content: {
-      content:
-        providers.ai.openai || providers.ai.gemini || providers.ai.anthropic,
-      analyze:
-        providers.ai.openai || providers.ai.gemini || providers.ai.anthropic,
-      debate: providers.ai.openai,
-      propose:
-        providers.ai.openai || providers.ai.gemini || providers.ai.anthropic,
+      content: !v1LaunchSurface && aiProviderReady,
+      analyze: !v1LaunchSurface && aiProviderReady,
+      debate: !v1LaunchSurface && providers.ai.openai,
+      propose: !v1LaunchSurface && aiProviderReady,
       draftSchedule:
-        cfg.workers.draftScheduleWorkerEnabled && providers.n8n.scheduleDraft,
-      publish: providers.n8n.enabled || providers.meta.pageAccess,
+        !v1LaunchSurface &&
+        cfg.workers.draftScheduleWorkerEnabled &&
+        providers.n8n.scheduleDraft,
+      publish:
+        !v1LaunchSurface && (providers.n8n.enabled || providers.meta.pageAccess),
     },
 
     media: {
-      render: providers.media.creatomate || providers.media.runway,
-      imageGeneration: providers.media.runway || providers.media.pika,
-      videoGeneration: providers.media.runway || providers.media.pika,
-      tts: providers.media.elevenlabs,
-      mediaWorker: cfg.workers.mediaJobWorkerEnabled,
+      render:
+        !v1LaunchSurface && (providers.media.creatomate || providers.media.runway),
+      imageGeneration:
+        !v1LaunchSurface && (providers.media.runway || providers.media.pika),
+      videoGeneration:
+        !v1LaunchSurface && (providers.media.runway || providers.media.pika),
+      tts: !v1LaunchSurface && providers.media.elevenlabs,
+      mediaWorker:
+        !v1LaunchSurface &&
+        cfg.workers.mediaJobWorkerEnabled &&
+        mediaProviderReady,
     },
 
     channels: {
-      telegram: providers.telegram.enabled,
-      push: providers.push.enabled,
+      telegram: !v1LaunchSurface && providers.telegram.enabled,
+      push: !v1LaunchSurface && providers.push.enabled,
       meta:
         providers.meta.oauth ||
         providers.meta.pageAccess ||
         providers.meta.gateway,
+      voice: !v1LaunchSurface,
+      websiteWidget: true,
     },
 
     sources: {
       websiteImport: true,
-      googlePlacesImport: providers.google.places,
-      googleBusinessProfileConnect: providers.google.businessProfileOauth,
+      googlePlacesImport: !v1LaunchSurface && providers.google.places,
+      googleBusinessProfileConnect:
+        !v1LaunchSurface && providers.google.businessProfileOauth,
       sourceSync: true,
       sourceFusion: true,
       reviewQueue: true,
@@ -140,9 +160,14 @@ export function getFeatureFlags() {
     },
 
     workflows: {
-      n8n: providers.n8n.enabled,
-      cron: has(cfg.security.cronSecret),
-      internalCallbacks: has(cfg.n8n.callbackToken),
+      n8n: !v1LaunchSurface && providers.n8n.enabled,
+      cron: !v1LaunchSurface && has(cfg.security.cronSecret),
+      internalCallbacks: !v1LaunchSurface && has(cfg.n8n.callbackToken),
+      executions: !v1LaunchSurface,
+    },
+
+    ops: {
+      incidents: !v1LaunchSurface,
     },
 
     billing: {
