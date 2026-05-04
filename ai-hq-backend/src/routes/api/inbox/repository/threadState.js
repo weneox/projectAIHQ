@@ -45,8 +45,30 @@ export async function getInboxThreadState(db, threadId) {
   }
 }
 
+function assertInputMatchesTenantContext(input = {}) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return;
+
+  const contextTenantId = s(context.tenantId);
+  const contextTenantKey = s(context.tenantKey).toLowerCase();
+  const inputTenantId = s(input.tenant_id || input.tenantId);
+  const inputTenantKey = s(input.tenant_key || input.tenantKey).toLowerCase();
+
+  if (contextTenantId && inputTenantId && contextTenantId !== inputTenantId) {
+    const err = new Error("inbox thread state tenant scope mismatch");
+    err.code = "TENANT_SCOPE_MISMATCH";
+    throw err;
+  }
+
+  if (contextTenantKey && inputTenantKey && contextTenantKey !== inputTenantKey) {
+    const err = new Error("inbox thread state tenant scope mismatch");
+    err.code = "TENANT_SCOPE_MISMATCH";
+    throw err;
+  }
+}
 export async function upsertInboxThreadState(db, input = {}) {
   if (!isDbReady(db)) return null;
+  assertInputMatchesTenantContext(input);
 
   const threadId = s(input.thread_id || input.threadId);
   if (!threadId || !isUuid(threadId)) return null;
