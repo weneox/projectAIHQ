@@ -287,11 +287,27 @@ test("operational settings route returns sanitized readiness metadata", async ()
   assert.deepEqual(res.body?.channels?.meta?.providerSecrets?.missingSecretKeys, []);
   assert.equal(res.body?.readiness?.status, "ready");
   assert.equal(res.body?.readiness?.blockers?.length, 0);
-  assert.equal(res.body?.dataGovernance?.retention?.items?.[0]?.key, "runtime_incidents");
-  assert.equal(res.body?.dataGovernance?.retention?.items?.[0]?.retainDays, 14);
+  const retentionItems = res.body?.dataGovernance?.retention?.items || [];
+  assert.equal(res.body?.dataGovernance?.retention?.version, "aihq_v1_data_retention_2026_05");
   assert.equal(
-    res.body?.dataGovernance?.retention?.items?.find((item) => item.key === "audit_log")?.status,
-    "unbounded_in_repo"
+    retentionItems.find((item) => item.key === "runtime_incidents")?.retainDays,
+    14
+  );
+  assert.equal(
+    retentionItems.find((item) => item.key === "website_widget_conversations")?.status,
+    "bounded"
+  );
+  assert.equal(
+    retentionItems.find((item) => item.key === "source_raw_artifacts")?.status,
+    "bounded"
+  );
+  assert.equal(
+    retentionItems.find((item) => item.key === "audit_log")?.status,
+    "bounded"
+  );
+  assert.equal(
+    retentionItems.find((item) => item.key === "truth_history")?.status,
+    "excluded_from_generic_retention"
   );
   assert.equal(res.body?.dataGovernance?.backupRestore?.status, "runbook_only");
   assert.match(

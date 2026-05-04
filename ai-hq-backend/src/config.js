@@ -784,6 +784,20 @@ export const cfg = {
     ),
   },
 
+  retention: {
+    dryRunDefault: b(process.env.DATA_RETENTION_DRY_RUN, true),
+    websiteWidgetDays: n(process.env.DATA_RETENTION_WEBSITE_WIDGET_DAYS, 30),
+    inboxMessageDays: n(process.env.DATA_RETENTION_INBOX_MESSAGE_DAYS, 90),
+    sourceRawArtifactDays: n(
+      process.env.DATA_RETENTION_SOURCE_RAW_ARTIFACT_DAYS,
+      30
+    ),
+    runtimeIncidentDays: n(process.env.DATA_RETENTION_RUNTIME_INCIDENT_DAYS, 14),
+    auditLogDays: n(process.env.DATA_RETENTION_AUDIT_LOG_DAYS, 365),
+    maxDeleteRows: n(process.env.DATA_RETENTION_MAX_DELETE_ROWS, 1000),
+    tenantBatchLimit: n(process.env.DATA_RETENTION_TENANT_BATCH_LIMIT, 100),
+  },
+
   debug: {
     debateRaw: b(process.env.DEBUG_DEBATE_RAW, false),
   },

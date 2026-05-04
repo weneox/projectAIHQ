@@ -42,11 +42,9 @@ Every launch evidence item must include:
 
 As of 2026-05-04:
 
-- Limited controlled unpaid pilot is blocked by missing production secret
-  evidence, deployment environment classification proof, backup/restore proof,
-  production sign-off, and external observability/alert delivery proof.
-- Paid pilot is blocked by the same technical evidence plus missing paid launch
-  terms and external observability/alert delivery proof.
+- Limited controlled unpaid pilot is blocked by missing production data
+  retention proof and external observability/alert delivery proof.
+- Paid pilot is blocked by the same operational proof requirements.
 - Public launch is blocked by all remaining external proof items.
 
 The Meta bot deployment classification proof must show that the provider
@@ -63,3 +61,8 @@ The observability proof must show `OBS_INCIDENT_OWNER`,
 `OBS_INCIDENT_CONTACT`, `OBS_ALERT_DESTINATION`, and `OBS_ALERT_RUNBOOK_URL`
 configured in the deployment provider, plus a successful test alert delivered to
 the incident contact. Do not attach alert webhook secrets or vendor tokens.
+
+The retention proof must show a production/staging dry-run and approved live or
+scheduled cleanup for `docs/runbooks/v1-data-retention.md`. Evidence must not
+contain PII or secret values, and it must prove that approved Business
+Truth/configuration tables were not targeted by generic cleanup.

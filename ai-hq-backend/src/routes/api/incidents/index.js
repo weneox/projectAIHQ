@@ -8,14 +8,20 @@ import {
   listRecentRuntimeIncidents,
   summarizeRuntimeIncidents,
 } from "../../../services/runtimeIncidentTrail.js";
+import { buildV1RetentionPolicy } from "../../../services/dataRetention.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
 function getIncidentRetentionPolicy() {
+  const policy = buildV1RetentionPolicy();
+  const runtimeStore = policy.stores.find(
+    (item) => item.key === "runtime_incidents"
+  );
+
   return {
-    retainDays: 14,
+    retainDays: runtimeStore?.retainDays || 14,
     maxRows: 5000,
     pruneIntervalHours: 6,
   };

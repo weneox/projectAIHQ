@@ -15,6 +15,7 @@ import {
   buildOperationalRepairGuidance,
   buildReadinessSurface,
 } from "../../../services/operationalReadiness.js";
+import { buildV1RetentionPolicy } from "../../../services/dataRetention.js";
 import {
   ok,
   bad,
@@ -88,15 +89,57 @@ function arr(v) {
 }
 
 function buildDataGovernancePosture() {
+  const policy = buildV1RetentionPolicy();
+  const storesByKey = new Map(policy.stores.map((item) => [item.key, item]));
+  const runtimeStore = storesByKey.get("runtime_incidents") || {};
+  const auditStore = storesByKey.get("audit_log") || {};
+  const websiteStore = storesByKey.get("website_widget_conversations") || {};
+  const inboxStore = storesByKey.get("inbox_conversations") || {};
+  const sourceStore = storesByKey.get("source_raw_artifacts") || {};
+
   return {
     retention: {
+      version: policy.version,
+      defaultDryRun: policy.defaultDryRun,
+      runbook: "docs/runbooks/v1-data-retention.md",
+      excludedTables: policy.excludedTables,
       items: [
+        {
+          key: websiteStore.key,
+          label: websiteStore.label,
+          status: "bounded",
+          classification: websiteStore.classification,
+          retainDays: websiteStore.retainDays,
+          automatedPrune: true,
+          message:
+            "Website widget visitor conversations are covered by tenant-scoped retention cleanup.",
+        },
+        {
+          key: inboxStore.key,
+          label: inboxStore.label,
+          status: "bounded",
+          classification: inboxStore.classification,
+          retainDays: inboxStore.retainDays,
+          automatedPrune: true,
+          message:
+            "Inbox messages and manual operator replies are covered by tenant-scoped retention cleanup.",
+        },
+        {
+          key: sourceStore.key,
+          label: sourceStore.label,
+          status: "bounded",
+          classification: sourceStore.classification,
+          retainDays: sourceStore.retainDays,
+          automatedPrune: true,
+          message:
+            "Website raw source artifacts and chunks are covered by retention cleanup; approved Business Truth, configuration, and non-website artifacts are excluded.",
+        },
         {
           key: "runtime_incidents",
           label: "Runtime incident trail",
           status: "bounded",
           classification: "operator_incident_history",
-          retainDays: 14,
+          retainDays: runtimeStore.retainDays || 14,
           maxRows: 5000,
           pruneIntervalHours: 6,
           automatedPrune: true,
@@ -106,29 +149,21 @@ function buildDataGovernancePosture() {
         {
           key: "audit_log",
           label: "Control-plane audit history",
-          status: "unbounded_in_repo",
+          status: "bounded",
           classification: "governance_mutation_history",
-          automatedPrune: false,
+          retainDays: auditStore.retainDays || 365,
+          automatedPrune: true,
           message:
-            "No repo-enforced retention window is currently defined for audit_log rows.",
-        },
-        {
-          key: "interaction_history",
-          label: "Inbox, comments, and voice interaction records",
-          status: "unbounded_in_repo",
-          classification: "customer_and_operator_interaction_history",
-          automatedPrune: false,
-          message:
-            "No repo-enforced retention TTL is currently defined for conversation, comment, or voice-linked history in this workspace.",
+            "Audit and security logs use a longer tenant-scoped retention window than transient visitor/session data.",
         },
         {
           key: "truth_history",
           label: "Truth, review, and synthesis history",
-          status: "unbounded_in_repo",
+          status: "excluded_from_generic_retention",
           classification: "governed_business_truth_history",
           automatedPrune: false,
           message:
-            "Approved truth versions, review sessions, and synthesis snapshots remain durable until database retention is managed outside this repo.",
+            "Approved Business Truth, review sessions, tenant configuration, and provider secrets are intentionally excluded from generic retention cleanup.",
         },
       ],
     },

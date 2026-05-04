@@ -67,6 +67,13 @@ target, provider env must define `OBS_INCIDENT_OWNER`, `OBS_INCIDENT_CONTACT`,
 `OBS_ALERT_DESTINATION`, and `OBS_ALERT_RUNBOOK_URL` without committing alert
 webhook secrets.
 
+Data retention cleanup is also repo-managed but not self-proving. Local and
+production cleanup defaults to dry-run via `DATA_RETENTION_DRY_RUN=1`. Before
+any launch target, run `npm run retention:cleanup -w ai-hq-backend -- --dry-run`
+against the intended environment, review the output, and attach evidence for
+`P1-005`. Do not run `--execute` until the owner/approver has approved the
+retention runbook in `docs/runbooks/v1-data-retention.md`.
+
 If you do want Telegram channel connect enabled locally, set:
 
 - `TELEGRAM_ENABLED=1`

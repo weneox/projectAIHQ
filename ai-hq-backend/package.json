@@ -15,6 +15,7 @@
     "backfill:operational-data": "node --import ../scripts/workspace-module-loader.mjs scripts/backfill-operational-data.mjs",
     "repair:canonical-auth": "node --import ../scripts/workspace-module-loader.mjs scripts/repair-canonical-auth.mjs",
     "check:operational-readiness": "node --import ../scripts/workspace-module-loader.mjs scripts/check-operational-readiness.mjs",
+    "retention:cleanup": "node --import ../scripts/workspace-module-loader.mjs scripts/run-data-retention-cleanup.mjs",
     "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
     "build": "npm run validate:env && npm run lint",

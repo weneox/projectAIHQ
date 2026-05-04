@@ -102,6 +102,20 @@
                       "acceptedRiskAllowed":  false
                   },
                   {
+                      "id":  "P1-005",
+                      "item":  "V1 data retention policy, dry-run/live cleanup evidence, and privacy exclusions are proven",
+                      "owner":  "Backend / Security / Operations",
+                      "status":  "BLOCKED",
+                      "evidence":  "ai-hq-backend/src/services/dataRetention.js and docs/runbooks/v1-data-retention.md define the repo-side retention policy and safe cleanup path. Production dry-run/live/schedule evidence is not attached yet.",
+                      "reasonMissing":  "Attach a production-scoped dry-run output, approved live cleanup or scheduled job evidence, and reviewer sign-off proving tenant-scoped retention runs without deleting approved Business Truth/configuration. Do not include PII or secret values.",
+                      "date":  "2026-05-04",
+                      "approver":  "TBD",
+                      "blocksLimitedLaunch":  true,
+                      "blocksPaidLaunch":  true,
+                      "blocksPublicLaunch":  true,
+                      "acceptedRiskAllowed":  false
+                  },
+                  {
                       "id":  "P1-006",
                       "item":  "Production observability and alerting owner, contact, destination, and runbook are proven",
                       "owner":  "DevOps / Operations",

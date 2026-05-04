@@ -17,6 +17,15 @@ const REQUIRED_LAUNCH_EVIDENCE_ITEMS = {
       "blocksPublicLaunch",
     ],
   },
+  "P1-005": {
+    item:
+      "V1 data retention policy, dry-run/live cleanup evidence, and privacy exclusions are proven",
+    requiredBlocks: [
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ],
+  },
   "P1-006": {
     item:
       "Production observability and alerting owner, contact, destination, and runbook are proven",
