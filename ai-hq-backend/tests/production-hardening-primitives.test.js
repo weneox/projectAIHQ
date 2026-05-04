@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
@@ -928,7 +928,7 @@ test("production launch evidence validates external P0 proof before allowing lau
       );
 
       for (const field of check.blockingFields) {
-        assert.equal(item[field], false, `${check.id} READY must not block ${field}`);
+        assert.equal(item[field], true, `${check.id} READY must remain required for ${field}`);
       }
     } else {
       assert.equal(item.status, "BLOCKED", `${check.id} must be READY or BLOCKED`);
@@ -1062,3 +1062,4 @@ test("quota reconciliation releases stale durable reservation counters", async (
     limit: 9,
   });
 });
+
