@@ -4,7 +4,6 @@
 import express from "express";
 import { createTenantsHandlers } from "./handlers.js";
 import { tenantInternalRoutes } from "./internal.js";
-import { runWithSystemDbContext } from "../../../db/tenantContext.js";
 
 export function tenantsRoutes({ db }) {
   const router = express.Router();
@@ -17,9 +16,6 @@ export function tenantsRoutes({ db }) {
 
   // only /tenants* routes must require admin
   tenantAdminRouter.use(h.requireAdmin);
-  tenantAdminRouter.use((req, res, next) =>
-    runWithSystemDbContext("tenant_admin_route", next)
-  );
 
   tenantAdminRouter.get("/", h.listTenants);
   tenantAdminRouter.post("/", h.createTenant);
