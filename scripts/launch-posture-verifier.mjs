@@ -53,6 +53,15 @@ const PHASE_TWO_SURFACES = [
 
 export const DEFAULT_INTERNAL_SERVICE = "meta-bot-backend";
 
+export function resolveLaunchPostureInternalToken(env = process.env) {
+  return s(
+    env.AIHQ_INTERNAL_TOKEN_META_BOT ||
+      env.AIHQ_INTERNAL_META_BOT_TOKEN ||
+      env.AIHQ_PROD_INTERNAL_TOKEN_META_BOT ||
+      env.META_BOT_INTERNAL_TOKEN
+  );
+}
+
 export function buildInternalServiceHeaders({
   internalToken = "",
   audience = "",

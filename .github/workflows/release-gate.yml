@@ -371,7 +371,7 @@ jobs:
           POSTDEPLOY_STRICT_SIDECARS: "1"
           PROD_SPINE_STRICT_SIDECARS: "1"
           AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
-          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' && '1' || '0' }}
+          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: "1"
         run: npm run security:placeholder-guard
 
       - name: Summarize production security preflight
@@ -388,7 +388,7 @@ jobs:
             echo "| Railway hook deploy enabled | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
             echo "| Strict sidecars required | \`true\` |"
             echo "| Frontend release SHA required | \`true\` |"
-            echo "| Backend release SHA required | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
+            echo "| Backend release SHA required | \`true\` |"
             echo "| Neox frontend deploy enabled | \`${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1' }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -438,7 +438,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -488,7 +488,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_meta_bot_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -538,7 +538,7 @@ jobs:
             echo "| Deploy hook secret | \`RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK\` |"
             echo "| Deploy hook trigger | \`${{ steps.trigger_twilio_voice_backend_railway_deploy.outcome }}\` |"
             echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
-            echo "| Disabled behavior | \`no-op; Railway/provider deploy handled outside this hook step\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
             echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + production-security-preflight\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -654,6 +654,7 @@ jobs:
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
           META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
@@ -672,7 +673,7 @@ jobs:
           }
 
           require_secret "AIHQ_PROD_BASE_URL" "$AIHQ_BASE_URL"
-          require_secret "AIHQ_PROD_INTERNAL_TOKEN_META_BOT" "$AIHQ_INTERNAL_TOKEN"
+          require_secret "AIHQ_PROD_INTERNAL_TOKEN_META_BOT" "$AIHQ_INTERNAL_TOKEN_META_BOT"
           require_secret "AIHQ_FRONTEND_PROD_URL" "$AIHQ_FRONTEND_PROD_URL"
           require_secret "META_BOT_PROD_BASE_URL" "$META_BOT_BASE_URL"
           require_secret "TWILIO_VOICE_PROD_BASE_URL" "$TWILIO_VOICE_BASE_URL"
@@ -704,6 +705,7 @@ jobs:
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
           AIHQ_LAUNCH_POSTURE_TENANT_KEY: ${{ secrets.AIHQ_LAUNCH_POSTURE_TENANT_KEY }}
           AIHQ_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
@@ -717,7 +719,7 @@ jobs:
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "1"
           PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
-          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' && '1' || '0' }}
+          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: "1"
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:prod-spine:smoke
@@ -727,6 +729,7 @@ jobs:
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
           AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
           AIHQ_LAUNCH_POSTURE_TENANT_KEY: ${{ secrets.AIHQ_LAUNCH_POSTURE_TENANT_KEY }}
           AIHQ_USER_SESSION_COOKIE: ${{ secrets.AIHQ_PROD_USER_SESSION_COOKIE }}
           AIHQ_USER_SESSION_TOKEN: ${{ secrets.AIHQ_PROD_USER_SESSION_TOKEN }}
@@ -759,7 +762,7 @@ jobs:
             echo "| Post-deploy verify step | \`${{ steps.postdeploy_verify.outcome }}\` |"
             echo "| Expected release SHA | \`${{ github.sha }}\` |"
             echo "| Frontend release SHA identity check | \`true\` |"
-            echo "| Backend release SHA identity check | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
+            echo "| Backend release SHA identity check | \`true\` |"
             echo "| Strict sidecars | \`true\` |"
             echo "| Strict website lane tenant smoke | \`true\` |"
             echo "| Fail on degraded | \`true\` |"

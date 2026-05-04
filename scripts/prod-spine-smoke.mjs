@@ -12,6 +12,7 @@ import {
   buildLaunchPostureHeaders,
   buildLaunchPostureUrl,
   classifyLaunchPosture,
+  resolveLaunchPostureInternalToken,
   resolveLaunchPostureSessionCookie,
   resolveLaunchPostureTenantKey,
 } from "./launch-posture-verifier.mjs";
@@ -56,6 +57,13 @@ function normalizeBaseUrl(value = "") {
 function deriveHealthUrl(baseUrl = "") {
   const root = normalizeBaseUrl(baseUrl);
   return root ? `${root}/health` : "";
+}
+
+function deriveAihqReadinessUrl(baseUrl = "") {
+  const root = normalizeBaseUrl(baseUrl);
+  const path = s(process.env.AIHQ_READINESS_PATH, "/readyz");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return root ? `${root}${normalizedPath}` : "";
 }
 
 function deriveRuntimeSignalsUrl(baseUrl = "") {
@@ -119,23 +127,6 @@ function printLine(prefix, message, details = "") {
 function uniqStrings(values = []) {
   return [...new Set(values.map((item) => s(item).toLowerCase()).filter(Boolean))];
 }
-
-const TOLERABLE_AIHQ_READINESS_BLOCKER_CODES = new Set([
-  "projection_missing",
-  "runtime_projection_missing",
-  "projection_stale",
-  "runtime_projection_stale",
-  "truth_version_drift",
-  "authority_invalid",
-  "runtime_authority_unavailable",
-  "projection_build_failed",
-  "repair_pending",
-  "source_dependency_failed",
-  "approval_required",
-  "approved_truth_unavailable",
-  "approved_truth_empty",
-  "review_required",
-]);
 
 function summarizeReadiness(json = {}) {
   const readiness =
@@ -216,14 +207,14 @@ function buildResult(name, ok, details = {}, status = 0) {
   };
 }
 
-function resolveExpectedReleaseSha() {
+function resolveExpectedReleaseSha(env = process.env) {
   return normalizeSha(
     pickFirst(
-      process.env.AIHQ_EXPECTED_RELEASE_SHA,
-      process.env.EXPECTED_RELEASE_SHA,
-      process.env.AIHQ_RELEASE_SHA,
-      process.env.RELEASE_SHA,
-      process.env.GITHUB_SHA
+      env.AIHQ_EXPECTED_RELEASE_SHA,
+      env.EXPECTED_RELEASE_SHA,
+      env.AIHQ_RELEASE_SHA,
+      env.RELEASE_SHA,
+      env.GITHUB_SHA
     )
   );
 }
@@ -260,10 +251,25 @@ function extractBuildShaCandidates(response = {}) {
     .filter(Boolean);
 }
 
-function resolveBackendReleaseShaRequirement() {
-  const explicit = s(process.env.PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA);
-  if (explicit) return bool(explicit, false);
-  return bool(process.env.PROD_SPINE_REQUIRE_RELEASE_SHA, false);
+function isExplicitNonProdReleaseGate(env = process.env) {
+  if (bool(env.PROD_SPINE_NON_PROD, false)) return true;
+  const mode = s(env.PROD_SPINE_ENV || env.APP_ENV || env.NODE_ENV).toLowerCase();
+  return ["dev", "development", "test", "local", "nonprod", "non-production"].includes(
+    mode
+  );
+}
+
+export function resolveBackendReleaseShaRequirement(env = process.env) {
+  const explicit = s(
+    env.PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA ||
+      env.PROD_SPINE_REQUIRE_RELEASE_SHA
+  );
+
+  if (isExplicitNonProdReleaseGate(env)) {
+    return bool(explicit, false);
+  }
+
+  return true;
 }
 
 function renderSummary(results = []) {
@@ -303,6 +309,7 @@ function renderSummary(results = []) {
 function getRequiredEnvIssues({
   aihqBaseUrl,
   internalToken,
+  launchPostureInternalToken,
   expectedReleaseSha,
   requireBackendReleaseSha,
 }) {
@@ -336,6 +343,20 @@ function getRequiredEnvIssues({
     });
   }
 
+  if (!launchPostureInternalToken) {
+    issues.push({
+      name: "prod_spine_aihq_launch_posture_internal_token_meta_bot",
+      ok: false,
+      status: 0,
+      details: {
+        env: "AIHQ_INTERNAL_TOKEN_META_BOT",
+        reasonCode: "missing_required_env",
+        message:
+          "AIHQ_INTERNAL_TOKEN_META_BOT is required so launch posture smoke uses the scoped Meta service identity instead of a broad internal token.",
+      },
+    });
+  }
+
   if (requireBackendReleaseSha && !expectedReleaseSha) {
     issues.push({
       name: "prod_spine_expected_release_sha",
@@ -355,31 +376,55 @@ function getRequiredEnvIssues({
 
 export function classifyAihqReadiness(readiness = {}) {
   const blockerReasonCodes = uniqStrings(readiness.blockerReasonCodes || []);
-  const fatalBlockerReasonCodes = blockerReasonCodes.filter(
-    (code) => !TOLERABLE_AIHQ_READINESS_BLOCKER_CODES.has(code)
-  );
-
-  const tolerableOnly =
-    Number(readiness.blockersTotal || 0) > 0 &&
-    blockerReasonCodes.length > 0 &&
-    fatalBlockerReasonCodes.length === 0;
-
-  const effectiveBlockersTotal = tolerableOnly
-    ? 0
-    : Number(readiness.blockersTotal || 0);
-
-  const effectiveStatus =
-    tolerableOnly &&
-    ["blocked", "unavailable"].includes(s(readiness.status).toLowerCase())
-      ? "degraded"
-      : s(readiness.status);
+  const fatalBlockerReasonCodes =
+    Number(readiness.blockersTotal || 0) > 0 ? blockerReasonCodes : [];
+  const effectiveBlockersTotal = Number(readiness.blockersTotal || 0);
+  const effectiveStatus = s(readiness.status);
 
   return {
     blockerReasonCodes,
     fatalBlockerReasonCodes,
-    tolerableOnly,
+    tolerableOnly: false,
     effectiveBlockersTotal,
     effectiveStatus,
+    productionBlockersEnforced: true,
+  };
+}
+
+export function classifyIncidentAcceptance({
+  incidents = {},
+  readinessPolicy = {},
+  dbOk = false,
+  workers = {},
+  status = "",
+} = {}) {
+  const activeIncidentDegraded =
+    s(incidents.status).toLowerCase() === "degraded" ||
+    Number(incidents.errorCount || 0) > 0;
+  const activeIncidentAttention =
+    s(incidents.status).toLowerCase() === "attention" ||
+    Number(incidents.warnCount || 0) > 0;
+  const workerReady =
+    s(workers.status).toLowerCase() !== "unavailable" &&
+    Number(workers.requiredUnavailableCount || 0) === 0;
+  const readinessReady =
+    s(status).toLowerCase() === "ready" &&
+    Number(readinessPolicy.effectiveBlockersTotal || 0) === 0;
+  const staleIncidentHistoryIgnored =
+    !activeIncidentDegraded &&
+    Number(incidents.historyErrorCount || 0) > 0 &&
+    dbOk === true &&
+    readinessReady &&
+    workerReady;
+
+  return {
+    activeIncidentDegraded,
+    activeIncidentAttention,
+    staleIncidentHistoryIgnored,
+    decision:
+      activeIncidentDegraded || activeIncidentAttention
+        ? "fail_active_incident"
+        : "accept",
   };
 }
 
@@ -390,7 +435,7 @@ export function isAihqDegradedForAcceptance({
   incidents = {},
 } = {}) {
   const degradedFromReadiness =
-    s(status).toLowerCase() === "degraded" && !readinessPolicy.tolerableOnly;
+    s(status).toLowerCase() === "degraded";
 
   return (
     degradedFromReadiness ||
@@ -503,7 +548,7 @@ async function verifyAihqBuildIdentity({
 }
 
 async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
-  const healthUrl = deriveHealthUrl(baseUrl);
+  const healthUrl = deriveAihqReadinessUrl(baseUrl);
   const health = await fetchJson(healthUrl, {}, timeoutMs);
 
   const readiness = summarizeReadiness(health.json || {});
@@ -513,15 +558,24 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   const rawStatus = s(health.json?.status).toLowerCase();
   const readinessPolicy = classifyAihqReadiness(readiness);
   const status = s(readinessPolicy.effectiveStatus || rawStatus).toLowerCase();
-
-  const degradedFromReadiness =
-    status === "degraded" && !readinessPolicy.tolerableOnly;
-  const degraded = isAihqDegradedForAcceptance({
-    status,
-    readinessPolicy,
-    workers,
+  const incidentAcceptance = classifyIncidentAcceptance({
     incidents,
+    readinessPolicy,
+    dbOk,
+    workers,
+    status,
   });
+
+  const degradedFromReadiness = status === "degraded";
+  const degraded =
+    isAihqDegradedForAcceptance({
+      status,
+      readinessPolicy,
+      workers,
+      incidents,
+    }) ||
+    incidentAcceptance.activeIncidentDegraded ||
+    incidentAcceptance.activeIncidentAttention;
 
   return [
     buildResult(
@@ -542,6 +596,7 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         blockerReasonCodes: readinessPolicy.blockerReasonCodes,
         fatalBlockerReasonCodes: readinessPolicy.fatalBlockerReasonCodes,
         tolerableReadinessOnly: readinessPolicy.tolerableOnly,
+        productionBlockersEnforced: readinessPolicy.productionBlockersEnforced,
         degradedFromReadiness,
         dbOk,
       },
@@ -587,6 +642,11 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         incidentActiveWindowStartedAt: incidents.activeWindowStartedAt,
         incidentHistoryStatus: incidents.historyStatus,
         incidentHistoryErrorCount: incidents.historyErrorCount,
+        activeIncidentDegraded: incidentAcceptance.activeIncidentDegraded,
+        activeIncidentAttention: incidentAcceptance.activeIncidentAttention,
+        staleIncidentHistoryIgnored:
+          incidentAcceptance.staleIncidentHistoryIgnored,
+        incidentAcceptanceDecision: incidentAcceptance.decision,
         failOnDegraded,
       },
       health.status
@@ -720,7 +780,7 @@ async function verifySidecar(
 
 async function verifyLaunchPosture({
   baseUrl,
-  internalToken,
+  launchPostureInternalToken,
   sessionCookie,
   tenantKey,
   timeoutMs,
@@ -732,7 +792,10 @@ async function verifyLaunchPosture({
   });
   const internalResponse = await fetchJson(
     internalUrl,
-    buildLaunchPostureHeaders({ internalToken, internal: true }),
+    buildLaunchPostureHeaders({
+      internalToken: launchPostureInternalToken,
+      internal: true,
+    }),
     timeoutMs
   );
 
@@ -746,7 +809,8 @@ async function verifyLaunchPosture({
           routeMode: "internal",
           tenantKey: s(tenantKey),
           httpStatus: internalResponse.status,
-          internalTokenConfigured: Boolean(s(internalToken)),
+          internalService: "meta-bot-backend",
+          scopedInternalTokenConfigured: Boolean(s(launchPostureInternalToken)),
           reasonCode: s(
             internalResponse.json?.reasonCode ||
               internalResponse.json?.reason ||
@@ -776,7 +840,8 @@ async function verifyLaunchPosture({
           routeMode: "internal",
           tenantKey: s(tenantKey),
           httpStatus: internalResponse.status,
-          internalTokenConfigured: Boolean(s(internalToken)),
+          internalService: "meta-bot-backend",
+          scopedInternalTokenConfigured: Boolean(s(launchPostureInternalToken)),
           ...posture.details,
         },
         internalResponse.status
@@ -937,6 +1002,7 @@ async function verifyWebsiteLane({
 async function runAttempt({
   aihqBaseUrl,
   internalToken,
+  launchPostureInternalToken,
   expectedReleaseSha,
   requireBackendReleaseSha,
   metaBaseUrl,
@@ -972,7 +1038,7 @@ async function runAttempt({
   results.push(
     ...(await verifyLaunchPosture({
       baseUrl: aihqBaseUrl,
-      internalToken,
+      launchPostureInternalToken,
       sessionCookie: launchPostureSessionCookie,
       tenantKey: launchPostureTenantKey,
       timeoutMs,
@@ -1038,7 +1104,8 @@ async function main() {
   const attempts = Math.max(1, n(process.env.PROD_SPINE_SMOKE_ATTEMPTS, 1));
   const delayMs = Math.max(0, n(process.env.PROD_SPINE_SMOKE_DELAY_MS, 15000));
   const aihqBaseUrl = normalizeBaseUrl(process.env.AIHQ_BASE_URL);
-  const internalToken = s(process.env.AIHQ_INTERNAL_TOKEN);
+  const launchPostureInternalToken = resolveLaunchPostureInternalToken();
+  const internalToken = s(launchPostureInternalToken || process.env.AIHQ_INTERNAL_TOKEN);
   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
   const websiteLaneTenantKey = s(process.env.WEBSITE_LANE_TENANT_KEY);
@@ -1066,6 +1133,7 @@ async function main() {
       requireBackendReleaseSha,
       requireWebsiteLane,
       failOnDegraded,
+      readinessPath: s(process.env.AIHQ_READINESS_PATH, "/readyz"),
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
       websiteLaneDomainConfigured: Boolean(websiteLaneDomain),
       launchPostureTenantKeyConfigured: Boolean(launchPostureTenantKey),
@@ -1076,6 +1144,7 @@ async function main() {
   const envIssues = getRequiredEnvIssues({
     aihqBaseUrl,
     internalToken,
+    launchPostureInternalToken,
     expectedReleaseSha,
     requireBackendReleaseSha,
   });
@@ -1099,6 +1168,7 @@ async function main() {
     lastResults = await runAttempt({
       aihqBaseUrl,
       internalToken,
+      launchPostureInternalToken,
       expectedReleaseSha,
       requireBackendReleaseSha,
       metaBaseUrl,

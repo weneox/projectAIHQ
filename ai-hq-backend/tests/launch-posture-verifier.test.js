@@ -6,6 +6,7 @@ import {
   buildLaunchPostureHeaders,
   buildLaunchPostureUrl,
   classifyLaunchPosture,
+  resolveLaunchPostureInternalToken,
 } from "../../scripts/launch-posture-verifier.mjs";
 
 function validPosture(overrides = {}) {
@@ -100,6 +101,29 @@ test("launch posture verifier builds internal route URL and headers by default",
     {
       accept: "application/json",
       cookie: "aihq_user=session-token",
+    }
+  );
+});
+
+test("launch posture verifier resolves the scoped Meta service token", () => {
+  assert.equal(
+    resolveLaunchPostureInternalToken({
+      AIHQ_INTERNAL_TOKEN: "global-secret",
+      AIHQ_INTERNAL_TOKEN_META_BOT: "meta-scoped-secret",
+    }),
+    "meta-scoped-secret"
+  );
+  assert.deepEqual(
+    buildLaunchPostureHeaders({
+      internalToken: resolveLaunchPostureInternalToken({
+        AIHQ_PROD_INTERNAL_TOKEN_META_BOT: "prod-meta-scoped-secret",
+      }),
+    }),
+    {
+      accept: "application/json",
+      "x-internal-token": "prod-meta-scoped-secret",
+      "x-internal-audience": "aihq-backend.launch-posture",
+      "x-internal-service": "meta-bot-backend",
     }
   );
 });

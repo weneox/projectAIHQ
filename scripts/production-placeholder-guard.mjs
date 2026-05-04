@@ -34,9 +34,8 @@ const REQUIRED_FLAGS = [
   "POSTDEPLOY_STRICT_SIDECARS",
   "PROD_SPINE_STRICT_SIDECARS",
   "AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA",
+  "PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA",
 ];
-
-const RAILWAY_DEPLOY_REQUIRED_FLAGS = ["PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA"];
 
 function isNeoxDeployEnabled() {
   return s(process.env.ENABLE_NEOX_FRONTEND_PROD_DEPLOY) === "1";
@@ -175,12 +174,7 @@ function validateReleaseSha() {
 }
 
 function validateStrictFlags() {
-  const requiredFlags = [
-    ...REQUIRED_FLAGS,
-    ...(areRailwayDeployHooksEnabled() ? RAILWAY_DEPLOY_REQUIRED_FLAGS : []),
-  ];
-
-  return requiredFlags.map((name) => ({
+  return REQUIRED_FLAGS.map((name) => ({
     name,
     ok: bool(process.env[name], false) === true,
     reasonCode: bool(process.env[name], false) === true ? "" : "strict_flag_not_enabled",

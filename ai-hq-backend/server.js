@@ -305,6 +305,8 @@ async function main() {
       marker: "ROOT_BUILD_V4_FEATURES",
       endpoints: [
         "GET /health",
+        "GET /readyz",
+        "GET /livez",
         "GET /__whoami",
         "GET /__buildcheck",
         "GET /api/__buildcheck",
@@ -316,6 +318,26 @@ async function main() {
         "POST /api/auth/logout",
         "GET /api",
       ],
+    });
+  });
+
+  app.get("/livez", (_req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return res.status(200).json({
+      ok: true,
+      service: "ai-hq-backend",
+      env: cfg.app.env,
+      status: "live",
+      marker: "LIVEZ_BUILD_V4_FEATURES",
+      build: {
+        version: buildInfo.version,
+        sha: buildInfo.shortSha || "unknown",
+        fullSha: buildInfo.fullSha || "unknown",
+        releaseSha: buildInfo.releaseSha || "unknown",
+        bootId: buildInfo.bootId,
+        marker: buildInfo.marker,
+        startedAt: buildInfo.startedAt,
+      },
     });
   });
 
@@ -361,7 +383,11 @@ async function main() {
     );
   });
 
-  app.get("/health", async (_req, res) => {
+  const handleRuntimeHealth = async (
+    _req,
+    res,
+    { readinessHttpStatus = false } = {}
+  ) => {
     const hasDbUrl = Boolean(s(cfg.db.url));
     const db = getDb();
 
@@ -451,7 +477,7 @@ async function main() {
       out.summary.message =
         "Database-backed readiness is unavailable, so this runtime is not healthy enough to advertise as ready.";
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      return res.status(200).json(out);
+      return res.status(readinessHttpStatus ? 503 : 200).json(out);
     }
 
     try {
@@ -631,8 +657,15 @@ async function main() {
           : "The control plane is reachable but degraded. Operators should review worker or recent incident signals before trusting normal runtime behavior.";
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    return res.status(200).json(out);
-  });
+    return res
+      .status(readinessHttpStatus && out.status !== "ready" ? 503 : 200)
+      .json(out);
+  };
+
+  app.get("/health", (req, res) => handleRuntimeHealth(req, res));
+  app.get("/readyz", (req, res) =>
+    handleRuntimeHealth(req, res, { readinessHttpStatus: true })
+  );
 
   app.get("/__runtime-signals", diagnosticsGuard, async (req, res) => {
     const db = getDb();
