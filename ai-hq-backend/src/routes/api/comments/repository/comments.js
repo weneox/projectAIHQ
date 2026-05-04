@@ -11,9 +11,21 @@ function isGuardedDb(db) {
   return db?.__tenantGuardedDb === true;
 }
 
+function resolveScopedTenantKey(inputTenantKey = "") {
+  const contextKey = contextTenantKey();
+  const explicitKey = resolveTenantKey(inputTenantKey);
+
+  if (contextKey && explicitKey && contextKey !== explicitKey) {
+    const err = new Error("comment access tenant scope mismatch");
+    err.code = "TENANT_SCOPE_MISMATCH";
+    throw err;
+  }
+
+  return explicitKey || contextKey;
+}
 export async function getCommentById(db, id, tenantKey = "") {
   if (!isDbReady(db)) return null;
-  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  const resolvedTenantKey = resolveScopedTenantKey(tenantKey);
   if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
@@ -122,7 +134,7 @@ export async function insertComment(db, payload) {
 
 export async function updateCommentState(db, id, nextClassification, nextRaw, tenantKey = "") {
   if (!isDbReady(db)) return null;
-  const resolvedTenantKey = resolveTenantKey(tenantKey) || contextTenantKey();
+  const resolvedTenantKey = resolveScopedTenantKey(tenantKey);
   if (!resolvedTenantKey && isGuardedDb(db)) return null;
 
   const result = await db.query(
