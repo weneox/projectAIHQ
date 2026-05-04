@@ -16,8 +16,10 @@ import {
   recordDurableExecutionClaimed,
   recordDurableExecutionCreated,
   recordDurableExecutionFinalized,
+  recordOutboundFinality,
   recordRealtimeAuthFailure,
   recordSourceSyncOutcome,
+  recordWebhookIngestionFailure,
   resetRuntimeSignals,
   summarizeWorkerFleet,
 } from "../src/observability/runtimeSignals.js";
@@ -109,6 +111,76 @@ test("stale worker heartbeat and repeated failure signals produce attention stat
     cfg.observability.realtimeAuthFailureAttentionCount = previousRealtimeThreshold;
     cfg.observability.sourceSyncAttentionCount = previousSourceSyncThreshold;
     cfg.observability.staleWorkerHeartbeatMs = previousStaleMs;
+  }
+});
+
+test("v1 critical ingestion, runtime, and outbound failures produce actionable alerts", () => {
+  resetRuntimeSignals();
+  const previousWindow = cfg.observability.recentSignalWindowMs;
+  const previousWebhookThreshold =
+    cfg.observability.webhookIngestionFailureAttentionCount;
+  const previousOutboundThreshold = cfg.observability.outboundFailureAttentionCount;
+  const previousRuntimeThreshold = cfg.observability.runtimeSignalAttentionCount;
+
+  try {
+    cfg.observability.recentSignalWindowMs = 60_000;
+    cfg.observability.webhookIngestionFailureAttentionCount = 1;
+    cfg.observability.outboundFailureAttentionCount = 1;
+    cfg.observability.runtimeSignalAttentionCount = 1;
+
+    recordWebhookIngestionFailure({
+      tenantKey: "acme",
+      channel: "website_widget",
+      reasonCode: "widget_ingest_failed",
+    });
+    recordOutboundFinality({
+      tenantKey: "acme",
+      provider: "meta",
+      channel: "instagram",
+      status: "failed",
+      errorCode: "manual_reply_send_failed",
+    });
+    recordRuntimeSignal({
+      level: "warn",
+      category: "runtime_projection",
+      code: "runtime_projection_not_ready",
+      reasonCode: "projection_stale",
+      durable: false,
+    });
+
+    const operational = buildDurableOperationalStatus({
+      summary: {
+        counts: {
+          retryable: 0,
+        },
+        deadLetterCount: 0,
+      },
+      durableWorker: {
+        enabled: true,
+        running: true,
+        lastHeartbeatAt: new Date().toISOString(),
+      },
+      sourceSyncWorker: {
+        enabled: true,
+        running: true,
+        lastHeartbeatAt: new Date().toISOString(),
+      },
+    });
+    const alertCodes = operational.alerts.map((item) => item.code);
+
+    assert.equal(operational.status, "attention");
+    assert.ok(alertCodes.includes("webhook_ingestion_failures"));
+    assert.ok(alertCodes.includes("outbound_reply_failures"));
+    assert.ok(alertCodes.includes("runtime_signal_attention"));
+    assert.equal(operational.recentSignals.webhookIngestionFailures, 1);
+    assert.equal(operational.recentSignals.outboundReplyFailures, 1);
+    assert.equal(operational.recentSignals.runtimeSignalAttention, 1);
+  } finally {
+    cfg.observability.recentSignalWindowMs = previousWindow;
+    cfg.observability.webhookIngestionFailureAttentionCount =
+      previousWebhookThreshold;
+    cfg.observability.outboundFailureAttentionCount = previousOutboundThreshold;
+    cfg.observability.runtimeSignalAttentionCount = previousRuntimeThreshold;
   }
 });
 

@@ -79,3 +79,49 @@ test("requestContextMiddleware emits lifecycle logs and response headers", () =>
   assert.equal(entries[1].event, "http.request.completed");
   assert.equal(entries[1].correlationId, "corr-health-1");
 });
+
+test("structured logger redacts secret-like fields before emission", () => {
+  const entries = [];
+  const logger = createStructuredLogger(
+    {
+      service: "meta-bot-backend",
+      metaWebhookSecret: "should-not-leak",
+    },
+    (entry) => {
+      entries.push(entry);
+    }
+  );
+
+  logger.warn("meta.webhook.verify.rejected", {
+    authorization: "Bearer should-not-leak",
+    secret: "should-not-leak",
+    secretSource: "META_WEBHOOK_APP_SECRET",
+    secretFingerprint: "sha256:abcd",
+    hasMetaAppSecret: true,
+    message: "forward failed token=should-not-leak",
+    nested: {
+      accessToken: "should-not-leak",
+      safeStatus: "blocked",
+    },
+  });
+  logger.error(
+    "meta.webhook.forward.failed",
+    new Error("provider rejected Authorization: Bearer should-not-leak")
+  );
+
+  const serialized = JSON.stringify(entries);
+  assert.equal(entries[0].metaWebhookSecret, "[REDACTED]");
+  assert.equal(entries[0].authorization, "[REDACTED]");
+  assert.equal(entries[0].secret, "[REDACTED]");
+  assert.equal(entries[0].secretSource, "META_WEBHOOK_APP_SECRET");
+  assert.equal(entries[0].secretFingerprint, "sha256:abcd");
+  assert.equal(entries[0].hasMetaAppSecret, true);
+  assert.equal(entries[0].message, "forward failed token=[REDACTED]");
+  assert.equal(entries[0].nested.accessToken, "[REDACTED]");
+  assert.equal(entries[0].nested.safeStatus, "blocked");
+  assert.equal(
+    entries[1].error.message,
+    "provider rejected Authorization: Bearer [REDACTED]"
+  );
+  assert.doesNotMatch(serialized, /should-not-leak/);
+});

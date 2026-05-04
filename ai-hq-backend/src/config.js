@@ -721,6 +721,15 @@ export const cfg = {
   },
 
   observability: {
+    incidentOwner: s(process.env.OBS_INCIDENT_OWNER, ""),
+    incidentContact: s(process.env.OBS_INCIDENT_CONTACT, ""),
+    alertProvider: s(process.env.OBS_ALERT_PROVIDER, "vendor-neutral"),
+    alertDestination: s(process.env.OBS_ALERT_DESTINATION, ""),
+    alertRunbookUrl: s(
+      process.env.OBS_ALERT_RUNBOOK_URL,
+      "docs/runbooks/v1-production-observability.md"
+    ),
+    alertEvidenceUrl: s(process.env.OBS_ALERT_EVIDENCE_URL, ""),
     staleWorkerHeartbeatMs: n(
       process.env.OBS_STALE_WORKER_HEARTBEAT_MS,
       2 * 60_000
@@ -756,6 +765,22 @@ export const cfg = {
     quotaRejectionAttentionCount: n(
       process.env.OBS_QUOTA_REJECTION_ATTENTION_COUNT,
       10
+    ),
+    webhookIngestionFailureAttentionCount: n(
+      process.env.OBS_WEBHOOK_INGESTION_FAILURE_ATTENTION_COUNT,
+      3
+    ),
+    outboundFailureAttentionCount: n(
+      process.env.OBS_OUTBOUND_FAILURE_ATTENTION_COUNT,
+      3
+    ),
+    runtimeSignalAttentionCount: n(
+      process.env.OBS_RUNTIME_SIGNAL_ATTENTION_COUNT,
+      3
+    ),
+    recentRuntimeSignalHistoryLimit: n(
+      process.env.OBS_RECENT_RUNTIME_SIGNAL_HISTORY_LIMIT,
+      100
     ),
   },
 

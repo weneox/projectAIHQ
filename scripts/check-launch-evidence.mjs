@@ -17,6 +17,15 @@ const REQUIRED_LAUNCH_EVIDENCE_ITEMS = {
       "blocksPublicLaunch",
     ],
   },
+  "P1-006": {
+    item:
+      "Production observability and alerting owner, contact, destination, and runbook are proven",
+    requiredBlocks: [
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ],
+  },
 };
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -134,7 +143,7 @@ export function validateLaunchEvidence(evidence, { target = "limited" } = {}) {
     for (const field of requirement.requiredBlocks) {
       if (item[field] !== true) {
         errors.push(
-          `${id} must set ${field}=true because deployment environment classification proof is required before every launch target.`
+          `${id} must set ${field}=true because ${requirement.item} is required before every launch target.`
         );
       }
     }

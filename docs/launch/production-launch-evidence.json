@@ -100,6 +100,20 @@
                       "blocksPaidLaunch":  true,
                       "blocksPublicLaunch":  true,
                       "acceptedRiskAllowed":  false
+                  },
+                  {
+                      "id":  "P1-006",
+                      "item":  "Production observability and alerting owner, contact, destination, and runbook are proven",
+                      "owner":  "DevOps / Operations",
+                      "status":  "BLOCKED",
+                      "evidence":  "docs/runbooks/v1-production-observability.md defines the vendor-neutral observability contract and required evidence. External provider alert delivery proof is not attached yet.",
+                      "reasonMissing":  "Attach provider evidence that OBS_INCIDENT_OWNER, OBS_INCIDENT_CONTACT, OBS_ALERT_DESTINATION, and OBS_ALERT_RUNBOOK_URL are configured, and attach a successful test alert delivered to the incident contact. Do not include webhook secrets.",
+                      "date":  "2026-05-04",
+                      "approver":  "TBD",
+                      "blocksLimitedLaunch":  true,
+                      "blocksPaidLaunch":  true,
+                      "blocksPublicLaunch":  true,
+                      "acceptedRiskAllowed":  false
                   }
               ]
 }

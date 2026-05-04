@@ -17,14 +17,69 @@ function compact(input = {}) {
   return out;
 }
 
+const SENSITIVE_LOG_KEY_RE =
+  /(^|[_-])(password|passcode|token|secret|authorization|cookie|credential|api[_-]?key)($|[_-])/i;
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSensitiveLogKey(key = "") {
+  const normalized = String(key || "").trim();
+  if (!normalized) return false;
+  if (SENSITIVE_LOG_KEY_RE.test(`_${normalized}_`)) return true;
+  const compactKey = normalized.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return /(password|passcode|token|secret|authorization|cookie|credential|apikey)/.test(
+    compactKey
+  );
+}
+
+function isSafeSensitiveMetadataKey(key = "") {
+  const compactKey = String(key || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return (
+    compactKey.endsWith("fingerprint") ||
+    compactKey === "secretsource" ||
+    compactKey.endsWith("secretsource")
+  );
+}
+
+function sanitizeLogString(value = "") {
+  return s(value)
+    .replace(
+      /\b((?:password|passcode|token|secret|authorization|credential|api[_-]?key)\s*[=:]\s*(?:Bearer\s+)?)[^\s,;&]+/gi,
+      "$1[REDACTED]"
+    )
+    .replace(/\b(Bearer\s+)[^\s,;]+/gi, "$1[REDACTED]");
+}
+
+function sanitizeForLog(value, depth = 0) {
+  if (depth > 6) return "[MaxDepth]";
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map((item) => sanitizeForLog(item, depth + 1));
+  }
+  if (typeof value === "string") return sanitizeLogString(value);
+  if (!isPlainObject(value)) return value;
+
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (isSensitiveLogKey(key) && !isSafeSensitiveMetadataKey(key)) {
+      out[key] =
+        typeof raw === "boolean" || typeof raw === "number" ? raw : "[REDACTED]";
+      continue;
+    }
+    out[key] = sanitizeForLog(raw, depth + 1);
+  }
+  return out;
+}
+
 function serializeError(error) {
   if (!error) return null;
-  if (typeof error === "string") return { message: error };
+  if (typeof error === "string") return { message: sanitizeLogString(error) };
 
   return compact({
     name: s(error?.name || "Error"),
-    message: s(error?.message || String(error)),
-    code: s(error?.code),
+    message: sanitizeLogString(error?.message || String(error)),
+    code: sanitizeLogString(error?.code),
   });
 }
 
@@ -96,12 +151,14 @@ export function createStructuredLogger(baseContext = {}, sink = null) {
         };
 
   function write(level, event, data = {}, error = null) {
+    const safeBaseContext = sanitizeForLog(compact(baseContext));
+    const safeData = sanitizeForLog(compact(data));
     const entry = compact({
       ts: new Date().toISOString(),
       level: s(level || "info").toLowerCase(),
       event: s(event || "log"),
-      ...compact(baseContext),
-      ...compact(data),
+      ...safeBaseContext,
+      ...safeData,
       error: serializeError(error),
     });
     emit(entry);

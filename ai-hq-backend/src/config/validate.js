@@ -422,6 +422,40 @@ export function getConfigIssues() {
     );
   }
 
+  for (const item of [
+    {
+      key: "observability.incidentOwner",
+      envKeys: ["OBS_INCIDENT_OWNER"],
+      message:
+        "OBS_INCIDENT_OWNER is missing; production incidents have no accountable owner.",
+    },
+    {
+      key: "observability.incidentContact",
+      envKeys: ["OBS_INCIDENT_CONTACT"],
+      message:
+        "OBS_INCIDENT_CONTACT is missing; production alerts have no configured contact/channel.",
+    },
+    {
+      key: "observability.alertDestination",
+      envKeys: ["OBS_ALERT_DESTINATION"],
+      message:
+        "OBS_ALERT_DESTINATION is missing; production alert routing is not configured.",
+    },
+    {
+      key: "observability.alertRunbookUrl",
+      envKeys: ["OBS_ALERT_RUNBOOK_URL"],
+      message:
+        "OBS_ALERT_RUNBOOK_URL is missing; first-response runbook routing is not configured.",
+    },
+  ]) {
+    if (!isNonEmpty(cfg?.observability?.[item.key.split(".")[1]])) {
+      pushIssue(issues, "warning", item.key, item.message, {
+        category: "observability",
+        envKeys: item.envKeys,
+      });
+    }
+  }
+
   const quotaMode = s(cfg?.commercial?.quotaEnforcementMode || "").toLowerCase();
   if (!["enforce", "monitor", "off"].includes(quotaMode)) {
     pushIssue(

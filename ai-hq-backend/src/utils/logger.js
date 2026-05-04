@@ -22,18 +22,40 @@ function isSensitiveLogKey(key = "") {
   return /^(authorization|cookie|set-cookie)$/i.test(normalized);
 }
 
+function isSafeSensitiveMetadataKey(key = "") {
+  const compact = String(key || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return (
+    compact.endsWith("fingerprint") ||
+    compact === "secretsource" ||
+    compact.endsWith("secretsource")
+  );
+}
+
+function sanitizeLogString(value = "") {
+  return s(value)
+    .replace(
+      /\b((?:password|passcode|token|secret|authorization|credential|api[_-]?key)\s*[=:]\s*(?:Bearer\s+)?)[^\s,;&]+/gi,
+      "$1[REDACTED]"
+    )
+    .replace(/\b(Bearer\s+)[^\s,;]+/gi, "$1[REDACTED]");
+}
+
 function sanitizeForLog(value, depth = 0) {
   if (depth > 6) return "[MaxDepth]";
   if (Array.isArray(value)) {
     return value.slice(0, 50).map((item) => sanitizeForLog(item, depth + 1));
   }
+  if (typeof value === "string") return sanitizeLogString(value);
   if (!isPlainObject(value)) return value;
 
   const out = {};
   for (const [key, raw] of Object.entries(value)) {
-    out[key] = isSensitiveLogKey(key)
-      ? "[REDACTED]"
-      : sanitizeForLog(raw, depth + 1);
+    if (isSensitiveLogKey(key) && !isSafeSensitiveMetadataKey(key)) {
+      out[key] =
+        typeof raw === "boolean" || typeof raw === "number" ? raw : "[REDACTED]";
+      continue;
+    }
+    out[key] = sanitizeForLog(raw, depth + 1);
   }
   return out;
 }
@@ -59,14 +81,14 @@ function compactObject(input = {}) {
 
 function serializeError(error) {
   if (!error) return null;
-  if (typeof error === "string") return { message: error };
+  if (typeof error === "string") return { message: sanitizeLogString(error) };
 
   return compactObject({
     name: s(error.name || "Error"),
-    message: s(error.message || String(error)),
-    code: s(error.code),
-    stage: s(error.stage),
-    stack: s(error.stack),
+    message: sanitizeLogString(error.message || String(error)),
+    code: sanitizeLogString(error.code),
+    stage: sanitizeLogString(error.stage),
+    stack: sanitizeLogString(error.stack),
   });
 }
 

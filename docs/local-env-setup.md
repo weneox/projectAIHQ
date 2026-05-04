@@ -62,6 +62,11 @@ If you do not need an optional feature in local development, disable it instead 
 - Draft scheduling worker: `DRAFT_SCHEDULE_WORKER_ENABLED=0`
 - Service worker in frontend: `VITE_ENABLE_SERVICE_WORKER=0`
 
+Production observability is vendor-neutral in the repo. Before any launch
+target, provider env must define `OBS_INCIDENT_OWNER`, `OBS_INCIDENT_CONTACT`,
+`OBS_ALERT_DESTINATION`, and `OBS_ALERT_RUNBOOK_URL` without committing alert
+webhook secrets.
+
 If you do want Telegram channel connect enabled locally, set:
 
 - `TELEGRAM_ENABLED=1`

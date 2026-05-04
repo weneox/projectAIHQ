@@ -1,6 +1,7 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
 import { setTenantContext } from "../../../../db/tenantContext.js";
 import { createLogger } from "../../../../utils/logger.js";
+import { recordWebhookIngestionFailure } from "../../../../observability/runtimeSignals.js";
 import { enforceTenantQuota } from "../../../../services/tenantQuota.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
 import { emitRuntimeProjectionBlockedConsumer } from "../../../../services/runtimeProjectionObservability.js";
@@ -138,6 +139,12 @@ function logIngestFailure({
   try {
     ingestLog.error("inbox.ingest.failed", payload.details || {});
   } catch {}
+  recordWebhookIngestionFailure({
+    tenantId,
+    tenantKey: s(input?.tenantKey),
+    channel: s(input?.channel || "inbox"),
+    reasonCode: payload.reasonCode,
+  });
 
   return payload;
 }

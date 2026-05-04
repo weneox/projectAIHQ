@@ -635,10 +635,13 @@ export function recordRuntimeSignal({
   tenantKey = "",
   durable = true,
 } = {}) {
+  const normalizedLevel = lower(level || "info");
+  const normalizedCategory = s(category || "runtime");
+  const normalizedCode = s(code || "runtime_signal");
   const entry = {
-    level: lower(level || "info"),
-    category: s(category || "runtime"),
-    code: s(code || "runtime_signal"),
+    level: normalizedLevel,
+    category: normalizedCategory,
+    code: normalizedCode,
     reasonCode: s(reasonCode),
     message: s(message).slice(0, 240),
     service: s(service || "ai-hq-backend"),
@@ -657,6 +660,18 @@ export function recordRuntimeSignal({
         )
       : {},
   };
+  incrementCounter("runtime_signals_total", {
+    level: normalizedLevel,
+    category: normalizedCategory,
+    code: normalizedCode,
+  });
+  if (normalizedLevel === "warn" || normalizedLevel === "error") {
+    recordRecent("runtime_signal_attention_recent_total", {
+      level: normalizedLevel,
+      category: normalizedCategory,
+      code: normalizedCode,
+    });
+  }
   pushRecentEvent(entry);
   if (durable) {
     persistRuntimeEvent(entry);
@@ -811,6 +826,57 @@ export function buildDurableOperationalStatus({
     });
   }
 
+  const webhookIngestionFailureCount = countRecent(
+    "webhook_ingestion_failures_recent_total",
+    {
+      withinMs: cfg?.observability?.recentSignalWindowMs,
+    }
+  );
+  if (
+    webhookIngestionFailureCount >=
+    Math.max(1, n(cfg?.observability?.webhookIngestionFailureAttentionCount, 3))
+  ) {
+    alerts.push({
+      code: "webhook_ingestion_failures",
+      status: "attention",
+      message: "Recent webhook/widget/inbox ingestion failures need attention.",
+      value: webhookIngestionFailureCount,
+    });
+  }
+
+  const outboundFailureCount = countRecent("outbound_attempt_failures_recent_total", {
+    withinMs: cfg?.observability?.recentSignalWindowMs,
+  });
+  if (
+    outboundFailureCount >=
+    Math.max(1, n(cfg?.observability?.outboundFailureAttentionCount, 3))
+  ) {
+    alerts.push({
+      code: "outbound_reply_failures",
+      status: "attention",
+      message: "Recent outbound/manual reply delivery failures need attention.",
+      value: outboundFailureCount,
+    });
+  }
+
+  const runtimeSignalAttentionCount = countRecent(
+    "runtime_signal_attention_recent_total",
+    {
+      withinMs: cfg?.observability?.recentSignalWindowMs,
+    }
+  );
+  if (
+    runtimeSignalAttentionCount >=
+    Math.max(1, n(cfg?.observability?.runtimeSignalAttentionCount, 3))
+  ) {
+    alerts.push({
+      code: "runtime_signal_attention",
+      status: "attention",
+      message: "Recent runtime projection/readiness signals need attention.",
+      value: runtimeSignalAttentionCount,
+    });
+  }
+
   return {
     status: alerts.length ? "attention" : "ok",
     alerts,
@@ -821,6 +887,9 @@ export function buildDurableOperationalStatus({
       sourceSyncAttentionEvents: sourceSyncAttentionCount,
       httpRequestErrors: httpErrorSpikeCount,
       tenantQuotaRejections: quotaRejectionCount,
+      webhookIngestionFailures: webhookIngestionFailureCount,
+      outboundReplyFailures: outboundFailureCount,
+      runtimeSignalAttention: runtimeSignalAttentionCount,
     },
     workers: {
       durableExecution: {

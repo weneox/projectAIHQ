@@ -16,6 +16,51 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function hasText(v) {
+  return s(v).length > 0;
+}
+
+const V1_OBSERVABILITY_COVERAGE = [
+  "backend_health_readiness",
+  "meta_webhook_ingestion_failures",
+  "website_widget_inbound_failures",
+  "inbox_inbound_failures",
+  "runtime_projection_readiness_failures",
+  "outbound_manual_reply_failures",
+  "database_connectivity_readiness",
+  "launch_smoke_failures",
+];
+
+export function buildObservabilityHealthStatus() {
+  const ownerConfigured = hasText(cfg.observability?.incidentOwner);
+  const contactConfigured = hasText(cfg.observability?.incidentContact);
+  const destinationConfigured = hasText(cfg.observability?.alertDestination);
+  const runbookConfigured = hasText(cfg.observability?.alertRunbookUrl);
+  const configured =
+    ownerConfigured &&
+    contactConfigured &&
+    destinationConfigured &&
+    runbookConfigured;
+
+  return {
+    status: configured ? "configured" : "missing_config",
+    safeForPublicHealth: true,
+    incidentOwnerConfigured: ownerConfigured,
+    incidentContactConfigured: contactConfigured,
+    alertDestinationConfigured: destinationConfigured,
+    alertRunbookConfigured: runbookConfigured,
+    alertProviderConfigured: hasText(cfg.observability?.alertProvider),
+    alertEvidenceConfigured: hasText(cfg.observability?.alertEvidenceUrl),
+    alertProviderType: hasText(cfg.observability?.alertProvider)
+      ? "configured"
+      : "vendor_neutral",
+    runbookRef: hasText(cfg.observability?.alertRunbookUrl)
+      ? cfg.observability.alertRunbookUrl
+      : "docs/runbooks/v1-production-observability.md",
+    requiredCoverage: V1_OBSERVABILITY_COVERAGE,
+  };
+}
+
 export async function resolveOperationalReadinessForHealth({
   db,
   startupOperationalReadiness = null,
@@ -54,6 +99,7 @@ export async function buildHealthCore({
     db: {
       enabled: dbEnabled,
     },
+    observability: buildObservabilityHealthStatus(),
     operationalReadiness,
   };
 }

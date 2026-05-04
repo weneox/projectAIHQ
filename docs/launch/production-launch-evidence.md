@@ -44,9 +44,9 @@ As of 2026-05-04:
 
 - Limited controlled unpaid pilot is blocked by missing production secret
   evidence, deployment environment classification proof, backup/restore proof,
-  and production sign-off.
+  production sign-off, and external observability/alert delivery proof.
 - Paid pilot is blocked by the same technical evidence plus missing paid launch
-  terms.
+  terms and external observability/alert delivery proof.
 - Public launch is blocked by all remaining external proof items.
 
 The Meta bot deployment classification proof must show that the provider
@@ -58,3 +58,8 @@ classification only.
 Do not change `BLOCKED` to `READY` based on intention, memory, screenshots
 without context, or verbal approval. Attach the evidence link or runbook output
 first, then add the approver and date.
+
+The observability proof must show `OBS_INCIDENT_OWNER`,
+`OBS_INCIDENT_CONTACT`, `OBS_ALERT_DESTINATION`, and `OBS_ALERT_RUNBOOK_URL`
+configured in the deployment provider, plus a successful test alert delivered to
+the incident contact. Do not attach alert webhook secrets or vendor tokens.

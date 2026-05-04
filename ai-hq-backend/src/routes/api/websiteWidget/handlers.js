@@ -18,6 +18,7 @@ import { buildInboxActions } from "../../../services/inboxBrain.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 import { isDbReady, okJson } from "../../../utils/http.js";
 import { createLogger } from "../../../utils/logger.js";
+import { recordWebhookIngestionFailure } from "../../../observability/runtimeSignals.js";
 import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
 import { applyHandoffActions, persistLeadActions } from "../inbox/mutations.js";
@@ -185,6 +186,12 @@ function logWebsiteWidgetEvent({
   });
 
   if (level === "error") {
+    recordWebhookIngestionFailure({
+      tenantId: data.tenantId,
+      tenantKey: data.tenantKey,
+      channel: "website_widget",
+      reasonCode: data.reasonCode || event || "website_widget_failure",
+    });
     return logger.error(event, error, data);
   }
 
