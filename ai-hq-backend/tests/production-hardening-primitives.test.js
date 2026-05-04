@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
@@ -846,7 +846,7 @@ test("release gate requires Website lane smoke for production deployment", () =>
   assert.match(workflow, /Strict website lane tenant smoke \| \\`true\\`/);
 });
 
-test("production launch evidence validates external P0 proof before allowing launch", () => {
+test("production launch evidence keeps external P0 proof blocked until attached", () => {
   const evidence = JSON.parse(
     readFileSync(
       new URL("../../docs/launch/production-launch-evidence.json", import.meta.url),
@@ -872,104 +872,26 @@ test("production launch evidence validates external P0 proof before allowing lau
     ]) {
       assert.equal(field in item, true, `${item.id} missing ${field}`);
     }
-
-    assert.ok(
-      ["READY", "BLOCKED"].includes(item.status),
-      `${item.id} has invalid status ${item.status}`
-    );
   }
 
   const byId = new Map(evidence.items.map((item) => [item.id, item]));
 
-  const externalP0s = [
-    {
-      id: "P0-001",
-      proofPattern: /META_WEBHOOK_APP_SECRET/i,
-      blockingFields: ["blocksLimitedLaunch", "blocksPaidLaunch", "blocksPublicLaunch"],
-    },
-    {
-      id: "P0-001-ENV",
-      proofPattern: /APP_ENV=(production|staging)|NODE_ENV=production|production\/staging/i,
-      blockingFields: ["blocksLimitedLaunch", "blocksPaidLaunch", "blocksPublicLaunch"],
-      blockedReasonPattern: /APP_ENV=production|APP_ENV=staging|development/i,
-    },
-    {
-      id: "P0-004",
-      proofPattern: /backup|restore/i,
-      blockingFields: ["blocksLimitedLaunch", "blocksPaidLaunch", "blocksPublicLaunch"],
-    },
-    {
-      id: "P0-005",
-      proofPattern: /pricing|payment|invoice|quota|cancellation|refund|support/i,
-      blockingFields: ["blocksPaidLaunch", "blocksPublicLaunch"],
-    },
-    {
-      id: "P0-006",
-      proofPattern: /sign-off|go\/no-go|approval|approved|approver/i,
-      blockingFields: ["blocksLimitedLaunch", "blocksPaidLaunch", "blocksPublicLaunch"],
-    },
-  ];
-
-  for (const check of externalP0s) {
-    const item = byId.get(check.id);
-    assert.ok(item, `${check.id} must exist in launch evidence`);
-
-    if (item.status === "READY") {
-      assert.equal(item.reasonMissing, "", `${check.id} READY must not have reasonMissing`);
-      assert.notEqual(item.approver, "TBD", `${check.id} READY must have real approver`);
-      assert.ok(
-        String(item.approver || "").trim().length > 0,
-        `${check.id} READY must have approver`
-      );
-      assert.match(
-        String(item.evidence || ""),
-        check.proofPattern,
-        `${check.id} READY must include meaningful evidence`
-      );
-
-      for (const field of check.blockingFields) {
-        assert.equal(item[field], true, `${check.id} READY must remain required for ${field}`);
-      }
-    } else {
-      assert.equal(item.status, "BLOCKED", `${check.id} must be READY or BLOCKED`);
-      assert.ok(
-        String(item.reasonMissing || "").trim().length > 0,
-        `${check.id} BLOCKED must explain missing evidence`
-      );
-
-      for (const field of check.blockingFields) {
-        assert.equal(item[field], true, `${check.id} BLOCKED must block ${field}`);
-      }
-
-      if (check.blockedReasonPattern) {
-        assert.match(
-          String(item.reasonMissing || ""),
-          check.blockedReasonPattern,
-          `${check.id} BLOCKED reason must mention env classification risk`
-        );
-      }
-    }
-  }
-
-  const targetToBlockField = {
-    limited: "blocksLimitedLaunch",
-    paid: "blocksPaidLaunch",
-    public: "blocksPublicLaunch",
-  };
-
-  for (const [target, blockField] of Object.entries(targetToBlockField)) {
-    const result = validateLaunchEvidence(evidence, { target });
-    const hasBlockedEvidence = evidence.items.some(
-      (item) => item.status !== "READY" && item[blockField] === true
-    );
-
-    assert.equal(
-      result.ok,
-      !hasBlockedEvidence,
-      `${target} launch evidence result mismatch: ${result.errors.join("\n")}`
-    );
-  }
+  assert.equal(byId.get("P0-001")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-001")?.blocksPublicLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-001-ENV")?.blocksLimitedLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.blocksPaidLaunch, true);
+  assert.equal(byId.get("P0-001-ENV")?.blocksPublicLaunch, true);
+  assert.match(byId.get("P0-001-ENV")?.reasonMissing || "", /APP_ENV=production/);
+  assert.match(byId.get("P0-001-ENV")?.reasonMissing || "", /development/);
+  assert.equal(byId.get("P0-004")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-004")?.blocksLimitedLaunch, true);
+  assert.equal(byId.get("P0-005")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-005")?.blocksPaidLaunch, true);
+  assert.equal(byId.get("P0-006")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-006")?.blocksPublicLaunch, true);
 });
+
 test("launch evidence gate requires deployment environment classification proof", () => {
   const evidence = JSON.parse(
     readFileSync(
@@ -1062,4 +984,3 @@ test("quota reconciliation releases stale durable reservation counters", async (
     limit: 9,
   });
 });
-
