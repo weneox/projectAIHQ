@@ -2,6 +2,7 @@
 // FINAL v1.1 — inbox mutation layer
 // canonical tenant-aware lead + handoff persistence
 
+import { getTenantContext } from "../../../db/tenantContext.js";
 import { isUuid } from "../../../utils/http.js";
 import { fixText } from "../../../utils/textFix.js";
 import { writeAudit } from "../../../utils/auditLog.js";
@@ -659,7 +660,15 @@ export async function persistLeadActions({ db, client = null, wsHub, tenantKey, 
   return persisted;
 }
 
-export async function applyHandoffActions({ db, client = null, wsHub, threadId, actions }) {
+export async function applyHandoffActions({
+  db,
+  client = null,
+  wsHub,
+  threadId,
+  tenantId = "",
+  tenantKey = "",
+  actions,
+}) {
   const q = pickDb(db, client);
   const list = Array.isArray(actions) ? actions : [];
   const handoffs = list.filter((x) => s(x?.type).toLowerCase() === "handoff");
