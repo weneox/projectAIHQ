@@ -502,7 +502,10 @@ async function main() {
         app.locals?.sourceSyncWorker?.getState?.() || null;
 
       const helpers = createDurableExecutionHelpers({ db });
-      const durableSummary = await helpers.getExecutionSummary();
+      const durableSummary = await runWithSystemDbContext(
+        "health_durable_execution_summary",
+        () => helpers.getExecutionSummary()
+      );
 
       const operational = buildDurableOperationalStatus({
         summary: durableSummary,
@@ -543,11 +546,15 @@ async function main() {
       };
 
       const workerSummary = summarizeWorkerFleet(Object.values(workerStates));
-      const recentIncidents = await listRecentRuntimeIncidents({
-        db,
-        limit: 10,
-        sinceHours: 6,
-      });
+      const recentIncidents = await runWithSystemDbContext(
+        "health_runtime_incident_window",
+        () =>
+          listRecentRuntimeIncidents({
+            db,
+            limit: 10,
+            sinceHours: 6,
+          })
+      );
       const incidentSummary = summarizeRuntimeIncidentHealthWindow(
         recentIncidents,
         {
