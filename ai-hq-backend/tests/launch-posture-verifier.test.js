@@ -108,20 +108,21 @@ test("launch posture verifier builds internal route URL and headers by default",
 test("launch posture verifier resolves the scoped Meta service token", () => {
   assert.equal(
     resolveLaunchPostureInternalToken({
-      AIHQ_INTERNAL_TOKEN: "global-secret",
-      AIHQ_INTERNAL_TOKEN_META_BOT: "meta-scoped-secret",
+      AIHQ_INTERNAL_TOKEN: "mock-global-internal-token",
+      AIHQ_INTERNAL_TOKEN_META_BOT: "mock-meta-scoped-internal-token",
     }),
-    "meta-scoped-secret"
+    "mock-meta-scoped-internal-token"
   );
   assert.deepEqual(
     buildLaunchPostureHeaders({
       internalToken: resolveLaunchPostureInternalToken({
-        AIHQ_PROD_INTERNAL_TOKEN_META_BOT: "prod-meta-scoped-secret",
+        AIHQ_PROD_INTERNAL_TOKEN_META_BOT:
+          "mock-prod-meta-scoped-internal-token",
       }),
     }),
     {
       accept: "application/json",
-      "x-internal-token": "prod-meta-scoped-secret",
+      "x-internal-token": "mock-prod-meta-scoped-internal-token",
       "x-internal-audience": "aihq-backend.launch-posture",
       "x-internal-service": "meta-bot-backend",
     }
