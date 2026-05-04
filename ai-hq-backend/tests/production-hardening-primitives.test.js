@@ -10,7 +10,12 @@ import {
   __test__ as tenantContextTests,
 } from "../src/db/tenantContext.js";
 import { createTenantSourcesHelpers } from "../src/db/helpers/tenantSources.js";
-import { markSetupReviewSessionProcessing } from "../src/db/helpers/tenantSetupReview.js";
+import {
+  getSetupReviewSessionById,
+  listSetupReviewSessionSources,
+  markSetupReviewSessionProcessing,
+  readSetupReviewDraft,
+} from "../src/db/helpers/tenantSetupReview.js";
 import { createStructuredLogEntry } from "../src/utils/logger.js";
 import {
   expireStaleOutboundReservations,
@@ -55,6 +60,10 @@ function readSchemaSql() {
     .filter((file) => file.endsWith(".sql"))
     .sort()
     .map((file) => readFileSync(new URL(file, schemaDir), "utf8"));
+}
+
+function compactSql(sql = "") {
+  return String(sql || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 test("tenant DB guard blocks tenant-table queries without context", () => {
@@ -246,6 +255,137 @@ test("source sync worker helpers bind active tenant context for ID-based tenant 
   assert.equal(seen.length, 4);
 });
 
+test("source sync claim does not mutate tenant source rows in system context", async () => {
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const sourceId = "22222222-2222-4222-8222-222222222222";
+  const runId = "33333333-3333-4333-8333-333333333333";
+  const seen = [];
+
+  const db = createTenantGuardedDb({
+    async query(sql, params = []) {
+      const text = compactSql(sql);
+      seen.push({ text, params });
+
+      if (text.includes("from tenant_sources") || text.startsWith("update tenant_sources")) {
+        throw new Error("claimNextSyncRun must not update tenant source rows");
+      }
+
+      if (text.includes("with claimable as") && text.includes("update tenant_source_sync_runs")) {
+        return {
+          rows: [
+            {
+              id: runId,
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              source_id: sourceId,
+              run_type: "sync",
+              trigger_type: "manual",
+              status: "running",
+              attempt_count: 1,
+              max_attempts: 3,
+            },
+          ],
+        };
+      }
+
+      throw new Error(`unexpected source sync claim query: ${text}`);
+    },
+  });
+
+  const sources = createTenantSourcesHelpers({ db });
+  const claimed = await runWithSystemDbContext("source_sync_worker_claim_test", () =>
+    sources.claimNextSyncRun({
+      runnerKey: "source-sync-worker:test",
+      leaseToken: "source-sync-lease:test",
+      leaseMs: 60_000,
+    })
+  );
+
+  assert.equal(claimed?.id, runId);
+  assert.equal(seen.length, 1);
+});
+
+test("source sync ID helpers cannot read or update tenant A rows under tenant B context", async () => {
+  const tenantA = "11111111-1111-4111-8111-111111111111";
+  const tenantB = "99999999-9999-4999-8999-999999999999";
+  const sourceId = "22222222-2222-4222-8222-222222222222";
+  const runId = "33333333-3333-4333-8333-333333333333";
+  const seen = [];
+
+  const db = createTenantGuardedDb({
+    async query(sql, params = []) {
+      const text = compactSql(sql);
+      seen.push({ text, params });
+
+      if (text.includes("from tenant_sources")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        return {
+          rows:
+            params[0] === sourceId && params[1] === tenantA
+              ? [
+                  {
+                    id: sourceId,
+                    tenant_id: tenantA,
+                    tenant_key: "acme",
+                    source_type: "website",
+                    source_key: "website:acme",
+                    display_name: "Acme Website",
+                    status: "connected",
+                    auth_status: "authorized",
+                    sync_status: "idle",
+                  },
+                ]
+              : [],
+        };
+      }
+
+      if (text.startsWith("update tenant_sources")) {
+        throw new Error("tenant B must not update tenant A source rows");
+      }
+
+      if (text.includes("from tenant_source_sync_runs")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        return {
+          rows:
+            params[0] === runId && params[1] === tenantA
+              ? [
+                  {
+                    id: runId,
+                    tenant_id: tenantA,
+                    tenant_key: "acme",
+                    source_id: sourceId,
+                    run_type: "sync",
+                    trigger_type: "manual",
+                    status: "running",
+                    attempt_count: 1,
+                    max_attempts: 3,
+                  },
+                ]
+              : [],
+        };
+      }
+
+      if (text.startsWith("update tenant_source_sync_runs")) {
+        throw new Error("tenant B must not update tenant A source sync runs");
+      }
+
+      throw new Error(`unexpected source sync query: ${text}`);
+    },
+  });
+  const sources = createTenantSourcesHelpers({ db });
+
+  await runWithTenantContext({ tenantId: tenantB, tenantKey: "other" }, async () => {
+    assert.equal(await sources.getSourceById(sourceId), null);
+    assert.equal(
+      await sources.markSourceSyncStarted(sourceId, { updatedBy: "source-sync-worker" }),
+      null
+    );
+    assert.equal(await sources.markSyncRunFinished(runId, { status: "success" }), null);
+  });
+
+  assert.ok(seen.every((entry) => entry.params.includes(tenantB)));
+});
+
 test("setup review status helpers bind active tenant context for source sync review rows", async () => {
   const tenantId = "11111111-1111-4111-8111-111111111111";
   const sessionId = "44444444-4444-4444-8444-444444444444";
@@ -321,6 +461,110 @@ test("setup review status helpers bind active tenant context for source sync rev
   );
 
   assert.equal(seen.length, 3);
+});
+
+test("setup review ID helpers cannot read or update tenant A rows under tenant B context", async () => {
+  const tenantA = "11111111-1111-4111-8111-111111111111";
+  const tenantB = "99999999-9999-4999-8999-999999999999";
+  const sessionId = "44444444-4444-4444-8444-444444444444";
+  const sourceId = "22222222-2222-4222-8222-222222222222";
+  const draftId = "66666666-6666-4666-8666-666666666666";
+  const seen = [];
+
+  const client = createTenantGuardedDb({
+    async query(sql, params = []) {
+      const text = compactSql(sql);
+      seen.push({ text, params });
+
+      if (text.startsWith("select * from public.tenant_setup_review_sessions")) {
+        assert.match(text, /where id = \$1\s+and tenant_id = \$2/i);
+        return {
+          rows:
+            params[0] === sessionId && params[1] === tenantA
+              ? [
+                  {
+                    id: sessionId,
+                    tenant_id: tenantA,
+                    status: "draft",
+                    mode: "setup",
+                    current_step: "source_sync",
+                  },
+                ]
+              : [],
+        };
+      }
+
+      if (text.startsWith("update public.tenant_setup_review_sessions")) {
+        throw new Error("tenant B must not update tenant A setup review sessions");
+      }
+
+      if (text.startsWith("select * from public.tenant_setup_review_session_sources")) {
+        assert.match(text, /where session_id = \$1\s+and tenant_id = \$2/i);
+        return {
+          rows:
+            params[0] === sessionId && params[1] === tenantA
+              ? [
+                  {
+                    id: sourceId,
+                    session_id: sessionId,
+                    tenant_id: tenantA,
+                    source_id: sourceId,
+                    source_type: "website",
+                    role: "primary",
+                  },
+                ]
+              : [],
+        };
+      }
+
+      if (text.startsWith("select * from public.tenant_setup_review_drafts")) {
+        assert.match(text, /where session_id = \$1\s+and tenant_id = \$2/i);
+        return {
+          rows:
+            params[0] === sessionId && params[1] === tenantA
+              ? [
+                  {
+                    id: draftId,
+                    session_id: sessionId,
+                    tenant_id: tenantA,
+                    draft_payload: {},
+                    business_profile: {},
+                    capabilities: {},
+                    services: [],
+                    knowledge_items: [],
+                    channels: [],
+                  },
+                ]
+              : [],
+        };
+      }
+
+      if (text.startsWith("insert into public.tenant_setup_review_events")) {
+        throw new Error("tenant B must not write tenant A setup review events");
+      }
+
+      throw new Error(`unexpected setup review query: ${text}`);
+    },
+  });
+
+  await runWithTenantContext({ tenantId: tenantB, tenantKey: "other" }, async () => {
+    assert.equal(await getSetupReviewSessionById(sessionId, client), null);
+    assert.deepEqual(await listSetupReviewSessionSources(sessionId, client), []);
+    assert.equal(
+      await readSetupReviewDraft({ sessionId, tenantId: tenantA }, client),
+      null
+    );
+    assert.equal(
+      await markSetupReviewSessionProcessing(
+        sessionId,
+        { currentStep: "source_sync", payload: { runId: "run-1" } },
+        client
+      ),
+      null
+    );
+  });
+
+  assert.ok(seen.every((entry) => entry.params.includes(tenantB)));
 });
 
 test("critical multi-tenant tables are registered as tenant-scoped", () => {

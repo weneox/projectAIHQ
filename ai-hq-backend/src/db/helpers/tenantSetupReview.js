@@ -78,16 +78,31 @@ function safeUuidOrNull(value = null) {
   return isUuid(x) ? x : null;
 }
 
-function activeTenantIdPredicate(startIndex = 2) {
+function activeTenantIdPredicate(startIndex = 2, inputTenantId = "") {
   const context = getTenantContext() || {};
-  if (context.system === true) return { clause: "", values: [] };
+  if (context.system === true) {
+    const explicitTenantId = s(inputTenantId);
+    return explicitTenantId
+      ? { clause: `tenant_id = $${startIndex}`, values: [explicitTenantId] }
+      : { clause: "", values: [] };
+  }
 
   const tenantId = s(context.tenantId);
-  if (!tenantId) return { clause: "", values: [] };
+  if (tenantId) {
+    return {
+      clause: `tenant_id = $${startIndex}`,
+      values: [tenantId],
+    };
+  }
+
+  if (s(context.tenantKey)) return { clause: "", values: [] };
+
+  const explicitTenantId = s(inputTenantId);
+  if (!explicitTenantId) return { clause: "", values: [] };
 
   return {
     clause: `tenant_id = $${startIndex}`,
-    values: [tenantId],
+    values: [explicitTenantId],
   };
 }
 
@@ -966,19 +981,25 @@ export async function failSetupReviewSession(
   );
 }
 
-export async function listSetupReviewSessionSources(sessionId, client = null) {
+export async function listSetupReviewSessionSources(
+  sessionId,
+  client = null,
+  { tenantId = "" } = {}
+) {
   const sid = s(sessionId);
   if (!sid) return [];
 
   const run = async (cx) => {
+    const tenantScope = activeTenantIdPredicate(2, tenantId);
     const { rows } = await cx.query(
       `
         SELECT *
         FROM public.tenant_setup_review_session_sources
         WHERE session_id = $1
+          ${tenantScope.clause ? `AND ${tenantScope.clause}` : ""}
         ORDER BY position ASC, attached_at ASC
       `,
-      [sid]
+      [sid, ...tenantScope.values]
     );
 
     return arr(rows).map(normalizeSourceRow);
@@ -1132,19 +1153,24 @@ export async function readSetupReviewDraft(
 
   const run = async (cx) => {
     if (sid) {
+      const tenantScope = activeTenantIdPredicate(2, tid);
+      const effectiveTenantId = s(tenantScope.values?.[0]);
       const { rows } = await cx.query(
         `
           SELECT *
           FROM public.tenant_setup_review_drafts
           WHERE session_id = $1
+            ${tenantScope.clause ? `AND ${tenantScope.clause}` : ""}
           LIMIT 1
         `,
-        [sid]
+        [sid, ...tenantScope.values]
       );
 
       if (rows?.[0]) return normalizeDraftRow(rows[0]);
 
-      if (tid) return emptyDraftPayload(sid, tid);
+      if (tid && (!effectiveTenantId || effectiveTenantId === tid)) {
+        return emptyDraftPayload(sid, tid);
+      }
 
       return null;
     }
@@ -1435,7 +1461,7 @@ export async function getCurrentSetupReview(tenantId, client = null) {
 
     const [draft, sources] = await Promise.all([
       readSetupReviewDraft({ sessionId: session.id, tenantId: tid }, cx),
-      listSetupReviewSessionSources(session.id, cx),
+      listSetupReviewSessionSources(session.id, cx, { tenantId: tid }),
     ]);
 
     return {
@@ -1516,15 +1542,17 @@ export async function finalizeSetupReviewSession(
     let session = null;
 
     if (sid) {
+      const tenantScope = activeTenantIdPredicate(2, tid);
       const locked = await cx.query(
         `
           SELECT *
           FROM public.tenant_setup_review_sessions
           WHERE id = $1
+            ${tenantScope.clause ? `AND ${tenantScope.clause}` : ""}
           LIMIT 1
           FOR UPDATE
         `,
-        [sid]
+        [sid, ...tenantScope.values]
       );
       session = locked.rows?.[0] ? normalizeSessionRow(locked.rows[0]) : null;
     } else if (tid) {
@@ -1562,7 +1590,9 @@ export async function finalizeSetupReviewSession(
         cx
       )) || emptyDraftPayload(session.id, session.tenantId);
 
-    const sources = await listSetupReviewSessionSources(session.id, cx);
+    const sources = await listSetupReviewSessionSources(session.id, cx, {
+      tenantId: session.tenantId,
+    });
 
     await updateSetupReviewSession(
       session.id,
@@ -1694,8 +1724,9 @@ export async function listSetupReviewEvents(
       sql += ` AND session_id = $${values.length}`;
     }
 
-    if (tid) {
-      values.push(tid);
+    const tenantScope = activeTenantIdPredicate(values.length + 1, tid);
+    if (tenantScope.values.length) {
+      values.push(tenantScope.values[0]);
       sql += ` AND tenant_id = $${values.length}`;
     }
 

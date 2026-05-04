@@ -77,10 +77,10 @@ function baseExecution(overrides = {}) {
   };
 }
 
-function createGuardedDurableDb() {
+function createGuardedDurableDb({ executionOverrides = {} } = {}) {
   const queries = [];
   let claimCount = 0;
-  const execution = baseExecution();
+  const execution = baseExecution(executionOverrides);
 
   const rawDb = {
     async query(sql, params = []) {
@@ -101,11 +101,12 @@ function createGuardedDurableDb() {
         if (claimCount > 1) return { rows: [] };
         return {
           rows: [
-            baseExecution({
+            {
+              ...execution,
               lease_token: params[1],
               lease_expires_at: new Date(Date.now() + Number(params[2] || 60_000)).toISOString(),
               claimed_by: params[3],
-            }),
+            },
           ],
         };
       }
@@ -163,6 +164,45 @@ function createGuardedDurableDb() {
         };
       }
 
+      if (text.startsWith("update durable_executions set status = 'retryable'")) {
+        kind = "durable-finalize-retryable";
+        queries.push({ kind, sql: text, params, context });
+        return {
+          rows: [
+            {
+              ...execution,
+              id: params[0],
+              status: "retryable",
+              lease_token: null,
+              next_retry_at: params[2],
+              last_error_code: params[3],
+              last_error_message: params[4],
+              last_error_classification: params[5],
+            },
+          ],
+        };
+      }
+
+      if (text.startsWith("update durable_executions set status = $3::text")) {
+        kind = "durable-finalize-terminal";
+        queries.push({ kind, sql: text, params, context });
+        return {
+          rows: [
+            {
+              ...execution,
+              id: params[0],
+              status: params[2],
+              lease_token: null,
+              dead_lettered_at:
+                params[2] === "dead_lettered" ? new Date().toISOString() : null,
+              last_error_code: params[3],
+              last_error_message: params[4],
+              last_error_classification: params[5],
+            },
+          ],
+        };
+      }
+
       queries.push({ kind, sql: text, params, context });
       throw new Error(`unexpected durable worker query: ${text}`);
     },
@@ -193,6 +233,83 @@ test("durable queue claim remains fail-closed without system context", async () 
       }),
     (error) => error?.code === "TENANT_CONTEXT_REQUIRED"
   );
+});
+
+test("durable worker retryable finalize remains system control-plane metadata", async () => {
+  const guarded = createGuardedDurableDb();
+  const logger = createMemoryLogger();
+  const retryWorker = createDurableExecutionWorker({
+    db: guarded.db,
+    logger,
+    async processExecution() {
+      return {
+        ok: false,
+        retryable: true,
+        errorCode: "upstream_timeout",
+        errorMessage: "upstream timeout",
+        classification: "retryable_gateway_failure",
+        resultSummary: { retry: true },
+      };
+    },
+  });
+
+  await retryWorker.runOnce();
+
+  assert.ok(
+    logger.events.some(
+      (event) =>
+        event.event === "durable_execution.retried" &&
+        event.data?.errorCode === "upstream_timeout"
+    )
+  );
+
+  const retryableQueries = guarded.queries.filter(
+    (query) => query.kind === "durable-finalize-retryable"
+  );
+  assert.equal(retryableQueries.length, 1);
+  assert.equal(retryableQueries[0].context.system, true);
+  assert.equal(retryableQueries[0].params[3], "upstream_timeout");
+});
+
+test("durable worker dead-letters tenant context failures observably", async () => {
+  const guarded = createGuardedDurableDb({
+    executionOverrides: {
+      max_attempts: 1,
+    },
+  });
+  const logger = createMemoryLogger();
+
+  const worker = createDurableExecutionWorker({
+    db: guarded.db,
+    logger,
+    async processExecution() {
+      const error = new Error("Tenant-scoped database query requires tenant context");
+      error.code = "TENANT_CONTEXT_REQUIRED";
+      throw error;
+    },
+  });
+
+  await worker.runOnce();
+
+  assert.equal(
+    logger.events.some((event) => event.event === "durable_execution.succeeded"),
+    false
+  );
+  assert.ok(
+    logger.events.some(
+      (event) =>
+        event.event === "durable_execution.dead_lettered" &&
+        event.data?.errorCode === "TENANT_CONTEXT_REQUIRED"
+    )
+  );
+
+  const terminalQueries = guarded.queries.filter(
+    (query) => query.kind === "durable-finalize-terminal"
+  );
+  assert.equal(terminalQueries.length, 1);
+  assert.equal(terminalQueries[0].context.system, true);
+  assert.equal(terminalQueries[0].params[2], "dead_lettered");
+  assert.equal(terminalQueries[0].params[3], "TENANT_CONTEXT_REQUIRED");
 });
 
 test("durable worker tick uses system context for control-plane queue work and tenant context for execution", async () => {

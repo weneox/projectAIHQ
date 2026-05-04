@@ -1247,13 +1247,6 @@ export function createTenantSourcesHelpers({ db }) {
       const claimed = rowToSyncRun(r.rows?.[0]);
       if (!claimed?.id) return null;
 
-      try {
-        await this.markSourceSyncStarted(claimed.source_id, {
-          startedAt: claimed.started_at || new Date().toISOString(),
-          updatedBy: claimedBy,
-        });
-      } catch {}
-
       return claimed;
     },
 

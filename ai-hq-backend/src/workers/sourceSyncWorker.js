@@ -268,6 +268,19 @@ export function createSourceSyncWorker({ db }) {
         );
 
         if (!claimedRun?.id) break;
+        await runWithTenantContext(
+          {
+            tenantId: s(claimedRun.tenant_id),
+            tenantKey: s(claimedRun.tenant_key),
+            source: "source_sync_worker",
+            requestId: s(claimedRun.metadata_json?.requestId),
+          },
+          () =>
+            sources.markSourceSyncStarted(claimedRun.source_id, {
+              startedAt: claimedRun.started_at || new Date().toISOString(),
+              updatedBy: runnerKey,
+            })
+        );
         lastClaimAt = new Date().toISOString();
         lastRunId = s(claimedRun.id);
         touchWorkerHeartbeat("source-sync-worker", getState());
