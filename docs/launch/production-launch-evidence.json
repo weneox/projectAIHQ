@@ -1,4 +1,4 @@
-﻿{
+{
     "schemaVersion":  1,
     "updatedAt":  "2026-05-04",
     "sourceOfTruth":  "This file is the production launch evidence gate. External checks are marked READY only with provider, CI, runbook, or human sign-off evidence.",
