@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 
 import {
   assertTenantQueryAllowed,
@@ -43,6 +44,14 @@ function createMockRes() {
       return this;
     },
   };
+}
+
+function readSchemaSql() {
+  const schemaDir = new URL("../src/db/schema/", import.meta.url);
+  return readdirSync(schemaDir)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .map((file) => readFileSync(new URL(file, schemaDir), "utf8"));
 }
 
 test("tenant DB guard blocks tenant-table queries without context", () => {
@@ -105,6 +114,12 @@ test("critical multi-tenant tables are registered as tenant-scoped", () => {
     "proposals",
     "jobs",
     "inbox_outbound_attempts",
+    "tenant_profiles",
+    "tenant_voice_settings",
+    "tenant_business_runtime_projection",
+    "tenant_setup_review_drafts",
+    "voice_calls",
+    "content_items",
   ]) {
     assert.equal(scoped.has(table), true, `${table} must be tenant guarded`);
     assert.equal(
@@ -113,6 +128,146 @@ test("critical multi-tenant tables are registered as tenant-scoped", () => {
       `${table} must not bypass tenant guard as a system table`
     );
   }
+});
+
+test("tenant DB guard coverage follows tenant-shaped schema tables", () => {
+  const discovered = new Set(
+    readSchemaSql().flatMap((sql) =>
+      tenantContextTests.discoverTenantShapedTablesFromSql(sql)
+    )
+  );
+  const scoped = new Set(tenantContextTests.TENANT_SCOPED_TABLES);
+  const systemExempt = new Set(
+    tenantContextTests.TENANT_CONTEXT_EXEMPT_SYSTEM_TABLES
+  );
+
+  assert.ok(discovered.size > 40, "schema discovery must find tenant-shaped tables");
+
+  const missing = [...discovered]
+    .filter((table) => !scoped.has(table) && !systemExempt.has(table))
+    .sort();
+  assert.deepEqual(
+    missing,
+    [],
+    `tenant-shaped schema tables missing guard coverage: ${missing.join(", ")}`
+  );
+
+  for (const table of scoped) {
+    assert.equal(
+      tenantContextTests.SYSTEM_LEVEL_TABLES.includes(table),
+      false,
+      `${table} must not bypass tenant guard as a system table`
+    );
+  }
+
+  for (const table of systemExempt) {
+    assert.equal(
+      tenantContextTests.SYSTEM_LEVEL_TABLES.includes(table),
+      true,
+      `${table} must be explicit when exempted from tenant-scoped guard checks`
+    );
+  }
+});
+
+test("tenant DB guard blocks mixed system plus tenant-shaped joins without context", () => {
+  assert.throws(
+    () =>
+      assertTenantQueryAllowed(
+        `select t.id, tp.profile_json
+         from tenants t
+         left join tenant_profiles tp on tp.tenant_id = t.id
+         where t.tenant_key = $1`,
+        ["acme"]
+      ),
+    /tenant context/i
+  );
+
+  assert.throws(
+    () =>
+      assertTenantQueryAllowed(
+        `select *
+         from public."tenants" t
+         join public."tenant_profiles" tp on tp."tenant_id" = t."id"
+         where tp."tenant_key" = $1::text`,
+        ["acme"]
+      ),
+    /tenant context/i
+  );
+});
+
+test("tenant DB guard fails closed for unknown tenant namespace tables", () => {
+  assert.throws(
+    () =>
+      assertTenantQueryAllowed(
+        `select *
+         from tenants t
+         join tenant_new_runtime_state s on s.tenant_id = t.id
+         where t.tenant_key = $1`,
+        ["acme"]
+      ),
+    /tenant context/i
+  );
+});
+
+test("tenant DB guard still allows valid system-only queries", () => {
+  assert.equal(
+    assertTenantQueryAllowed(
+      "select id, tenant_key from tenants where tenant_key = $1::text",
+      ["acme"]
+    ),
+    true
+  );
+  assert.equal(
+    assertTenantQueryAllowed(
+      "select version, checksum from schema_migrations order by version desc limit 1",
+      []
+    ),
+    true
+  );
+});
+
+test("tenant DB guard allows realistic tenant-scoped SQL with tenant context", () => {
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  runWithTenantContext({ tenantId, tenantKey: "acme" }, () => {
+    assert.equal(
+      assertTenantQueryAllowed(
+        `select tp.*
+         from public."tenant_profiles" tp
+         join tenants t on t.id = tp.tenant_id
+         where tp.tenant_key = $1::text`,
+        ["acme"]
+      ),
+      true
+    );
+
+    assert.equal(
+      assertTenantQueryAllowed(
+        `insert into tenant_profiles (tenant_id, tenant_key, profile_json)
+         values ($1::uuid, $2::text, $3::jsonb)`,
+        [tenantId, "acme", "{}"]
+      ),
+      true
+    );
+
+    assert.equal(
+      assertTenantQueryAllowed(
+        `update public.tenant_profiles
+         set profile_json = $2::jsonb
+         where tenant_id = $1::uuid`,
+        [tenantId, "{}"]
+      ),
+      true
+    );
+
+    assert.equal(
+      assertTenantQueryAllowed(
+        `delete from public."tenant_profiles"
+         where tenant_key = $1::text`,
+        ["acme"]
+      ),
+      true
+    );
+  });
 });
 
 test("API response middleware maps ok false payloads away from HTTP 200", () => {

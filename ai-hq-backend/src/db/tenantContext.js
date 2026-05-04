@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { readdirSync, readFileSync } from "node:fs";
 
 function s(value = "", fallback = "") {
   const out = String(value ?? "").trim();
@@ -23,7 +24,7 @@ function compactContext(input = {}) {
 
 const tenantContextStorage = new AsyncLocalStorage();
 
-const TENANT_SCOPED_TABLES = [
+const LEGACY_TENANT_SCOPED_TABLES = [
   "comments",
   "external_idempotency_keys",
   "inbox_threads",
@@ -65,15 +66,20 @@ const TENANT_SCOPED_TABLES = [
   "workspace_import_jobs",
 ];
 
+const TENANT_CONTEXT_EXEMPT_SYSTEM_TABLES = [
+  "auth_identity_memberships",
+  "auth_identity_sessions",
+  "auth_sessions",
+  "runtime_incidents",
+];
+
 const SYSTEM_LEVEL_TABLES = [
   "admin_auth_sessions",
   "auth_identities",
   "auth_identity_memberships",
+  "auth_sessions",
   "auth_identity_sessions",
   "auth_login_attempts",
-  "audit_log",
-  "durable_execution_attempts",
-  "durable_executions",
   "runtime_incidents",
   "schema_migrations",
   "tenants",
@@ -97,17 +103,172 @@ function normalizeSql(sql = "") {
     .toLowerCase();
 }
 
+function uniqSorted(items = []) {
+  return [...new Set(items.map((item) => lower(item)).filter(Boolean))].sort();
+}
+
+function unquoteIdentifierPart(value = "") {
+  return s(value).replace(/^"+|"+$/g, "").toLowerCase();
+}
+
+function normalizeTableIdentifier(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+  const parts = raw
+    .split(".")
+    .map((part) => unquoteIdentifierPart(part))
+    .filter(Boolean);
+  return parts.at(-1) || "";
+}
+
+function stripSqlComments(sql = "") {
+  return String(sql || "")
+    .replace(/--.*$/gm, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
+function readSchemaSqlFiles() {
+  try {
+    const schemaDir = new URL("./schema/", import.meta.url);
+    return readdirSync(schemaDir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort()
+      .map((file) => readFileSync(new URL(file, schemaDir), "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function extractCreateTableBlocks(sql = "") {
+  const cleaned = stripSqlComments(sql);
+  const tableName =
+    String.raw`(?:"[^"]+"|[a-zA-Z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[a-zA-Z_][\w$]*))?`;
+  const re = new RegExp(
+    String.raw`\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(${tableName})\s*\(`,
+    "gi"
+  );
+  const blocks = [];
+  let match;
+
+  while ((match = re.exec(cleaned))) {
+    const table = normalizeTableIdentifier(match[1]);
+    const openIndex = cleaned.indexOf("(", match.index);
+    if (!table || openIndex < 0) continue;
+
+    let depth = 0;
+    let endIndex = -1;
+    for (let i = openIndex; i < cleaned.length; i += 1) {
+      const char = cleaned[i];
+      if (char === "(") depth += 1;
+      if (char === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          endIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (endIndex > openIndex) {
+      blocks.push({
+        table,
+        body: cleaned.slice(openIndex + 1, endIndex),
+      });
+      re.lastIndex = endIndex + 1;
+    }
+  }
+
+  return blocks;
+}
+
+function discoverTenantShapedTablesFromSql(sql = "") {
+  const cleaned = stripSqlComments(sql);
+  const tables = new Set();
+
+  for (const block of extractCreateTableBlocks(cleaned)) {
+    const body = lower(block.body);
+    if (
+      block.table !== "tenants" &&
+      (block.table.startsWith("tenant_") ||
+        /\btenant_id\b/.test(body) ||
+        /\btenant_key\b/.test(body) ||
+        /\breferences\s+(?:public\.)?tenants\b/.test(body) ||
+        /\breferences\s+(?:public\.)?"tenants"\b/.test(body))
+    ) {
+      tables.add(block.table);
+    }
+  }
+
+  const tableName =
+    String.raw`(?:"[^"]+"|[a-zA-Z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[a-zA-Z_][\w$]*))?`;
+  const alterRe = new RegExp(
+    String.raw`\balter\s+table\s+(?:if\s+exists\s+)?(${tableName})\b([\s\S]*?);`,
+    "gi"
+  );
+  let match;
+  while ((match = alterRe.exec(cleaned))) {
+    const table = normalizeTableIdentifier(match[1]);
+    const statement = lower(match[2] || "");
+    if (
+      table &&
+      table !== "tenants" &&
+      (table.startsWith("tenant_") ||
+        /\btenant_id\b/.test(statement) ||
+        /\btenant_key\b/.test(statement) ||
+        /\breferences\s+(?:public\.)?tenants\b/.test(statement) ||
+        /\breferences\s+(?:public\.)?"tenants"\b/.test(statement))
+    ) {
+      tables.add(table);
+    }
+  }
+
+  return uniqSorted([...tables]);
+}
+
+function discoverTenantShapedSchemaTables() {
+  return uniqSorted(readSchemaSqlFiles().flatMap(discoverTenantShapedTablesFromSql));
+}
+
+const TENANT_SHAPED_SCHEMA_TABLES = discoverTenantShapedSchemaTables();
+const TENANT_SCOPED_TABLES = uniqSorted([
+  ...LEGACY_TENANT_SCOPED_TABLES,
+  ...TENANT_SHAPED_SCHEMA_TABLES.filter(
+    (table) => !TENANT_CONTEXT_EXEMPT_SYSTEM_TABLES.includes(table)
+  ),
+]);
+
 function referencesTable(sql, table) {
   return new RegExp(`\\b${table}\\b`, "i").test(sql);
+}
+
+function referencesUnregisteredTenantNamespaceTable(sql = "") {
+  const scoped = new Set(TENANT_SCOPED_TABLES);
+  const systemExempt = new Set(TENANT_CONTEXT_EXEMPT_SYSTEM_TABLES);
+  const tableName =
+    String.raw`(?:"[^"]+"|[a-zA-Z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[a-zA-Z_][\w$]*))?`;
+  const tableRefRe = new RegExp(
+    String.raw`\b(?:from|join|update|into|table)\s+(?:only\s+)?(${tableName})\b`,
+    "gi"
+  );
+
+  let match;
+  while ((match = tableRefRe.exec(String(sql || "")))) {
+    const table = normalizeTableIdentifier(match[1]);
+    if (table.startsWith("tenant_") && !scoped.has(table) && !systemExempt.has(table)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isSystemOnlyQuery(normalizedSql = "") {
   if (!normalizedSql) return true;
   if (TRANSACTION_COMMAND_RE.test(normalizedSql)) return true;
 
-  const referencesTenantTable = TENANT_SCOPED_TABLES.some((table) =>
-    referencesTable(normalizedSql, table)
-  );
+  const referencesTenantTable =
+    TENANT_SCOPED_TABLES.some((table) => referencesTable(normalizedSql, table)) ||
+    referencesUnregisteredTenantNamespaceTable(normalizedSql);
   if (referencesTenantTable) return false;
 
   return SYSTEM_LEVEL_TABLES.some((table) => referencesTable(normalizedSql, table));
@@ -288,7 +449,11 @@ export const __test__ = {
   normalizeSql,
   hasTenantPredicate,
   isSystemOnlyQuery,
+  discoverTenantShapedTablesFromSql,
   valuesContainTenant,
+  LEGACY_TENANT_SCOPED_TABLES,
+  TENANT_CONTEXT_EXEMPT_SYSTEM_TABLES,
+  TENANT_SHAPED_SCHEMA_TABLES,
   TENANT_SCOPED_TABLES,
   SYSTEM_LEVEL_TABLES,
 };

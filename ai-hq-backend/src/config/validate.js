@@ -26,6 +26,97 @@ function isValidDatabaseUrl(value) {
   }
 }
 
+function envBool(value) {
+  return ["1", "true", "yes", "y", "on"].includes(
+    String(value ?? "").trim().toLowerCase()
+  );
+}
+
+const DISABLED_DB_SSL_VALUES = new Set([
+  "0",
+  "false",
+  "no",
+  "n",
+  "off",
+  "disable",
+  "disabled",
+]);
+
+function parseDatabaseUrl(value) {
+  try {
+    return new URL(String(value ?? "").trim());
+  } catch {
+    return null;
+  }
+}
+
+function isRailwayPrivateDatabaseHost(value) {
+  const parsed = parseDatabaseUrl(value);
+  const host = String(parsed?.hostname || "").trim().toLowerCase();
+  return Boolean(host && (host === "railway.internal" || host.endsWith(".railway.internal")));
+}
+
+function getDisabledDbSslReason(databaseUrl = "", env = process.env) {
+  const explicitDbSsl = String(env.DB_SSL ?? "").trim().toLowerCase();
+  if (DISABLED_DB_SSL_VALUES.has(explicitDbSsl)) {
+    return "DB_SSL disables database TLS";
+  }
+
+  const parsed = parseDatabaseUrl(databaseUrl);
+  const sslmode = String(parsed?.searchParams?.get("sslmode") || "").trim().toLowerCase();
+  if (DISABLED_DB_SSL_VALUES.has(sslmode)) {
+    return "DATABASE_URL sslmode disables database TLS";
+  }
+
+  if (isRailwayPrivateDatabaseHost(databaseUrl)) {
+    return "Railway private database host disables database TLS by default";
+  }
+
+  return "";
+}
+
+function isAllowedPrivateNetworkDbSslException(databaseUrl = "", env = process.env) {
+  return (
+    envBool(env.DB_SSL_PRIVATE_NETWORK_TRUSTED) &&
+    isRailwayPrivateDatabaseHost(databaseUrl)
+  );
+}
+
+function isPlaceholderLookingSecret(value = "") {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return true;
+  if (/^(changeme|change-me|change_me|password|secret|placeholder|example|test|dev|local)$/.test(raw)) {
+    return true;
+  }
+  if (/(changeme|placeholder|example|test-secret|dev-secret|local-secret)/.test(raw)) {
+    return true;
+  }
+  return false;
+}
+
+function isRepeatingSecret(value = "") {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw.length > 0 && /^([a-z0-9])\1+$/.test(raw);
+}
+
+function getTenantSecretMasterKeyIssue(value = "") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "TENANT_SECRET_MASTER_KEY is missing.";
+  if (isPlaceholderLookingSecret(raw)) {
+    return "TENANT_SECRET_MASTER_KEY must not use placeholder, example, dev, or test values.";
+  }
+  if (raw.length < 64) {
+    return "TENANT_SECRET_MASTER_KEY must be a 64-character hex-encoded 32-byte key in production.";
+  }
+  if (!/^[a-f0-9]{64}$/i.test(raw)) {
+    return "TENANT_SECRET_MASTER_KEY must be a 64-character hex-encoded 32-byte key in production.";
+  }
+  if (isRepeatingSecret(raw)) {
+    return "TENANT_SECRET_MASTER_KEY must not be a repeated-character test key.";
+  }
+  return "";
+}
+
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
@@ -94,6 +185,29 @@ export function getConfigIssues() {
         envKeys: ["DATABASE_URL"],
       }
     );
+  }
+
+  if (isProd && isNonEmpty(cfg?.db?.url) && isValidDatabaseUrl(cfg?.db?.url)) {
+    const disabledDbSslReason = getDisabledDbSslReason(cfg?.db?.url);
+    if (
+      disabledDbSslReason &&
+      !isAllowedPrivateNetworkDbSslException(cfg?.db?.url)
+    ) {
+      pushIssue(
+        issues,
+        "error",
+        "db.ssl",
+        `${disabledDbSslReason}. Set DB_SSL_PRIVATE_NETWORK_TRUSTED=1 only for a verified Railway private database host, or enable database TLS.`,
+        {
+          category: "database",
+          envKeys: [
+            "DATABASE_URL",
+            "DB_SSL",
+            "DB_SSL_PRIVATE_NETWORK_TRUSTED",
+          ],
+        }
+      );
+    }
   }
 
   if (isProd && String(cfg?.urls?.corsOrigin || "").trim() === "*") {
@@ -283,12 +397,15 @@ export function getConfigIssues() {
     );
   }
 
-  if (!isNonEmpty(cfg?.security?.tenantSecretMasterKey)) {
+  const tenantSecretIssue = getTenantSecretMasterKeyIssue(
+    cfg?.security?.tenantSecretMasterKey
+  );
+  if (tenantSecretIssue) {
     pushIssue(
       issues,
-      "warning",
+      isProd ? "error" : "warning",
       "security.tenantSecretMasterKey",
-      "TENANT_SECRET_MASTER_KEY is missing.",
+      tenantSecretIssue,
       {
         category: "secrets",
         envKeys: ["TENANT_SECRET_MASTER_KEY"],
@@ -880,4 +997,11 @@ export function assertSelectedConfigValid(keys = [], logger = console) {
 
   return report;
 }
+
+export const __test__ = {
+  getDisabledDbSslReason,
+  getTenantSecretMasterKeyIssue,
+  isAllowedPrivateNetworkDbSslException,
+  isPlaceholderLookingSecret,
+};
 

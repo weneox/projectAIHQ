@@ -24,10 +24,25 @@ function clampInt(value, fallback, min, max) {
   return Math.max(min, Math.min(max, Math.floor(n)));
 }
 
+function isRailwayPrivateDatabaseHost(url) {
+  try {
+    const u = new URL(url);
+    const host = s(u.hostname).toLowerCase();
+    return host === "railway.internal" || host.endsWith(".railway.internal");
+  } catch {
+    return false;
+  }
+}
+
 function shouldUseSsl(url) {
+  const railwayPrivateHost = isRailwayPrivateDatabaseHost(url);
+  const privateNetworkTrusted = boolFromEnv(
+    process.env.DB_SSL_PRIVATE_NETWORK_TRUSTED,
+    false
+  );
   const explicitDbSsl = s(process.env.DB_SSL).toLowerCase();
   if (["0", "false", "no", "n", "off", "disable", "disabled"].includes(explicitDbSsl)) {
-    return false;
+    return !(railwayPrivateHost && privateNetworkTrusted);
   }
   if (["1", "true", "yes", "y", "on", "require", "required"].includes(explicitDbSsl)) {
     return true;
@@ -38,7 +53,7 @@ function shouldUseSsl(url) {
 
     const sslmode = s(u.searchParams.get("sslmode")).toLowerCase();
     if (["disable", "disabled", "false", "off"].includes(sslmode)) {
-      return false;
+      return !(railwayPrivateHost && privateNetworkTrusted);
     }
     if (
       sslmode === "require" ||
@@ -49,8 +64,7 @@ function shouldUseSsl(url) {
     }
 
     const host = s(u.hostname).toLowerCase();
-    if (host.endsWith(".railway.internal")) return false;
-    if (host.includes("railway.internal")) return false;
+    if (railwayPrivateHost) return !privateNetworkTrusted;
 
     if (host.includes("railway")) return true;
     if (host.includes("render")) return true;

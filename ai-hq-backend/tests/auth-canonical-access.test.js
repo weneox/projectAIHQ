@@ -649,9 +649,13 @@ function createSignupRouter(db, workspaceStates = {}) {
 }
 
 const previousUserSessionSecret = cfg.auth.userSessionSecret;
+const previousTenantSecretMasterKey = cfg.security.tenantSecretMasterKey;
 cfg.auth.userSessionSecret = previousUserSessionSecret || "test-user-session-secret";
+cfg.security.tenantSecretMasterKey =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 after(() => {
   cfg.auth.userSessionSecret = previousUserSessionSecret;
+  cfg.security.tenantSecretMasterKey = previousTenantSecretMasterKey;
 });
 
 test("signup creates canonical identity, membership, bridge user, and authenticated setup destination", async () => {
@@ -676,7 +680,7 @@ test("signup creates canonical identity, membership, bridge user, and authentica
     headers: { host: "app.weneox.com" },
   });
 
-  assert.equal(signup.res.statusCode, 201);
+  assert.equal(signup.res.statusCode, 201, JSON.stringify(signup.res.body));
   assert.equal(signup.res.body?.authenticated, true);
   assert.equal(signup.res.body?.destination?.path, "/home?assistant=setup");
   assert.equal(db.tenants.size, 1);
@@ -724,7 +728,7 @@ test("login repairs a legacy-only user into canonical identity auth and succeeds
     headers: { host: "app.weneox.com" },
   });
 
-  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.statusCode, 200, JSON.stringify(login.res.body));
   assert.equal(login.res.body?.user?.tenantKey, "acme");
   assert.equal(db.identities.size, 1);
   assert.equal(db.memberships.size, 1);
@@ -773,7 +777,7 @@ test("login repairs stale canonical password hashes from the legacy bridge and s
     body: { email: "owner@acme.test", password: "new-pass" },
   });
 
-  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.statusCode, 200, JSON.stringify(login.res.body));
   assert.equal(login.res.body?.destination?.path, "/workspace");
 });
 

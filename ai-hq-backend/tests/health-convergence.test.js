@@ -98,6 +98,8 @@ test("root and api health derive operational readiness from the same blocker log
 
   assert.equal(apiHealth.operationalReadiness.status, "blocked");
   assert.equal(rootHealth.operationalReadiness.status, "blocked");
+  assert.equal(apiHealth.ok, false);
+  assert.equal(rootHealth.ok, false);
   assert.deepEqual(
     rootHealth.operationalReadiness.blockerReasonCodes,
     apiHealth.operationalReadiness.blockerReasonCodes

@@ -168,7 +168,7 @@ test("secret mutation writes durable audit without leaking secret value", async 
     },
   });
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
   assert.equal(db.auditEntries[0]?.action, "settings.secret.updated");
   assert.equal(db.auditEntries[0]?.meta?.outcome, "succeeded");
   assert.equal(db.auditEntries[0]?.meta?.provider, "meta");
@@ -201,7 +201,7 @@ test("secret mutation blocks non-admin operators and audits the denial safely", 
     },
   });
 
-  assert.equal(res.statusCode, 403);
+  assert.equal(res.statusCode, 403, JSON.stringify(res.body));
   assert.equal(res.body?.error, "Only owner/admin can manage provider secrets");
   assert.equal(res.body?.reasonCode, "insufficient_role");
   assert.equal(db.auditEntries[0]?.action, "settings.secret.updated");
