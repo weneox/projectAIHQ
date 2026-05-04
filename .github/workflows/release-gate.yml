@@ -764,7 +764,7 @@ jobs:
             echo "| Frontend release SHA identity check | \`true\` |"
             echo "| Backend release SHA identity check | \`true\` |"
             echo "| Strict sidecars | \`true\` |"
-            echo "| Strict website lane tenant smoke | \`true\` |"
+            echo "| Strict website lane tenant smoke | \`false\` |"
             echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"
