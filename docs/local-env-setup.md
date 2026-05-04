@@ -11,6 +11,13 @@ Use the root [`.env.example`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/.env.
 2. Fill only the values you actually need for the workspaces you run.
 3. If you run a workspace directly and it expects its own local env file, copy the same needed values into that workspace's gitignored `.env.local`.
 
+Backend workspaces use `dotenv/config`, which reads `.env` by default. To keep
+using `.env.local`, set this in the shell before validation/build commands:
+
+```powershell
+$env:DOTENV_CONFIG_PATH = ".env.local"
+```
+
 ## Minimum local config
 
 For `npm run validate:env` at the repo root, the smallest practical local set is:
@@ -25,7 +32,7 @@ For `npm run validate:env` at the repo root, the smallest practical local set is
 - `VITE_API_BASE=http://localhost:8080`
 - `VITE_WS_URL=ws://localhost:8080`
 - `VERIFY_TOKEN=...`
-- `META_WEBHOOK_APP_SECRET=...`
+- `META_WEBHOOK_APP_SECRET=local-placeholder-meta-webhook-secret`
 - `CONTACT_EMAIL=ops@example.test`
 - `OPENAI_API_KEY=...`
 - `TWILIO_ACCOUNT_SID=...`
@@ -52,6 +59,18 @@ If you do want Telegram channel connect enabled locally, set:
 - `TELEGRAM_API_BASE_URL=https://api.telegram.org`
 
 The product-managed Telegram connector stores each tenant bot token in tenant secrets after the operator connects it from the Channels UI. You do not preconfigure a shared `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` in the backend env for this flow.
+
+## Meta webhook secret rules
+
+`META_WEBHOOK_APP_SECRET` is required for Meta webhook signature verification.
+For local validation/build only, use a clearly fake value such as
+`local-placeholder-meta-webhook-secret`. Production-like environments
+(`APP_ENV=staging`, `APP_ENV=production`, or any non-dev value) must use the
+real Meta app secret from the deployment provider secret store under the
+explicit `META_WEBHOOK_APP_SECRET` name.
+
+Do not rely on `META_APP_SECRET` for production Meta webhook verification.
+`META_APP_SECRET` is retained only as a local/dev/test legacy fallback.
 
 ## Validation commands
 

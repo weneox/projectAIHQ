@@ -40,6 +40,7 @@ They may exist in the codebase, but should not be presented as live product scop
 
 Before claiming launch readiness, all of these must be green:
 
+- Production launch evidence gate for the intended launch target
 - GitHub Release Gate
 - AI HQ backend Railway deploy
 - Meta bot backend Railway deploy
@@ -49,6 +50,11 @@ Before claiming launch readiness, all of these must be green:
 - Mandatory postdeploy verification
 - Mandatory prod-spine smoke
 - Website lane tenant smoke with WEBSITE_LANE_TENANT_KEY
+
+`npm run launch:evidence:check -- limited` must pass before a controlled unpaid
+pilot with real customer data. `npm run launch:evidence:check -- paid` must pass
+before a paid pilot. `npm run launch:evidence:check -- public` must pass before
+public launch and is enforced by Release Gate on `main`.
 
 ## Required GitHub Actions secrets
 
@@ -87,9 +93,11 @@ Run from the monorepo root:
 - npm run build:all
 - npm run test:backend:all
 
-For local build env validation, these placeholder values may be set before build:
+For local build env validation only, these placeholder values may be set before
+build. They are unsafe for production and are rejected by production placeholder
+guards or production-like env validation:
 
-- META_WEBHOOK_APP_SECRET=local-placeholder
+- META_WEBHOOK_APP_SECRET=local-placeholder-meta-webhook-secret
 - CORS_ORIGIN=http://localhost:5173
 - OPENAI_API_KEY=local-placeholder
 
@@ -125,6 +133,11 @@ Safe public wording:
 - AI HQ helps your business define approved business truth, connect a live customer channel, and operate conversations from one inbox.
 - AI replies are gated by approved business truth and channel readiness.
 - The system stays blocked when the runtime, channel, or inbox state is not safe.
+
+Do not imply paid SaaS readiness unless
+`docs/launch/production-launch-evidence.json` has `P0-005` marked `READY` with
+approved pricing, payment/manual invoice, quota, cancellation/refund, and
+support-term evidence.
 
 Avoid public wording for v1:
 

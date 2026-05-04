@@ -828,6 +828,61 @@ test("structured logs expose production-required reliability fields", () => {
   assert.equal(entry.execution_state, "sent");
 });
 
+test("release gate requires Website lane smoke for production deployment", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/release-gate.yml", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"1"/);
+  assert.match(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"1"/);
+  assert.doesNotMatch(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  assert.doesNotMatch(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  assert.match(workflow, /LAUNCH_GATE_TARGET:\s*public/);
+  assert.match(workflow, /npm run launch:evidence:check/);
+  assert.match(workflow, /Strict website lane tenant smoke \| \\`true\\`/);
+});
+
+test("production launch evidence keeps external P0 proof blocked until attached", () => {
+  const evidence = JSON.parse(
+    readFileSync(
+      new URL("../../docs/launch/production-launch-evidence.json", import.meta.url),
+      "utf8"
+    )
+  );
+
+  assert.equal(Array.isArray(evidence.items), true);
+
+  for (const item of evidence.items) {
+    for (const field of [
+      "id",
+      "item",
+      "owner",
+      "status",
+      "evidence",
+      "reasonMissing",
+      "date",
+      "approver",
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ]) {
+      assert.equal(field in item, true, `${item.id} missing ${field}`);
+    }
+  }
+
+  const byId = new Map(evidence.items.map((item) => [item.id, item]));
+
+  assert.equal(byId.get("P0-001")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-001")?.blocksPublicLaunch, true);
+  assert.equal(byId.get("P0-004")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-004")?.blocksLimitedLaunch, true);
+  assert.equal(byId.get("P0-005")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-005")?.blocksPaidLaunch, true);
+  assert.equal(byId.get("P0-006")?.status, "BLOCKED");
+  assert.equal(byId.get("P0-006")?.blocksPublicLaunch, true);
+});
+
 test("outbound retry query includes expired reserved/sending recovery path", async () => {
   const db = {
     async query(sql, params) {

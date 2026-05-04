@@ -18,6 +18,11 @@ function b(v, fallback = false) {
   return fallback;
 }
 
+function isProdLikeEnvValue(env = "") {
+  const normalized = s(env || "development").toLowerCase();
+  return !["", "development", "dev", "test"].includes(normalized);
+}
+
 function prodDefaultBool(v, fallbackProd = true) {
   const raw = String(v ?? "").trim().toLowerCase();
   if (raw) {
@@ -75,7 +80,20 @@ function resolveSecretContract(
 }
 
 export function getMetaWebhookSecretConfig(env = process.env) {
-  return resolveSecretContract("META_WEBHOOK_APP_SECRET", "META_APP_SECRET", env);
+  const contract = resolveSecretContract("META_WEBHOOK_APP_SECRET", "META_APP_SECRET", env);
+  const appEnv = s(env?.APP_ENV, env?.NODE_ENV || "development");
+  const prodLike = isProdLikeEnvValue(appEnv);
+  const fallbackDisallowed = prodLike && !contract.explicitPresent && contract.fallbackPresent;
+
+  return {
+    ...contract,
+    appEnv,
+    prodLike,
+    fallbackDisallowed,
+    resolvedSecret: fallbackDisallowed ? "" : contract.resolvedSecret,
+    resolvedSource: fallbackDisallowed ? "" : contract.resolvedSource,
+    resolvedFingerprint: fallbackDisallowed ? "" : contract.resolvedFingerprint,
+  };
 }
 
 export function readMetaWebhookAppSecret(env = process.env) {
@@ -91,6 +109,16 @@ export function assertMetaWebhookSecretConfig(env = process.env) {
     );
     error.code = "meta_webhook_secret_mismatch";
     error.reason = "secret_env_mismatch";
+    error.secretConfig = secretConfig;
+    throw error;
+  }
+
+  if (secretConfig.fallbackDisallowed) {
+    const error = new Error(
+      "META_APP_SECRET fallback is not allowed in production-like environments. Set META_WEBHOOK_APP_SECRET for Meta webhook signature verification."
+    );
+    error.code = "meta_webhook_explicit_secret_required";
+    error.reason = "explicit_webhook_secret_required";
     error.secretConfig = secretConfig;
     throw error;
   }

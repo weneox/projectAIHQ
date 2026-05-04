@@ -51,6 +51,7 @@ test(
     const envSnapshot = { ...process.env };
 
     try {
+      process.env.APP_ENV = "development";
       delete process.env.META_WEBHOOK_APP_SECRET;
       process.env.META_APP_SECRET = "fallback-secret";
 
@@ -60,6 +61,78 @@ test(
       assert.equal(secretConfig.resolvedSecret, "fallback-secret");
       assert.equal(secretConfig.resolvedSource, "META_APP_SECRET");
       assert.equal(secretConfig.mismatch, false);
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "meta-bot config rejects META_APP_SECRET fallback in production-like environments",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      process.env.APP_ENV = "production";
+      process.env.NODE_ENV = "production";
+      process.env.VERIFY_TOKEN = "verify-token";
+      process.env.PUBLIC_BASE_URL = "https://meta.example.test";
+      process.env.AIHQ_BASE_URL = "https://aihq.example.test";
+      process.env.AIHQ_INTERNAL_TOKEN = "internal-token";
+      process.env.CONTACT_EMAIL = "ops@example.test";
+      delete process.env.META_WEBHOOK_APP_SECRET;
+      process.env.META_APP_SECRET = "fallback-secret";
+
+      const { getMetaWebhookSecretConfig } = await loadConfigFresh("prod-fallback");
+      const secretConfig = getMetaWebhookSecretConfig();
+
+      assert.equal(secretConfig.fallbackDisallowed, true);
+      assert.equal(secretConfig.resolvedSecret, "");
+      assert.equal(secretConfig.resolvedSource, "");
+
+      const { getConfigIssues } = await loadValidateFresh("prod-fallback");
+      const issues = getConfigIssues();
+      const secretIssue = issues.find(
+        (item) => item.key === "META_WEBHOOK_APP_SECRET"
+      );
+
+      assert.ok(secretIssue);
+      assert.equal(secretIssue.level, "error");
+      assert.equal(secretIssue.category, "providers");
+      assert.match(String(secretIssue.message || ""), /production-like/i);
+      assert.ok(secretIssue.envKeys.includes("META_WEBHOOK_APP_SECRET"));
+      assert.ok(secretIssue.envKeys.includes("META_APP_SECRET"));
+    } finally {
+      restoreEnv(envSnapshot);
+    }
+  }
+);
+
+test(
+  "meta-bot config accepts explicit META_WEBHOOK_APP_SECRET in production-like environments",
+  { concurrency: false },
+  async () => {
+    const envSnapshot = { ...process.env };
+
+    try {
+      process.env.APP_ENV = "production";
+      process.env.NODE_ENV = "production";
+      process.env.VERIFY_TOKEN = "verify-token";
+      process.env.PUBLIC_BASE_URL = "https://meta.example.test";
+      process.env.AIHQ_BASE_URL = "https://aihq.example.test";
+      process.env.AIHQ_INTERNAL_TOKEN = "internal-token";
+      process.env.CONTACT_EMAIL = "ops@example.test";
+      process.env.META_WEBHOOK_APP_SECRET = "preferred-secret";
+      delete process.env.META_APP_SECRET;
+
+      const { getConfigIssues } = await loadValidateFresh("prod-explicit");
+      const issues = getConfigIssues();
+      const secretIssue = issues.find(
+        (item) => item.key === "META_WEBHOOK_APP_SECRET"
+      );
+
+      assert.equal(secretIssue, undefined);
     } finally {
       restoreEnv(envSnapshot);
     }

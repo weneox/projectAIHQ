@@ -350,6 +350,11 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Check production launch evidence gate
+        env:
+          LAUNCH_GATE_TARGET: public
+        run: npm run launch:evidence:check
+
       - name: Run production placeholder guard
         env:
           AIHQ_PROD_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
@@ -366,8 +371,8 @@ jobs:
           ENABLE_NEOX_FRONTEND_PROD_DEPLOY: ${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY }}
           CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
           AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
-          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "0"
-          PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
           POSTDEPLOY_STRICT_SIDECARS: "1"
           PROD_SPINE_STRICT_SIDECARS: "1"
           AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
@@ -731,7 +736,7 @@ jobs:
           PROD_SPINE_SMOKE_DELAY_MS: "15000"
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "1"
-          PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
           PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: "1"
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
@@ -765,7 +770,7 @@ jobs:
           WEBSITE_LANE_DOMAIN: ${{ secrets.WEBSITE_LANE_DOMAIN }}
           POSTDEPLOY_TIMEOUT_MS: "12000"
           POSTDEPLOY_STRICT_SIDECARS: "1"
-          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "0"
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
           POSTDEPLOY_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:postdeploy:verify
@@ -792,7 +797,7 @@ jobs:
             echo "| Frontend release SHA identity check | \`true\` |"
             echo "| Backend release SHA identity check | \`true\` |"
             echo "| Strict sidecars | \`true\` |"
-            echo "| Strict website lane tenant smoke | \`false\` |"
+            echo "| Strict website lane tenant smoke | \`true\` |"
             echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"

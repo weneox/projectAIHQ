@@ -86,6 +86,9 @@ Do not add a separate production deploy workflow that bypasses these needs.
 The Release Gate includes security checks before any production deploy hook can
 run:
 
+- `npm run launch:evidence:check` runs with `LAUNCH_GATE_TARGET=public` and
+  fails while launch-blocking evidence in
+  `docs/launch/production-launch-evidence.json` is still `BLOCKED`.
 - `npm run security:audit` runs `npm audit --audit-level=high` and fails on
   high or critical dependency advisories.
 - `npm run security:scan` runs a tracked-file secret scan for committed provider

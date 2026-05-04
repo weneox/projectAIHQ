@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { cfg } from "../src/config.js";
-import { leadsRoutes } from "../src/routes/api/leads/index.js";
+import { leadsInternalRoutes, leadsRoutes } from "../src/routes/api/leads/index.js";
 import { commentsRoutes } from "../src/routes/api/comments/index.js";
 import { voiceRoutes, voiceInternalRoutes } from "../src/routes/api/voice/index.js";
 import { executionsRoutes } from "../src/routes/api/executions/index.js";
@@ -89,6 +89,46 @@ function buildAuth(role = "member") {
   };
 }
 
+const LEAD_MUTATION_CASES = [
+  ["create lead", "post", "/leads", { fullName: "New Lead" }],
+  [
+    "update lead",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111",
+    { notes: "updated" },
+  ],
+  [
+    "stage change",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111/stage",
+    { stage: "qualified" },
+  ],
+  [
+    "status change",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111/status",
+    { status: "open" },
+  ],
+  [
+    "owner assignment",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111/owner",
+    { owner: "operator@acme.test" },
+  ],
+  [
+    "follow-up update",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111/followup",
+    { followUpAt: "2026-05-05T10:00:00.000Z", nextAction: "Call back" },
+  ],
+  [
+    "note creation",
+    "post",
+    "/leads/11111111-1111-4111-8111-111111111111/note",
+    { note: "Operator note" },
+  ],
+];
+
 test("operator-only read surfaces reject ordinary authenticated members", async () => {
   const leadRouter = leadsRoutes({ db: null, wsHub: null });
   const commentsRouter = commentsRoutes({ db: null, wsHub: null });
@@ -164,6 +204,90 @@ test("owner admin and operator can still reach operator-read surfaces", async ()
     auth: operatorAuth,
   });
   assert.notEqual(proposalList.res.statusCode, 403);
+});
+
+test("lead mutation surfaces reject ordinary authenticated members", async () => {
+  const leadRouter = leadsRoutes({ db: null, wsHub: null });
+  const memberAuth = buildAuth("member");
+
+  for (const [label, method, path, body] of LEAD_MUTATION_CASES) {
+    const result = await invokeRouter(leadRouter, method, path, {
+      auth: memberAuth,
+      body,
+    });
+
+    assert.equal(result.res.statusCode, 403, label);
+    assert.equal(result.res.body?.reason, "operator surface access required", label);
+  }
+});
+
+test("lead mutation surfaces reject unauthenticated callers before handlers run", async () => {
+  const leadRouter = leadsRoutes({ db: null, wsHub: null });
+
+  for (const [label, method, path, body] of LEAD_MUTATION_CASES) {
+    const result = await invokeRouter(leadRouter, method, path, { body });
+
+    assert.equal(result.res.statusCode, 401, label);
+    assert.equal(result.res.body?.reason, "authenticated tenant user is required", label);
+  }
+});
+
+test("operator roles can still reach lead mutation handlers", async () => {
+  const leadRouter = leadsRoutes({ db: null, wsHub: null });
+  const operatorAuth = buildAuth("operator");
+
+  for (const [label, method, path, body] of LEAD_MUTATION_CASES) {
+    const result = await invokeRouter(leadRouter, method, path, {
+      auth: operatorAuth,
+      body,
+    });
+
+    assert.equal(result.res.body?.dbDisabled, true, label);
+    assert.notEqual(result.res.body?.reason, "operator surface access required", label);
+  }
+});
+
+test("lead ingest stays internal-token only", async () => {
+  const previousEnv = cfg.app.env;
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.app.env = "development";
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const browserRouter = leadsRoutes({ db: null, wsHub: null });
+    const browserResult = await invokeRouter(browserRouter, "post", "/leads/ingest", {
+      auth: buildAuth("member"),
+      body: { fullName: "Browser lead" },
+    });
+
+    assert.equal(browserResult.res.statusCode, 403);
+    assert.equal(browserResult.res.body?.reason, "operator surface access required");
+
+    const internalRouter = leadsInternalRoutes({ db: null, wsHub: null });
+    const memberResult = await invokeRouter(internalRouter, "post", "/leads/ingest", {
+      auth: buildAuth("member"),
+      body: { fullName: "Member lead" },
+    });
+
+    assert.equal(memberResult.res.statusCode, 401);
+    assert.equal(memberResult.res.body?.error, "unauthorized");
+
+    const internalResult = await invokeRouter(internalRouter, "post", "/leads/ingest", {
+      headers: {
+        "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.leads.ingest",
+      },
+      body: { fullName: "Internal lead" },
+    });
+
+    assert.equal(internalResult.res.body?.dbDisabled, true);
+    assert.notEqual(internalResult.res.body?.error, "unauthorized");
+  } finally {
+    cfg.app.env = previousEnv;
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
 });
 
 test("internal-only server-to-server flows remain available", async () => {

@@ -1,6 +1,27 @@
 ﻿# Production Readiness Checklist
 
 This checklist is the minimum gate before treating Project AIHQ as production-ready.
+It is not launch sign-off by itself. The evidence source of truth is
+`docs/launch/production-launch-evidence.json`, and the gate command is
+`npm run launch:evidence:check -- <limited|paid|public>`. Release Gate runs the
+public target before production deploy hooks can pass.
+
+Current status as of 2026-05-04: production launch is BLOCKED until all
+launch-blocking P0 evidence items are `READY`, or explicitly accepted only where
+the evidence file allows `ACCEPTED_RISK`. Backup/restore proof and paid launch
+commercial terms are not acceptable missing-proof risks.
+
+## 0. Evidence gate
+
+- [ ] `docs/launch/production-launch-evidence.json` has an owner for every P0 item.
+- [ ] Every launch-blocking item has `status`, evidence or missing-proof reason,
+  date, approver, and target-blocking flags.
+- [ ] `npm run launch:evidence:check -- limited` passes before any controlled
+  unpaid pilot with real customer data.
+- [ ] `npm run launch:evidence:check -- paid` passes before any paid pilot.
+- [ ] `npm run launch:evidence:check -- public` passes before public launch.
+- [ ] No external proof is marked `READY` without a provider, CI, runbook, or
+  signed go/no-go evidence link.
 
 ## 1. Repository hygiene
 
@@ -113,10 +134,13 @@ Before enabling a live tenant:
 - [ ] Autonomous mode explicitly approved.
 ## Related runbooks
 
+- [Production Launch Evidence Gate](launch/production-launch-evidence.md)
 - [Production Smoke Runbook](runbooks/PRODUCTION_SMOKE.md)
 - [Production Environment Audit Runbook](runbooks/PRODUCTION_ENV_AUDIT.md)
 - [Durable Execution Dead-Letter Runbook](runbooks/DURABLE_EXECUTION_DEAD_LETTER.md)
 - [Tenant Launch Checklist](runbooks/TENANT_LAUNCH_CHECKLIST.md)
+- [Backup And Restore Evidence Template](runbooks/backup-restore-evidence-template.md)
+- [Paid Launch Gate](launch/paid-launch-gate.md)
 - [Twilio Fallback Hardening Runbook](runbooks/TWILIO_FALLBACK_HARDENING.md)
 
 

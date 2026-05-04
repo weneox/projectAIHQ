@@ -3,6 +3,11 @@
 Use this checklist for the surviving controlled launch slice only:
 Home -> Setup Widget -> Truth/Runtime -> Channels -> Inbox
 
+This checklist is not permission to launch. Before a controlled unpaid pilot
+with real customer data, `npm run launch:evidence:check -- limited` must pass.
+Paid pilot and public launch remain blocked until their dedicated evidence
+targets pass.
+
 ## Workspace isolation
 - [ ] Start in tenant A and confirm `/home` shows tenant A launch posture.
 - [ ] Switch to tenant B and confirm Home, the setup widget, Truth, Channels, and Inbox do not show tenant A draft, review, or channel state.

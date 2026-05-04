@@ -89,6 +89,17 @@ export function getConfigIssues() {
         envKeys: ["META_WEBHOOK_APP_SECRET", "META_APP_SECRET"],
       }
     );
+  } else if (metaWebhookSecret.fallbackDisallowed) {
+    pushIssue(
+      issues,
+      "error",
+      "META_WEBHOOK_APP_SECRET",
+      "META_WEBHOOK_APP_SECRET is required in production-like environments. META_APP_SECRET is a local/dev/test legacy fallback only and must not be used for production webhook verification.",
+      {
+        category: "providers",
+        envKeys: ["META_WEBHOOK_APP_SECRET", "META_APP_SECRET"],
+      }
+    );
   } else if (!s(metaWebhookSecret.resolvedSecret)) {
     pushIssue(
       issues,

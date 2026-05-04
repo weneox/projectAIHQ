@@ -18,6 +18,12 @@ The repo does not create backups or fake restore drills. The preflight only
 enforces that an operator supplied explicit evidence from the production
 database provider/runbook.
 
+Use [backup-restore-evidence-template.md](backup-restore-evidence-template.md)
+to record provider snapshot policy, latest backup age, restore drill result,
+owner, and approver. Link the completed evidence from
+`docs/launch/production-launch-evidence.json` before changing `P0-004` from
+`BLOCKED`.
+
 ## Production preflight
 
 `npm run migrate:ai-hq-backend` runs the migration safety preflight before

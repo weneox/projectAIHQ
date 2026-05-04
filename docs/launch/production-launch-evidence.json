@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-05-04",
+  "sourceOfTruth": "This file is the production launch evidence gate. Do not mark external checks READY without attached provider, CI, runbook, or sign-off evidence.",
+  "items": [
+    {
+      "id": "P0-001",
+      "item": "Production-like Meta webhook verification uses an explicit META_WEBHOOK_APP_SECRET",
+      "owner": "DevOps / Security",
+      "status": "BLOCKED",
+      "evidence": "Code gate: meta-bot-backend/src/config.js; meta-bot-backend/src/config/validate.js; tests: meta-bot-backend/tests/config-validation.test.js",
+      "reasonMissing": "Production/staging provider secret evidence for META_WEBHOOK_APP_SECRET has not been attached. Local placeholder documentation is not production evidence.",
+      "date": "2026-05-04",
+      "approver": "TBD",
+      "blocksLimitedLaunch": true,
+      "blocksPaidLaunch": true,
+      "blocksPublicLaunch": true,
+      "acceptedRiskAllowed": false
+    },
+    {
+      "id": "P0-002",
+      "item": "Lead mutation routes require operator-level authorization or stricter",
+      "owner": "Backend / Security",
+      "status": "READY",
+      "evidence": "ai-hq-backend/src/routes/api/leads/index.js; ai-hq-backend/tests/operator-surface-read-governance.test.js; focused test passed locally on 2026-05-04",
+      "reasonMissing": "",
+      "date": "2026-05-04",
+      "approver": "local-verification",
+      "blocksLimitedLaunch": false,
+      "blocksPaidLaunch": false,
+      "blocksPublicLaunch": false,
+      "acceptedRiskAllowed": false
+    },
+    {
+      "id": "P0-003",
+      "item": "Production release gate requires website-lane tenant smoke",
+      "owner": "DevOps / QA",
+      "status": "READY",
+      "evidence": ".github/workflows/release-gate.yml; docs/runbooks/post-deploy-verification.md; ai-hq-backend/tests/production-hardening-primitives.test.js; focused test passed locally on 2026-05-04",
+      "reasonMissing": "",
+      "date": "2026-05-04",
+      "approver": "local-verification",
+      "blocksLimitedLaunch": false,
+      "blocksPaidLaunch": false,
+      "blocksPublicLaunch": false,
+      "acceptedRiskAllowed": false
+    },
+    {
+      "id": "P0-004",
+      "item": "Provider backup policy and restore drill are proven before production launch",
+      "owner": "DevOps / Data",
+      "status": "BLOCKED",
+      "evidence": "Template: docs/runbooks/backup-restore-evidence-template.md; pre-migration gate: docs/runbooks/schema-migration-safety.md",
+      "reasonMissing": "No provider snapshot policy, latest backup timestamp, or successful restore drill evidence has been attached. The repo cannot create or verify provider backups by itself.",
+      "date": "2026-05-04",
+      "approver": "TBD",
+      "blocksLimitedLaunch": true,
+      "blocksPaidLaunch": true,
+      "blocksPublicLaunch": true,
+      "acceptedRiskAllowed": false
+    },
+    {
+      "id": "P0-005",
+      "item": "Paid launch has explicit pricing, payment/manual invoice, quota limits, cancellation/refund, and support terms",
+      "owner": "Founder / GTM / Legal",
+      "status": "BLOCKED",
+      "evidence": "Gate doc: docs/launch/paid-launch-gate.md",
+      "reasonMissing": "Paid pilot and public paid SaaS terms are not defined or approved. Billing readiness, manual invoice process, usage limits, refund/cancellation terms, and support ownership are missing.",
+      "date": "2026-05-04",
+      "approver": "TBD",
+      "blocksLimitedLaunch": false,
+      "blocksPaidLaunch": true,
+      "blocksPublicLaunch": true,
+      "acceptedRiskAllowed": false
+    },
+    {
+      "id": "P0-006",
+      "item": "Production readiness checklist is evidence-based and signed off",
+      "owner": "Founder / Engineering Lead / Security",
+      "status": "BLOCKED",
+      "evidence": "Gate script: scripts/check-launch-evidence.mjs; source file: docs/launch/production-launch-evidence.json; docs/PRODUCTION_READINESS.md",
+      "reasonMissing": "Launch-critical evidence is still BLOCKED and no human go/no-go approver has signed off this evidence file.",
+      "date": "2026-05-04",
+      "approver": "TBD",
+      "blocksLimitedLaunch": true,
+      "blocksPaidLaunch": true,
+      "blocksPublicLaunch": true,
+      "acceptedRiskAllowed": false
+    }
+  ]
+}

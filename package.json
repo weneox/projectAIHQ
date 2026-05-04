@@ -22,6 +22,7 @@
     "security:audit": "npm audit --audit-level=high",
     "security:secret-scan": "node scripts/security-secret-scan.mjs",
     "security:placeholder-guard": "node scripts/production-placeholder-guard.mjs",
+    "launch:evidence:check": "node scripts/check-launch-evidence.mjs",
     "security:scan": "npm run security:secret-scan",
     "start:ai-hq-frontend": "npm run start -w ai-hq-frontend",
     "start:meta-bot-backend": "npm run start -w meta-bot-backend",
