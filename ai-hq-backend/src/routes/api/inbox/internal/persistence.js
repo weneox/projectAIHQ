@@ -1,3 +1,4 @@
+import { getTenantContext } from "../../../../db/tenantContext.js";
 import {
   normalizeMessage,
   normalizeThread,
@@ -13,6 +14,27 @@ function lower(v, d = "") {
   return s(v || d).toLowerCase();
 }
 
+function assertInputMatchesTenantContext({ tenantId = "", tenantKey = "" } = {}) {
+  const context = getTenantContext() || {};
+  if (context.system === true) return;
+
+  const contextTenantId = s(context.tenantId);
+  const contextTenantKey = lower(context.tenantKey);
+  const inputTenantId = s(tenantId);
+  const inputTenantKey = lower(tenantKey);
+
+  if (contextTenantId && inputTenantId && contextTenantId !== inputTenantId) {
+    const error = new Error("inbox ingest tenant scope mismatch");
+    error.code = "TENANT_SCOPE_MISMATCH";
+    throw error;
+  }
+
+  if (contextTenantKey && inputTenantKey && contextTenantKey !== inputTenantKey) {
+    const error = new Error("inbox ingest tenant scope mismatch");
+    error.code = "TENANT_SCOPE_MISMATCH";
+    throw error;
+  }
+}
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
@@ -224,6 +246,8 @@ export async function findOrCreateThreadForIngest({
   customerName,
   meta,
 }) {
+  assertInputMatchesTenantContext({ tenantId, tenantKey });
+
   if (!tenantId || !tenantKey) {
     const error = new Error("findOrCreateThreadForIngest requires tenant identity");
     error.code = "TENANT_CONTEXT_REQUIRED";
@@ -346,6 +370,8 @@ export async function insertInboundMessage({
   meta,
   timestamp,
 }) {
+  assertInputMatchesTenantContext({ tenantId, tenantKey });
+
   if (!tenantId || !tenantKey) {
     const error = new Error("insertInboundMessage requires tenant identity");
     error.code = "TENANT_CONTEXT_REQUIRED";
@@ -403,6 +429,8 @@ export async function insertInboundMessage({
 }
 
 export async function loadRecentMessages(client, threadId, tenantKey, limit = 8) {
+  assertInputMatchesTenantContext({ tenantKey });
+
   const resolvedTenantKey = cleanText(tenantKey);
   if (!resolvedTenantKey) {
     const error = new Error("loadRecentMessages requires tenant key");
