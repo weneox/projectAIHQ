@@ -413,7 +413,9 @@ export async function resolveWebsiteWidgetTenant(db, { tenantKey = "", publicWid
   if (!db?.query) return null;
 
   if (publicWidgetId) {
-    const result = await db.query(
+    const result = await runWithSystemDbContext(
+    "website_widget_public_tenant_lookup",
+    () => db.query(
       `
       select
         t.id,
@@ -450,7 +452,8 @@ export async function resolveWebsiteWidgetTenant(db, { tenantKey = "", publicWid
       limit 1
       `,
       [publicWidgetId, WEBSITE_WIDGET_CHANNEL]
-    );
+    )
+  );
 
     const row = result.rows?.[0] || null;
     return row ? mapTenantRow(row) : null;
@@ -458,7 +461,9 @@ export async function resolveWebsiteWidgetTenant(db, { tenantKey = "", publicWid
 
   if (!tenantKey) return null;
 
-  const result = await db.query(
+  const result = await runWithSystemDbContext(
+    "website_widget_tenant_key_lookup",
+    () => db.query(
     `
     select
       t.id,
@@ -484,6 +489,7 @@ export async function resolveWebsiteWidgetTenant(db, { tenantKey = "", publicWid
     limit 1
     `,
     [tenantKey, WEBSITE_WIDGET_CHANNEL]
+  )
   );
 
   const row = result.rows?.[0] || null;
@@ -493,7 +499,9 @@ export async function resolveWebsiteWidgetTenant(db, { tenantKey = "", publicWid
 export async function resolveWebsiteWidgetStatus(db, tenantKey = "") {
   if (!db?.query || !tenantKey) return null;
 
-  const result = await db.query(
+  const result = await runWithSystemDbContext(
+    "website_widget_status_lookup",
+    () => db.query(
     `
     select
       t.id,
@@ -522,6 +530,7 @@ export async function resolveWebsiteWidgetStatus(db, tenantKey = "") {
     limit 1
     `,
     [tenantKey, WEBSITE_WIDGET_CHANNEL]
+  )
   );
 
   const row = result.rows?.[0] || null;
