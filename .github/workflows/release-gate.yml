@@ -700,6 +700,19 @@ jobs:
         shell: bash
         run: npm run ops:frontend:prod-smoke
 
+      - name: Wait for AI HQ backend Railway release identity
+        id: wait_aihq_backend_release_for_prod_spine
+        env:
+          AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          BACKEND_RELEASE_WAIT_ATTEMPTS: "30"
+          BACKEND_RELEASE_WAIT_DELAY_MS: "20000"
+          BACKEND_RELEASE_WAIT_TIMEOUT_MS: "5000"
+        shell: bash
+        run: node scripts/wait-for-backend-release.mjs
+
       - name: Run mandatory production prod-spine smoke with strict sidecars
         id: prod_spine_smoke
         env:
@@ -723,6 +736,19 @@ jobs:
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:prod-spine:smoke
+
+      - name: Reconfirm AI HQ backend release identity before post-deploy verification
+        id: wait_aihq_backend_release_for_postdeploy
+        env:
+          AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          BACKEND_RELEASE_WAIT_ATTEMPTS: "30"
+          BACKEND_RELEASE_WAIT_DELAY_MS: "20000"
+          BACKEND_RELEASE_WAIT_TIMEOUT_MS: "5000"
+        shell: bash
+        run: node scripts/wait-for-backend-release.mjs
 
       - name: Run mandatory production post-deploy verification with strict sidecars
         id: postdeploy_verify
@@ -758,7 +784,9 @@ jobs:
             echo "| Twilio voice backend deploy dependency | \`${{ needs['trigger-twilio-voice-backend-railway-deploy'].result }}\` |"
             echo "| AI HQ frontend deploy dependency | \`${{ needs['trigger-ai-hq-frontend-cloudflare-pages-deploy'].result }}\` |"
             echo "| AI HQ frontend browser smoke step | \`${{ steps.frontend_prod_smoke.outcome }}\` |"
+            echo "| Backend release wait before prod-spine | \`${{ steps.wait_aihq_backend_release_for_prod_spine.outcome }}\` |"
             echo "| Prod spine smoke step | \`${{ steps.prod_spine_smoke.outcome }}\` |"
+            echo "| Backend release wait before postdeploy | \`${{ steps.wait_aihq_backend_release_for_postdeploy.outcome }}\` |"
             echo "| Post-deploy verify step | \`${{ steps.postdeploy_verify.outcome }}\` |"
             echo "| Expected release SHA | \`${{ github.sha }}\` |"
             echo "| Frontend release SHA identity check | \`true\` |"
