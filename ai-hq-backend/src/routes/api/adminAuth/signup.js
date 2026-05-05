@@ -25,7 +25,7 @@ import {
 } from "../../../services/auth/canonicalUserAccess.js";
 import { isLikelyEmail, isReservedTenantKey, slugTenantKey, validTenantKey } from "../tenants/utils.js";
 import { markIdentityLogin, markUserLogin } from "./repository.js";
-import { setTenantContext } from "../../../db/tenantContext.js";
+import { runWithTenantContext } from "../../../db/tenantContext.js";
 import { writeAudit } from "../../../utils/auditLog.js";
 import { writeTenantLifecycleEvent } from "../../../db/helpers/tenantLifecycle.js";
 
@@ -215,43 +215,47 @@ export function userSignupRoutes({
           lifecycle_status: "trial",
           billing_status: "trialing",
         });
-        setTenantContext({
-          tenantId: tenant.id,
-          tenantKey,
-          requestId: req.requestId,
-          source: "auth.signup",
-        });
-
-        await dbUpsertTenantProfile(tx, tenant.id, {
-          brand_name: companyName,
-          website_url: websiteUrl || null,
-        });
-        await dbUpsertTenantAiPolicy(tx, tenant.id, {});
-
-        const user = await createCanonicalTenantUser(tx, tenant.id, {
-          user_email: email,
-          full_name: fullName || companyName,
-          role: "owner",
-          status: "active",
-          password_hash: hashUserPassword(password),
-          auth_provider: "local",
-          email_verified: false,
-          permissions: {},
-          meta: {
-            signupCreated: true,
-            emailVerificationRequired: true,
+        return runWithTenantContext(
+          {
+            tenantId: tenant.id,
+            tenantKey,
+            requestId: req.requestId,
+            source: "auth.signup",
+            reason: "self_service_workspace_creation",
           },
-        });
+          async () => {
+            await dbUpsertTenantProfile(tx, tenant.id, {
+              brand_name: companyName,
+              website_url: websiteUrl || null,
+            });
+            await dbUpsertTenantAiPolicy(tx, tenant.id, {});
 
-        const identity = await dbGetAuthIdentityByEmail(tx, email);
-        const membership = await dbGetAuthIdentityMembership(tx, identity?.id, tenant.id);
+            const user = await createCanonicalTenantUser(tx, tenant.id, {
+              user_email: email,
+              full_name: fullName || companyName,
+              role: "owner",
+              status: "active",
+              password_hash: hashUserPassword(password),
+              auth_provider: "local",
+              email_verified: false,
+              permissions: {},
+              meta: {
+                signupCreated: true,
+                emailVerificationRequired: true,
+              },
+            });
 
-        return {
-          tenant,
-          user,
-          identity,
-          membership,
-        };
+            const identity = await dbGetAuthIdentityByEmail(tx, email);
+            const membership = await dbGetAuthIdentityMembership(tx, identity?.id, tenant.id);
+
+            return {
+              tenant,
+              user,
+              identity,
+              membership,
+            };
+          }
+        );
       });
 
       if (!created?.identity?.id || !created?.membership?.id || !created?.user?.id) {
@@ -293,41 +297,51 @@ export function userSignupRoutes({
       clearUserCookie(res);
       res.cookie(getUserCookieName(), token, userCookieOptions(req));
 
-      await Promise.allSettled([
-        markIdentityLogin(db, created.identity.id),
-        markUserLogin(db, {
-          ...created.user,
-          tenant_key: created.tenant.tenant_key,
-        }),
-        writeAudit(db, {
+      await runWithTenantContext(
+        {
           tenantId: created.tenant.id,
           tenantKey: created.tenant.tenant_key,
           requestId: req.requestId,
-          actor: "user_signup",
-          action: "tenant.signup.created",
-          objectType: "tenant",
-          objectId: created.tenant.id,
-          meta: {
-            email,
-            planKey: created.tenant.plan_key || "free",
-            billingStatus: created.tenant.billing_status || "trialing",
-          },
-        }),
-        writeTenantLifecycleEvent(db, {
-          tenantId: created.tenant.id,
-          tenantKey: created.tenant.tenant_key,
-          actor: "user_signup",
-          action: "tenant.created",
-          statusFrom: "",
-          statusTo: created.tenant.lifecycle_status || created.tenant.status || "trial",
-          reason: "self_service_signup",
-          requestId: req.requestId,
-          meta: {
-            email,
-            planKey: created.tenant.plan_key || "free",
-          },
-        }),
-      ]);
+          source: "auth.signup",
+          reason: "self_service_signup_side_effects",
+        },
+        () =>
+          Promise.allSettled([
+            markIdentityLogin(db, created.identity.id),
+            markUserLogin(db, {
+              ...created.user,
+              tenant_key: created.tenant.tenant_key,
+            }),
+            writeAudit(db, {
+              tenantId: created.tenant.id,
+              tenantKey: created.tenant.tenant_key,
+              requestId: req.requestId,
+              actor: "user_signup",
+              action: "tenant.signup.created",
+              objectType: "tenant",
+              objectId: created.tenant.id,
+              meta: {
+                email,
+                planKey: created.tenant.plan_key || "free",
+                billingStatus: created.tenant.billing_status || "trialing",
+              },
+            }),
+            writeTenantLifecycleEvent(db, {
+              tenantId: created.tenant.id,
+              tenantKey: created.tenant.tenant_key,
+              actor: "user_signup",
+              action: "tenant.created",
+              statusFrom: "",
+              statusTo: created.tenant.lifecycle_status || created.tenant.status || "trial",
+              reason: "self_service_signup",
+              requestId: req.requestId,
+              meta: {
+                email,
+                planKey: created.tenant.plan_key || "free",
+              },
+            }),
+          ])
+      );
 
       return res.status(201).json({
         ok: true,

@@ -5,6 +5,7 @@ import { cfg } from "../src/config.js";
 import { hashUserPassword } from "../src/utils/adminAuth.js";
 import { userLoginRoutes } from "../src/routes/api/adminAuth/user.js";
 import { userSignupRoutes } from "../src/routes/api/adminAuth/signup.js";
+import { createTenantGuardedDb } from "../src/db/tenantContext.js";
 
 function createMockRes() {
   return {
@@ -720,8 +721,9 @@ test("signup creates canonical identity, membership, bridge user, and authentica
   assert.equal(user.email_verified, false);
 });
 
-test("signup creates workspace through a pooled client without reconnecting nested transactions", async () => {
-  const db = new FakeCanonicalAuthPoolDb();
+test("signup creates workspace through a guarded pooled client without reconnecting nested transactions", async () => {
+  const rawDb = new FakeCanonicalAuthPoolDb();
+  const db = createTenantGuardedDb(rawDb);
   const router = createSignupRouter(db, {
     "smoke-test": {
       setupCompleted: false,
@@ -744,12 +746,17 @@ test("signup creates workspace through a pooled client without reconnecting nest
 
   assert.equal(signup.res.statusCode, 201, JSON.stringify(signup.res.body));
   assert.equal(signup.res.body?.authenticated, true);
-  assert.equal(db.connectCount, 1);
-  assert.equal(db.releaseCount, 1);
-  assert.equal(db.tenants.size, 1);
-  assert.equal(db.identities.size, 1);
-  assert.equal(db.memberships.size, 1);
-  assert.equal(db.users.size, 1);
+  assert.equal(rawDb.connectCount, 1);
+  assert.equal(rawDb.releaseCount, 1);
+  assert.equal(rawDb.tenants.size, 1);
+  assert.equal(rawDb.identities.size, 1);
+  assert.equal(rawDb.memberships.size, 1);
+  assert.equal(rawDb.users.size, 1);
+
+  assert.throws(
+    () => db.query("select * from tenant_users", []),
+    /Tenant-scoped database query requires tenant context/
+  );
 });
 
 test("signup rejects weak passwords with concrete requirement failures", async () => {
