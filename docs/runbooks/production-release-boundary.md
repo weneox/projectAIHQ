@@ -31,19 +31,28 @@ multiple deploy targets. Use the target-specific commands above, or
 
 ## GitHub Actions release boundary
 
-Production deploy jobs live in `.github/workflows/release-gate.yml`. They run
-only on `push` to `main`, and each production deploy target depends on the
-three release gate jobs plus the production security preflight:
+Validation deploy jobs live in `.github/workflows/release-gate.yml`. They run
+only on `push` to `main`, and each validation deploy target depends on the
+three release gate jobs plus the validation deploy security preflight:
 
 - `workspace-startup-compat-node18`
 - `monorepo-release-gate`
 - `frontend-stable-windows`
-- `production-security-preflight`
+- `validation-deploy-security-preflight`
 
-`production-security-preflight` itself depends on
+`validation-deploy-security-preflight` itself depends on
 `workspace-startup-compat-node18`, `monorepo-release-gate`, and
-`frontend-stable-windows`, so no deploy hook can run until the release checks
-and production security checks have passed.
+`frontend-stable-windows`, so no validation deploy hook can run until the
+release checks and production security checks have passed.
+
+Launch approval is intentionally separate from validation deploy. Evidence
+collection for deployed browser smoke can require fresh deployed code, so
+blocked launch evidence must not deadlock validation deployment. The
+`limited-pilot-approval` and `public-launch-approval` jobs are explicit
+`workflow_dispatch` approval gates. They run
+`npm run launch:evidence:check` for the requested target and remain blocking
+for controlled unpaid pilot or public launch approval, but they are not a
+dependency of validation deploy hooks.
 
 The gated AI HQ production deploy jobs are:
 
@@ -81,14 +90,11 @@ SHA identity checks against the current `github.sha`.
 
 Do not add a separate production deploy workflow that bypasses these needs.
 
-## Security gate
+## Security and approval gates
 
-The Release Gate includes security checks before any production deploy hook can
+The Release Gate includes security checks before any validation deploy hook can
 run:
 
-- `npm run launch:evidence:check` runs with `LAUNCH_GATE_TARGET=public` and
-  fails while launch-blocking evidence in
-  `docs/launch/production-launch-evidence.json` is still `BLOCKED`.
 - `npm run security:audit` runs `npm audit --audit-level=high` and fails on
   high or critical dependency advisories.
 - `npm run security:scan` runs a tracked-file secret scan for committed provider
@@ -98,6 +104,17 @@ run:
   and rejects missing or placeholder production URLs, internal tokens, deploy
   hooks for enabled deploy targets, release SHA requirements, website lane
   strictness, and sidecar strictness.
+
+Launch approval evidence is checked separately:
+
+- Select `launch_approval_target=limited` in `workflow_dispatch` to run
+  `limited-pilot-approval`, which executes
+  `npm run launch:evidence:check` with `LAUNCH_GATE_TARGET=limited`.
+- Select `launch_approval_target=public` in `workflow_dispatch` to run
+  `public-launch-approval`, which executes
+  `npm run launch:evidence:check` with `LAUNCH_GATE_TARGET=public`.
+- Select `launch_approval_target=none` for validation deploy only. This does
+  not mark evidence `READY` and does not approve any launch target.
 
 Never commit real OpenAI keys, GitHub tokens, Railway deploy hooks, Cloudflare
 tokens or deploy hooks, Meta app secrets or page tokens, Twilio auth/API

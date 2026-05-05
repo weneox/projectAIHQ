@@ -110,12 +110,19 @@ function pickPreferredLegacyPasswordHash(users = []) {
   };
 }
 
+const TRANSACTION_DEPTH = Symbol.for("aihq.auth.withTransactionDepth");
+
 export async function withTransaction(db, work) {
   if (!db?.query && !db?.connect) {
     throw new Error("Database is required");
   }
 
-  const ownsClient = typeof db.connect === "function";
+  if (db?.[TRANSACTION_DEPTH] > 0) {
+    return work(db);
+  }
+
+  const ownsClient =
+    typeof db.connect === "function" && typeof db.release !== "function";
   const client = ownsClient ? await db.connect() : db;
   const allowQueryOnlyTestDouble =
     !ownsClient &&
@@ -124,6 +131,8 @@ export async function withTransaction(db, work) {
   if (!ownsClient && typeof client.release !== "function" && !allowQueryOnlyTestDouble) {
     throw new Error("Database transaction requires a dedicated client");
   }
+
+  client[TRANSACTION_DEPTH] = (client[TRANSACTION_DEPTH] || 0) + 1;
 
   await client.query("begin");
   try {
@@ -136,6 +145,7 @@ export async function withTransaction(db, work) {
     } catch {}
     throw error;
   } finally {
+    client[TRANSACTION_DEPTH] = Math.max(0, (client[TRANSACTION_DEPTH] || 1) - 1);
     if (ownsClient) {
       try {
         client.release();

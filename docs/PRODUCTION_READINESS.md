@@ -3,8 +3,11 @@
 This checklist is the minimum gate before treating Project AIHQ as production-ready.
 It is not launch sign-off by itself. The evidence source of truth is
 `docs/launch/production-launch-evidence.json`, and the gate command is
-`npm run launch:evidence:check -- <limited|paid|public>`. Release Gate runs the
-public target before production deploy hooks can pass.
+`npm run launch:evidence:check -- <limited|paid|public>`. Release Gate separates
+validation deploy from launch approval: main pushes may deploy validation code
+after tests, build, security, and placeholder checks pass, while explicit
+`workflow_dispatch` launch approval jobs run the limited or public evidence
+gate before any launch target is approved.
 
 Current status as of 2026-05-04: production launch is BLOCKED until all
 launch-blocking P0 evidence items are `READY`, or explicitly accepted only where

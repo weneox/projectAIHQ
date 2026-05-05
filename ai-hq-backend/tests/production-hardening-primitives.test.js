@@ -55,6 +55,22 @@ function createMockRes() {
   };
 }
 
+function getWorkflowJob(workflow, jobName) {
+  const jobMatches = [...workflow.matchAll(/^  [A-Za-z0-9_-]+:\s*$/gm)];
+  const jobIndex = jobMatches.findIndex((match) =>
+    match[0].trim().startsWith(`${jobName}:`)
+  );
+
+  assert.notEqual(jobIndex, -1, `workflow job ${jobName} missing`);
+
+  const start = jobMatches[jobIndex].index;
+  const end =
+    jobIndex + 1 < jobMatches.length
+      ? jobMatches[jobIndex + 1].index
+      : workflow.length;
+  return workflow.slice(start, end);
+}
+
 function readSchemaSql() {
   const schemaDir = new URL("../src/db/schema/", import.meta.url);
   return readdirSync(schemaDir)
@@ -834,15 +850,55 @@ test("release gate requires Website lane smoke for production deployment", () =>
     new URL("../../.github/workflows/release-gate.yml", import.meta.url),
     "utf8"
   );
+  const validationDeployPreflight = getWorkflowJob(
+    workflow,
+    "validation-deploy-security-preflight"
+  );
+  const limitedApproval = getWorkflowJob(workflow, "limited-pilot-approval");
+  const publicApproval = getWorkflowJob(workflow, "public-launch-approval");
+  const frontendDeploy = getWorkflowJob(
+    workflow,
+    "trigger-ai-hq-frontend-cloudflare-pages-deploy"
+  );
+  const backendDeploy = getWorkflowJob(
+    workflow,
+    "trigger-ai-hq-backend-railway-deploy"
+  );
 
   assert.match(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"1"/);
   assert.match(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"1"/);
   assert.doesNotMatch(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
   assert.doesNotMatch(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
-  assert.match(workflow, /LAUNCH_GATE_TARGET:\s*public/);
-  assert.match(workflow, /APP_ENV:\s*production/);
-  assert.match(workflow, /NODE_ENV:\s*production/);
-  assert.match(workflow, /npm run launch:evidence:check/);
+
+  assert.match(frontendDeploy, /validation-deploy-security-preflight/);
+  assert.match(backendDeploy, /validation-deploy-security-preflight/);
+  assert.doesNotMatch(frontendDeploy, /public-launch-approval/);
+  assert.doesNotMatch(backendDeploy, /public-launch-approval/);
+  assert.doesNotMatch(frontendDeploy, /limited-pilot-approval/);
+  assert.doesNotMatch(backendDeploy, /limited-pilot-approval/);
+
+  assert.doesNotMatch(
+    validationDeployPreflight,
+    /npm run launch:evidence:check/
+  );
+  assert.match(
+    validationDeployPreflight,
+    /Launch evidence approval.*not evaluated here/
+  );
+  assert.doesNotMatch(validationDeployPreflight, /production-launch-evidence\.json/);
+
+  assert.match(limitedApproval, /LAUNCH_GATE_TARGET:\s*limited/);
+  assert.match(limitedApproval, /APP_ENV:\s*production/);
+  assert.match(limitedApproval, /NODE_ENV:\s*production/);
+  assert.match(limitedApproval, /npm run launch:evidence:check/);
+
+  assert.match(publicApproval, /LAUNCH_GATE_TARGET:\s*public/);
+  assert.match(publicApproval, /APP_ENV:\s*production/);
+  assert.match(publicApproval, /NODE_ENV:\s*production/);
+  assert.match(publicApproval, /npm run launch:evidence:check/);
+
+  assert.doesNotMatch(workflow, /git\s+add\s+docs\/launch\/production-launch-evidence\.json/);
+  assert.doesNotMatch(workflow, /status.*READY/);
   assert.match(workflow, /Strict website lane tenant smoke \| \\`true\\`/);
 });
 

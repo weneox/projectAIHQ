@@ -598,6 +598,30 @@ class FakeCanonicalAuthDb {
   }
 }
 
+class FakeCanonicalAuthPoolDb extends FakeCanonicalAuthDb {
+  constructor() {
+    super();
+    this.connectCount = 0;
+    this.releaseCount = 0;
+  }
+
+  async connect() {
+    this.connectCount += 1;
+    const pool = this;
+    return {
+      async connect() {
+        throw new Error("Client has already been connected. You cannot reuse a client.");
+      },
+      async query(...args) {
+        return pool.query(...args);
+      },
+      release() {
+        pool.releaseCount += 1;
+      },
+    };
+  }
+}
+
 function createLoginRouter(db, workspaceStates = {}) {
   const resolveWorkspaceState = async ({ tenantId, tenantKey, membershipId, role, tenant }) => {
     const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
@@ -694,6 +718,38 @@ test("signup creates canonical identity, membership, bridge user, and authentica
   assert.ok(identity.password_hash.startsWith("s2u:"));
   const user = Array.from(db.users.values())[0];
   assert.equal(user.email_verified, false);
+});
+
+test("signup creates workspace through a pooled client without reconnecting nested transactions", async () => {
+  const db = new FakeCanonicalAuthPoolDb();
+  const router = createSignupRouter(db, {
+    "smoke-test": {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      destination: { kind: "setup", path: "/home?assistant=setup" },
+      routeHint: "/home?assistant=setup",
+    },
+  });
+
+  const signup = await invokeRoute(router, "post", "/auth/signup", {
+    body: {
+      companyName: "Smoke Test",
+      fullName: "Codex Operator",
+      email: "smoke@example.test",
+      password: "AqelNivra!4729MoroZ",
+    },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(signup.res.statusCode, 201, JSON.stringify(signup.res.body));
+  assert.equal(signup.res.body?.authenticated, true);
+  assert.equal(db.connectCount, 1);
+  assert.equal(db.releaseCount, 1);
+  assert.equal(db.tenants.size, 1);
+  assert.equal(db.identities.size, 1);
+  assert.equal(db.memberships.size, 1);
+  assert.equal(db.users.size, 1);
 });
 
 test("signup rejects weak passwords with concrete requirement failures", async () => {

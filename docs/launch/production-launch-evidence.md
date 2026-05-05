@@ -15,9 +15,18 @@ npm run launch:evidence:check -- paid
 npm run launch:evidence:check -- public
 ```
 
-GitHub Actions Release Gate runs the same check with `LAUNCH_GATE_TARGET=public`
-inside `.github/workflows/release-gate.yml` before production deploy hooks or
-post-deploy verification can pass.
+GitHub Actions Release Gate keeps validation deploy separate from launch
+approval. Pushes to `main` run tests, build, security checks, placeholder
+guards, validation deploy hooks, and post-deploy verification without marking
+launch evidence `READY`. Launch approval is explicit:
+
+- `workflow_dispatch` with `launch_approval_target=limited` runs the same check
+  with `LAUNCH_GATE_TARGET=limited`.
+- `workflow_dispatch` with `launch_approval_target=public` runs the same check
+  with `LAUNCH_GATE_TARGET=public`.
+
+Blocked evidence must not stop validation deploy, but it still blocks limited,
+paid, and public launch approval.
 
 ## Required fields
 
