@@ -40,16 +40,22 @@ Every launch evidence item must include:
 
 ## Current gate result
 
-As of 2026-05-04:
+As of 2026-05-05:
 
+- Limited controlled unpaid pilot is blocked by missing deployed Meta webhook
+  secret proof and deployed production/staging environment classification proof.
+- Limited controlled unpaid pilot is blocked by missing provider backup policy
+  and restore drill proof.
 - Limited controlled unpaid pilot is blocked by missing shared rate-limit or
   WAF proof for public and abuse-prone v1 surfaces.
-- Limited controlled unpaid pilot is blocked by missing production data
-  retention proof and external observability/alert delivery proof.
 - Limited controlled unpaid pilot is blocked by missing staging/production v1
   launch journey smoke evidence.
-- Paid pilot is blocked by the same operational proof requirements.
-- Public launch is blocked by all remaining external proof items.
+- Limited controlled unpaid pilot is blocked by missing production data
+  retention proof and external observability/alert delivery proof.
+- Paid pilot is additionally blocked by missing approved paid-launch pricing,
+  payment/manual invoice, quota, cancellation/refund, support, and terms proof.
+- Public launch is blocked by all remaining external proof items and the final
+  evidence-based production readiness sign-off.
 
 The Meta bot deployment classification proof must show that the provider
 runtime uses `APP_ENV=production` or `APP_ENV=staging` and `NODE_ENV=production`.

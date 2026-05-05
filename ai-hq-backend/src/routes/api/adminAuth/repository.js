@@ -1,5 +1,6 @@
 import { lower, s } from "./utils.js";
 import { queryDbWithTimeout } from "./utils.js";
+import { runWithTenantContext } from "../../../db/tenantContext.js";
 
 export async function findAuthIdentityForLogin(db, { email }) {
   if (!db) return null;
@@ -91,9 +92,16 @@ export async function findLegacyTenantUserForIdentityLogin(
 ) {
   if (!db || !tenantId || !email) return null;
 
-  const query = await queryDbWithTimeout(
-    db,
-    `
+  const query = await runWithTenantContext(
+    {
+      tenantId: s(tenantId),
+      source: "auth.login",
+      reason: "find_legacy_tenant_user_for_authenticated_identity",
+    },
+    () =>
+      queryDbWithTimeout(
+        db,
+        `
       select
         tu.id,
         tu.tenant_id,
@@ -113,34 +121,48 @@ export async function findLegacyTenantUserForIdentityLogin(
         and lower(tu.user_email) = $2
       limit 1
     `,
-    [s(tenantId), lower(email)],
-    {
-      timeoutMs: 3000,
-      label: "auth.login.findLegacyTenantUser",
-    }
+        [s(tenantId), lower(email)],
+        {
+          timeoutMs: 3000,
+          label: "auth.login.findLegacyTenantUser",
+        }
+      )
   );
 
   return query?.rows?.[0] || null;
 }
 
-export async function markUserLogin(db, userId) {
-  if (!db || !userId) return;
+export async function markUserLogin(db, user = {}) {
+  const userId = s(user?.id || user?.userId || user);
+  const tenantId = s(user?.tenant_id || user?.tenantId);
+  const tenantKey = s(user?.tenant_key || user?.tenantKey);
+  if (!db || !userId || !tenantId) return;
   try {
-    await queryDbWithTimeout(
-      db,
-      `
+    await runWithTenantContext(
+      {
+        tenantId,
+        tenantKey,
+        source: "auth.login",
+        reason: "mark_legacy_tenant_user_login",
+      },
+      () =>
+        queryDbWithTimeout(
+          db,
+          `
       update tenant_users
       set
         last_login_at = now(),
         last_seen_at = now(),
         updated_at = now()
       where id = $1
+        and tenant_id = $2
       `,
-      [userId],
-      {
-        timeoutMs: 1500,
-        label: "auth.login.markUserLogin",
-      }
+          [userId, tenantId],
+          {
+            timeoutMs: 1500,
+            label: "auth.login.markUserLogin",
+          }
+        )
     );
   } catch {}
 }

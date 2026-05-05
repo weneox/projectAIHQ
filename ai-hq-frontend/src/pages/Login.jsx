@@ -10,6 +10,7 @@ import {
   Mail,
   User2,
 } from "lucide-react";
+import { getPasswordRuleResults } from "@aihq/shared-contracts/auth";
 
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
 import {
@@ -107,6 +108,36 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
   );
 }
 
+const PASSWORD_FAILURE_COPY = {
+  minimum_length: "at least 12 characters",
+  lowercase_required: "a lowercase letter",
+  uppercase_required: "an uppercase letter",
+  number_required: "a number",
+  symbol_required: "a special character",
+  must_not_contain_email: "not too similar to your email",
+  must_not_contain_company: "not too similar to the workspace name",
+  must_not_contain_full_name: "not too similar to your name",
+  common_pattern: "not an obvious weak pattern",
+};
+
+function getSignupPasswordError(error) {
+  const code = s(error?.code || error?.payload?.code).toLowerCase();
+  if (code !== "weak_password") return "";
+
+  const failures = Array.isArray(error?.payload?.failures)
+    ? error.payload.failures
+    : [];
+  const missing = failures
+    .map((failure) => PASSWORD_FAILURE_COPY[failure])
+    .filter(Boolean);
+
+  if (!missing.length) {
+    return "Password does not meet the workspace security requirements.";
+  }
+
+  return `Password still needs ${missing.join(", ")}.`;
+}
+
 function isMultipleAccountsError(error) {
   const code = s(
     error?.code || error?.payload?.code || error?.response?.data?.code
@@ -186,6 +217,82 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
   );
 }
 
+function PasswordStrengthPanel({ assessment }) {
+  const strengthTone =
+    assessment.strengthLevel >= 4
+      ? "bg-[rgb(var(--color-success))]"
+      : assessment.strengthLevel === 3
+        ? "bg-[rgba(var(--color-brand),0.72)]"
+        : assessment.strengthLevel === 2
+          ? "bg-[rgba(var(--color-warning),0.62)]"
+          : "bg-[rgba(var(--color-danger),0.56)]";
+
+  return (
+    <div
+      className="space-y-3 rounded-[var(--ui-radius-control-inner)] border border-line-soft bg-surface-muted px-4 py-3"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text-muted">
+          Password strength
+        </div>
+
+        <div className="text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+          {assessment.strengthLabel}
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-4 gap-1"
+        aria-label={`Password strength: ${assessment.strengthLabel}`}
+      >
+        {[1, 2, 3, 4].map((segment) => (
+          <span
+            key={segment}
+            aria-hidden="true"
+            className={cx(
+              "h-1.5 rounded-[3px]",
+              segment <= assessment.strengthLevel
+                ? strengthTone
+                : "bg-line-soft"
+            )}
+          />
+        ))}
+      </div>
+
+      <ul className="grid gap-2 sm:grid-cols-2" aria-label="Password requirements">
+        {assessment.rules.map((rule) => (
+          <li
+            key={rule.id}
+            className={cx(
+              "flex items-start gap-2 text-[12.5px] font-medium leading-5 tracking-[var(--tracking-tight-xs)]",
+              rule.passed ? "text-text-muted" : "text-text-subtle"
+            )}
+            aria-label={`${rule.label}: ${rule.passed ? "met" : "missing"}`}
+          >
+            <span
+              aria-hidden="true"
+              className={cx(
+                "mt-[3px] inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[5px] border",
+                rule.passed
+                  ? "border-success/30 bg-success-soft text-success"
+                  : "border-line-soft bg-surface text-text-subtle"
+              )}
+            >
+              {rule.passed ? (
+                <Check className="h-[9px] w-[9px]" strokeWidth={3} />
+              ) : (
+                <span className="h-[3px] w-[3px] rounded-full bg-text-subtle" />
+              )}
+            </span>
+            <span>{rule.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -208,6 +315,15 @@ export default function Login() {
     email: "",
     password: "",
   });
+  const passwordAssessment = useMemo(
+    () =>
+      getPasswordRuleResults(form.password, {
+        email: form.email,
+        companyName: form.companyName,
+        fullName: form.fullName,
+      }),
+    [form.password, form.email, form.companyName, form.fullName]
+  );
 
   function onChange(event) {
     const { name, value } = event.target;
@@ -280,6 +396,11 @@ export default function Login() {
       return;
     }
 
+    if (!passwordAssessment.ok) {
+      setError("Choose a stronger password before creating your workspace.");
+      return;
+    }
+
     await signupUser(payload);
     clearAppSessionContext();
 
@@ -308,11 +429,15 @@ export default function Login() {
         setSelectedAccountToken("");
         setError("Select your workspace to continue.");
       } else {
+        const passwordError = isSignupMode
+          ? getSignupPasswordError(submitError)
+          : "";
         setError(
-          getFriendlyError(
-            submitError,
-            isSignupMode ? "Unable to create your workspace." : "Sign in failed."
-          )
+          passwordError ||
+            getFriendlyError(
+              submitError,
+              isSignupMode ? "Unable to create your workspace." : "Sign in failed."
+            )
         );
       }
     } finally {
@@ -322,7 +447,11 @@ export default function Login() {
 
   const isLoginDisabled = loading || !s(form.email) || !s(form.password);
   const isSignupDisabled =
-    loading || !s(form.companyName) || !s(form.email) || !s(form.password);
+    loading ||
+    !s(form.companyName) ||
+    !s(form.email) ||
+    !s(form.password) ||
+    !passwordAssessment.ok;
 
   return (
     <div className="auth-page min-h-screen bg-white text-text">
@@ -392,6 +521,10 @@ export default function Login() {
                 </button>
               }
             />
+
+            {isSignupMode ? (
+              <PasswordStrengthPanel assessment={passwordAssessment} />
+            ) : null}
 
             {error ? (
               <InlineNotice

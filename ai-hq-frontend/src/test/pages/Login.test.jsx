@@ -7,6 +7,7 @@ const loginUser = vi.fn();
 const selectWorkspaceUser = vi.fn();
 const signupUser = vi.fn();
 const clearAppSessionContext = vi.fn();
+const getAppSessionContext = vi.fn();
 
 vi.mock("../../api/auth.js", () => ({
   loginUser: (...args) => loginUser(...args),
@@ -16,6 +17,7 @@ vi.mock("../../api/auth.js", () => ({
 
 vi.mock("../../lib/appSession.js", () => ({
   clearAppSessionContext: (...args) => clearAppSessionContext(...args),
+  getAppSessionContext: (...args) => getAppSessionContext(...args),
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -40,6 +42,7 @@ describe("Login auth entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearAppSessionContext.mockImplementation(() => {});
+    getAppSessionContext.mockResolvedValue({});
   });
 
   it("renders the current sign-in surface", async () => {
@@ -98,7 +101,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "shared@company.test" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "secret-pass" },
+      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -113,7 +116,7 @@ describe("Login auth entry", () => {
     await waitFor(() => {
       expect(selectWorkspaceUser).toHaveBeenCalledWith({
         email: "shared@company.test",
-        password: "secret-pass",
+        password: "WeneoxSmokeTest@2026#A1",
         tenantKey: undefined,
         accountSelectionToken: "token-globex",
       });
@@ -122,7 +125,7 @@ describe("Login auth entry", () => {
     expect(clearAppSessionContext).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
     });
   });
 
@@ -135,7 +138,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "secret-pass" },
+      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -143,7 +146,7 @@ describe("Login auth entry", () => {
     await waitFor(() => {
       expect(loginUser).toHaveBeenCalledWith({
         email: "owner@acme.com",
-        password: "secret-pass",
+        password: "WeneoxSmokeTest@2026#A1",
         tenantKey: undefined,
         accountSelectionToken: undefined,
       });
@@ -152,8 +155,75 @@ describe("Login auth entry", () => {
     expect(clearAppSessionContext).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
     });
+  });
+
+  it("shows live password requirements and keeps create workspace disabled for weak passwords", async () => {
+    renderRoute("/signup");
+
+    fireEvent.change(await screen.findByPlaceholderText(/full name/i), {
+      target: { name: "fullName", value: "Jane Doe" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/workspace name/i), {
+      target: { name: "companyName", value: "Acme Clinic" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/email address/i), {
+      target: { name: "email", value: "owner@acme.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
+      target: { name: "password", value: "password" },
+    });
+
+    expect(screen.getByText(/password strength/i)).toBeInTheDocument();
+    expect(screen.getByText("Weak")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/at least 12 characters: missing/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/uppercase letter: missing/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/special character: missing/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/not an obvious weak or common pattern: missing/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create workspace/i })
+    ).toBeDisabled();
+    expect(signupUser).not.toHaveBeenCalled();
+  });
+
+  it("marks a strong signup password valid and enables create workspace", async () => {
+    renderRoute("/signup");
+
+    fireEvent.change(await screen.findByPlaceholderText(/full name/i), {
+      target: { name: "fullName", value: "Jane Doe" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/workspace name/i), {
+      target: { name: "companyName", value: "Acme Clinic" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/email address/i), {
+      target: { name: "email", value: "owner@acme.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
+      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+    });
+
+    expect(screen.getByText("Strong")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/at least 12 characters: met/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/not too similar to name, workspace, or email: met/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/not an obvious weak or common pattern: met/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create workspace/i })
+    ).not.toBeDisabled();
   });
 
   it("shows the current network-friendly auth error copy", async () => {
@@ -165,7 +235,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "secret-pass" },
+      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -190,17 +260,21 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "secret-pass" },
+      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    const createButton = screen.getByRole("button", { name: /create workspace/i });
+    await waitFor(() => {
+      expect(createButton).not.toBeDisabled();
+    });
+    fireEvent.click(createButton);
 
     await waitFor(() => {
       expect(signupUser).toHaveBeenCalledWith({
         fullName: "Jane Doe",
         companyName: "Acme Clinic",
         email: "owner@acme.com",
-        password: "secret-pass",
+        password: "WeneoxSmokeTest@2026#A1",
       });
     });
 

@@ -10,6 +10,7 @@ import {
   clearUserCookie,
   checkLoginRateLimit,
   registerFailedLoginAttempt,
+  PASSWORD_REQUIREMENT_CODES,
 } from "../../../utils/adminAuth.js";
 import { setNoStore, s, lower, getIp } from "./utils.js";
 import { dbGetTenantByKey, dbUpsertTenantAiPolicy, dbUpsertTenantCore, dbUpsertTenantProfile } from "../../../db/helpers/settings.js";
@@ -160,21 +161,14 @@ export function userSignupRoutes({
     const passwordStrength = validateStrongUserPassword(password, {
       email,
       companyName,
+      fullName,
     });
     if (!passwordStrength.ok) {
       return res.status(400).json({
         ok: false,
         error: "password does not meet strength requirements",
         code: "weak_password",
-        requirements: [
-          "minimum_length",
-          "lowercase_required",
-          "uppercase_required",
-          "number_required",
-          "symbol_required",
-          "must_not_contain_email",
-          "must_not_contain_company",
-        ],
+        requirements: PASSWORD_REQUIREMENT_CODES,
         failures: passwordStrength.failures,
       });
     }
@@ -301,7 +295,10 @@ export function userSignupRoutes({
 
       await Promise.allSettled([
         markIdentityLogin(db, created.identity.id),
-        markUserLogin(db, created.user.id),
+        markUserLogin(db, {
+          ...created.user,
+          tenant_key: created.tenant.tenant_key,
+        }),
         writeAudit(db, {
           tenantId: created.tenant.id,
           tenantKey: created.tenant.tenant_key,

@@ -10,6 +10,10 @@ import {
   dbGetTenantUserByEmail,
   dbUpsertTenantUserByEmail,
 } from "../../db/helpers/tenantUsers.js";
+import {
+  runWithSystemDbContext,
+  runWithTenantContext,
+} from "../../db/tenantContext.js";
 import { queryDbWithTimeout } from "../../routes/api/adminAuth/utils.js";
 
 function cleanString(value, fallback = "") {
@@ -235,9 +239,12 @@ export async function listLegacyTenantUsersByEmail(
     tenantClause = "and lower(t.tenant_key) = $2";
   }
 
-  const query = await queryDbWithTimeout(
-    db,
-    `
+  const query = await runWithSystemDbContext(
+    "auth_legacy_user_discovery",
+    () =>
+      queryDbWithTimeout(
+        db,
+        `
       select
         tu.id,
         tu.tenant_id,
@@ -267,11 +274,12 @@ export async function listLegacyTenantUsersByEmail(
         tu.created_at asc,
         tu.id asc
     `,
-    params,
-    {
-      timeoutMs: 3000,
-      label: "auth.repair.listLegacyTenantUsersByEmail",
-    }
+        params,
+        {
+          timeoutMs: 3000,
+          label: "auth.repair.listLegacyTenantUsersByEmail",
+        }
+      )
   );
 
   return Array.isArray(query?.rows) ? query.rows : [];
@@ -378,30 +386,45 @@ export async function ensureLegacyBridgeForMemberships(
     const tenantId = cleanString(membership.tenant_id);
     if (!tenantId) continue;
 
-    const found = await dbGetTenantUserByEmail(db, tenantId, identity.normalized_email);
+    const found = await runWithTenantContext(
+      {
+        tenantId,
+        source: "auth.bridge",
+        reason: "ensure_legacy_bridge_lookup",
+      },
+      () => dbGetTenantUserByEmail(db, tenantId, identity.normalized_email)
+    );
     if (found?.id) {
       existing.push(found);
       continue;
     }
 
-    const created = await dbUpsertTenantUserByEmail(db, tenantId, {
-      user_email: identity.primary_email || identity.normalized_email,
-      full_name: cleanString(identity?.meta?.fullName),
-      role: normalizeRole(membership.role),
-      status: normalizeStatus(membership.status, "active"),
-      password_hash: cleanString(identity.password_hash) || undefined,
-      auth_provider: normalizeAuthProvider(identity.auth_provider),
-      email_verified: !!identity.email_verified,
-      session_version: 1,
-      permissions: asJsonObject(membership.permissions, {}),
-      meta: {
-        ...asJsonObject(membership.meta, {}),
-        repairedFromCanonicalIdentity: true,
-        identityId: identity.id,
+    const created = await runWithTenantContext(
+      {
+        tenantId,
+        source: "auth.bridge",
+        reason: "ensure_legacy_bridge_upsert",
       },
-      last_seen_at: membership.last_seen_at || null,
-      last_login_at: identity.last_login_at || null,
-    });
+      () =>
+        dbUpsertTenantUserByEmail(db, tenantId, {
+          user_email: identity.primary_email || identity.normalized_email,
+          full_name: cleanString(identity?.meta?.fullName),
+          role: normalizeRole(membership.role),
+          status: normalizeStatus(membership.status, "active"),
+          password_hash: cleanString(identity.password_hash) || undefined,
+          auth_provider: normalizeAuthProvider(identity.auth_provider),
+          email_verified: !!identity.email_verified,
+          session_version: 1,
+          permissions: asJsonObject(membership.permissions, {}),
+          meta: {
+            ...asJsonObject(membership.meta, {}),
+            repairedFromCanonicalIdentity: true,
+            identityId: identity.id,
+          },
+          last_seen_at: membership.last_seen_at || null,
+          last_login_at: identity.last_login_at || null,
+        })
+    );
 
     if (created?.id) {
       repaired.push(created);

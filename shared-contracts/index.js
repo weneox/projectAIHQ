@@ -1,4 +1,5 @@
 export * from "./critical.js";
+export * from "./auth.js";
 export * from "./health.js";
 export * from "./operations.js";
 export * from "./realtime.js";

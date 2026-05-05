@@ -696,6 +696,31 @@ test("signup creates canonical identity, membership, bridge user, and authentica
   assert.equal(user.email_verified, false);
 });
 
+test("signup rejects weak passwords with concrete requirement failures", async () => {
+  const db = new FakeCanonicalAuthDb();
+  const router = createSignupRouter(db);
+
+  const signup = await invokeRoute(router, "post", "/auth/signup", {
+    body: {
+      companyName: "Acme Clinic",
+      fullName: "Owner One",
+      email: "owner@acme.test",
+      password: "password",
+    },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(signup.res.statusCode, 400);
+  assert.equal(signup.res.body?.code, "weak_password");
+  assert.ok(signup.res.body?.requirements?.includes("minimum_length"));
+  assert.ok(signup.res.body?.requirements?.includes("common_pattern"));
+  assert.ok(signup.res.body?.failures?.includes("minimum_length"));
+  assert.ok(signup.res.body?.failures?.includes("uppercase_required"));
+  assert.ok(signup.res.body?.failures?.includes("number_required"));
+  assert.ok(signup.res.body?.failures?.includes("symbol_required"));
+  assert.ok(signup.res.body?.failures?.includes("common_pattern"));
+});
+
 test("login repairs a legacy-only user into canonical identity auth and succeeds", async () => {
   const db = new FakeCanonicalAuthDb();
   db.seedTenant({

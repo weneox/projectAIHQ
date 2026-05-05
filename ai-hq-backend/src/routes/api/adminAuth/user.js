@@ -211,7 +211,7 @@ async function finalizeWorkspaceLogin({
 
   await Promise.allSettled([
     markIdentityLogin(db, identity.id),
-    markUserLogin(db, legacyUser.id),
+    markUserLogin(db, legacyUser),
   ]);
 
   return res.status(200).json({

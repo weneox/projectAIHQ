@@ -2,8 +2,10 @@ import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { cfg } from "../src/config.js";
+import { createTenantGuardedDb } from "../src/db/tenantContext.js";
 import { userLoginRoutes } from "../src/routes/api/adminAuth/user.js";
 import { adminSessionRoutes } from "../src/routes/api/adminAuth/session.js";
+import { listLegacyTenantUsersByEmail } from "../src/services/auth/canonicalUserAccess.js";
 import { hashUserPassword } from "../src/utils/adminAuth.js";
 
 function createMockRes() {
@@ -533,6 +535,85 @@ test("single identity + one membership logs in successfully", async () => {
   });
   assert.equal(me.res.body?.authenticated, true);
   assert.equal(me.res.body?.user?.tenantKey, "acme");
+});
+
+test("login succeeds through guarded DB before tenant context exists", async () => {
+  const rawDb = new FakeLoginDb();
+  seedIdentityWithMembership(rawDb, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+
+  const db = createTenantGuardedDb(rawDb);
+  const router = createLoginRouter(db);
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.authenticated, true);
+  assert.equal(login.res.body?.user?.tenantKey, "acme");
+  assert.ok(rawDb.users.get("user-1")?.last_login_at);
+});
+
+test("auth legacy discovery is explicit system context while tenant data stays guarded", async () => {
+  const rawDb = {
+    async query(input, maybeValues = []) {
+      const text = String(input?.text || input || "").trim().toLowerCase();
+      const values = Array.isArray(input?.values) ? input.values : maybeValues;
+
+      if (
+        text.includes("from tenant_users tu") &&
+        text.includes("join tenants t") &&
+        text.includes("lower(tu.user_email) = $1")
+      ) {
+        assert.equal(values[0], "owner@acme.test");
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              id: "user-1",
+              tenant_id: "tenant-1",
+              user_email: "owner@acme.test",
+              full_name: "Owner",
+              role: "owner",
+              status: "active",
+              password_hash: "legacy-hash",
+              auth_provider: "local",
+              email_verified: true,
+              session_version: 1,
+              permissions: {},
+              meta: {},
+              tenant_key: "acme",
+              company_name: "Acme Clinic",
+            },
+          ],
+        };
+      }
+
+      throw new Error(`unexpected query: ${text}`);
+    },
+  };
+  const db = createTenantGuardedDb(rawDb);
+
+  assert.throws(
+    () => db.query("select * from tenant_users where tenant_id = $1", ["tenant-1"]),
+    (error) => error?.code === "TENANT_CONTEXT_REQUIRED"
+  );
+
+  const legacyUsers = await listLegacyTenantUsersByEmail(db, {
+    email: "owner@acme.test",
+  });
+  assert.equal(legacyUsers.length, 1);
+  assert.equal(legacyUsers[0].tenant_key, "acme");
 });
 
 test("single workspace with setup incomplete returns setup destination", async () => {
