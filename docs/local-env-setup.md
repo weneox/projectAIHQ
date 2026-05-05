@@ -67,6 +67,16 @@ target, provider env must define `OBS_INCIDENT_OWNER`, `OBS_INCIDENT_CONTACT`,
 `OBS_ALERT_DESTINATION`, and `OBS_ALERT_RUNBOOK_URL` without committing alert
 webhook secrets.
 
+Rate limiting is also split between local repo controls and launch-proof
+controls. Local development may keep
+`RATE_LIMIT_PRODUCTION_STRATEGY=memory`, but that is not production-safe for
+multi-instance deployments. Before any limited, paid, or public launch, attach
+evidence for `P1-002` showing a shared Redis/Upstash limiter or provider/WAF
+rule coverage for auth/login, website widget public endpoints, Meta webhook
+ingress, inbox manual reply, source sync triggers, and any enabled AI/runtime
+endpoint. Do not put Redis passwords, WAF tokens, or provider secrets into
+tracked files.
+
 Data retention cleanup is also repo-managed but not self-proving. Local and
 production cleanup defaults to dry-run via `DATA_RETENTION_DRY_RUN=1`. Before
 any launch target, run `npm run retention:cleanup -w ai-hq-backend -- --dry-run`

@@ -352,6 +352,12 @@ export const cfg = {
   },
 
   rateLimit: {
+    productionStrategy: s(
+      process.env.RATE_LIMIT_PRODUCTION_STRATEGY,
+      "memory"
+    ).toLowerCase(),
+    provider: s(process.env.RATE_LIMIT_PROVIDER, ""),
+    externalEvidenceUrl: s(process.env.RATE_LIMIT_EVIDENCE_URL, ""),
     executionCallbackWindowMs: n(
       process.env.EXECUTION_CALLBACK_RATE_LIMIT_WINDOW_MS,
       60 * 1000
@@ -368,6 +374,22 @@ export const cfg = {
     aiMaxRequests: n(process.env.AI_RATE_LIMIT_MAX_REQUESTS, 30),
     webhookWindowMs: n(process.env.WEBHOOK_RATE_LIMIT_WINDOW_MS, 60 * 1000),
     webhookMaxRequests: n(process.env.WEBHOOK_RATE_LIMIT_MAX_REQUESTS, 300),
+    inboxManualReplyWindowMs: n(
+      process.env.INBOX_MANUAL_REPLY_RATE_LIMIT_WINDOW_MS,
+      60 * 1000
+    ),
+    inboxManualReplyMaxRequests: n(
+      process.env.INBOX_MANUAL_REPLY_RATE_LIMIT_MAX_REQUESTS,
+      30
+    ),
+    sourceSyncWindowMs: n(
+      process.env.SOURCE_SYNC_RATE_LIMIT_WINDOW_MS,
+      5 * 60 * 1000
+    ),
+    sourceSyncMaxRequests: n(
+      process.env.SOURCE_SYNC_RATE_LIMIT_MAX_REQUESTS,
+      10
+    ),
   },
 
   commercial: {

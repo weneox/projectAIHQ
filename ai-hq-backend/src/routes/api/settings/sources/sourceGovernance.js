@@ -1,4 +1,5 @@
 import { auditSafe } from "../utils.js";
+import { requireSourceSyncTriggerRateLimit } from "../../../../utils/rateLimit.js";
 import {
   b,
   bad,
@@ -262,7 +263,7 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
     }
   });
 
-  router.post("/sources/:id/sync", async (req, res) => {
+  router.post("/sources/:id/sync", requireSourceSyncTriggerRateLimit, async (req, res) => {
     try {
       const sourceId = s(req.params.id);
       const role = await requireSettingsWriteRole(req, res, null, {

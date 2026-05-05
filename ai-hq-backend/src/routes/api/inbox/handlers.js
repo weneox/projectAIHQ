@@ -3,6 +3,7 @@
 
 import express from "express";
 import { okJson, isDbReady, isUuid } from "../../../utils/http.js";
+import { requireInboxManualReplyRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
 import { writeAudit } from "../../../utils/auditLog.js";
 import { resolveTenantKeyFromReq } from "../../../tenancy/index.js";
@@ -973,7 +974,7 @@ export function inboxHandlers({ db, wsHub }) {
     }
   });
 
-  r.post("/inbox/threads/:id/messages", async (req, res) => {
+  r.post("/inbox/threads/:id/messages", requireInboxManualReplyRateLimit, async (req, res) => {
     const threadId = s(req.params.id);
     const tenantKey = getScopedTenantKey(req);
     const tenantId = getScopedTenantId(req);

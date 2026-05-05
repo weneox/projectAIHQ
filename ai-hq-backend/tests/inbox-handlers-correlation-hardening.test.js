@@ -26,7 +26,45 @@ function getRouteHandler(router, path, method) {
   const layer = router.stack.find(
     (item) => item?.route?.path === path && item?.route?.methods?.[method]
   );
-  return layer?.route?.stack?.[0]?.handle || null;
+  const handlers = layer?.route?.stack?.map((entry) => entry?.handle).filter(Boolean) || [];
+  if (!handlers.length) return null;
+
+  return async function invokeRouteStack(req, res) {
+    async function runAt(index) {
+      if (index >= handlers.length) return;
+      const handler = handlers[index];
+
+      if (handler.length >= 3) {
+        await new Promise((resolve, reject) => {
+          let settled = false;
+          const next = (err) => {
+            if (settled) return;
+            settled = true;
+            if (err) {
+              reject(err);
+              return;
+            }
+            resolve(runAt(index + 1));
+          };
+
+          Promise.resolve(handler(req, res, next))
+            .then(() => {
+              if (!settled) {
+                settled = true;
+                resolve();
+              }
+            })
+            .catch(reject);
+        });
+        return;
+      }
+
+      await Promise.resolve(handler(req, res));
+      await runAt(index + 1);
+    }
+
+    await runAt(0);
+  };
 }
 
 function isScopedThreadLookup(sql) {

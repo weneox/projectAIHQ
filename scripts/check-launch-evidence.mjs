@@ -26,6 +26,24 @@ const REQUIRED_LAUNCH_EVIDENCE_ITEMS = {
       "blocksPublicLaunch",
     ],
   },
+  "P1-002": {
+    item:
+      "Production rate limiting is shared across instances or fronted by provider/WAF proof for all v1 abuse-prone surfaces",
+    requiredBlocks: [
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ],
+  },
+  "P1-003": {
+    item:
+      "V1 launch journey smoke covers auth, setup, Business Truth, website widget, inbox manual reply, and runtime health",
+    requiredBlocks: [
+      "blocksLimitedLaunch",
+      "blocksPaidLaunch",
+      "blocksPublicLaunch",
+    ],
+  },
   "P1-006": {
     item:
       "Production observability and alerting owner, contact, destination, and runbook are proven",

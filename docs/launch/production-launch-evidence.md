@@ -42,8 +42,12 @@ Every launch evidence item must include:
 
 As of 2026-05-04:
 
+- Limited controlled unpaid pilot is blocked by missing shared rate-limit or
+  WAF proof for public and abuse-prone v1 surfaces.
 - Limited controlled unpaid pilot is blocked by missing production data
   retention proof and external observability/alert delivery proof.
+- Limited controlled unpaid pilot is blocked by missing staging/production v1
+  launch journey smoke evidence.
 - Paid pilot is blocked by the same operational proof requirements.
 - Public launch is blocked by all remaining external proof items.
 
@@ -66,3 +70,17 @@ The retention proof must show a production/staging dry-run and approved live or
 scheduled cleanup for `docs/runbooks/v1-data-retention.md`. Evidence must not
 contain PII or secret values, and it must prove that approved Business
 Truth/configuration tables were not targeted by generic cleanup.
+
+The rate-limit proof must show which shared control protects each v1 abuse-prone
+surface: auth/login/session, website widget public endpoints, Meta webhook
+ingress, inbox manual reply, source sync trigger endpoints, and any user-facing
+AI/runtime endpoint that remains enabled. In-memory backend limits are allowed
+for local development and single-instance demos only. They are not launch
+evidence for limited, paid, or public environments.
+
+The v1 launch journey proof must follow
+`docs/runbooks/v1-launch-journey-smoke.md` and cover login/session, setup
+assistant, Business Truth/readiness, channels/widget setup, public Website
+Widget, inbox inbound item, manual operator reply, and runtime health/readiness
+in the target environment. Local CI smoke coverage is required but does not
+replace staging or production browser evidence.

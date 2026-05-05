@@ -102,6 +102,34 @@
                       "acceptedRiskAllowed":  false
                   },
                   {
+                      "id":  "P1-002",
+                      "item":  "Production rate limiting is shared across instances or fronted by provider/WAF proof for all v1 abuse-prone surfaces",
+                      "owner":  "DevOps / Security / Backend",
+                      "status":  "BLOCKED",
+                      "evidence":  "docs/runbooks/v1-rate-limiting.md defines the v1 rate-limit contract and repo-side coverage. Production shared Redis/Upstash or provider/WAF proof is not attached yet.",
+                      "reasonMissing":  "Attach provider or shared limiter proof covering auth/login, website widget public endpoints, Meta webhook ingress, inbox manual reply, source sync triggers, and any user-facing AI/runtime endpoints. Include owner, environment, policy names, thresholds, and a verification record proving the limiter is shared across instances or enforced at the edge. Do not include Redis passwords, webhook secrets, or WAF tokens.",
+                      "date":  "2026-05-05",
+                      "approver":  "TBD",
+                      "blocksLimitedLaunch":  true,
+                      "blocksPaidLaunch":  true,
+                      "blocksPublicLaunch":  true,
+                      "acceptedRiskAllowed":  false
+                  },
+                  {
+                      "id":  "P1-003",
+                      "item":  "V1 launch journey smoke covers auth, setup, Business Truth, website widget, inbox manual reply, and runtime health",
+                      "owner":  "QA / Backend / Product Engineering",
+                      "status":  "BLOCKED",
+                      "evidence":  "ai-hq-backend/tests/v1-launch-journey-smoke.test.js defines the CI-safe e2e-lite launch journey and docs/runbooks/v1-launch-journey-smoke.md defines the staging/production browser smoke. Real staging/production run evidence is not attached yet.",
+                      "reasonMissing":  "Attach a staging/production launch journey run record proving login/session, setup assistant, Business Truth/readiness, channels/widget setup, public widget load/message, inbox inbound item, manual operator reply, and runtime health/readiness. Include environment, release SHA, tester, timestamp, screenshots or CI log references, and any failure remediation. Do not include passwords, session cookies, widget session tokens, or provider secrets.",
+                      "date":  "2026-05-05",
+                      "approver":  "TBD",
+                      "blocksLimitedLaunch":  true,
+                      "blocksPaidLaunch":  true,
+                      "blocksPublicLaunch":  true,
+                      "acceptedRiskAllowed":  false
+                  },
+                  {
                       "id":  "P1-005",
                       "item":  "V1 data retention policy, dry-run/live cleanup evidence, and privacy exclusions are proven",
                       "owner":  "Backend / Security / Operations",

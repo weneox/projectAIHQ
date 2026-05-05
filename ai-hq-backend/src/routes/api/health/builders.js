@@ -6,6 +6,7 @@ import {
 } from "../../../services/operationalReadiness.js";
 import { runWithSystemDbContext } from "../../../db/tenantContext.js";
 import { isDbReady } from "../../../utils/http.js";
+import { buildRateLimitControlStatus } from "../../../utils/rateLimit.js";
 import { shouldEnableDebugRoutes } from "../../../utils/securitySurface.js";
 
 function s(v, d = "") {
@@ -100,6 +101,7 @@ export async function buildHealthCore({
       enabled: dbEnabled,
     },
     observability: buildObservabilityHealthStatus(),
+    rateLimit: buildRateLimitControlStatus(),
     operationalReadiness,
   };
 }
