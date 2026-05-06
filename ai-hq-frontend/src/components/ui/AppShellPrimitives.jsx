@@ -509,59 +509,9 @@ export function StatusBanner({
       </div>
     </div>
   );
-}) {
-  return (
-    <div
-      className={cx(
-        "rounded-[10px] border px-4 py-4 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.55)]",
-        bannerToneClass(tone),
-        className
-      )}
-    >
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          {label ? (
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {label}
-            </div>
-          ) : null}
-
-          {title ? (
-            <div
-              className={cx(
-                "font-semibold tracking-[var(--tracking-tight-md)] text-text",
-                label ? "mt-2 text-[15px]" : "text-[15px]"
-              )}
-            >
-              {title}
-            </div>
-          ) : null}
-
-          {description ? (
-            <div
-              className={cx(
-                "text-[13.5px] font-medium leading-6 text-current/85",
-                title ? "mt-1" : "mt-0"
-              )}
-            >
-              {description}
-            </div>
-          ) : null}
-
-          {detail ? (
-            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-subtle">
-              {detail}
-            </div>
-          ) : null}
-        </div>
-
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-    </div>
-  );
 }
 
-export function PropertyList({ className, children, tone = "default" }) {
+export function PropertyListexport function PropertyList({ className, children, tone = "default" }) {
   return (
     <Surface
       className={className}
@@ -693,60 +643,9 @@ export function InlineNotice({
       </div>
     </div>
   );
-}) {
-  const palette = resolveNoticeTone(tone);
-  const iconElement = createElement(IconOverride || resolveNoticeIcon(tone), {
-    className: compact ? "h-4 w-4" : "h-[16px] w-[16px]",
-    strokeWidth: 2.1,
-  });
-
-  return (
-    <div
-      className={cx(
-        "rounded-[10px] border shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.55)]",
-        palette.container,
-        compact ? "px-3.5 py-3" : "px-4 py-3.5",
-        className
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className={cx(
-            "mt-0.5 inline-flex shrink-0 items-center justify-center",
-            compact ? "h-4 w-4" : "h-[16px] w-[16px]",
-            palette.icon
-          )}
-        >
-          {iconElement}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          {title ? (
-            <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-current">
-              {title}
-            </div>
-          ) : null}
-
-          {description ? (
-            <div
-              className={cx(
-                "text-[13px] font-medium text-current/85",
-                title ? "mt-1 leading-6" : "leading-5"
-              )}
-            >
-              {description}
-            </div>
-          ) : null}
-        </div>
-
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-    </div>
-  );
 }
 
-export function StateSkeletonBlock({ className }) {
+export function StateSkeletonBlockexport function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
