@@ -1,7 +1,10 @@
 import {
+  BarChart3,
   BookOpenCheck,
   Rocket,
   Settings,
+  UserCog,
+  Users,
 } from "lucide-react";
 
 import dashboardIcon from "../../assets/channels/dashboard.png";
@@ -52,6 +55,32 @@ const PRIMARY_SECTIONS = [
       },
     ],
   },
+  {
+    id: "customers",
+    label: "Customers",
+    icon: Users,
+    to: "/customers",
+    paths: ["/customers"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Customers", to: "/customers" }],
+      },
+    ],
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: BarChart3,
+    to: "/reports",
+    paths: ["/reports"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Reports", to: "/reports" }],
+      },
+    ],
+  },
 ];
 
 const SECONDARY_SECTIONS = [
@@ -83,9 +112,35 @@ const SECONDARY_SECTIONS = [
       },
     ],
   },
+  {
+    id: "knowledge",
+    label: "Knowledge",
+    icon: BookOpenCheck,
+    to: "/knowledge",
+    paths: ["/knowledge"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Knowledge", to: "/knowledge" }],
+      },
+    ],
+  },
 ];
 
 const UTILITY_SECTIONS = [
+  {
+    id: "team",
+    label: "Team",
+    icon: UserCog,
+    to: "/team",
+    paths: ["/team"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Team", to: "/team" }],
+      },
+    ],
+  },
   {
     id: "settings",
     label: "Settings",

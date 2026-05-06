@@ -19,6 +19,10 @@ import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
 import ChannelCatalog from "./pages/ChannelCatalog.jsx";
 import LaunchChecklist from "./pages/LaunchChecklist.jsx";
 import Settings from "./pages/Settings.jsx";
+import Customers from "./pages/Customers.jsx";
+import Reports from "./pages/Reports.jsx";
+import Knowledge from "./pages/Knowledge.jsx";
+import Team from "./pages/Team.jsx";
 import {
   INTERNAL_ONLY_APP_ROUTES,
   isLocalWorkspaceEntryEnabled,
@@ -249,8 +253,11 @@ export default function App() {
 
           <Route path="welcome" element={<Welcome />} />
           <Route path="inbox" element={<Inbox />} />
+          <Route path="customers" element={<Customers />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="channels" element={<ChannelCatalog />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="team" element={<Team />} />
 
           <Route
             path="truth"

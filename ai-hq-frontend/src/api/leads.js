@@ -1,83 +1,25 @@
-import { apiGet, apiPost } from "./client.js";
+import { apiGet } from "./client.js";
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
 
 export async function listLeads({
+  q = "",
   stage = "",
   status = "",
   owner = "",
   priority = "",
-  q = "",
-  limit = 50,
+  limit = 100,
 } = {}) {
-  const qs = new URLSearchParams();
-  if (stage) qs.set("stage", stage);
-  if (status) qs.set("status", status);
-  if (owner) qs.set("owner", owner);
-  if (priority) qs.set("priority", priority);
-  if (q) qs.set("q", q);
-  qs.set("limit", String(limit));
+  const search = new URLSearchParams();
 
-  return apiGet(`/api/leads?${qs.toString()}`);
-}
+  if (s(q)) search.set("q", s(q));
+  if (s(stage)) search.set("stage", s(stage));
+  if (s(status)) search.set("status", s(status));
+  if (s(owner)) search.set("owner", s(owner));
+  if (s(priority)) search.set("priority", s(priority));
+  search.set("limit", String(Math.max(1, Math.min(200, Number(limit || 100)))));
 
-export async function getLead(id) {
-  return apiGet(`/api/leads/${encodeURIComponent(id)}`);
-}
-
-export async function getLeadByThreadId(threadId) {
-  return apiGet(`/api/leads/by-thread/${encodeURIComponent(threadId)}`);
-}
-
-export async function getLeadEvents(id, limit = 50) {
-  return apiGet(
-    `/api/leads/${encodeURIComponent(id)}/events?limit=${encodeURIComponent(limit)}`
-  );
-}
-
-export async function updateLead(id, body) {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}`, body || {});
-}
-
-export async function setLeadStage(id, stage, actor = "operator", reason = "") {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}/stage`, {
-    stage,
-    actor,
-    reason,
-  });
-}
-
-export async function setLeadStatus(id, status, actor = "operator", reason = "") {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}/status`, {
-    status,
-    actor,
-    reason,
-  });
-}
-
-export async function setLeadOwner(id, owner, actor = "operator") {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}/owner`, {
-    owner,
-    actor,
-  });
-}
-
-export async function setLeadFollowUp(
-  id,
-  { followUpAt = null, nextAction = "", actor = "operator" } = {}
-) {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}/followup`, {
-    followUpAt,
-    nextAction,
-    actor,
-  });
-}
-
-export async function addLeadNote(id, note, actor = "operator") {
-  return apiPost(`/api/leads/${encodeURIComponent(id)}/note`, {
-    note,
-    actor,
-  });
-}
-
-export async function createLead(body) {
-  return apiPost(`/api/leads`, body || {});
+  return apiGet(`/api/leads?${search.toString()}`);
 }
