@@ -1,0 +1,60 @@
+﻿name: Post Deploy Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Expected deployed commit SHA. Leave empty to use current workflow SHA."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-ai-hq-production:
+    name: Verify AI HQ production backend
+    runs-on: ubuntu-latest
+    env:
+      AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+      AIHQ_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+      AIHQ_EXPECTED_RELEASE_SHA: ${{ github.event.inputs.expected_sha || github.sha }}
+      BACKEND_RELEASE_WAIT_ATTEMPTS: "12"
+      BACKEND_RELEASE_WAIT_DELAY_MS: "10000"
+      BACKEND_RELEASE_WAIT_TIMEOUT_MS: "7000"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for backend deployed SHA
+        run: node scripts/wait-for-backend-release.mjs
+
+      - name: Check backend health
+        shell: bash
+        run: |
+          curl --fail --show-error --silent "$AIHQ_BASE_URL/health" > /tmp/aihq-health.json
+          node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('/tmp/aihq-health.json','utf8')); if(!data.ok || data.status !== 'ready'){ console.error(data); process.exit(1); } console.log('Backend health ready:', data.status);"
+
+      - name: Summarize production verification
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## AI HQ post-deploy verification"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Backend base URL | \`${AIHQ_BASE_URL}\` |"
+            echo "| Expected SHA | \`${AIHQ_EXPECTED_RELEASE_SHA}\` |"
+            echo "| Result | \`${{ job.status }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

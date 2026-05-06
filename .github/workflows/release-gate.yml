@@ -472,7 +472,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - validation-deploy-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ false }} # disabled because Railway GitHub Auto Deploy is the backend deploy owner
     steps:
       - name: Trigger AI HQ backend Railway production deploy
         id: trigger_aihq_backend_railway_deploy
@@ -522,7 +522,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - validation-deploy-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ false }} # disabled because provider auto-deploy owns backend deploys
     steps:
       - name: Trigger Meta bot backend Railway production deploy
         id: trigger_meta_bot_backend_railway_deploy
@@ -572,7 +572,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - validation-deploy-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ false }} # disabled because provider auto-deploy owns backend deploys
     steps:
       - name: Trigger Twilio voice backend Railway production deploy
         id: trigger_twilio_voice_backend_railway_deploy
@@ -622,7 +622,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - validation-deploy-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ false }} # disabled because Cloudflare Pages Git integration owns frontend deploys
     steps:
       - name: Trigger AI HQ frontend Cloudflare Pages production deploy
         id: trigger_aihq_frontend_pages_deploy
@@ -665,7 +665,7 @@ jobs:
       - monorepo-release-gate
       - frontend-stable-windows
       - validation-deploy-security-preflight
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1'
+    if: ${{ false }} # disabled because provider integration owns frontend deploys
     steps:
       - name: Trigger Neox frontend Cloudflare Pages production deploy
         id: trigger_neox_frontend_pages_deploy
