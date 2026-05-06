@@ -249,7 +249,7 @@ export default function Settings() {
             </h1>
 
             <p className="mt-3 max-w-[720px] text-[14.5px] font-medium leading-6 text-text-muted">
-              Manage account security, workspace state, channel readiness, and the core launch controls.
+              Manage account security, workspace state, omnichannel readiness, and launch controls.
             </p>
           </div>
 
@@ -338,10 +338,10 @@ export default function Settings() {
       <Card padded={false} clip>
         <div className="border-b border-line-soft px-4 py-3.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Launch readiness
+            Workspace readiness
           </div>
           <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Core workspace checks
+            Omnichannel workspace checks
           </div>
         </div>
 
@@ -366,8 +366,8 @@ export default function Settings() {
 
         <SettingRow
           icon={Globe2}
-          title="Channels"
-          description="Website Chat, Instagram, and Telegram connection posture."
+          title="Customer Channels"
+          description="Website Chat, Instagram, and Telegram all route into the same Inbox and Business Info runtime."
           status={channelReady ? "Ready" : "Not connected"}
           tone={channelReady ? "success" : "warning"}
           action={
@@ -385,8 +385,8 @@ export default function Settings() {
 
         <SettingRow
           icon={CheckCircle2}
-          title="Launch checklist"
-          description="Finish the V1 launch path before relying on live AI replies."
+          title="Launch Checklist"
+          description="Finish the omnichannel launch path before relying on live AI replies."
           status="Open"
           tone="brand"
           action={

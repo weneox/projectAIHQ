@@ -408,7 +408,7 @@ function CompactHeader({
 
         <div className="flex items-center gap-3">
           <Button variant="secondary" size="sm" onClick={onOpenTruth}>
-            Open truth
+            Open Business Info
           </Button>
 
           <Button
@@ -618,7 +618,7 @@ export default function ChannelCatalog() {
   const readinessPendingLabel =
     hasDeliveryReadyLaunchChannel && !overallLaunchReady
       ? !truthReady
-        ? "truth pending approval"
+        ? "Business Info pending approval"
         : !runtimeReady
           ? "runtime pending repair"
           : "launch readiness pending"
@@ -699,12 +699,12 @@ export default function ChannelCatalog() {
               tone="warning"
               title={
                 !truthReady
-                  ? "A channel is connected, but truth still needs approval."
+                  ? "A channel is connected, but Business Info still needs approval."
                   : "A channel is connected, but runtime still needs repair."
               }
               description={
                 !truthReady
-                  ? "Approve truth before relying on live AI replies."
+                  ? "Approve Business Info before relying on live AI replies."
                   : "Repair runtime before relying on live AI replies."
               }
               compact

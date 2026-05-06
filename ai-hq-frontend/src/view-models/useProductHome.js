@@ -523,29 +523,29 @@ function buildReasonHeadline(reasonCode = "") {
     case "approved_truth_empty":
     case "approval_required":
       return {
-        title: "Business truth still needs approval.",
+        title: "Business Info still needs approval.",
         summary:
-          "The launch channel can stay connected, but live runtime stays fail-closed until business truth is approved.",
+          "The launch channel can stay connected, but live runtime stays fail-closed until Business Info is approved.",
       };
     case "projection_missing":
     case "runtime_projection_missing":
       return {
         title: "Runtime has not been built yet.",
         summary:
-          "Approved truth exists, but the live runtime is not available yet.",
+          "Approved Business Info exists, but the live runtime is not available yet.",
       };
     case "projection_stale":
     case "runtime_projection_stale":
       return {
         title: "Runtime needs refresh.",
         summary:
-          "Approved truth exists, but the runtime projection is stale and should be refreshed before trusting live replies.",
+          "Approved Business Info exists, but the runtime projection is stale and should be refreshed before trusting live replies.",
       };
     case "truth_version_drift":
       return {
-        title: "Runtime is out of sync with approved truth.",
+        title: "Runtime is out of sync with approved Business Info.",
         summary:
-          "The business truth changed, and the runtime now needs refresh before it should be treated as live.",
+          "Business Info changed, and the runtime now needs refresh before it should be treated as live.",
       };
     case "authority_invalid":
     case "runtime_authority_unavailable":
@@ -773,7 +773,7 @@ function buildAssistantState(setupAssistantSession) {
       : { label: "Continue setup", path: SETUP_WIDGET_ROUTE },
     secondaryAction:
       lower(obj(assistant.completion).phase) === "review_and_launch"
-        ? { label: "Open truth", path: "/truth" }
+        ? { label: "Open Business Info", path: "/truth" }
         : { label: "Open channels", path: "/channels" },
     hasApprovedSetupBaseline,
     draftPreviewHidden: assistant.draftPreviewHidden === true,
@@ -792,7 +792,7 @@ function buildLaunchSteps({ launchChannel, truthRuntime, inboxState, assistant }
   const truthComplete = truthReady && runtimeReady;
   const truthAction = truthReady
     ? {
-        label: runtimeReady ? "Open truth" : "Review truth",
+        label: runtimeReady ? "Open Business Info" : "Review Business Info",
         path: "/truth",
       }
     : normalizeAction(assistant.primaryAction, {
@@ -804,7 +804,7 @@ function buildLaunchSteps({ launchChannel, truthRuntime, inboxState, assistant }
   return [
     {
       id: "truth",
-      label: "Business truth",
+      label: "Business Info",
       complete: truthComplete,
       summary: truthReady
         ? truthRuntime.summary
@@ -930,7 +930,7 @@ function buildPrimaryAction({
   }
 
   if (!runtimeReady) {
-    return { label: "Review truth", path: "/truth" };
+    return { label: "Review Business Info", path: "/truth" };
   }
 
   if (!channelReady) {
@@ -951,7 +951,7 @@ function buildSecondaryAction({ posture, truthRuntime }) {
   const truthReady = truthRuntime.truthReady === true;
   if (!truthReady) return null;
 
-  return { label: "Open truth", path: "/truth" };
+  return { label: "Open Business Info", path: "/truth" };
 }
 
 function deriveAssistantLaunchState({

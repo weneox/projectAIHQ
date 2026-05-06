@@ -253,9 +253,9 @@ function _buildLaunchReadinessNotice({
   if (hasDeliveryReadyLaunchChannel && !truthReady) {
     return {
       tone: "warning",
-      title: "Truth approval required",
+      title: "Business Info approval required",
       description:
-        "A channel is live, but approved truth is not ready yet. Approve truth before trusting live AI replies.",
+        "A channel is live, but approved business info is not ready yet. Approve Business Info before trusting live AI replies.",
       action,
     };
   }
@@ -792,10 +792,10 @@ export default function Inbox() {
         inboxAutomationControl.enabled !== true,
       disabledReason:
         inboxAutomationControl.enabled !== true
-          ? "Inbox AI Autopilot global olaraq sÃ¶ndÃ¼rÃ¼lÃ¼b."
+          ? "Inbox AI Autopilot is globally disabled."
           : selectedThreadAiEnabled
-            ? "AI bu sÃ¶hbÉ™tdÉ™ cavab verÉ™ bilÉ™r."
-            : "Operator rejimi. AI bu sÃ¶hbÉ™tdÉ™ cavab vermir.",
+            ? "AI can reply in this conversation."
+            : "Operator mode. AI will not reply in this conversation.",
       statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
       scopeLabel: "Bu sÃ¶hbÉ™tdÉ™ AI",
     }),
@@ -825,20 +825,51 @@ export default function Inbox() {
     [readinessState.channelSummary]
   );
 
-  const _truthReady = useMemo(
+  const truthReady = useMemo(
     () =>
       readinessState.truth?.ready === true &&
       lower(readinessState.truth?.status) === "ready",
     [readinessState.truth]
   );
 
-  const _runtimeReady = useMemo(
+  const runtimeReady = useMemo(
     () =>
       readinessState.runtime?.ready === true &&
       lower(readinessState.runtime?.status) === "ready",
     [readinessState.runtime]
   );
-  const visibleLaunchReadinessNotice = null;
+
+  const launchReady = useMemo(
+    () =>
+      truthReady &&
+      runtimeReady &&
+      hasDeliveryReadyLaunchChannel &&
+      readinessState.overall?.launchReady === true,
+    [
+      truthReady,
+      runtimeReady,
+      hasDeliveryReadyLaunchChannel,
+      readinessState.overall?.launchReady,
+    ]
+  );
+
+  const visibleLaunchReadinessNotice = useMemo(
+    () =>
+      buildLaunchReadinessNotice({
+        readinessState,
+        hasDeliveryReadyLaunchChannel,
+        truthReady,
+        runtimeReady,
+        launchReady,
+      }),
+    [
+      readinessState,
+      hasDeliveryReadyLaunchChannel,
+      truthReady,
+      runtimeReady,
+      launchReady,
+    ]
+  );
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 

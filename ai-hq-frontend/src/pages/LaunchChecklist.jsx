@@ -8,6 +8,7 @@ import {
   Globe2,
   Inbox,
   MailCheck,
+  Network,
   RefreshCw,
   Rocket,
   ShieldCheck,
@@ -88,11 +89,6 @@ function StatusText({ tone = "neutral", children }) {
   );
 }
 
-function resolveWebsiteReady(posture = {}) {
-  const website = obj(posture?.channels?.website);
-  return website.connected === true && website.deliveryReady === true;
-}
-
 function resolveAnyChannelReady(posture = {}) {
   const summary = obj(posture?.channelSummary);
   if (Number(summary.readyCount || 0) > 0) return true;
@@ -106,7 +102,6 @@ function buildSteps({ auth, posture }) {
     posture?.truth?.ready === true && s(posture?.truth?.status).toLowerCase() === "ready";
   const runtimeReady =
     posture?.runtime?.ready === true && s(posture?.runtime?.status).toLowerCase() === "ready";
-  const websiteReady = resolveWebsiteReady(posture);
   const channelReady = resolveAnyChannelReady(posture);
   const inboxAvailable = posture?.inbox?.available === true;
 
@@ -133,14 +128,14 @@ function buildSteps({ auth, posture }) {
       path: truthReady ? "/truth" : "/home?assistant=setup",
     },
     {
-      id: "website",
-      title: "Connect Website Chat",
-      description: "Make the website widget the first clean V1 customer channel.",
-      icon: Globe2,
-      done: websiteReady || channelReady,
-      status: websiteReady ? "Website ready" : channelReady ? "Channel ready" : "Not connected",
+      id: "channels",
+      title: "Connect customer channels",
+      description: "Connect Website Chat, Instagram, or Telegram. Every channel routes into the same Inbox.",
+      icon: Network,
+      done: channelReady,
+      status: channelReady ? "Channel ready" : "Not connected",
       actionLabel: "Open channels",
-      path: "/channels?channel=website",
+      path: "/channels",
     },
     {
       id: "inbox",
@@ -357,8 +352,8 @@ export default function LaunchChecklist() {
             </h1>
 
             <p className="mt-3 max-w-[720px] text-[14.5px] font-medium leading-6 text-text-muted">
-              This is the clean V1 path: verified owner, approved business info,
-              website chat connected, and inbox tested before live usage.
+              This is the clean SaaS launch path: verified owner, approved Business Info,
+              at least one customer channel connected, and Inbox tested before live usage.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -369,7 +364,7 @@ export default function LaunchChecklist() {
                 Manual-first launch
               </Badge>
               <Badge tone="neutral" size="sm">
-                Website Chat V1
+                Omnichannel V1
               </Badge>
             </div>
           </div>
@@ -436,7 +431,7 @@ export default function LaunchChecklist() {
             onClick={handleSendWebsiteTest}
             leftIcon={!testBusy ? <Globe2 className="h-4 w-4" strokeWidth={2.1} /> : undefined}
           >
-            Send website test
+            Send test message
           </Button>
 
           <Button
