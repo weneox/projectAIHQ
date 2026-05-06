@@ -1,4 +1,4 @@
-﻿// src/api/auth.js
+// src/api/auth.js
 
 import { apiGet, apiPost } from "./client.js";
 
@@ -44,12 +44,18 @@ export async function signupUser({
     { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
-export async function verifyEmail(token) {
+
+export async function verifyEmail(input) {
+  const payload =
+    input && typeof input === "object"
+      ? input
+      : {
+          token: input,
+        };
+
   return apiPost(
     "/api/auth/verify-email",
-    {
-      token,
-    },
+    payload,
     { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }

@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import { requireTrustedBrowserOriginForCookieAuth } from "../../../utils/adminAuth.js";
 import { adminSessionRoutes } from "./session.js";
 import { adminLoginRoutes } from "./admin.js";
@@ -6,21 +6,28 @@ import { userSignupRoutes } from "./signup.js";
 import { userLoginRoutes } from "./user.js";
 import { emailVerificationRoutes } from "./emailVerification.js";
 import {
+  createRateLimitMiddleware,
   requireAuthEndpointRateLimit,
+  requireSignupRateLimit,
 } from "../../../utils/rateLimit.js";
+
+const requireEmailVerificationRateLimit = createRateLimitMiddleware({
+  policyName: "email_verification",
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 10,
+});
 
 export function adminAuthRoutes({ db, wsHub } = {}) {
   const r = express.Router();
 
-  // This router is mounted at /api before the main API router.
-  // Scope browser-origin CSRF checks only to real auth endpoints so
-  // public provider webhooks under /api/* can fall through to their
-  // own public handlers.
   r.use("/admin-auth", requireTrustedBrowserOriginForCookieAuth);
   r.use("/auth", requireTrustedBrowserOriginForCookieAuth);
   r.use("/admin-auth/login", requireAuthEndpointRateLimit);
   r.use("/auth/login", requireAuthEndpointRateLimit);
   r.use("/auth/select-workspace", requireAuthEndpointRateLimit);
+  r.use("/auth/signup", requireSignupRateLimit);
+  r.use("/auth/verify-email", requireEmailVerificationRateLimit);
+  r.use("/auth/resend-verification", requireEmailVerificationRateLimit);
 
   r.use(adminSessionRoutes({ db, wsHub }));
   r.use(adminLoginRoutes({ db, wsHub }));
@@ -30,5 +37,3 @@ export function adminAuthRoutes({ db, wsHub } = {}) {
 
   return r;
 }
-
-

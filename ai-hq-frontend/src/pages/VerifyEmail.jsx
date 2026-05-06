@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -15,9 +15,14 @@ import {
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
+import { clearAppSessionContext } from "../lib/appSession.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function normalizeCode(value = "") {
+  return s(value).replace(/\D/g, "").slice(0, 6);
 }
 
 function getFriendlyVerifyError(error) {
@@ -28,24 +33,52 @@ function getFriendlyVerifyError(error) {
       error?.message
   );
 
+  if (code === "verification_code_expired") {
+    return {
+      title: "Verification code expired",
+      description: "Request a new verification code and try again.",
+    };
+  }
+
+  if (code === "invalid_verification_code") {
+    return {
+      title: "Invalid verification code",
+      description: "Enter the 6-digit code from your latest email.",
+    };
+  }
+
+  if (code === "auth_required") {
+    return {
+      title: "Sign in again",
+      description: "Sign in again, then enter the verification code.",
+    };
+  }
+
   if (code === "verification_token_expired") {
     return {
       title: "Verification link expired",
-      description: "Request a new verification email from your workspace.",
+      description: "Request a new verification code and try again.",
     };
   }
 
-  if (code === "invalid_verification_token") {
+  if (code === "invalid_verification_token" || code === "token_required") {
     return {
       title: "Invalid verification link",
-      description: "This verification link is invalid or has already expired.",
+      description: "Use the 6-digit verification code from your latest email.",
     };
   }
 
-  if (code === "token_required") {
+  if (code === "verification_resend_cooldown") {
     return {
-      title: "Verification token missing",
-      description: "Open the verification link from your email.",
+      title: "Wait before resending",
+      description: "A new code was sent recently. Check your inbox first.",
+    };
+  }
+
+  if (code === "verification_resend_hourly_limited") {
+    return {
+      title: "Too many codes requested",
+      description: "Try again later.",
     };
   }
 
@@ -69,9 +102,8 @@ export default function VerifyEmail() {
     [searchParams]
   );
 
-  const [status, setStatus] = useState(
-    token ? "verifying" : sent ? "sent" : "missing"
-  );
+  const [status, setStatus] = useState(token ? "verifying" : "code");
+  const [verificationCode, setVerificationCode] = useState("");
   const [message, setMessage] = useState(null);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState(null);
@@ -81,19 +113,12 @@ export default function VerifyEmail() {
 
     async function run() {
       if (!token) {
-        if (sent) {
-          setStatus("sent");
-          setMessage({
-            title: "Check your inbox",
-            description: "We sent a verification link to your email. Open that link to verify your workspace.",
-          });
-          return;
-        }
-
-        setStatus("missing");
+        setStatus("code");
         setMessage({
-          title: "Verification token missing",
-          description: "Open the verification link from your email.",
+          title: sent ? "Check your email" : "Verify your email",
+          description: sent
+            ? "We sent a 6-digit verification code to your email."
+            : "Enter the 6-digit verification code from your latest email.",
         });
         return;
       }
@@ -102,10 +127,11 @@ export default function VerifyEmail() {
         setStatus("verifying");
         setMessage(null);
 
-        const result = await verifyEmail(token);
+        const result = await verifyEmail({ token });
 
         if (!alive) return;
 
+        clearAppSessionContext();
         setStatus("verified");
         setMessage({
           title: result?.alreadyVerified
@@ -130,6 +156,41 @@ export default function VerifyEmail() {
     };
   }, [token, sent]);
 
+  async function handleVerifyCode(event) {
+    event?.preventDefault?.();
+
+    const code = normalizeCode(verificationCode);
+    if (code.length !== 6) {
+      setMessage({
+        title: "Enter the 6-digit code",
+        description: "The verification code should contain exactly 6 digits.",
+      });
+      return;
+    }
+
+    try {
+      setStatus("verifying");
+      setMessage(null);
+
+      const result = await verifyEmail({ code });
+
+      clearAppSessionContext();
+
+      setStatus("verified");
+      setMessage({
+        title: result?.alreadyVerified
+          ? "Email already verified"
+          : "Email verified",
+        description: result?.alreadyVerified
+          ? "This email was already verified. You can continue to your workspace."
+          : "Your email has been verified. You can continue to your workspace.",
+      });
+    } catch (error) {
+      setStatus("failed");
+      setMessage(getFriendlyVerifyError(error));
+    }
+  }
+
   async function handleResend() {
     if (resending) return;
 
@@ -140,6 +201,8 @@ export default function VerifyEmail() {
       const result = await resendVerificationEmail();
 
       if (result?.alreadyVerified) {
+        clearAppSessionContext();
+        setStatus("verified");
         setResendMessage({
           tone: "success",
           title: "Already verified",
@@ -151,25 +214,27 @@ export default function VerifyEmail() {
       if (result?.sent) {
         setResendMessage({
           tone: "success",
-          title: "Verification email sent",
-          description: "Check your inbox for a new verification link.",
+          title: "Verification code sent",
+          description: "Check your inbox for a new 6-digit code.",
         });
         return;
       }
 
       setResendMessage({
         tone: "warning",
-        title: "Verification link created",
+        title: "Verification code created",
         description:
-          "Email delivery is not configured yet. Configure RESEND_API_KEY and AUTH_EMAIL_FROM in production.",
+          "Email delivery is not configured yet. Check RESEND_API_KEY and AUTH_EMAIL_FROM in production.",
       });
     } catch (error) {
+      const friendly = getFriendlyVerifyError(error);
       setResendMessage({
         tone: "danger",
-        title: "Could not resend email",
+        title: friendly.title || "Could not resend code",
         description:
+          friendly.description ||
           s(error?.payload?.error || error?.message) ||
-          "Sign in again and try resending the verification email.",
+          "Sign in again and try resending the verification code.",
       });
     } finally {
       setResending(false);
@@ -178,6 +243,7 @@ export default function VerifyEmail() {
 
   const verified = status === "verified";
   const verifying = status === "verifying";
+  const codeReady = normalizeCode(verificationCode).length === 6;
 
   return (
     <div className="min-h-screen bg-white text-text">
@@ -189,7 +255,7 @@ export default function VerifyEmail() {
             ) : verifying ? (
               <RefreshCw className="h-7 w-7 animate-spin text-text-muted" strokeWidth={2.1} />
             ) : (
-              <AlertCircle className="h-7 w-7 text-danger" strokeWidth={2.1} />
+              <AlertCircle className="h-7 w-7 text-warning" strokeWidth={2.1} />
             )}
           </div>
 
@@ -198,17 +264,42 @@ export default function VerifyEmail() {
               ? "Email verified"
               : verifying
                 ? "Verifying email"
-                : status === "sent"
-                  ? "Check your inbox"
-                  : "Verify your email"}
+                : "Check your email"}
           </h1>
 
           <p className="mx-auto mt-4 max-w-[420px] text-[15px] font-medium leading-6 text-text-muted">
             {message?.description ||
-              "We are checking your verification link."}
+              "Enter the 6-digit verification code from your latest email."}
           </p>
 
-          {message && !verified ? (
+          {!verified && !token ? (
+            <form className="mx-auto mt-7 max-w-[340px] space-y-3" onSubmit={handleVerifyCode}>
+              <input
+                name="verificationCode"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={verificationCode}
+                onChange={(event) => setVerificationCode(normalizeCode(event.target.value))}
+                placeholder="6-digit code"
+                className="h-14 w-full rounded-[18px] border border-line bg-white px-5 text-center text-[24px] font-semibold tracking-[0.3em] text-text outline-none transition-colors duration-base ease-premium placeholder:text-[15px] placeholder:tracking-normal placeholder:text-text-subtle focus:border-brand"
+              />
+
+              <Button
+                type="submit"
+                size="hero"
+                fullWidth
+                disabled={!codeReady || verifying}
+                loading={verifying}
+                rightIcon={
+                  !verifying ? <ArrowRight className="h-4 w-4" strokeWidth={2.2} /> : undefined
+                }
+              >
+                Verify email
+              </Button>
+            </form>
+          ) : null}
+
+          {message && !verified && status === "failed" ? (
             <div className="mt-6 text-left">
               <InlineNotice
                 tone="danger"
@@ -244,6 +335,7 @@ export default function VerifyEmail() {
             ) : (
               <Button
                 type="button"
+                variant="secondary"
                 size="hero"
                 fullWidth
                 loading={resending}
@@ -252,7 +344,7 @@ export default function VerifyEmail() {
                 }
                 onClick={handleResend}
               >
-                {resending ? "Sending..." : "Resend verification email"}
+                {resending ? "Sending..." : "Resend code"}
               </Button>
             )}
 
@@ -268,5 +360,3 @@ export default function VerifyEmail() {
     </div>
   );
 }
-
-

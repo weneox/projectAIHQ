@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
 
 import { resendVerificationEmail } from "../../api/auth.js";
@@ -30,6 +31,7 @@ function userEmail(auth) {
 }
 
 export default function EmailVerificationBanner() {
+  const navigate = useNavigate();
   const [state, setState] = useState({
     loading: true,
     visible: false,
@@ -97,7 +99,7 @@ export default function EmailVerificationBanner() {
       if (result?.sent) {
         setNotice({
           tone: "success",
-          message: "Verification email sent. Check your inbox.",
+          message: "Verification code sent. Check your inbox.",
         });
         return;
       }
@@ -105,14 +107,17 @@ export default function EmailVerificationBanner() {
       setNotice({
         tone: "warning",
         message:
-          "Verification link was created, but email delivery is not configured yet.",
+          "Verification code was created, but email delivery is not configured yet.",
       });
     } catch (error) {
+      const retryAfter = error?.payload?.retryAfterSeconds;
       setNotice({
         tone: "danger",
         message:
-          s(error?.payload?.error || error?.message) ||
-          "Could not resend verification email.",
+          retryAfter
+            ? `Wait ${retryAfter} seconds before requesting another code.`
+            : s(error?.payload?.error || error?.message) ||
+              "Could not resend verification code.",
       });
     } finally {
       setSending(false);
@@ -142,7 +147,7 @@ export default function EmailVerificationBanner() {
 
             <div className="text-[12.5px] font-medium leading-5 text-amber-900/80">
               {notice?.message ||
-                `We sent a verification link${state.email ? ` to ${state.email}` : ""}. Some sensitive actions stay limited until verification is complete.`}
+                `We sent a 6-digit verification code${state.email ? ` to ${state.email}` : ""}. Some sensitive actions stay limited until verification is complete.`}
             </div>
           </div>
         </div>
@@ -150,12 +155,20 @@ export default function EmailVerificationBanner() {
         <div className="flex shrink-0 items-center gap-2 pl-10 sm:pl-0">
           <button
             type="button"
+            onClick={() => navigate("/verify-email?sent=1")}
+            className="inline-flex h-8 items-center rounded-[10px] bg-amber-950 px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Verify now
+          </button>
+
+          <button
+            type="button"
             onClick={handleResend}
             disabled={sending}
-            className="inline-flex h-8 items-center gap-2 rounded-[10px] bg-amber-950 px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-8 items-center gap-2 rounded-[10px] border border-amber-300 bg-amber-100 px-3 text-[12px] font-semibold text-amber-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Mail className="h-3.5 w-3.5" strokeWidth={2.2} />
-            {sending ? "Sending..." : "Resend"}
+            {sending ? "Sending..." : "Resend code"}
           </button>
 
           <button

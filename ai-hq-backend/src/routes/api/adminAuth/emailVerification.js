@@ -1,6 +1,7 @@
-﻿import express from "express";
+import express from "express";
 import {
   issueEmailVerification,
+  verifyEmailCode,
   verifyEmailToken,
 } from "../../../services/auth/emailVerification.js";
 import {
@@ -8,37 +9,8 @@ import {
 } from "../../../utils/adminAuth.js";
 import { s, setNoStore } from "./utils.js";
 
-
-function shouldExposeVerificationCodeForOps(req) {
-  const expected = s(
-    process.env.AUTH_DEBUG_VERIFICATION_CODE_TOKEN ||
-      process.env.DEBUG_API_TOKEN ||
-      ""
-  );
-
-  if (!expected) return false;
-
-  const provided = s(
-    req?.headers?.["x-debug-token"] ||
-      req?.headers?.["x-internal-token"] ||
-      req?.query?.debugToken ||
-      req?.body?.debugToken
-  );
-
-  return provided && provided === expected;
-}
-
-function maybeDebugVerificationCode(req, issued) {
-  if (!shouldExposeVerificationCodeForOps(req)) return {};
-  const code = s(issued?.verificationCode);
-  if (!code) return {};
-  return {
-    debug: {
-      verificationCode: code,
-      warning: "Visible only because AUTH_DEBUG_VERIFICATION_CODE_TOKEN or DEBUG_API_TOKEN matched.",
-    },
-  };
-}
+const RESEND_COOLDOWN_SECONDS = 60;
+const MAX_RESENDS_PER_HOUR = 5;
 
 function verificationErrorResponse(res, result = {}) {
   return res.status(Number(result.status || 400)).json({
@@ -48,6 +20,59 @@ function verificationErrorResponse(res, result = {}) {
     code: result.code || "email_verification_failed",
     email: result.email || null,
   });
+}
+
+function retryAfterSeconds(dateValue = null) {
+  if (!dateValue) return RESEND_COOLDOWN_SECONDS;
+  const last = new Date(dateValue).getTime();
+  const nextAllowed = last + RESEND_COOLDOWN_SECONDS * 1000;
+  return Math.max(1, Math.ceil((nextAllowed - Date.now()) / 1000));
+}
+
+async function checkResendPolicy(db, identityId = "") {
+  const result = await db.query(
+    `
+      select
+        max(created_at) as last_code_at,
+        count(*) filter (
+          where created_at > now() - interval '1 hour'
+        )::int as recent_code_count
+      from auth_email_verification_tokens
+      where identity_id = $1
+        and purpose = 'email_verification'
+        and meta->>'verificationKind' = 'code'
+    `,
+    [s(identityId)]
+  );
+
+  const row = result?.rows?.[0] || {};
+  const recentCount = Number(row.recent_code_count || 0);
+  const lastCodeAt = row.last_code_at || null;
+
+  if (recentCount >= MAX_RESENDS_PER_HOUR) {
+    return {
+      ok: false,
+      status: 429,
+      code: "verification_resend_hourly_limited",
+      error: "Too many verification codes requested. Try again later.",
+      retryAfterSeconds: 3600,
+    };
+  }
+
+  if (lastCodeAt) {
+    const wait = retryAfterSeconds(lastCodeAt);
+    if (wait > 0 && wait < RESEND_COOLDOWN_SECONDS) {
+      return {
+        ok: false,
+        status: 429,
+        code: "verification_resend_cooldown",
+        error: "Wait before requesting another verification code.",
+        retryAfterSeconds: wait,
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 export function emailVerificationRoutes({ db } = {}) {
@@ -66,8 +91,33 @@ export function emailVerificationRoutes({ db } = {}) {
     }
 
     const token = s(req.body?.token || req.query?.token);
+    const code = s(req.body?.code || req.query?.code);
 
-    const result = await verifyEmailToken(db, token);
+    let result = null;
+
+    if (token) {
+      result = await verifyEmailToken(db, token);
+    } else {
+      const session = await loadUserSessionFromRequest(req, {
+        db,
+        touch: false,
+      });
+
+      if (!session?.ok || !session?.payload?.identityId || !session?.payload?.email) {
+        return res.status(401).json({
+          ok: false,
+          verified: false,
+          error: "Sign in again to verify your email",
+          code: "auth_required",
+        });
+      }
+
+      result = await verifyEmailCode(db, {
+        identityId: session.payload.identityId,
+        email: session.payload.email,
+        code,
+      });
+    }
 
     if (!result?.ok) {
       return verificationErrorResponse(res, result);
@@ -101,7 +151,7 @@ export function emailVerificationRoutes({ db } = {}) {
     if (!session?.ok || !session?.payload?.identityId || !session?.payload?.email) {
       return res.status(401).json({
         ok: false,
-        error: "Sign in again to resend verification email",
+        error: "Sign in again to resend verification code",
         code: "auth_required",
       });
     }
@@ -140,6 +190,20 @@ export function emailVerificationRoutes({ db } = {}) {
       });
     }
 
+    const policy = await checkResendPolicy(db, identity.id);
+    if (!policy.ok) {
+      if (policy.retryAfterSeconds) {
+        res.setHeader("Retry-After", String(policy.retryAfterSeconds));
+      }
+
+      return res.status(policy.status || 429).json({
+        ok: false,
+        error: policy.error,
+        code: policy.code,
+        retryAfterSeconds: policy.retryAfterSeconds || null,
+      });
+    }
+
     const issued = await issueEmailVerification(db, {
       identityId: identity.id,
       email: identity.primary_email || identity.normalized_email || session.payload.email,
@@ -162,7 +226,6 @@ export function emailVerificationRoutes({ db } = {}) {
         skipped: issued?.delivery?.skipped === true,
         reason: issued?.delivery?.reason || "",
       },
-      ...maybeDebugVerificationCode(req, issued),
     });
   });
 
