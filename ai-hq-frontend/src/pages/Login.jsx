@@ -472,7 +472,7 @@ export default function Login() {
       // Protected routes verify the session again if warmup fails.
     }
 
-    navigate("/home", { replace: true });
+    navigate("/verify-email?sent=1", { replace: true });
   }
 
   async function onSubmit(event) {
@@ -661,3 +661,4 @@ export default function Login() {
     </div>
   );
 }
+

@@ -64,7 +64,14 @@ export default function VerifyEmail() {
     [searchParams]
   );
 
-  const [status, setStatus] = useState(token ? "verifying" : "missing");
+  const sent = useMemo(
+    () => ["1", "true", "yes"].includes(s(searchParams.get("sent")).toLowerCase()),
+    [searchParams]
+  );
+
+  const [status, setStatus] = useState(
+    token ? "verifying" : sent ? "sent" : "missing"
+  );
   const [message, setMessage] = useState(null);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState(null);
@@ -74,6 +81,15 @@ export default function VerifyEmail() {
 
     async function run() {
       if (!token) {
+        if (sent) {
+          setStatus("sent");
+          setMessage({
+            title: "Check your inbox",
+            description: "We sent a verification link to your email. Open that link to verify your workspace.",
+          });
+          return;
+        }
+
         setStatus("missing");
         setMessage({
           title: "Verification token missing",
@@ -182,7 +198,9 @@ export default function VerifyEmail() {
               ? "Email verified"
               : verifying
                 ? "Verifying email"
-                : "Verify your email"}
+                : status === "sent"
+                  ? "Check your inbox"
+                  : "Verify your email"}
           </h1>
 
           <p className="mx-auto mt-4 max-w-[420px] text-[15px] font-medium leading-6 text-text-muted">
@@ -250,3 +268,4 @@ export default function VerifyEmail() {
     </div>
   );
 }
+
