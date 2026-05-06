@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -198,7 +198,7 @@ export default function Customers() {
     leads: [],
   });
 
-  async function load({ refreshing = false } = {}) {
+  const load = useCallback(async ({ refreshing = false } = {}) => {
     setState((current) => ({
       ...current,
       loading: !refreshing,
@@ -232,11 +232,15 @@ export default function Customers() {
         leads: [],
       });
     }
-  }
+  }, [query]);
 
   useEffect(() => {
-    load();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const filteredLeads = useMemo(() => {
     const source = arr(state.leads);

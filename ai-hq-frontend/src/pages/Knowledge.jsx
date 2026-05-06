@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -424,7 +424,7 @@ export default function Knowledge() {
   const [notice, setNotice] = useState(null);
   const [busyId, setBusyId] = useState("");
 
-  async function load({ refreshing = false } = {}) {
+  const load = useCallback(async ({ refreshing = false } = {}) => {
     setState((current) => ({
       ...current,
       loading: !refreshing,
@@ -456,11 +456,15 @@ export default function Knowledge() {
         count: 0,
       });
     }
-  }
+  }, [statusFilter]);
 
   useEffect(() => {
-    load();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const metrics = useMemo(() => {
     const items = arr(state.items);

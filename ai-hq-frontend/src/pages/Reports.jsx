@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -457,7 +457,7 @@ export default function Reports() {
     leadsDegraded: false,
   });
 
-  async function load({ refreshing = false } = {}) {
+  const load = useCallback(async ({ refreshing = false } = {}) => {
     setState((current) => ({
       ...current,
       loading: !refreshing,
@@ -496,11 +496,15 @@ export default function Reports() {
         leadsDegraded: false,
       });
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const metrics = useMemo(() => {
     const posture = obj(state.posture);

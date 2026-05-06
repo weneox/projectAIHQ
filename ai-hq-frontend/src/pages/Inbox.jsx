@@ -224,7 +224,7 @@ async function loadInboxTrustState(tenantKey = "") {
   }
 }
 
-function _buildLaunchReadinessNotice({
+function buildLaunchReadinessNotice({
   readinessState = EMPTY_READINESS_STATE,
   hasDeliveryReadyLaunchChannel = false,
   truthReady = false,

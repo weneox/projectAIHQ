@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bot,
   CheckCircle2,
@@ -89,11 +89,18 @@ function toneForStatus(status = "") {
   return "neutral";
 }
 
-function roleIcon(role = "") {
+function RoleAvatarIcon({ role = "", className = "", ...props }) {
   const safe = lower(role);
-  if (safe === "owner") return Crown;
-  if (safe === "admin") return ShieldCheck;
-  return Headphones;
+
+  if (safe === "owner") {
+    return <Crown className={className} {...props} />;
+  }
+
+  if (safe === "admin") {
+    return <ShieldCheck className={className} {...props} />;
+  }
+
+  return <Headphones className={className} {...props} />;
 }
 
 function toneTextClass(tone = "neutral") {
@@ -220,7 +227,6 @@ function TeamRow({ user, busyId, onToggleStatus }) {
   const id = userId(user);
   const role = userRole(user);
   const status = userStatus(user);
-  const RoleIcon = roleIcon(role);
   const active = ["active", "enabled"].includes(status);
   const busy = busyId === id;
 
@@ -229,7 +235,7 @@ function TeamRow({ user, busyId, onToggleStatus }) {
       <div className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_180px_170px_auto] lg:items-center">
         <div className="flex min-w-0 items-start gap-3">
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] border border-line-soft bg-surface-subtle">
-            <RoleIcon className={cx("h-5 w-5", toneTextClass(toneForRole(role)))} strokeWidth={2.1} />
+            <RoleAvatarIcon role={role} className={cx("h-5 w-5", toneTextClass(toneForRole(role)))} strokeWidth={2.1} />
           </span>
 
           <div className="min-w-0">
@@ -288,7 +294,7 @@ export default function Team() {
     role: "operator",
   });
 
-  async function load({ refreshing = false } = {}) {
+  const load = useCallback(async ({ refreshing = false } = {}) => {
     setState((current) => ({
       ...current,
       loading: !refreshing,
@@ -317,11 +323,15 @@ export default function Team() {
         viewerRole: "",
       });
     }
-  }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const metrics = useMemo(() => {
     const users = arr(state.users);
