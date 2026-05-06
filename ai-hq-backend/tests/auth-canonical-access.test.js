@@ -5,7 +5,7 @@ import { cfg } from "../src/config.js";
 import { hashUserPassword } from "../src/utils/adminAuth.js";
 import { userLoginRoutes } from "../src/routes/api/adminAuth/user.js";
 import { userSignupRoutes } from "../src/routes/api/adminAuth/signup.js";
-import { createTenantGuardedDb } from "../src/db/tenantContext.js";
+import { createTenantGuardedDb, getTenantContext } from "../src/db/tenantContext.js";
 
 function createMockRes() {
   return {
@@ -648,8 +648,12 @@ function createLoginRouter(db, workspaceStates = {}) {
   return userLoginRoutes({ db, resolveWorkspaceState });
 }
 
-function createSignupRouter(db, workspaceStates = {}) {
+function createSignupRouter(db, workspaceStates = {}, options = {}) {
   const resolveWorkspaceState = async ({ tenantId, tenantKey, membershipId, role, tenant }) => {
+    if (typeof options.onResolveWorkspaceState === "function") {
+      options.onResolveWorkspaceState({ tenantId, tenantKey, membershipId, role, tenant });
+    }
+
     const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
     return {
       tenantId,
@@ -724,6 +728,7 @@ test("signup creates canonical identity, membership, bridge user, and authentica
 test("signup creates workspace through a guarded pooled client without reconnecting nested transactions", async () => {
   const rawDb = new FakeCanonicalAuthPoolDb();
   const db = createTenantGuardedDb(rawDb);
+  let workspaceResolutionContext = null;
   const router = createSignupRouter(db, {
     "smoke-test": {
       setupCompleted: false,
@@ -731,6 +736,10 @@ test("signup creates workspace through a guarded pooled client without reconnect
       workspaceReady: false,
       destination: { kind: "setup", path: "/home?assistant=setup" },
       routeHint: "/home?assistant=setup",
+    },
+  }, {
+    onResolveWorkspaceState: () => {
+      workspaceResolutionContext = getTenantContext();
     },
   });
 
@@ -752,6 +761,12 @@ test("signup creates workspace through a guarded pooled client without reconnect
   assert.equal(rawDb.identities.size, 1);
   assert.equal(rawDb.memberships.size, 1);
   assert.equal(rawDb.users.size, 1);
+  assert.equal(workspaceResolutionContext?.tenantId, "tenant-1");
+  assert.equal(workspaceResolutionContext?.tenantKey, "smoke-test");
+  assert.equal(
+    workspaceResolutionContext?.reason,
+    "self_service_signup_workspace_resolution"
+  );
 
   assert.throws(
     () => db.query("select * from tenant_users", []),

@@ -266,18 +266,28 @@ export function userSignupRoutes({
         });
       }
 
-      const workspace = await resolveWorkspaceState({
-        db,
-        tenantId: created.tenant.id,
-        tenantKey: created.tenant.tenant_key,
-        membershipId: created.membership.id,
-        role: created.membership.role,
-        tenant: {
-          id: created.tenant.id,
-          tenant_key: created.tenant.tenant_key,
-          company_name: created.tenant.company_name,
+      const workspace = await runWithTenantContext(
+        {
+          tenantId: created.tenant.id,
+          tenantKey: created.tenant.tenant_key,
+          requestId: req.requestId,
+          source: "auth.signup",
+          reason: "self_service_signup_workspace_resolution",
         },
-      });
+        () =>
+          resolveWorkspaceState({
+            db,
+            tenantId: created.tenant.id,
+            tenantKey: created.tenant.tenant_key,
+            membershipId: created.membership.id,
+            role: created.membership.role,
+            tenant: {
+              id: created.tenant.id,
+              tenant_key: created.tenant.tenant_key,
+              company_name: created.tenant.company_name,
+            },
+          })
+      );
 
       const { token, expiresAt } = await createUserSessionRecord(
         db,
