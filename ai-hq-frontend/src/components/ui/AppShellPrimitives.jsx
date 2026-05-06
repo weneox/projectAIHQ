@@ -16,20 +16,28 @@ import Badge from "./Badge.jsx";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]",
-    icon: "text-[#173b67]",
+    container:
+      "border-line-soft bg-white text-text before:bg-[#173b67]",
+    icon:
+      "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]",
   },
   success: {
-    container: "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]",
-    icon: "text-[#155a2f]",
+    container:
+      "border-line-soft bg-white text-text before:bg-[#155a2f]",
+    icon:
+      "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]",
   },
   warning: {
-    container: "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]",
-    icon: "text-[#5f4a00]",
+    container:
+      "border-line-soft bg-white text-text before:bg-[#5f4a00]",
+    icon:
+      "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]",
   },
   danger: {
-    container: "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]",
-    icon: "text-[#6c1f2a]",
+    container:
+      "border-line-soft bg-white text-text before:bg-[#6c1f2a]",
+    icon:
+      "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]",
   },
 };
 
@@ -80,18 +88,18 @@ function metricTone(tone = "neutral") {
 
 function bannerToneClass(tone = "info") {
   if (tone === "success") {
-    return "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]";
+    return "border-line-soft bg-white text-text before:bg-[#155a2f]";
   }
 
   if (tone === "warning") {
-    return "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]";
+    return "border-line-soft bg-white text-text before:bg-[#5f4a00]";
   }
 
   if (tone === "danger") {
-    return "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]";
+    return "border-line-soft bg-white text-text before:bg-[#6c1f2a]";
   }
 
-  return "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]";
+  return "border-line-soft bg-white text-text before:bg-[#173b67]";
 }
 
 export function PageCanvas({ className, children }) {
@@ -454,6 +462,57 @@ export function StatusBanner({
   return (
     <div
       className={cx(
+        "relative overflow-hidden rounded-[10px] border px-4 py-3.5 shadow-[0_16px_42px_-34px_rgba(15,23,42,0.55),inset_0_1px_0_rgba(255,255,255,0.8)]",
+        "before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px]",
+        bannerToneClass(tone),
+        className
+      )}
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          {label ? (
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              {label}
+            </div>
+          ) : null}
+
+          {title ? (
+            <div
+              className={cx(
+                "truncate font-semibold tracking-[var(--tracking-tight-md)] text-text",
+                label ? "mt-1.5 text-[14px]" : "text-[14px]"
+              )}
+            >
+              {title}
+            </div>
+          ) : null}
+
+          {description ? (
+            <div
+              className={cx(
+                "truncate text-[12.5px] font-medium text-text-muted",
+                title ? "mt-0.5" : ""
+              )}
+            >
+              {description}
+            </div>
+          ) : null}
+
+          {detail ? (
+            <div className="mt-0.5 truncate text-[12px] font-medium text-text-subtle">
+              {detail}
+            </div>
+          ) : null}
+        </div>
+
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </div>
+  );
+}) {
+  return (
+    <div
+      className={cx(
         "rounded-[10px] border px-4 py-4 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.55)]",
         bannerToneClass(tone),
         className
@@ -582,6 +641,58 @@ export function InlineNotice({
   className,
   compact = false,
   icon: IconOverride,
+}) {
+  const palette = resolveNoticeTone(tone);
+  const iconElement = createElement(IconOverride || resolveNoticeIcon(tone), {
+    className: compact ? "h-3.5 w-3.5" : "h-4 w-4",
+    strokeWidth: 2.15,
+  });
+
+  return (
+    <div
+      className={cx(
+        "relative overflow-hidden rounded-[10px] border bg-white shadow-[0_16px_42px_-34px_rgba(15,23,42,0.55),inset_0_1px_0_rgba(255,255,255,0.8)]",
+        "before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px]",
+        palette.container,
+        compact ? "px-3.5 py-2.5" : "px-4 py-3",
+        className
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className={cx(
+            "inline-flex shrink-0 items-center justify-center rounded-[8px] border shadow-[var(--shadow-inset-top)]",
+            compact ? "h-7 w-7" : "h-8 w-8",
+            palette.icon
+          )}
+        >
+          {iconElement}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          {title ? (
+            <div className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+              {title}
+            </div>
+          ) : null}
+
+          {description ? (
+            <div
+              className={cx(
+                "truncate text-[12.5px] font-medium text-text-muted",
+                title ? "mt-0.5" : ""
+              )}
+            >
+              {description}
+            </div>
+          ) : null}
+        </div>
+
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </div>
+  );
 }) {
   const palette = resolveNoticeTone(tone);
   const iconElement = createElement(IconOverride || resolveNoticeIcon(tone), {
