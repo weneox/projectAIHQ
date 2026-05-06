@@ -224,7 +224,7 @@ async function loadInboxTrustState(tenantKey = "") {
   }
 }
 
-function buildLaunchReadinessNotice({
+function _buildLaunchReadinessNotice({
   readinessState = EMPTY_READINESS_STATE,
   hasDeliveryReadyLaunchChannel = false,
   truthReady = false,
@@ -853,23 +853,7 @@ export default function Inbox() {
     ]
   );
 
-  const visibleLaunchReadinessNotice = useMemo(
-    () =>
-      buildLaunchReadinessNotice({
-        readinessState,
-        hasDeliveryReadyLaunchChannel,
-        truthReady,
-        runtimeReady,
-        launchReady,
-      }),
-    [
-      readinessState,
-      hasDeliveryReadyLaunchChannel,
-      truthReady,
-      runtimeReady,
-      launchReady,
-    ]
-  );
+  const visibleLaunchReadinessNotice = null;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 

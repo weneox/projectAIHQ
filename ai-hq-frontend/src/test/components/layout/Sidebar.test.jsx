@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import Sidebar from "../../../components/layout/Sidebar.jsx";
 
 describe("Sidebar", () => {
-  it("shows the simplified launch navigation and keeps hidden surfaces out of the shell", () => {
+  it("shows the expanded product navigation and keeps hidden legacy surfaces out of the shell", () => {
     render(
       <MemoryRouter initialEntries={["/inbox"]}>
         <Sidebar
@@ -16,21 +16,60 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /^home$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^home$/i })).toHaveAttribute(
+      "href",
+      "/home"
+    );
+    expect(screen.getByRole("link", { name: /^launch$/i })).toHaveAttribute(
+      "href",
+      "/launch"
+    );
     expect(screen.getByRole("link", { name: /inbox 3/i })).toHaveAttribute(
       "href",
       "/inbox"
     );
-    expect(screen.getByRole("link", { name: /channels/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^customers$/i })).toHaveAttribute(
+      "href",
+      "/customers"
+    );
+    expect(screen.getByRole("link", { name: /^reports$/i })).toHaveAttribute(
+      "href",
+      "/reports"
+    );
+    expect(screen.getByRole("link", { name: /^channels$/i })).toHaveAttribute(
       "href",
       "/channels"
     );
-    expect(screen.getByRole("link", { name: /truth/i })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: /^business info$/i })
+    ).toHaveAttribute("href", "/truth");
+    expect(screen.getByRole("link", { name: /^knowledge$/i })).toHaveAttribute(
       "href",
-      "/truth"
+      "/knowledge"
+    );
+    expect(screen.getByRole("link", { name: /^team$/i })).toHaveAttribute(
+      "href",
+      "/team"
+    );
+    expect(screen.getByRole("link", { name: /^settings$/i })).toHaveAttribute(
+      "href",
+      "/settings"
     );
 
-    for (const href of ["/home", "/inbox", "/channels", "/truth"]) {
+    const expectedVisibleHrefs = [
+      "/home",
+      "/launch",
+      "/inbox",
+      "/customers",
+      "/reports",
+      "/channels",
+      "/truth",
+      "/knowledge",
+      "/team",
+      "/settings",
+    ];
+
+    for (const href of expectedVisibleHrefs) {
       expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
     }
 
@@ -46,12 +85,14 @@ describe("Sidebar", () => {
       expect(document.querySelector(`a[href="${href}"]`)).toBeNull();
     }
 
-    const linkOrder = Array.from(document.querySelectorAll('a[href]')).map(
+    const linkOrder = Array.from(document.querySelectorAll("a[href]")).map(
       (link) => link.getAttribute("href")
     );
 
-    expect(linkOrder.indexOf("/home")).toBeLessThan(linkOrder.indexOf("/inbox"));
-    expect(linkOrder.indexOf("/inbox")).toBeLessThan(linkOrder.indexOf("/channels"));
-    expect(linkOrder.indexOf("/channels")).toBeLessThan(linkOrder.indexOf("/truth"));
+    for (let i = 0; i < expectedVisibleHrefs.length - 1; i += 1) {
+      expect(linkOrder.indexOf(expectedVisibleHrefs[i])).toBeLessThan(
+        linkOrder.indexOf(expectedVisibleHrefs[i + 1])
+      );
+    }
   });
 });
