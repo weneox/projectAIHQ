@@ -845,63 +845,81 @@ test("structured logs expose production-required reliability fields", () => {
   assert.equal(entry.execution_state, "sent");
 });
 
-test("release gate separates validation deploy from strict launch approval", () => {
+test("release gate is CI-only while preserving safety checks", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release-gate.yml", import.meta.url),
     "utf8"
   );
-  const validationDeployPreflight = getWorkflowJob(
-    workflow,
-    "validation-deploy-security-preflight"
-  );
-  const limitedApproval = getWorkflowJob(workflow, "limited-pilot-approval");
-  const publicApproval = getWorkflowJob(workflow, "public-launch-approval");
-  const frontendDeploy = getWorkflowJob(
-    workflow,
-    "trigger-ai-hq-frontend-cloudflare-pages-deploy"
-  );
-  const backendDeploy = getWorkflowJob(
-    workflow,
-    "trigger-ai-hq-backend-railway-deploy"
-  );
 
-  assert.match(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
-  assert.match(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  const workspaceCompat = getWorkflowJob(
+    workflow,
+    "workspace-startup-compat-node18"
+  );
+  const frontendStableWindows = getWorkflowJob(
+    workflow,
+    "frontend-stable-windows"
+  );
+  const monorepoReleaseGate = getWorkflowJob(workflow, "monorepo-release-gate");
+
+  for (const removedJob of [
+    "validation-deploy-security-preflight",
+    "limited-pilot-approval",
+    "public-launch-approval",
+    "trigger-ai-hq-backend-railway-deploy",
+    "trigger-meta-bot-backend-railway-deploy",
+    "trigger-twilio-voice-backend-railway-deploy",
+    "trigger-ai-hq-frontend-cloudflare-pages-deploy",
+    "trigger-neox-frontend-cloudflare-pages-deploy",
+    "production-smoke-after-validation-deploy",
+    "verify-production-post-deploy",
+  ]) {
+    assert.doesNotMatch(
+      workflow,
+      new RegExp(`^  ${removedJob}:\\s*$`, "m"),
+      `${removedJob} must not be part of the CI-only release gate`
+    );
+  }
+
   assert.match(
-    workflow,
-    /validation diagnostic; launch approval remains evidence-gated/
+    workspaceCompat,
+    /npm run check:workspace-startup-compat/,
+    "workspace startup compatibility check must remain"
   );
 
-  assert.match(frontendDeploy, /validation-deploy-security-preflight/);
-  assert.match(backendDeploy, /validation-deploy-security-preflight/);
-  assert.doesNotMatch(frontendDeploy, /public-launch-approval/);
-  assert.doesNotMatch(backendDeploy, /public-launch-approval/);
-  assert.doesNotMatch(frontendDeploy, /limited-pilot-approval/);
-  assert.doesNotMatch(backendDeploy, /limited-pilot-approval/);
+  assert.match(
+    frontendStableWindows,
+    /npm run validate:env -w ai-hq-frontend/,
+    "frontend environment validation must remain"
+  );
+  assert.match(
+    frontendStableWindows,
+    /npm run test:frontend:stable:ci/,
+    "frontend stable tests must remain"
+  );
+
+  for (const requiredCommand of [
+    "npm run security:audit",
+    "npm run security:scan",
+    "npm run validate:env",
+    "npm run migrate:ai-hq-backend",
+    "npm run test:aihq:db",
+    "npm run check:operational-readiness",
+    "npm run lint:all",
+    "npm run test:backend:all",
+    "npm run build:all",
+  ]) {
+    assert.match(
+      monorepoReleaseGate,
+      new RegExp(requiredCommand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      `${requiredCommand} must remain in the CI release gate`
+    );
+  }
 
   assert.doesNotMatch(
-    validationDeployPreflight,
-    /npm run launch:evidence:check/
+    workflow,
+    /AIHQ_EXPECTED_RELEASE_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/,
+    "CI-only release gate must not block product work on live SHA matching"
   );
-  assert.match(
-    validationDeployPreflight,
-    /Launch evidence approval.*not evaluated here/
-  );
-  assert.doesNotMatch(validationDeployPreflight, /production-launch-evidence\.json/);
-
-  assert.match(limitedApproval, /LAUNCH_GATE_TARGET:\s*limited/);
-  assert.match(limitedApproval, /APP_ENV:\s*production/);
-  assert.match(limitedApproval, /NODE_ENV:\s*production/);
-  assert.match(limitedApproval, /npm run launch:evidence:check/);
-
-  assert.match(publicApproval, /LAUNCH_GATE_TARGET:\s*public/);
-  assert.match(publicApproval, /APP_ENV:\s*production/);
-  assert.match(publicApproval, /NODE_ENV:\s*production/);
-  assert.match(publicApproval, /npm run launch:evidence:check/);
-
-  assert.doesNotMatch(workflow, /git\s+add\s+docs\/launch\/production-launch-evidence\.json/);
-  assert.doesNotMatch(workflow, /status.*READY/);
-  assert.match(workflow, /WEBSITE_LANE_TENANT_KEY is not configured/);
 });
 
 test("production launch evidence supports READY proof and BLOCKED gates safely", () => {
