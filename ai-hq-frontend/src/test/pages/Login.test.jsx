@@ -106,7 +106,7 @@ describe("Login auth entry", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
-    expect(await screen.findByText(/choose workspace/i)).toBeInTheDocument();
+    expect(await screen.findAllByText(/choose workspace/i)).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: /globex/i }));
     fireEvent.click(
@@ -246,6 +246,32 @@ describe("Login auth entry", () => {
     expect(
       await screen.findByText(/authentication is temporarily unavailable/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/temporary issue/i)).toBeInTheDocument();
+  });
+
+  it("shows retry timing for login rate limiting", async () => {
+    loginUser.mockRejectedValueOnce(
+      Object.assign(new Error("Too many attempts"), {
+        payload: {
+          code: "login_rate_limited",
+          retryAfterSeconds: 125,
+        },
+      })
+    );
+
+    renderRoute("/login");
+
+    fireEvent.change(await screen.findByPlaceholderText(/email address/i), {
+      target: { name: "email", value: "owner@acme.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
+      target: { name: "password", value: "Smoke2026" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument();
+    expect(screen.getByText(/try again in 3 minutes\./i)).toBeInTheDocument();
   });
 
   it("creates an account from the signup route and sends the user to verify email", async () => {

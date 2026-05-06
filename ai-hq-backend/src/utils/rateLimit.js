@@ -83,7 +83,8 @@ export function applyInMemoryRateLimit(
   }
 
   const retryAfterMs = Math.max(0, Number(bucket.resetAt || now) - now);
-  res.setHeader("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+  const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  res.setHeader("Retry-After", String(retryAfterSeconds));
   return res.status(429).json({
     ok: false,
     error: "Too many requests",
@@ -91,6 +92,7 @@ export function applyInMemoryRateLimit(
     reason: `${s(policyName, "global")}_rate_limited`,
     requestId: req?.requestId || null,
     retryAfterMs,
+    retryAfterSeconds,
     rateLimit: {
       policy: s(policyName, "global"),
       subject: subjectKey,
@@ -98,6 +100,7 @@ export function applyInMemoryRateLimit(
       remaining: 0,
       resetAt: new Date(Number(bucket.resetAt || now)).toISOString(),
       retryAfterMs,
+      retryAfterSeconds,
     },
   });
 }

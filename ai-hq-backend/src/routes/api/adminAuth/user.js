@@ -52,6 +52,18 @@ function buildRateLimitScope(email, tenantKey = "") {
   return `user:${s(tenantKey).toLowerCase() || "any"}:${lower(email)}`;
 }
 
+function retrySecondsUntil(resetAt) {
+  return Math.max(1, Math.ceil((Number(resetAt || 0) - Date.now()) / 1000));
+}
+
+function authenticationUnavailableResponse(res, statusCode = 503) {
+  return res.status(statusCode).json({
+    ok: false,
+    error: "Sign in is temporarily unavailable. Try again in a moment.",
+    code: "auth_temporarily_unavailable",
+  });
+}
+
 function shouldInvalidateUserCookie(session = {}) {
   const reason = s(session?.error).toLowerCase();
   return (
@@ -281,10 +293,13 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
     } catch {}
 
     if (rl && !rl.ok) {
+      const retryAfterSeconds = retrySecondsUntil(rl.resetAt);
+      res.setHeader("Retry-After", String(retryAfterSeconds));
       res.status(429).json({
         ok: false,
-        error: "Too many failed attempts. Try again later.",
-        retryAfterMs: Math.max(0, Number(rl.resetAt || 0) - Date.now()),
+        error: "Too many attempts. Try again in a few minutes.",
+        code: "login_rate_limited",
+        retryAfterSeconds,
       });
       return null;
     }
@@ -298,11 +313,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       identity = bootstrap?.identity || (await findAuthIdentityForLogin(db, { email }));
     } catch (e) {
       const timeout = isDbTimeoutError(e);
-      res.status(timeout ? 503 : 500).json({
-        ok: false,
-        error: timeout ? "Authentication database timeout" : "Login query failed",
-        reason: timeout ? "auth_db_timeout" : s(e?.message || e || "Login query failed"),
-      });
+      authenticationUnavailableResponse(res, timeout ? 503 : 500);
       return null;
     }
 
@@ -400,11 +411,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       });
     } catch (e) {
       const timeout = isDbTimeoutError(e);
-      res.status(timeout ? 503 : 500).json({
-        ok: false,
-        error: timeout ? "Authentication database timeout" : "Membership query failed",
-        reason: timeout ? "auth_db_timeout" : s(e?.message || e || "Membership query failed"),
-      });
+      authenticationUnavailableResponse(res, timeout ? 503 : 500);
       return null;
     }
 
@@ -669,15 +676,15 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
         clearUserCookie(res);
         return res.status(401).json({
           ok: false,
-          error: "Unauthorized",
-          reason: session?.error || "invalid_session",
+          error: "Your session has expired. Sign in again.",
+          code: "invalid_session",
         });
       }
 
       return res.status(503).json({
         ok: false,
-        error: "Auth session unavailable",
-        reason: session?.error || "session_lookup_unavailable",
+        error: "Your session is temporarily unavailable. Try again in a moment.",
+        code: "session_lookup_unavailable",
       });
     }
 

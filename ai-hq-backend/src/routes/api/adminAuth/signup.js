@@ -1,92 +1,71 @@
 import express from "express";
 
 import {
+  PASSWORD_REQUIREMENT_CODES,
+  checkLoginRateLimit,
+  clearLoginAttempts,
+  clearUserCookie,
   createUserSessionRecord,
   getUserCookieName,
   hashUserPassword,
   isUserAuthConfigured,
-  validateStrongUserPassword,
-  userCookieOptions,
-  clearUserCookie,
-  checkLoginRateLimit,
   registerFailedLoginAttempt,
-  PASSWORD_REQUIREMENT_CODES,
+  userCookieOptions,
+  validateStrongUserPassword,
 } from "../../../utils/adminAuth.js";
-import { setNoStore, s, lower, getIp } from "./utils.js";
-import { dbGetTenantByKey, dbUpsertTenantAiPolicy, dbUpsertTenantCore, dbUpsertTenantProfile } from "../../../db/helpers/settings.js";
-import { dbGetAuthIdentityByEmail } from "../../../db/helpers/authIdentities.js";
-import { dbGetAuthIdentityMembership } from "../../../db/helpers/authIdentityMemberships.js";
-import { loadActiveWorkspaceContract } from "../../../services/workspace/activeWorkspace.js";
-import { createTenantUser as createCanonicalTenantUser } from "../team/repository.js";
-import {
-  ensureCanonicalAndLegacyAccessForEmail,
-  listLegacyTenantUsersByEmail,
-  withTransaction,
-} from "../../../services/auth/canonicalUserAccess.js";
-import { isLikelyEmail, isReservedTenantKey, slugTenantKey, validTenantKey } from "../tenants/utils.js";
-import { markIdentityLogin, markUserLogin } from "./repository.js";
-import { runWithTenantContext } from "../../../db/tenantContext.js";
-import { writeAudit } from "../../../utils/auditLog.js";
 import { writeTenantLifecycleEvent } from "../../../db/helpers/tenantLifecycle.js";
+import { runWithTenantContext } from "../../../db/tenantContext.js";
+import { listLegacyTenantUsersByEmail } from "../../../services/auth/canonicalUserAccess.js";
+import { createSelfServiceWorkspace } from "../../../services/auth/selfServiceWorkspace.js";
+import { loadActiveWorkspaceContract } from "../../../services/workspace/activeWorkspace.js";
+import { writeAudit } from "../../../utils/auditLog.js";
+import { isLikelyEmail } from "../tenants/utils.js";
+import { markIdentityLogin, markUserLogin } from "./repository.js";
+import { getIp, lower, s, setNoStore } from "./utils.js";
 
-const SIGNUP_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const SIGNUP_RATE_LIMIT_BLOCK_MS = 60 * 60 * 1000;
-const SIGNUP_RATE_LIMIT_MAX_ATTEMPTS = 3;
+const SIGNUP_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const SIGNUP_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
+const SIGNUP_RATE_LIMIT_EMAIL_MAX_ATTEMPTS = 5;
+const SIGNUP_RATE_LIMIT_IP_MAX_ATTEMPTS = 30;
 
-function normalizeTenantKeySeed(value = "") {
-  const seed = slugTenantKey(value);
-  if (!seed) return "workspace";
-  if (!isReservedTenantKey(seed) && validTenantKey(seed)) return seed;
-  return `${seed}-workspace`.slice(0, 63);
+function retrySecondsUntil(resetAt) {
+  return Math.max(1, Math.ceil((Number(resetAt || 0) - Date.now()) / 1000));
 }
 
-async function reserveUniqueTenantKey(db, companyName = "", explicitTenantKey = "") {
-  const baseSeed = normalizeTenantKeySeed(explicitTenantKey || companyName);
-  let attempt = 0;
-
-  while (attempt < 50) {
-    const suffix = attempt === 0 ? "" : `-${attempt + 1}`;
-    const available = `${baseSeed}${suffix}`.slice(0, 63).replace(/-+$/g, "");
-    if (!available || isReservedTenantKey(available) || !validTenantKey(available)) {
-      attempt += 1;
-      continue;
-    }
-
-    const existing = await dbGetTenantByKey(db, available);
-    if (!existing?.id) {
-      return available;
-    }
-
-    attempt += 1;
-  }
-
-  throw new Error("Unable to reserve a unique workspace key");
-}
-
-function buildSignupRateLimitScopes(email, ip) {
+function buildSignupRateLimitBuckets(email, ip) {
   return [
-    `signup:ip:${s(ip || "unknown").toLowerCase()}`,
-    `signup:email:${lower(email)}`,
+    {
+      scopeType: "ip",
+      scopeKey: `signup:create:ip:${s(ip || "unknown").toLowerCase()}`,
+      maxAttempts: SIGNUP_RATE_LIMIT_IP_MAX_ATTEMPTS,
+    },
+    {
+      scopeType: "email",
+      scopeKey: `signup:create:email:${lower(email)}`,
+      maxAttempts: SIGNUP_RATE_LIMIT_EMAIL_MAX_ATTEMPTS,
+    },
   ];
 }
 
 async function checkSignupRateLimit(db, { email, ip }) {
-  const scopes = buildSignupRateLimitScopes(email, ip);
+  const buckets = buildSignupRateLimitBuckets(email, ip);
 
-  for (const scopeKey of scopes) {
+  for (const bucket of buckets) {
     const result = await checkLoginRateLimit(db, {
       actorType: "user",
-      scopeKey,
+      scopeKey: bucket.scopeKey,
       ip,
       windowMs: SIGNUP_RATE_LIMIT_WINDOW_MS,
-      maxAttempts: SIGNUP_RATE_LIMIT_MAX_ATTEMPTS,
+      maxAttempts: bucket.maxAttempts,
     });
 
     if (!result.ok) {
       return {
         ok: false,
-        scopeKey,
+        scopeType: bucket.scopeType,
+        scopeKey: bucket.scopeKey,
         resetAt: result.resetAt,
+        retryAfterSeconds: retrySecondsUntil(result.resetAt),
       };
     }
   }
@@ -95,20 +74,28 @@ async function checkSignupRateLimit(db, { email, ip }) {
 }
 
 async function recordSignupAttempt(db, { email, ip }) {
-  const scopes = buildSignupRateLimitScopes(email, ip);
+  const buckets = buildSignupRateLimitBuckets(email, ip);
 
   await Promise.allSettled(
-    scopes.map((scopeKey) =>
+    buckets.map((bucket) =>
       registerFailedLoginAttempt(db, {
         actorType: "user",
-        scopeKey,
+        scopeKey: bucket.scopeKey,
         ip,
         windowMs: SIGNUP_RATE_LIMIT_WINDOW_MS,
-        maxAttempts: SIGNUP_RATE_LIMIT_MAX_ATTEMPTS,
+        maxAttempts: bucket.maxAttempts,
         blockMs: SIGNUP_RATE_LIMIT_BLOCK_MS,
       })
     )
   );
+}
+
+async function softenSuccessfulSignupBucket(db, { email, ip }) {
+  await clearLoginAttempts(db, {
+    actorType: "user",
+    scopeKey: `signup:create:email:${lower(email)}`,
+    ip,
+  });
 }
 
 export function userSignupRoutes({
@@ -176,17 +163,15 @@ export function userSignupRoutes({
     try {
       const rateLimit = await checkSignupRateLimit(db, { email, ip });
       if (!rateLimit.ok) {
-        if (rateLimit.resetAt) {
-          res.setHeader(
-            "Retry-After",
-            String(Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000)))
-          );
+        if (rateLimit.retryAfterSeconds) {
+          res.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
         }
 
         return res.status(429).json({
           ok: false,
-          error: "Too many signup attempts",
+          error: "Too many attempts. Try again in a few minutes.",
           code: "signup_rate_limited",
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
           retryAt: rateLimit.resetAt
             ? new Date(rateLimit.resetAt).toISOString()
             : null,
@@ -195,9 +180,8 @@ export function userSignupRoutes({
 
       await recordSignupAttempt(db, { email, ip });
 
-      const existing = await ensureCanonicalAndLegacyAccessForEmail(db, { email });
       const legacyUsers = await listLegacyTenantUsersByEmail(db, { email });
-      if (existing?.identity?.id || legacyUsers.length) {
+      if (legacyUsers.length) {
         return res.status(409).json({
           ok: false,
           error: "An account with this email already exists",
@@ -205,66 +189,23 @@ export function userSignupRoutes({
         });
       }
 
-      const created = await withTransaction(db, async (tx) => {
-        const tenantKey = await reserveUniqueTenantKey(tx, companyName, explicitTenantKey);
-        const tenant = await dbUpsertTenantCore(tx, tenantKey, {
-          tenant_key: tenantKey,
-          company_name: companyName,
-          plan_key: "free",
-          status: "trial",
-          lifecycle_status: "trial",
-          billing_status: "trialing",
-        });
-        return runWithTenantContext(
-          {
-            tenantId: tenant.id,
-            tenantKey,
-            requestId: req.requestId,
-            source: "auth.signup",
-            reason: "self_service_workspace_creation",
-          },
-          async () => {
-            await dbUpsertTenantProfile(tx, tenant.id, {
-              brand_name: companyName,
-              website_url: websiteUrl || null,
-            });
-            await dbUpsertTenantAiPolicy(tx, tenant.id, {});
-
-            const user = await createCanonicalTenantUser(tx, tenant.id, {
-              user_email: email,
-              full_name: fullName || companyName,
-              role: "owner",
-              status: "active",
-              password_hash: hashUserPassword(password),
-              auth_provider: "local",
-              email_verified: false,
-              permissions: {},
-              meta: {
-                signupCreated: true,
-                emailVerificationRequired: true,
-              },
-            });
-
-            const identity = await dbGetAuthIdentityByEmail(tx, email);
-            const membership = await dbGetAuthIdentityMembership(tx, identity?.id, tenant.id);
-
-            return {
-              tenant,
-              user,
-              identity,
-              membership,
-            };
-          }
-        );
+      const created = await createSelfServiceWorkspace({
+        db,
+        requestId: req.requestId,
+        source: "auth.signup",
+        email,
+        fullName,
+        companyName,
+        websiteUrl,
+        explicitTenantKey,
+        passwordHash: hashUserPassword(password),
+        authProvider: "local",
+        emailVerified: false,
+        userMeta: {
+          signupCreated: true,
+          emailVerificationRequired: true,
+        },
       });
-
-      if (!created?.identity?.id || !created?.membership?.id || !created?.user?.id) {
-        return res.status(500).json({
-          ok: false,
-          error: "Signup could not be completed",
-          code: "signup_incomplete",
-        });
-      }
 
       const workspace = await runWithTenantContext(
         {
@@ -299,7 +240,7 @@ export function userSignupRoutes({
           session_version: 1,
         },
         {
-          ip: getIp(req),
+          ip,
           ua: s(req.headers["user-agent"]),
         }
       );
@@ -353,6 +294,8 @@ export function userSignupRoutes({
           ])
       );
 
+      await softenSuccessfulSignupBucket(db, { email, ip });
+
       return res.status(201).json({
         ok: true,
         created: true,
@@ -378,9 +321,14 @@ export function userSignupRoutes({
         },
       });
     } catch (error) {
+      req.log?.error?.("auth.signup.failed", {
+        code: error?.code || "signup_failed",
+        requestId: req.requestId || null,
+      });
       return res.status(500).json({
         ok: false,
-        error: s(error?.message || error || "Signup failed"),
+        error: "Signup could not be completed. Try again in a moment.",
+        code: "signup_failed",
       });
     }
   });

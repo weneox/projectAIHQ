@@ -108,6 +108,18 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
   );
 }
 
+function formatRetryDelay(retryAfterSeconds) {
+  const seconds = Math.max(1, Number(retryAfterSeconds || 0));
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+
+  if (seconds < 60) {
+    return `Try again in ${seconds} second${seconds === 1 ? "" : "s"}.`;
+  }
+
+  const minutes = Math.ceil(seconds / 60);
+  return `Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+}
+
 const PASSWORD_FAILURE_COPY = {
   minimum_length: "at least 8 characters",
   letter_required: "a letter",
@@ -132,6 +144,48 @@ function getSignupPasswordError(error) {
   }
 
   return `Password still needs ${missing.join(", ")}.`;
+}
+
+function getAuthErrorPresentation(error, { isSignupMode = false } = {}) {
+  const code = s(
+    error?.code || error?.payload?.code || error?.response?.data?.code
+  ).toLowerCase();
+  const retryCopy = formatRetryDelay(
+    error?.payload?.retryAfterSeconds ??
+      error?.response?.data?.retryAfterSeconds
+  );
+
+  if (isSignupMode) {
+    const passwordError = getSignupPasswordError(error);
+    if (passwordError) {
+      return {
+        title: "Choose a stronger password",
+        description: passwordError,
+      };
+    }
+  }
+
+  if (code === "signup_rate_limited" || code === "login_rate_limited") {
+    return {
+      title: "Too many attempts",
+      description: retryCopy || "Try again in a few minutes.",
+    };
+  }
+
+  if (isServiceUnavailableError(error) || code === "auth_temporarily_unavailable") {
+    return {
+      title: "Temporary issue",
+      description: "Authentication is temporarily unavailable. Try again shortly.",
+    };
+  }
+
+  return {
+    title: isSignupMode ? "Unable to create workspace" : "Sign in failed",
+    description: getFriendlyError(
+      error,
+      isSignupMode ? "Unable to create your workspace." : "Sign in failed."
+    ),
+  };
 }
 
 function isMultipleAccountsError(error) {
@@ -302,7 +356,7 @@ export default function Login() {
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [accountChoices, setAccountChoices] = useState([]);
   const [selectedAccountToken, setSelectedAccountToken] = useState("");
   const [form, setForm] = useState({
@@ -329,7 +383,7 @@ export default function Login() {
       [name]: value,
     }));
 
-    if (error) setError("");
+    if (error) setError(null);
 
     if (name === "email") {
       setAccountChoices([]);
@@ -343,12 +397,18 @@ export default function Login() {
     const usingInlineWorkspaceSelection = accountChoices.length > 0;
 
     if (!email || !password) {
-      setError("Enter your email and password.");
+      setError({
+        title: "Missing details",
+        description: "Enter your email and password.",
+      });
       return;
     }
 
     if (usingInlineWorkspaceSelection && !selectedAccountToken) {
-      setError("Select the correct workspace to continue.");
+      setError({
+        title: "Choose workspace",
+        description: "Select the correct workspace to continue.",
+      });
       return;
     }
 
@@ -388,12 +448,18 @@ export default function Login() {
     };
 
     if (!payload.companyName || !payload.email || !payload.password) {
-      setError("Enter your workspace name, email, and password.");
+      setError({
+        title: "Missing details",
+        description: "Enter your workspace name, email, and password.",
+      });
       return;
     }
 
     if (!passwordAssessment.ok) {
-      setError("Choose a stronger password before creating your workspace.");
+      setError({
+        title: "Choose a stronger password",
+        description: "Choose a stronger password before creating your workspace.",
+      });
       return;
     }
 
@@ -411,7 +477,7 @@ export default function Login() {
     if (loading) return;
 
     try {
-      setError("");
+      setError(null);
       setLoading(true);
 
       if (isSignupMode) {
@@ -423,18 +489,12 @@ export default function Login() {
       if (!isSignupMode && isMultipleAccountsError(submitError)) {
         setAccountChoices(normalizeAccountChoices(submitError));
         setSelectedAccountToken("");
-        setError("Select your workspace to continue.");
+        setError({
+          title: "Choose workspace",
+          description: "Select your workspace to continue.",
+        });
       } else {
-        const passwordError = isSignupMode
-          ? getSignupPasswordError(submitError)
-          : "";
-        setError(
-          passwordError ||
-            getFriendlyError(
-              submitError,
-              isSignupMode ? "Unable to create your workspace." : "Sign in failed."
-            )
-        );
+        setError(getAuthErrorPresentation(submitError, { isSignupMode }));
       }
     } finally {
       setLoading(false);
@@ -525,8 +585,8 @@ export default function Login() {
             {error ? (
               <InlineNotice
                 tone="danger"
-                title="Authentication issue"
-                description={error}
+                title={error.title}
+                description={error.description}
                 compact
               />
             ) : null}

@@ -6,7 +6,6 @@ import { userSignupRoutes } from "./signup.js";
 import { userLoginRoutes } from "./user.js";
 import {
   requireAuthEndpointRateLimit,
-  requireSignupRateLimit,
 } from "../../../utils/rateLimit.js";
 
 export function adminAuthRoutes({ db, wsHub } = {}) {
@@ -21,7 +20,6 @@ export function adminAuthRoutes({ db, wsHub } = {}) {
   r.use("/admin-auth/login", requireAuthEndpointRateLimit);
   r.use("/auth/login", requireAuthEndpointRateLimit);
   r.use("/auth/select-workspace", requireAuthEndpointRateLimit);
-  r.use("/auth/signup", requireSignupRateLimit);
 
   r.use(adminSessionRoutes({ db, wsHub }));
   r.use(adminLoginRoutes({ db, wsHub }));

@@ -116,6 +116,8 @@ class FakeCanonicalAuthDb {
     this.memberships = new Map();
     this.authSessions = new Map();
     this.loginAttempts = new Map();
+    this.auditLogEntries = [];
+    this.tenantLifecycleEvents = [];
   }
 
   nextId(prefix, counterKey) {
@@ -540,6 +542,41 @@ class FakeCanonicalAuthDb {
       return { rowCount: 1, rows: [] };
     }
 
+    if (text.startsWith("insert into audit_log")) {
+      const row = {
+        id: `audit-${this.auditLogEntries.length + 1}`,
+        tenant_id: values[0] || null,
+        tenant_key: values[1] || null,
+        actor: values[2],
+        action: values[3],
+        object_type: values[4],
+        object_id: values[5] || null,
+        meta: JSON.parse(values[6] || "{}"),
+        request_id: values[7] || null,
+        created_at: new Date().toISOString(),
+      };
+      this.auditLogEntries.push(row);
+      return { rowCount: 1, rows: [{ ...row }] };
+    }
+
+    if (text.startsWith("insert into tenant_lifecycle_events")) {
+      const row = {
+        id: `tenant-lifecycle-${this.tenantLifecycleEvents.length + 1}`,
+        tenant_id: values[0],
+        tenant_key: values[1],
+        actor: values[2],
+        action: values[3],
+        status_from: values[4],
+        status_to: values[5],
+        reason: values[6] || null,
+        meta: JSON.parse(values[7] || "{}"),
+        request_id: values[8] || null,
+        created_at: new Date().toISOString(),
+      };
+      this.tenantLifecycleEvents.push(row);
+      return { rowCount: 1, rows: [{ ...row }] };
+    }
+
     if (text.startsWith("update tenant_users") && text.includes("last_login_at = now()")) {
       const row = this.users.get(String(values[0])) || null;
       if (!row) return { rowCount: 0, rows: [] };
@@ -674,7 +711,11 @@ function createSignupRouter(db, workspaceStates = {}, options = {}) {
     };
   };
 
-  return userSignupRoutes({ db, resolveWorkspaceState });
+  return userSignupRoutes({
+    db,
+    resolveWorkspaceState,
+    createVerificationCode: options.createVerificationCode,
+  });
 }
 
 const previousUserSessionSecret = cfg.auth.userSessionSecret;
@@ -688,7 +729,8 @@ after(() => {
 });
 
 test("signup creates canonical identity, membership, bridge user, and authenticated setup destination", async () => {
-  const db = new FakeCanonicalAuthDb();
+  const rawDb = new FakeCanonicalAuthPoolDb();
+  const db = createTenantGuardedDb(rawDb);
   const router = createSignupRouter(db, {
     "acme-clinic": {
       setupCompleted: false,
@@ -712,16 +754,16 @@ test("signup creates canonical identity, membership, bridge user, and authentica
   assert.equal(signup.res.statusCode, 201, JSON.stringify(signup.res.body));
   assert.equal(signup.res.body?.authenticated, true);
   assert.equal(signup.res.body?.destination?.path, "/home?assistant=setup");
-  assert.equal(db.tenants.size, 1);
-  assert.equal(db.identities.size, 1);
-  assert.equal(db.memberships.size, 1);
-  assert.equal(db.users.size, 1);
-  assert.equal(db.authSessions.size, 1);
-  const identity = Array.from(db.identities.values())[0];
+  assert.equal(rawDb.tenants.size, 1);
+  assert.equal(rawDb.identities.size, 1);
+  assert.equal(rawDb.memberships.size, 1);
+  assert.equal(rawDb.users.size, 1);
+  assert.equal(rawDb.authSessions.size, 1);
+  const identity = Array.from(rawDb.identities.values())[0];
   assert.equal(identity.normalized_email, "owner@acme.test");
   assert.equal(identity.email_verified, false);
   assert.ok(identity.password_hash.startsWith("s2u:"));
-  const user = Array.from(db.users.values())[0];
+  const user = Array.from(rawDb.users.values())[0];
   assert.equal(user.email_verified, false);
 });
 
@@ -809,9 +851,10 @@ test("signup rejects weak passwords with concrete requirement failures", async (
   assert.equal(sameAsEmail.res.statusCode, 400);
   assert.equal(sameAsEmail.res.body?.code, "weak_password");
   assert.ok(sameAsEmail.res.body?.failures?.includes("must_not_equal_email"));
+  assert.equal(db.loginAttempts.size, 0);
 });
 
-test("login repairs a legacy-only user into canonical identity auth and succeeds", async () => {
+test("signup rate limit returns retryAfterSeconds after repeated real create attempts", async () => {
   const db = new FakeCanonicalAuthDb();
   db.seedTenant({
     id: "tenant-1",
@@ -825,8 +868,50 @@ test("login repairs a legacy-only user into canonical identity auth and succeeds
     full_name: "Owner",
     role: "owner",
     status: "active",
+    password_hash: hashUserPassword("Smoke2026"),
+  });
+  const router = createSignupRouter(db);
+  let finalAttempt = null;
+
+  for (let index = 0; index < 6; index += 1) {
+    finalAttempt = await invokeRoute(router, "post", "/auth/signup", {
+      body: {
+        companyName: "Acme Clinic",
+        fullName: "Owner One",
+        email: "owner@acme.test",
+        password: "Smoke2026",
+      },
+      headers: { host: "app.weneox.com" },
+    });
+  }
+
+  assert.equal(finalAttempt?.res.statusCode, 429);
+  assert.equal(finalAttempt?.res.body?.code, "signup_rate_limited");
+  assert.match(finalAttempt?.res.body?.error || "", /try again/i);
+  assert.ok(Number(finalAttempt?.res.body?.retryAfterSeconds) > 0);
+  assert.equal(
+    finalAttempt?.res.headers?.["Retry-After"],
+    String(finalAttempt?.res.body?.retryAfterSeconds)
+  );
+});
+
+test("login repairs a legacy-only user into canonical identity auth and succeeds", async () => {
+  const rawDb = new FakeCanonicalAuthPoolDb();
+  rawDb.seedTenant({
+    id: "tenant-1",
+    tenant_key: "acme",
+    company_name: "Acme",
+  });
+  rawDb.seedUser({
+    id: "tenant-user-1",
+    tenant_id: "tenant-1",
+    user_email: "owner@acme.test",
+    full_name: "Owner",
+    role: "owner",
+    status: "active",
     password_hash: hashUserPassword("secret-pass"),
   });
+  const db = createTenantGuardedDb(rawDb);
 
   const router = createLoginRouter(db, {
     acme: {
@@ -845,31 +930,31 @@ test("login repairs a legacy-only user into canonical identity auth and succeeds
 
   assert.equal(login.res.statusCode, 200, JSON.stringify(login.res.body));
   assert.equal(login.res.body?.user?.tenantKey, "acme");
-  assert.equal(db.identities.size, 1);
-  assert.equal(db.memberships.size, 1);
+  assert.equal(rawDb.identities.size, 1);
+  assert.equal(rawDb.memberships.size, 1);
 });
 
 test("login repairs stale canonical password hashes from the legacy bridge and succeeds", async () => {
-  const db = new FakeCanonicalAuthDb();
-  db.seedTenant({
+  const rawDb = new FakeCanonicalAuthPoolDb();
+  rawDb.seedTenant({
     id: "tenant-1",
     tenant_key: "acme",
     company_name: "Acme",
   });
-  db.seedIdentity({
+  rawDb.seedIdentity({
     id: "identity-1",
     primary_email: "owner@acme.test",
     normalized_email: "owner@acme.test",
     password_hash: hashUserPassword("old-pass"),
   });
-  db.seedMembership({
+  rawDb.seedMembership({
     id: "membership-1",
     identity_id: "identity-1",
     tenant_id: "tenant-1",
     role: "owner",
     status: "active",
   });
-  db.seedUser({
+  rawDb.seedUser({
     id: "tenant-user-1",
     tenant_id: "tenant-1",
     user_email: "owner@acme.test",
@@ -878,6 +963,7 @@ test("login repairs stale canonical password hashes from the legacy bridge and s
     status: "active",
     password_hash: hashUserPassword("new-pass"),
   });
+  const db = createTenantGuardedDb(rawDb);
 
   const router = createLoginRouter(db, {
     acme: {
@@ -946,4 +1032,48 @@ test("missing identity and missing legacy user still returns 401 invalid credent
 
   assert.equal(login.res.statusCode, 401);
   assert.equal(login.res.body?.error, "Invalid credentials");
+});
+
+test("login rate limit returns retryAfterSeconds and humane copy", async () => {
+  const db = new FakeCanonicalAuthDb();
+  const router = createLoginRouter(db);
+  let finalAttempt = null;
+
+  for (let index = 0; index < 10; index += 1) {
+    finalAttempt = await invokeRoute(router, "post", "/auth/login", {
+      body: { email: "nobody@acme.test", password: "Smoke2026" },
+      headers: { host: "app.weneox.com" },
+    });
+  }
+
+  assert.equal(finalAttempt?.res.statusCode, 429);
+  assert.equal(finalAttempt?.res.body?.code, "login_rate_limited");
+  assert.match(finalAttempt?.res.body?.error || "", /try again/i);
+  assert.ok(Number(finalAttempt?.res.body?.retryAfterSeconds) > 0);
+  assert.equal(
+    finalAttempt?.res.headers?.["Retry-After"],
+    String(finalAttempt?.res.body?.retryAfterSeconds)
+  );
+});
+
+test("login hides internal query errors from the user", async () => {
+  const db = {
+    async query() {
+      throw new Error("Tenant-scoped database query requires tenant context");
+    },
+  };
+  const router = createLoginRouter(db);
+
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "Smoke2026" },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(login.res.statusCode, 500);
+  assert.equal(
+    login.res.body?.error,
+    "Sign in is temporarily unavailable. Try again in a moment."
+  );
+  assert.equal(login.res.body?.code, "auth_temporarily_unavailable");
+  assert.equal("reason" in (login.res.body || {}), false);
 });
