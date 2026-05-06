@@ -1,4 +1,4 @@
-name: Release Gate
+﻿name: Release Gate
 
 on:
   workflow_dispatch:
@@ -342,6 +342,371 @@ jobs:
       - name: Build Twilio voice backend Docker image
         run: docker build -f twilio-voice-backend/Dockerfile .
 
+  validation-deploy-security-preflight:
+    name: Validation deploy security preflight
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.launch_approval_target != 'none')
+    env:
+      APP_ENV: production
+      NODE_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run production placeholder guard
+        env:
+          AIHQ_PROD_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+          AIHQ_PROD_INTERNAL_TOKEN_META_BOT: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN_META_BOT }}
+          AIHQ_FRONTEND_PROD_URL: ${{ secrets.AIHQ_FRONTEND_PROD_URL }}
+          META_BOT_PROD_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
+          TWILIO_VOICE_PROD_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
+          WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
+          RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
+          RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
+          CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+          ENABLE_NEOX_FRONTEND_PROD_DEPLOY: ${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY }}
+          CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
+          AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "0"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
+          POSTDEPLOY_STRICT_SIDECARS: "1"
+          PROD_SPINE_STRICT_SIDECARS: "1"
+          AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
+          PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: "1"
+        run: npm run security:placeholder-guard
+
+      - name: Summarize validation deploy security preflight
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Validation deploy security preflight"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Placeholder guard | \`${{ job.status }}\` |"
+            echo "| Deploy hook/env placeholders rejected | \`true\` |"
+            echo "| Launch evidence approval | \`not evaluated here; see limited/public launch approval jobs\` |"
+            echo "| Railway hook deploy enabled | \`${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS == '1' }}\` |"
+            echo "| Strict sidecars required | \`true\` |"
+            echo "| Frontend release SHA required | \`true\` |"
+            echo "| Backend release SHA required | \`true\` |"
+            echo "| Neox frontend deploy enabled | \`${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY == '1' }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  limited-pilot-approval:
+    name: Controlled unpaid pilot approval evidence gate
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.launch_approval_target == 'limited'
+    env:
+      APP_ENV: production
+      NODE_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check controlled unpaid pilot evidence gate
+        env:
+          LAUNCH_GATE_TARGET: limited
+          APP_ENV: production
+          NODE_ENV: production
+        run: npm run launch:evidence:check
+
+  public-launch-approval:
+    name: Public launch approval evidence gate
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.launch_approval_target == 'public'
+    env:
+      APP_ENV: production
+      NODE_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check public launch evidence gate
+        env:
+          LAUNCH_GATE_TARGET: public
+          APP_ENV: production
+          NODE_ENV: production
+        run: npm run launch:evidence:check
+
+  trigger-ai-hq-backend-railway-deploy:
+    name: Trigger AI HQ backend Railway deploy
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: ${{ false }} # disabled because Railway GitHub Auto Deploy is the backend deploy owner
+    steps:
+      - name: Trigger AI HQ backend Railway production deploy
+        id: trigger_aihq_backend_railway_deploy
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for AI HQ backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
+          if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
+            echo "RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK is missing for the AI HQ backend Railway service." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+
+      - name: Summarize AI HQ backend Railway deploy trigger
+        if: always()
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          {
+            echo "## AI HQ backend Railway deploy"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Railway service | \`AI HQ backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
+            echo "| Deploy hook secret | \`RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_backend_railway_deploy.outcome }}\` |"
+            echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + validation-deploy-security-preflight\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-meta-bot-backend-railway-deploy:
+    name: Trigger Meta bot backend Railway deploy
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: ${{ false }} # disabled because provider auto-deploy owns backend deploys
+    steps:
+      - name: Trigger Meta bot backend Railway production deploy
+        id: trigger_meta_bot_backend_railway_deploy
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for Meta bot backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
+          if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
+            echo "RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK is missing for the Meta bot backend Railway service." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+
+      - name: Summarize Meta bot backend Railway deploy trigger
+        if: always()
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          {
+            echo "## Meta bot backend Railway deploy"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Railway service | \`Meta bot backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
+            echo "| Deploy hook secret | \`RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_meta_bot_backend_railway_deploy.outcome }}\` |"
+            echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + validation-deploy-security-preflight\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-twilio-voice-backend-railway-deploy:
+    name: Trigger Twilio voice backend Railway deploy
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: ${{ false }} # disabled because provider auto-deploy owns backend deploys
+    steps:
+      - name: Trigger Twilio voice backend Railway production deploy
+        id: trigger_twilio_voice_backend_railway_deploy
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ "$ENABLE_RAILWAY_DEPLOY_HOOKS" != "1" ]; then
+            echo "Railway hook deploy is disabled for Twilio voice backend. Railway/provider deploy is expected to be handled outside this hook step."
+            exit 0
+          fi
+
+          if [ -z "$RAILWAY_DEPLOY_HOOK" ]; then
+            echo "RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK is missing for the Twilio voice backend Railway service." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+
+      - name: Summarize Twilio voice backend Railway deploy trigger
+        if: always()
+        env:
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          {
+            echo "## Twilio voice backend Railway deploy"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Railway service | \`Twilio voice backend\` |"
+            echo "| Railway hook deploy enabled | \`${ENABLE_RAILWAY_DEPLOY_HOOKS:-0}\` |"
+            echo "| Deploy hook secret | \`RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_twilio_voice_backend_railway_deploy.outcome }}\` |"
+            echo "| Deploy hook configured | \`${RAILWAY_DEPLOY_HOOK:+true}\` |"
+            echo "| Disabled behavior | \`no-op deploy trigger; post-deploy backend release identity must still match github.sha\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + validation-deploy-security-preflight\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-ai-hq-frontend-cloudflare-pages-deploy:
+    name: Trigger AI HQ frontend Cloudflare Pages deploy
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: ${{ false }} # disabled because Cloudflare Pages Git integration owns frontend deploys
+    steps:
+      - name: Trigger AI HQ frontend Cloudflare Pages production deploy
+        id: trigger_aihq_frontend_pages_deploy
+        env:
+          CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK" ]; then
+            echo "CLOUDFLARE_PAGES_DEPLOY_HOOK is missing for the AI HQ frontend Cloudflare Pages project." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --request POST "$CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK"
+
+      - name: Summarize AI HQ frontend deploy trigger
+        if: always()
+        env:
+          CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          {
+            echo "## AI HQ frontend Cloudflare deploy"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Cloudflare project | \`AI HQ frontend\` |"
+            echo "| Cloudflare build command | \`npm run build:ai-hq-frontend\` |"
+            echo "| Cloudflare output directory | \`ai-hq-frontend/dist\` |"
+            echo "| Deploy hook secret | \`CLOUDFLARE_PAGES_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_aihq_frontend_pages_deploy.outcome }}\` |"
+            echo "| Deploy hook configured | \`${CLOUDFLARE_AIHQ_FRONTEND_DEPLOY_HOOK:+true}\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + validation-deploy-security-preflight\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-neox-frontend-cloudflare-pages-deploy:
+    name: Trigger Neox frontend Cloudflare Pages deploy
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-startup-compat-node18
+      - monorepo-release-gate
+      - frontend-stable-windows
+      - validation-deploy-security-preflight
+    if: ${{ false }} # disabled because provider integration owns frontend deploys
+    steps:
+      - name: Trigger Neox frontend Cloudflare Pages production deploy
+        id: trigger_neox_frontend_pages_deploy
+        env:
+          CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK" ]; then
+            echo "CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK is missing for the Neox frontend Cloudflare Pages project." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --request POST "$CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK"
+
+      - name: Summarize Neox frontend deploy trigger
+        if: always()
+        env:
+          CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          {
+            echo "## Neox frontend Cloudflare deploy"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Cloudflare project | \`Neox frontend\` |"
+            echo "| Cloudflare build command | \`npm run build:neox-frontend\` |"
+            echo "| Cloudflare output directory | \`neox-frontend/dist\` |"
+            echo "| Deploy hook secret | \`CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_neox_frontend_pages_deploy.outcome }}\` |"
+            echo "| Deploy hook configured | \`${CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK:+true}\` |"
+            echo "| Release boundary | \`workspace-startup-compat-node18 + monorepo-release-gate + frontend-stable-windows + validation-deploy-security-preflight\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   verify-production-post-deploy:
     name: Production smoke after validation deploy
     runs-on: ubuntu-latest
@@ -526,3 +891,6 @@ jobs:
             echo "- \`docs/runbooks/schema-migration-safety.md\`"
             echo "- \`docs/runbooks/production-rollback.md\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+
