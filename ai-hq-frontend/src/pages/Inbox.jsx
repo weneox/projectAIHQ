@@ -825,19 +825,9 @@ export default function Inbox() {
     [readinessState.channelSummary]
   );
 
-  const truthReady = useMemo(
-    () =>
-      readinessState.truth?.ready === true &&
-      lower(readinessState.truth?.status) === "ready",
-    [readinessState.truth]
-  );
 
-  const runtimeReady = useMemo(
-    () =>
-      readinessState.runtime?.ready === true &&
-      lower(readinessState.runtime?.status) === "ready",
-    [readinessState.runtime]
-  );
+
+
 
   const visibleLaunchReadinessNotice = null;
   const surfaceNotice = buildSurfaceNotice(surface);
