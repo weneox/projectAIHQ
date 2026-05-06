@@ -1,4 +1,4 @@
-function s(value, fallback = "") {
+﻿function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
@@ -21,13 +21,15 @@ const REQUIRED_ENV = [
   { name: "AIHQ_FRONTEND_PROD_URL", type: "https_url" },
   { name: "META_BOT_PROD_BASE_URL", type: "https_url" },
   { name: "TWILIO_VOICE_PROD_BASE_URL", type: "https_url" },
-  { name: "CLOUDFLARE_PAGES_DEPLOY_HOOK", type: "https_url" },
 ];
 
 const RAILWAY_DEPLOY_HOOK_ENV = [
   { name: "RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK", type: "https_url" },
   { name: "RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK", type: "https_url" },
+];
+const CLOUDFLARE_DEPLOY_HOOK_ENV = [
+  { name: "CLOUDFLARE_PAGES_DEPLOY_HOOK", type: "https_url" },
 ];
 
 const REQUIRED_FLAGS = [
@@ -43,6 +45,9 @@ function isNeoxDeployEnabled() {
 
 function areRailwayDeployHooksEnabled() {
   return s(process.env.ENABLE_RAILWAY_DEPLOY_HOOKS) === "1";
+}
+function areCloudflareDeployHooksEnabled() {
+  return s(process.env.ENABLE_CLOUDFLARE_DEPLOY_HOOKS) === "1";
 }
 
 function isPlaceholderValue(value = "") {
@@ -185,7 +190,8 @@ function main() {
   const requiredEnv = [
     ...REQUIRED_ENV,
     ...(areRailwayDeployHooksEnabled() ? RAILWAY_DEPLOY_HOOK_ENV : []),
-    ...(isNeoxDeployEnabled()
+    ...(areCloudflareDeployHooksEnabled() ? CLOUDFLARE_DEPLOY_HOOK_ENV : []),
+    ...(areCloudflareDeployHooksEnabled() && isNeoxDeployEnabled()
       ? [{ name: "CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK", type: "https_url" }]
       : []),
   ];
@@ -221,3 +227,4 @@ function main() {
 }
 
 main();
+

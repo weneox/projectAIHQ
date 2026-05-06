@@ -1,4 +1,4 @@
-name: Release Gate
+﻿name: Release Gate
 
 on:
   workflow_dispatch:
@@ -371,7 +371,8 @@ jobs:
           META_BOT_PROD_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
           TWILIO_VOICE_PROD_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
           WEBSITE_LANE_TENANT_KEY: ${{ secrets.WEBSITE_LANE_TENANT_KEY }}
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
           RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
           RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
@@ -477,7 +478,8 @@ jobs:
       - name: Trigger AI HQ backend Railway production deploy
         id: trigger_aihq_backend_railway_deploy
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -496,7 +498,8 @@ jobs:
       - name: Summarize AI HQ backend Railway deploy trigger
         if: always()
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_AIHQ_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -527,7 +530,8 @@ jobs:
       - name: Trigger Meta bot backend Railway production deploy
         id: trigger_meta_bot_backend_railway_deploy
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -546,7 +550,8 @@ jobs:
       - name: Summarize Meta bot backend Railway deploy trigger
         if: always()
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_META_BOT_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -577,7 +582,8 @@ jobs:
       - name: Trigger Twilio voice backend Railway production deploy
         id: trigger_twilio_voice_backend_railway_deploy
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -596,7 +602,8 @@ jobs:
       - name: Summarize Twilio voice backend Railway deploy trigger
         if: always()
         env:
-          ENABLE_RAILWAY_DEPLOY_HOOKS: ${{ vars.ENABLE_RAILWAY_DEPLOY_HOOKS }}
+          ENABLE_RAILWAY_DEPLOY_HOOKS: "0"
+          ENABLE_CLOUDFLARE_DEPLOY_HOOKS: "0"
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_TWILIO_VOICE_BACKEND_DEPLOY_HOOK }}
         shell: bash
         run: |
@@ -884,5 +891,6 @@ jobs:
             echo "- \`docs/runbooks/schema-migration-safety.md\`"
             echo "- \`docs/runbooks/production-rollback.md\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
 
 
