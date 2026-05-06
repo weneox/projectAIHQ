@@ -17,6 +17,8 @@ import ProductHomePage from "./surfaces/home/ProductHomePage.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
 import ChannelCatalog from "./pages/ChannelCatalog.jsx";
+import LaunchChecklist from "./pages/LaunchChecklist.jsx";
+import Settings from "./pages/Settings.jsx";
 import {
   INTERNAL_ONLY_APP_ROUTES,
   isLocalWorkspaceEntryEnabled,
@@ -234,6 +236,7 @@ export default function App() {
           }
         >
           <Route path="home" element={<ProductHomePage />} />
+          <Route path="launch" element={<LaunchChecklist />} />
 
           <Route
             path="setup"
@@ -247,6 +250,7 @@ export default function App() {
           <Route path="welcome" element={<Welcome />} />
           <Route path="inbox" element={<Inbox />} />
           <Route path="channels" element={<ChannelCatalog />} />
+          <Route path="settings" element={<Settings />} />
 
           <Route
             path="truth"

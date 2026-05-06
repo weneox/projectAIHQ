@@ -1,3 +1,9 @@
+import {
+  BookOpenCheck,
+  Rocket,
+  Settings,
+} from "lucide-react";
+
 import dashboardIcon from "../../assets/channels/dashboard.png";
 import inboxIcon from "../../assets/channels/inbox.png";
 import connectIcon from "../../assets/channels/connect.png";
@@ -15,6 +21,19 @@ const PRIMARY_SECTIONS = [
       {
         title: "Navigation",
         items: [{ label: "Home", to: "/home" }],
+      },
+    ],
+  },
+  {
+    id: "launch",
+    label: "Launch",
+    icon: Rocket,
+    to: "/launch",
+    paths: ["/launch"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Launch", to: "/launch" }],
       },
     ],
   },
@@ -51,8 +70,8 @@ const SECONDARY_SECTIONS = [
     ],
   },
   {
-    id: "truth",
-    label: "Truth",
+    id: "business-info",
+    label: "Business Info",
     iconType: "image",
     iconSrc: businessInformationsIcon,
     to: "/truth",
@@ -60,13 +79,28 @@ const SECONDARY_SECTIONS = [
     contextGroups: [
       {
         title: "Navigation",
-        items: [{ label: "Truth", to: "/truth" }],
+        items: [{ label: "Business Info", to: "/truth" }],
       },
     ],
   },
 ];
 
-const UTILITY_SECTIONS = [];
+const UTILITY_SECTIONS = [
+  {
+    id: "settings",
+    label: "Settings",
+    icon: Settings,
+    to: "/settings",
+    paths: ["/settings"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Settings", to: "/settings" }],
+      },
+    ],
+  },
+];
+
 const ALL_SECTIONS = [...PRIMARY_SECTIONS, ...SECONDARY_SECTIONS, ...UTILITY_SECTIONS];
 
 function pathMatches(pathname = "", candidate = "") {
