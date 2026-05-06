@@ -473,7 +473,7 @@ function GlobalWarningRibbon({
             <button
               type="button"
               onClick={onVerify}
-              className="inline-flex h-8 items-center rounded-[10px] bg-[#5f2b12] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+              className="inline-flex h-8 items-center rounded-[10px] bg-[#5f4a00] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
             >
               Verify now
             </button>

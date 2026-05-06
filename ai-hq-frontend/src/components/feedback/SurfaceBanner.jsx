@@ -29,7 +29,7 @@ function ensureOverlayRoot() {
   }
 
   root.className =
-    "pointer-events-none fixed inset-x-0 top-0 z-[160] flex flex-col items-center gap-2 px-3 pt-0 sm:px-4";
+    "pointer-events-none fixed inset-x-0 top-0 z-[160] flex flex-col items-center gap-2 px-3 pt-2 sm:px-4";
 
   return root;
 }
@@ -38,14 +38,14 @@ function toneMaterial(tone = "neutral") {
   if (tone === "success") {
     return {
       shell:
-        "border-[rgba(var(--color-success),0.24)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(247,253,249)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+        "border-[#69c57a] bg-[#d8f3de] text-[#155a2f] shadow-[0_18px_42px_-30px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.65)]",
       iconWrap:
-        "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success",
-      accent: "bg-success",
+        "border-[#69c57a] bg-[#c6eccf] text-[#155a2f]",
+      accent: "bg-[#155a2f]",
       close:
-        "text-text-subtle hover:bg-surface-subtle hover:text-text",
+        "text-[#155a2f]/75 hover:bg-[#c6eccf] hover:text-[#155a2f]",
       button:
-        "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success hover:bg-[rgba(var(--color-success),0.12)] disabled:opacity-50",
+        "border-[#69c57a] bg-[#c6eccf] text-[#155a2f] hover:bg-[#b8e7c4] disabled:opacity-50",
       role: "status",
       live: "polite",
     };
@@ -54,14 +54,14 @@ function toneMaterial(tone = "neutral") {
   if (tone === "warn") {
     return {
       shell:
-        "border-[rgba(var(--color-warning),0.28)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(255,251,245)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+        "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00] shadow-[0_18px_42px_-30px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.6)]",
       iconWrap:
-        "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning",
-      accent: "bg-warning",
+        "border-[#d8c35c] bg-[#fff3bf] text-[#5f4a00]",
+      accent: "bg-[#5f4a00]",
       close:
-        "text-text-subtle hover:bg-surface-subtle hover:text-text",
+        "text-[#5f4a00]/75 hover:bg-[#edd96f] hover:text-[#5f4a00]",
       button:
-        "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning hover:bg-[rgba(var(--color-warning),0.12)] disabled:opacity-50",
+        "border-[#d2a23d] bg-[#fff3c6] text-[#5f4a00] hover:bg-[#f4de7c] disabled:opacity-50",
       role: "alert",
       live: "assertive",
     };
@@ -70,14 +70,14 @@ function toneMaterial(tone = "neutral") {
   if (tone === "danger") {
     return {
       shell:
-        "border-[rgba(var(--color-danger),0.24)] bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(253,246,249)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+        "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a] shadow-[0_18px_42px_-30px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.62)]",
       iconWrap:
-        "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger",
-      accent: "bg-danger",
+        "border-[#df7a86] bg-[#ffc3ca] text-[#6c1f2a]",
+      accent: "bg-[#6c1f2a]",
       close:
-        "text-text-subtle hover:bg-surface-subtle hover:text-text",
+        "text-[#6c1f2a]/75 hover:bg-[#ffc3ca] hover:text-[#6c1f2a]",
       button:
-        "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger hover:bg-[rgba(var(--color-danger),0.12)] disabled:opacity-50",
+        "border-[#df7a86] bg-[#ffc3ca] text-[#6c1f2a] hover:bg-[#f7b3bc] disabled:opacity-50",
       role: "alert",
       live: "assertive",
     };
@@ -85,19 +85,18 @@ function toneMaterial(tone = "neutral") {
 
   return {
     shell:
-      "border-line-soft bg-[linear-gradient(180deg,rgb(255,255,255)_0%,rgb(248,250,252)_100%)] text-text shadow-[0_18px_42px_-32px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]",
+      "border-[#7aa9df] bg-[#d8ebff] text-[#173b67] shadow-[0_18px_42px_-30px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.62)]",
     iconWrap:
-      "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand",
-    accent: "bg-brand",
+      "border-[#7aa9df] bg-[#c2ddfb] text-[#173b67]",
+    accent: "bg-[#173b67]",
     close:
-      "text-text-subtle hover:bg-surface-subtle hover:text-text",
+      "text-[#173b67]/75 hover:bg-[#c2ddfb] hover:text-[#173b67]",
     button:
-      "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand hover:bg-[rgba(var(--color-brand),0.12)] disabled:opacity-50",
+      "border-[#7aa9df] bg-[#c2ddfb] text-[#173b67] hover:bg-[#b2d3f5] disabled:opacity-50",
     role: "status",
     live: "polite",
   };
 }
-
 function compactUnavailableMessage(message) {
   const normalized = s(message)
     .replace(/\bis temporarily unavailable\b/gi, "unavailable")
@@ -260,7 +259,7 @@ function NotificationCard({ item, onRemove }) {
       aria-live={material.live}
       className={cx(
         "pointer-events-auto relative w-full max-w-[520px] overflow-hidden border",
-        "rounded-b-[14px] rounded-t-none",
+        "rounded-[10px]",
         "transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
         material.shell,
         visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0"
@@ -275,7 +274,7 @@ function NotificationCard({ item, onRemove }) {
         <NotificationIcon tone={item.tone} />
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold leading-5 tracking-[var(--tracking-tight-sm)] text-text">
+          <div className="truncate text-[14px] font-semibold leading-5 tracking-[var(--tracking-tight-sm)] text-current">
             {item.displayMessage}
           </div>
 

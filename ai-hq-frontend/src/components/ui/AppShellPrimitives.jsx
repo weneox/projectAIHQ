@@ -1,4 +1,4 @@
-﻿import { createElement } from "react";
+import { createElement } from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
@@ -16,20 +16,20 @@ import Badge from "./Badge.jsx";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-[rgba(var(--color-brand),0.18)] bg-brand-soft",
-    icon: "text-brand",
+    container: "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]",
+    icon: "text-[#173b67]",
   },
   success: {
-    container: "border-[rgba(var(--color-success),0.18)] bg-success-soft",
-    icon: "text-success",
+    container: "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]",
+    icon: "text-[#155a2f]",
   },
   warning: {
-    container: "border-[rgba(var(--color-warning),0.2)] bg-warning-soft",
-    icon: "text-warning",
+    container: "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]",
+    icon: "text-[#5f4a00]",
   },
   danger: {
-    container: "border-[rgba(var(--color-danger),0.18)] bg-danger-soft",
-    icon: "text-danger",
+    container: "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]",
+    icon: "text-[#6c1f2a]",
   },
 };
 
@@ -80,18 +80,18 @@ function metricTone(tone = "neutral") {
 
 function bannerToneClass(tone = "info") {
   if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success";
+    return "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]";
   }
 
   if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning";
+    return "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]";
   }
 
   if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger";
+    return "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]";
   }
 
-  return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand";
+  return "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]";
 }
 
 export function PageCanvas({ className, children }) {
@@ -454,7 +454,7 @@ export function StatusBanner({
   return (
     <div
       className={cx(
-        "rounded-[var(--radius-lg)] border px-4 py-4 shadow-[var(--shadow-inset-top)]",
+        "rounded-[10px] border px-4 py-4 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.55)]",
         bannerToneClass(tone),
         className
       )}
@@ -481,7 +481,7 @@ export function StatusBanner({
           {description ? (
             <div
               className={cx(
-                "text-[13.5px] font-medium leading-6 text-text-muted",
+                "text-[13.5px] font-medium leading-6 text-current/85",
                 title ? "mt-1" : "mt-0"
               )}
             >
@@ -592,7 +592,7 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "rounded-[var(--radius-lg)] border shadow-[var(--shadow-inset-top)]",
+        "rounded-[10px] border shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.55)]",
         palette.container,
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
         className
@@ -612,7 +612,7 @@ export function InlineNotice({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+            <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-current">
               {title}
             </div>
           ) : null}
@@ -620,7 +620,7 @@ export function InlineNotice({
           {description ? (
             <div
               className={cx(
-                "text-[13px] font-medium text-text-muted",
+                "text-[13px] font-medium text-current/85",
                 title ? "mt-1 leading-6" : "leading-5"
               )}
             >
@@ -663,7 +663,7 @@ export function SectionLoading({
             {title}
           </div>
           {description ? (
-            <div className="text-[13.5px] font-medium leading-6 text-text-muted">
+            <div className="text-[13.5px] font-medium leading-6 text-current/85">
               {description}
             </div>
           ) : null}
