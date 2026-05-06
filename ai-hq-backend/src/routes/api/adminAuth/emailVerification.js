@@ -8,6 +8,38 @@ import {
 } from "../../../utils/adminAuth.js";
 import { s, setNoStore } from "./utils.js";
 
+
+function shouldExposeVerificationCodeForOps(req) {
+  const expected = s(
+    process.env.AUTH_DEBUG_VERIFICATION_CODE_TOKEN ||
+      process.env.DEBUG_API_TOKEN ||
+      ""
+  );
+
+  if (!expected) return false;
+
+  const provided = s(
+    req?.headers?.["x-debug-token"] ||
+      req?.headers?.["x-internal-token"] ||
+      req?.query?.debugToken ||
+      req?.body?.debugToken
+  );
+
+  return provided && provided === expected;
+}
+
+function maybeDebugVerificationCode(req, issued) {
+  if (!shouldExposeVerificationCodeForOps(req)) return {};
+  const code = s(issued?.verificationCode);
+  if (!code) return {};
+  return {
+    debug: {
+      verificationCode: code,
+      warning: "Visible only because AUTH_DEBUG_VERIFICATION_CODE_TOKEN or DEBUG_API_TOKEN matched.",
+    },
+  };
+}
+
 function verificationErrorResponse(res, result = {}) {
   return res.status(Number(result.status || 400)).json({
     ok: false,
@@ -130,6 +162,7 @@ export function emailVerificationRoutes({ db } = {}) {
         skipped: issued?.delivery?.skipped === true,
         reason: issued?.delivery?.reason || "",
       },
+      ...maybeDebugVerificationCode(req, issued),
     });
   });
 
