@@ -234,6 +234,7 @@ function collectFindingsForLine(filePath, line, lineNumber) {
 
 function scanFile(filePath) {
   const abs = path.resolve(ROOT, filePath);
+  if (!fs.existsSync(abs)) return [];
   const stat = fs.statSync(abs);
   if (stat.size > MAX_FILE_BYTES) return [];
   if (!isProbablyTextFile(filePath)) return [];

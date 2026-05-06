@@ -466,10 +466,13 @@ export default function Login() {
     await signupUser(payload);
     clearAppSessionContext();
 
-    navigate("/verify-email", {
-      replace: true,
-      state: { email: payload.email },
-    });
+    try {
+      await getAppSessionContext({ force: true });
+    } catch {
+      // Protected routes verify the session again if warmup fails.
+    }
+
+    navigate("/home", { replace: true });
   }
 
   async function onSubmit(event) {

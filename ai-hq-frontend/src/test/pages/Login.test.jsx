@@ -274,7 +274,7 @@ describe("Login auth entry", () => {
     expect(screen.getByText(/try again in 3 minutes\./i)).toBeInTheDocument();
   });
 
-  it("creates an account from the signup route and sends the user to verify email", async () => {
+  it("creates an account from the signup route and opens the signed-in workspace", async () => {
     signupUser.mockResolvedValueOnce({ ok: true });
 
     renderRoute("/signup");
@@ -310,10 +310,11 @@ describe("Login auth entry", () => {
     expect(clearAppSessionContext).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/verify-email", {
-        replace: true,
-        state: { email: "owner@acme.com" },
-      });
+      expect(getAppSessionContext).toHaveBeenCalledWith({ force: true });
+    });
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
     });
   });
 });

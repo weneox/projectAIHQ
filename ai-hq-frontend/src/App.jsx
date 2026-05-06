@@ -26,7 +26,6 @@ import {
   peekAppAuthContext,
 } from "./lib/appSession.js";
 
-const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
 const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
 const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
@@ -214,7 +213,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={loginEntryElement} />
         <Route path="/signup" element={loginEntryElement} />
-        <Route path="/verify-email" element={withSuspense(<VerifyEmail />)} />
+        <Route path="/verify-email" element={<Navigate to="/login" replace />} />
         <Route
           path="/widget/website-chat"
           element={withSuspense(<PublicWebsiteWidget />)}
