@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import {
   isAdminAuthConfigured,
   isUserAuthConfigured,
@@ -326,6 +326,8 @@ export function adminSessionRoutes({
           tenantId: userSession.payload?.tenantId || null,
           tenantKey: userSession.payload?.tenantKey || null,
           email: userSession.payload?.email || null,
+          emailVerified: userSession.payload?.emailVerified === true,
+          emailVerificationRequired: userSession.payload?.emailVerified !== true,
           fullName: userSession.payload?.fullName || "",
           role: userSession.payload?.role || "member",
           companyName: userSession.payload?.companyName || "",
@@ -335,6 +337,8 @@ export function adminSessionRoutes({
         identity: {
           id: userSession.payload?.identityId || null,
           email: userSession.payload?.email || null,
+          emailVerified: userSession.payload?.emailVerified === true,
+          emailVerificationRequired: userSession.payload?.emailVerified !== true,
         },
         membership: {
           id: userSession.payload?.membershipId || null,

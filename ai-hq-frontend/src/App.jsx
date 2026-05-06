@@ -32,6 +32,7 @@ const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
 const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail.jsx"));
 
 const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "workspace",
@@ -213,7 +214,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={loginEntryElement} />
         <Route path="/signup" element={loginEntryElement} />
-        <Route path="/verify-email" element={<Navigate to="/login" replace />} />
+        <Route path="/verify-email" element={withSuspense(<VerifyEmail />)} />
         <Route
           path="/widget/website-chat"
           element={withSuspense(<PublicWebsiteWidget />)}
@@ -268,3 +269,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+

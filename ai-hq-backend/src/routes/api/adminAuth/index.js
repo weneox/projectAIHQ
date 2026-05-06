@@ -1,9 +1,10 @@
-import express from "express";
+﻿import express from "express";
 import { requireTrustedBrowserOriginForCookieAuth } from "../../../utils/adminAuth.js";
 import { adminSessionRoutes } from "./session.js";
 import { adminLoginRoutes } from "./admin.js";
 import { userSignupRoutes } from "./signup.js";
 import { userLoginRoutes } from "./user.js";
+import { emailVerificationRoutes } from "./emailVerification.js";
 import {
   requireAuthEndpointRateLimit,
 } from "../../../utils/rateLimit.js";
@@ -24,7 +25,10 @@ export function adminAuthRoutes({ db, wsHub } = {}) {
   r.use(adminSessionRoutes({ db, wsHub }));
   r.use(adminLoginRoutes({ db, wsHub }));
   r.use(userSignupRoutes({ db, wsHub }));
+  r.use(emailVerificationRoutes({ db, wsHub }));
   r.use(userLoginRoutes({ db, wsHub }));
 
   return r;
 }
+
+

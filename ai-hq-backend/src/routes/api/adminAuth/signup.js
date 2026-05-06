@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 
 import {
   PASSWORD_REQUIREMENT_CODES,
@@ -18,6 +18,7 @@ import { runWithTenantContext } from "../../../db/tenantContext.js";
 import { listLegacyTenantUsersByEmail } from "../../../services/auth/canonicalUserAccess.js";
 import { createSelfServiceWorkspace } from "../../../services/auth/selfServiceWorkspace.js";
 import { loadActiveWorkspaceContract } from "../../../services/workspace/activeWorkspace.js";
+import { issueEmailVerification } from "../../../services/auth/emailVerification.js";
 import { writeAudit } from "../../../utils/auditLog.js";
 import { isLikelyEmail } from "../tenants/utils.js";
 import { markIdentityLogin, markUserLogin } from "./repository.js";
@@ -207,6 +208,49 @@ export function userSignupRoutes({
         },
       });
 
+      let emailVerification = {
+        ok: false,
+        delivery: {
+          ok: false,
+          skipped: true,
+          reason: "not_attempted",
+        },
+      };
+
+      try {
+        emailVerification = await issueEmailVerification(db, {
+          identityId: created.identity.id,
+          email,
+          req,
+          meta: {
+            tenantId: created.tenant.id,
+            tenantKey: created.tenant.tenant_key,
+            source: "auth.signup",
+          },
+        });
+      } catch (verificationError) {
+        req.log?.warn?.("auth.signup.email_verification_issue_failed", {
+          requestId: req.requestId || null,
+          identityId: created.identity?.id || null,
+          tenantId: created.tenant?.id || null,
+          code: verificationError?.code || "email_verification_issue_failed",
+          error: String(
+            verificationError?.message ||
+              verificationError ||
+              "email_verification_issue_failed"
+          ),
+        });
+
+        emailVerification = {
+          ok: false,
+          delivery: {
+            ok: false,
+            skipped: true,
+            reason: "email_verification_issue_failed",
+          },
+        };
+      }
+
       const workspace = await runWithTenantContext(
         {
           tenantId: created.tenant.id,
@@ -319,6 +363,16 @@ export function userSignupRoutes({
           kind: "setup",
           path: "/home?assistant=setup",
         },
+        emailVerification: {
+          required: true,
+          sent: emailVerification?.delivery?.ok === true,
+          delivery: {
+            ok: emailVerification?.delivery?.ok === true,
+            provider: emailVerification?.delivery?.provider || "",
+            skipped: emailVerification?.delivery?.skipped === true,
+            reason: emailVerification?.delivery?.reason || "",
+          },
+        },
       });
     } catch (error) {
       req.log?.error?.("auth.signup.failed", {
@@ -335,3 +389,4 @@ export function userSignupRoutes({
 
   return r;
 }
+

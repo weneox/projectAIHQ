@@ -1,4 +1,4 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import {
   PASSWORD_REQUIREMENT_CODES,
   validateStrongUserPassword as validateSharedStrongUserPassword,
@@ -226,6 +226,8 @@ function normalizeUserSessionPayload(row = {}) {
     tenantActive: row.tenant_active !== false,
     billingStatus: s(row.billing_status || "unconfigured").toLowerCase(),
     email: s(row.user_email).toLowerCase(),
+    emailVerified: row.email_verified === true,
+    email_verified: row.email_verified === true,
     fullName: s(row.full_name),
     role: s(row.role || "member").toLowerCase(),
     companyName: s(row.company_name),
@@ -273,6 +275,7 @@ async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
         s.created_at,
         s.last_seen_at,
         i.primary_email as user_email,
+        i.email_verified as email_verified,
         m.id as membership_id,
         m.role,
         m.status,
@@ -1655,3 +1658,4 @@ export const __test__ = {
   normalizeUserSessionPayload,
   normalizeAdminSessionPayload,
 };
+

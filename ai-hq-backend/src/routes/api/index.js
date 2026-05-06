@@ -1,4 +1,4 @@
-// src/routes/api/index.js
+﻿// src/routes/api/index.js
 // FINAL v3.3.8
 
 import express from "express";
@@ -90,7 +90,8 @@ function mapSessionPayloadToAuth(payload = {}) {
     tenantActive: payload.tenantActive !== false,
     billingStatus: payload.billingStatus || "unconfigured",
     email: payload.email,
-    fullName: payload.fullName || "",
+        emailVerified: payload.emailVerified === true || payload.email_verified === true,
+    emailVerificationRequired: !(payload.emailVerified === true || payload.email_verified === true),fullName: payload.fullName || "",
     role: payload.role || "member",
     sessionVersion: Number(payload.sessionVersion || 1),
     _serverControlled: true,
@@ -115,7 +116,10 @@ function mapSessionPayloadToUser(payload = {}) {
     billingStatus: payload.billingStatus || "unconfigured",
     billing_status: payload.billingStatus || "unconfigured",
     email: payload.email,
-    fullName: payload.fullName || "",
+        emailVerified: payload.emailVerified === true || payload.email_verified === true,
+    email_verified: payload.emailVerified === true || payload.email_verified === true,
+    emailVerificationRequired: !(payload.emailVerified === true || payload.email_verified === true),
+    email_verification_required: !(payload.emailVerified === true || payload.email_verified === true),fullName: payload.fullName || "",
     full_name: payload.fullName || "",
     role: payload.role || "member",
     sessionVersion: Number(payload.sessionVersion || 1),
@@ -346,6 +350,62 @@ async function requireUserSessionMiddleware(req, res, next) {
   return next();
 }
 
+
+function isUnsafeWriteMethod(method = "") {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(s(method).toUpperCase());
+}
+
+function pathRequiresVerifiedEmail(req) {
+  if (!isUnsafeWriteMethod(req?.method)) return false;
+
+  const path = normalizePath(req);
+
+  return (
+    path.startsWith("/settings/secrets") ||
+    path.startsWith("/settings/team") ||
+    path.startsWith("/team") ||
+    path.startsWith("/channels/connect") ||
+    path.startsWith("/channels/meta") ||
+    path.startsWith("/channels/telegram") ||
+    path.startsWith("/settings/operational") ||
+    path.startsWith("/push/subscribe")
+  );
+}
+
+function requireVerifiedEmailForSensitiveActions(req, res, next) {
+  if (!pathRequiresVerifiedEmail(req)) {
+    return next();
+  }
+
+  const verified =
+    req?.auth?.emailVerified === true ||
+    req?.user?.emailVerified === true ||
+    req?.user?.email_verified === true;
+
+  if (verified) {
+    return next();
+  }
+
+  req.log?.warn?.("auth.email_verification_required", {
+    tenantId: s(req?.auth?.tenantId),
+    tenantKey: s(req?.auth?.tenantKey),
+    userId: s(req?.auth?.userId),
+    endpoint: req.originalUrl || req.url || "",
+  });
+
+  return res.status(403).json({
+    ok: false,
+    error: "EmailVerificationRequired",
+    code: "email_verification_required",
+    message: "Verify your email before changing sensitive workspace settings.",
+    action: {
+      type: "verify_email",
+      resendEndpoint: "/api/auth/resend-verification",
+      verifyRoute: "/verify-email",
+    },
+    requestId: req.requestId || null,
+  });
+}
 export function createRequireOperationalDbMiddleware({ db, env = cfg.app.env }) {
   return function requireOperationalDb(req, res, next) {
     if (!isDbRequiredAppEnv(env) || isDbReady(db)) {
@@ -385,7 +445,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   const r = express.Router();
 
   // public + internal bypass routes
-  // bunlar session guard-dan əvvəl qalmalıdır
+  // bunlar session guard-dan É™vvÉ™l qalmalÄ±dÄ±r
   r.use("/", healthRoutes({ db }));
   const commentsEnabled = mountFrozenWhenDisabled(
     r,
@@ -518,6 +578,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use(requireUserSessionMiddleware);
   r.use(enforceServerControlledIdentityMiddleware);
   r.use(enforceAuthenticatedTenantContextMiddleware);
+  r.use(requireVerifiedEmailForSensitiveActions);
   r.use(createRequireOperationalDbMiddleware({ db }));
   r.use(createTenantUsageAndQuotaMiddleware({ db }));
 
@@ -619,3 +680,4 @@ export const __test__ = {
   enforceServerControlledIdentityMiddleware,
   requireUserSessionMiddleware,
 };
+

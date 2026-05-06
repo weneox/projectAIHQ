@@ -6,6 +6,7 @@ import warningIcon from "../../assets/channels/warning.png";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
+import EmailVerificationBanner from "../auth/EmailVerificationBanner.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
@@ -652,7 +653,9 @@ export default function Shell() {
         onClose={() => setWarningDismissed(true)}
       />
 
-      <div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
+      
+      <EmailVerificationBanner />
+<div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -703,4 +706,5 @@ export default function Shell() {
     </div>
   );
 }
+
 

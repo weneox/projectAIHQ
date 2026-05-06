@@ -1,4 +1,4 @@
-// src/api/auth.js
+﻿// src/api/auth.js
 
 import { apiGet, apiPost } from "./client.js";
 
@@ -41,6 +41,23 @@ export async function signupUser({
       tenantKey,
       websiteUrl,
     },
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+  );
+}
+export async function verifyEmail(token) {
+  return apiPost(
+    "/api/auth/verify-email",
+    {
+      token,
+    },
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+  );
+}
+
+export async function resendVerificationEmail() {
+  return apiPost(
+    "/api/auth/resend-verification",
+    {},
     { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
