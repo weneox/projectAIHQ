@@ -511,7 +511,7 @@ export function StatusBanner({
   );
 }
 
-export function PropertyListexport function PropertyList({ className, children, tone = "default" }) {
+export function PropertyList({ className, children, tone = "default" }) {
   return (
     <Surface
       className={className}
@@ -645,7 +645,7 @@ export function InlineNotice({
   );
 }
 
-export function StateSkeletonBlockexport function StateSkeletonBlock({ className }) {
+export function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
