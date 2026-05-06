@@ -128,7 +128,7 @@ export default function VerifyEmail() {
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, [token, sent]);
 
   async function handleResend() {
     if (resending) return;
@@ -268,4 +268,5 @@ export default function VerifyEmail() {
     </div>
   );
 }
+
 
