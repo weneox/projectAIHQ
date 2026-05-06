@@ -924,6 +924,7 @@ async function createWebsiteChatTestMessage({
     const message = await insertInboundMessage({
       client,
       threadId: thread.id,
+      tenantId,
       tenantKey,
       externalMessageId,
       text: messageText,

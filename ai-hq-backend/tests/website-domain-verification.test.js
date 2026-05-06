@@ -6,11 +6,13 @@ import {
   createWebsiteDomainVerificationChallenge,
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
+  createWebsiteWidgetTestMessage,
   createWebsiteWidgetWordpressInstallHandoff,
   getWebsiteLaneHealthStatus,
   getWebsiteWidgetStatus,
 } from "../src/routes/api/channelConnect/website.js";
 import { __test__ as websiteDomainVerificationTest } from "../src/services/websiteDomainVerification.js";
+import { runWithTenantContext } from "../src/db/tenantContext.js";
 
 function normalizeSql(sql = "") {
   return String(sql || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -215,6 +217,97 @@ class FakeWebsiteDomainVerificationDb {
     }
 
     throw new Error(`Unhandled SQL in FakeWebsiteDomainVerificationDb: ${sql}`);
+  }
+}
+
+class FakeWebsiteWidgetTestMessageDb extends FakeWebsiteDomainVerificationDb {
+  constructor() {
+    super();
+    this.thread = {
+      id: "22222222-2222-4222-8222-222222222222",
+      tenant_id: this.tenant.id,
+      tenant_key: this.tenant.tenant_key,
+      channel: "website",
+      external_thread_id: "website-test:acme:setup",
+      external_user_id: "website-chat-test-visitor",
+      external_username: "website-chat-test",
+      customer_name: "Website Chat Test Visitor",
+      status: "open",
+      assigned_to: null,
+      labels: [],
+      meta: {},
+      unread_count: 1,
+      handoff_active: false,
+      handoff_reason: "",
+      handoff_priority: "normal",
+      handoff_at: null,
+      handoff_by: null,
+      last_message_at: "2026-04-10T10:01:00.000Z",
+      last_inbound_at: "2026-04-10T10:01:00.000Z",
+      last_outbound_at: null,
+      created_at: "2026-04-10T10:01:00.000Z",
+      updated_at: "2026-04-10T10:01:00.000Z",
+    };
+    this.insertedMessageParams = null;
+  }
+
+  async query(text, values = []) {
+    const sql = normalizeSql(text);
+
+    if (sql.includes("insert into audit_log")) {
+      return { rows: [] };
+    }
+
+    return super.query(text, values);
+  }
+
+  async connect() {
+    return {
+      query: async (text, values = []) => {
+        const sql = normalizeSql(text);
+
+        if (["begin", "commit", "rollback"].includes(sql)) {
+          return { rows: [] };
+        }
+
+        if (
+          sql.includes("from inbox_threads") &&
+          sql.includes("external_thread_id")
+        ) {
+          return { rows: [] };
+        }
+
+        if (sql.includes("insert into inbox_threads")) {
+          return { rows: [clone(this.thread)] };
+        }
+
+        if (sql.includes("insert into inbox_messages")) {
+          this.insertedMessageParams = values;
+          return {
+            rows: [
+              {
+                id: "33333333-3333-4333-8333-333333333333",
+                thread_id: values[0],
+                tenant_id: values[1],
+                tenant_key: values[2],
+                direction: "inbound",
+                sender_type: "customer",
+                external_message_id: values[3],
+                message_type: "text",
+                text: values[4],
+                attachments: [],
+                meta: JSON.parse(values[5]),
+                sent_at: "2026-04-10T10:01:05.000Z",
+                created_at: "2026-04-10T10:01:05.000Z",
+              },
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected client query: ${text}`);
+      },
+      release() {},
+    };
   }
 }
 
@@ -519,6 +612,36 @@ test("website widget status blocks production install until domain ownership is 
       });
     }
   );
+});
+
+test("website widget setup test message persists inbound smoke message with tenant identity", async () => {
+  const db = new FakeWebsiteWidgetTestMessageDb();
+
+  const payload = await runWithTenantContext(
+    {
+      tenantId: db.tenant.id,
+      tenantKey: db.tenant.tenant_key,
+      source: "test.website_widget_setup_message",
+      reason: "v1_launch_smoke",
+    },
+    () =>
+      createWebsiteWidgetTestMessage({
+        db,
+        req: buildAuthedReq({
+          body: {
+            text: "Codex website widget setup smoke",
+          },
+        }),
+      })
+  );
+
+  assert.ok(payload?.testId);
+  assert.equal(payload?.thread?.id, db.thread.id);
+  assert.equal(payload?.thread?.channel, "website");
+  assert.equal(payload?.message?.direction, "inbound");
+  assert.equal(payload?.message?.text, "Codex website widget setup smoke");
+  assert.equal(db.insertedMessageParams?.[1], db.tenant.id);
+  assert.equal(db.insertedMessageParams?.[2], db.tenant.tenant_key);
 });
 
 test("website widget install handoff returns a developer package only when production install is ready", async () => {
