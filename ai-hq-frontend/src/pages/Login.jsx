@@ -109,14 +109,10 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
 }
 
 const PASSWORD_FAILURE_COPY = {
-  minimum_length: "at least 12 characters",
-  lowercase_required: "a lowercase letter",
-  uppercase_required: "an uppercase letter",
+  minimum_length: "at least 8 characters",
+  letter_required: "a letter",
   number_required: "a number",
-  symbol_required: "a special character",
-  must_not_contain_email: "not too similar to your email",
-  must_not_contain_company: "not too similar to the workspace name",
-  must_not_contain_full_name: "not too similar to your name",
+  must_not_equal_email: "not your email address",
   common_pattern: "not an obvious weak pattern",
 };
 

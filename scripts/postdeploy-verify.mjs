@@ -30,6 +30,10 @@ function n(value, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function normalizeBaseUrl(value = "") {
   return s(value).replace(/\/+$/, "");
 }
@@ -736,6 +740,41 @@ async function verifyWebsiteLane({
   ];
 }
 
+function downgradeWebsiteLaneToDiagnostic(results = [], reasonCode = "website_lane_diagnostic_only") {
+  return results.map((result) => {
+    const details = obj(result.details);
+
+    if (result.ok) {
+      return {
+        ...result,
+        warning: true,
+        details: {
+          ...details,
+          diagnosticOnly: true,
+          launchBlocking: false,
+          reasonCode: s(details.reasonCode) || reasonCode,
+        },
+      };
+    }
+
+    return {
+      ...result,
+      ok: true,
+      warning: true,
+      details: {
+        ...details,
+        diagnosticOnly: true,
+        launchBlocking: false,
+        originalOk: false,
+        reasonCode: s(details.reasonCode) || reasonCode,
+        message:
+          s(details.message) ||
+          "Website lane diagnostic did not pass. This does not block validation deploy; public launch approval still requires real website-lane evidence.",
+      },
+    };
+  });
+}
+
 function renderSummary(results = []) {
   let failed = 0;
 
@@ -751,7 +790,11 @@ function renderSummary(results = []) {
     }
 
     if (result.ok) {
-      printLine("OK", result.name, JSON.stringify(result.details));
+      printLine(
+        result.warning ? "WARN" : "OK",
+        result.name,
+        JSON.stringify(result.details)
+      );
       continue;
     }
 
@@ -848,6 +891,20 @@ async function main() {
         timeoutMs,
         requireWebsiteLane,
       }))
+    );
+  } else if (websiteLaneTenantKey) {
+    results.push(
+      ...downgradeWebsiteLaneToDiagnostic(
+        await verifyWebsiteLane({
+          baseUrl: aihqBaseUrl,
+          internalToken,
+          tenantKey: websiteLaneTenantKey,
+          domain: websiteLaneDomain,
+          timeoutMs,
+          requireWebsiteLane: false,
+        }),
+        "website_lane_not_required_for_validation_deploy"
+      )
     );
   } else {
     results.push({

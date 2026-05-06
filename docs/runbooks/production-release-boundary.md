@@ -157,7 +157,8 @@ operator must ensure Railway/provider deployment happens through the approved
 external mechanism when backend files changed. If Railway/provider deploy
 no-ops because watched backend files did not change, the backend may continue
 serving a previous backend deploy SHA. In that mode prod-spine still requires
-backend health, readiness, launch posture, website lane, and sidecar checks, but
+backend health, readiness, launch posture, and sidecar checks, and it reports
+website-lane diagnostics when a tenant key is configured, but
 does not fail solely because the AI HQ backend build SHA differs from the full
 repo `github.sha`.
 
@@ -199,10 +200,10 @@ GitHub Actions stores production secrets under these names and maps them into th
 - `CLOUDFLARE_PAGES_DEPLOY_HOOK` for AI HQ frontend only
 - `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1` only when the Neox production deploy should run with the AI HQ release
 - `CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK` for Neox frontend only when `ENABLE_NEOX_FRONTEND_PROD_DEPLOY=1`
-- `WEBSITE_LANE_TENANT_KEY`
+- `WEBSITE_LANE_TENANT_KEY` optional for validation deploy diagnostics; required as real evidence before public launch approval
 - `WEBSITE_LANE_DOMAIN` optional, used when the tenant smoke must target one expected domain
-- `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` in production CI
-- `PROD_SPINE_REQUIRE_WEBSITE_LANE=1` in production CI
+- `POSTDEPLOY_REQUIRE_WEBSITE_LANE=0` for validation deploy
+- `PROD_SPINE_REQUIRE_WEBSITE_LANE=0` for validation deploy
 - `META_BOT_PROD_BASE_URL` -> `META_BOT_BASE_URL`
 - `TWILIO_VOICE_PROD_BASE_URL` -> `TWILIO_VOICE_BASE_URL`
 - `POSTDEPLOY_STRICT_SIDECARS=1` in production CI
@@ -211,10 +212,13 @@ GitHub Actions stores production secrets under these names and maps them into th
 ## Launch confidence rule
 
 A green deploy hook and green generic health checks are not enough for launch
-confidence. Production launch readiness requires the internal read-only launch
-posture smoke, a real browser smoke of the deployed AI HQ frontend, a real
-tenant website-lane smoke with `WEBSITE_LANE_TENANT_KEY`, and strict sidecar
-checks for Meta and Twilio. The frontend smoke checks `/`, `/login`, `/home`,
+confidence. Validation deploy readiness requires the internal read-only launch
+posture smoke, a real browser smoke of the deployed AI HQ frontend, and strict
+sidecar checks for Meta and Twilio. Website-lane tenant checks are diagnostic in
+validation deploy mode so missing launch evidence cannot block an otherwise
+valid deploy. Production launch readiness still requires real website-lane
+evidence with `WEBSITE_LANE_TENANT_KEY` through the launch approval evidence
+gate. The frontend smoke checks `/`, `/login`, `/home`,
 `/channels`, `/inbox`, and `/truth` for blank screens, boot failures, obvious
 placeholder configuration leaks, and wrong-backend symptoms. It also fetches
 `/build-meta.json` and requires the deployed frontend release SHA to match

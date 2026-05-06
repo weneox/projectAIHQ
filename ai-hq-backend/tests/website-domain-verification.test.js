@@ -157,7 +157,12 @@ class FakeWebsiteDomainVerificationDb {
       sql.includes("left join tenant_profiles") &&
       sql.includes("tenant_channels")
     ) {
-      return { rows: [clone(this.websiteStatus)] };
+      return {
+        rows:
+          String(values[0] || "").toLowerCase() === this.tenant.tenant_key
+            ? [clone(this.websiteStatus)]
+            : [],
+      };
     }
 
     if (
@@ -1148,7 +1153,11 @@ test("website lane health returns the unified readiness payload for smoke script
       assert.equal(blocked.channelConfigured, true);
       assert.equal(blocked.configurationReady, true);
       assert.equal(blocked.productionLaunchAllowed, false);
-      assert.equal(blocked.reasonCode, "website_domain_verification_missing");
+      assert.equal(blocked.reasonCode, "domain_unverified");
+      assert.equal(blocked.detailedReasonCode, "website_domain_verification_missing");
+      assert.ok(
+        blocked.blockerReasonCodes.includes("website_domain_verification_missing")
+      );
       assert.equal(blocked.handoffs?.developer?.ready, false);
 
       await verifyWebsiteDomain(db);
@@ -1176,9 +1185,80 @@ test("website lane health returns the unified readiness payload for smoke script
       assert.equal(ready.domainVerificationState, "verified");
       assert.equal(ready.productionLaunchAllowed, true);
       assert.equal(ready.productionReady, true);
+      assert.equal(ready.reasonCode, "");
       assert.equal(ready.handoffs?.developer?.productionReady, true);
       assert.equal(ready.handoffs?.gtm?.productionReady, true);
       assert.equal(ready.handoffs?.wordpress?.productionReady, true);
+    }
+  );
+});
+
+test("website lane health distinguishes missing tenants from configuration blockers", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const missingTenantDb = new FakeWebsiteDomainVerificationDb();
+      const missingTenant = await getWebsiteLaneHealthStatus({
+        db: missingTenantDb,
+        req: buildAuthedReq({
+          query: {
+            tenantKey: "missing-smoke-tenant",
+          },
+        }),
+      });
+
+      assert.equal(missingTenant.tenantFound, false);
+      assert.equal(missingTenant.reasonCode, "tenant_not_found");
+
+      const notConfiguredDb = new FakeWebsiteDomainVerificationDb();
+      notConfiguredDb.websiteStatus = {
+        ...notConfiguredDb.websiteStatus,
+        widget_channel_id: "",
+        widget_channel_status: "",
+        widget_config: {},
+        website_url: "",
+      };
+
+      const notConfigured = await getWebsiteLaneHealthStatus({
+        db: notConfiguredDb,
+        req: buildAuthedReq({
+          query: {
+            tenantKey: "acme",
+          },
+        }),
+      });
+
+      assert.equal(notConfigured.tenantFound, true);
+      assert.equal(notConfigured.reasonCode, "website_not_configured");
+      assert.ok(
+        notConfigured.blockerReasonCodes.includes("website_widget_public_id_missing")
+      );
+
+      const disabledDb = new FakeWebsiteDomainVerificationDb();
+      disabledDb.websiteStatus = {
+        ...disabledDb.websiteStatus,
+        widget_channel_status: "disabled",
+        widget_config: {
+          ...disabledDb.websiteStatus.widget_config,
+          enabled: false,
+        },
+      };
+
+      const disabled = await getWebsiteLaneHealthStatus({
+        db: disabledDb,
+        req: buildAuthedReq({
+          query: {
+            tenantKey: "acme",
+          },
+        }),
+      });
+
+      assert.equal(disabled.tenantFound, true);
+      assert.equal(disabled.reasonCode, "widget_not_enabled");
+      assert.ok(disabled.blockerReasonCodes.includes("website_widget_disabled"));
     }
   );
 });

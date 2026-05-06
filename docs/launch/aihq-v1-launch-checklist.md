@@ -47,9 +47,10 @@ Before claiming launch readiness, all of these must be green:
 - Twilio voice backend Railway deploy
 - AI HQ frontend Cloudflare deploy
 - Neox frontend Cloudflare deploy, if marketing site changed
-- Mandatory postdeploy verification
-- Mandatory prod-spine smoke
-- Website lane tenant smoke with WEBSITE_LANE_TENANT_KEY
+- Validation postdeploy verification
+- Validation prod-spine smoke
+- Website lane diagnostics with WEBSITE_LANE_TENANT_KEY when configured
+- Strict Website lane launch evidence before public launch
 
 `npm run launch:evidence:check -- limited` must pass before a controlled unpaid
 pilot with real customer data. `npm run launch:evidence:check -- paid` must pass
@@ -76,9 +77,18 @@ Optional:
 
 Current production website-lane smoke tenant:
 
-- WEBSITE_LANE_TENANT_KEY=neox
+- WEBSITE_LANE_TENANT_KEY=smoke-test-20260506061021-385634
 
-Do not replace this with a random value. It must match a real tenant key in production Postgres.
+Do not replace this with a random value. It must match a real tenant key in
+production Postgres. The old `neox` value produced `tenant_not_found` in
+prod-spine smoke and must not be used unless that tenant is recreated and
+verified through the normal app flow.
+
+Validation deploy treats Website lane as diagnostic so normal deploy is not
+blocked by limited/public launch evidence. Public launch approval still requires
+real Website lane proof through `docs/launch/production-launch-evidence.json`
+and must not be marked READY until domain ownership and widget install are
+verified.
 
 ## Local verification baseline
 

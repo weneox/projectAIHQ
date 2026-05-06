@@ -1,4 +1,4 @@
-const MIN_PASSWORD_LENGTH = 12;
+const MIN_PASSWORD_LENGTH = 8;
 
 const COMMON_PASSWORD_PATTERNS = [
   "password",
@@ -20,31 +20,22 @@ const COMMON_PASSWORD_PATTERNS = [
 
 export const PASSWORD_REQUIREMENT_CODES = [
   "minimum_length",
-  "lowercase_required",
-  "uppercase_required",
+  "letter_required",
   "number_required",
-  "symbol_required",
-  "must_not_contain_email",
-  "must_not_contain_company",
-  "must_not_contain_full_name",
+  "must_not_equal_email",
   "common_pattern",
 ];
 
 export const PASSWORD_RULES = [
   {
     id: "minimum_length",
-    label: "At least 12 characters",
+    label: "At least 8 characters",
     failureCodes: ["minimum_length"],
   },
   {
-    id: "uppercase_required",
-    label: "Uppercase letter",
-    failureCodes: ["uppercase_required"],
-  },
-  {
-    id: "lowercase_required",
-    label: "Lowercase letter",
-    failureCodes: ["lowercase_required"],
+    id: "letter_required",
+    label: "Letter",
+    failureCodes: ["letter_required"],
   },
   {
     id: "number_required",
@@ -52,18 +43,9 @@ export const PASSWORD_RULES = [
     failureCodes: ["number_required"],
   },
   {
-    id: "symbol_required",
-    label: "Special character",
-    failureCodes: ["symbol_required"],
-  },
-  {
-    id: "not_similar_to_identity",
-    label: "Not too similar to name, workspace, or email",
-    failureCodes: [
-      "must_not_contain_email",
-      "must_not_contain_company",
-      "must_not_contain_full_name",
-    ],
+    id: "not_email",
+    label: "Not your email address",
+    failureCodes: ["must_not_equal_email"],
   },
   {
     id: "not_common_pattern",
@@ -78,26 +60,6 @@ function s(value, fallback = "") {
 
 function compactComparable(value) {
   return s(value).toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function unique(values = []) {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function identityFragments(value) {
-  const raw = s(value).toLowerCase();
-  const compact = compactComparable(raw);
-  const parts = raw
-    .split(/[^a-z0-9]+/i)
-    .map(compactComparable)
-    .filter((part) => part.length >= 4);
-
-  return unique([compact.length >= 4 ? compact : "", ...parts]);
-}
-
-function containsAny(value, fragments = []) {
-  const compact = compactComparable(value);
-  return fragments.some((fragment) => fragment && compact.includes(fragment));
 }
 
 function hasCommonPattern(password) {
@@ -115,26 +77,18 @@ function hasCommonPattern(password) {
 
 export function getPasswordRuleResults(
   password,
-  { email = "", companyName = "", fullName = "" } = {}
+  { email = "" } = {}
 ) {
   const value = String(password || "");
   const failures = [];
 
   if (value.length < MIN_PASSWORD_LENGTH) failures.push("minimum_length");
-  if (!/[a-z]/.test(value)) failures.push("lowercase_required");
-  if (!/[A-Z]/.test(value)) failures.push("uppercase_required");
+  if (!/[a-z]/i.test(value)) failures.push("letter_required");
   if (!/[0-9]/.test(value)) failures.push("number_required");
-  if (!/[^A-Za-z0-9]/.test(value)) failures.push("symbol_required");
 
-  const emailLocal = s(email).split("@")[0] || "";
-  if (containsAny(value, identityFragments(emailLocal))) {
-    failures.push("must_not_contain_email");
-  }
-  if (containsAny(value, identityFragments(companyName))) {
-    failures.push("must_not_contain_company");
-  }
-  if (containsAny(value, identityFragments(fullName))) {
-    failures.push("must_not_contain_full_name");
+  const normalizedEmail = s(email).toLowerCase();
+  if (normalizedEmail && s(value).toLowerCase() === normalizedEmail) {
+    failures.push("must_not_equal_email");
   }
   if (hasCommonPattern(value)) failures.push("common_pattern");
 

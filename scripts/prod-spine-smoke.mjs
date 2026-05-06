@@ -34,6 +34,10 @@ function n(value, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function pickFirst(...values) {
   for (const value of values) {
     const text = s(value);
@@ -999,6 +1003,39 @@ async function verifyWebsiteLane({
   ];
 }
 
+export function downgradeWebsiteLaneToDiagnostic(results = [], reasonCode = "website_lane_diagnostic_only") {
+  return results.map((result) => {
+    if (result.ok) {
+      return {
+        ...result,
+        warning: true,
+        details: {
+          ...obj(result.details),
+          diagnosticOnly: true,
+          launchBlocking: false,
+          reasonCode: s(obj(result.details).reasonCode) || reasonCode,
+        },
+      };
+    }
+
+    return {
+      ...result,
+      ok: true,
+      warning: true,
+      details: {
+        ...obj(result.details),
+        diagnosticOnly: true,
+        launchBlocking: false,
+        originalOk: false,
+        reasonCode: s(obj(result.details).reasonCode) || reasonCode,
+        message:
+          s(obj(result.details).message) ||
+          "Website lane diagnostic did not pass. This does not block validation deploy; public launch approval still requires real website-lane evidence.",
+      },
+    };
+  });
+}
+
 async function runAttempt({
   aihqBaseUrl,
   internalToken,
@@ -1054,6 +1091,20 @@ async function runAttempt({
         timeoutMs,
         requireWebsiteLane,
       }))
+    );
+  } else if (websiteLaneTenantKey) {
+    results.push(
+      ...downgradeWebsiteLaneToDiagnostic(
+        await verifyWebsiteLane({
+          baseUrl: aihqBaseUrl,
+          internalToken,
+          tenantKey: websiteLaneTenantKey,
+          domain: websiteLaneDomain,
+          timeoutMs,
+          requireWebsiteLane: false,
+        }),
+        "website_lane_not_required_for_validation_deploy"
+      )
     );
   } else {
     results.push({

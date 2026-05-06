@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   classifyAihqReadiness,
   classifyIncidentAcceptance,
+  downgradeWebsiteLaneToDiagnostic,
   isAihqDegradedForAcceptance,
   resolveBackendReleaseShaRequirement,
   summarizeIncidents,
@@ -56,6 +57,29 @@ test("prod spine smoke gates on active incidents, not stale history", () => {
       decision: "accept",
     }
   );
+});
+
+test("prod spine validation deploy treats website lane as diagnostic when launch gate is not required", () => {
+  const [result] = downgradeWebsiteLaneToDiagnostic([
+    {
+      name: "website_lane_prod_spine",
+      ok: false,
+      status: 200,
+      details: {
+        tenantKey: "smoke-test",
+        reasonCode: "domain_unverified",
+        message: "DNS TXT verification is missing.",
+      },
+    },
+  ]);
+
+  assert.equal(result.name, "website_lane_prod_spine");
+  assert.equal(result.ok, true);
+  assert.equal(result.warning, true);
+  assert.equal(result.details.diagnosticOnly, true);
+  assert.equal(result.details.launchBlocking, false);
+  assert.equal(result.details.originalOk, false);
+  assert.equal(result.details.reasonCode, "domain_unverified");
 });
 
 test("prod spine smoke still blocks active degraded incidents", () => {

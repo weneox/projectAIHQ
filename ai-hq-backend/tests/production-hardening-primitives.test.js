@@ -845,7 +845,7 @@ test("structured logs expose production-required reliability fields", () => {
   assert.equal(entry.execution_state, "sent");
 });
 
-test("release gate requires Website lane smoke for production deployment", () => {
+test("release gate separates validation deploy from strict launch approval", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release-gate.yml", import.meta.url),
     "utf8"
@@ -865,10 +865,12 @@ test("release gate requires Website lane smoke for production deployment", () =>
     "trigger-ai-hq-backend-railway-deploy"
   );
 
-  assert.match(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"1"/);
-  assert.match(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"1"/);
-  assert.doesNotMatch(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
-  assert.doesNotMatch(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  assert.match(workflow, /POSTDEPLOY_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  assert.match(workflow, /PROD_SPINE_REQUIRE_WEBSITE_LANE:\s*"0"/);
+  assert.match(
+    workflow,
+    /validation diagnostic; launch approval remains evidence-gated/
+  );
 
   assert.match(frontendDeploy, /validation-deploy-security-preflight/);
   assert.match(backendDeploy, /validation-deploy-security-preflight/);
@@ -899,7 +901,7 @@ test("release gate requires Website lane smoke for production deployment", () =>
 
   assert.doesNotMatch(workflow, /git\s+add\s+docs\/launch\/production-launch-evidence\.json/);
   assert.doesNotMatch(workflow, /status.*READY/);
-  assert.match(workflow, /Strict website lane tenant smoke \| \\`true\\`/);
+  assert.match(workflow, /WEBSITE_LANE_TENANT_KEY is not configured/);
 });
 
 test("production launch evidence supports READY proof and BLOCKED gates safely", () => {

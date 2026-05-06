@@ -101,7 +101,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "shared@company.test" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+      target: { name: "password", value: "Smoke2026" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -116,7 +116,7 @@ describe("Login auth entry", () => {
     await waitFor(() => {
       expect(selectWorkspaceUser).toHaveBeenCalledWith({
         email: "shared@company.test",
-        password: "WeneoxSmokeTest@2026#A1",
+        password: "Smoke2026",
         tenantKey: undefined,
         accountSelectionToken: "token-globex",
       });
@@ -138,7 +138,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+      target: { name: "password", value: "Smoke2026" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -146,7 +146,7 @@ describe("Login auth entry", () => {
     await waitFor(() => {
       expect(loginUser).toHaveBeenCalledWith({
         email: "owner@acme.com",
-        password: "WeneoxSmokeTest@2026#A1",
+        password: "Smoke2026",
         tenantKey: undefined,
         accountSelectionToken: undefined,
       });
@@ -178,13 +178,10 @@ describe("Login auth entry", () => {
     expect(screen.getByText(/password strength/i)).toBeInTheDocument();
     expect(screen.getByText("Weak")).toBeInTheDocument();
     expect(
-      screen.getByLabelText(/at least 12 characters: missing/i)
+      screen.getByLabelText(/at least 8 characters: met/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText(/uppercase letter: missing/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText(/special character: missing/i)
+      screen.getByLabelText(/number: missing/i)
     ).toBeInTheDocument();
     expect(
       screen.getByLabelText(/not an obvious weak or common pattern: missing/i)
@@ -208,15 +205,21 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+      target: { name: "password", value: "Weneox2026" },
     });
 
     expect(screen.getByText("Strong")).toBeInTheDocument();
     expect(
-      screen.getByLabelText(/at least 12 characters: met/i)
+      screen.getByLabelText(/at least 8 characters: met/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText(/not too similar to name, workspace, or email: met/i)
+      screen.getByLabelText(/letter: met/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/number: met/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/not your email address: met/i)
     ).toBeInTheDocument();
     expect(
       screen.getByLabelText(/not an obvious weak or common pattern: met/i)
@@ -235,7 +238,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+      target: { name: "password", value: "Smoke2026" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
@@ -260,7 +263,7 @@ describe("Login auth entry", () => {
       target: { name: "email", value: "owner@acme.com" },
     });
     fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
-      target: { name: "password", value: "WeneoxSmokeTest@2026#A1" },
+      target: { name: "password", value: "Smoke2026" },
     });
 
     const createButton = screen.getByRole("button", { name: /create workspace/i });
@@ -274,7 +277,7 @@ describe("Login auth entry", () => {
         fullName: "Jane Doe",
         companyName: "Acme Clinic",
         email: "owner@acme.com",
-        password: "WeneoxSmokeTest@2026#A1",
+        password: "Smoke2026",
       });
     });
 

@@ -1254,6 +1254,47 @@ function buildWebsiteLaneUnavailableHealthPayload({
   };
 }
 
+function normalizeWebsiteLaneHealthReasonCode(launchReadiness = {}) {
+  const launch = obj(launchReadiness);
+  if (launch.productionLaunchAllowed === true || launch.productionReady === true) {
+    return "";
+  }
+
+  const reasonCodes = arr(launch.blockerReasonCodes)
+    .map((item) => s(item))
+    .filter(Boolean);
+  const primary = s(launch.reasonCode || reasonCodes[0]);
+
+  if (
+    primary === "website_widget_public_id_missing" ||
+    primary === "website_widget_origin_rules_missing" ||
+    primary === "website_install_target_domain_missing" ||
+    launch.channelConfigured !== true ||
+    launch.publicWidgetIdPresent !== true ||
+    launch.originRulesPresent !== true
+  ) {
+    return "website_not_configured";
+  }
+
+  if (
+    primary === "website_widget_disabled" ||
+    primary === "website_widget_channel_inactive" ||
+    launch.widgetEnabled !== true
+  ) {
+    return "widget_not_enabled";
+  }
+
+  if (
+    primary === "website_domain_verification_missing" ||
+    primary === "website_domain_verification_required" ||
+    launch.domainVerified === false
+  ) {
+    return "domain_unverified";
+  }
+
+  return primary || "website_not_configured";
+}
+
 export async function getWebsiteLaneHealthStatus({ db, req }) {
   const tenantKey = s(req?.query?.tenantKey || req?.query?.tenant_key);
   const requestedDomain = s(req?.query?.domain || req?.query?.targetDomain);
@@ -1281,11 +1322,16 @@ export async function getWebsiteLaneHealthStatus({ db, req }) {
     });
   }
 
+  const launchReadiness = obj(payload.launchReadiness);
+  const healthReasonCode = normalizeWebsiteLaneHealthReasonCode(launchReadiness);
+
   return {
     tenantKey: s(payload.tenantKey || tenantKey),
     tenantId: s(payload.tenantId),
     tenantFound: true,
-    ...obj(payload.launchReadiness),
+    ...launchReadiness,
+    reasonCode: healthReasonCode,
+    detailedReasonCode: s(launchReadiness.reasonCode),
   };
 }
 

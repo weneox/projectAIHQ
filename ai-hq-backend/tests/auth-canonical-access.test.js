@@ -748,7 +748,7 @@ test("signup creates workspace through a guarded pooled client without reconnect
       companyName: "Smoke Test",
       fullName: "Codex Operator",
       email: "smoke@example.test",
-      password: "AqelNivra!4729MoroZ",
+      password: "Smoke2026",
     },
     headers: { host: "app.weneox.com" },
   });
@@ -783,7 +783,7 @@ test("signup rejects weak passwords with concrete requirement failures", async (
       companyName: "Acme Clinic",
       fullName: "Owner One",
       email: "owner@acme.test",
-      password: "password",
+      password: "qwerty",
     },
     headers: { host: "app.weneox.com" },
   });
@@ -793,10 +793,22 @@ test("signup rejects weak passwords with concrete requirement failures", async (
   assert.ok(signup.res.body?.requirements?.includes("minimum_length"));
   assert.ok(signup.res.body?.requirements?.includes("common_pattern"));
   assert.ok(signup.res.body?.failures?.includes("minimum_length"));
-  assert.ok(signup.res.body?.failures?.includes("uppercase_required"));
   assert.ok(signup.res.body?.failures?.includes("number_required"));
-  assert.ok(signup.res.body?.failures?.includes("symbol_required"));
   assert.ok(signup.res.body?.failures?.includes("common_pattern"));
+
+  const sameAsEmail = await invokeRoute(router, "post", "/auth/signup", {
+    body: {
+      companyName: "Acme Clinic",
+      fullName: "Owner One",
+      email: "owner@acme.test",
+      password: "owner@acme.test",
+    },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(sameAsEmail.res.statusCode, 400);
+  assert.equal(sameAsEmail.res.body?.code, "weak_password");
+  assert.ok(sameAsEmail.res.body?.failures?.includes("must_not_equal_email"));
 });
 
 test("login repairs a legacy-only user into canonical identity auth and succeeds", async () => {

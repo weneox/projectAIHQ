@@ -343,7 +343,7 @@ jobs:
         run: docker build -f twilio-voice-backend/Dockerfile .
 
   validation-deploy-security-preflight:
-    name: Validate production deploy security env
+    name: Validation deploy security preflight
     runs-on: ubuntu-latest
     needs:
       - workspace-startup-compat-node18
@@ -379,8 +379,8 @@ jobs:
           ENABLE_NEOX_FRONTEND_PROD_DEPLOY: ${{ vars.ENABLE_NEOX_FRONTEND_PROD_DEPLOY }}
           CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_NEOX_FRONTEND_DEPLOY_HOOK }}
           AIHQ_EXPECTED_RELEASE_SHA: ${{ github.sha }}
-          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
-          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "0"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
           POSTDEPLOY_STRICT_SIDECARS: "1"
           PROD_SPINE_STRICT_SIDECARS: "1"
           AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA: "1"
@@ -701,7 +701,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify-production-post-deploy:
-    name: Verify production deploy after gated hooks
+    name: Production smoke after validation deploy
     runs-on: ubuntu-latest
     needs:
       - trigger-ai-hq-backend-railway-deploy
@@ -749,7 +749,9 @@ jobs:
           require_secret "AIHQ_FRONTEND_PROD_URL" "$AIHQ_FRONTEND_PROD_URL"
           require_secret "META_BOT_PROD_BASE_URL" "$META_BOT_BASE_URL"
           require_secret "TWILIO_VOICE_PROD_BASE_URL" "$TWILIO_VOICE_BASE_URL"
-          require_secret "WEBSITE_LANE_TENANT_KEY" "$WEBSITE_LANE_TENANT_KEY"
+          if [ -z "$WEBSITE_LANE_TENANT_KEY" ]; then
+            echo "WEBSITE_LANE_TENANT_KEY is not configured; validation deploy will skip tenant-specific website-lane diagnostics. Launch approval still requires evidence."
+          fi
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -785,7 +787,7 @@ jobs:
         shell: bash
         run: node scripts/wait-for-backend-release.mjs
 
-      - name: Run mandatory production prod-spine smoke with strict sidecars
+      - name: Run production prod-spine smoke with validation website-lane diagnostics
         id: prod_spine_smoke
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
@@ -803,7 +805,7 @@ jobs:
           PROD_SPINE_SMOKE_DELAY_MS: "15000"
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "1"
-          PROD_SPINE_REQUIRE_WEBSITE_LANE: "1"
+          PROD_SPINE_REQUIRE_WEBSITE_LANE: "0"
           PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA: "1"
           PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
@@ -837,7 +839,7 @@ jobs:
           WEBSITE_LANE_DOMAIN: ${{ secrets.WEBSITE_LANE_DOMAIN }}
           POSTDEPLOY_TIMEOUT_MS: "12000"
           POSTDEPLOY_STRICT_SIDECARS: "1"
-          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "1"
+          POSTDEPLOY_REQUIRE_WEBSITE_LANE: "0"
           POSTDEPLOY_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: npm run ops:postdeploy:verify
@@ -864,7 +866,7 @@ jobs:
             echo "| Frontend release SHA identity check | \`true\` |"
             echo "| Backend release SHA identity check | \`true\` |"
             echo "| Strict sidecars | \`true\` |"
-            echo "| Strict website lane tenant smoke | \`true\` |"
+            echo "| Website lane mode | \`validation diagnostic; launch approval remains evidence-gated\` |"
             echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"

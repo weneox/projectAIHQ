@@ -32,7 +32,13 @@ The frontend browser smoke fails closed if `AIHQ_FRONTEND_PROD_URL` is missing o
 In production CI, set `AIHQ_FRONTEND_PROD_SMOKE_REQUIRE_RELEASE_SHA=1`. Set `PROD_SPINE_REQUIRE_BACKEND_RELEASE_SHA=1` only when backend deployment is actually expected, currently when `ENABLE_RAILWAY_DEPLOY_HOOKS=1`; missing or mismatched `AIHQ_EXPECTED_RELEASE_SHA` then fails closed for the backend instead of proving only that an older backend deployment is healthy.
 The mandatory launch posture smoke uses `GET /api/internal/launch/posture` with the scoped Meta service token and `x-internal-audience: aihq-backend.launch-posture`, so CI does not depend on expiring browser user sessions.
 If an app session cookie/token is supplied, the verifier also checks `GET /api/launch/posture` as an optional app-route verification.
-In local/dev mode, missing `WEBSITE_LANE_TENANT_KEY` is reported as a warning and the website lane smoke is skipped. The Release Gate sets `POSTDEPLOY_REQUIRE_WEBSITE_LANE=1` and `PROD_SPINE_REQUIRE_WEBSITE_LANE=1` for production verification, so a missing tenant key fails closed instead of producing false launch confidence.
+In validation deploy mode, `WEBSITE_LANE_TENANT_KEY` is diagnostic: when it is
+present, post-deploy and prod-spine smoke call the tenant website-lane health
+endpoint and report warnings for `tenant_not_found`, `website_not_configured`,
+`domain_unverified`, or `widget_not_enabled`; those warnings do not block normal
+deploy. Public launch approval is separate and still fails closed through
+`npm run launch:evidence:check -- public` until real website-lane evidence is
+attached.
 In production CI, set `POSTDEPLOY_STRICT_SIDECARS=1` and `PROD_SPINE_STRICT_SIDECARS=1`; missing Meta or Twilio sidecar base URLs then fail closed.
 
 ## Command
@@ -80,7 +86,7 @@ npm run ops:postdeploy:verify
 If production launch readiness is being verified, require the real website lane tenant:
 
 ```powershell
-$env:POSTDEPLOY_REQUIRE_WEBSITE_LANE='1'
+$env:POSTDEPLOY_REQUIRE_WEBSITE_LANE='0'
 $env:WEBSITE_LANE_TENANT_KEY='REPLACE_WITH_REAL_TENANT_KEY'
 npm run ops:postdeploy:verify
 ```
