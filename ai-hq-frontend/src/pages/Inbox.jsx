@@ -839,20 +839,6 @@ export default function Inbox() {
     [readinessState.runtime]
   );
 
-  const launchReady = useMemo(
-    () =>
-      truthReady &&
-      runtimeReady &&
-      hasDeliveryReadyLaunchChannel &&
-      readinessState.overall?.launchReady === true,
-    [
-      truthReady,
-      runtimeReady,
-      hasDeliveryReadyLaunchChannel,
-      readinessState.overall?.launchReady,
-    ]
-  );
-
   const visibleLaunchReadinessNotice = null;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
