@@ -410,7 +410,7 @@ function createLaunchPosture(overrides = {}) {
       primaryAction: launchReady
         ? { label: "Open inbox", path: "/inbox" }
         : { label: "Open channels", path: "/channels" },
-      secondaryAction: { label: "Open truth", path: "/truth" },
+      secondaryAction: { label: "Open Business Info", path: "/truth" },
       ...(overrides.overall || {}),
     },
     truth,
@@ -522,7 +522,7 @@ describe("ChannelCatalog", () => {
     expect(screen.getByRole("button", { name: /^connect$/i })).toBeInTheDocument();
 
     expect(
-      screen.getByRole("button", { name: /open truth/i })
+      screen.getByRole("button", { name: /open business info/i })
     ).toBeInTheDocument();
 
     expect(
@@ -670,7 +670,7 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(document.body).toHaveTextContent(/truth still needs approval/i);
+      expect(document.body).toHaveTextContent(/business info still needs approval/i);
     });
   });
 
