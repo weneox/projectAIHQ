@@ -1,12 +1,13 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
+import { resendVerificationEmail } from "../../api/auth.js";
 import warningIcon from "../../assets/channels/warning.png";
+import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
-import EmailVerificationBanner from "../auth/EmailVerificationBanner.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
@@ -28,6 +29,12 @@ const INITIAL_WORKSPACE_META = {
   workspaceKey: "",
   userName: "",
   userEmail: "",
+};
+
+const INITIAL_EMAIL_VERIFICATION_STATE = {
+  loading: true,
+  visible: false,
+  email: "",
 };
 
 const SHELL_REFRESH_EVENT_TYPES = new Set([
@@ -90,6 +97,24 @@ function pickFirstString(...values) {
     if (text) return text;
   }
   return "";
+}
+
+function isEmailVerified(auth) {
+  return (
+    auth?.user?.emailVerified === true ||
+    auth?.user?.email_verified === true ||
+    auth?.identity?.emailVerified === true ||
+    auth?.identity?.email_verified === true
+  );
+}
+
+function userEmail(auth) {
+  return s(
+    auth?.user?.email ||
+      auth?.identity?.email ||
+      auth?.raw?.user?.email ||
+      ""
+  );
 }
 
 function normalizeWorkspaceName(value, { allowGeneric = false } = {}) {
@@ -395,8 +420,30 @@ function mergeWorkspaceMeta(currentMeta, nextMeta) {
   };
 }
 
-function GlobalWarningRibbon({ message, onClose }) {
-  if (!message) return null;
+function GlobalWarningRibbon({
+  statsMessage = "",
+  emailVisible = false,
+  email = "",
+  emailNotice = null,
+  sending = false,
+  onVerify,
+  onResend,
+  onClose,
+}) {
+  const hasStatsMessage = Boolean(s(statsMessage));
+  if (!hasStatsMessage && !emailVisible) return null;
+
+  const title = emailVisible
+    ? "Verify your email to secure this workspace"
+    : "Workspace stats unavailable";
+
+  const description = emailVisible
+    ? emailNotice?.message ||
+      `We sent a 6-digit verification code${email ? ` to ${email}` : ""}. Some sensitive actions stay limited until verification is complete.`
+    : s(statsMessage);
+
+  const statsInline =
+    emailVisible && hasStatsMessage ? `Workspace stats unavailable · ${s(statsMessage)}` : "";
 
   return (
     <div className="fixed left-0 right-0 top-0 z-[120] h-[42px] border-b border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]">
@@ -408,16 +455,47 @@ function GlobalWarningRibbon({ message, onClose }) {
           draggable="false"
         />
 
-        <div className="min-w-0 flex-1 truncate text-[12px] leading-none tracking-[-0.01em]">
-          <span className="mr-2 font-semibold">Workspace stats unavailable</span>
-          <span className="opacity-85">{message}</span>
+        <div className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] tracking-[-0.01em]">
+          <div className="truncate">
+            <span className="mr-2 font-semibold">{title}</span>
+            {statsInline ? (
+              <span className="font-medium opacity-85">{statsInline}</span>
+            ) : null}
+          </div>
+
+          <div className="truncate font-medium opacity-85">
+            {description}
+          </div>
         </div>
+
+        {emailVisible ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onVerify}
+              className="inline-flex h-8 items-center rounded-[10px] bg-[#5f2b12] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Verify now
+            </button>
+
+            <button
+              type="button"
+              onClick={onResend}
+              disabled={sending}
+              className="inline-flex h-8 items-center gap-2 rounded-[10px] border border-[#d2a23d] bg-[#fff3c6] px-3 text-[12px] font-semibold text-[#5f4a00] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Mail className="h-3.5 w-3.5" strokeWidth={2.2} />
+              {sending ? "Sending..." : "Resend code"}
+            </button>
+          </div>
+        ) : null}
 
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close warning"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-[8px] text-[#6f5600]/80 transition-colors hover:bg-[#edd96f] hover:text-[#5f4a00]"
+          aria-label="Dismiss"
+          title="Dismiss"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-[#6f5600]/80 transition-colors hover:bg-[#edd96f] hover:text-[#5f4a00]"
         >
           <X className="h-[14px] w-[14px]" strokeWidth={2.1} />
         </button>
@@ -442,6 +520,14 @@ export default function Shell() {
     getInitialCollapsedState
   );
   const [warningDismissed, setWarningDismissed] = useState(false);
+  const [emailVerificationState, setEmailVerificationState] = useState(
+    INITIAL_EMAIL_VERIFICATION_STATE
+  );
+  const [emailVerificationDismissed, setEmailVerificationDismissed] =
+    useState(false);
+  const [emailVerificationNotice, setEmailVerificationNotice] = useState(null);
+  const [emailVerificationSending, setEmailVerificationSending] =
+    useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -505,6 +591,40 @@ export default function Shell() {
     },
     [loadShellStats]
   );
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadEmailVerificationState() {
+      try {
+        const auth = await getAppAuthContext({ force: true });
+        if (!alive) return;
+
+        const authenticated = auth?.authenticated === true;
+        const verified = isEmailVerified(auth);
+
+        setEmailVerificationState({
+          loading: false,
+          visible: authenticated && !verified,
+          email: userEmail(auth),
+        });
+      } catch {
+        if (!alive) return;
+
+        setEmailVerificationState({
+          loading: false,
+          visible: false,
+          email: "",
+        });
+      }
+    }
+
+    loadEmailVerificationState();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -613,6 +733,56 @@ export default function Shell() {
     };
   }, [scheduleShellRefresh]);
 
+  const handleResendVerificationCode = useCallback(async () => {
+    if (emailVerificationSending) return;
+
+    try {
+      setEmailVerificationSending(true);
+      setEmailVerificationNotice(null);
+
+      const result = await resendVerificationEmail();
+
+      if (result?.alreadyVerified) {
+        clearAppAuthContext();
+        setEmailVerificationState((current) => ({
+          ...current,
+          visible: false,
+        }));
+        setEmailVerificationNotice({
+          tone: "success",
+          message: "Email already verified.",
+        });
+        return;
+      }
+
+      if (result?.sent) {
+        setEmailVerificationNotice({
+          tone: "success",
+          message: "Verification code sent. Check your inbox.",
+        });
+        return;
+      }
+
+      setEmailVerificationNotice({
+        tone: "warning",
+        message:
+          "Verification code was created, but email delivery is not configured yet.",
+      });
+    } catch (error) {
+      const retryAfter = error?.payload?.retryAfterSeconds;
+
+      setEmailVerificationNotice({
+        tone: "danger",
+        message: retryAfter
+          ? `Wait ${retryAfter} seconds before requesting another code.`
+          : s(error?.payload?.error || error?.message) ||
+            "Could not resend verification code.",
+      });
+    } finally {
+      setEmailVerificationSending(false);
+    }
+  }, [emailVerificationSending]);
+
   const handleWidgetOpenChange = useCallback(
     (nextOpen) => {
       setWidgetOpen(Boolean(nextOpen));
@@ -637,7 +807,12 @@ export default function Shell() {
     : SIDEBAR_WIDTH;
 
   const topWarningVisible = Boolean(shellStats?.message) && !warningDismissed;
-  const topOffset = topWarningVisible ? GLOBAL_ALERT_HEIGHT : 0;
+  const emailVerificationVisible =
+    emailVerificationState.loading !== true &&
+    emailVerificationState.visible === true &&
+    !emailVerificationDismissed;
+  const topBannerVisible = topWarningVisible || emailVerificationVisible;
+  const topOffset = topBannerVisible ? GLOBAL_ALERT_HEIGHT : 0;
 
 
   return (
@@ -649,12 +824,18 @@ export default function Shell() {
       }}
     >
       <GlobalWarningRibbon
-        message={topWarningVisible ? shellStats?.message : ""}
-        onClose={() => setWarningDismissed(true)}
+        statsMessage={topWarningVisible ? shellStats?.message : ""}
+        emailVisible={emailVerificationVisible}
+        email={emailVerificationState.email}
+        emailNotice={emailVerificationNotice}
+        sending={emailVerificationSending}
+        onVerify={() => navigate("/verify-email?sent=1")}
+        onResend={handleResendVerificationCode}
+        onClose={() => {
+          if (topWarningVisible) setWarningDismissed(true);
+          if (emailVerificationVisible) setEmailVerificationDismissed(true);
+        }}
       />
-
-      
-      <EmailVerificationBanner />
 <div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
 
       <Sidebar
