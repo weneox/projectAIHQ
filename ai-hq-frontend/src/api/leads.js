@@ -23,3 +23,12 @@ export async function listLeads({
 
   return apiGet(`/api/leads?${search.toString()}`);
 }
+
+
+export async function getLeadByThreadId(threadId = "") {
+  return apiGet(`/api/leads/by-thread/${encodeURIComponent(s(threadId))}`);
+}
+
+export async function getLeadById(id = "") {
+  return apiGet(`/api/leads/${encodeURIComponent(s(id))}`);
+}
