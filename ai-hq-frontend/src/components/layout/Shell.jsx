@@ -1,11 +1,10 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle2, Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
-import { resendVerificationEmail } from "../../api/auth.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
+import EmailVerificationBanner from "../auth/EmailVerificationBanner.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
@@ -29,11 +28,6 @@ const INITIAL_WORKSPACE_META = {
   userEmail: "",
 };
 
-const INITIAL_EMAIL_VERIFICATION_STATE = {
-  loading: true,
-  visible: false,
-  email: "",
-};
 
 const SHELL_REFRESH_EVENT_TYPES = new Set([
   "inbox.message.created",
@@ -97,23 +91,6 @@ function pickFirstString(...values) {
   return "";
 }
 
-function isEmailVerified(auth) {
-  return (
-    auth?.user?.emailVerified === true ||
-    auth?.user?.email_verified === true ||
-    auth?.identity?.emailVerified === true ||
-    auth?.identity?.email_verified === true
-  );
-}
-
-function userEmail(auth) {
-  return s(
-    auth?.user?.email ||
-      auth?.identity?.email ||
-      auth?.raw?.user?.email ||
-      ""
-  );
-}
 
 function normalizeWorkspaceName(value, { allowGeneric = false } = {}) {
   const text = s(value);
@@ -418,95 +395,6 @@ function mergeWorkspaceMeta(currentMeta, nextMeta) {
   };
 }
 
-function TopWorkspaceBanner({
-  statsMessage = "",
-  emailVisible = false,
-  email = "",
-  notice = null,
-  sending = false,
-  onVerify,
-  onResend,
-  onDismiss,
-}) {
-  const hasStatsMessage = Boolean(s(statsMessage));
-  if (!emailVisible && !hasStatsMessage) return null;
-
-  const title = emailVisible
-    ? "Verify your email to secure this workspace"
-    : "Workspace stats unavailable";
-
-  const description = emailVisible
-    ? notice?.message ||
-      `We sent a 6-digit verification code${email ? ` to ${email}` : ""}. Some sensitive actions stay limited until verification is complete.`
-    : s(statsMessage);
-
-  const statsInline =
-    emailVisible && hasStatsMessage
-      ? `Workspace stats: ${s(statsMessage)}`
-      : "";
-
-  return (
-    <div className="fixed left-0 right-0 top-0 z-[120] h-[42px] border-b border-amber-200 bg-amber-50 text-amber-950 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.45)]">
-      <div className="flex h-full items-center gap-3 px-4">
-        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] bg-amber-100 text-amber-700">
-          {notice?.tone === "success" ? (
-            <CheckCircle2 className="h-4 w-4" strokeWidth={2.2} />
-          ) : (
-            <AlertCircle className="h-4 w-4" strokeWidth={2.2} />
-          )}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-semibold leading-4 tracking-[var(--tracking-tight-sm)]">
-            {title}
-            {statsInline ? (
-              <span className="ml-2 font-medium text-amber-900/70">
-                · {statsInline}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="truncate text-[12px] font-medium leading-4 text-amber-900/80">
-            {description}
-          </div>
-        </div>
-
-        {emailVisible ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={onVerify}
-              className="inline-flex h-8 items-center rounded-[10px] bg-amber-950 px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              Verify now
-            </button>
-
-            <button
-              type="button"
-              onClick={onResend}
-              disabled={sending}
-              className="inline-flex h-8 items-center gap-2 rounded-[10px] border border-amber-300 bg-amber-100 px-3 text-[12px] font-semibold text-amber-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Mail className="h-3.5 w-3.5" strokeWidth={2.2} />
-              {sending ? "Sending..." : "Resend code"}
-            </button>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          title="Dismiss"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-amber-950/70 transition-colors hover:bg-amber-100 hover:text-amber-950"
-        >
-          <X className="h-4 w-4" strokeWidth={2.2} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function getInitialCollapsedState() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
@@ -523,11 +411,7 @@ export default function Shell() {
     getInitialCollapsedState
   );
   const [warningDismissed, setWarningDismissed] = useState(false);
-  const [emailVerificationState, setEmailVerificationState] = useState(
-    INITIAL_EMAIL_VERIFICATION_STATE
-  );
-  const [emailVerificationDismissed, setEmailVerificationDismissed] =
-    useState(false);
+  const [topBannerActive, setTopBannerActive] = useState(false);
   const [emailVerificationNotice, setEmailVerificationNotice] = useState(null);
   const [emailVerificationSending, setEmailVerificationSending] =
     useState(false);
@@ -595,39 +479,6 @@ export default function Shell() {
     [loadShellStats]
   );
 
-  useEffect(() => {
-    let alive = true;
-
-    async function loadEmailVerificationState() {
-      try {
-        const auth = await getAppAuthContext({ force: true });
-        if (!alive) return;
-
-        const authenticated = auth?.authenticated === true;
-        const verified = isEmailVerified(auth);
-
-        setEmailVerificationState({
-          loading: false,
-          visible: authenticated && !verified,
-          email: userEmail(auth),
-        });
-      } catch {
-        if (!alive) return;
-
-        setEmailVerificationState({
-          loading: false,
-          visible: false,
-          email: "",
-        });
-      }
-    }
-
-    loadEmailVerificationState();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -703,6 +554,26 @@ export default function Shell() {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
+    function handleTopBannerVisibility(event) {
+      setTopBannerActive(Boolean(event?.detail?.visible));
+    }
+
+    window.addEventListener(
+      "aihq:top-banner-visibility",
+      handleTopBannerVisibility
+    );
+
+    return () => {
+      window.removeEventListener(
+        "aihq:top-banner-visibility",
+        handleTopBannerVisibility
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
     const handleOpenAssistant = () => {
       setWidgetOpen(true);
     };
@@ -736,55 +607,6 @@ export default function Shell() {
     };
   }, [scheduleShellRefresh]);
 
-  const handleResendVerificationCode = useCallback(async () => {
-    if (emailVerificationSending) return;
-
-    try {
-      setEmailVerificationSending(true);
-      setEmailVerificationNotice(null);
-
-      const result = await resendVerificationEmail();
-
-      if (result?.alreadyVerified) {
-        clearAppAuthContext();
-        setEmailVerificationState((current) => ({
-          ...current,
-          visible: false,
-        }));
-        setEmailVerificationNotice({
-          tone: "success",
-          message: "Email already verified.",
-        });
-        return;
-      }
-
-      if (result?.sent) {
-        setEmailVerificationNotice({
-          tone: "success",
-          message: "Verification code sent. Check your inbox.",
-        });
-        return;
-      }
-
-      setEmailVerificationNotice({
-        tone: "warning",
-        message:
-          "Verification code was created, but email delivery is not configured yet.",
-      });
-    } catch (error) {
-      const retryAfter = error?.payload?.retryAfterSeconds;
-
-      setEmailVerificationNotice({
-        tone: "danger",
-        message: retryAfter
-          ? `Wait ${retryAfter} seconds before requesting another code.`
-          : s(error?.payload?.error || error?.message) ||
-            "Could not resend verification code.",
-      });
-    } finally {
-      setEmailVerificationSending(false);
-    }
-  }, [emailVerificationSending]);
 
   const handleWidgetOpenChange = useCallback(
     (nextOpen) => {
@@ -810,12 +632,7 @@ export default function Shell() {
     : SIDEBAR_WIDTH;
 
   const statsBannerVisible = Boolean(shellStats?.message) && !warningDismissed;
-  const emailVerificationVisible =
-    emailVerificationState.loading !== true &&
-    emailVerificationState.visible === true &&
-    !emailVerificationDismissed;
-  const topBannerVisible = statsBannerVisible || emailVerificationVisible;
-  const topOffset = topBannerVisible ? GLOBAL_ALERT_HEIGHT : 0;
+  const topOffset = topBannerActive ? GLOBAL_ALERT_HEIGHT : 0;
 
 
   return (
@@ -826,20 +643,11 @@ export default function Shell() {
         "--shell-top-offset": `${topOffset}px`,
       }}
     >
-      <TopWorkspaceBanner
+      <EmailVerificationBanner
         statsMessage={statsBannerVisible ? shellStats?.message : ""}
-        emailVisible={emailVerificationVisible}
-        email={emailVerificationState.email}
-        notice={emailVerificationNotice}
-        sending={emailVerificationSending}
-        onVerify={() => navigate("/verify-email?sent=1")}
-        onResend={handleResendVerificationCode}
-        onDismiss={() => {
-          if (statsBannerVisible) setWarningDismissed(true);
-          if (emailVerificationVisible) setEmailVerificationDismissed(true);
-        }}
+        onStatsDismiss={() => setWarningDismissed(true)}
       />
-<div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
+      <div className="pointer-events-none fixed inset-0 -z-[8] bg-white" />
 
       <Sidebar
         mobileOpen={mobileOpen}
