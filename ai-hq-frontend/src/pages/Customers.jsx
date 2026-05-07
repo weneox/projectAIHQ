@@ -33,10 +33,6 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
-function n(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
 
 function titleize(value = "") {
   return s(value || "new")

@@ -335,13 +335,6 @@ export default function ChannelCatalog() {
     const tenantKey = workspace.tenantKey;
     const currentRequestKey = requestKey;
 
-    setReadinessState((current) => ({
-      ...current,
-      tenantKey,
-      requestKey: currentRequestKey,
-      loading: true,
-      error: "",
-    }));
 
     getLaunchPosture()
       .then((posture) => {
