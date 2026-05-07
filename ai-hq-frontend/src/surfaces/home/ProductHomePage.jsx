@@ -343,7 +343,6 @@ function MainPanel({ mode, onNavigate }) {
     >
       <div className="grid gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-brand">Home</div>
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">

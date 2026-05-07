@@ -246,7 +246,6 @@ function Header({
   return (
     <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
-        <div className="text-[12px] font-semibold text-brand">Channels</div>
         <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
           Launch channels
         </h1>

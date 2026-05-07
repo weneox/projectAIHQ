@@ -4,11 +4,14 @@ import {
   ArrowRight,
   ExternalLink,
   MoreHorizontal,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
 
 import { listLeads } from "../api/leads.js";
+import Button from "../components/ui/Button.jsx";
+import Input from "../components/ui/Input.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -197,6 +200,35 @@ function StageLabel({ stage, pill = false }) {
 
 
 
+function StageTabs({ value, onChange }) {
+  return (
+    <div className="flex h-full min-w-0 items-center">
+      <div className="inline-flex h-10 items-center gap-1 rounded-[18px] border #D9E3EE bg-[linear-gradient(180deg,#FFFFFF_0%,#F6F9FC_100%)] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_10px_22px_-20px_rgba(15,23,42,0.32)]">
+        {STAGES.map((item) => {
+          const active = value === item.key;
+
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onChange(item.key)}
+              className={cx(
+                "inline-flex h-8 items-center justify-center rounded-[14px] px-3 text-[12.5px] font-semibold transition-[background-color,border-color,box-shadow,color] duration-base ease-premium",
+                active
+                  ? "bg-white text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-14px_rgba(15,23,42,0.30)] ring-1 ring-[#D8E2EE]"
+                  : "text-[#64748B] hover:bg-white/70 hover:text-[#0F172A]"
+              )}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 function EmptyState({ hasQuery }) {
   return (
     <div className="flex min-h-[360px] items-center justify-center px-6 py-12 text-center">
@@ -217,158 +249,7 @@ function EmptyState({ hasQuery }) {
   );
 }
 
-/* customers-combo-picker:start */
-function CustomerPicker({ leads, value = "all", onChange }) {
-  const [open, setOpen] = useState(false);
-  const [term, setTerm] = useState("");
-
-  const items = useMemo(
-    () =>
-      arr(leads).map((lead, index) => ({
-        lead,
-        index,
-        key: leadKey(lead, index),
-        name: pickName(lead),
-        contact: pickContact(lead),
-      })),
-    [leads]
-  );
-
-  const selected = value === "all" ? null : items.find((item) => item.key === value);
-  const q = lower(term);
-
-  const filteredItems = q
-    ? items.filter((item) =>
-        lower(
-          `${item.name} ${item.contact} ${leadStage(item.lead)} ${leadStatus(item.lead)}`
-        ).includes(q)
-      )
-    : items;
-
-  function choose(nextValue) {
-    onChange?.(nextValue);
-    setOpen(false);
-    setTerm("");
-  }
-
-  return (
-    <div className="relative z-[120] w-full max-w-[260px]">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="flex h-8 w-full items-center gap-2 rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-left text-[12.8px] font-semibold tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow,background-color] duration-base ease-premium hover:border-[#B9C8DA] hover:bg-[#FBFDFF] focus-visible:ring-4 focus-visible:ring-[rgba(49,92,255,0.12)]"
-      >
-        <Search className="h-[14px] w-[14px] shrink-0 text-[#66768A]" strokeWidth={2.15} />
-        <span className="min-w-0 flex-1 truncate">
-          {selected ? selected.name : "All customers"}
-        </span>
-        <span className="shrink-0 text-[11px] font-semibold text-[#94A3B8]">
-          {open ? "⌃" : "⌄"}
-        </span>
-      </button>
-
-      {open ? (
-        <div className="absolute left-0 top-[calc(100%+8px)] z-[220] w-[320px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
-          <div className="border-b border-[#E5EBF3] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FBFF_100%)] p-2">
-            <div className="flex h-9 items-center gap-2 rounded-[12px] border border-[#D3DEEA] bg-white px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.12)]">
-              <Search className="h-[14px] w-[14px] shrink-0 text-[#66768A]" strokeWidth={2.15} />
-              <input
-                autoFocus
-                value={term}
-                onChange={(event) => setTerm(event.target.value)}
-                placeholder="Search or select customer"
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
-              />
-              {term ? (
-                <button
-                  type="button"
-                  onClick={() => setTerm("")}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-[8px] text-[#94A3B8] hover:bg-[#F2F6FB] hover:text-[#0F172A]"
-                  aria-label="Clear customer search"
-                >
-                  <X className="h-3.5 w-3.5" strokeWidth={2.2} />
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="max-h-[320px] overflow-y-auto py-1">
-            <button
-              type="button"
-              onClick={() => choose("all")}
-              className={cx(
-                "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#F6F9FC]",
-                value === "all" ? "bg-[#EEF4FF]" : "bg-white"
-              )}
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EEF4FF] text-[12px] font-bold text-[#315CFF] ring-1 ring-white">
-                All
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold tracking-[-0.02em] text-[#0F172A]">
-                  All customers
-                </div>
-                <div className="truncate text-[12px] font-medium text-[#66768A]">
-                  Show every customer
-                </div>
-              </div>
-
-              <span
-                className={cx(
-                  "ml-auto text-[14px] font-bold",
-                  value === "all" ? "text-[#315CFF]" : "text-transparent"
-                )}
-              >
-                ✓
-              </span>
-            </button>
-
-            {filteredItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => choose(item.key)}
-                className={cx(
-                  "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#F6F9FC]",
-                  value === item.key ? "bg-[#EEF4FF]" : "bg-white"
-                )}
-              >
-                <CustomerAvatar name={item.name} />
-
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-semibold tracking-[-0.02em] text-[#0F172A]">
-                    {item.name}
-                  </div>
-                  <div className="truncate text-[12px] font-medium text-[#66768A]">
-                    {item.contact || titleize(leadStage(item.lead))}
-                  </div>
-                </div>
-
-                <span
-                  className={cx(
-                    "ml-auto text-[14px] font-bold",
-                    value === item.key ? "text-[#315CFF]" : "text-transparent"
-                  )}
-                >
-                  ✓
-                </span>
-              </button>
-            ))}
-
-            {!filteredItems.length ? (
-              <div className="px-4 py-5 text-center text-[12.5px] font-semibold text-[#94A3B8]">
-                No customer found
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-/* customers-combo-picker:end */
-function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCustomerChange, onSelect, onOpen, stageFilter, onStageFilterChange, dateFilter, onDateFilterChange }) {
+function CustomerTable({ leads, selectedLead, onSelect, onOpen }) {
   return (
     <table className="w-full table-fixed border-collapse">
       <colgroup>
@@ -381,40 +262,22 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
       
       <thead>
         <tr className="text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#66768A]">
-          <th className="relative z-[80] border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-6 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <div className="flex min-w-0 items-center"><CustomerPicker
-                leads={allLeads}
-                value={selectedCustomerId}
-                onChange={onCustomerChange}
-              />
-            </div>
+          <th className="border-y #D9E3EE bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_48%,#EEF4F8_100%)] px-6 py-3 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95),0_10px_22px_-21px_rgba(15,23,42,0.42)]">
+            <span className="flex items-center gap-3">
+              <span className="h-10 w-10 shrink-0" />
+              <span>Customer</span>
+            </span>
           </th>
 
-          <th className="relative z-[70] border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <select
-              value={stageFilter}
-              onChange={(event) => onStageFilterChange?.(event.target.value)}
-              className="h-8 w-[140px] rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[12.8px] font-semibold normal-case tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow] duration-base ease-premium hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
-            >
-              {STAGES.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+          <th className="border-y #D9E3EE bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_48%,#EEF4F8_100%)] px-3 py-3 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95),0_10px_22px_-21px_rgba(15,23,42,0.42)]">
+            Stage
           </th>
 
-          <th className="border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => onDateFilterChange?.(event.target.value)}
-              className="h-8 w-[145px] rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[12.8px] font-semibold normal-case tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow] duration-base ease-premium hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
-              aria-label="Filter by date"
-            />
+          <th className="border-y #D9E3EE bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_48%,#EEF4F8_100%)] px-3 py-3 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95),0_10px_22px_-21px_rgba(15,23,42,0.42)]">
+            Updated
           </th>
 
-          <th className="border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]" aria-hidden="true" />
+          <th className="border-y #D9E3EE bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_48%,#EEF4F8_100%)] px-3 py-3 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95),0_10px_22px_-21px_rgba(15,23,42,0.42)]" aria-hidden="true" />
         </tr>
       </thead>
 
@@ -435,7 +298,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
               key={key}
               onClick={() => onSelect?.(lead, key)}
               className={cx(
-                "group cursor-pointer  #D9E3EE text-left transition-[background-color,box-shadow,color] duration-base ease-premium",
+                "group cursor-pointer border-t #D9E3EE text-left transition-[background-color,box-shadow,color] duration-base ease-premium",
                 selected ? "bg-[linear-gradient(90deg,#EEF6FF_0%,#F7FBFF_58%,#FFFFFF_100%)] shadow-[inset_3px_0_0_#315CFF,inset_0_1px_0_rgba(255,255,255,0.95)]" : "bg-white hover:bg-[#FAFCFF]"
               )}
             >
@@ -512,7 +375,7 @@ function DetailLine({ label, children }) {
 function CustomerDetailPanel({ lead, onOpen }) {
   if (!lead) {
     return (
-      <aside className="customers-detail-lines-off hidden h-full min-h-0 overflow-y-auto %)] px-6 pb-6 )] xl:block ] bg-white )] bg-white overflow-hidden">
+      <aside className="hidden h-full min-h-0 overflow-y-auto border-[#D5DDEA] %)] px-6 pb-6 )] xl:block border-[#D5DDEA] ml-4 mr-4 my-4 ] border-[#D5DDEA] bg-white )] rounded-[28px] border-2 border-[#D6DFEB] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden mx-4 my-4">
         <div className="flex h-full min-h-[420px] items-center justify-center text-center">
           <div className="max-w-[240px]">
             <div className="text-[15px] font-semibold text-[#0F172A]">
@@ -538,7 +401,7 @@ function CustomerDetailPanel({ lead, onOpen }) {
   const notes = s(lead.notes || lead.summary || lead.interest || lead.intent);
 
   return (
- <aside className="customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block">
+    <aside className="hidden h-full min-h-0 overflow-y-auto border-l border-[#D8E2EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFCFE_50%,#F8FAFD_100%)] px-6 pb-6 shadow-[inset_1px_0_0_rgba(255,255,255,0.92),-16px_0_34px_-44px_rgba(15,23,42,0.28)] xl:block">
       <div className="flex min-h-full flex-col py-5">
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="flex min-w-0 items-start gap-3.5">
@@ -612,8 +475,6 @@ export default function Customers() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
-  const [customerFilter, setCustomerFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [state, setState] = useState({
     loading: true,
@@ -669,37 +530,10 @@ export default function Customers() {
   }, [load]);
 
   const filteredLeads = useMemo(() => {
-    let source = arr(state.leads);
-
-    if (stageFilter !== "all") {
-      source = source.filter((lead) => leadStage(lead) === stageFilter);
-    }
-
-    if (customerFilter !== "all") {
-      const target = s(customerFilter);
-      source = source.filter((lead, index) => leadKey(lead, index) === target);
-    }
-
-    if (dateFilter) {
-      source = source.filter((lead) => {
-        const rawDate = s(
-          lead.updated_at || lead.updatedAt || lead.created_at || lead.createdAt
-        );
-        if (!rawDate) return false;
-
-        const d = new Date(rawDate);
-        if (Number.isNaN(d.getTime())) return false;
-
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-
-        return `${yyyy}-${mm}-${dd}` === dateFilter;
-      });
-    }
-
-    return source;
-  }, [customerFilter, dateFilter, stageFilter, state.leads]);
+    const source = arr(state.leads);
+    if (stageFilter === "all") return source;
+    return source.filter((lead) => leadStage(lead) === stageFilter);
+  }, [stageFilter, state.leads]);
 
   const selectedLead = useMemo(() => {
     if (!filteredLeads.length) return null;
@@ -740,14 +574,14 @@ export default function Customers() {
 
   if (state.loading) {
     return (
-      <PageCanvas className="customers-page-canvas !m-0 !mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none !overflow-hidden !bg-white !p-0 !px-0 !py-0 !pt-0 !pb-0">
+      <PageCanvas className="!mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none overflow-hidden bg-white px-0 py-0">
         <LoadingSurface title="Loading customers" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="customers-page-canvas !m-0 !mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none !overflow-hidden !bg-white !p-0 !px-0 !py-0 !pt-0 !pb-0">
+    <PageCanvas className="!mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none overflow-hidden bg-white px-0 py-0">
       {state.error ? (
         <div className="px-6 pb-4">
           <InlineNotice
@@ -771,29 +605,69 @@ export default function Customers() {
       ) : null}
 
       <section className="customers-premium-page h-full min-h-0 overflow-hidden bg-white">
+        <form onSubmit={handleSubmit} className="grid min-h-[64px] shrink-0 items-center gap-3 overflow-visible border-b #D9E3EE bg-white px-6 py-2 shadow-[0_1px_0_rgba(255,255,255,0.95)] xl:grid-cols-[420px_minmax(0,1fr)_auto_auto]"
+        >
+          <div className="flex h-full items-center">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search conversations"
+              aria-label="Search conversations"
+              autoComplete="off"
+              appearance="quiet"
+              leftIcon={<Search className="h-[16px] w-[16px]" strokeWidth={2.15} />}
+              right={
+                query ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[#73839A] transition-colors duration-base ease-premium hover:bg-[#F2F6FB] hover:text-[#0F172A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(49,92,255,0.22)]"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  </button>
+                ) : null
+              }
+              className="h-11 min-w-0 rounded-[14px] border-[#D3DEEA] bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_1px_2px_rgba(15,23,42,0.035)]"
+              inputClassName="!h-11 !text-[13.5px]"
+            />
+          </div>
 
-        <div className="grid h-full min-h-0 overflow-hidden bg-white xl:grid-cols-[minmax(0,1fr)_386px]">
-          <div className="min-w-0 overflow-y-auto bg-white">
+          <StageTabs value={stageFilter} onChange={setStageFilter} />
+
+          <div className="flex items-center justify-start whitespace-nowrap text-[13px] font-semibold text-[#475569] xl:justify-end">
+            {summary.total} total&nbsp;/&nbsp;{summary.open} open&nbsp;/&nbsp;{summary.qualified} qualified
+          </div>
+
+          <div className="flex h-full items-center justify-end self-stretch">
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              loading={state.refreshing}
+              leftIcon={
+                !state.refreshing ? (
+                  <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
+                ) : undefined
+              }
+            >
+              Refresh
+            </Button>
+          </div>
+        </form>
+
+        <div className="grid h-[calc(100%-64px)] min-h-0 overflow-hidden bg-white xl:grid-cols-[minmax(0,1fr)_386px]">
+          <div className="min-w-0 overflow-y-auto bg-white shadow-[inset_-1px_0_0_#D8E2EE]">
             {filteredLeads.length ? (
               <>
                 <CustomerTable
                   leads={filteredLeads}
-                  allLeads={arr(state.leads)}
                   selectedLead={selectedLead}
-                  selectedCustomerId={customerFilter}
-                  onCustomerChange={(value) => {
-                    setCustomerFilter(value);
-                    setSelectedLeadId(value === "all" ? "" : value);
-                  }}
-                  onSelect={(lead, key) => setSelectedLeadId(key)}
+                  onSelect={(lead, key) => setSelectedLeadId(key || leadKey(lead))}
                   onOpen={openConversation}
-                  stageFilter={stageFilter}
-                  onStageFilterChange={setStageFilter}
-                  dateFilter={dateFilter}
-                  onDateFilterChange={setDateFilter}
                 />
 
-                <div className="flex w-full items-center justify-between  #D9E3EE bg-white px-6 py-3 text-[13px] font-medium text-[#475569] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
+                <div className="flex w-full items-center justify-between border-t #D9E3EE bg-white px-6 py-3 text-[13px] font-medium text-[#475569] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
                   <span>
                     Showing 1–{filteredLeads.length} of {filteredLeads.length}
                   </span>
@@ -814,13 +688,3 @@ export default function Customers() {
     </PageCanvas>
   );
 }
-
-
-
-
-
-
-
-
-
-

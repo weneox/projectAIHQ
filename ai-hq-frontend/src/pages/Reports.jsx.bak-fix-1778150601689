@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Bot,
@@ -92,6 +92,9 @@ function ReportTooltip({ active, payload, label }) {
 
   return (
     <div className="rounded-[16px] border border-line-soft bg-white px-3.5 py-3 shadow-[0_20px_52px_-34px_rgba(15,23,42,0.5)]">
+        </div>
+      </div>
+
       <div className="text-[12px] font-semibold text-text">
         {dateLabel(label)}
       </div>
@@ -372,6 +375,19 @@ export default function Reports() {
 
   return (
     <PageCanvas className="max-w-[1280px] space-y-4 py-3">
+
+      <div className="flex items-center gap-3 px-1 pb-1">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-[16px] border border-[#E6EAF0] bg-white text-[#2F3947] shadow-[0_14px_34px_-22px_rgba(15,23,42,0.24)]">
+          <BarChart3 className="h-6 w-6" strokeWidth={2.05} />
+        </span>
+
+        <div className="min-w-0">
+          <h1 className="truncate text-[28px] font-semibold leading-none tracking-[-0.03em] text-[#2F3947]">
+            Reports
+          </h1>
+        </div>
+      </div>
+
       {state.error ? (
         <InlineNotice
           tone="danger"
@@ -393,7 +409,7 @@ export default function Reports() {
       <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
         <div className="flex flex-col gap-4 border-b border-line-soft bg-gradient-to-b from-surface-subtle/70 to-white px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+            <div className="mt-1 text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
               Business activity
             </div>
           </div>

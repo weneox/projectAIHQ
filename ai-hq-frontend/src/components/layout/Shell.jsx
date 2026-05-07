@@ -813,6 +813,7 @@ export default function Shell() {
     !emailVerificationDismissed;
   const topBannerVisible = topWarningVisible || emailVerificationVisible;
   const topOffset = topBannerVisible ? GLOBAL_ALERT_HEIGHT : 0;
+  const standardFullBleed = String(location.pathname || "").startsWith("/customers");
 
 
   return (
@@ -872,7 +873,13 @@ export default function Shell() {
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white">
-              <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6">
+              <div
+                className={
+                  standardFullBleed
+                    ? "relative min-h-full w-full bg-white pb-10 pt-6"
+                    : "relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6"
+                }
+              >
                 <Outlet />
               </div>
             </div>

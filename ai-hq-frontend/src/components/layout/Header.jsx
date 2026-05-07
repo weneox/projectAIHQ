@@ -1,14 +1,15 @@
-﻿import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
+﻿import { Bell, ChevronDown, Crown, Menu, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { logoutUser } from "../../api/auth.js";
-import customerIcon from "../../assets/channels/customer.png";
 import {
   clearAppSessionContext,
   getAppSessionContext,
 } from "../../lib/appSession.js";
 import { cx } from "../../lib/cx.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
+import { getActiveShellSection } from "./shellNavigation.js";
 
 const GENERIC_WORKSPACE_NAMES = new Set([
   "workspace",
@@ -201,11 +202,9 @@ function resolveSessionRole(sessionContext = {}) {
 
 function WorkspaceGlyph({ className = "" }) {
   return (
-    <img
-      src={customerIcon}
-      alt=""
-      className={cx("pointer-events-none select-none object-contain", className)}
-      draggable="false"
+    <Crown
+      className={cx("pointer-events-none select-none text-[#2F3947]", className)}
+      strokeWidth={1.95}
     />
   );
 }
@@ -214,11 +213,8 @@ function HeaderChromeLayer() {
   return (
     <>
       <div className="absolute inset-0" style={{ background: SHELL_CHROME_SURFACE }} />
-
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.78)_0%,rgba(255,255,255,0.18)_46%,rgba(226,232,240,0.22)_100%)] opacity-50" />
-
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-[linear-gradient(90deg,rgba(15,23,42,0.025),rgba(15,23,42,0.086)_42%,rgba(15,23,42,0.038))]" />
-
       <div className="pointer-events-none absolute bottom-px left-0 right-0 h-px bg-[linear-gradient(90deg,rgba(255,255,255,0.86),rgba(255,255,255,0.38),rgba(255,255,255,0.72))] opacity-75" />
     </>
   );
@@ -237,14 +233,12 @@ function ShellIconButton({
       onClick={onClick}
       aria-label={ariaLabel}
       className={cx(
-        "group relative inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-[12px]",
-        "text-text-muted transition-[color,box-shadow,background-color] duration-base ease-premium hover:text-text",
-        active ? "bg-surface shadow-[var(--shadow-inset-top)]" : "bg-white/60",
-        "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.045),inset_0_1px_0_rgba(255,255,255,0.72)]",
+        "group relative inline-flex h-8 w-8 items-center justify-center rounded-[10px]",
+        "text-text-muted transition-[color,background-color] duration-base ease-premium hover:text-text",
+        active ? "bg-[rgba(15,23,42,0.06)] text-text" : "bg-transparent hover:bg-[rgba(15,23,42,0.04)]",
         className
       )}
     >
-      <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.86)_0%,rgba(241,245,251,0.62)_100%)]" />
       <span className="relative z-[1]">{children}</span>
     </button>
   );
@@ -262,17 +256,34 @@ function AskAiButton() {
         );
       }}
       className={cx(
-        "group relative inline-flex h-8 items-center gap-2 overflow-hidden rounded-[12px] px-2.5",
-        "bg-white/60 text-[12px] font-semibold tracking-[var(--tracking-tight-md)] text-text-muted",
-        "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.045),inset_0_1px_0_rgba(255,255,255,0.72)]",
-        "transition-[color,box-shadow,background-color] duration-base ease-premium hover:text-text"
+        "group relative inline-flex h-8 items-center gap-2 rounded-[10px] px-2",
+        "bg-transparent text-[12px] font-semibold tracking-[var(--tracking-tight-md)] text-text-muted",
+        "transition-[color,background-color] duration-base ease-premium hover:bg-[rgba(15,23,42,0.04)] hover:text-text"
       )}
       aria-label="Open Ask AI"
     >
-      <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.86)_0%,rgba(241,245,251,0.62)_100%)]" />
-      <Sparkles className="relative z-[1] h-[17px] w-[17px]" strokeWidth={1.95} />
-      <span className="relative z-[1]">Ask AI</span>
+      <Sparkles className="h-[17px] w-[17px]" strokeWidth={1.95} />
+      <span>Ask AI</span>
     </button>
+  );
+}
+
+function HeaderPageTitle({ pathname = "" }) {
+  const section = getActiveShellSection(pathname);
+  if (!section?.label) return null;
+
+  const Icon = section.icon;
+
+  return (
+    <div className="hidden min-w-0 items-center gap-2.5 md:flex">
+      {Icon ? (
+        <Icon className="h-5 w-5 shrink-0 text-[#2F3947]" strokeWidth={2.05} />
+      ) : null}
+
+      <div className="truncate py-[2px] text-[20px] font-semibold leading-[1.25] tracking-[-0.025em] text-[#2F3947]">
+        {section.label}
+      </div>
+    </div>
   );
 }
 
@@ -387,28 +398,13 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
         className={cx(
-          "group relative flex h-9 items-center gap-2 overflow-hidden rounded-[14px] px-2.5 text-left",
-          "transition-[color,box-shadow,background-color] duration-base ease-premium",
-          open ? "bg-surface text-text" : "bg-white/70 text-text-muted hover:text-text",
-          open
-            ? "shadow-[inset_0_0_0_1px_rgba(37,99,235,0.13),inset_0_1px_0_rgba(255,255,255,0.95),0_14px_30px_-24px_rgba(37,99,235,0.38)]"
-            : "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.052),inset_0_1px_0_rgba(255,255,255,0.84)]"
+          "group relative flex h-8 items-center gap-1.5 rounded-[10px] px-1.5",
+          "bg-transparent text-text-muted transition-[color,background-color] duration-base ease-premium hover:bg-[rgba(15,23,42,0.04)] hover:text-text",
+          open && "bg-[rgba(15,23,42,0.06)] text-text"
         )}
       >
-        <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(241,245,251,0.68)_100%)]" />
-
-        <span className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center">
-          <WorkspaceGlyph className="h-[20px] w-[20px] opacity-[0.98]" />
-        </span>
-
-        <span className="relative z-[1] hidden min-w-0 text-left lg:block">
-          {workspaceResolving ? (
-            <span className="block h-3 w-24 rounded-full bg-[rgba(15,23,42,0.08)]" />
-          ) : (
-            <span className="block max-w-[210px] truncate text-[13px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-              {displayName || "Workspace"}
-            </span>
-          )}
+        <span className="relative z-[1] flex h-5 w-5 shrink-0 items-center justify-center">
+          <WorkspaceGlyph className="h-[17px] w-[17px]" />
         </span>
 
         <ChevronDown
@@ -424,8 +420,8 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
         <div className="absolute right-0 top-[calc(100%+9px)] z-[700] w-[270px] overflow-hidden rounded-[18px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(249,250,253,0.99)_52%,rgba(245,247,251,0.988)_100%)] p-2.5 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.92),0_30px_82px_-42px_rgba(15,23,42,0.42)]">
           <div className="px-2 py-2.5">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-[linear-gradient(180deg,rgba(255,255,255,0.94)_0%,rgba(242,246,252,0.88)_100%)] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_-24px_rgba(15,23,42,0.38)]">
-                <WorkspaceGlyph className="h-7 w-7 opacity-[0.96]" />
+              <div className="flex h-12 w-12 shrink-0 items-start justify-center pt-0.5">
+                <WorkspaceGlyph className="h-7 w-7 text-text opacity-[0.96]" />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -498,6 +494,8 @@ function NotificationsButton({ notifications }) {
 }
 
 export default function Header({ onMenuClick, notifications, workspaceMeta }) {
+  const location = useLocation();
+
   return (
     <>
       <header
@@ -520,6 +518,8 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
             >
               <Menu className="h-[18px] w-[18px]" strokeWidth={2} />
             </ShellIconButton>
+
+            <HeaderPageTitle pathname={location.pathname} />
           </div>
 
           <div className="flex items-center gap-2 md:gap-2.5">

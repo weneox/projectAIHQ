@@ -418,7 +418,6 @@ export default function Knowledge() {
       <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
         <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className="text-[12px] font-semibold text-brand">Knowledge</div>
             <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
               Review what AI is allowed to learn
             </h1>

@@ -1659,260 +1659,186 @@ select:-webkit-autofill:active {
   max-width: 72ch;
 }
 
-/* customers-premium-detail-harmony:start */
-@media (min-width: 1280px) {
-  .customers-premium-page {
-    background: #fff !important;
-  }
-
-  /* Table header daha təmiz və premium */
-  .customers-premium-page table thead th {
-    border-top: 1px solid rgba(216, 226, 238, 0.95) !important;
-    border-bottom: 1px solid rgba(216, 226, 238, 0.95) !important;
-    background: linear-gradient(180deg, #fbfdff 0%, #f6f9fc 100%) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.98),
-      inset 0 -1px 0 rgba(216,226,238,0.9) !important;
-  }
-
-  /* List hissəsi */
-  .customers-premium-page table tbody tr {
-    box-shadow: inset 0 -1px 0 rgba(216, 226, 238, 0.72) !important;
-    transition:
-      background-color var(--motion-base) var(--motion-premium),
-      box-shadow var(--motion-base) var(--motion-premium) !important;
-  }
-
-  .customers-premium-page table tbody tr:hover {
-    background: #fbfdff !important;
-  }
-
-  .customers-premium-page table tbody tr:last-child {
-    box-shadow: none !important;
-  }
-
-  /* Sağ detail panel — ayrı dünya yox, eyni sistemin premium davamı */
-  .customers-detail-clean,
-  .customers-detail-lines-off,
-  .customers-premium-page aside[class*="customers-detail"] {
-    position: relative !important;
-    margin: 0 !important;
-    border-left: 1px solid rgba(216, 226, 238, 0.92) !important;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(250,252,255,1) 100%) !important;
-    box-shadow:
-      -22px 0 44px -38px rgba(15,23,42,0.18),
-      inset 1px 0 0 rgba(255,255,255,0.94),
-      inset 0 1px 0 rgba(255,255,255,0.98) !important;
-    border-radius: 0 !important;
-    overflow-y: auto !important;
-  }
-
-  /* List ilə detail arasında premium soft separation */
-  .customers-detail-clean::before,
-  .customers-detail-lines-off::before,
-  .customers-premium-page aside[class*="customers-detail"]::before {
-    content: "" !important;
-    position: absolute !important;
-    left: -18px !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: 18px !important;
-    background: linear-gradient(
-      90deg,
-      rgba(15,23,42,0.04) 0%,
-      rgba(15,23,42,0.02) 28%,
-      rgba(255,255,255,0) 100%
-    ) !important;
-    pointer-events: none !important;
-    display: block !important;
-  }
-
-  .customers-detail-clean > div,
-  .customers-detail-lines-off > div,
-  .customers-premium-page aside[class*="customers-detail"] > div {
-    padding: 26px 28px 28px !important;
-  }
-
-  /* Detail panel içindəki ayırıcı xətlər list/header tonu ilə eyni olsun */
-  .customers-detail-clean .h-px,
-  .customers-detail-lines-off .h-px,
-  .customers-premium-page aside[class*="customers-detail"] .h-px {
-    background: rgba(216, 226, 238, 0.9) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.92) !important;
-  }
-
-  /* Button da material dilinə uyğun olsun */
-  .customers-detail-clean button,
-  .customers-detail-lines-off button,
-  .customers-premium-page aside[class*="customers-detail"] button {
-    border-color: rgba(198, 210, 226, 0.95) !important;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.98),
-      0 10px 24px -22px rgba(15,23,42,0.18) !important;
-  }
-}
-/* customers-premium-detail-harmony:end */
-
-/* customers-real-flush-top:start */
-
-/* Customers route-un üstündə qalan app-shell padding/gap-i sıfırlayır.
-   Negative margin yoxdur, header-in altına girmir. */
-body:has(.customers-page-canvas) :where(main, section, div):has(> .customers-page-canvas) {
-  padding-top: 0 !important;
-  margin-top: 0 !important;
-}
-
-body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-canvas) {
-  row-gap: 0 !important;
-}
-
-.customers-page-canvas {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
+/* customers-single-divider-system:start */
 
 .customers-premium-page {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  height: 100% !important;
+  --customers-divider: #d9e2ec;
+  --customers-header-bg: #f6f8fb;
+  --customers-white: #ffffff;
+  background: #ffffff !important;
 }
 
-.customers-premium-page > .grid {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  height: 100% !important;
+/* ümumi sıfırlama */
+.customers-premium-page table,
+.customers-premium-page thead,
+.customers-premium-page tbody,
+.customers-premium-page tr,
+.customers-premium-page th,
+.customers-premium-page td,
+.customers-premium-page aside,
+.customers-premium-page form {
+  box-shadow: none !important;
 }
 
+/* yuxarı search/filter hissəsi */
+.customers-premium-page > form {
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--customers-divider) !important;
+}
+
+/* table */
 .customers-premium-page table {
-  margin-top: 0 !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  background: #ffffff !important;
 }
 
-/* customers-real-flush-top:end */
-
-/* customers-header-controls-ui-language:start */
-@media (min-width: 1280px) {
-  .customers-premium-page thead th {
-    padding-top: 5px !important;
-    padding-bottom: 5px !important;
-    background:
-      linear-gradient(
-        180deg,
-        rgb(var(--color-surface)) 0%,
-        rgb(var(--color-surface-muted)) 100%
-      ) !important;
-    border-top: 1px solid rgb(var(--color-line-soft)) !important;
-    border-bottom: 1px solid rgb(var(--color-line)) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.98),
-      inset 0 -1px 0 rgba(15,23,42,0.035) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div {
-    width: 260px !important;
-    max-width: 260px !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button,
-  .customers-premium-page thead select,
-  .customers-premium-page thead input[type="date"] {
-    height: 38px !important;
-    min-height: 38px !important;
-    border: 1.5px solid rgb(var(--color-line)) !important;
-    border-radius: var(--ui-radius-control-outer) !important;
-    background:
-      linear-gradient(
-        180deg,
-        rgb(var(--color-surface)) 0%,
-        rgb(var(--color-surface-muted)) 100%
-      ) !important;
-    color: rgb(var(--color-text)) !important;
-    font-size: 13.2px !important;
-    font-weight: var(--font-weight-semibold) !important;
-    letter-spacing: var(--tracking-tight-sm) !important;
-    box-shadow: var(--shadow-control) !important;
-    transition:
-      border-color var(--motion-base) var(--motion-premium),
-      box-shadow var(--motion-base) var(--motion-premium),
-      background-color var(--motion-base) var(--motion-premium) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button {
-    padding-left: 13px !important;
-    padding-right: 12px !important;
-    gap: 9px !important;
-  }
-
-  .customers-premium-page thead select {
-    width: 142px !important;
-    padding-left: 13px !important;
-    padding-right: 34px !important;
-    appearance: auto !important;
-  }
-
-  .customers-premium-page thead input[type="date"] {
-    width: 148px !important;
-    padding-left: 13px !important;
-    padding-right: 10px !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button:hover,
-  .customers-premium-page thead select:hover,
-  .customers-premium-page thead input[type="date"]:hover {
-    border-color: rgb(var(--color-line-strong)) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button:focus-visible,
-  .customers-premium-page thead select:focus,
-  .customers-premium-page thead input[type="date"]:focus {
-    border-color: rgb(var(--color-brand)) !important;
-    box-shadow: var(--shadow-control-focus) !important;
-    outline: none !important;
-  }
-
-  .customers-premium-page thead th:first-child svg,
-  .customers-premium-page thead th:first-child > div > div > button span:last-child {
-    color: rgb(var(--color-text-subtle)) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button:focus-visible svg {
-    color: rgb(var(--color-brand)) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button + div {
-    width: 320px !important;
-    border: 1px solid rgb(var(--color-line-soft)) !important;
-    border-radius: var(--radius-xl) !important;
-    background: rgb(var(--color-surface)) !important;
-    box-shadow: var(--shadow-md) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button + div input {
-    height: 38px !important;
-    border: 0 !important;
-    background: transparent !important;
-    color: rgb(var(--color-text)) !important;
-    font-size: 13.2px !important;
-    font-weight: var(--font-weight-semibold) !important;
-    letter-spacing: var(--tracking-tight-sm) !important;
-    outline: 0 !important;
-    box-shadow: none !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button + div input::placeholder {
-    color: rgb(var(--color-text-subtle)) !important;
-    font-weight: var(--font-weight-medium) !important;
-  }
-
-  .customers-premium-page thead th:first-child > div > div > button + div > div:first-child > div {
-    height: 40px !important;
-    border: 1.5px solid rgb(var(--color-line)) !important;
-    border-radius: var(--ui-radius-control-outer) !important;
-    background: rgb(var(--color-surface)) !important;
-    box-shadow: var(--shadow-control) !important;
-  }
+/* header row - tək xətt sistemi */
+.customers-premium-page thead tr {
+  background: var(--customers-header-bg) !important;
+  border-top: 1px solid var(--customers-divider) !important;
+  border-bottom: 1px solid var(--customers-divider) !important;
 }
-/* customers-header-controls-ui-language:end */
+
+.customers-premium-page thead th {
+  background: var(--customers-header-bg) !important;
+  border: 0 !important;
+}
+
+/* body row - hər row üçün yalnız 1 alt xətt */
+.customers-premium-page tbody tr {
+  border: 0 !important;
+  box-shadow: inset 0 -1px 0 var(--customers-divider) !important;
+}
+
+.customers-premium-page tbody td {
+  border: 0 !important;
+  background-clip: padding-box !important;
+}
+
+/* selected row xətti qalsın amma divider qalınlaşmasın */
+.customers-premium-page tbody tr[aria-selected="true"],
+.customers-premium-page tbody tr[data-state="selected"] {
+  box-shadow: inset 0 -1px 0 var(--customers-divider) !important;
+}
+
+/* list və detail arası bir ədəd vertical xətt */
+.customers-premium-page aside {
+  background: #ffffff !important;
+  border-left: 1px solid var(--customers-divider) !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* sağ paneldə bütün horizontal dividerlər eyni olsun */
+.customers-premium-page aside .h-px {
+  height: 1px !important;
+  min-height: 1px !important;
+  max-height: 1px !important;
+  background: var(--customers-divider) !important;
+  border: 0 !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* tailwind border class-ləri fərqli qalınlıq verməsin */
+.customers-premium-page [class*="border-t"] {
+  border-top-width: 1px !important;
+  border-top-color: var(--customers-divider) !important;
+}
+.customers-premium-page [class*="border-b"] {
+  border-bottom-width: 1px !important;
+  border-bottom-color: var(--customers-divider) !important;
+}
+.customers-premium-page [class*="border-l"] {
+  border-left-width: 1px !important;
+  border-left-color: var(--customers-divider) !important;
+}
+.customers-premium-page [class*="border-r"] {
+  border-right-width: 1px !important;
+  border-right-color: var(--customers-divider) !important;
+}
+
+/* divide util-ləri də eyni sistemə keçsin */
+.customers-premium-page [class*="divide-y"] > :not([hidden]) ~ :not([hidden]) {
+  border-top-width: 1px !important;
+  border-top-color: var(--customers-divider) !important;
+}
+.customers-premium-page [class*="divide-x"] > :not([hidden]) ~ :not([hidden]) {
+  border-left-width: 1px !important;
+  border-left-color: var(--customers-divider) !important;
+}
+
+/* pagination kapsulu bu xəttlə dalaşmasın */
+.customers-premium-page button,
+.customers-premium-page a {
+  background-clip: padding-box !important;
+}
+
+/* customers-single-divider-system:end */
+
+/* customers-detail-rail-even-line:start */
+.customers-detail-rail {
+  position: relative !important;
+  border-left: 0 !important;
+  isolation: isolate !important;
+}
+
+.customers-detail-rail::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 2px !important;
+  min-width: 2px !important;
+  max-width: 2px !important;
+  background: #C4CEDD !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  z-index: 30 !important;
+  pointer-events: none !important;
+}
+
+.customers-detail-rail * {
+  border-left-color: inherit;
+}
+/* customers-detail-rail-even-line:end */
+
+
+/* customers-single-left-divider:start */
+.customers-detail-rail {
+  position: relative !important;
+  border-left: none !important;
+}
+
+.customers-detail-rail::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 3px !important;
+  background: #C7D1E0 !important;
+  display: block !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
+}
+
+.customers-detail-rail,
+.customers-detail-rail *,
+.customers-detail-rail > * {
+  border-left-width: 0 !important;
+  border-left-style: none !important;
+}
+
+.customers-detail-rail > * {
+  position: relative !important;
+  z-index: 6 !important;
+}
+/* customers-single-left-divider:end */
 

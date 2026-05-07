@@ -162,10 +162,6 @@ function MainPanel({ step, complete, onNavigate }) {
     <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
       <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-brand">
-            <Rocket className="h-4 w-4" strokeWidth={2.1} />
-            Launch
-          </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <h1 className="text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
