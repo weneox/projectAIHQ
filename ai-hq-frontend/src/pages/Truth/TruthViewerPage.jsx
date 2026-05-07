@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
-import { getCanonicalTruthSnapshot } from "../../api/truth.js";
+import {
+  getCanonicalTruthSnapshot,
+  getTruthVersionDetail,
+  rollbackTruthVersion,
+} from "../../api/truth.js";
+import { getSettingsTrustView } from "../../api/trust.js";
+import useWorkspaceTenantKey from "../../hooks/useWorkspaceTenantKey.js";
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
 import {
@@ -10,6 +17,7 @@ import {
   PageCanvas,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../../lib/cx.js";
+import { useLaunchSliceRefreshToken } from "../../lib/launchSliceRefresh.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -118,7 +126,7 @@ function fieldsFromPayload(payload = {}) {
   if (directFields.length) return directFields;
 
   const candidates = [
-    ["companyName", "Business name"],
+    ["companyName", "Company name"],
     ["description", "Summary"],
     ["summary", "Summary"],
     ["primaryPhone", "Phone"],
@@ -131,12 +139,8 @@ function fieldsFromPayload(payload = {}) {
     ["website", "Website"],
     ["services", "Services"],
     ["products", "Products"],
-    ["pricingHints", "Pricing"],
     ["pricing", "Pricing"],
     ["hours", "Hours"],
-    ["faqQuestions", "FAQ"],
-    ["tone", "Tone"],
-    ["mainLanguage", "Language"],
   ];
 
   return candidates
@@ -167,28 +171,33 @@ function approvalFromPayload(payload = {}) {
   };
 }
 
+function sourceFromPayload(payload = {}) {
+  const root = obj(payload?.data || payload?.snapshot || payload);
+  const latest = obj(root?.sourceSummary?.latestImport);
+
+  const type = s(latest.sourceType || latest.type);
+  const url = s(latest.sourceUrl || latest.url);
+
+  if (type || url) return `${type || "source"} · ${url || "Not available"}`;
+
+  return "Not available";
+}
+
+function runtimeFromTrust(trust = {}) {
+  const runtime = obj(trust?.summary?.runtimeProjection);
+  const readiness = obj(runtime.readiness);
+  const healthy = runtime?.health?.usable === true || runtime?.authority?.available === true;
+
+  if (healthy || s(readiness.status).toLowerCase() === "ready") return "Healthy";
+  return "Unavailable";
+}
+
 function groupFields(fields = []) {
   const groups = {
-    identity: {
-      title: "Identity",
-      rows: [],
-    },
-    contact: {
-      title: "Contact",
-      rows: [],
-    },
-    offering: {
-      title: "Offering",
-      rows: [],
-    },
-    behavior: {
-      title: "AI behavior",
-      rows: [],
-    },
-    other: {
-      title: "Other facts",
-      rows: [],
-    },
+    identity: { title: "Identity", rows: [] },
+    contact: { title: "Contact", rows: [] },
+    offering: { title: "Offering", rows: [] },
+    other: { title: "Other facts", rows: [] },
   };
 
   for (const field of fields) {
@@ -198,8 +207,7 @@ function groupFields(fields = []) {
       key.includes("company") ||
       key.includes("business") ||
       key.includes("description") ||
-      key.includes("summary") ||
-      key.includes("language")
+      key.includes("summary")
     ) {
       groups.identity.rows.push(field);
       continue;
@@ -209,8 +217,7 @@ function groupFields(fields = []) {
       key.includes("phone") ||
       key.includes("email") ||
       key.includes("address") ||
-      key.includes("website") ||
-      key.includes("social")
+      key.includes("website")
     ) {
       groups.contact.rows.push(field);
       continue;
@@ -228,17 +235,6 @@ function groupFields(fields = []) {
       continue;
     }
 
-    if (
-      key.includes("tone") ||
-      key.includes("greeting") ||
-      key.includes("handoff") ||
-      key.includes("booking") ||
-      key.includes("after")
-    ) {
-      groups.behavior.rows.push(field);
-      continue;
-    }
-
     groups.other.rows.push(field);
   }
 
@@ -247,7 +243,7 @@ function groupFields(fields = []) {
 
 function EmptyState() {
   return (
-    <div className="flex min-h-[420px] items-center justify-center px-6 py-12 text-center">
+    <div className="flex min-h-[320px] items-center justify-center px-6 py-12 text-center">
       <div className="max-w-[560px]">
         <div className="mx-auto h-1.5 w-14 rounded-full bg-line-strong" />
         <h2 className="mt-6 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
@@ -308,12 +304,206 @@ function FieldGroup({ group }) {
   );
 }
 
+function NoticeList({ notices = [] }) {
+  if (!arr(notices).length) return null;
+
+  return (
+    <div className="grid gap-2 border-t border-line-soft px-5 py-4">
+      {arr(notices).map((notice, index) => (
+        <InlineNotice
+          key={`${s(notice.title)}-${index}`}
+          tone={s(notice.tone, "warning")}
+          title={s(notice.title)}
+          description={s(notice.message || notice.description)}
+          compact
+        />
+      ))}
+    </div>
+  );
+}
+
+function VersionsPanel({ history = [], onCompare }) {
+  if (!arr(history).length) {
+    return (
+      <div className="border-t border-line-soft px-5 py-8 text-[13.5px] font-medium text-text-muted">
+        No approved truth versions are available yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-line-soft">
+      {arr(history).map((item) => (
+        <div
+          key={s(item.id || item.version)}
+          className="grid gap-3 border-b border-line-soft px-5 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+        >
+          <div className="min-w-0">
+            <div className="text-[14px] font-semibold text-text">
+              {s(item.versionLabel || item.version || item.id)}
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              {s(item.sourceSummary) || s(item.diffSummary) || "Approved version"}
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onCompare(s(item.id || item.version))}
+          >
+            Compare
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CompareDialog({
+  detail,
+  loading,
+  rollbackBusy,
+  rollbackReceipt,
+  onRollback,
+  onClose,
+}) {
+  if (!detail && !loading) return null;
+
+  const selected = obj(detail?.selectedVersion);
+  const compared = obj(detail?.comparedVersion);
+  const behavior = obj(detail?.behavior);
+  const rollbackPreview = obj(detail?.rollbackPreview);
+  const action = obj(rollbackPreview.action);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Business data version compare"
+      className="fixed inset-0 z-50 grid place-items-center bg-[rgba(15,23,42,0.18)] px-4 py-8"
+    >
+      <Card padded={false} clip className="max-h-[86vh] w-full max-w-[860px] overflow-auto bg-white shadow-[0_28px_100px_-48px_rgba(15,23,42,0.55)]">
+        <div className="flex items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <div className="text-[12px] font-semibold text-brand">Version compare</div>
+            <h2 className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Business data version compare
+            </h2>
+          </div>
+
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="border-t border-line-soft px-5 py-10 text-[13.5px] font-medium text-text-muted">
+            Loading version compare...
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 border-t border-line-soft px-5 py-4 md:grid-cols-2">
+              <section className="rounded-[20px] bg-surface-subtle px-4 py-4">
+                <div className="text-[13px] font-semibold text-text">
+                  Selected version behavior
+                </div>
+                <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+                  {s(behavior?.selected?.summary) || s(selected.versionLabel || selected.version)}
+                </div>
+                {arr(behavior?.selected?.rows).map((row) => (
+                  <div key={s(row.key || row.label)} className="mt-2 text-[12.5px] font-medium text-text">
+                    {s(row.label)}: {s(row.value)}
+                  </div>
+                ))}
+              </section>
+
+              <section className="rounded-[20px] bg-surface-subtle px-4 py-4">
+                <div className="text-[13px] font-semibold text-text">
+                  Compared version behavior
+                </div>
+                <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+                  {s(behavior?.compared?.summary) || s(compared.versionLabel || compared.version)}
+                </div>
+                {arr(behavior?.compared?.rows).map((row) => (
+                  <div key={s(row.key || row.label)} className="mt-2 text-[12.5px] font-medium text-text">
+                    {s(row.label)}: {s(row.value)}
+                  </div>
+                ))}
+              </section>
+            </div>
+
+            <div className="border-t border-line-soft px-5 py-4">
+              <div className="text-[13px] font-semibold text-text">
+                Changes
+              </div>
+
+              <div className="mt-2 grid gap-2">
+                {arr(detail?.fieldChanges).map((item) => (
+                  <div key={s(item.key || item.label)} className="rounded-[16px] bg-surface-subtle px-3 py-3 text-[12.5px] font-medium text-text">
+                    {s(item.label)}: {s(item.beforeSummary)} → {s(item.afterSummary)}
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-3 text-[12.5px] font-medium leading-5 text-text-muted">
+                {s(detail?.rollbackPreview?.summaryExplanation || detail?.versionDiff?.summaryExplanation || detail?.diffSummary)}
+              </p>
+
+              {action.label ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-4"
+                  loading={rollbackBusy}
+                  disabled={action.allowed === false}
+                  onClick={() => onRollback(s(selected.id || selected.version))}
+                >
+                  {action.label}
+                </Button>
+              ) : null}
+            </div>
+
+            {rollbackReceipt ? (
+              <div className="border-t border-line-soft px-5 py-4">
+                <div className="text-[13px] font-semibold text-text">
+                  Rollback verification
+                </div>
+                <p className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+                  {s(rollbackReceipt.summaryExplanation)}
+                </p>
+                <div className="mt-2 text-[12.5px] font-semibold text-text">
+                  {s(rollbackReceipt.resultingTruthVersion?.versionLabel || rollbackReceipt.resultingTruthVersionId)}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function TruthViewerPage() {
+  const workspace = useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(workspace.tenantKey, workspace.ready);
+  const [searchParams] = useSearchParams();
+
+  const [tab, setTab] = useState("current");
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
     error: "",
     payload: null,
+    trust: null,
+  });
+  const [compare, setCompare] = useState({
+    open: false,
+    loading: false,
+    detail: null,
+    rollbackBusy: false,
+    rollbackReceipt: null,
   });
 
   const load = useCallback(async ({ refreshing = false } = {}) => {
@@ -325,13 +515,17 @@ export default function TruthViewerPage() {
     }));
 
     try {
-      const payload = await getCanonicalTruthSnapshot();
+      const [payload, trust] = await Promise.all([
+        getCanonicalTruthSnapshot(),
+        getSettingsTrustView().catch(() => null),
+      ]);
 
       setState({
         loading: false,
         refreshing: false,
         error: "",
         payload,
+        trust,
       });
     } catch (error) {
       setState({
@@ -341,6 +535,7 @@ export default function TruthViewerPage() {
           s(error?.payload?.reason || error?.payload?.error || error?.message) ||
           "Business Info could not be loaded.",
         payload: null,
+        trust: null,
       });
     }
   }, []);
@@ -351,7 +546,7 @@ export default function TruthViewerPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, refreshToken]);
 
   const model = useMemo(() => {
     const fields = fieldsFromPayload(state.payload);
@@ -361,13 +556,91 @@ export default function TruthViewerPage() {
       fields,
       groups: groupFields(fields),
       approval,
+      history: arr(state.payload?.history),
+      notices: arr(state.payload?.notices),
+      unavailable: state.payload?.approvedTruthUnavailable === true,
+      runtime: runtimeFromTrust(state.trust),
+      source: sourceFromPayload(state.payload),
     };
-  }, [state.payload]);
+  }, [state.payload, state.trust]);
+
+  async function openCompare(versionId = "") {
+    const id = s(versionId || model.history[0]?.id || model.history[0]?.version);
+    if (!id) return;
+
+    setCompare({
+      open: true,
+      loading: true,
+      detail: null,
+      rollbackBusy: false,
+      rollbackReceipt: null,
+    });
+
+    try {
+      const detail = await getTruthVersionDetail(id);
+      setCompare({
+        open: true,
+        loading: false,
+        detail,
+        rollbackBusy: false,
+        rollbackReceipt: null,
+      });
+    } catch (error) {
+      setCompare({
+        open: true,
+        loading: false,
+        detail: {
+          selectedVersion: { id, version: id, versionLabel: id },
+          diffSummary: s(error?.message || "Version detail unavailable."),
+        },
+        rollbackBusy: false,
+        rollbackReceipt: null,
+      });
+    }
+  }
+
+  async function handleRollback(versionId = "") {
+    const id = s(versionId);
+    if (!id) return;
+
+    setCompare((current) => ({
+      ...current,
+      rollbackBusy: true,
+    }));
+
+    try {
+      const result = await rollbackTruthVersion(id);
+      setCompare((current) => ({
+        ...current,
+        rollbackBusy: false,
+        rollbackReceipt: result?.rollbackReceipt || result,
+      }));
+    } catch (error) {
+      setCompare((current) => ({
+        ...current,
+        rollbackBusy: false,
+        rollbackReceipt: {
+          summaryExplanation: s(error?.message || "Rollback failed."),
+          resultingTruthVersionId: "",
+        },
+      }));
+    }
+  }
+
+  useEffect(() => {
+    const versionId = s(searchParams.get("versionId"));
+    const focus = s(searchParams.get("focus"));
+
+    if (versionId && focus === "history" && !compare.open) {
+      void openCompare(versionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, model.history.length]);
 
   if (state.loading) {
     return (
       <PageCanvas className="max-w-[1180px] py-3">
-        <LoadingSurface title="Loading Business Info" />
+        <LoadingSurface title="Loading truth" />
       </PageCanvas>
     );
   }
@@ -390,26 +663,38 @@ export default function TruthViewerPage() {
               Business Info
             </div>
             <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-              Approved business profile
+              Business Truth Runtime
             </h1>
-            <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
-              These are the facts AI is allowed to use when replying to customers.
+            <p className="mt-2 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
+              Approved business facts and the governed runtime state AI can use with customers.
             </p>
+
+            <div className="mt-3 flex flex-wrap gap-3 text-[12.5px] font-semibold text-text-muted">
+              <span>Version: {model.approval.version || "Unavailable"}</span>
+              <span>Runtime: {model.runtime}</span>
+              <span>Source: {model.source}</span>
+              <span>Saved: {model.approval.approvedAt ? formatWhen(model.approval.approvedAt) : "Unavailable"}</span>
+              <span>Pending review: 0</span>
+            </div>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {model.approval.version || model.approval.approvedAt ? (
-              <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
-                <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                Approved{model.approval.approvedAt ? ` ${formatWhen(model.approval.approvedAt)}` : ""}
-              </span>
-            ) : (
-              <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
-                No approved profile yet
-              </span>
-            )}
-
+            <Button
+              type="button"
+              variant={tab === "current" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setTab("current")}
+            >
+              Current
+            </Button>
+            <Button
+              type="button"
+              variant={tab === "versions" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setTab("versions")}
+            >
+              Versions
+            </Button>
             <Button
               type="button"
               variant="secondary"
@@ -423,7 +708,11 @@ export default function TruthViewerPage() {
           </div>
         </div>
 
-        {model.groups.length ? (
+        <NoticeList notices={model.notices} />
+
+        {tab === "versions" ? (
+          <VersionsPanel history={model.history} onCompare={openCompare} />
+        ) : model.groups.length ? (
           <div>
             {model.groups.map((group) => (
               <FieldGroup key={group.title} group={group} />
@@ -435,6 +724,23 @@ export default function TruthViewerPage() {
           </div>
         )}
       </Card>
+
+      <CompareDialog
+        detail={compare.detail}
+        loading={compare.loading}
+        rollbackBusy={compare.rollbackBusy}
+        rollbackReceipt={compare.rollbackReceipt}
+        onRollback={handleRollback}
+        onClose={() =>
+          setCompare({
+            open: false,
+            loading: false,
+            detail: null,
+            rollbackBusy: false,
+            rollbackReceipt: null,
+          })
+        }
+      />
     </PageCanvas>
   );
 }

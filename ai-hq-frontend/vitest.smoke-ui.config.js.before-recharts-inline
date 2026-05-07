@@ -23,19 +23,6 @@ export default mergeConfig(
     test: {
       name: "frontend-smoke-ui",
       globals: true,
-      server: {
-        deps: {
-          inline: [
-            "react-router",
-            "react-router-dom",
-            "react-router/dom",
-            "recharts",
-            "@reduxjs/toolkit",
-            "redux",
-            "react-redux",
-          ],
-        },
-      },
       include: [
         "src/test/App.smoke.test.jsx",
         "src/test/components/admin/AdminPageShell.test.jsx",
