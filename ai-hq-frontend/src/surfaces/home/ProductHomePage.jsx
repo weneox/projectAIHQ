@@ -653,89 +653,60 @@ function MiniTrend({ tone = "brand" }) {
   );
 }
 
-function CommandHero({ hero, home, onAction }) {
-  const truthReadyFlag = truthApproved(home);
-  const runtimeReadyFlag = runtimeReady(home);
-  const channelsReady = readyChannelCount(home);
-  const channelsTotal = availableChannelCount(home);
-
+function CommandHero({ hero, onAction }) {
   return (
-    <section className="space-y-4">
-      <div className="inline-flex h-8 items-center rounded-full border border-line-soft bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand shadow-[var(--shadow-inset-top)]">
-        Home
-      </div>
+    <section className="border-b border-line-soft pb-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-display text-[24px] font-semibold leading-tight tracking-[var(--tracking-tight-lg)] text-text">
+              Home
+            </h1>
 
-      <div className="max-w-[920px]">
-        <h1 className="font-display text-[36px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[50px]">
-          Your business operating system
-        </h1>
+            <span
+              className={cx(
+                "inline-flex h-7 items-center gap-2 rounded-full border px-3 text-[12px] font-semibold",
+                hero.tone === "success"
+                  ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
+                  : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
+              )}
+            >
+              <span
+                className={cx(
+                  "h-1.5 w-1.5 rounded-full",
+                  hero.tone === "success" ? "bg-success" : "bg-warning"
+                )}
+              />
+              {hero.title}
+            </span>
+          </div>
 
-        <p className="mt-3 max-w-[760px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
-          Manage conversations, channels, Business Info, knowledge, and AI guardrails from one operational command center.
-        </p>
-      </div>
+          <p className="mt-2 max-w-[640px] text-[14px] font-medium leading-6 text-text-muted">
+            {hero.summary}
+          </p>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          size="md"
-          className="min-w-[148px] justify-center"
-          onClick={() => onAction(hero.primary)}
-        >
-          {hero.primary.label}
-          <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="min-w-[128px] justify-center"
+            onClick={() => onAction(hero.primary)}
+          >
+            {hero.primary.label}
+            <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
+          </Button>
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className="min-w-[128px] justify-center"
-          onClick={() => onAction({ label: "Open inbox", path: "/inbox" })}
-        >
-          Open inbox
-        </Button>
-
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className="min-w-[148px] justify-center"
-          onClick={() => onAction({ label: "Connect channels", path: "/channels" })}
-        >
-          Connect channels
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className={cx(
-          "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[12px] font-semibold shadow-[var(--shadow-inset-top)]",
-          hero.tone === "success"
-            ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-            : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
-        )}>
-          {hero.tone === "success" ? (
-            <CheckCircle2 className="h-4 w-4" strokeWidth={2.1} />
-          ) : (
-            <CircleAlert className="h-4 w-4" strokeWidth={2.1} />
-          )}
-          {hero.title}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", channelsReady > 0 ? "bg-success" : "bg-warning")} />
-          Channels {channelsReady}/{channelsTotal}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", truthReadyFlag ? "bg-success" : "bg-warning")} />
-          Business Info {truthReadyFlag ? "approved" : "pending"}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", runtimeReadyFlag ? "bg-success" : "bg-warning")} />
-          Runtime {runtimeReadyFlag ? "ready" : "guarded"}
-        </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="min-w-[116px] justify-center"
+            onClick={() => onAction({ label: "Channels", path: "/channels" })}
+          >
+            Channels
+          </Button>
+        </div>
       </div>
     </section>
   );
@@ -764,7 +735,7 @@ function KpiCard({
                   ? "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger"
                   : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
           )}>
-            <Icon className="h-4.5 w-4.5" strokeWidth={2.1} />
+            <Icon className="h-4 w-4" strokeWidth={2.1} />
           </span>
 
           <MiniTrend tone={tone} />
@@ -861,18 +832,18 @@ function NextBestActionsPanel({ tiles, onNavigate }) {
 
   return (
     <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Next best actions
+            Setup
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
             Launch checklist
           </div>
         </div>
 
         <span className="text-[12px] font-semibold text-text-muted">
-          {completed}/{tiles.length} completed
+          {completed}/{tiles.length}
         </span>
       </div>
 
@@ -886,18 +857,20 @@ function NextBestActionsPanel({ tiles, onNavigate }) {
               type="button"
               key={item.id}
               onClick={() => onNavigate(item.path)}
-              className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+              className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
             >
-              <span className={cx(
-                "inline-flex h-9 w-9 items-center justify-center rounded-[14px] border",
-                completedItem
-                  ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-                  : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
-              )}>
+              <span
+                className={cx(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-[14px] border",
+                  completedItem
+                    ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
+                    : "border-line-soft bg-surface text-text-muted"
+                )}
+              >
                 {completedItem ? (
                   <CheckCircle2 className="h-4.5 w-4.5" strokeWidth={2.1} />
                 ) : (
-                  <Icon className="h-4.5 w-4.5" strokeWidth={2.1} />
+                  <Icon className="h-4 w-4" strokeWidth={2.1} />
                 )}
               </span>
 
@@ -905,12 +878,15 @@ function NextBestActionsPanel({ tiles, onNavigate }) {
                 <span className="block truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
                   {item.title}
                 </span>
-                <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
-                  {completedItem ? "Ready for the launch lane" : `Next step: ${item.value}`}
+                <span className={cx("mt-0.5 block truncate text-[12px] font-semibold", toneTextClass(item.tone))}>
+                  {completedItem ? "Ready" : item.value}
                 </span>
               </span>
 
-              <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" strokeWidth={2.1} />
+              <ArrowRight
+                className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text"
+                strokeWidth={2.1}
+              />
             </button>
           );
         })}
@@ -922,13 +898,13 @@ function NextBestActionsPanel({ tiles, onNavigate }) {
 function ChannelPanel({ items, onNavigate }) {
   return (
     <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Live channel status
+            Channels
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Omnichannel surfaces
+          <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Connected surfaces
           </div>
         </div>
 
@@ -947,7 +923,7 @@ function ChannelPanel({ items, onNavigate }) {
             type="button"
             key={item.id}
             onClick={() => onNavigate(item.path)}
-            className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+            className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
           >
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line-soft bg-white">
               <ChannelImageIcon provider={item.provider} className="h-[20px] w-[20px]" />
@@ -964,9 +940,11 @@ function ChannelPanel({ items, onNavigate }) {
                 </span>
               </span>
 
-              <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
-                {item.account}
-              </span>
+              {item.value === "Off" ? null : (
+                <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
+                  {item.account}
+                </span>
+              )}
             </span>
 
             <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" strokeWidth={2.1} />
@@ -1011,12 +989,12 @@ function InboxPulsePanel({ home, onNavigate }) {
 
   return (
     <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             Inbox pulse
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
             Conversation activity
           </div>
         </div>
@@ -1264,12 +1242,12 @@ function OmnichannelFlowPanel({ home, onNavigate }) {
 
   return (
     <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             Flowchart
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
             Omnichannel runtime flow
           </div>
         </div>
@@ -1315,6 +1293,114 @@ function OmnichannelFlowPanel({ home, onNavigate }) {
   );
 }
 
+function SetupOverviewCard({ icon: Icon, label, value, tone = "neutral" }) {
+  return (
+    <Card padded="sm" className="min-h-[78px]">
+      <div className="flex items-center gap-3">
+        <span
+          className={cx(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border",
+            tone === "success"
+              ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
+              : tone === "warning"
+                ? "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
+                : tone === "danger"
+                  ? "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger"
+                  : "border-line-soft bg-surface text-text-muted"
+          )}
+        >
+          <Icon className="h-4 w-4" strokeWidth={2.1} />
+        </span>
+
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+            {label}
+          </div>
+
+          <div className="mt-1 truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {value}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SetupOverview({ home }) {
+  const connected = connectedChannelCount(home);
+  const ready = readyChannelCount(home);
+  const available = availableChannelCount(home);
+  const business = businessReady(home);
+  const truth = truthApproved(home);
+  const runtime = runtimeReady(home);
+  const inboxReady = inboxReadyForData(home);
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <SetupOverviewCard
+        icon={ShieldCheck}
+        label="Business Info"
+        value={business ? "Ready" : truth ? "Review" : "Required"}
+        tone={business ? "success" : "warning"}
+      />
+
+      <SetupOverviewCard
+        icon={Globe2}
+        label="Channels"
+        value={ready > 0 ? `${ready}/${available} live` : connected > 0 ? "Review" : `0/${available}`}
+        tone={ready > 0 ? "success" : "warning"}
+      />
+
+      <SetupOverviewCard
+        icon={Inbox}
+        label="Inbox"
+        value={business && ready > 0 && inboxReady ? "Ready" : "Waiting"}
+        tone={business && ready > 0 && inboxReady ? "success" : "neutral"}
+      />
+
+      <SetupOverviewCard
+        icon={Bot}
+        label="AI Guard"
+        value={business && runtime && ready > 0 ? "Ready" : "Manual"}
+        tone={business && runtime && ready > 0 ? "success" : "warning"}
+      />
+    </div>
+  );
+}
+
+function SetupGuardPanel({ home, onNavigate }) {
+  const hero = buildHero(home);
+
+  return (
+    <Card padded={false} clip>
+      <div className="border-b border-line-soft px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+          Start here
+        </div>
+
+        <div className="mt-1 text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          {hero.primary.label}
+        </div>
+      </div>
+
+      <div className="px-4 py-4">
+        <p className="text-[13px] font-medium leading-6 text-text-muted">
+          {hero.summary}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => onNavigate(hero.primary.path)}
+          className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-[12px] bg-brand px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          {hero.primary.label}
+          <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 function ProductHomeLoadingSurface() {
   return (
     <PageCanvas>
@@ -1341,10 +1427,26 @@ export default function ProductHomePage() {
   const hero = buildHero(home);
   const tiles = buildTiles(home);
   const channels = normalizeChannels(home);
+  const setupMode = !aiOperating(home) && !hasLiveWork(home);
+
+  if (setupMode) {
+    return (
+      <PageCanvas className="space-y-3 pt-2 md:space-y-3 md:pt-3">
+        <CommandHero hero={hero} onAction={goFromAction} />
+
+        <SetupOverview home={home} />
+
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+          <NextBestActionsPanel tiles={tiles} onNavigate={go} />
+          <ChannelPanel items={channels} onNavigate={go} />
+        </div>
+      </PageCanvas>
+    );
+  }
 
   return (
-    <PageCanvas className="space-y-4 pt-3 md:space-y-4 md:pt-4">
-      <CommandHero hero={hero} home={home} onAction={goFromAction} />
+    <PageCanvas className="space-y-3 pt-2 md:space-y-3 md:pt-3">
+      <CommandHero hero={hero} onAction={goFromAction} />
 
       <KpiGrid home={home} onNavigate={go} />
 
@@ -1364,3 +1466,4 @@ export default function ProductHomePage() {
     </PageCanvas>
   );
 }
+
