@@ -204,17 +204,19 @@ function EmptyState({ filter }) {
       : "Knowledge history will appear here when review activity starts.";
 
   return (
-    <div className="flex min-h-[420px] items-center justify-center px-6 py-12 text-center">
-      <div className="max-w-[560px]">
-        <div className="mx-auto h-1.5 w-14 rounded-full bg-line-strong" />
-        <h2 className="mt-6 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          {title}
-        </h2>
-        <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-          {body}
-        </p>
+    <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
+      <div className="flex min-h-[360px] items-center justify-center px-6 py-12 text-center">
+        <div className="max-w-[560px]">
+          <div className="mx-auto h-1.5 w-14 rounded-full bg-line-strong" />
+          <h2 className="mt-6 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            {title}
+          </h2>
+          <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+            {body}
+          </p>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -227,52 +229,54 @@ function CandidateRow({ item, busyId, onApprove, onReject }) {
   const when = formatWhen(item.created_at || item.createdAt || item.updated_at || item.updatedAt);
 
   return (
-    <div className="grid gap-4 rounded-[18px] border border-line-soft bg-white px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-            {candidateTitle(item)}
+    <Card padded={false} clip className="shadow-[0_20px_60px_-58px_rgba(15,23,42,0.5)]">
+      <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+              {candidateTitle(item)}
+            </div>
+            <Status status={status} />
           </div>
-          <Status status={status} />
+
+          <div className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+            {value || "No preview text returned for this item."}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] font-medium text-text-subtle">
+            <span>{sourceLabel(item)}</span>
+            {when ? <span>{when}</span> : null}
+          </div>
         </div>
 
-        <div className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-          {value || "No preview text returned for this item."}
-        </div>
+        {reviewable ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              loading={busy}
+              onClick={() => onReject(id)}
+              leftIcon={!busy ? <X className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+            >
+              Reject
+            </Button>
 
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] font-medium text-text-subtle">
-          <span>{sourceLabel(item)}</span>
-          {when ? <span>{when}</span> : null}
-        </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              loading={busy}
+              onClick={() => onApprove(id)}
+              leftIcon={!busy ? <Check className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+            >
+              Approve
+            </Button>
+          </div>
+        ) : null}
       </div>
-
-      {reviewable ? (
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            loading={busy}
-            onClick={() => onReject(id)}
-            leftIcon={!busy ? <X className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-          >
-            Reject
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            loading={busy}
-            onClick={() => onApprove(id)}
-            leftIcon={!busy ? <Check className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-          >
-            Approve
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -416,7 +420,7 @@ export default function Knowledge() {
       ) : null}
 
       <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
-        <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-[12px] font-semibold text-brand">Knowledge</div>
             <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
@@ -443,30 +447,28 @@ export default function Knowledge() {
           </div>
         </div>
 
-        <div className="border-t border-line-soft">
-          {visibleItems.length ? (
-            <>
-              <div className="px-5 py-3 text-[12.5px] font-medium text-text-muted">
-                {visibleItems.length} item{visibleItems.length === 1 ? "" : "s"} shown
-              </div>
-
-              <div className="grid gap-3 px-4 pb-4">
-                {visibleItems.map((item, index) => (
-                  <CandidateRow
-                    key={candidateId(item) || `${candidateTitle(item)}-${index}`}
-                    item={item}
-                    busyId={busyId}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            <EmptyState filter={filter} />
-          )}
+        <div className="px-5 py-3 text-[12.5px] font-medium text-text-muted">
+          {visibleItems.length
+            ? `${visibleItems.length} item${visibleItems.length === 1 ? "" : "s"} shown`
+            : "Queue is empty"}
         </div>
       </Card>
+
+      {visibleItems.length ? (
+        <div className="grid gap-3">
+          {visibleItems.map((item, index) => (
+            <CandidateRow
+              key={candidateId(item) || `${candidateTitle(item)}-${index}`}
+              item={item}
+              busyId={busyId}
+              onApprove={handleApprove}
+              onReject={handleReject}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState filter={filter} />
+      )}
     </PageCanvas>
   );
 }

@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowRight,
-  Building2,
-  Inbox,
-  RefreshCw,
-  Search,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { ArrowRight, RefreshCw, Search } from "lucide-react";
 
 import { listLeads } from "../api/leads.js";
-import Badge from "../components/ui/Badge.jsx";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import {
@@ -20,6 +11,15 @@ import {
   PageCanvas,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
+
+const STAGES = [
+  { key: "all", label: "All" },
+  { key: "new", label: "New" },
+  { key: "qualified", label: "Qualified" },
+  { key: "proposal", label: "Proposal" },
+  { key: "won", label: "Won" },
+  { key: "lost", label: "Lost" },
+];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -33,14 +33,28 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
-function formatWhen(value = "") {
+function n(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function titleize(value = "") {
+  return s(value || "new")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatDate(value = "") {
   const raw = s(value);
-  if (!raw) return "Not available";
+  if (!raw) return "";
 
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
 
-  return date.toLocaleString();
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function pickName(lead = {}) {
@@ -57,11 +71,9 @@ function pickName(lead = {}) {
 }
 
 function pickContact(lead = {}) {
-  return [
-    s(lead.email),
-    s(lead.phone),
-    s(lead.username),
-  ].filter(Boolean).join(" · ");
+  return [s(lead.email), s(lead.phone), s(lead.username)]
+    .filter(Boolean)
+    .join(" / ");
 }
 
 function leadStage(lead = {}) {
@@ -80,108 +92,119 @@ function toneForStage(stage = "") {
   return "neutral";
 }
 
-function statusTone(status = "") {
-  const safe = lower(status);
-  if (["open", "new", "active"].includes(safe)) return "success";
-  if (["closed", "archived"].includes(safe)) return "neutral";
-  if (["blocked", "lost"].includes(safe)) return "danger";
-  return "warning";
+function toneText(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand") return "text-brand";
+  return "text-text-muted";
 }
 
-function titleize(value = "") {
-  return s(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+function toneDot(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
 }
 
-function StatCard({ label, value, icon: Icon, tone = "neutral" }) {
-  const toneClass =
-    tone === "success"
-      ? "text-success"
-      : tone === "warning"
-        ? "text-warning"
-        : tone === "danger"
-          ? "text-danger"
-          : tone === "brand"
-            ? "text-brand"
-            : "text-text-muted";
+function StagePill({ stage }) {
+  const tone = toneForStage(stage);
 
   return (
-    <Card padded="sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
-            {label}
-          </div>
-          <div className="mt-1 text-[26px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-            {value}
-          </div>
-        </div>
-
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border border-line-soft bg-surface">
-          <Icon className={cx("h-5 w-5", toneClass)} strokeWidth={2.1} />
-        </span>
-      </div>
-    </Card>
+    <span className={cx("inline-flex items-center gap-2 text-[12px] font-semibold", toneText(tone))}>
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+      {titleize(stage)}
+    </span>
   );
 }
 
-function CustomerRow({ lead, onOpenInbox }) {
+function StageTabs({ value, onChange }) {
+  return (
+    <div className="flex overflow-x-auto rounded-full border border-line-soft bg-white p-1">
+      {STAGES.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange(item.key)}
+          className={cx(
+            "h-8 whitespace-nowrap rounded-full px-3.5 text-[12px] font-semibold transition-all duration-base ease-premium",
+            value === item.key
+              ? "bg-surface-subtle text-text"
+              : "text-text-muted hover:text-text"
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ hasQuery }) {
+  return (
+    <div className="flex min-h-[420px] items-center justify-center px-6 py-12 text-center">
+      <div className="max-w-[520px]">
+        <div className="mx-auto h-1.5 w-14 rounded-full bg-line-strong" />
+        <h2 className="mt-6 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          {hasQuery ? "No matching customers" : "No customers yet"}
+        </h2>
+        <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+          {hasQuery
+            ? "Try a different name, email, phone, username, or stage."
+            : "Customer records will appear here when conversations create leads."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CustomerRow({ lead, onOpen }) {
   const name = pickName(lead);
   const contact = pickContact(lead);
   const stage = leadStage(lead);
   const status = leadStatus(lead);
   const threadId = s(lead.inbox_thread_id || lead.inboxThreadId);
+  const updated = formatDate(lead.updated_at || lead.updatedAt || lead.created_at || lead.createdAt);
+  const interest = s(lead.interest || lead.intent || lead.summary);
 
   return (
-    <Card padded={false} clip>
-      <div className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_180px_170px_auto] lg:items-center">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] border border-line-soft bg-surface-subtle">
-            <UserRound className="h-5 w-5 text-text-muted" strokeWidth={2.1} />
-          </span>
-
-          <div className="min-w-0">
-            <div className="truncate text-[15.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              {name}
-            </div>
-            <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-              {contact || "No contact details yet"}
-            </div>
-            {s(lead.interest) ? (
-              <div className="mt-2 line-clamp-1 text-[12.5px] font-medium text-text-subtle">
-                Interest: {s(lead.interest)}
-              </div>
-            ) : null}
+    <div className="grid gap-3 border-t border-line-soft px-5 py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(140px,0.35fr)_minmax(120px,0.25fr)_auto] lg:items-center">
+      <div className="min-w-0">
+        <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+          {name}
+        </div>
+        <div className="mt-1 truncate text-[12.5px] font-medium text-text-muted">
+          {contact || "No contact details"}
+        </div>
+        {interest ? (
+          <div className="mt-1 truncate text-[12px] font-medium text-text-subtle">
+            {interest}
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Badge tone={toneForStage(stage)} size="sm">
-            {titleize(stage || "new")}
-          </Badge>
-          <Badge tone={statusTone(status)} size="sm">
-            {titleize(status || "open")}
-          </Badge>
-        </div>
-
-        <div className="text-[12.5px] font-medium leading-5 text-text-muted">
-          <div className="font-semibold text-text">Last activity</div>
-          {formatWhen(lead.updated_at || lead.created_at)}
-        </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={!threadId}
-          onClick={() => onOpenInbox(threadId)}
-          rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-        >
-          Inbox
-        </Button>
+        ) : null}
       </div>
-    </Card>
+
+      <div className="flex items-center gap-3">
+        <StagePill stage={stage} />
+      </div>
+
+      <div className="text-[12.5px] font-medium text-text-muted">
+        {updated || titleize(status)}
+      </div>
+
+      {threadId ? (
+        <button
+          type="button"
+          onClick={() => onOpen(threadId)}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold text-text-muted transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text"
+        >
+          Conversation
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+        </button>
+      ) : (
+        <span className="text-[12px] font-medium text-text-subtle">No thread</span>
+      )}
+    </div>
   );
 }
 
@@ -248,13 +271,19 @@ export default function Customers() {
     return source.filter((lead) => leadStage(lead) === stageFilter);
   }, [stageFilter, state.leads]);
 
-  const stats = useMemo(() => {
+  const summary = useMemo(() => {
     const leads = arr(state.leads);
+    const open = leads.filter((lead) =>
+      ["open", "new", "active"].includes(leadStatus(lead))
+    ).length;
+    const qualified = leads.filter((lead) =>
+      ["qualified", "proposal", "negotiation"].includes(leadStage(lead))
+    ).length;
+
     return {
       total: leads.length,
-      open: leads.filter((lead) => ["open", "new", "active"].includes(leadStatus(lead))).length,
-      qualified: leads.filter((lead) => ["qualified", "proposal", "negotiation"].includes(leadStage(lead))).length,
-      won: leads.filter((lead) => ["won", "converted", "customer"].includes(leadStage(lead))).length,
+      open,
+      qualified,
     };
   }, [state.leads]);
 
@@ -263,7 +292,7 @@ export default function Customers() {
     load({ refreshing: true });
   }
 
-  function openInbox(threadId = "") {
+  function openConversation(threadId = "") {
     const safeThreadId = s(threadId);
     if (!safeThreadId) return;
     navigate(`/inbox?threadId=${encodeURIComponent(safeThreadId)}`);
@@ -271,14 +300,14 @@ export default function Customers() {
 
   if (state.loading) {
     return (
-      <PageCanvas className="max-w-[1240px] py-2">
+      <PageCanvas className="max-w-[1180px] py-3">
         <LoadingSurface title="Loading customers" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="max-w-[1240px] space-y-4 py-2">
+    <PageCanvas className="max-w-[1180px] space-y-4 py-3">
       {state.error ? (
         <InlineNotice
           tone="danger"
@@ -291,76 +320,48 @@ export default function Customers() {
       {state.degraded ? (
         <InlineNotice
           tone="warning"
-          title="Customers schema unavailable"
-          description="The Customers surface is ready, but the backend lead table is not available in this environment yet."
+          title="Customers unavailable in this environment"
+          description="The customer surface is ready, but the backend lead table is not available here yet."
           compact
         />
       ) : null}
 
-      <Card padded={false} clip>
-        <section className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
-              <Users className="h-4 w-4" strokeWidth={2.1} />
-              Customers
-            </div>
-
-            <h1 className="mt-3 max-w-[820px] font-display text-[34px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[44px]">
-              Customer profiles from every channel
+      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
+        <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold text-brand">Customers</div>
+            <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+              Customer records
             </h1>
-
-            <p className="mt-3 max-w-[760px] text-[14.5px] font-medium leading-6 text-text-muted">
-              Turn Website Chat, Instagram, and Telegram conversations into customer records,
-              lead stages, ownership, and follow-up context.
+            <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
+              Leads and customer profiles created from conversations.
             </p>
           </div>
 
-          <div className="rounded-[22px] border border-line-soft bg-surface-subtle px-4 py-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-              Customer records
-            </div>
-            <div className="mt-2 text-[34px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-              {stats.total}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Badge tone="success" size="sm">{stats.open} open</Badge>
-              <Badge tone="brand" size="sm">{stats.qualified} qualified</Badge>
-            </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 text-[12.5px] font-semibold text-text-muted">
+            <span>{summary.total} total</span>
+            <span>/</span>
+            <span>{summary.open} open</span>
+            <span>/</span>
+            <span>{summary.qualified} qualified</span>
           </div>
-        </section>
-      </Card>
+        </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <StatCard label="Total" value={stats.total} icon={Users} tone="brand" />
-        <StatCard label="Open" value={stats.open} icon={Inbox} tone="success" />
-        <StatCard label="Qualified" value={stats.qualified} icon={Building2} tone="brand" />
-        <StatCard label="Won" value={stats.won} icon={UserRound} tone="success" />
-      </div>
-
-      <Card padded={false} clip>
-        <form onSubmit={handleSubmit} className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-3 border-t border-line-soft px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]"
+        >
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" strokeWidth={2.1} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search customers, email, phone, username..."
-              className="h-10 w-full rounded-[14px] border border-line bg-white pl-9 pr-3 text-[13.5px] font-medium text-text outline-none transition-colors duration-base ease-premium placeholder:text-text-subtle focus:border-brand"
+              placeholder="Search name, email, phone, username..."
+              className="h-10 w-full rounded-full border border-line bg-white pl-9 pr-3 text-[13.5px] font-medium text-text outline-none transition-colors duration-base ease-premium placeholder:text-text-subtle focus:border-brand"
             />
           </label>
 
-          <select
-            value={stageFilter}
-            onChange={(event) => setStageFilter(event.target.value)}
-            className="h-10 rounded-[14px] border border-line bg-white px-3 text-[13.5px] font-semibold text-text outline-none transition-colors duration-base ease-premium focus:border-brand"
-          >
-            <option value="all">All stages</option>
-            <option value="new">New</option>
-            <option value="qualified">Qualified</option>
-            <option value="proposal">Proposal</option>
-            <option value="won">Won</option>
-            <option value="lost">Lost</option>
-          </select>
+          <StageTabs value={stageFilter} onChange={setStageFilter} />
 
           <Button
             type="submit"
@@ -372,43 +373,28 @@ export default function Customers() {
             Refresh
           </Button>
         </form>
+
+        {filteredLeads.length ? (
+          <div>
+            <div className="hidden border-t border-line-soft px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(140px,0.35fr)_minmax(120px,0.25fr)_auto]">
+              <span>Customer</span>
+              <span>Stage</span>
+              <span>Updated</span>
+              <span className="text-right">Thread</span>
+            </div>
+
+            {filteredLeads.map((lead, index) => (
+              <CustomerRow
+                key={s(lead.id || lead.inbox_thread_id || lead.email || lead.username || index)}
+                lead={lead}
+                onOpen={openConversation}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState hasQuery={Boolean(s(query) || stageFilter !== "all")} />
+        )}
       </Card>
-
-      {filteredLeads.length ? (
-        <div className="grid gap-3">
-          {filteredLeads.map((lead) => (
-            <CustomerRow
-              key={s(lead.id || lead.inbox_thread_id || lead.email || lead.username)}
-              lead={lead}
-              onOpenInbox={openInbox}
-            />
-          ))}
-        </div>
-      ) : (
-        <Card padded="lg" className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[18px] border border-line-soft bg-surface-subtle">
-            <Users className="h-6 w-6 text-text-muted" strokeWidth={2.1} />
-          </div>
-
-          <h2 className="mt-4 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            No customers yet
-          </h2>
-
-          <p className="mx-auto mt-2 max-w-[520px] text-[14px] font-medium leading-6 text-text-muted">
-            Customer records will appear here as conversations and leads are created from Inbox channels.
-          </p>
-
-          <div className="mt-5 flex justify-center">
-            <Button
-              type="button"
-              onClick={() => navigate("/inbox")}
-              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Open Inbox
-            </Button>
-          </div>
-        </Card>
-      )}
     </PageCanvas>
   );
 }

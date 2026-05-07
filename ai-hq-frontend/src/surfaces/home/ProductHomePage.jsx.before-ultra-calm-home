@@ -1,0 +1,514 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Globe2,
+  Inbox,
+  MessageCircle,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+
+import Button from "../../components/ui/Button.jsx";
+import Card from "../../components/ui/Card.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+} from "../../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../../lib/cx.js";
+import useProductHome from "../../view-models/useProductHome.js";
+
+const PROVIDERS = ["website", "instagram", "telegram"];
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function n(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function compact(value = 0) {
+  return new Intl.NumberFormat(undefined, {
+    notation: n(value) >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(n(value));
+}
+
+function toneText(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand") return "text-brand";
+  return "text-text-muted";
+}
+
+function toneDot(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function providerStates(home = {}) {
+  return arr(home?.launchChannel?.providerStates);
+}
+
+function availableChannelCount(home = {}) {
+  const states = providerStates(home);
+  if (states.length) return states.filter((item) => item?.available !== false).length;
+  return 3;
+}
+
+function readyChannelCount(home = {}) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.filter(
+      (item) => item?.connected === true && item?.deliveryReady === true
+    ).length;
+  }
+
+  return n(home?.launchChannel?.readyCount);
+}
+
+function connectedChannelCount(home = {}) {
+  const states = providerStates(home);
+  if (states.length) return states.filter((item) => item?.connected === true).length;
+  return n(home?.launchChannel?.connectedCount);
+}
+
+function unreadCount(home = {}) {
+  return n(home?.inboxState?.counts?.unreadCount);
+}
+
+function openCount(home = {}) {
+  return n(home?.inboxState?.counts?.openCount);
+}
+
+function handoffCount(home = {}) {
+  return n(home?.inboxState?.counts?.handoffCount);
+}
+
+function pendingOutboundCount(home = {}) {
+  return n(
+    home?.inboxState?.counts?.pendingOutboundCount ??
+      home?.inboxState?.counts?.outboundPending
+  );
+}
+
+function failedOutboundCount(home = {}) {
+  return n(home?.inboxState?.counts?.failedOutboundCount);
+}
+
+function retryingOutboundCount(home = {}) {
+  return n(home?.inboxState?.counts?.retryingOutboundCount);
+}
+
+function outboundAttention(home = {}) {
+  return (
+    pendingOutboundCount(home) +
+    failedOutboundCount(home) +
+    retryingOutboundCount(home)
+  );
+}
+
+function truthReady(home = {}) {
+  return home?.truthRuntime?.truthReady === true;
+}
+
+function runtimeReady(home = {}) {
+  return home?.truthRuntime?.ready === true;
+}
+
+function businessReady(home = {}) {
+  return truthReady(home) && runtimeReady(home);
+}
+
+function channelReady(home = {}) {
+  return readyChannelCount(home) > 0;
+}
+
+function inboxUnavailable(home = {}) {
+  return lower(home?.inboxState?.status) === "unavailable";
+}
+
+function aiReady(home = {}) {
+  return businessReady(home) && channelReady(home) && !inboxUnavailable(home);
+}
+
+function normalizeAction(action = {}, fallback = {}) {
+  const source = obj(action);
+  const backup = obj(fallback);
+
+  return {
+    label: s(source.label || backup.label || "Continue"),
+    path: s(source.path || source?.target?.path || backup.path || "/home"),
+  };
+}
+
+function channelName(provider = "") {
+  const key = lower(provider);
+  if (key === "website" || key === "webchat") return "Website";
+  if (key === "instagram" || key === "meta") return "Instagram";
+  if (key === "telegram") return "Telegram";
+  return "Channel";
+}
+
+function normalizeChannels(home = {}) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.map((item) => {
+      const provider = lower(item?.provider || item?.id);
+      const ready = item?.connected === true && item?.deliveryReady === true;
+      const connected = item?.connected === true;
+
+      return {
+        id: provider || s(item?.id) || "channel",
+        label: s(item?.channelLabel) || channelName(provider),
+        tone: ready ? "success" : connected ? "warning" : "neutral",
+        status: ready ? "Live" : connected ? "Review" : "Off",
+      };
+    });
+  }
+
+  return PROVIDERS.map((provider) => ({
+    id: provider,
+    label: channelName(provider),
+    tone: "neutral",
+    status: "Off",
+  }));
+}
+
+function buildPrimary(home = {}) {
+  const unread = unreadCount(home);
+  const outbound = outboundAttention(home);
+
+  if (unread > 0 || outbound > 0) {
+    return {
+      tone: "warning",
+      label: unread > 0 ? "Inbox needs attention" : "Replies need review",
+      title: unread > 0 ? `${unread} unread message${unread === 1 ? "" : "s"}` : `${outbound} outbound action${outbound === 1 ? "" : "s"}`,
+      action: { label: "Open inbox", path: "/inbox" },
+    };
+  }
+
+  if (!truthReady(home)) {
+    return {
+      tone: "warning",
+      label: "Setup",
+      title: "Business info is not approved",
+      action: normalizeAction(home?.assistant?.primaryAction, {
+        label: "Review setup",
+        path: "/welcome",
+      }),
+    };
+  }
+
+  if (!runtimeReady(home)) {
+    return {
+      tone: "warning",
+      label: "AI",
+      title: "Runtime authority needs review",
+      action: { label: "Review business info", path: "/truth" },
+    };
+  }
+
+  if (!channelReady(home)) {
+    return {
+      tone: "warning",
+      label: "Channels",
+      title: "No live customer channel",
+      action: { label: "Open channels", path: "/channels" },
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      tone: "danger",
+      label: "Inbox",
+      title: "Inbox state is unavailable",
+      action: { label: "Open inbox", path: "/inbox" },
+    };
+  }
+
+  return {
+    tone: "success",
+    label: "Today",
+    title: "Workspace is calm",
+    action: { label: "Open inbox", path: "/inbox" },
+  };
+}
+
+function Header({ primary, onNavigate }) {
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-brand">
+          <Sparkles className="h-4 w-4" strokeWidth={2.1} />
+          Home
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-[24px] font-semibold leading-tight tracking-[var(--tracking-tight-xl)] text-text">
+            Today
+          </h1>
+
+          <span
+            className={cx(
+              "inline-flex h-7 items-center gap-2 rounded-full border px-3 text-[12px] font-semibold",
+              primary.tone === "success"
+                ? "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
+                : primary.tone === "danger"
+                  ? "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger"
+                  : "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning"
+            )}
+          >
+            <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(primary.tone))} />
+            {primary.title}
+          </span>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => onNavigate(primary.action.path)}
+        rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+      >
+        {primary.action.label}
+      </Button>
+    </div>
+  );
+}
+
+function Metric({ label, value, hint, icon: Icon, tone = "neutral" }) {
+  return (
+    <div className="min-w-0 px-0 py-4 first:pt-0 last:pb-0 md:px-6 md:py-0 md:first:pl-0 md:last:pr-0">
+      <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+        <Icon className={cx("h-3.5 w-3.5", toneText(tone))} strokeWidth={2.1} />
+        {label}
+      </div>
+
+      <div className="mt-2 text-[30px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+        {value}
+      </div>
+
+      <div className="mt-1.5 text-[12px] font-medium text-text-muted">
+        {hint}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, detail, value, tone = "neutral" }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3.5">
+      <div className="min-w-0">
+        <div className="truncate text-[13.5px] font-semibold text-text">
+          {label}
+        </div>
+        {detail ? (
+          <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
+            {detail}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+        <span className={cx("text-[13px] font-semibold", tone === "neutral" ? "text-text" : toneText(tone))}>
+          {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SoftSection({ title, children }) {
+  return (
+    <section className="rounded-[28px] border border-line-soft bg-white px-5 py-4 shadow-[0_24px_70px_-64px_rgba(15,23,42,0.55)]">
+      <div className="mb-1 text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+        {title}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ChannelPill({ item }) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-full border border-line-soft bg-surface-subtle/70 px-4 py-2.5">
+      <span className="truncate text-[13px] font-semibold text-text">
+        {item.label}
+      </span>
+
+      <span className={cx("flex items-center gap-2 text-[12px] font-semibold", toneText(item.tone))}>
+        <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(item.tone))} />
+        {item.status}
+      </span>
+    </div>
+  );
+}
+
+export default function ProductHomePage() {
+  const navigate = useNavigate();
+  const home = useProductHome();
+
+  const loading = home?.loading === true || home?.isLoading === true;
+  const primary = useMemo(() => buildPrimary(home), [home]);
+  const channels = useMemo(() => normalizeChannels(home), [home]);
+
+  function handleNavigate(path = "") {
+    const target = s(path);
+    if (!target) return;
+    navigate(target);
+  }
+
+  if (loading) {
+    return (
+      <PageCanvas className="max-w-[1260px] py-3">
+        <LoadingSurface title="Loading home" />
+      </PageCanvas>
+    );
+  }
+
+  return (
+    <PageCanvas className="max-w-[1260px] space-y-4 py-3">
+      {home?.availabilityNote ? (
+        <InlineNotice
+          tone="warning"
+          title={home.availabilityNote.title}
+          description={home.availabilityNote.description}
+          compact
+        />
+      ) : null}
+
+      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
+        <div className="border-b border-line-soft bg-gradient-to-b from-surface-subtle/55 to-white px-5 py-5">
+          <Header primary={primary} onNavigate={handleNavigate} />
+        </div>
+
+        <div className="grid border-b border-line-soft px-5 py-5 md:grid-cols-2 md:divide-x md:divide-line-soft xl:grid-cols-4">
+          <Metric
+            label="Open conversations"
+            value={compact(openCount(home))}
+            hint={`${compact(unreadCount(home))} unread`}
+            icon={Inbox}
+            tone={unreadCount(home) > 0 ? "warning" : "brand"}
+          />
+
+          <Metric
+            label="Live channels"
+            value={`${readyChannelCount(home)}/${availableChannelCount(home)}`}
+            hint={`${connectedChannelCount(home)} connected`}
+            icon={Globe2}
+            tone={channelReady(home) ? "success" : "warning"}
+          />
+
+          <Metric
+            label="AI status"
+            value={aiReady(home) ? "Live" : "Guarded"}
+            hint={businessReady(home) ? "Business info ready" : "Needs business info"}
+            icon={Bot}
+            tone={aiReady(home) ? "success" : "warning"}
+          />
+
+          <Metric
+            label="Reply health"
+            value={outboundAttention(home) > 0 ? "Review" : "Calm"}
+            hint={`${compact(outboundAttention(home))} outbound actions`}
+            icon={Clock3}
+            tone={outboundAttention(home) > 0 ? "warning" : "success"}
+          />
+        </div>
+
+        <div className="px-5 py-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            {channels.map((item) => (
+              <ChannelPill key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SoftSection title="Customer queue">
+          <div className="divide-y divide-line-soft">
+            <Row
+              label="Unread messages"
+              detail="Customer messages waiting"
+              value={compact(unreadCount(home))}
+              tone={unreadCount(home) > 0 ? "warning" : "success"}
+            />
+            <Row
+              label="Open conversations"
+              detail="Active customer threads"
+              value={compact(openCount(home))}
+              tone={openCount(home) > 0 ? "brand" : "success"}
+            />
+            <Row
+              label="Human handoff"
+              detail="Operator-owned threads"
+              value={compact(handoffCount(home))}
+              tone={handoffCount(home) > 0 ? "warning" : "success"}
+            />
+            <Row
+              label="Outbound review"
+              detail="Pending / failed / retrying replies"
+              value={compact(outboundAttention(home))}
+              tone={outboundAttention(home) > 0 ? "warning" : "success"}
+            />
+          </div>
+        </SoftSection>
+
+        <SoftSection title="Workspace state">
+          <div className="divide-y divide-line-soft">
+            <Row
+              label="Business info"
+              value={truthReady(home) ? "Approved" : "Needed"}
+              tone={truthReady(home) ? "success" : "warning"}
+            />
+            <Row
+              label="AI runtime"
+              value={runtimeReady(home) ? "Ready" : "Guarded"}
+              tone={runtimeReady(home) ? "success" : "warning"}
+            />
+            <Row
+              label="Live channels"
+              value={`${readyChannelCount(home)}/${availableChannelCount(home)}`}
+              tone={channelReady(home) ? "success" : "warning"}
+            />
+            <Row
+              label="AI operation"
+              value={aiReady(home) ? "Operating" : "Limited"}
+              tone={aiReady(home) ? "success" : "warning"}
+            />
+          </div>
+        </SoftSection>
+      </div>
+    </PageCanvas>
+  );
+}

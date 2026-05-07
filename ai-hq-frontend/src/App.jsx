@@ -1,4 +1,4 @@
-﻿import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -256,6 +256,7 @@ export default function App() {
           <Route path="customers" element={<Customers />} />
           <Route path="reports" element={<Reports />} />
           <Route path="channels" element={<ChannelCatalog />} />
+          <Route path="knowledge" element={<Knowledge />} />
           <Route path="settings" element={<Settings />} />
           <Route path="team" element={<Team />} />
 

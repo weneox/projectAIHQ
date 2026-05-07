@@ -1,0 +1,480 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
+
+import Button from "../../components/ui/Button.jsx";
+import Card from "../../components/ui/Card.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+} from "../../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../../lib/cx.js";
+import useProductHome from "../../view-models/useProductHome.js";
+
+const PROVIDERS = ["website", "instagram", "telegram"];
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function n(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function toneText(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand") return "text-brand";
+  return "text-text-muted";
+}
+
+function toneDot(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function providerStates(home = {}) {
+  return arr(home?.launchChannel?.providerStates);
+}
+
+function availableChannelCount(home = {}) {
+  const states = providerStates(home);
+  if (states.length) return states.filter((item) => item?.available !== false).length;
+  return 3;
+}
+
+function readyChannelCount(home = {}) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.filter(
+      (item) => item?.connected === true && item?.deliveryReady === true
+    ).length;
+  }
+
+  return n(home?.launchChannel?.readyCount);
+}
+
+function connectedChannelCount(home = {}) {
+  const states = providerStates(home);
+  if (states.length) return states.filter((item) => item?.connected === true).length;
+  return n(home?.launchChannel?.connectedCount);
+}
+
+function unreadCount(home = {}) {
+  return n(home?.inboxState?.counts?.unreadCount);
+}
+
+function openCount(home = {}) {
+  return n(home?.inboxState?.counts?.openCount);
+}
+
+function handoffCount(home = {}) {
+  return n(home?.inboxState?.counts?.handoffCount);
+}
+
+function pendingOutboundCount(home = {}) {
+  return n(
+    home?.inboxState?.counts?.pendingOutboundCount ??
+      home?.inboxState?.counts?.outboundPending
+  );
+}
+
+function failedOutboundCount(home = {}) {
+  return n(home?.inboxState?.counts?.failedOutboundCount);
+}
+
+function retryingOutboundCount(home = {}) {
+  return n(home?.inboxState?.counts?.retryingOutboundCount);
+}
+
+function outboundAttention(home = {}) {
+  return (
+    pendingOutboundCount(home) +
+    failedOutboundCount(home) +
+    retryingOutboundCount(home)
+  );
+}
+
+function truthReady(home = {}) {
+  return home?.truthRuntime?.truthReady === true;
+}
+
+function runtimeReady(home = {}) {
+  return home?.truthRuntime?.ready === true;
+}
+
+function businessReady(home = {}) {
+  return truthReady(home) && runtimeReady(home);
+}
+
+function channelReady(home = {}) {
+  return readyChannelCount(home) > 0;
+}
+
+function inboxUnavailable(home = {}) {
+  return lower(home?.inboxState?.status) === "unavailable";
+}
+
+function aiReady(home = {}) {
+  return businessReady(home) && channelReady(home) && !inboxUnavailable(home);
+}
+
+function normalizeAction(action = {}, fallback = {}) {
+  const source = obj(action);
+  const backup = obj(fallback);
+
+  return {
+    label: s(source.label || backup.label || "Continue"),
+    path: s(source.path || source?.target?.path || backup.path || "/home"),
+  };
+}
+
+function channelName(provider = "") {
+  const key = lower(provider);
+  if (key === "website" || key === "webchat") return "Website";
+  if (key === "instagram" || key === "meta") return "Instagram";
+  if (key === "telegram") return "Telegram";
+  return "Channel";
+}
+
+function normalizeChannels(home = {}) {
+  const states = providerStates(home);
+
+  if (states.length) {
+    return states.map((item) => {
+      const provider = lower(item?.provider || item?.id);
+      const ready = item?.connected === true && item?.deliveryReady === true;
+      const connected = item?.connected === true;
+
+      return {
+        id: provider || s(item?.id) || "channel",
+        label: s(item?.channelLabel) || channelName(provider),
+        tone: ready ? "success" : connected ? "warning" : "neutral",
+        status: ready ? "Live" : connected ? "Review" : "Off",
+      };
+    });
+  }
+
+  return PROVIDERS.map((provider) => ({
+    id: provider,
+    label: channelName(provider),
+    tone: "neutral",
+    status: "Off",
+  }));
+}
+
+function buildPrimary(home = {}) {
+  const unread = unreadCount(home);
+  const outbound = outboundAttention(home);
+
+  if (unread > 0 || outbound > 0) {
+    return {
+      tone: "warning",
+      label: unread > 0 ? "Inbox needs attention" : "Replies need review",
+      action: { label: "Open inbox", path: "/inbox" },
+    };
+  }
+
+  if (!truthReady(home)) {
+    return {
+      tone: "warning",
+      label: "Business info is not approved",
+      action: normalizeAction(home?.assistant?.primaryAction, {
+        label: "Review setup",
+        path: "/welcome",
+      }),
+    };
+  }
+
+  if (!runtimeReady(home)) {
+    return {
+      tone: "warning",
+      label: "Runtime authority needs review",
+      action: { label: "Review", path: "/truth" },
+    };
+  }
+
+  if (!channelReady(home)) {
+    return {
+      tone: "warning",
+      label: "No live channel",
+      action: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      tone: "danger",
+      label: "Inbox unavailable",
+      action: { label: "Inbox", path: "/inbox" },
+    };
+  }
+
+  return {
+    tone: "success",
+    label: "Workspace is calm",
+    action: { label: "Inbox", path: "/inbox" },
+  };
+}
+
+function StatusPill({ tone = "neutral", children }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-2 rounded-full border border-line-soft bg-white px-2.5 py-1 text-[12px] font-semibold",
+        toneText(tone)
+      )}
+    >
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+      {children}
+    </span>
+  );
+}
+
+function Header({ primary, onNavigate }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-brand">Home</div>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            Workspace overview
+          </div>
+          <StatusPill tone={primary.tone}>{primary.label}</StatusPill>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => onNavigate(primary.action.path)}
+        rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+      >
+        {primary.action.label}
+      </Button>
+    </div>
+  );
+}
+
+function StatLine({ label, value, hint = "", tone = "neutral" }) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <div className="truncate text-[13.5px] font-semibold text-text">
+          {label}
+        </div>
+        {hint ? (
+          <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
+            {hint}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+        <span className={cx("text-[13px] font-semibold", toneText(tone))}>
+          {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function QuietCard({ title, children }) {
+  return (
+    <Card padded={false} clip className="shadow-[0_24px_70px_-64px_rgba(15,23,42,0.52)]">
+      <div className="border-b border-line-soft px-5 py-4">
+        <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+          {title}
+        </div>
+      </div>
+      <div className="divide-y divide-line-soft px-5">{children}</div>
+    </Card>
+  );
+}
+
+function OverviewStrip({ home }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-4">
+      <div className="rounded-[22px] border border-line-soft bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+          Conversations
+        </div>
+        <div className="mt-1 text-[13px] font-semibold text-text">
+          {openCount(home)} open / {unreadCount(home)} unread
+        </div>
+      </div>
+
+      <div className="rounded-[22px] border border-line-soft bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+          Channels
+        </div>
+        <div className="mt-1 text-[13px] font-semibold text-text">
+          {readyChannelCount(home)}/{availableChannelCount(home)} live
+        </div>
+      </div>
+
+      <div className="rounded-[22px] border border-line-soft bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+          AI
+        </div>
+        <div className="mt-1 text-[13px] font-semibold text-text">
+          {aiReady(home) ? "Live" : "Guarded"}
+        </div>
+      </div>
+
+      <div className="rounded-[22px] border border-line-soft bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+          Replies
+        </div>
+        <div className="mt-1 text-[13px] font-semibold text-text">
+          {outboundAttention(home)} need review
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChannelRow({ channels }) {
+  return (
+    <Card padded={false} clip className="shadow-[0_24px_70px_-64px_rgba(15,23,42,0.52)]">
+      <div className="grid gap-2 px-5 py-4 md:grid-cols-3">
+        {channels.map((item) => (
+          <div
+            key={item.id}
+            className="flex items-center justify-between gap-3 rounded-full bg-surface-subtle px-4 py-2.5"
+          >
+            <span className="truncate text-[13px] font-semibold text-text">
+              {item.label}
+            </span>
+            <span className={cx("flex items-center gap-2 text-[12px] font-semibold", toneText(item.tone))}>
+              <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(item.tone))} />
+              {item.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+export default function ProductHomePage() {
+  const navigate = useNavigate();
+  const home = useProductHome();
+
+  const loading = home?.loading === true || home?.isLoading === true;
+  const primary = useMemo(() => buildPrimary(home), [home]);
+  const channels = useMemo(() => normalizeChannels(home), [home]);
+
+  function handleNavigate(path = "") {
+    const target = s(path);
+    if (!target) return;
+    navigate(target);
+  }
+
+  if (loading) {
+    return (
+      <PageCanvas className="max-w-[1220px] py-3">
+        <LoadingSurface title="Loading home" />
+      </PageCanvas>
+    );
+  }
+
+  return (
+    <PageCanvas className="max-w-[1220px] space-y-4 py-3">
+      {home?.availabilityNote ? (
+        <InlineNotice
+          tone="warning"
+          title={home.availabilityNote.title}
+          description={home.availabilityNote.description}
+          compact
+        />
+      ) : null}
+
+      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
+        <div className="border-b border-line-soft bg-gradient-to-b from-surface-subtle/55 to-white px-5 py-4">
+          <Header primary={primary} onNavigate={handleNavigate} />
+        </div>
+
+        <div className="px-5 py-4">
+          <OverviewStrip home={home} />
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <QuietCard title="Customer queue">
+          <StatLine
+            label="Unread messages"
+            hint="Customer messages waiting"
+            value={unreadCount(home)}
+            tone={unreadCount(home) > 0 ? "warning" : "success"}
+          />
+          <StatLine
+            label="Open conversations"
+            hint="Active customer threads"
+            value={openCount(home)}
+            tone={openCount(home) > 0 ? "brand" : "success"}
+          />
+          <StatLine
+            label="Human handoff"
+            hint="Operator-owned threads"
+            value={handoffCount(home)}
+            tone={handoffCount(home) > 0 ? "warning" : "success"}
+          />
+          <StatLine
+            label="Outbound review"
+            hint="Pending / failed / retrying replies"
+            value={outboundAttention(home)}
+            tone={outboundAttention(home) > 0 ? "warning" : "success"}
+          />
+        </QuietCard>
+
+        <QuietCard title="Workspace state">
+          <StatLine
+            label="Business info"
+            value={truthReady(home) ? "Approved" : "Needed"}
+            tone={truthReady(home) ? "success" : "warning"}
+          />
+          <StatLine
+            label="AI runtime"
+            value={runtimeReady(home) ? "Ready" : "Guarded"}
+            tone={runtimeReady(home) ? "success" : "warning"}
+          />
+          <StatLine
+            label="Live channels"
+            value={`${readyChannelCount(home)}/${availableChannelCount(home)}`}
+            tone={channelReady(home) ? "success" : "warning"}
+          />
+          <StatLine
+            label="AI operation"
+            value={aiReady(home) ? "Operating" : "Limited"}
+            tone={aiReady(home) ? "success" : "warning"}
+          />
+        </QuietCard>
+      </div>
+
+      <ChannelRow channels={channels} />
+    </PageCanvas>
+  );
+}

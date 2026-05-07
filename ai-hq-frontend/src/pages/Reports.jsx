@@ -1,25 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowRight,
   BarChart3,
   Bot,
-  CheckCircle2,
-  CircleAlert,
-  GitBranch,
-  Globe2,
   Inbox,
-  Network,
   RefreshCw,
-  ShieldCheck,
-  Sparkles,
   TrendingUp,
   Users,
 } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-import { getLaunchPosture } from "../api/launch.js";
-import { listLeads } from "../api/leads.js";
-import Badge from "../components/ui/Badge.jsx";
+import { getReportsOverview } from "../api/reports.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import {
@@ -29,8 +27,20 @@ import {
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
+const RANGES = [
+  { key: "24h", label: "24h" },
+  { key: "7d", label: "7d" },
+  { key: "30d", label: "30d" },
+  { key: "90d", label: "90d" },
+];
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function n(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function arr(value, fallback = []) {
@@ -43,129 +53,196 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function lower(value, fallback = "") {
-  return s(value, fallback).toLowerCase();
+function compact(value = 0) {
+  return new Intl.NumberFormat(undefined, {
+    notation: n(value) >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(n(value));
 }
 
-function n(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
+function dateLabel(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+  const date = new Date(`${raw}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function titleize(value = "") {
-  return s(value)
+  return s(value || "unknown")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function toneTextClass(tone = "neutral") {
-  if (tone === "success") return "text-success";
-  if (tone === "warning") return "text-warning";
-  if (tone === "danger") return "text-danger";
-  if (tone === "brand" || tone === "info") return "text-brand";
-  return "text-text-muted";
+function chartHasData(rows = []) {
+  return rows.some(
+    (row) =>
+      n(row.messagesIn) ||
+      n(row.messagesOut) ||
+      n(row.aiReplies) ||
+      n(row.leads)
+  );
 }
 
-function toneDotClass(tone = "neutral") {
-  if (tone === "success") return "bg-success";
-  if (tone === "warning") return "bg-warning";
-  if (tone === "danger") return "bg-danger";
-  if (tone === "brand" || tone === "info") return "bg-brand";
-  return "bg-[rgb(var(--color-text-soft))]";
-}
+function ReportTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
 
-function stageOf(lead = {}) {
-  return lower(lead.stage || "new");
-}
-
-function statusOf(lead = {}) {
-  return lower(lead.status || "open");
-}
-
-function channelTone(channel = {}) {
-  if (channel.deliveryReady === true) return "success";
-  if (channel.connected === true) return "warning";
-  if (channel.available === false) return "danger";
-  return "neutral";
-}
-
-function channelLabel(id = "") {
-  const safe = lower(id);
-  if (safe === "website") return "Website Chat";
-  if (safe === "instagram") return "Instagram";
-  if (safe === "telegram") return "Telegram";
-  return titleize(safe || "Channel");
-}
-
-function channelIcon(id = "") {
-  const safe = lower(id);
-  if (safe === "website") return Globe2;
-  if (safe === "instagram") return Network;
-  if (safe === "telegram") return Bot;
-  return Network;
-}
-
-function StatCard({ label, value, caption, icon: Icon, tone = "neutral" }) {
   return (
-    <Card padded="sm">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
-            {label}
-          </div>
-          <div className="mt-1 text-[30px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-            {value}
-          </div>
-          {caption ? (
-            <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
-              {caption}
-            </div>
-          ) : null}
-        </div>
-
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] border border-line-soft bg-surface-subtle">
-          <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.1} />
-        </span>
+    <div className="rounded-[16px] border border-line-soft bg-white px-3.5 py-3 shadow-[0_20px_52px_-34px_rgba(15,23,42,0.5)]">
+      <div className="text-[12px] font-semibold text-text">
+        {dateLabel(label)}
       </div>
-    </Card>
+
+      <div className="mt-2 grid gap-1.5">
+        {payload.map((item) => (
+          <div
+            key={item.dataKey}
+            className="flex items-center justify-between gap-8 text-[12px] font-medium text-text-muted"
+          >
+            <span>{item.name}</span>
+            <span className="font-semibold text-text">{compact(item.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function StatusPill({ tone = "neutral", children }) {
+function Metric({ label, value, icon: Icon }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-line-soft bg-surface px-2.5 py-1 text-[12px] font-semibold">
-      <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
-      <span className={toneTextClass(tone)}>{children}</span>
-    </span>
+    <div className="min-w-0 px-0 py-3 first:pt-0 last:pb-0 md:px-5 md:py-0 md:first:pl-0 md:last:pr-0">
+      <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+        <Icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+        {label}
+      </div>
+      <div className="mt-2 text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+        {compact(value)}
+      </div>
+    </div>
   );
 }
 
-function BarRow({ label, value, total, tone = "brand" }) {
-  const width = total > 0 ? Math.max(6, Math.round((value / total) * 100)) : 0;
+function EmptyChart() {
+  return (
+    <div className="relative flex h-[360px] items-center justify-center overflow-hidden rounded-[26px] border border-dashed border-line-soft bg-[radial-gradient(circle_at_top,rgba(var(--color-brand),0.055),transparent_42%),linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.92))]">
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[18px] border border-line-soft bg-white shadow-[0_18px_44px_-34px_rgba(15,23,42,0.5)]">
+          <BarChart3 className="h-5 w-5 text-text-subtle" strokeWidth={2.1} />
+        </div>
+        <div className="mt-4 text-[15px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+          No report activity yet
+        </div>
+        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+          Activity will appear here when conversations, AI replies, or leads are recorded.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MainChart({ rows = [] }) {
+  if (!chartHasData(rows)) return <EmptyChart />;
+
+  return (
+    <div className="h-[360px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={rows}
+          margin={{ top: 16, right: 18, left: -18, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id="messagesInFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="rgb(var(--color-brand))" stopOpacity={0.22} />
+              <stop offset="95%" stopColor="rgb(var(--color-brand))" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="aiFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="rgb(var(--color-success))" stopOpacity={0.18} />
+              <stop offset="95%" stopColor="rgb(var(--color-success))" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid
+            strokeDasharray="3 3"
+            vertical={false}
+            stroke="rgba(148,163,184,0.22)"
+          />
+
+          <XAxis
+            dataKey="date"
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={dateLabel}
+            tick={{ fontSize: 11, fill: "rgb(var(--color-text-subtle))" }}
+          />
+
+          <YAxis
+            allowDecimals={false}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fontSize: 11, fill: "rgb(var(--color-text-subtle))" }}
+          />
+
+          <Tooltip content={<ReportTooltip />} />
+
+          <Area
+            type="monotone"
+            dataKey="messagesIn"
+            name="Messages in"
+            stroke="rgb(var(--color-brand))"
+            fill="url(#messagesInFill)"
+            strokeWidth={2.2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+
+          <Area
+            type="monotone"
+            dataKey="aiReplies"
+            name="AI replies"
+            stroke="rgb(var(--color-success))"
+            fill="url(#aiFill)"
+            strokeWidth={2.2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+
+          <Area
+            type="monotone"
+            dataKey="leads"
+            name="Leads"
+            stroke="rgb(var(--color-warning))"
+            fill="transparent"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function BarRow({ label, value, total }) {
+  const safeTotal = Math.max(1, n(total));
+  const width = Math.max(value > 0 ? 5 : 0, Math.round((n(value) / safeTotal) * 100));
 
   return (
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-4">
         <div className="truncate text-[13px] font-semibold text-text">
           {label}
         </div>
-        <div className="text-[12.5px] font-semibold text-text-muted">
-          {value}
+        <div className="shrink-0 text-[13px] font-semibold text-text-muted">
+          {compact(value)}
         </div>
       </div>
 
       <div className="h-2 overflow-hidden rounded-full bg-surface-subtle">
         <div
-          className={cx(
-            "h-full rounded-full transition-all duration-base ease-premium",
-            tone === "success"
-              ? "bg-success"
-              : tone === "warning"
-                ? "bg-warning"
-                : tone === "danger"
-                  ? "bg-danger"
-                  : "bg-brand"
-          )}
+          className="h-full rounded-full bg-brand transition-all duration-slow ease-premium"
           style={{ width: `${width}%` }}
         />
       </div>
@@ -173,288 +250,44 @@ function BarRow({ label, value, total, tone = "brand" }) {
   );
 }
 
-function FlowNode({ icon: Icon, title, description, tone = "neutral", active = false }) {
-  return (
-    <div
-      className={cx(
-        "relative min-w-0 rounded-[22px] border px-4 py-4 shadow-[0_18px_48px_-42px_rgba(15,23,42,0.55)]",
-        active
-          ? "border-[rgba(var(--color-brand),0.35)] bg-brand-soft"
-          : "border-line-soft bg-surface"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-line-soft bg-white">
-          <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.1} />
-        </span>
+function BreakdownPanel({ title, empty, rows }) {
+  const total = rows.reduce((sum, row) => sum + n(row.value), 0);
 
-        <div className="min-w-0">
-          <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-            {title}
+  return (
+    <Card padded={false} clip className="shadow-[0_22px_70px_-62px_rgba(15,23,42,0.52)]">
+      <div className="border-b border-line-soft bg-gradient-to-b from-surface-subtle/60 to-white px-5 py-4">
+        <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+          {title}
+        </div>
+      </div>
+
+      <div className="space-y-4 px-5 py-5">
+        {rows.length && total > 0 ? (
+          rows.map((row) => (
+            <BarRow
+              key={row.label}
+              label={row.label}
+              value={row.value}
+              total={total}
+            />
+          ))
+        ) : (
+          <div className="rounded-[22px] border border-dashed border-line-soft bg-surface-subtle/80 px-4 py-10 text-center text-[13px] font-medium text-text-muted">
+            {empty}
           </div>
-          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            {description}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlowArrow() {
-  return (
-    <div className="hidden items-center justify-center lg:flex">
-      <ArrowRight className="h-5 w-5 text-text-subtle" strokeWidth={2.1} />
-    </div>
-  );
-}
-
-function OmnichannelFlow({ ready }) {
-  return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-4 py-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-              Flowchart
-            </div>
-            <div className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-              Omnichannel runtime flow
-            </div>
-          </div>
-
-          <StatusPill tone={ready ? "success" : "warning"}>
-            {ready ? "Launch ready" : "Guarded mode"}
-          </StatusPill>
-        </div>
-      </div>
-
-      <div className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_36px_minmax(0,1fr)_36px_minmax(0,1fr)_36px_minmax(0,1fr)]">
-        <FlowNode
-          icon={Network}
-          title="Customer channels"
-          description="Website Chat, Instagram, and Telegram collect conversations."
-          tone="brand"
-          active
-        />
-        <FlowArrow />
-        <FlowNode
-          icon={Inbox}
-          title="Shared Inbox"
-          description="Operators see every conversation in one workspace."
-          tone="success"
-          active
-        />
-        <FlowArrow />
-        <FlowNode
-          icon={ShieldCheck}
-          title="Business Info guard"
-          description="AI only uses approved facts and runtime authority."
-          tone={ready ? "success" : "warning"}
-        />
-        <FlowArrow />
-        <FlowNode
-          icon={Bot}
-          title="Manual-first AI"
-          description="Safe replies, handoff, and operator control before full automation."
-          tone={ready ? "success" : "warning"}
-        />
-      </div>
-    </Card>
-  );
-}
-
-function SafetyFlow({ truthReady, runtimeReady, channelReady }) {
-  const nodes = [
-    {
-      title: "Business Info",
-      ready: truthReady,
-      description: truthReady ? "Approved facts exist" : "Needs approval",
-    },
-    {
-      title: "Runtime",
-      ready: runtimeReady,
-      description: runtimeReady ? "Authority available" : "Guarded",
-    },
-    {
-      title: "Channel",
-      ready: channelReady,
-      description: channelReady ? "Delivery ready" : "Connect channel",
-    },
-  ];
-
-  return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-4 py-3.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-          AI safety pipeline
-        </div>
-        <div className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Reply authority checks
-        </div>
-      </div>
-
-      <div className="space-y-3 px-4 py-4">
-        {nodes.map((node, index) => (
-          <div key={node.title} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line-soft bg-surface">
-              {node.ready ? (
-                <CheckCircle2 className="h-4.5 w-4.5 text-success" strokeWidth={2.1} />
-              ) : (
-                <CircleAlert className="h-4.5 w-4.5 text-warning" strokeWidth={2.1} />
-              )}
-            </span>
-
-            <div className="min-w-0">
-              <div className="text-[13.5px] font-semibold text-text">
-                {index + 1}. {node.title}
-              </div>
-              <div className="text-[12.5px] font-medium text-text-muted">
-                {node.description}
-              </div>
-            </div>
-
-            <Badge tone={node.ready ? "success" : "warning"} size="sm">
-              {node.ready ? "Ready" : "Pending"}
-            </Badge>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function ChannelReadiness({ channels = {} }) {
-  const entries = ["website", "instagram", "telegram"].map((id) => {
-    const channel = obj(channels[id]);
-    return {
-      id,
-      label: channelLabel(id),
-      icon: channelIcon(id),
-      status: s(channel.status || "not_connected"),
-      connected: channel.connected === true,
-      deliveryReady: channel.deliveryReady === true,
-      tone: channelTone(channel),
-    };
-  });
-
-  return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-4 py-3.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-          Channels
-        </div>
-        <div className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Omnichannel readiness
-        </div>
-      </div>
-
-      <div className="divide-y divide-line-soft">
-        {entries.map((item) => {
-          const Icon = item.icon;
-
-          return (
-            <div key={item.id} className="grid gap-3 px-4 py-4 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border border-line-soft bg-surface-subtle">
-                <Icon className={cx("h-5 w-5", toneTextClass(item.tone))} strokeWidth={2.1} />
-              </span>
-
-              <div className="min-w-0">
-                <div className="text-[14.5px] font-semibold text-text">
-                  {item.label}
-                </div>
-                <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  {item.deliveryReady
-                    ? "Connected and delivery ready"
-                    : item.connected
-                      ? "Connected but blocked by readiness checks"
-                      : "Not connected yet"}
-                </div>
-              </div>
-
-              <Badge tone={item.tone} size="sm">
-                {titleize(item.status)}
-              </Badge>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-function CustomerFunnel({ leads = [] }) {
-  const total = leads.length;
-  const buckets = [
-    {
-      id: "new",
-      label: "New",
-      value: leads.filter((lead) => ["", "new"].includes(stageOf(lead))).length,
-      tone: "brand",
-    },
-    {
-      id: "qualified",
-      label: "Qualified",
-      value: leads.filter((lead) => ["qualified", "proposal", "negotiation"].includes(stageOf(lead))).length,
-      tone: "success",
-    },
-    {
-      id: "won",
-      label: "Won",
-      value: leads.filter((lead) => ["won", "converted", "customer"].includes(stageOf(lead))).length,
-      tone: "success",
-    },
-    {
-      id: "lost",
-      label: "Lost",
-      value: leads.filter((lead) => ["lost", "closed_lost"].includes(stageOf(lead))).length,
-      tone: "danger",
-    },
-  ];
-
-  return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-4 py-3.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-          Customers
-        </div>
-        <div className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Customer funnel
-        </div>
-      </div>
-
-      <div className="space-y-4 px-4 py-4">
-        {buckets.map((bucket) => (
-          <BarRow
-            key={bucket.id}
-            label={bucket.label}
-            value={bucket.value}
-            total={total}
-            tone={bucket.tone}
-          />
-        ))}
-
-        {!total ? (
-          <InlineNotice
-            tone="info"
-            compact
-            description="Customer funnel will populate as leads are created from Inbox conversations."
-          />
-        ) : null}
+        )}
       </div>
     </Card>
   );
 }
 
 export default function Reports() {
-  const navigate = useNavigate();
+  const [range, setRange] = useState("7d");
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
     error: "",
-    posture: null,
-    leads: [],
-    leadsDegraded: false,
+    payload: null,
   });
 
   const load = useCallback(async ({ refreshing = false } = {}) => {
@@ -466,23 +299,13 @@ export default function Reports() {
     }));
 
     try {
-      const [posture, leadsPayload] = await Promise.all([
-        getLaunchPosture(),
-        listLeads({ limit: 200 }).catch((error) => ({
-          ok: false,
-          leads: [],
-          degraded: true,
-          error: s(error?.message),
-        })),
-      ]);
+      const payload = await getReportsOverview({ range });
 
       setState({
         loading: false,
         refreshing: false,
         error: "",
-        posture,
-        leads: arr(leadsPayload?.leads),
-        leadsDegraded: leadsPayload?.degraded === true,
+        payload,
       });
     } catch (error) {
       setState({
@@ -491,12 +314,10 @@ export default function Reports() {
         error:
           s(error?.payload?.error || error?.payload?.message || error?.message) ||
           "Reports could not be loaded.",
-        posture: null,
-        leads: [],
-        leadsDegraded: false,
+        payload: null,
       });
     }
-  }, []);
+  }, [range]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -506,42 +327,51 @@ export default function Reports() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const metrics = useMemo(() => {
-    const posture = obj(state.posture);
-    const leads = arr(state.leads);
-    const inbox = obj(posture.inbox);
-    const channelSummary = obj(posture.channelSummary);
-    const truthReady = posture.truth?.ready === true;
-    const runtimeReady = posture.runtime?.ready === true;
-    const channelReady = n(channelSummary.readyCount) > 0;
-    const launchReady = posture.overall?.launchReady === true;
+  const model = useMemo(() => {
+    const payload = obj(state.payload);
+    const summary = obj(payload.summary);
+    const timeseries = arr(payload.timeseries);
+    const channels = arr(payload.channels);
+    const leadStages = arr(payload.leadStages);
 
     return {
-      launchReady,
-      truthReady,
-      runtimeReady,
-      channelReady,
-      readyChannels: n(channelSummary.readyCount),
-      connectedChannels: n(channelSummary.connectedCount),
-      leadsTotal: leads.length,
-      openLeads: leads.filter((lead) => ["open", "new", "active"].includes(statusOf(lead))).length,
-      inboxOpen: n(inbox.openCount),
-      inboxUnread: n(inbox.unreadCount),
-      handoff: n(inbox.handoffCount),
-      pendingOutbound: n(inbox.pendingOutboundCount),
+      degraded: arr(payload.degraded),
+      summary: {
+        messagesIn: n(summary.messagesIn),
+        messagesOut: n(summary.messagesOut),
+        aiReplies: n(summary.aiReplies),
+        leads: n(summary.leads),
+        aiUnits: n(summary.aiUnits),
+        apiCalls: n(summary.apiCalls),
+      },
+      timeseries: timeseries.map((row) => ({
+        date: s(row.date),
+        messagesIn: n(row.messagesIn),
+        messagesOut: n(row.messagesOut),
+        aiReplies: n(row.aiReplies),
+        leads: n(row.leads),
+      })),
+      channels: channels.map((row) => ({
+        label: titleize(row.channel),
+        value: n(row.messagesIn) + n(row.messagesOut),
+      })),
+      leadStages: leadStages.map((row) => ({
+        label: titleize(row.stage),
+        value: n(row.count),
+      })),
     };
-  }, [state.posture, state.leads]);
+  }, [state.payload]);
 
   if (state.loading) {
     return (
-      <PageCanvas className="max-w-[1280px] py-2">
+      <PageCanvas className="max-w-[1280px] py-3">
         <LoadingSurface title="Loading reports" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="max-w-[1280px] space-y-4 py-2">
+    <PageCanvas className="max-w-[1280px] space-y-4 py-3">
       {state.error ? (
         <InlineNotice
           tone="danger"
@@ -551,173 +381,83 @@ export default function Reports() {
         />
       ) : null}
 
-      {state.leadsDegraded ? (
+      {model.degraded.length ? (
         <InlineNotice
           tone="warning"
-          title="Customer analytics degraded"
-          description="Lead/customer schema is unavailable in this environment, so customer funnel data is empty."
+          title="Some report sources are unavailable"
+          description={model.degraded.join(", ")}
           compact
         />
       ) : null}
 
-      <Card padded={false} clip>
-        <section className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
+        <div className="flex flex-col gap-4 border-b border-line-soft bg-gradient-to-b from-surface-subtle/70 to-white px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
+            <div className="flex items-center gap-2 text-[12px] font-semibold text-brand">
               <BarChart3 className="h-4 w-4" strokeWidth={2.1} />
               Reports
             </div>
-
-            <h1 className="mt-3 max-w-[860px] font-display text-[34px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[44px]">
-              Omnichannel performance command center
-            </h1>
-
-            <p className="mt-3 max-w-[780px] text-[14.5px] font-medium leading-6 text-text-muted">
-              Track customer channels, Inbox pressure, Business Info authority, and lead funnel health from one operational view.
-            </p>
-          </div>
-
-          <div className="rounded-[22px] border border-line-soft bg-surface-subtle px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                  Launch posture
-                </div>
-                <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  {metrics.launchReady ? "Ready" : "Guarded"}
-                </div>
-              </div>
-
-              {metrics.launchReady ? (
-                <CheckCircle2 className="h-8 w-8 text-success" strokeWidth={2.1} />
-              ) : (
-                <CircleAlert className="h-8 w-8 text-warning" strokeWidth={2.1} />
-              )}
-            </div>
-
-            <div className="mt-4">
-              <Button
-                type="button"
-                fullWidth
-                size="sm"
-                loading={state.refreshing}
-                onClick={() => load({ refreshing: true })}
-                leftIcon={!state.refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-              >
-                Refresh reports
-              </Button>
+            <div className="mt-1 text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              Business activity
             </div>
           </div>
-        </section>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-[999px] border border-line-soft bg-white/80 p-1 shadow-[0_12px_30px_-26px_rgba(15,23,42,0.45)]">
+              {RANGES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setRange(item.key)}
+                  className={cx(
+                    "h-8 rounded-[999px] px-3.5 text-[12px] font-semibold transition-all duration-base ease-premium",
+                    range === item.key
+                      ? "bg-white text-text shadow-[0_10px_24px_-20px_rgba(15,23,42,0.45)]"
+                      : "text-text-muted hover:text-text"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={state.refreshing}
+              onClick={() => load({ refreshing: true })}
+              leftIcon={!state.refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid border-b border-line-soft px-5 py-5 md:grid-cols-2 md:divide-x md:divide-line-soft xl:grid-cols-4">
+          <Metric label="Messages" value={model.summary.messagesIn} icon={Inbox} />
+          <Metric label="AI replies" value={model.summary.aiReplies} icon={Bot} />
+          <Metric label="Leads" value={model.summary.leads} icon={Users} />
+          <Metric label="AI units" value={model.summary.aiUnits} icon={TrendingUp} />
+        </div>
+
+        <div className="px-5 py-5">
+          <MainChart rows={model.timeseries} />
+        </div>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Ready channels"
-          value={`${metrics.readyChannels}/${Math.max(3, metrics.connectedChannels || 3)}`}
-          caption={`${metrics.connectedChannels} connected`}
-          icon={Network}
-          tone={metrics.channelReady ? "success" : "warning"}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BreakdownPanel
+          title="Channels"
+          empty="No channel activity in this range."
+          rows={model.channels}
         />
-        <StatCard
-          label="Customers"
-          value={metrics.leadsTotal}
-          caption={`${metrics.openLeads} open records`}
-          icon={Users}
-          tone="brand"
+
+        <BreakdownPanel
+          title="Lead stages"
+          empty="No leads in this range."
+          rows={model.leadStages}
         />
-        <StatCard
-          label="Inbox pressure"
-          value={metrics.inboxOpen + metrics.inboxUnread}
-          caption={`${metrics.inboxUnread} unread · ${metrics.handoff} handoff`}
-          icon={Inbox}
-          tone={metrics.inboxOpen || metrics.inboxUnread ? "warning" : "success"}
-        />
-        <StatCard
-          label="AI guard"
-          value={metrics.truthReady && metrics.runtimeReady ? "Ready" : "Guarded"}
-          caption={metrics.pendingOutbound ? `${metrics.pendingOutbound} outbound pending` : "Manual-first control"}
-          icon={ShieldCheck}
-          tone={metrics.truthReady && metrics.runtimeReady ? "success" : "warning"}
-        />
-      </div>
-
-      <OmnichannelFlow ready={metrics.launchReady} />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="space-y-4">
-          <ChannelReadiness channels={obj(state.posture?.channels)} />
-          <CustomerFunnel leads={state.leads} />
-        </div>
-
-        <div className="space-y-4">
-          <SafetyFlow
-            truthReady={metrics.truthReady}
-            runtimeReady={metrics.runtimeReady}
-            channelReady={metrics.channelReady}
-          />
-
-          <Card padded={false} clip>
-            <div className="border-b border-line-soft px-4 py-3.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                Next actions
-              </div>
-              <div className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                Operational shortcuts
-              </div>
-            </div>
-
-            <div className="grid gap-2 px-4 py-4">
-              <Button
-                type="button"
-                variant="secondary"
-                fullWidth
-                onClick={() => navigate("/launch")}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                Review Launch Checklist
-              </Button>
-
-              <Button
-                type="button"
-                variant="secondary"
-                fullWidth
-                onClick={() => navigate("/channels")}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                Open Customer Channels
-              </Button>
-
-              <Button
-                type="button"
-                fullWidth
-                onClick={() => navigate("/inbox")}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                Open Inbox
-              </Button>
-            </div>
-          </Card>
-
-          <Card padded="md">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border border-line-soft bg-brand-soft">
-                <Sparkles className="h-5 w-5 text-brand" strokeWidth={2.1} />
-              </span>
-
-              <div>
-                <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                  Executive summary
-                </div>
-                <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
-                  {metrics.launchReady
-                    ? "Workspace is ready for controlled customer conversations across connected channels."
-                    : "Workspace is still guarded. Finish Business Info, runtime, and at least one channel before relying on live AI replies."}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
       </div>
     </PageCanvas>
   );

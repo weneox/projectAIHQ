@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
 import Card from "../components/ui/Card.jsx";
+import Badge from "../components/ui/Badge.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -23,7 +24,7 @@ import {
 } from "../lib/welcomeIdentity.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  return String(value ?? fallback).trim();
 }
 
 function ignoreError() {
@@ -33,7 +34,7 @@ function ignoreError() {
 function WelcomeField({ icon: Icon, label, value, onChange, placeholder }) {
   return (
     <label className="block">
-      <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold text-text-muted">
+      <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
         <Icon className="h-4 w-4 text-text-subtle" strokeWidth={2.05} />
         {label}
       </div>
@@ -45,6 +46,26 @@ function WelcomeField({ icon: Icon, label, value, onChange, placeholder }) {
         appearance="quiet"
       />
     </label>
+  );
+}
+
+function StepCard({ label, value, hint, tone = "neutral" }) {
+  return (
+    <Card padded="sm" tone={tone}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+        {label}
+      </div>
+
+      <div className="mt-2 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+        {value}
+      </div>
+
+      {hint ? (
+        <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
+          {hint}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
@@ -147,33 +168,51 @@ export default function Welcome() {
 
   if (loading) {
     return (
-      <PageCanvas className="max-w-[780px] py-3">
+      <PageCanvas className="max-w-[920px]">
         <LoadingSurface
-          title="Preparing workspace"
-          description="Loading the identity step."
+          title="Preparing welcome"
+          description="Loading the workspace identity step."
         />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="max-w-[820px] py-3">
-      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
-        <div className="px-6 py-6">
-          <div className="text-[12px] font-semibold text-brand">
-            Welcome
+    <PageCanvas className="max-w-[1040px] space-y-5">
+      <section className="border-b border-line-soft pb-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0 max-w-[760px]">
+            <Badge tone="brand" size="sm">
+              Welcome
+            </Badge>
+
+            <h1 className="mt-4 font-display text-[32px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[38px]">
+              A quick identity pass.
+            </h1>
+
+            <p className="mt-3 max-w-[620px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
+              Just the essentials, then into the launch lane.
+            </p>
           </div>
 
-          <h1 className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Set up your workspace identity
-          </h1>
-
-          <p className="mt-2 max-w-[620px] text-[13.5px] font-medium leading-6 text-text-muted">
-            Add the basic identity used inside the workspace. Business details can be refined later.
-          </p>
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[420px]">
+            <StepCard
+              label="Step"
+              value="Identity"
+              tone="brand"
+              hint="One small pass."
+            />
+            <StepCard
+              label="Next"
+              value="Launch lane"
+              hint="Then straight into the product."
+            />
+          </div>
         </div>
+      </section>
 
-        <form className="border-t border-line-soft px-6 py-6" onSubmit={handleSubmit}>
+      <Card padded="lg" className="max-w-[760px]">
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
             <WelcomeField
               icon={User2}
@@ -192,23 +231,19 @@ export default function Welcome() {
             />
           </div>
 
-          <div className="mt-4">
-            <WelcomeField
-              icon={Building2}
-              label="Company"
-              value={form.companyName}
-              onChange={(event) => patchField("companyName", event.target.value)}
-              placeholder="Company name"
-            />
-          </div>
+          <WelcomeField
+            icon={Building2}
+            label="Company"
+            value={form.companyName}
+            onChange={(event) => patchField("companyName", event.target.value)}
+            placeholder="Company name"
+          />
 
           {error ? (
-            <div className="mt-4">
-              <InlineNotice tone="danger" description={error} compact />
-            </div>
+            <InlineNotice tone="danger" description={error} compact />
           ) : null}
 
-          <div className="mt-6 flex items-center justify-end border-t border-line-soft pt-5">
+          <div className="flex items-center justify-end border-t border-line-soft pt-5">
             <Button
               type="submit"
               size="md"

@@ -213,92 +213,113 @@ function connectedLaneName(readinessState = {}, channels = []) {
 
 function Header({ activeLane, refreshing, onRefresh }) {
   return (
-    <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0">
-        <div className="text-[12px] font-semibold text-brand">Channels</div>
-        <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Customer lanes
-        </h1>
-        <p className="mt-2 max-w-[680px] text-[13.5px] font-medium leading-6 text-text-muted">
-          Pick the channel you want to use with customers. Unused lanes can stay quiet.
-        </p>
-      </div>
+    <Card
+      padded={false}
+      clip
+      className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]"
+    >
+      <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-brand">Channels</div>
+          <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Customer lanes
+          </h1>
+          <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
+            Choose the channel you want to use with customers. Other lanes can stay unused until you need them.
+          </p>
+        </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {activeLane ? (
-          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            {activeLane}
-          </span>
-        ) : (
-          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
-            No active lane yet
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {activeLane ? (
+            <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              {activeLane}
+            </span>
+          ) : (
+            <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
+              No active lane yet
+            </span>
+          )}
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          loading={refreshing}
-          onClick={onRefresh}
-          leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-        >
-          Refresh
-        </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={refreshing}
+            onClick={onRefresh}
+            leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+          >
+            Refresh
+          </Button>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
+
 function ChannelCard({ channel, runtime, onInspect }) {
   const status = laneStatus(runtime);
-  const actionLabel = runtime.deliveryReady
-    ? "Manage"
-    : runtime.needsReview
-      ? "Review"
-      : "Choose";
 
   return (
-    <div className="flex min-h-[230px] flex-col px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center">
-            <div className="scale-[1.35] transform-gpu">
-              <ChannelIcon channel={channel} size="md" />
+    <Card
+      padded={false}
+      clip
+      className="shadow-[0_24px_70px_-64px_rgba(15,23,42,0.52)]"
+    >
+      <div className="flex min-h-[260px] flex-col px-5 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-surface-subtle">
+              <ChannelIcon channel={channel} size="sm" />
             </div>
-          </div>
 
-          <div className="min-w-0">
-            <h2 className="truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              {channel.name}
-            </h2>
-
-            <div className={cx("mt-1 flex items-center gap-2 text-[12px] font-semibold", textClass(status.tone))}>
-              <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(status.tone))} />
-              {status.label}
+            <div className="min-w-0">
+              <h2 className="truncate text-[15.5px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                {channel.name}
+              </h2>
+              <div className={cx("mt-1 flex items-center gap-2 text-[12px] font-semibold", textClass(status.tone))}>
+                <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(status.tone))} />
+                {status.label}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <p className="mt-5 line-clamp-3 text-[13.5px] font-medium leading-6 text-text-muted">
-        {s(runtime.summary) || channel.summary}
-      </p>
+        <p className="mt-5 text-[13.5px] font-medium leading-6 text-text-muted">
+          {status.body}
+        </p>
 
-      <div className="mt-auto pt-5">
-        <button
-          type="button"
-          onClick={() => onInspect(channel.id)}
-          className="inline-flex h-9 items-center gap-2 rounded-full bg-brand px-4 text-[13px] font-semibold text-white shadow-[0_16px_36px_-24px_rgba(37,99,235,0.75)] transition-all duration-base ease-premium hover:-translate-y-px"
-        >
-          {actionLabel}
-          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
-        </button>
+        <p className="mt-2 line-clamp-3 text-[13px] font-medium leading-6 text-text-subtle">
+          {s(runtime.summary) || channel.summary}
+        </p>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+          <button
+            type="button"
+            onClick={() => onInspect(channel.id)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-2 text-[13px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-brand-soft hover:text-brand"
+          >
+            Details
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          </button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant={runtime.deliveryReady ? "secondary" : "primary"}
+            disabled={runtime.available === false}
+            onClick={() => onInspect(channel.id)}
+            rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
+          >
+            {status.action}
+          </Button>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
+
 export default function ChannelCatalog() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -478,28 +499,22 @@ export default function ChannelCatalog() {
           />
         ) : null}
 
-        <Card
-          padded={false}
-          clip
-          className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]"
-        >
-          <Header
-            activeLane={activeLane}
-            refreshing={effectiveReadinessState.loading}
-            onRefresh={refresh}
-          />
+        <Header
+          activeLane={activeLane}
+          refreshing={effectiveReadinessState.loading}
+          onRefresh={refresh}
+        />
 
-          <div className="grid divide-y divide-line-soft md:grid-cols-3 md:divide-x md:divide-y-0">
-            {channels.map((channel) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                runtime={runtimeFor(channel, effectiveReadinessState)}
-                onInspect={updateSelectedChannel}
-              />
-            ))}
-          </div>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-3">
+          {channels.map((channel) => (
+            <ChannelCard
+              key={channel.id}
+              channel={channel}
+              runtime={runtimeFor(channel, effectiveReadinessState)}
+              onInspect={updateSelectedChannel}
+            />
+          ))}
+        </div>
       </PageCanvas>
 
       {drawerChannel ? (

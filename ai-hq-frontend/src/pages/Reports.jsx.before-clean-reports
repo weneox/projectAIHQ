@@ -1,0 +1,884 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Globe2,
+  Inbox,
+  Network,
+  RefreshCw,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+
+import { getLaunchPosture } from "../api/launch.js";
+import { listLeads } from "../api/leads.js";
+import Badge from "../components/ui/Badge.jsx";
+import Button from "../components/ui/Button.jsx";
+import Card from "../components/ui/Card.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+} from "../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../lib/cx.js";
+
+const CHANNEL_IDS = ["website", "instagram", "telegram"];
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function n(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function titleize(value = "") {
+  return s(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function leadStage(lead = {}) {
+  return lower(lead.stage || "new");
+}
+
+function leadStatus(lead = {}) {
+  return lower(lead.status || "open");
+}
+
+function pickLeadName(lead = {}) {
+  return s(
+    lead.full_name ||
+      lead.fullName ||
+      lead.name ||
+      lead.display_name ||
+      lead.username ||
+      lead.email ||
+      lead.phone ||
+      "Unknown customer"
+  );
+}
+
+function pickLeadMeta(lead = {}) {
+  return [s(lead.email), s(lead.phone), s(lead.username)]
+    .filter(Boolean)
+    .join(" Â· ");
+}
+
+function channelLabel(id = "") {
+  const safe = lower(id);
+  if (safe === "website") return "Website";
+  if (safe === "instagram") return "Instagram";
+  if (safe === "telegram") return "Telegram";
+  return titleize(safe || "Channel");
+}
+
+function toneTextClass(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand" || tone === "info") return "text-brand";
+  return "text-text-muted";
+}
+
+function toneDotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand" || tone === "info") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function stageTone(stage = "") {
+  const safe = lower(stage);
+  if (["won", "converted", "customer"].includes(safe)) return "success";
+  if (["lost", "closed_lost"].includes(safe)) return "danger";
+  if (["qualified", "proposal", "negotiation"].includes(safe)) return "brand";
+  return "neutral";
+}
+
+function channelTone(channel = {}) {
+  if (channel.deliveryReady === true) return "success";
+  if (channel.connected === true) return "warning";
+  if (channel.available === false) return "danger";
+  return "neutral";
+}
+
+function channelStatus(channel = {}) {
+  if (channel.deliveryReady === true) return "Live";
+  if (channel.connected === true) return "Review";
+  if (channel.available === false) return "Unavailable";
+  return "Off";
+}
+
+function SectionTitle({ eyebrow, title, right }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3">
+      <div className="min-w-0">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+          {eyebrow}
+        </div>
+        <div className="mt-1 truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+          {title}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, detail, icon: Icon, tone = "neutral" }) {
+  return (
+    <Card padded="sm" className="min-h-[108px]">
+      <div className="flex h-full flex-col justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-text-subtle">
+            {label}
+          </span>
+          <span
+            className={cx(
+              "inline-flex h-8 w-8 items-center justify-center rounded-[13px] border border-line-soft bg-surface-subtle",
+              toneTextClass(tone)
+            )}
+          >
+            <Icon className="h-4 w-4" strokeWidth={2.1} />
+          </span>
+        </div>
+
+        <div>
+          <div className="text-[27px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+            {value}
+          </div>
+          <div className="mt-1.5 text-[12px] font-medium leading-5 text-text-muted">
+            {detail}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function BarMeter({ label, value, total, tone = "brand", detail = "" }) {
+  const safeTotal = Math.max(1, Number(total || 0));
+  const width = Math.max(value > 0 ? 7 : 0, Math.round((value / safeTotal) * 100));
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold text-text">
+            {label}
+          </div>
+          {detail ? (
+            <div className="mt-0.5 truncate text-[11.5px] font-medium text-text-subtle">
+              {detail}
+            </div>
+          ) : null}
+        </div>
+        <div className={cx("text-[13px] font-semibold", toneTextClass(tone))}>
+          {value}
+        </div>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-surface-subtle">
+        <div
+          className={cx(
+            "h-full rounded-full transition-all duration-slow ease-premium",
+            tone === "success"
+              ? "bg-success"
+              : tone === "warning"
+                ? "bg-warning"
+                : tone === "danger"
+                  ? "bg-danger"
+                  : "bg-brand"
+          )}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SnapshotBar({ metrics, refreshing, onRefresh }) {
+  return (
+    <Card padded={false} clip>
+      <div className="flex flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-8 items-center gap-2 rounded-[13px] border border-line-soft bg-white px-3 text-[12px] font-semibold text-text">
+              <Activity className="h-4 w-4 text-brand" strokeWidth={2.1} />
+              Operating snapshot
+            </span>
+
+            <Badge tone={metrics.launchReady ? "success" : "warning"} size="sm">
+              {metrics.launchReady ? "Ready" : "Guarded"}
+            </Badge>
+
+            <Badge tone={metrics.channelReady ? "success" : "neutral"} size="sm">
+              {metrics.readyChannels}/{metrics.availableChannels} channels
+            </Badge>
+          </div>
+
+          <div className="mt-2 text-[13px] font-medium leading-5 text-text-muted">
+            Live workspace posture across inbox, customers, channels, and AI.
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={refreshing}
+          onClick={onRefresh}
+          leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+        >
+          Refresh
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function ChannelMatrix({ channels = [] }) {
+  return (
+    <Card padded={false} clip>
+      <SectionTitle eyebrow="Channels" title="Readiness matrix" />
+
+      <div className="grid gap-3 px-4 py-4">
+        {channels.map((channel) => (
+          <div
+            key={channel.id}
+            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[18px] border border-line-soft bg-surface px-3.5 py-3"
+          >
+            <span
+              className={cx(
+                "inline-flex h-10 w-10 items-center justify-center rounded-[15px] border",
+                channel.deliveryReady
+                  ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
+                  : channel.connected
+                    ? "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
+                    : "border-line-soft bg-surface-subtle text-text-muted"
+              )}
+            >
+              <Globe2 className="h-5 w-5" strokeWidth={2.1} />
+            </span>
+
+            <div className="min-w-0">
+              <div className="truncate text-[13.5px] font-semibold text-text">
+                {channel.label}
+              </div>
+              <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
+                {channel.deliveryReady
+                  ? "Live delivery ready"
+                  : channel.connected
+                    ? "Connected, needs review"
+                    : channel.available
+                      ? "Available, not connected"
+                      : "Provider unavailable"}
+              </div>
+            </div>
+
+            <Badge tone={channel.tone} size="sm">
+              {channel.status}
+            </Badge>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PressurePanel({ metrics }) {
+  const total = Math.max(
+    1,
+    metrics.inboxOpen,
+    metrics.inboxUnread,
+    metrics.handoff,
+    metrics.outboundPressure
+  );
+
+  return (
+    <Card padded={false} clip>
+      <SectionTitle eyebrow="Inbox" title="Conversation pressure" />
+
+      <div className="space-y-4 px-4 py-4">
+        <BarMeter
+          label="Open conversations"
+          value={metrics.inboxOpen}
+          total={total}
+          tone={metrics.inboxOpen ? "brand" : "neutral"}
+          detail="Active threads across channels"
+        />
+        <BarMeter
+          label="Unread messages"
+          value={metrics.inboxUnread}
+          total={total}
+          tone={metrics.inboxUnread ? "warning" : "success"}
+          detail="Customer messages waiting"
+        />
+        <BarMeter
+          label="Human handoff"
+          value={metrics.handoff}
+          total={total}
+          tone={metrics.handoff ? "warning" : "success"}
+          detail="Operator-owned conversations"
+        />
+        <BarMeter
+          label="Outbound attention"
+          value={metrics.outboundPressure}
+          total={total}
+          tone={metrics.outboundPressure ? "warning" : "success"}
+          detail="Pending, failed, or retrying replies"
+        />
+      </div>
+    </Card>
+  );
+}
+
+function CustomerPipeline({ buckets, total }) {
+  const max = Math.max(1, ...buckets.map((item) => item.value));
+
+  return (
+    <Card padded={false} clip>
+      <SectionTitle eyebrow="Customers" title="Pipeline" />
+
+      <div className="space-y-4 px-4 py-4">
+        {buckets.map((bucket) => (
+          <BarMeter
+            key={bucket.id}
+            label={bucket.label}
+            value={bucket.value}
+            total={max}
+            tone={bucket.tone}
+            detail={total ? `${Math.round((bucket.value / Math.max(1, total)) * 100)}% of records` : "No records yet"}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function GuardrailPanel({ metrics, onNavigate }) {
+  const rows = [
+    {
+      label: "Business Info",
+      ready: metrics.truthReady,
+      pending: "Needs approval",
+      readyLabel: "Approved",
+      path: "/truth",
+    },
+    {
+      label: "Runtime authority",
+      ready: metrics.runtimeReady,
+      pending: "Guarded",
+      readyLabel: "Ready",
+      path: "/truth",
+    },
+    {
+      label: "Live channel",
+      ready: metrics.channelReady,
+      pending: "Connect",
+      readyLabel: "Live",
+      path: "/channels",
+    },
+    {
+      label: "Inbox activity",
+      ready: metrics.inboxAvailable,
+      pending: "Unavailable",
+      readyLabel: "Available",
+      path: "/inbox",
+    },
+  ];
+
+  return (
+    <Card padded={false} clip>
+      <SectionTitle eyebrow="AI guard" title="Runtime authority" />
+
+      <div className="divide-y divide-line-soft">
+        {rows.map((row, index) => (
+          <button
+            type="button"
+            key={row.label}
+            onClick={() => onNavigate(row.path)}
+            className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line-soft bg-surface">
+              {row.ready ? (
+                <CheckCircle2 className="h-4.5 w-4.5 text-success" strokeWidth={2.1} />
+              ) : (
+                <CircleAlert className="h-4.5 w-4.5 text-warning" strokeWidth={2.1} />
+              )}
+            </span>
+
+            <span className="min-w-0">
+              <span className="block truncate text-[13.5px] font-semibold text-text">
+                {index + 1}. {row.label}
+              </span>
+              <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
+                {row.ready ? row.readyLabel : row.pending}
+              </span>
+            </span>
+
+            <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" strokeWidth={2.1} />
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function RecentCustomers({ leads = [], onNavigate }) {
+  const visible = leads.slice(0, 5);
+
+  return (
+    <Card padded={false} clip>
+      <SectionTitle
+        eyebrow="Customers"
+        title="Recent records"
+        right={
+          <button
+            type="button"
+            onClick={() => onNavigate("/customers")}
+            className="text-[12px] font-semibold text-brand"
+          >
+            View all
+          </button>
+        }
+      />
+
+      {visible.length ? (
+        <div className="divide-y divide-line-soft">
+          {visible.map((lead, index) => {
+            const stage = leadStage(lead);
+            const key = s(lead.id || lead.inbox_thread_id || lead.email || lead.username || index);
+
+            return (
+              <div
+                key={key}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5"
+              >
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line-soft bg-surface-subtle">
+                  <Users className="h-4.5 w-4.5 text-text-muted" strokeWidth={2.1} />
+                </span>
+
+                <div className="min-w-0">
+                  <div className="truncate text-[13.5px] font-semibold text-text">
+                    {pickLeadName(lead)}
+                  </div>
+                  <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
+                    {pickLeadMeta(lead) || "No contact details"}
+                  </div>
+                </div>
+
+                <Badge tone={stageTone(stage)} size="sm">
+                  {titleize(stage || "new")}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-4 py-8 text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[16px] border border-line-soft bg-surface-subtle">
+            <Users className="h-5 w-5 text-text-muted" strokeWidth={2.1} />
+          </div>
+          <div className="mt-3 text-[13.5px] font-semibold text-text">
+            No customer records yet
+          </div>
+          <div className="mx-auto mt-1 max-w-[360px] text-[12.5px] font-medium leading-5 text-text-muted">
+            Records will appear when conversations create leads.
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SummaryPanel({ metrics }) {
+  const status = metrics.launchReady ? "Ready" : "Guarded";
+
+  return (
+    <Card padded="md">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+        Executive summary
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+            {status}
+          </div>
+          <div className="mt-1.5 text-[12.5px] font-medium text-text-muted">
+            Current launch posture
+          </div>
+        </div>
+
+        <span
+          className={cx(
+            "inline-flex h-11 w-11 items-center justify-center rounded-[17px] border",
+            metrics.launchReady
+              ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
+              : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
+          )}
+        >
+          {metrics.launchReady ? (
+            <CheckCircle2 className="h-5 w-5" strokeWidth={2.1} />
+          ) : (
+            <CircleAlert className="h-5 w-5" strokeWidth={2.1} />
+          )}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {[
+          ["Channels", `${metrics.readyChannels}/${metrics.availableChannels} live`, metrics.channelReady ? "success" : "neutral"],
+          ["Inbox pressure", `${metrics.inboxUnread} unread`, metrics.inboxUnread ? "warning" : "success"],
+          ["Customers", String(metrics.leadsTotal), metrics.leadsTotal ? "brand" : "neutral"],
+        ].map(([label, value, tone]) => (
+          <div key={label} className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
+              <span className="truncate text-[13px] font-semibold text-text-muted">
+                {label}
+              </span>
+            </div>
+            <span className={cx("shrink-0 text-[13px] font-semibold", toneTextClass(tone))}>
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-[18px] border border-line-soft bg-surface-subtle px-4 py-3 text-[13px] font-medium leading-6 text-text-muted">
+        {metrics.launchReady
+          ? "Workspace is ready for controlled customer operations."
+          : "Guarded mode is active. Business Info, runtime authority, and one delivery-ready channel are required before live AI replies become trusted."}
+      </div>
+    </Card>
+  );
+}
+
+function ShortcutPanel({ onNavigate }) {
+  const items = [
+    { label: "Open Inbox", path: "/inbox", icon: Inbox, primary: true },
+    { label: "Channels", path: "/channels", icon: Network },
+    { label: "Business Info", path: "/truth", icon: ShieldCheck },
+    { label: "Customers", path: "/customers", icon: Users },
+  ];
+
+  return (
+    <Card padded={false} clip>
+      <SectionTitle eyebrow="Routes" title="Operational shortcuts" />
+
+      <div className="grid gap-2 px-4 py-3">
+        {items.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <Button
+              key={item.path}
+              type="button"
+              variant={item.primary ? "primary" : "secondary"}
+              fullWidth
+              onClick={() => onNavigate(item.path)}
+              leftIcon={<Icon className="h-4 w-4" strokeWidth={2.1} />}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              {item.label}
+            </Button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+export default function Reports() {
+  const navigate = useNavigate();
+  const [state, setState] = useState({
+    loading: true,
+    refreshing: false,
+    error: "",
+    posture: null,
+    leads: [],
+    leadsDegraded: false,
+  });
+
+  const load = useCallback(async ({ refreshing = false } = {}) => {
+    setState((current) => ({
+      ...current,
+      loading: !refreshing,
+      refreshing,
+      error: "",
+    }));
+
+    try {
+      const [posture, leadsPayload] = await Promise.all([
+        getLaunchPosture(),
+        listLeads({ limit: 200 }).catch((error) => ({
+          ok: false,
+          leads: [],
+          degraded: true,
+          error: s(error?.message),
+        })),
+      ]);
+
+      setState({
+        loading: false,
+        refreshing: false,
+        error: "",
+        posture,
+        leads: arr(leadsPayload?.leads),
+        leadsDegraded: leadsPayload?.degraded === true,
+      });
+    } catch (error) {
+      setState({
+        loading: false,
+        refreshing: false,
+        error:
+          s(error?.payload?.error || error?.payload?.message || error?.message) ||
+          "Reports could not be loaded.",
+        posture: null,
+        leads: [],
+        leadsDegraded: false,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  const model = useMemo(() => {
+    const posture = obj(state.posture);
+    const channelMap = obj(posture.channels);
+    const channelSummary = obj(posture.channelSummary);
+    const inbox = obj(posture.inbox);
+    const leads = arr(state.leads);
+
+    const channels = CHANNEL_IDS.map((id) => {
+      const source = obj(channelMap[id]);
+      const available = source.available !== false;
+      const connected = source.connected === true;
+      const deliveryReady = source.deliveryReady === true;
+
+      return {
+        id,
+        label: channelLabel(id),
+        available,
+        connected,
+        deliveryReady,
+        tone: channelTone({ available, connected, deliveryReady }),
+        status: channelStatus({ available, connected, deliveryReady }),
+      };
+    });
+
+    const readyChannels = Math.max(
+      n(channelSummary.readyCount),
+      channels.filter((channel) => channel.deliveryReady).length
+    );
+    const connectedChannels = Math.max(
+      n(channelSummary.connectedCount),
+      channels.filter((channel) => channel.connected).length
+    );
+    const availableChannels = Math.max(
+      1,
+      channels.filter((channel) => channel.available).length
+    );
+
+    const inboxOpen = n(inbox.openCount);
+    const inboxUnread = n(inbox.unreadCount);
+    const handoff = n(inbox.handoffCount);
+    const pendingOutbound = n(inbox.pendingOutboundCount);
+    const failedOutbound = n(inbox.failedOutboundCount);
+    const retryingOutbound = n(inbox.retryingOutboundCount);
+    const outboundPressure = pendingOutbound + failedOutbound + retryingOutbound;
+
+    const truthReady = posture.truth?.ready === true;
+    const runtimeReady = posture.runtime?.ready === true;
+    const channelReady = readyChannels > 0;
+    const inboxAvailable = inbox.available !== false;
+    const launchReady = posture.overall?.launchReady === true;
+
+    const buckets = [
+      {
+        id: "new",
+        label: "New",
+        value: leads.filter((lead) => ["", "new"].includes(leadStage(lead))).length,
+        tone: "neutral",
+      },
+      {
+        id: "qualified",
+        label: "Qualified",
+        value: leads.filter((lead) =>
+          ["qualified", "proposal", "negotiation"].includes(leadStage(lead))
+        ).length,
+        tone: "brand",
+      },
+      {
+        id: "won",
+        label: "Won",
+        value: leads.filter((lead) =>
+          ["won", "converted", "customer"].includes(leadStage(lead))
+        ).length,
+        tone: "success",
+      },
+      {
+        id: "lost",
+        label: "Lost",
+        value: leads.filter((lead) =>
+          ["lost", "closed_lost"].includes(leadStage(lead))
+        ).length,
+        tone: "danger",
+      },
+    ];
+
+    const openLeads = leads.filter((lead) =>
+      ["open", "new", "active"].includes(leadStatus(lead))
+    ).length;
+
+    return {
+      leads,
+      channels,
+      buckets,
+      metrics: {
+        launchReady,
+        truthReady,
+        runtimeReady,
+        channelReady,
+        inboxAvailable,
+        readyChannels,
+        connectedChannels,
+        availableChannels,
+        inboxOpen,
+        inboxUnread,
+        handoff,
+        pendingOutbound,
+        failedOutbound,
+        retryingOutbound,
+        outboundPressure,
+        leadsTotal: leads.length,
+        openLeads,
+      },
+    };
+  }, [state.posture, state.leads]);
+
+  function handleNavigate(path = "") {
+    if (!path) return;
+    navigate(path);
+  }
+
+  if (state.loading) {
+    return (
+      <PageCanvas className="max-w-[1320px] py-2">
+        <LoadingSurface title="Loading reports" />
+      </PageCanvas>
+    );
+  }
+
+  return (
+    <PageCanvas className="max-w-[1320px] space-y-4 py-2">
+      {state.error ? (
+        <InlineNotice
+          tone="danger"
+          title="Reports unavailable"
+          description={state.error}
+          compact
+        />
+      ) : null}
+
+      {state.leadsDegraded ? (
+        <InlineNotice
+          tone="warning"
+          title="Customer analytics degraded"
+          description="Lead/customer schema is unavailable in this environment, so customer analytics only show available data."
+          compact
+        />
+      ) : null}
+
+      <SnapshotBar
+        metrics={model.metrics}
+        refreshing={state.refreshing}
+        onRefresh={() => load({ refreshing: true })}
+      />
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Conversations"
+          value={model.metrics.inboxOpen}
+          detail={`${model.metrics.inboxUnread} unread / ${model.metrics.handoff} handoff`}
+          icon={Inbox}
+          tone={model.metrics.inboxUnread > 0 ? "warning" : "brand"}
+        />
+
+        <MetricCard
+          label="Customers"
+          value={model.metrics.leadsTotal}
+          detail={`${model.metrics.openLeads} open records`}
+          icon={Users}
+          tone={model.metrics.leadsTotal > 0 ? "brand" : "neutral"}
+        />
+
+        <MetricCard
+          label="Channels"
+          value={`${model.metrics.readyChannels}/${model.metrics.availableChannels}`}
+          detail={`${model.metrics.connectedChannels} connected`}
+          icon={Network}
+          tone={model.metrics.channelReady ? "success" : "warning"}
+        />
+
+        <MetricCard
+          label="AI Guard"
+          value={model.metrics.truthReady && model.metrics.runtimeReady ? "Ready" : "Guarded"}
+          detail={model.metrics.outboundPressure ? `${model.metrics.outboundPressure} outbound actions` : "Manual-first control"}
+          icon={Bot}
+          tone={model.metrics.truthReady && model.metrics.runtimeReady ? "success" : "warning"}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <ChannelMatrix channels={model.channels} />
+            <PressurePanel metrics={model.metrics} />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
+            <CustomerPipeline buckets={model.buckets} total={model.metrics.leadsTotal} />
+            <RecentCustomers leads={model.leads} onNavigate={handleNavigate} />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <SummaryPanel metrics={model.metrics} />
+          <GuardrailPanel metrics={model.metrics} onNavigate={handleNavigate} />
+          <ShortcutPanel onNavigate={handleNavigate} />
+        </div>
+      </div>
+    </PageCanvas>
+  );
+}

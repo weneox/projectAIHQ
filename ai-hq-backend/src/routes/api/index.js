@@ -1,4 +1,4 @@
-﻿// src/routes/api/index.js
+// src/routes/api/index.js
 // FINAL v3.3.8
 
 import express from "express";
@@ -41,6 +41,7 @@ import { debateRoutes } from "./debate/index.js";
 import { debugRoutes } from "./debug/index.js";
 import { leadsInternalRoutes, leadsRoutes } from "./leads/index.js";
 import { launchInternalRoutes, launchRoutes } from "./launch/index.js";
+import { reportsRoutes } from "./reports/index.js";
 import { commentsInternalRoutes, commentsRoutes } from "./comments/index.js";
 import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
@@ -584,6 +585,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
   r.use("/", launchRoutes({ db }));
+  r.use("/", reportsRoutes({ db }));
 
   r.use("/", modeRoutes({ db, wsHub }));
   if (agentsEnabled) {

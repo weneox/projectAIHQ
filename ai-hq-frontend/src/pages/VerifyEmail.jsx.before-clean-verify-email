@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Mail,
@@ -17,7 +18,7 @@ import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
 import { clearAppSessionContext } from "../lib/appSession.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  return String(value ?? fallback).trim();
 }
 
 function normalizeCode(value = "") {
@@ -114,10 +115,10 @@ export default function VerifyEmail() {
       if (!token) {
         setStatus("code");
         setMessage({
-          title: sent ? "Code sent" : "Verify email",
+          title: sent ? "Check your email" : "Verify your email",
           description: sent
-            ? "Enter the 6-digit code from your latest email."
-            : "Use the 6-digit verification code from your latest email.",
+            ? "We sent a 6-digit verification code to your email."
+            : "Enter the 6-digit verification code from your latest email.",
         });
         return;
       }
@@ -137,8 +138,8 @@ export default function VerifyEmail() {
             ? "Email already verified"
             : "Email verified",
           description: result?.alreadyVerified
-            ? "This email was already verified."
-            : "Your email has been verified.",
+            ? "This email was already verified. You can continue to your workspace."
+            : "Your email has been verified. You can continue to your workspace.",
         });
       } catch (error) {
         if (!alive) return;
@@ -181,8 +182,8 @@ export default function VerifyEmail() {
           ? "Email already verified"
           : "Email verified",
         description: result?.alreadyVerified
-          ? "This email was already verified."
-          : "Your email has been verified.",
+          ? "This email was already verified. You can continue to your workspace."
+          : "Your email has been verified. You can continue to your workspace.",
       });
     } catch (error) {
       setStatus("failed");
@@ -246,41 +247,33 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-screen bg-white text-text">
-      <main className="mx-auto flex min-h-screen w-full max-w-[520px] flex-col justify-center px-6 py-10">
-        <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
-          <div className="px-6 py-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-[12px] font-semibold text-brand">
-                  Email
-                </div>
-
-                <h1 className="mt-1 text-[21px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  {verified
-                    ? "Email verified"
-                    : verifying
-                      ? "Verifying email"
-                      : "Verify your email"}
-                </h1>
-              </div>
-
-              {verified ? (
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-success" strokeWidth={2.1} />
-              ) : verifying ? (
-                <RefreshCw className="h-5 w-5 shrink-0 animate-spin text-text-muted" strokeWidth={2.1} />
-              ) : (
-                <Mail className="h-5 w-5 shrink-0 text-text-muted" strokeWidth={2.1} />
-              )}
-            </div>
-
-            <p className="mt-3 text-[13.5px] font-medium leading-6 text-text-muted">
-              {message?.description ||
-                "Enter the 6-digit verification code from your latest email."}
-            </p>
+      <main className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col justify-center px-6 py-10">
+        <Card padded="lg" className="text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[20px] border border-line-soft bg-surface-muted">
+            {verified ? (
+              <CheckCircle2 className="h-7 w-7 text-success" strokeWidth={2.1} />
+            ) : verifying ? (
+              <RefreshCw className="h-7 w-7 animate-spin text-text-muted" strokeWidth={2.1} />
+            ) : (
+              <AlertCircle className="h-7 w-7 text-warning" strokeWidth={2.1} />
+            )}
           </div>
 
+          <h1 className="mt-6 font-display text-[38px] font-semibold leading-[0.98] tracking-[var(--tracking-tight-xl)] text-text">
+            {verified
+              ? "Email verified"
+              : verifying
+                ? "Verifying email"
+                : "Check your email"}
+          </h1>
+
+          <p className="mx-auto mt-4 max-w-[420px] text-[15px] font-medium leading-6 text-text-muted">
+            {message?.description ||
+              "Enter the 6-digit verification code from your latest email."}
+          </p>
+
           {!verified && !token ? (
-            <form className="border-t border-line-soft px-6 py-5" onSubmit={handleVerifyCode}>
+            <form className="mx-auto mt-7 max-w-[340px] space-y-3" onSubmit={handleVerifyCode}>
               <input
                 name="verificationCode"
                 inputMode="numeric"
@@ -288,14 +281,13 @@ export default function VerifyEmail() {
                 value={verificationCode}
                 onChange={(event) => setVerificationCode(normalizeCode(event.target.value))}
                 placeholder="6-digit code"
-                className="h-12 w-full rounded-[16px] border border-line bg-white px-5 text-center text-[22px] font-semibold tracking-[0.28em] text-text outline-none transition-colors duration-base ease-premium placeholder:text-[14px] placeholder:tracking-normal placeholder:text-text-subtle focus:border-brand"
+                className="h-14 w-full rounded-[18px] border border-line bg-white px-5 text-center text-[24px] font-semibold tracking-[0.3em] text-text outline-none transition-colors duration-base ease-premium placeholder:text-[15px] placeholder:tracking-normal placeholder:text-text-subtle focus:border-brand"
               />
 
               <Button
                 type="submit"
-                size="md"
+                size="hero"
                 fullWidth
-                className="mt-3"
                 disabled={!codeReady || verifying}
                 loading={verifying}
                 rightIcon={
@@ -308,7 +300,7 @@ export default function VerifyEmail() {
           ) : null}
 
           {message && !verified && status === "failed" ? (
-            <div className="border-t border-line-soft px-6 py-4">
+            <div className="mt-6 text-left">
               <InlineNotice
                 tone="danger"
                 title={message.title}
@@ -319,7 +311,7 @@ export default function VerifyEmail() {
           ) : null}
 
           {resendMessage ? (
-            <div className="border-t border-line-soft px-6 py-4">
+            <div className="mt-6 text-left">
               <InlineNotice
                 tone={resendMessage.tone}
                 title={resendMessage.title}
@@ -329,11 +321,11 @@ export default function VerifyEmail() {
             </div>
           ) : null}
 
-          <div className="grid gap-3 border-t border-line-soft px-6 py-5">
+          <div className="mt-8 space-y-3">
             {verified ? (
               <Button
                 type="button"
-                size="md"
+                size="hero"
                 fullWidth
                 rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
                 onClick={() => navigate("/home", { replace: true })}
@@ -344,7 +336,7 @@ export default function VerifyEmail() {
               <Button
                 type="button"
                 variant="secondary"
-                size="md"
+                size="hero"
                 fullWidth
                 loading={resending}
                 rightIcon={
@@ -358,7 +350,7 @@ export default function VerifyEmail() {
 
             <Link
               to="/login"
-              className="text-center text-[13px] font-semibold text-text-muted underline underline-offset-[3px] transition-colors hover:text-text"
+              className="inline-flex text-[14px] font-semibold text-text-muted underline underline-offset-[3px] transition-colors hover:text-text"
             >
               Back to sign in
             </Link>

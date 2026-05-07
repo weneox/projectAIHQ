@@ -56,7 +56,7 @@ function SidebarVectorIcon({ Icon, isActive = false }) {
     <span className="relative z-[2] flex h-6 w-6 shrink-0 items-center justify-center">
       <Icon
         className={cx(
-          "block h-[21px] w-[21px] shrink-0 transition-colors duration-base ease-premium",
+          "block h-[21px] w-[21px] shrink-0 transition-[color,transform,filter] duration-slow ease-premium group-hover:scale-[1.065] group-hover:drop-shadow-[0_8px_12px_rgba(46,96,255,0.24)]",
           isActive ? "text-brand" : "text-text-subtle group-hover:text-text"
         )}
         strokeWidth={1.95}
@@ -64,7 +64,6 @@ function SidebarVectorIcon({ Icon, isActive = false }) {
     </span>
   );
 }
-
 function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
   const linkLabel = badgeCount ? `${item.label} ${badgeCount}` : item.label;
@@ -109,12 +108,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           />
 
           <span className="pointer-events-none absolute inset-y-0 left-0 w-full opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(15,23,42,0.026)_0%,rgba(15,23,42,0.012)_34%,rgba(15,23,42,0)_76%)]" />
-
-          {item.iconType === "image" && item.iconSrc ? (
-            <SidebarImageIcon src={item.iconSrc} isActive={isActive} />
-          ) : (
-            <SidebarVectorIcon Icon={Icon} isActive={isActive} />
-          )}
+          <SidebarVectorIcon Icon={Icon} isActive={isActive} />
 
           <div
             className={cx(
@@ -190,7 +184,7 @@ function CollapseControl({ collapsed = false, onToggle }) {
 }
 
 function SidebarBrandSpace() {
-  return <div className="h-[92px] shrink-0" />;
+  return <div className="h-[64px] shrink-0" />;
 }
 
 function SidebarChromeLayer() {
