@@ -167,15 +167,6 @@ function hasLiveWork(home) {
   );
 }
 
-function setupReadyCount(home) {
-  return [
-    businessReady(home),
-    channelReady(home),
-    inboxReadyForData(home) && businessReady(home) && channelReady(home),
-    aiOperating(home),
-  ].filter(Boolean).length;
-}
-
 function toneTextClass(tone = "neutral") {
   if (tone === "success") return "text-success";
   if (tone === "warning") return "text-warning";
@@ -559,75 +550,6 @@ function normalizeChannels(home) {
     account: "Open to configure",
     path: providerPath(provider),
   }));
-}
-
-function buildWorkItems(home) {
-  const items = [];
-
-  const unread = unreadCount(home);
-  const pending = outboundAttentionCount(home);
-  const handoff = handoffCount(home);
-  const open = openConversationCount(home);
-
-  if (unread > 0) {
-    items.push({
-      id: "inbox",
-      tone: "warning",
-      icon: MessageCircle,
-      title: "Inbox",
-      detail: `${pluralize(unread, "message")} waiting.`,
-      actionLabel: "Reply",
-      path: "/inbox",
-    });
-  } else if (pending > 0) {
-    items.push({
-      id: "outbound",
-      tone: "warning",
-      icon: Clock3,
-      title: "Replies",
-      detail: `${pluralize(pending, "reply")} need review.`,
-      actionLabel: "Review",
-      path: "/inbox",
-    });
-  }
-
-  if (handoff > 0) {
-    items.push({
-      id: "handoff",
-      tone: "brand",
-      icon: Inbox,
-      title: `${pluralize(handoff, "handoff")} active`,
-      detail: "Operator-owned conversations are active.",
-      actionLabel: "Open",
-      path: "/inbox",
-    });
-  }
-
-  if (open > 0 && !items.some((item) => item.id === "inbox")) {
-    items.push({
-      id: "open",
-      tone: "brand",
-      icon: Inbox,
-      title: `${pluralize(open, "conversation")} open`,
-      detail: "No urgent unread pressure, but the queue is active.",
-      actionLabel: "Open",
-      path: "/inbox",
-    });
-  }
-
-  if (!items.length) {
-    items.push({
-      id: "calm",
-      tone: "success",
-      icon: CheckCircle2,
-      title: "No urgent work",
-      detail: "Everything active is calm right now.",
-      actionLabel: "Open",
-      path: "/inbox",
-    });
-  }
-
-  return items.slice(0, 4);
 }
 
 function MiniTrend({ tone = "brand" }) {
