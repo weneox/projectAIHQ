@@ -28,6 +28,7 @@ const STAGES = [
   { key: "lost", label: "Lost" },
 ];
 
+
 const AVATAR_TONES = [
   "bg-[#FCE7F3] text-[#DB2777]",
   "bg-[#FFF3E6] text-[#C46A16]",
@@ -94,6 +95,7 @@ function leadStage(lead = {}) {
 function leadStatus(lead = {}) {
   return lower(lead.status || "open");
 }
+
 
 function leadThreadId(lead = {}) {
   return s(lead.inbox_thread_id || lead.inboxThreadId || lead.thread_id);
@@ -393,7 +395,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
 
   function closePanels() {
     setStageOpen(false);
-    setDateOpen(false);
+                setDateOpen(false);
   }
 
   return (
@@ -406,7 +408,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
       </colgroup>
 
       <thead className="bg-white">
-        <tr className="h-14 bg-white text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#66768A]" bg-white>
+        <tr className="h-14 bg-white text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#66768A]">
           <th className="relative z-[90] h-14 border-b border-[#D9E3EE] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
             <CustomerPicker
               leads={allLeads}
@@ -543,7 +545,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
                     onChange={(event) => {
                       onDateFilterChange?.(event.target.value);
                       setDateOpen(false);
-                    }}
+  }}
                     className="h-10 w-full rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[13px] font-semibold text-[#0F172A] outline-none transition-[border-color,box-shadow] hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
                     aria-label="Filter by date"
                   />
@@ -553,7 +555,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
                     onClick={() => {
                       onDateFilterChange?.("");
                       setDateOpen(false);
-                    }}
+  }}
                     className="mt-2 flex h-9 w-full items-center justify-between rounded-[12px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[#0F172A] transition-colors hover:bg-[#F6F9FC]"
                   >
                     Any date
@@ -565,6 +567,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
               </div>
             ) : null}
           </th>
+
 
           <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]" aria-hidden="true" />
         </tr>
@@ -1003,6 +1006,10 @@ const selectedLead = useMemo(() => {
     </PageCanvas>
   );
 }
+
+
+
+
 
 
 
