@@ -254,19 +254,11 @@ function Header({
           Pick the channel you want to use with customers. Unused lanes can stay quiet.
         </p>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("/truth")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
+        <div className="sr-only">
+          <button type="button" onClick={() => onNavigate("/truth")}>
             Open Business Info
           </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("/inbox")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
+          <button type="button" onClick={() => onNavigate("/inbox")}>
             Open Inbox
           </button>
         </div>
@@ -279,12 +271,9 @@ function Header({
         </span>
 
         {activeLane ? (
-          <span
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success"
-            title={activeLane}
-          >
+          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Active lane
+            {activeLane}
           </span>
         ) : null}
 
@@ -366,7 +355,6 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
           variant={runtime.deliveryReady ? "secondary" : "primary"}
           disabled={runtime.available === false}
           onClick={primaryAction}
-          aria-label={status.action}
           rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
         >
           {status.action}

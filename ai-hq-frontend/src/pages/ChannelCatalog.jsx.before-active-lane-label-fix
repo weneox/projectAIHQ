@@ -279,12 +279,9 @@ function Header({
         </span>
 
         {activeLane ? (
-          <span
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success"
-            title={activeLane}
-          >
+          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Active lane
+            {activeLane}
           </span>
         ) : null}
 

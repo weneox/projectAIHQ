@@ -130,15 +130,7 @@ export default defineConfig(({ mode }) => {
       teardownTimeout: 10000,
       server: {
         deps: {
-          inline: [
-            "react-router",
-            "react-router-dom",
-            "react-router/dom",
-            "recharts",
-            "@reduxjs/toolkit",
-            "redux",
-            "react-redux",
-          ],
+          inline: ["react-router", "react-router-dom", "react-router/dom"],
         },
       },
     },

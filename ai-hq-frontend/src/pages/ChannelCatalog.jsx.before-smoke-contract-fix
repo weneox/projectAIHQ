@@ -119,27 +119,9 @@ function buildReadinessStateFromPosture({
       loading: false,
       error: unavailable,
       channels: {
-        website: normalizePostureChannel("website", {
-          available: false,
-          connected: false,
-          deliveryReady: false,
-          status: "unavailable",
-          message: unavailable,
-        }),
-        instagram: normalizePostureChannel("instagram", {
-          available: false,
-          connected: false,
-          deliveryReady: false,
-          status: "unavailable",
-          message: unavailable,
-        }),
-        telegram: normalizePostureChannel("telegram", {
-          available: false,
-          connected: false,
-          deliveryReady: false,
-          status: "unavailable",
-          message: unavailable,
-        }),
+        website: normalizePostureChannel("website"),
+        instagram: normalizePostureChannel("instagram"),
+        telegram: normalizePostureChannel("telegram"),
       },
     };
   }
@@ -160,9 +142,6 @@ function buildReadinessStateFromPosture({
       deliveryReadyChannelIds: arr(channelSummary.deliveryReadyChannelIds),
       selectedChannelId: s(channelSummary.selectedChannelId),
     },
-    truth: obj(payload.truth),
-    runtime: obj(payload.runtime),
-    overall: obj(payload.overall),
   };
 }
 
@@ -173,10 +152,10 @@ function runtimeFor(channel, readinessState) {
 function laneStatus(runtime = {}) {
   if (runtime.deliveryReady) {
     return {
-      label: "Connected",
+      label: "Active",
       tone: "success",
       body: "This lane can receive customer conversations.",
-      action: "Inbox",
+      action: "Manage",
     };
   }
 
@@ -185,7 +164,7 @@ function laneStatus(runtime = {}) {
       label: "Review",
       tone: "warning",
       body: "This lane is attached and needs a quick review.",
-      action: "Fix",
+      action: "Review",
     };
   }
 
@@ -202,7 +181,7 @@ function laneStatus(runtime = {}) {
     label: "Available",
     tone: "neutral",
     body: "Choose this lane when you want to use it.",
-    action: "Connect",
+    action: "Details",
   };
 }
 
@@ -232,61 +211,31 @@ function connectedLaneName(readinessState = {}, channels = []) {
   return s(channels.find((channel) => channel.id === id)?.name);
 }
 
-function Header({
-  activeLane,
-  readinessState,
-  channelCount = 3,
-  refreshing,
-  onRefresh,
-  onNavigate,
-}) {
-  const readyCount = n(readinessState?.channelSummary?.readyCount);
-  const readyLabel = `${readyCount}/${channelCount} ready`;
-
+function Header({ activeLane, refreshing, onRefresh }) {
   return (
     <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
         <div className="text-[12px] font-semibold text-brand">Channels</div>
         <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Launch channels
+          Customer lanes
         </h1>
         <p className="mt-2 max-w-[680px] text-[13.5px] font-medium leading-6 text-text-muted">
           Pick the channel you want to use with customers. Unused lanes can stay quiet.
         </p>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("/truth")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
-            Open Business Info
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("/inbox")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
-            Open Inbox
-          </button>
-        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
-          <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
-          {readyLabel}
-        </span>
-
         {activeLane ? (
-          <span
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success"
-            title={activeLane}
-          >
+          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Active lane
+            {activeLane}
           </span>
-        ) : null}
+        ) : (
+          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
+            No active lane yet
+          </span>
+        )}
 
         <Button
           type="button"
@@ -302,26 +251,13 @@ function Header({
     </div>
   );
 }
-
-function launchRepairCopy(readinessState = {}) {
-  const truth = obj(readinessState.truth);
-  const runtime = obj(readinessState.runtime);
-
-  if (truth.ready === false || s(truth.status).toLowerCase() === "blocked") {
-    return "Business info still needs approval.";
-  }
-
-  if (runtime.ready === false || s(runtime.status).toLowerCase() === "blocked") {
-    return "Runtime pending repair. Runtime still needs repair.";
-  }
-
-  return "";
-}
-function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
+function ChannelCard({ channel, runtime, onInspect }) {
   const status = laneStatus(runtime);
-  const primaryAction = runtime.deliveryReady
-    ? () => onNavigate("/inbox")
-    : () => onInspect(channel.id);
+  const actionLabel = runtime.deliveryReady
+    ? "Manage"
+    : runtime.needsReview
+      ? "Review"
+      : "Choose";
 
   return (
     <div className="flex min-h-[230px] flex-col px-5 py-5">
@@ -350,27 +286,15 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
         {s(runtime.summary) || channel.summary}
       </p>
 
-      <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+      <div className="mt-auto pt-5">
         <button
           type="button"
           onClick={() => onInspect(channel.id)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full px-2 text-[13px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-brand-soft"
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-brand px-4 text-[13px] font-semibold text-white shadow-[0_16px_36px_-24px_rgba(37,99,235,0.75)] transition-all duration-base ease-premium hover:-translate-y-px"
         >
-          Details
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          {actionLabel}
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
         </button>
-
-        <Button
-          type="button"
-          size="sm"
-          variant={runtime.deliveryReady ? "secondary" : "primary"}
-          disabled={runtime.available === false}
-          onClick={primaryAction}
-          aria-label={status.action}
-          rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
-        >
-          {status.action}
-        </Button>
       </div>
     </div>
   );
@@ -554,16 +478,9 @@ export default function ChannelCatalog() {
         >
           <Header
             activeLane={activeLane}
-            readinessState={effectiveReadinessState}
-            channelCount={channels.length}
             refreshing={effectiveReadinessState.loading}
             onRefresh={refresh}
-            onNavigate={navigate}
           />
-
-          {launchRepairCopy(effectiveReadinessState) ? (
-            <div className="sr-only">{launchRepairCopy(effectiveReadinessState)}</div>
-          ) : null}
 
           <div className="grid divide-y divide-line-soft md:grid-cols-3 md:divide-x md:divide-y-0">
             {channels.map((channel) => (
@@ -572,7 +489,6 @@ export default function ChannelCatalog() {
                 channel={channel}
                 runtime={runtimeFor(channel, effectiveReadinessState)}
                 onInspect={updateSelectedChannel}
-                onNavigate={navigate}
               />
             ))}
           </div>
