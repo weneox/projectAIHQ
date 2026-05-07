@@ -158,7 +158,7 @@ function stagePillClass(tone = "neutral") {
   if (tone === "proposal") return "bg-[#EAF6FF] text-[#1677C8] ring-[#C8E7FF]";
   if (tone === "brand") return "bg-[#EEF4FF] text-[#315CFF] ring-[#DDE8FF]";
 
-  return "bg-white text-[#475569] ring-[#E4EAF2]";
+  return "bg-white text-[#475569] ring-[#DCE6F1] shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 }
 
 function CustomerAvatar({ name, size = "md" }) {
@@ -593,7 +593,7 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
                 "group cursor-pointer text-left transition-[background-color,box-shadow,color] duration-base ease-premium",
                 selected
                   ? "bg-white shadow-[inset_0_-1px_0_rgba(216,226,238,0.82)]"
-                  : "bg-white hover:bg-white"
+                  : "bg-white hover:bg-[#FAFCFF]"
               )}
             >
               <td className="relative px-6 py-3.5">
@@ -657,6 +657,91 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
     </table>
   );
 }
+function CustomerDataStrip({ metrics }) {
+  const safe = metrics || {};
+  const total = Number(safe.total || 0);
+
+  function pct(value) {
+    return String(
+      Math.min(100, Math.round((Number(value || 0) / Math.max(total, 1)) * 100))
+    ) + "%";
+  }
+
+  const items = [
+    {
+      label: "Customers",
+      value: safe.total ?? 0,
+      detail: String(safe.visible ?? 0) + " visible now",
+      hint: "Live base",
+      bar: total ? "100%" : "0%",
+    },
+    {
+      label: "Qualified",
+      value: safe.qualified ?? 0,
+      detail: "sales-ready leads",
+      hint: "Pipeline",
+      bar: pct(safe.qualified),
+    },
+    {
+      label: "Demo intent",
+      value: safe.demoRequested ?? 0,
+      detail: "requested demo",
+      hint: "High signal",
+      bar: pct(safe.demoRequested),
+    },
+    {
+      label: "Threads",
+      value: safe.withThreads ?? 0,
+      detail: String(safe.conversationRate ?? 0) + "% conversation linked",
+      hint: "Coverage",
+      bar: pct(safe.withThreads),
+    },
+  ];
+
+  return (
+    <div className="border-b border-[#E3EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFDFF_100%)] px-6 py-3">
+      <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="group relative overflow-hidden rounded-[16px] border border-[#E3EAF2] bg-white px-4 py-3 shadow-[0_12px_30px_-30px_rgba(15,23,42,0.38)] transition-[border-color,box-shadow,transform] duration-base ease-premium hover:-translate-y-px hover:border-[#CFDAE8] hover:shadow-[0_18px_38px_-32px_rgba(15,23,42,0.46)]"
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(49,92,255,0.32),transparent)] opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100" />
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+                  {item.label}
+                </div>
+
+                <div className="mt-2 text-[22px] font-semibold leading-none tracking-[-0.055em] text-[#0F172A]">
+                  {item.value}
+                </div>
+              </div>
+
+              <span className="rounded-full border border-[#E3EAF2] bg-[#F8FAFF] px-2 py-1 text-[10.5px] font-semibold text-[#315CFF]">
+                {item.hint}
+              </span>
+            </div>
+
+            <div className="mt-2 truncate text-[12px] font-medium text-[#66768A]">
+              {item.detail}
+            </div>
+
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#EEF2F7]">
+              <div
+                className="h-full rounded-full bg-[#315CFF] shadow-[0_0_18px_rgba(49,92,255,0.35)]"
+                style={{ width: item.bar }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function DetailLine({ label, children }) {
   return (
     <div className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-3 py-[5px]">
@@ -868,7 +953,27 @@ export default function Customers() {
 
     return source;
   }, [customerFilter, dateFilter, stageFilter, state.leads]);
-  const handleCustomerSelect = useCallback((lead, key) => {
+  
+  const customerMetrics = useMemo(() => {
+    const all = arr(state.leads);
+    const total = all.length;
+    const visible = filteredLeads.length;
+    const qualified = all.filter((lead) => leadStage(lead) === "qualified").length;
+    const demoRequested = all.filter((lead) => leadStage(lead).includes("demo")).length;
+    const withThreads = all.filter((lead) => Boolean(leadThreadId(lead))).length;
+    const conversationRate = total ? Math.round((withThreads / total) * 100) : 0;
+
+    return {
+      total,
+      visible,
+      qualified,
+      demoRequested,
+      withThreads,
+      conversationRate,
+    };
+  }, [filteredLeads.length, state.leads]);
+
+const handleCustomerSelect = useCallback((lead, key) => {
     const safeKey = s(key);
     if (!safeKey) return;
 
@@ -950,7 +1055,9 @@ const selectedLead = useMemo(() => {
           <div className="min-w-0 overflow-y-auto bg-white">
             {filteredLeads.length ? (
               <>
-                <CustomerTable
+                <CustomerDataStrip metrics={customerMetrics} />
+
+<CustomerTable
                   leads={filteredLeads}
                   allLeads={arr(state.leads)}
                   selectedLead={selectedLead}
@@ -970,7 +1077,7 @@ const selectedLead = useMemo(() => {
 
                 <div className="flex w-full items-center justify-between  #D9E3EE bg-white px-6 py-3 text-[13px] font-medium text-[#475569] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
                   <span>
-                    Showing 1–{filteredLeads.length} of {filteredLeads.length}
+                    Showing {filteredLeads.length} of {customerMetrics.total} customers
                   </span>
 
                   <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-[10px] border border-[rgba(49,92,255,0.38)] bg-white px-3 text-[12px] font-semibold text-[#0F172A] shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
