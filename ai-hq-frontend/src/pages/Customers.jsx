@@ -610,7 +610,7 @@ function CustomerDetailPanel({ lead, onOpen }) {
 
 export default function Customers() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const [query] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
@@ -711,27 +711,6 @@ export default function Customers() {
     );
   }, [filteredLeads, selectedLeadId]);
 
-  const summary = useMemo(() => {
-    const leads = arr(state.leads);
-    const open = leads.filter((lead) =>
-      ["open", "new", "active"].includes(leadStatus(lead))
-    ).length;
-    const qualified = leads.filter((lead) =>
-      ["qualified", "proposal", "negotiation"].includes(leadStage(lead))
-    ).length;
-
-    return {
-      total: leads.length,
-      open,
-      qualified,
-    };
-  }, [state.leads]);
-
-  function handleSubmit(event) {
-    event?.preventDefault?.();
-    load({ refreshing: true });
-  }
-
   function openConversation(threadId = "") {
     const safeThreadId = s(threadId);
     if (!safeThreadId) return;
@@ -814,6 +793,7 @@ export default function Customers() {
     </PageCanvas>
   );
 }
+
 
 
 
