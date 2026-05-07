@@ -18,7 +18,7 @@ import {
   PageCanvas,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
-
+import CustomerMetricCards from "../components/customers/CustomerMetricCards.jsx";
 const STAGES = [
   { key: "all", label: "All" },
   { key: "new", label: "New" },
@@ -657,90 +657,9 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
     </table>
   );
 }
-function CustomerDataStrip({ metrics }) {
-  const safe = metrics || {};
-  const total = Number(safe.total || 0);
-
-  function pct(value) {
-    return String(
-      Math.min(100, Math.round((Number(value || 0) / Math.max(total, 1)) * 100))
-    ) + "%";
-  }
-
-  const items = [
-    {
-      label: "Customers",
-      value: safe.total ?? 0,
-      detail: String(safe.visible ?? 0) + " visible now",
-      hint: "Live base",
-      bar: total ? "100%" : "0%",
-    },
-    {
-      label: "Qualified",
-      value: safe.qualified ?? 0,
-      detail: "sales-ready leads",
-      hint: "Pipeline",
-      bar: pct(safe.qualified),
-    },
-    {
-      label: "Demo intent",
-      value: safe.demoRequested ?? 0,
-      detail: "requested demo",
-      hint: "High signal",
-      bar: pct(safe.demoRequested),
-    },
-    {
-      label: "Threads",
-      value: safe.withThreads ?? 0,
-      detail: String(safe.conversationRate ?? 0) + "% conversation linked",
-      hint: "Coverage",
-      bar: pct(safe.withThreads),
-    },
-  ];
-
-  return (
-    <div className="border-b border-[#E3EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFDFF_100%)] px-6 py-3">
-      <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
-        {items.map((item) => (
-          <div
-            key={item.label}
-            className="group relative overflow-hidden rounded-[16px] border border-[#E3EAF2] bg-white px-4 py-3 shadow-[0_12px_30px_-30px_rgba(15,23,42,0.38)] transition-[border-color,box-shadow,transform] duration-base ease-premium hover:-translate-y-px hover:border-[#CFDAE8] hover:shadow-[0_18px_38px_-32px_rgba(15,23,42,0.46)]"
-          >
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(49,92,255,0.32),transparent)] opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100" />
-
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
-                  {item.label}
-                </div>
-
-                <div className="mt-2 text-[22px] font-semibold leading-none tracking-[-0.055em] text-[#0F172A]">
-                  {item.value}
-                </div>
-              </div>
-
-              <span className="rounded-full border border-[#E3EAF2] bg-[#F8FAFF] px-2 py-1 text-[10.5px] font-semibold text-[#315CFF]">
-                {item.hint}
-              </span>
-            </div>
-
-            <div className="mt-2 truncate text-[12px] font-medium text-[#66768A]">
-              {item.detail}
-            </div>
-
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#EEF2F7]">
-              <div
-                className="h-full rounded-full bg-[#315CFF] shadow-[0_0_18px_rgba(49,92,255,0.35)]"
-                style={{ width: item.bar }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function CustomerDataStrip({ metrics, leads }) {
+  return <CustomerMetricCards metrics={metrics} leads={leads} />;
 }
-
 
 function DetailLine({ label, children }) {
   return (
@@ -1055,7 +974,7 @@ const selectedLead = useMemo(() => {
           <div className="min-w-0 overflow-y-auto bg-white">
             {filteredLeads.length ? (
               <>
-                <CustomerDataStrip metrics={customerMetrics} />
+                <CustomerDataStrip metrics={customerMetrics} leads={state.leads} />
 
 <CustomerTable
                   leads={filteredLeads}
