@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   BarChart3,
   Bot,
   Inbox,
@@ -19,7 +20,6 @@ import {
 
 import { getReportsOverview } from "../api/reports.js";
 import Button from "../components/ui/Button.jsx";
-import Card from "../components/ui/Card.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -28,10 +28,10 @@ import {
 import { cx } from "../lib/cx.js";
 
 const RANGES = [
-  { key: "24h", label: "24h" },
-  { key: "7d", label: "7d" },
-  { key: "30d", label: "30d" },
-  { key: "90d", label: "90d" },
+  { key: "24h", label: "24h", title: "Last 24 hours" },
+  { key: "7d", label: "7d", title: "Last 7 days" },
+  { key: "30d", label: "30d", title: "Last 30 days" },
+  { key: "90d", label: "90d", title: "Last 90 days" },
 ];
 
 function s(value, fallback = "") {
@@ -60,21 +60,27 @@ function compact(value = 0) {
   }).format(n(value));
 }
 
+function titleize(value = "") {
+  return s(value || "unknown")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function dateLabel(value = "") {
   const raw = s(value);
   if (!raw) return "";
-  const date = new Date(`${raw}T00:00:00Z`);
+
+  const date = new Date(raw + "T00:00:00Z");
   if (Number.isNaN(date.getTime())) return raw;
+
   return date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
 }
 
-function titleize(value = "") {
-  return s(value || "unknown")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+function rangeTitle(range = "7d") {
+  return RANGES.find((item) => item.key === range)?.title || "Selected range";
 }
 
 function chartHasData(rows = []) {
@@ -88,11 +94,13 @@ function chartHasData(rows = []) {
 }
 
 function ReportTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length) {
+    return null;
+  }
 
   return (
-    <div className="rounded-[16px] border border-line-soft bg-white px-3.5 py-3 shadow-[0_20px_52px_-34px_rgba(15,23,42,0.5)]">
-      <div className="text-[12px] font-semibold text-text">
+    <div className="rounded-[16px] border border-[#DDE8F3] bg-white/95 px-3.5 py-3 shadow-[0_20px_52px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
+      <div className="text-[12px] font-semibold text-[#0F172A]">
         {dateLabel(label)}
       </div>
 
@@ -100,10 +108,12 @@ function ReportTooltip({ active, payload, label }) {
         {payload.map((item) => (
           <div
             key={item.dataKey}
-            className="flex items-center justify-between gap-8 text-[12px] font-medium text-text-muted"
+            className="flex items-center justify-between gap-8 text-[12px] font-medium text-[#66768A]"
           >
             <span>{item.name}</span>
-            <span className="font-semibold text-text">{compact(item.value)}</span>
+            <span className="font-semibold text-[#0F172A]">
+              {compact(item.value)}
+            </span>
           </div>
         ))}
       </div>
@@ -111,15 +121,42 @@ function ReportTooltip({ active, payload, label }) {
   );
 }
 
-function Metric({ label, value, icon: Icon }) {
+function RangeSwitch({ range, onChange }) {
   return (
-    <div className="min-w-0 px-0 py-3 first:pt-0 last:pb-0 md:px-5 md:py-0 md:first:pl-0 md:last:pr-0">
-      <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+    <div className="flex rounded-full border border-[#DDE8F3] bg-white p-1 shadow-[0_10px_26px_-24px_rgba(15,23,42,0.42)]">
+      {RANGES.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange?.(item.key)}
+          className={cx(
+            "h-8 rounded-full px-3.5 text-[12px] font-semibold transition-all duration-base ease-premium",
+            range === item.key
+              ? "bg-[#0F172A] text-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.55)]"
+              : "text-[#66768A] hover:text-[#0F172A]"
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MetricCell({ label, value, detail, icon: Icon }) {
+  return (
+    <div className="min-w-0 border-b border-[#E3EAF2] px-6 py-4 md:border-b-0 md:border-r md:last:border-r-0">
+      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
         <Icon className="h-3.5 w-3.5" strokeWidth={2.1} />
         {label}
       </div>
-      <div className="mt-2 text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+
+      <div className="mt-2 text-[24px] font-semibold leading-none tracking-[-0.055em] text-[#0F172A]">
         {compact(value)}
+      </div>
+
+      <div className="mt-2 truncate text-[12px] font-medium text-[#66768A]">
+        {detail}
       </div>
     </div>
   );
@@ -127,16 +164,18 @@ function Metric({ label, value, icon: Icon }) {
 
 function EmptyChart() {
   return (
-    <div className="relative flex h-[360px] items-center justify-center overflow-hidden rounded-[26px] border border-dashed border-line-soft bg-[radial-gradient(circle_at_top,rgba(var(--color-brand),0.055),transparent_42%),linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.92))]">
+    <div className="flex h-[390px] items-center justify-center bg-[radial-gradient(circle_at_top,rgba(20,184,166,0.06),transparent_44%),linear-gradient(180deg,#FBFDFF,#FFFFFF)]">
       <div className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[18px] border border-line-soft bg-white shadow-[0_18px_44px_-34px_rgba(15,23,42,0.5)]">
-          <BarChart3 className="h-5 w-5 text-text-subtle" strokeWidth={2.1} />
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[18px] border border-[#E3EAF2] bg-white shadow-[0_18px_44px_-34px_rgba(15,23,42,0.5)]">
+          <BarChart3 className="h-5 w-5 text-[#8A96A8]" strokeWidth={2.1} />
         </div>
-        <div className="mt-4 text-[15px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+
+        <div className="mt-4 text-[15px] font-semibold tracking-[-0.03em] text-[#0F172A]">
           No report activity yet
         </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Activity will appear here when conversations, AI replies, or leads are recorded.
+
+        <div className="mt-1 text-[12.5px] font-medium text-[#66768A]">
+          Activity will appear when conversations, AI replies, or leads are recorded.
         </div>
       </div>
     </div>
@@ -144,23 +183,29 @@ function EmptyChart() {
 }
 
 function MainChart({ rows = [] }) {
-  if (!chartHasData(rows)) return <EmptyChart />;
+  if (!chartHasData(rows)) {
+    return <EmptyChart />;
+  }
 
   return (
-    <div className="h-[360px]">
+    <div className="h-[390px] px-5 py-5">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={rows}
-          margin={{ top: 16, right: 18, left: -18, bottom: 0 }}
+          margin={{ top: 12, right: 18, left: -18, bottom: 0 }}
         >
           <defs>
             <linearGradient id="messagesInFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="rgb(var(--color-brand))" stopOpacity={0.22} />
-              <stop offset="95%" stopColor="rgb(var(--color-brand))" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#315CFF" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#315CFF" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="aiFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="rgb(var(--color-success))" stopOpacity={0.18} />
-              <stop offset="95%" stopColor="rgb(var(--color-success))" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#14B8A6" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#14B8A6" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#38A3FF" stopOpacity={0.14} />
+              <stop offset="95%" stopColor="#38A3FF" stopOpacity={0.02} />
             </linearGradient>
           </defs>
 
@@ -175,14 +220,14 @@ function MainChart({ rows = [] }) {
             axisLine={false}
             tickLine={false}
             tickFormatter={dateLabel}
-            tick={{ fontSize: 11, fill: "rgb(var(--color-text-subtle))" }}
+            tick={{ fontSize: 11, fill: "#8A96A8" }}
           />
 
           <YAxis
             allowDecimals={false}
             axisLine={false}
             tickLine={false}
-            tick={{ fontSize: 11, fill: "rgb(var(--color-text-subtle))" }}
+            tick={{ fontSize: 11, fill: "#8A96A8" }}
           />
 
           <Tooltip content={<ReportTooltip />} />
@@ -191,7 +236,7 @@ function MainChart({ rows = [] }) {
             type="monotone"
             dataKey="messagesIn"
             name="Messages in"
-            stroke="rgb(var(--color-brand))"
+            stroke="#315CFF"
             fill="url(#messagesInFill)"
             strokeWidth={2.2}
             dot={false}
@@ -202,7 +247,7 @@ function MainChart({ rows = [] }) {
             type="monotone"
             dataKey="aiReplies"
             name="AI replies"
-            stroke="rgb(var(--color-success))"
+            stroke="#14B8A6"
             fill="url(#aiFill)"
             strokeWidth={2.2}
             dot={false}
@@ -213,8 +258,8 @@ function MainChart({ rows = [] }) {
             type="monotone"
             dataKey="leads"
             name="Leads"
-            stroke="rgb(var(--color-warning))"
-            fill="transparent"
+            stroke="#38A3FF"
+            fill="url(#leadsFill)"
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
@@ -227,41 +272,42 @@ function MainChart({ rows = [] }) {
 
 function BarRow({ label, value, total }) {
   const safeTotal = Math.max(1, n(total));
-  const width = Math.max(value > 0 ? 5 : 0, Math.round((n(value) / safeTotal) * 100));
+  const width = Math.max(
+    value > 0 ? 5 : 0,
+    Math.round((n(value) / safeTotal) * 100)
+  );
 
   return (
     <div className="grid gap-2">
       <div className="flex items-center justify-between gap-4">
-        <div className="truncate text-[13px] font-semibold text-text">
+        <div className="truncate text-[13px] font-semibold text-[#0F172A]">
           {label}
         </div>
-        <div className="shrink-0 text-[13px] font-semibold text-text-muted">
+        <div className="shrink-0 text-[13px] font-semibold text-[#66768A]">
           {compact(value)}
         </div>
       </div>
 
-      <div className="h-2 overflow-hidden rounded-full bg-surface-subtle">
+      <div className="h-2 overflow-hidden rounded-full bg-[#EEF2F7]">
         <div
-          className="h-full rounded-full bg-brand transition-all duration-slow ease-premium"
-          style={{ width: `${width}%` }}
+          className="h-full rounded-full bg-[#315CFF] transition-all duration-base ease-premium"
+          style={{ width: width + "%" }}
         />
       </div>
     </div>
   );
 }
 
-function BreakdownPanel({ title, empty, rows }) {
+function BreakdownColumn({ title, empty, rows }) {
   const total = rows.reduce((sum, row) => sum + n(row.value), 0);
 
   return (
-    <Card padded={false} clip className="shadow-[0_22px_70px_-62px_rgba(15,23,42,0.52)]">
-      <div className="border-b border-line-soft bg-gradient-to-b from-surface-subtle/60 to-white px-5 py-4">
-        <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          {title}
-        </div>
+    <div className="min-w-0 border-b border-[#E3EAF2] px-6 py-5 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+        {title}
       </div>
 
-      <div className="space-y-4 px-5 py-5">
+      <div className="mt-4 space-y-4">
         {rows.length && total > 0 ? (
           rows.map((row) => (
             <BarRow
@@ -272,12 +318,81 @@ function BreakdownPanel({ title, empty, rows }) {
             />
           ))
         ) : (
-          <div className="rounded-[22px] border border-dashed border-line-soft bg-surface-subtle/80 px-4 py-10 text-center text-[13px] font-medium text-text-muted">
+          <div className="rounded-[18px] border border-dashed border-[#DDE8F3] bg-[#F8FAFC] px-4 py-8 text-center text-[13px] font-medium text-[#66768A]">
             {empty}
           </div>
         )}
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function InsightRail({ model }) {
+  const messagesIn = model.summary.messagesIn;
+  const responseRate = messagesIn
+    ? Math.round((model.summary.aiReplies / messagesIn) * 100)
+    : 0;
+  const leadRate = messagesIn
+    ? Math.round((model.summary.leads / messagesIn) * 100)
+    : 0;
+  const topChannel = model.channels[0]?.label || "No channel";
+  const topStage = model.leadStages[0]?.label || "No stage";
+
+  const rows = [
+    {
+      label: "AI response rate",
+      value: responseRate + "%",
+      detail: "AI replies / inbound messages",
+    },
+    {
+      label: "Lead capture rate",
+      value: leadRate + "%",
+      detail: "Leads / inbound messages",
+    },
+    {
+      label: "Top channel",
+      value: topChannel,
+      detail: "Highest activity source",
+    },
+    {
+      label: "Top lead stage",
+      value: topStage,
+      detail: "Most common pipeline stage",
+    },
+  ];
+
+  return (
+    <div className="min-h-full border-t border-[#E3EAF2] bg-[#FBFDFF] xl:border-l xl:border-t-0">
+      <div className="border-b border-[#E3EAF2] px-5 py-4">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+          Intelligence
+        </div>
+        <div className="mt-1 text-[13px] font-semibold tracking-[-0.02em] text-[#0F172A]">
+          Performance snapshot
+        </div>
+      </div>
+
+      <div className="divide-y divide-[#E3EAF2]">
+        {rows.map((row) => (
+          <div key={row.label} className="px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-[#0F172A]">
+                  {row.label}
+                </div>
+                <div className="mt-1 text-[12px] font-medium leading-5 text-[#66768A]">
+                  {row.detail}
+                </div>
+              </div>
+
+              <div className="max-w-[132px] truncate rounded-full border border-[#CDEFE9] bg-[#F0FDFA] px-2.5 py-1 text-[12px] font-semibold text-[#0F766E]">
+                {row.value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -351,71 +466,82 @@ export default function Reports() {
         aiReplies: n(row.aiReplies),
         leads: n(row.leads),
       })),
-      channels: channels.map((row) => ({
-        label: titleize(row.channel),
-        value: n(row.messagesIn) + n(row.messagesOut),
-      })),
-      leadStages: leadStages.map((row) => ({
-        label: titleize(row.stage),
-        value: n(row.count),
-      })),
+      channels: channels
+        .map((row) => ({
+          label: titleize(row.channel),
+          value: n(row.messagesIn) + n(row.messagesOut),
+        }))
+        .sort((a, b) => b.value - a.value),
+      leadStages: leadStages
+        .map((row) => ({
+          label: titleize(row.stage),
+          value: n(row.count),
+        }))
+        .sort((a, b) => b.value - a.value),
     };
   }, [state.payload]);
 
+  const usageRows = [
+    { label: "AI units", value: model.summary.aiUnits },
+    { label: "API calls", value: model.summary.apiCalls },
+    { label: "Messages out", value: model.summary.messagesOut },
+    { label: "Leads", value: model.summary.leads },
+  ];
+
   if (state.loading) {
     return (
-      <PageCanvas className="max-w-[1280px] py-3">
+      <PageCanvas className="!mx-0 !h-full !min-h-0 !w-full !max-w-none !space-y-0 overflow-hidden bg-white">
         <LoadingSurface title="Loading reports" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="max-w-[1280px] space-y-4 py-3">
-      {state.error ? (
-        <InlineNotice
-          tone="danger"
-          title="Reports unavailable"
-          description={state.error}
-          compact
-        />
-      ) : null}
+    <PageCanvas className="!mx-0 !h-full !min-h-0 !w-full !max-w-none !space-y-0 overflow-hidden bg-white">
+      <section className="reports-premium-page h-full min-h-0 overflow-y-auto bg-white">
+        {state.error ? (
+          <div className="border-b border-[#E3EAF2] px-6 py-3">
+            <InlineNotice
+              tone="danger"
+              title="Reports unavailable"
+              description={state.error}
+              compact
+            />
+          </div>
+        ) : null}
 
-      {model.degraded.length ? (
-        <InlineNotice
-          tone="warning"
-          title="Some report sources are unavailable"
-          description={model.degraded.join(", ")}
-          compact
-        />
-      ) : null}
+        {model.degraded.length ? (
+          <div className="border-b border-[#E3EAF2] px-6 py-3">
+            <InlineNotice
+              tone="warning"
+              title="Some report sources are unavailable"
+              description={model.degraded.join(", ")}
+              compact
+            />
+          </div>
+        ) : null}
 
-      <Card padded={false} clip className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]">
-        <div className="flex flex-col gap-4 border-b border-line-soft bg-gradient-to-b from-surface-subtle/70 to-white px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="text-[22px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              Business activity
-            </div>
+        <div className="flex items-center justify-between gap-4 border-b border-[#E3EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFDFF_100%)] px-6 py-3">
+          <div className="flex flex-wrap items-center gap-3 text-[12px] font-semibold text-[#66768A]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#315CFF]" />
+              Messages
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#14B8A6]" />
+              AI replies
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#38A3FF]" />
+              Leads
+            </span>
+            <span className="rounded-full border border-[#DDE8F3] bg-white px-2.5 py-1 text-[#0F172A]">
+              {rangeTitle(range)}
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-[999px] border border-line-soft bg-white/80 p-1 shadow-[0_12px_30px_-26px_rgba(15,23,42,0.45)]">
-              {RANGES.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setRange(item.key)}
-                  className={cx(
-                    "h-8 rounded-[999px] px-3.5 text-[12px] font-semibold transition-all duration-base ease-premium",
-                    range === item.key
-                      ? "bg-white text-text shadow-[0_10px_24px_-20px_rgba(15,23,42,0.45)]"
-                      : "text-text-muted hover:text-text"
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <RangeSwitch range={range} onChange={setRange} />
 
             <Button
               type="button"
@@ -423,38 +549,75 @@ export default function Reports() {
               size="sm"
               loading={state.refreshing}
               onClick={() => load({ refreshing: true })}
-              leftIcon={!state.refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+              leftIcon={
+                !state.refreshing ? (
+                  <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
+                ) : undefined
+              }
             >
               Refresh
             </Button>
           </div>
         </div>
 
-        <div className="grid border-b border-line-soft px-5 py-5 md:grid-cols-2 md:divide-x md:divide-line-soft xl:grid-cols-4">
-          <Metric label="Messages" value={model.summary.messagesIn} icon={Inbox} />
-          <Metric label="AI replies" value={model.summary.aiReplies} icon={Bot} />
-          <Metric label="Leads" value={model.summary.leads} icon={Users} />
-          <Metric label="AI units" value={model.summary.aiUnits} icon={TrendingUp} />
+        <div className="grid border-b border-[#E3EAF2] bg-white md:grid-cols-2 xl:grid-cols-5">
+          <MetricCell
+            label="Activity"
+            value={model.summary.messagesIn + model.summary.messagesOut}
+            detail="total message flow"
+            icon={Activity}
+          />
+          <MetricCell
+            label="Inbound"
+            value={model.summary.messagesIn}
+            detail="messages received"
+            icon={Inbox}
+          />
+          <MetricCell
+            label="AI replies"
+            value={model.summary.aiReplies}
+            detail="automated responses"
+            icon={Bot}
+          />
+          <MetricCell
+            label="Leads"
+            value={model.summary.leads}
+            detail="captured contacts"
+            icon={Users}
+          />
+          <MetricCell
+            label="AI units"
+            value={model.summary.aiUnits}
+            detail="usage consumed"
+            icon={TrendingUp}
+          />
         </div>
 
-        <div className="px-5 py-5">
+        <div className="grid border-b border-[#E3EAF2] xl:grid-cols-[minmax(0,1fr)_340px]">
           <MainChart rows={model.timeseries} />
+          <InsightRail model={model} />
         </div>
-      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BreakdownPanel
-          title="Channels"
-          empty="No channel activity in this range."
-          rows={model.channels}
-        />
+        <div className="grid lg:grid-cols-3">
+          <BreakdownColumn
+            title="Channels"
+            empty="No channel activity in this range."
+            rows={model.channels}
+          />
 
-        <BreakdownPanel
-          title="Lead stages"
-          empty="No leads in this range."
-          rows={model.leadStages}
-        />
-      </div>
+          <BreakdownColumn
+            title="Lead stages"
+            empty="No leads in this range."
+            rows={model.leadStages}
+          />
+
+          <BreakdownColumn
+            title="Usage mix"
+            empty="No usage in this range."
+            rows={usageRows}
+          />
+        </div>
+      </section>
     </PageCanvas>
   );
 }

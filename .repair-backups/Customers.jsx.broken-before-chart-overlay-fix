@@ -3,6 +3,7 @@
   useEffect,
   useMemo,
   useState } from "react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -18,7 +19,7 @@ import {
   PageCanvas,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
-import CustomerMetricCards from "../components/customers/CustomerMetricCards.jsx";
+
 const STAGES = [
   { key: "all", label: "All" },
   { key: "new", label: "New" },
@@ -386,78 +387,25 @@ function CustomerPicker({ leads, value = "all", onChange }) {
   );
 }
 /* customers-combo-picker:end */
-
-
-
-function CustomerTable({
-  leads,
-  allLeads,
-  selectedLead,
-  selectedCustomerId,
-  onCustomerChange,
-  onSelect,
-  onOpen,
-  stageFilter,
-  onStageFilterChange,
-  dateFilter,
-  onDateFilterChange,
-}) {
+function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCustomerChange, onSelect, onOpen, stageFilter, onStageFilterChange, dateFilter, onDateFilterChange }) {
   const [stageOpen, setStageOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
 
-  const stageDisplay =
-    STAGES.find((item) => item.key === stageFilter)?.label || "All";
-
-  function formatLongDate(value) {
-    const parsed = value ? new Date(value) : null;
-    if (!parsed || !Number.isFinite(parsed.getTime())) return "";
-    return parsed.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  const dateDisplay = dateFilter
-    ? formatLongDate(dateFilter + "T00:00:00") || dateFilter
-    : "Any date";
+  const stageDisplay = STAGES.find((item) => item.key === stageFilter)?.label || "All";
+  const dateDisplay = dateFilter ? formatDate(`${dateFilter}T00:00:00`) || dateFilter : "Any date";
 
   function closePanels() {
     setStageOpen(false);
-    setDateOpen(false);
-  }
-
-  function sourceText(lead = {}) {
-    return titleize(s(lead.source || lead.channel || lead.channel_type || "Direct"));
-  }
-
-  function statusPillClass(status = "") {
-    const safe = lower(status);
-
-    if (["won", "customer", "converted"].includes(safe)) {
-      return "bg-[#EAF8EF] text-[#147A3E] ring-[#BFE8CD]";
-    }
-
-    if (["closed", "done", "resolved"].includes(safe)) {
-      return "bg-[#F8FAFC] text-[#475569] ring-[#DCE6F1]";
-    }
-
-    if (["pending", "waiting"].includes(safe)) {
-      return "bg-[#FFF8E8] text-[#A16207] ring-[#F6D78B]";
-    }
-
-    return "bg-[#EEF4FF] text-[#315CFF] ring-[#DDE8FF]";
+                setDateOpen(false);
   }
 
   return (
     <table className="customers-filter-table w-full table-fixed border-collapse">
       <colgroup>
-        <col className="w-[40%]" />
-        <col className="w-[170px]" />
-        <col className="w-[176px]" />
-        <col className="w-[170px]" />
-        <col className="w-[132px]" />
-        <col className="w-[84px]" />
+        <col />
+        <col className="w-[180px]" />
+        <col className="w-[205px]" />
+        <col className="w-[180px]" />
       </colgroup>
 
       <thead className="bg-white">
@@ -473,15 +421,6 @@ function CustomerTable({
             />
           </th>
 
-          <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white px-4 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
-              Source
-            </div>
-            <div className="mt-2 text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
-              Channel
-            </div>
-          </th>
-
           <th className="relative z-[85] h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
             <button
               type="button"
@@ -489,7 +428,7 @@ function CustomerTable({
                 setDateOpen(false);
                 setStageOpen((current) => !current);
               }}
-              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-white px-4 text-left outline-none transition-colors duration-base ease-premium hover:bg-white focus-visible:bg-white"
+              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-[#FFFFFF] px-5 text-left outline-none transition-colors duration-base ease-premium hover:bg-[#FFFFFF] focus-visible:bg-[#FFFFFF]"
             >
               <Search
                 className="mt-[19px] h-[14px] w-[14px] shrink-0 text-[#7C8A9F] transition-colors duration-base ease-premium group-hover:text-[#315CFF]"
@@ -500,13 +439,13 @@ function CustomerTable({
                 <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
                   Stage
                 </div>
-                <div className="mt-2 text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                <div className="mt-2 truncate text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
                   {stageDisplay}
                 </div>
               </div>
 
               <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#94A3B8] transition-colors duration-base ease-premium group-hover:text-[#315CFF]">
-                {stageOpen ? "?" : "?"}
+                {stageOpen ? "⌃" : "⌄"}
               </span>
             </button>
 
@@ -538,9 +477,7 @@ function CustomerTable({
                       <span
                         className={cx(
                           "h-1.5 w-1.5 rounded-full",
-                          item.key === "all"
-                            ? "bg-[#94A3B8]"
-                            : stageDotClass(toneForStage(item.key))
+                          item.key === "all" ? "bg-[#94A3B8]" : stageDotClass(toneForStage(item.key))
                         )}
                       />
 
@@ -551,12 +488,10 @@ function CustomerTable({
                       <span
                         className={cx(
                           "ml-auto text-[14px] font-bold",
-                          stageFilter === item.key
-                            ? "text-[#315CFF]"
-                            : "text-transparent"
+                          stageFilter === item.key ? "text-[#315CFF]" : "text-transparent"
                         )}
                       >
-                        ?
+                        ✓
                       </span>
                     </button>
                   ))}
@@ -572,7 +507,7 @@ function CustomerTable({
                 setStageOpen(false);
                 setDateOpen((current) => !current);
               }}
-              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-white px-4 text-left outline-none transition-colors duration-base ease-premium hover:bg-white focus-visible:bg-white"
+              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-[#FFFFFF] px-5 text-left outline-none transition-colors duration-base ease-premium hover:bg-[#FFFFFF] focus-visible:bg-[#FFFFFF]"
             >
               <Search
                 className="mt-[19px] h-[14px] w-[14px] shrink-0 text-[#7C8A9F] transition-colors duration-base ease-premium group-hover:text-[#315CFF]"
@@ -581,15 +516,15 @@ function CustomerTable({
 
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
-                  Updated
+                  Date
                 </div>
-                <div className="mt-2 text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                <div className="mt-2 truncate text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
                   {dateDisplay}
                 </div>
               </div>
 
               <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#94A3B8] transition-colors duration-base ease-premium group-hover:text-[#315CFF]">
-                {dateOpen ? "?" : "?"}
+                {dateOpen ? "⌃" : "⌄"}
               </span>
             </button>
 
@@ -600,7 +535,7 @@ function CustomerTable({
                     Filter date
                   </div>
                   <div className="mt-1 text-[12.5px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
-                    Choose updated date
+                    Choose customer date
                   </div>
                 </div>
 
@@ -611,9 +546,9 @@ function CustomerTable({
                     onChange={(event) => {
                       onDateFilterChange?.(event.target.value);
                       setDateOpen(false);
-                    }}
+  }}
                     className="h-10 w-full rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[13px] font-semibold text-[#0F172A] outline-none transition-[border-color,box-shadow] hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
-                    aria-label="Filter by updated date"
+                    aria-label="Filter by date"
                   />
 
                   <button
@@ -621,17 +556,12 @@ function CustomerTable({
                     onClick={() => {
                       onDateFilterChange?.("");
                       setDateOpen(false);
-                    }}
+  }}
                     className="mt-2 flex h-9 w-full items-center justify-between rounded-[12px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[#0F172A] transition-colors hover:bg-[#F6F9FC]"
                   >
                     Any date
-                    <span
-                      className={cx(
-                        "text-[14px] font-bold",
-                        !dateFilter ? "text-[#315CFF]" : "text-transparent"
-                      )}
-                    >
-                      ?
+                    <span className={cx("text-[14px] font-bold", !dateFilter ? "text-[#315CFF]" : "text-transparent")}>
+                      ✓
                     </span>
                   </button>
                 </div>
@@ -639,23 +569,8 @@ function CustomerTable({
             ) : null}
           </th>
 
-          <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white px-4 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
-              Status
-            </div>
-            <div className="mt-2 text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
-              Current
-            </div>
-          </th>
 
-          <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white px-3 text-center font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
-              Open
-            </div>
-            <div className="mt-2 text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
-              Thread
-            </div>
-          </th>
+          <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]" aria-hidden="true" />
         </tr>
       </thead>
 
@@ -666,14 +581,9 @@ function CustomerTable({
           const name = pickName(lead);
           const contact = pickContact(lead);
           const stage = leadStage(lead);
-          const status = leadStatus(lead);
-          const source = sourceText(lead);
           const threadId = leadThreadId(lead);
-          const updated = formatLongDate(
-            lead.updated_at ||
-              lead.updatedAt ||
-              lead.created_at ||
-              lead.createdAt
+          const updated = formatDate(
+            lead.updated_at || lead.updatedAt || lead.created_at || lead.createdAt
           );
 
           return (
@@ -711,32 +621,15 @@ function CustomerTable({
                 </div>
               </td>
 
-              <td className="px-4 py-3.5 align-middle">
-                <div className="inline-flex max-w-full rounded-full border border-[#E3EAF2] bg-[#F8FAFC] px-2.5 py-1 text-[12px] font-semibold text-[#475569]">
-                  <span className="truncate">{source}</span>
-                </div>
-              </td>
-
               <td className="px-3 py-3.5 align-middle">
                 <StageLabel stage={stage} pill />
               </td>
 
-              <td className="px-4 py-3.5 align-middle text-[13px] font-semibold text-[#475569]">
-                {updated || titleize(status)}
+              <td className="px-3 py-3.5 align-middle text-[13px] font-semibold text-[#475569]">
+                {updated || titleize(leadStatus(lead))}
               </td>
 
-              <td className="px-4 py-3.5 align-middle">
-                <span
-                  className={cx(
-                    "inline-flex rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]",
-                    statusPillClass(status)
-                  )}
-                >
-                  {titleize(status)}
-                </span>
-              </td>
-
-              <td className="px-3 py-3.5 align-middle text-center">
+              <td className="px-3 py-3.5 align-middle">
                 {threadId ? (
                   <button
                     type="button"
@@ -744,14 +637,18 @@ function CustomerTable({
                       event.stopPropagation();
                       onOpen?.(threadId);
                     }}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D7E1EC] bg-white text-[#315CFF] shadow-[0_8px_18px_-16px_rgba(15,23,42,0.24)] transition-[border-color,transform,box-shadow,background-color] duration-base ease-premium hover:-translate-y-px hover:border-[#BDD0FF] hover:bg-[#F8FBFF] hover:shadow-[0_14px_28px_-18px_rgba(49,92,255,0.28)]"
-                    aria-label="Open thread"
-                    title="Open thread"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-semibold text-[#315CFF] transition-colors duration-base ease-premium hover:bg-[#EEF4FF]"
                   >
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+                    Conversation
+                    <ArrowRight
+                      className="h-3.5 w-3.5 transition-transform duration-base ease-premium group-hover:translate-x-0.5"
+                      strokeWidth={2.1}
+                    />
                   </button>
                 ) : (
-                  <span className="text-[12px] font-medium text-[#94A3B8]">?</span>
+                  <span className="text-[12px] font-medium text-[#94A3B8]">
+                    No thread
+                  </span>
                 )}
               </td>
             </tr>
@@ -761,10 +658,268 @@ function CustomerTable({
     </table>
   );
 }
+) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const value = Number(payload[0]?.value || 0);
+
+  return (
+    <div className="rounded-xl border border-[#DDE8F3] bg-white/95 px-3 py-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.55)] backdrop-blur">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8A96A8]">
+        {label}
+      </div>
+      <div className="mt-1 text-[14px] font-semibold tracking-[-0.03em] text-[#0F172A]">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SparkTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  const firstPayload = payload[0] || {};
+  const point = firstPayload.payload || {};
+  const value = Number(point.value || firstPayload.value || 0);
+
+  return (
+    <div className="rounded-xl border border-[#DDE8F3] bg-white/95 px-3 py-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.55)] backdrop-blur">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8A96A8]">
+        {label}
+      </div>
+      <div className="mt-1 text-[14px] font-semibold tracking-[-0.03em] text-[#0F172A]">
+        {value}
+      </div>
+    </div>
+  );
+}
 
 function CustomerDataStrip({ metrics, leads }) {
-  return <CustomerMetricCards metrics={metrics} leads={leads} />;
+  const safe = metrics || {};
+  const allLeads = Array.isArray(leads) ? leads : [];
+
+  function readLeadDate(lead) {
+    const candidates = [
+      lead && lead.createdAt,
+      lead && lead.created_at,
+      lead && lead.firstSeenAt,
+      lead && lead.first_seen_at,
+      lead && lead.lastSeenAt,
+      lead && lead.last_seen_at,
+      lead && lead.updatedAt,
+      lead && lead.updated_at,
+      lead && lead.date,
+      lead && lead.timestamp,
+    ];
+
+    const raw = candidates.find(Boolean);
+    const parsed = raw ? new Date(raw) : new Date();
+
+    return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+  }
+
+  function dayLabel(date) {
+    return date.toLocaleDateString("en", {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  function buildSeries(predicate) {
+    const days = [];
+    const end = new Date();
+
+    for (let index = 6; index >= 0; index -= 1) {
+      const date = new Date(end);
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - index);
+
+      days.push({
+        label: dayLabel(date),
+        date,
+      });
+    }
+
+    return days.map((day) => {
+      const value = allLeads.filter((lead) => {
+        const leadDate = readLeadDate(lead);
+        leadDate.setHours(0, 0, 0, 0);
+
+        return leadDate <= day.date && predicate(lead);
+      }).length;
+
+      return {
+        label: day.label,
+        value,
+        visualValue: value + 0.08,
+      };
+    });
+  }
+
+  function trendCopy(series) {
+    const first = Number(series && series[0] ? series[0].value : 0);
+    const last = Number(series && series.length ? series[series.length - 1].value : 0);
+    const diff = last - first;
+
+    if (diff > 0) {
+      return "+" + diff + " this week";
+    }
+
+    if (diff < 0) {
+      return String(diff) + " this week";
+    }
+
+    return "steady 7d";
+  }
+
+  const customersSeries = buildSeries(() => true);
+  const qualifiedSeries = buildSeries((lead) => leadStage(lead) === "qualified");
+  const demoSeries = buildSeries((lead) => leadStage(lead).includes("demo"));
+  const threadsSeries = buildSeries((lead) => Boolean(leadThreadId(lead)));
+
+  const items = [
+    {
+      key: "customers",
+      label: "Customers",
+      value: safe.total ?? 0,
+      detail: String(safe.visible ?? 0) + " visible now",
+      hint: trendCopy(customersSeries),
+      badge: "Live base",
+      series: customersSeries,
+    },
+    {
+      key: "qualified",
+      label: "Qualified",
+      value: safe.qualified ?? 0,
+      detail: "sales-ready leads",
+      hint: trendCopy(qualifiedSeries),
+      badge: "Pipeline",
+      series: qualifiedSeries,
+    },
+    {
+      key: "demo",
+      label: "Demo intent",
+      value: safe.demoRequested ?? 0,
+      detail: "requested demo",
+      hint: trendCopy(demoSeries),
+      badge: "Intent",
+      series: demoSeries,
+    },
+    {
+      key: "threads",
+      label: "Threads",
+      value: safe.withThreads ?? 0,
+      detail: String(safe.conversationRate ?? 0) + "% conversation linked",
+      hint: trendCopy(threadsSeries),
+      badge: "Coverage",
+      series: threadsSeries,
+    },
+  ];
+
+  return (
+    <div className="border-b border-[#E3EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFDFF_100%)] px-6 py-3">
+      <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
+        {items.map((item) => {
+          const gradientId = "customer-spark-" + item.key;
+          const maxValue = Math.max(
+            1,
+            ...item.series.map((point) => Number(point.visualValue || 0))
+          );
+          const domainMax = Math.max(2, maxValue + 0.72);
+
+          return (
+            <div
+              key={item.key}
+              className="group relative overflow-hidden rounded-[17px] border border-[#E3EAF2] bg-white px-4 pt-3 shadow-[0_12px_30px_-30px_rgba(15,23,42,0.38)] transition-[border-color,box-shadow,transform] duration-base ease-premium hover:-translate-y-px hover:border-[#BFD8E7] hover:shadow-[0_22px_48px_-34px_rgba(15,23,42,0.54)]"
+            >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(20,184,166,0.62),transparent)] opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100" />
+              <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-[#14B8A6]/[0.045] blur-2xl transition-opacity duration-base ease-premium group-hover:opacity-100" />
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+                    {item.label}
+                  </div>
+
+                  <div className="mt-2 flex items-end gap-2">
+                    <div className="text-[24px] font-semibold leading-none tracking-[-0.055em] text-[#0F172A]">
+                      {item.value}
+                    </div>
+
+                    <div className="pb-0.5 text-[11px] font-semibold text-[#0F766E]">
+                      {item.hint}
+                    </div>
+                  </div>
+                </div>
+
+                <span className="rounded-full border border-[#CDEFE9] bg-[#F0FDFA] px-2.5 py-1 text-[10.5px] font-semibold text-[#0F766E] shadow-[0_1px_2px_rgba(20,184,166,0.08)]">
+                  {item.badge}
+                </span>
+              </div>
+
+              <div className="mt-2 truncate text-[12px] font-medium text-[#66768A]">
+                {item.detail}
+              </div>
+
+              <div className="mt-2 h-[74px] -mx-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={item.series}
+                    margin={{
+                      top: 6,
+                      right: 8,
+                      bottom: 10,
+                      left: 8,
+                    }}
+                  >
+                    <defs>
+                      <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#14B8A6" stopOpacity={0.34} />
+                        <stop offset="58%" stopColor="#14B8A6" stopOpacity={0.08} />
+                        <stop offset="100%" stopColor="#14B8A6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+
+                    <YAxis hide domain={[0, domainMax]} />
+
+                    <Tooltip
+                      cursor={{
+                        stroke: "#14B8A6",
+                        strokeOpacity: 0.24,
+                        strokeWidth: 1,
+                      }}
+                      content={<SparkTooltip />}
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="visualValue"
+                      stroke="#14B8A6"
+                      strokeWidth={2.25}
+                      fill={"url(#" + gradientId + ")"}
+                      dot={false}
+                      activeDot={{
+                        r: 4,
+                        strokeWidth: 2,
+                        stroke: "#FFFFFF",
+                        fill: "#14B8A6",
+                      }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
+
 
 function DetailLine({ label, children }) {
   return (
@@ -782,24 +937,16 @@ function DetailLine({ label, children }) {
 
 
 
-function CustomerDetailPanel({ lead, onOpen, onClose, closed = false, closing = false, opening = false }) {
-  if (closed) return null;
-
-  if (!lead) {
-    return (
-      <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
-        <div className="flex h-full min-h-[420px] items-center justify-center bg-white text-center">
-          <div className="max-w-[240px]">
-            <div className="text-[15px] font-semibold text-[#0F172A]">
-              Select a customer
-            </div>
-            <div className="mt-2 text-[13px] font-medium leading-6 text-[#66768A]">
-              Customer details will appear here.
-            </div>
-          </div>
-        </div>
-      </aside>
-    );
+function CustomerDetailPanel({
+  lead,
+  onOpen,
+  onClose,
+  closed = false,
+  closing = false,
+  opening = false,
+}) {
+  if (closed || !lead) {
+    return null;
   }
 
   const name = pickName(lead);
@@ -809,80 +956,109 @@ function CustomerDetailPanel({ lead, onOpen, onClose, closed = false, closing = 
   const threadId = leadThreadId(lead);
   const source = s(lead.source || lead.channel || lead.channel_type || "Conversation");
   const firstSeen = formatDate(lead.created_at || lead.createdAt);
-  const updated = formatDate(lead.updated_at || lead.updatedAt || lead.created_at || lead.createdAt);
+  const updated = formatDate(
+    lead.updated_at || lead.updatedAt || lead.created_at || lead.createdAt
+  );
   const notes = s(lead.notes || lead.summary || lead.interest || lead.intent);
 
+  const panelMotion =
+    closing || opening
+      ? "translate-x-5 opacity-0 scale-[0.985]"
+      : "translate-x-0 opacity-100 scale-100";
+
   return (
-    <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
-      <div className="flex min-h-full flex-col bg-white py-5">
-        <div className="flex items-start justify-between gap-4 pb-4">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <CustomerAvatar name={name} size="lg" />
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[88px] z-[80]">
+      <button
+        type="button"
+        onClick={() => onClose?.()}
+        className={cx(
+          "pointer-events-auto absolute inset-0 bg-[#0F172A]/[0.035] backdrop-blur-[1px] transition-opacity duration-base ease-premium",
+          closing ? "opacity-0" : "opacity-100"
+        )}
+        aria-label="Close customer details overlay"
+      />
 
-            <div className="min-w-0 pt-0.5">
-              <div className="truncate text-[15.5px] font-semibold tracking-[-0.03em] text-[#0F172A]">
-                {name}
-              </div>
+      <aside
+        className={cx(
+          "pointer-events-auto absolute right-6 top-4 flex max-h-[calc(100vh-124px)] w-[430px] max-w-[calc(100vw-104px)] flex-col overflow-hidden rounded-[26px] border border-[#DDE8F3] bg-white shadow-[0_32px_90px_-48px_rgba(15,23,42,0.62)] transition-[opacity,transform] duration-300 ease-premium",
+          panelMotion
+        )}
+      >
+        <div className="relative border-b border-[#E3EAF2] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFDFF_100%)] px-5 py-4">
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(20,184,166,0.42),transparent)]" />
 
-              <div className="mt-2">
-                <StageLabel stage={stage} pill />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <CustomerAvatar name={name} size="lg" />
+
+              <div className="min-w-0">
+                <div className="truncate text-[17px] font-semibold tracking-[-0.04em] text-[#0F172A]">
+                  {name}
+                </div>
+
+                <div className="mt-1 flex items-center gap-2">
+                  <StageLabel stage={stage} pill />
+                  <span className="h-1 w-1 rounded-full bg-[#CBD5E1]" />
+                  <span className="truncate text-[12px] font-medium text-[#66768A]">
+                    {titleize(source)}
+                  </span>
+                </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => onClose?.()}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] border border-[#E3EAF2] bg-white text-[20px] leading-none text-[#7C8A9F] shadow-[0_8px_22px_-18px_rgba(15,23,42,0.42)] transition-[border-color,background-color,color,box-shadow] hover:border-[#CBD8E6] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+              aria-label="Close customer details"
+            >
+              ×
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => onClose?.()}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white text-[#7C8A9F] shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_8px_18px_-16px_rgba(15,23,42,0.25)] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A]"
-            aria-label="Close customer details"
-          >
-            <X className="h-[15px] w-[15px]" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
-          </button>
         </div>
 
-        <div className="customers-detail-divider" />
-
-        <div className="py-3">
-          <DetailLine label="Email">{email || "—"}</DetailLine>
-          <DetailLine label="Phone">{phone || "—"}</DetailLine>
-          <DetailLine label="Source">{titleize(source)}</DetailLine>
-          <DetailLine label="First seen">{firstSeen || "—"}</DetailLine>
-          <DetailLine label="Updated">{updated || "—"}</DetailLine>
-        </div>
-
-        {notes ? (
-          <>
-            <div className="customers-detail-divider" />
-
-            <div className="py-3.5">
-              <div className="text-[11px] font-semibold uppercase leading-5 tracking-[0.18em] text-[#66768A]">
-                Notes
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+          <div className="grid gap-3">
+            <div className="rounded-[20px] border border-[#E3EAF2] bg-[#FBFDFF] p-4">
+              <div className="grid gap-3">
+                <DetailLine label="Email">{email || "—"}</DetailLine>
+                <DetailLine label="Phone">{phone || "—"}</DetailLine>
+                <DetailLine label="Source">{titleize(source)}</DetailLine>
+                <DetailLine label="First seen">{firstSeen || "—"}</DetailLine>
+                <DetailLine label="Updated">{updated || "—"}</DetailLine>
               </div>
-
-              <p className="mt-2 text-[13px] font-medium leading-[1.65] text-[#1F2937]">
-                {notes}
-              </p>
             </div>
-          </>
-        ) : null}
 
-        <div className="customers-detail-divider mt-2" />
+            {notes ? (
+              <div className="rounded-[20px] border border-[#E3EAF2] bg-white p-4 shadow-[0_14px_34px_-32px_rgba(15,23,42,0.35)]">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+                  Notes
+                </div>
+                <div className="mt-2 text-[13px] leading-6 text-[#334155]">
+                  {notes}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
 
-        <div className="pt-4">
+        <div className="border-t border-[#E3EAF2] bg-[#FBFDFF] p-4">
           <button
             type="button"
             disabled={!threadId}
             onClick={() => onOpen?.(threadId)}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[16px] border border-[#D3DEEA] bg-white text-[13px] font-semibold text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_10px_24px_-22px_rgba(15,23,42,0.22)] transition-[border-color,background-color,box-shadow] hover:border-[#B9C8DA] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_14px_30px_-24px_rgba(15,23,42,0.30)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[16px] border border-[#CFE8E3] bg-[#F0FDFA] text-[13px] font-semibold text-[#0F766E] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_12px_26px_-24px_rgba(15,118,110,0.55)] transition-[border-color,background-color,box-shadow,transform] hover:-translate-y-px hover:border-[#B9DDD6] hover:bg-[#ECFFFB] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
           >
-            Open conversation
-            <ExternalLink className="h-4 w-4" strokeWidth={2} />
+            Open conversation ↗
           </button>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   );
 }
+
+
+
 export default function Customers() {
   const navigate = useNavigate();
   const [query] = useState("");
@@ -977,8 +1153,8 @@ export default function Customers() {
 
     return source;
   }, [customerFilter, dateFilter, stageFilter, state.leads]);
-  
-  const customerMetrics = useMemo(() => {
+
+const customerMetrics = useMemo(() => {
     const all = arr(state.leads);
     const total = all.length;
     const visible = filteredLeads.length;
@@ -996,8 +1172,7 @@ export default function Customers() {
       conversationRate,
     };
   }, [filteredLeads.length, state.leads]);
-
-const handleCustomerSelect = useCallback((lead, key) => {
+  const handleCustomerSelect = useCallback((lead, key) => {
     const safeKey = s(key);
     if (!safeKey) return;
 
@@ -1027,7 +1202,7 @@ const selectedLead = useMemo(() => {
     if (!filteredLeads.length) return null;
     if (selectedLeadId === "__closed__") return null;
     if (selectedLeadId === "__closed__") return null;
-    if (!selectedLeadId) return filteredLeads[0];
+    if (!selectedLeadId) return null;
 
     return (
       filteredLeads.find((lead, index) => leadKey(lead, index) === selectedLeadId) ||
@@ -1079,9 +1254,13 @@ const selectedLead = useMemo(() => {
           <div className="min-w-0 overflow-y-auto bg-white">
             {filteredLeads.length ? (
               <>
-                <CustomerDataStrip metrics={customerMetrics} leads={state.leads} />
+                
+<CustomerDataStrip metrics={customerMetrics} leads={state.leads} />
 
-<CustomerTable
+
+<div className="customers-premium-list-shell px-6 pt-3">
+  <div className="overflow-hidden rounded-[20px] border border-[#E3EAF2] bg-white shadow-[0_18px_48px_-42px_rgba(15,23,42,0.48)]">
+    <CustomerTable
                   leads={filteredLeads}
                   allLeads={arr(state.leads)}
                   selectedLead={selectedLead}
@@ -1098,15 +1277,15 @@ const selectedLead = useMemo(() => {
                   dateFilter={dateFilter}
                   onDateFilterChange={setDateFilter}
                 />
+  </div>
+</div>
 
                 <div className="flex w-full items-center justify-between  #D9E3EE bg-white px-6 py-3 text-[13px] font-medium text-[#475569] shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
                   <span>
                     Showing {filteredLeads.length} of {customerMetrics.total} customers
                   </span>
 
-                  <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-[10px] border border-[rgba(49,92,255,0.38)] bg-white px-3 text-[12px] font-semibold text-[#0F172A] shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
-                    1
-                  </span>
+                  <span className="inline-flex h-8 min-w-[112px] items-center justify-center rounded-full border border-[rgba(49,92,255,0.22)] bg-[#F8FAFF] px-3 text-[12px] font-semibold text-[#315CFF] shadow-[0_1px_2px_rgba(37,99,235,0.08)]">{customerMetrics.conversationRate}% threaded</span>
                 </div>
               </>
             ) : (
@@ -1137,63 +1316,3 @@ const selectedLead = useMemo(() => {
     </PageCanvas>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
