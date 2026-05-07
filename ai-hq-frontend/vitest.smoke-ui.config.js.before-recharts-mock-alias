@@ -6,10 +6,6 @@ const routerMockPath = fileURLToPath(
   new URL("./src/test/mocks/react-router-dom.smoke-mock.jsx", import.meta.url)
 );
 
-const rechartsMockPath = fileURLToPath(
-  new URL("./src/test/mocks/recharts.smoke-mock.jsx", import.meta.url)
-);
-
 const resolvedBaseConfig =
   typeof baseConfig === "function"
     ? baseConfig({ command: "serve", mode: "test" })
@@ -22,7 +18,6 @@ export default mergeConfig(
       alias: {
         // Smoke UI always resolves the router through one local shim.
         "react-router-dom": routerMockPath,
-        recharts: rechartsMockPath,
       },
     },
     test: {
