@@ -1,4 +1,4 @@
-import { createElement } from "react";
+﻿import { createElement } from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
@@ -102,9 +102,10 @@ function bannerToneClass(tone = "info") {
   return "border-line-soft bg-white text-text before:bg-[#173b67]";
 }
 
-export function PageCanvas({ className, children }) {
+export function PageCanvas({ className, children, ...props }) {
   return (
     <div
+      {...props}
       className={cx(
         "mx-auto w-full max-w-shell-content space-y-5",
         className
@@ -114,7 +115,6 @@ export function PageCanvas({ className, children }) {
     </div>
   );
 }
-
 export function PageHeader({
   eyebrow,
   title,

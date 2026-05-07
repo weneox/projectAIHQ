@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
@@ -139,7 +139,7 @@ function pickFirstWorkspaceName(...values) {
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-  if (path.startsWith("/inbox")) return "immersive";
+  if (path.startsWith("/inbox") || path.startsWith("/customers")) return "immersive";
   return "standard";
 }
 
@@ -868,7 +868,7 @@ export default function Shell() {
 
         <main className="relative min-h-0 flex-1 overflow-hidden bg-white">
           {shellMode === "immersive" ? (
-            <div className="h-full min-h-0 overflow-hidden bg-white">
+            <div className="h-full min-h-0 overflow-hidden bg-white [&>*]:h-full [&>*]:min-h-0">
               <Outlet />
             </div>
           ) : (
@@ -894,5 +894,7 @@ export default function Shell() {
     </div>
   );
 }
+
+
 
 

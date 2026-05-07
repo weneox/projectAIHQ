@@ -27,9 +27,9 @@ const GENERIC_WORKSPACE_NAMES = new Set([
 
 const HEADER_HEIGHT = 52;
 
-const SHELL_CHROME_BG = "rgba(249,250,253,0.988)";
+const SHELL_CHROME_BG = "rgba(226,232,240,0.995)";
 const SHELL_CHROME_SURFACE =
-  "linear-gradient(180deg, rgba(255,255,255,0.985) 0%, rgba(249,250,253,0.99) 46%, rgba(245,247,251,0.988) 100%)";
+  "linear-gradient(180deg, rgba(235,240,246,0.995) 0%, rgba(226,232,240,0.995) 48%, rgba(218,226,235,0.995) 100%)";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -551,3 +551,6 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
 }
 
 export { HEADER_HEIGHT, SHELL_CHROME_BG };
+
+
+

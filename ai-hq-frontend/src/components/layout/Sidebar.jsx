@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Drawer } from "antd";
 import { NavLink } from "react-router-dom";
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
@@ -14,9 +14,9 @@ const SIDEBAR_WIDTH = 190;
 const SIDEBAR_COLLAPSED_WIDTH = 58;
 const MOBILE_DRAWER_WIDTH = 268;
 
-const SHELL_CHROME_BG = "rgba(249,250,253,0.988)";
+const SHELL_CHROME_BG = "rgba(226,232,240,0.995)";
 const SHELL_CHROME_SURFACE =
-  "linear-gradient(180deg, rgba(255,255,255,0.985) 0%, rgba(249,250,253,0.99) 46%, rgba(245,247,251,0.988) 100%)";
+  "linear-gradient(180deg, rgba(235,240,246,0.995) 0%, rgba(226,232,240,0.995) 48%, rgba(218,226,235,0.995) 100%)";
 
 const SIDEBAR_EDGE_SHADOW =
   "inset -1px 0 0 rgba(15,23,42,0.082), inset -2px 0 0 rgba(255,255,255,0.74), 14px 0 34px -32px rgba(15,23,42,0.32)";
@@ -340,3 +340,5 @@ export {
   SIDEBAR_COLLAPSED_WIDTH,
   SHELL_CHROME_BG,
 };
+
+

@@ -1,11 +1,14 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   ExternalLink,
-  MoreHorizontal,
-  Search,
   X,
+  Search,
 } from "lucide-react";
 
 import { listLeads } from "../api/leads.js";
@@ -252,24 +255,37 @@ function CustomerPicker({ leads, value = "all", onChange }) {
   }
 
   return (
-    <div className="relative z-[120] w-full max-w-[260px]">
+    <div className="relative z-[120] h-full w-full">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-8 w-full items-center gap-2 rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-left text-[12.8px] font-semibold tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow,background-color] duration-base ease-premium hover:border-[#B9C8DA] hover:bg-[#FBFDFF] focus-visible:ring-4 focus-visible:ring-[rgba(49,92,255,0.12)]"
+        className="group relative flex h-full w-full cursor-pointer items-center !bg-white px-6 text-left outline-none transition-colors duration-base ease-premium hover:!bg-white focus-visible:!bg-white"
       >
-        <Search className="h-[14px] w-[14px] shrink-0 text-[#66768A]" strokeWidth={2.15} />
-        <span className="min-w-0 flex-1 truncate">
-          {selected ? selected.name : "All customers"}
-        </span>
-        <span className="shrink-0 text-[11px] font-semibold text-[#94A3B8]">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Search
+            className="mt-[19px] h-[14px] w-[14px] shrink-0 text-[#7C8A9F] transition-colors duration-base ease-premium group-hover:text-[#315CFF]"
+            strokeWidth={2.05}
+          />
+
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
+              Customer
+            </div>
+
+            <div className="mt-2 truncate text-[13px] font-semibold tracking-[-0.02em] text-[#0F172A]">
+              {selected ? selected.name : "All customers"}
+            </div>
+          </div>
+        </div>
+
+        <span className="ml-3 shrink-0 text-[11px] font-semibold text-[#94A3B8] transition-colors duration-base ease-premium group-hover:text-[#315CFF]">
           {open ? "⌃" : "⌄"}
         </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-[calc(100%+8px)] z-[220] w-[320px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
-          <div className="border-b border-[#E5EBF3] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FBFF_100%)] p-2">
+        <div className="absolute left-3 top-[calc(100%+8px)] z-[220] w-[320px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
+          <div className="border-b border-[#E5EBF3] bg-white p-2">
             <div className="flex h-9 items-center gap-2 rounded-[12px] border border-[#D3DEEA] bg-white px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.12)]">
               <Search className="h-[14px] w-[14px] shrink-0 text-[#66768A]" strokeWidth={2.15} />
               <input
@@ -286,7 +302,7 @@ function CustomerPicker({ leads, value = "all", onChange }) {
                   className="inline-flex h-6 w-6 items-center justify-center rounded-[8px] text-[#94A3B8] hover:bg-[#F2F6FB] hover:text-[#0F172A]"
                   aria-label="Clear customer search"
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  <X className="h-[15px] w-[15px] text-[#94A3B8] transition-colors duration-base ease-premium" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
                 </button>
               ) : null}
             </div>
@@ -369,52 +385,188 @@ function CustomerPicker({ leads, value = "all", onChange }) {
 }
 /* customers-combo-picker:end */
 function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCustomerChange, onSelect, onOpen, stageFilter, onStageFilterChange, dateFilter, onDateFilterChange }) {
+  const [stageOpen, setStageOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+
+  const stageDisplay = STAGES.find((item) => item.key === stageFilter)?.label || "All";
+  const dateDisplay = dateFilter ? formatDate(`${dateFilter}T00:00:00`) || dateFilter : "Any date";
+
+  function closePanels() {
+    setStageOpen(false);
+    setDateOpen(false);
+  }
+
   return (
-    <table className="w-full table-fixed border-collapse">
+    <table className="customers-filter-table w-full table-fixed border-collapse">
       <colgroup>
         <col />
-        <col className="w-[190px]" />
-        <col className="w-[140px]" />
+        <col className="w-[180px]" />
+        <col className="w-[205px]" />
         <col className="w-[180px]" />
       </colgroup>
 
-      
-      <thead>
-        <tr className="text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#66768A]">
-          <th className="relative z-[80] border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-6 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <div className="flex min-w-0 items-center"><CustomerPicker
-                leads={allLeads}
-                value={selectedCustomerId}
-                onChange={onCustomerChange}
-              />
-            </div>
-          </th>
-
-          <th className="relative z-[70] border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <select
-              value={stageFilter}
-              onChange={(event) => onStageFilterChange?.(event.target.value)}
-              className="h-8 w-[140px] rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[12.8px] font-semibold normal-case tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow] duration-base ease-premium hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
-            >
-              {STAGES.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </th>
-
-          <th className="border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]">
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => onDateFilterChange?.(event.target.value)}
-              className="h-8 w-[145px] rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[12.8px] font-semibold normal-case tracking-[-0.01em] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.18)] outline-none transition-[border-color,box-shadow] duration-base ease-premium hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
-              aria-label="Filter by date"
+      <thead className="bg-white">
+        <tr className="h-14 bg-white text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#66768A]" bg-white>
+          <th className="relative z-[90] h-14 border-b border-[#D9E3EE] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
+            <CustomerPicker
+              leads={allLeads}
+              value={selectedCustomerId}
+              onChange={(nextValue) => {
+                closePanels();
+                onCustomerChange?.(nextValue);
+              }}
             />
           </th>
 
-          <th className="border-y border-[#D9E3EE] bg-[linear-gradient(180deg,#FFFFFF_0%,#F7FAFD_100%)] px-3 py-1 text-left font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_-1px_0_rgba(216,226,238,0.95)]" aria-hidden="true" />
+          <th className="relative z-[85] h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
+            <button
+              type="button"
+              onClick={() => {
+                setDateOpen(false);
+                setStageOpen((current) => !current);
+              }}
+              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-[#FFFFFF] px-5 text-left outline-none transition-colors duration-base ease-premium hover:bg-[#FFFFFF] focus-visible:bg-[#FFFFFF]"
+            >
+              <Search
+                className="mt-[19px] h-[14px] w-[14px] shrink-0 text-[#7C8A9F] transition-colors duration-base ease-premium group-hover:text-[#315CFF]"
+                strokeWidth={2.05}
+              />
+
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
+                  Stage
+                </div>
+                <div className="mt-2 truncate text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                  {stageDisplay}
+                </div>
+              </div>
+
+              <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#94A3B8] transition-colors duration-base ease-premium group-hover:text-[#315CFF]">
+                {stageOpen ? "⌃" : "⌄"}
+              </span>
+            </button>
+
+            {stageOpen ? (
+              <div className="absolute left-3 top-[calc(100%+8px)] z-[260] w-[210px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
+                <div className="border-b border-[#E5EBF3] bg-white px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+                    Filter stage
+                  </div>
+                  <div className="mt-1 text-[12.5px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                    Choose lead stage
+                  </div>
+                </div>
+
+                <div className="py-1">
+                  {STAGES.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        onStageFilterChange?.(item.key);
+                        setStageOpen(false);
+                      }}
+                      className={cx(
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#F6F9FC]",
+                        stageFilter === item.key ? "bg-[#EEF4FF]" : "bg-white"
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          "h-1.5 w-1.5 rounded-full",
+                          item.key === "all" ? "bg-[#94A3B8]" : stageDotClass(toneForStage(item.key))
+                        )}
+                      />
+
+                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold tracking-[-0.02em] text-[#0F172A]">
+                        {item.label}
+                      </span>
+
+                      <span
+                        className={cx(
+                          "ml-auto text-[14px] font-bold",
+                          stageFilter === item.key ? "text-[#315CFF]" : "text-transparent"
+                        )}
+                      >
+                        ✓
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </th>
+
+          <th className="relative z-[80] h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]">
+            <button
+              type="button"
+              onClick={() => {
+                setStageOpen(false);
+                setDateOpen((current) => !current);
+              }}
+              className="group flex h-full w-full cursor-pointer items-center gap-2.5 bg-[#FFFFFF] px-5 text-left outline-none transition-colors duration-base ease-premium hover:bg-[#FFFFFF] focus-visible:bg-[#FFFFFF]"
+            >
+              <Search
+                className="mt-[19px] h-[14px] w-[14px] shrink-0 text-[#7C8A9F] transition-colors duration-base ease-premium group-hover:text-[#315CFF]"
+                strokeWidth={2.05}
+              />
+
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase leading-none tracking-[0.18em] text-[#8A96A8]">
+                  Date
+                </div>
+                <div className="mt-2 truncate text-[13px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                  {dateDisplay}
+                </div>
+              </div>
+
+              <span className="ml-2 shrink-0 text-[11px] font-semibold text-[#94A3B8] transition-colors duration-base ease-premium group-hover:text-[#315CFF]">
+                {dateOpen ? "⌃" : "⌄"}
+              </span>
+            </button>
+
+            {dateOpen ? (
+              <div className="absolute left-3 top-[calc(100%+8px)] z-[260] w-[260px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
+                <div className="border-b border-[#E5EBF3] bg-white px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8A96A8]">
+                    Filter date
+                  </div>
+                  <div className="mt-1 text-[12.5px] font-semibold normal-case tracking-[-0.02em] text-[#0F172A]">
+                    Choose customer date
+                  </div>
+                </div>
+
+                <div className="p-3">
+                  <input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(event) => {
+                      onDateFilterChange?.(event.target.value);
+                      setDateOpen(false);
+                    }}
+                    className="h-10 w-full rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[13px] font-semibold text-[#0F172A] outline-none transition-[border-color,box-shadow] hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
+                    aria-label="Filter by date"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDateFilterChange?.("");
+                      setDateOpen(false);
+                    }}
+                    className="mt-2 flex h-9 w-full items-center justify-between rounded-[12px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[#0F172A] transition-colors hover:bg-[#F6F9FC]"
+                  >
+                    Any date
+                    <span className={cx("text-[14px] font-bold", !dateFilter ? "text-[#315CFF]" : "text-transparent")}>
+                      ✓
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </th>
+
+          <th className="h-14 border-b border-l border-[#E3EAF2] !bg-white p-0 text-left font-semibold shadow-[inset_0_-1px_0_rgba(216,226,238,0.95)]" aria-hidden="true" />
         </tr>
       </thead>
 
@@ -435,11 +587,21 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
               key={key}
               onClick={() => onSelect?.(lead, key)}
               className={cx(
-                "group cursor-pointer  #D9E3EE text-left transition-[background-color,box-shadow,color] duration-base ease-premium",
-                selected ? "bg-[linear-gradient(90deg,#EEF6FF_0%,#F7FBFF_58%,#FFFFFF_100%)] shadow-[inset_3px_0_0_#315CFF,inset_0_1px_0_rgba(255,255,255,0.95)]" : "bg-white hover:bg-[#FAFCFF]"
+                "group cursor-pointer text-left transition-[background-color,box-shadow,color] duration-base ease-premium",
+                selected
+                  ? "bg-white shadow-[inset_0_-1px_0_rgba(216,226,238,0.82)]"
+                  : "bg-white hover:bg-white"
               )}
             >
-              <td className="px-6 py-3.5">
+              <td className="relative px-6 py-3.5">
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    "pointer-events-none absolute left-0 top-1/2 h-12 w-[4px] -translate-y-1/2 rounded-r-full !bg-white shadow-[0_0_0_1px_rgba(49,92,255,0.08),0_0_18px_rgba(49,92,255,0.35)] transition-opacity duration-base ease-premium",
+                    selected ? "opacity-100" : "opacity-0 group-hover:opacity-45"
+                  )}
+                />
+
                 <div className="flex min-w-0 items-center gap-3">
                   <CustomerAvatar name={name} />
 
@@ -492,7 +654,6 @@ function CustomerTable({ leads, allLeads, selectedLead, selectedCustomerId, onCu
     </table>
   );
 }
-
 function DetailLine({ label, children }) {
   return (
     <div className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-3 py-[5px]">
@@ -509,11 +670,13 @@ function DetailLine({ label, children }) {
 
 
 
-function CustomerDetailPanel({ lead, onOpen }) {
+function CustomerDetailPanel({ lead, onOpen, onClose, closed = false, closing = false, opening = false }) {
+  if (closed) return null;
+
   if (!lead) {
     return (
-      <aside className="customers-detail-lines-off hidden h-full min-h-0 overflow-y-auto %)] px-6 pb-6 )] xl:block ] bg-white )] bg-white overflow-hidden">
-        <div className="flex h-full min-h-[420px] items-center justify-center text-center">
+      <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
+        <div className="flex h-full min-h-[420px] items-center justify-center bg-white text-center">
           <div className="max-w-[240px]">
             <div className="text-[15px] font-semibold text-[#0F172A]">
               Select a customer
@@ -538,8 +701,8 @@ function CustomerDetailPanel({ lead, onOpen }) {
   const notes = s(lead.notes || lead.summary || lead.interest || lead.intent);
 
   return (
- <aside className="customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block">
-      <div className="flex min-h-full flex-col py-5">
+    <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
+      <div className="flex min-h-full flex-col bg-white py-5">
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="flex min-w-0 items-start gap-3.5">
             <CustomerAvatar name={name} size="lg" />
@@ -557,14 +720,15 @@ function CustomerDetailPanel({ lead, onOpen }) {
 
           <button
             type="button"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] text-[#66768A] transition-colors hover:bg-white hover:text-[#0F172A] hover:shadow-[0_8px_18px_-16px_rgba(15,23,42,0.25)]"
-            aria-label="Customer actions"
+            onClick={() => onClose?.()}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white text-[#7C8A9F] shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_8px_18px_-16px_rgba(15,23,42,0.25)] transition-colors hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+            aria-label="Close customer details"
           >
-            <MoreHorizontal className="h-4 w-4" strokeWidth={2.1} />
+            <X className="h-[15px] w-[15px]" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
           </button>
         </div>
 
-        <div className="h-px bg-[linear-gradient(90deg,rgba(216,226,238,0)_0%,#D8E2EE_10%,#D8E2EE_90%,rgba(216,226,238,0)_100%)] shadow-[0_1px_0_rgba(255,255,255,0.95)]" />
+        <div className="customers-detail-divider" />
 
         <div className="py-3">
           <DetailLine label="Email">{email || "—"}</DetailLine>
@@ -576,7 +740,7 @@ function CustomerDetailPanel({ lead, onOpen }) {
 
         {notes ? (
           <>
-            <div className="h-px bg-[linear-gradient(90deg,rgba(216,226,238,0)_0%,#D8E2EE_10%,#D8E2EE_90%,rgba(216,226,238,0)_100%)] shadow-[0_1px_0_rgba(255,255,255,0.95)]" />
+            <div className="customers-detail-divider" />
 
             <div className="py-3.5">
               <div className="text-[11px] font-semibold uppercase leading-5 tracking-[0.18em] text-[#66768A]">
@@ -590,14 +754,14 @@ function CustomerDetailPanel({ lead, onOpen }) {
           </>
         ) : null}
 
-        <div className="mt-2 h-px bg-[linear-gradient(90deg,rgba(216,226,238,0)_0%,#D8E2EE_10%,#D8E2EE_90%,rgba(216,226,238,0)_100%)] shadow-[0_1px_0_rgba(255,255,255,0.95)]" />
+        <div className="customers-detail-divider mt-2" />
 
         <div className="pt-4">
           <button
             type="button"
             disabled={!threadId}
             onClick={() => onOpen?.(threadId)}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[16px] border border-[#D3DEEA] bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FBFD_100%)] text-[13px] font-semibold text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_10px_24px_-22px_rgba(15,23,42,0.22)] transition-[border-color,background-color,box-shadow] hover:border-[#B9C8DA] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_14px_30px_-24px_rgba(15,23,42,0.30)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[16px] border border-[#D3DEEA] bg-white text-[13px] font-semibold text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_10px_24px_-22px_rgba(15,23,42,0.22)] transition-[border-color,background-color,box-shadow] hover:border-[#B9C8DA] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_14px_30px_-24px_rgba(15,23,42,0.30)] disabled:cursor-not-allowed disabled:opacity-45"
           >
             Open conversation
             <ExternalLink className="h-4 w-4" strokeWidth={2} />
@@ -607,7 +771,6 @@ function CustomerDetailPanel({ lead, onOpen }) {
     </aside>
   );
 }
-
 export default function Customers() {
   const navigate = useNavigate();
   const [query] = useState("");
@@ -615,6 +778,8 @@ export default function Customers() {
   const [customerFilter, setCustomerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const [detailClosing, setDetailClosing] = useState(false);
+  const [detailOpening, setDetailOpening] = useState(false);
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -700,9 +865,36 @@ export default function Customers() {
 
     return source;
   }, [customerFilter, dateFilter, stageFilter, state.leads]);
+  const handleCustomerSelect = useCallback((lead, key) => {
+    const safeKey = s(key);
+    if (!safeKey) return;
 
-  const selectedLead = useMemo(() => {
+    const isSameLead = selectedLeadId === safeKey;
+    const isPanelOpen = selectedLeadId && selectedLeadId !== "__closed__" && !detailClosing;
+
+    if (isSameLead && isPanelOpen) {
+      return;
+    }
+
+    setDetailClosing(false);
+    setSelectedLeadId(safeKey);
+
+    if (!isPanelOpen) {
+      setDetailOpening(true);
+
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setDetailOpening(false);
+        });
+      });
+    } else {
+      setDetailOpening(false);
+    }
+  }, [detailClosing, selectedLeadId]);
+const selectedLead = useMemo(() => {
     if (!filteredLeads.length) return null;
+    if (selectedLeadId === "__closed__") return null;
+    if (selectedLeadId === "__closed__") return null;
     if (!selectedLeadId) return filteredLeads[0];
 
     return (
@@ -719,14 +911,14 @@ export default function Customers() {
 
   if (state.loading) {
     return (
-      <PageCanvas className="customers-page-canvas !m-0 !mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none !overflow-hidden !bg-white !p-0 !px-0 !py-0 !pt-0 !pb-0">
+      <PageCanvas data-aihq-customers-page="true" className="!mx-0 !h-full !min-h-0 !w-full !max-w-none !space-y-0 overflow-hidden bg-white customers-page-white customers-page-white">
         <LoadingSurface title="Loading customers" />
       </PageCanvas>
     );
   }
 
   return (
-    <PageCanvas className="customers-page-canvas !m-0 !mx-0 !h-[calc(100vh-64px)] !w-full !max-w-none !overflow-hidden !bg-white !p-0 !px-0 !py-0 !pt-0 !pb-0">
+    <PageCanvas data-aihq-customers-page="true" className="!mx-0 !h-full !min-h-0 !w-full !max-w-none !space-y-0 overflow-hidden bg-white customers-page-white customers-page-white">
       {state.error ? (
         <div className="px-6 pb-4">
           <InlineNotice
@@ -764,7 +956,8 @@ export default function Customers() {
                     setCustomerFilter(value);
                     setSelectedLeadId(value === "all" ? "" : value);
                   }}
-                  onSelect={(lead, key) => setSelectedLeadId(key)}
+                  onSelect={handleCustomerSelect}
+          
                   onOpen={openConversation}
                   stageFilter={stageFilter}
                   onStageFilterChange={setStageFilter}
@@ -787,12 +980,74 @@ export default function Customers() {
             )}
           </div>
 
-          <CustomerDetailPanel lead={selectedLead} onOpen={openConversation} />
+          <CustomerDetailPanel
+            lead={selectedLead}
+            onOpen={(threadId) => {
+              const safe = s(threadId);
+              if (safe) navigate(`/inbox?threadId=${encodeURIComponent(safe)}`);
+            }}
+            onClose={() => {
+              setDetailOpening(false);
+              setDetailClosing(true);
+              window.setTimeout(() => {
+                setSelectedLeadId("__closed__");
+                setDetailClosing(false);
+              }, 340);
+            }}
+            closed={selectedLeadId === "__closed__" && !detailClosing}
+            closing={detailClosing}
+            opening={detailOpening}
+          />
         </div>
       </section>
     </PageCanvas>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

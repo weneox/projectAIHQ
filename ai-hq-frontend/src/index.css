@@ -1916,3 +1916,355 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
 }
 /* customers-header-controls-ui-language:end */
 
+
+.customers-filter-table thead,
+.customers-filter-table thead tr,
+.customers-filter-table thead th,
+.customers-filter-table thead button {
+  background: #ffffff !important;
+  background-image: none !important;
+}
+
+.customers-filter-table thead th {
+  background-color: #ffffff !important;
+}
+
+
+/* Customers page: force the whole canvas pure white */
+.customers-page-white,
+.customers-page-white table,
+.customers-page-white thead,
+.customers-page-white thead tr,
+.customers-page-white thead th,
+.customers-page-white tbody,
+.customers-page-white tbody tr,
+.customers-page-white tbody td,
+.customers-page-white aside,
+.customers-page-white section {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+.customers-page-white button:not(:hover),
+.customers-page-white input,
+.customers-page-white select {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+.customers-page-white [class*="bg-[linear-gradient"] {
+  background: #ffffff !important;
+  background-image: none !important;
+}
+
+
+/* FORCE CUSTOMERS PAGE CANVAS WHITE */
+body:has([data-aihq-customers-page]) main,
+body:has([data-aihq-customers-page]) main > div,
+body:has([data-aihq-customers-page]) main > div > div,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page],
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] table,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] tbody,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] tr,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] th,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] td,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] aside,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] section {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead button,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead th,
+body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead tr {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+
+/* Customers: pure white canvas */
+[data-aihq-customers-page],
+[data-aihq-customers-page] table,
+[data-aihq-customers-page] thead,
+[data-aihq-customers-page] thead tr,
+[data-aihq-customers-page] thead th,
+[data-aihq-customers-page] tbody,
+[data-aihq-customers-page] tbody tr,
+[data-aihq-customers-page] tbody td,
+[data-aihq-customers-page] aside,
+[data-aihq-customers-page] section {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+[data-aihq-customers-page] thead button {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+/* Customers detail panel must stay pure white */
+html body #root aside.customers-detail-clean,
+html body #root aside.customers-detail-lines-off,
+html body #root aside.customers-detail-clean > div,
+html body #root aside.customers-detail-lines-off > div {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+
+/* Customers: when detail panel is closed, list takes full width */
+html body #root [data-aihq-customers-page] div.grid:has(table):not(:has(aside.customers-detail-clean)):not(:has(aside.customers-detail-lines-off)) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html body #root [data-aihq-customers-page] div.grid:has(table):not(:has(aside.customers-detail-clean)):not(:has(aside.customers-detail-lines-off)) > * {
+  min-width: 0 !important;
+}
+
+
+/* Customers filter bar: remove its own top separator, keep only header separator */
+[data-aihq-customers-page] table,
+[data-aihq-customers-page] thead,
+[data-aihq-customers-page] thead tr,
+[data-aihq-customers-page] thead th,
+.customers-filter-table,
+.customers-filter-table thead,
+.customers-filter-table thead tr,
+.customers-filter-table thead th {
+  border-top: 0 !important;
+  border-top-width: 0 !important;
+}
+
+[data-aihq-customers-page] thead th,
+.customers-filter-table thead th {
+  box-shadow: inset 0 -1px 0 rgba(216,226,238,0.95) !important;
+}
+
+[data-aihq-customers-page] thead,
+.customers-filter-table thead {
+  box-shadow: none !important;
+}
+
+
+/* Customers filter bar: no own top separator */
+html body #root table.customers-filter-table,
+html body #root table.customers-filter-table thead,
+html body #root table.customers-filter-table thead tr,
+html body #root table.customers-filter-table thead th {
+  border-top: 0 !important;
+  border-top-width: 0 !important;
+}
+
+html body #root table.customers-filter-table thead th {
+  border-bottom: 1px solid #D9E3EE !important;
+  box-shadow: inset 0 -1px 0 rgba(216,226,238,0.95) !important;
+}
+
+html body #root table.customers-filter-table thead::before,
+html body #root table.customers-filter-table thead tr::before,
+html body #root table.customers-filter-table thead th::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* CUSTOMERS_DETAIL_PANEL_MOTION_START */
+html body #root [data-aihq-customers-page] div.grid {
+  transition: grid-template-columns 340ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html body #root [data-aihq-customers-page] div.grid:has(.customers-detail-panel) {
+  grid-template-columns: minmax(0, 1fr) 400px !important;
+}
+
+html body #root [data-aihq-customers-page] div.grid:has(.customers-detail-panel-opening),
+html body #root [data-aihq-customers-page] div.grid:has(.customers-detail-panel-closing) {
+  grid-template-columns: minmax(0, 1fr) 0px !important;
+}
+
+html body #root .customers-detail-panel {
+  width: 400px !important;
+  min-width: 400px !important;
+  max-width: 400px !important;
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+  filter: blur(0) !important;
+  overflow: hidden !important;
+  will-change: width, max-width, min-width, padding, opacity, transform, filter !important;
+  transition:
+    width 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    min-width 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding-left 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding-right 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 340ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html body #root .customers-detail-panel > * {
+  min-width: 400px !important;
+  transition:
+    opacity 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 340ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html body #root .customers-detail-panel.customers-detail-panel-opening,
+html body #root .customers-detail-panel.customers-detail-panel-closing {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left: 0 !important;
+  pointer-events: none !important;
+}
+
+html body #root .customers-detail-panel.customers-detail-panel-opening > *,
+html body #root .customers-detail-panel.customers-detail-panel-closing > * {
+  opacity: 0 !important;
+  transform: translateX(14px) !important;
+  filter: blur(1px) !important;
+}
+
+html body #root .customers-detail-panel:not(.customers-detail-panel-opening):not(.customers-detail-panel-closing) > * {
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+  filter: blur(0) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #root [data-aihq-customers-page] div.grid,
+  html body #root .customers-detail-panel,
+  html body #root .customers-detail-panel > * {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+/* CUSTOMERS_DETAIL_PANEL_MOTION_END */
+
+
+/* CUSTOMERS_DETAIL_PANEL_SYMMETRY_START */
+html body #root .customers-detail-panel {
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+html body #root .customers-detail-panel > div {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 28px 32px 30px 32px !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+html body #root .customers-detail-panel > div > * {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
+}
+
+html body #root .customers-detail-panel > div > div:first-child {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+  width: 100% !important;
+  padding-bottom: 18px !important;
+  margin-bottom: 0 !important;
+}
+
+html body #root .customers-detail-panel > div > div:first-child > div:first-child {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+html body #root .customers-detail-panel > div > div:first-child > div:first-child > div:first-child {
+  transform: translateY(3px) !important;
+}
+
+html body #root .customers-detail-panel > div > div:first-child button {
+  flex: 0 0 auto !important;
+  margin-left: 12px !important;
+  margin-right: 0 !important;
+}
+
+html body #root .customers-detail-panel .customers-detail-divider,
+html body #root .customers-detail-panel div[class*="h-px"] {
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+html body #root .customers-detail-panel button {
+  max-width: 100% !important;
+}
+/* CUSTOMERS_DETAIL_PANEL_SYMMETRY_END */
+
+
+/* CUSTOMERS_DETAIL_PANEL_DIVIDERS_RESTORE_START */
+html body #root .customers-detail-panel .customers-detail-divider,
+html body #root .customers-detail-panel div[class*="h-px"] {
+  display: block !important;
+  content: "" !important;
+  height: 1px !important;
+  min-height: 1px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  border: 0 !important;
+  opacity: 1 !important;
+  background: linear-gradient(
+    90deg,
+    rgba(226,232,240,0) 0%,
+    rgba(203,213,225,0.72) 14%,
+    rgba(148,163,184,0.82) 50%,
+    rgba(203,213,225,0.72) 86%,
+    rgba(226,232,240,0) 100%
+  ) !important;
+  background-color: transparent !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.96) !important;
+}
+
+html body #root .customers-detail-panel .customers-detail-divider::after,
+html body #root .customers-detail-panel div[class*="h-px"]::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 10% !important;
+  right: 10% !important;
+  top: -3px !important;
+  height: 7px !important;
+  pointer-events: none !important;
+  background: linear-gradient(
+    90deg,
+    rgba(96,165,250,0) 0%,
+    rgba(96,165,250,0.07) 18%,
+    rgba(15,23,42,0.052) 50%,
+    rgba(96,165,250,0.07) 82%,
+    rgba(96,165,250,0) 100%
+  ) !important;
+  filter: blur(5px) !important;
+}
+
+html body #root .customers-detail-panel .customers-detail-divider {
+  position: relative !important;
+}
+/* CUSTOMERS_DETAIL_PANEL_DIVIDERS_RESTORE_END */
+
