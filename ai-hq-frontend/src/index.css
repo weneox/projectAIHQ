@@ -315,42 +315,9 @@ table {
   font-family: inherit;
 }
 
-.ant-btn {
-  box-shadow: none !important;
-}
 
-.ant-btn:not(:disabled):focus-visible {
-  box-shadow: var(--focus-ring) !important;
-}
 
-.ant-input,
-.ant-input-affix-wrapper,
-.ant-select-selector,
-.ant-picker,
-.ant-input-number,
-.ant-input-number-input-wrap {
-  border-color: rgb(var(--color-line)) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: none !important;
-  background: rgb(var(--color-surface)) !important;
-}
 
-.ant-input:hover,
-.ant-input-affix-wrapper:hover,
-.ant-select-selector:hover,
-.ant-picker:hover,
-.ant-input-number:hover {
-  border-color: rgb(var(--color-line-strong)) !important;
-}
-
-.ant-input:focus,
-.ant-input-affix-wrapper-focused,
-.ant-select-focused .ant-select-selector,
-.ant-picker-focused,
-.ant-input-number-focused {
-  border-color: rgb(var(--color-brand)) !important;
-  box-shadow: var(--focus-ring) !important;
-}
 
 .ant-dropdown .ant-dropdown-menu,
 .ant-select-dropdown,
@@ -500,29 +467,11 @@ table {
     background: rgb(var(--color-line-soft));
   }
 
-  .app-input {
-    height: var(--control-md);
-    width: 100%;
-    border: 1.5px solid rgb(var(--color-line));
-    border-radius: var(--radius-md);
-    background: rgb(var(--color-surface));
-    padding: 0 13px;
-    color: rgb(var(--color-text));
-    font-weight: var(--font-weight-medium);
-    transition:
-      border-color var(--motion-base) var(--motion-premium),
-      box-shadow var(--motion-base) var(--motion-premium),
-      background-color var(--motion-base) var(--motion-premium);
-  }
+  
 
-  .app-input:hover {
-    border-color: rgb(var(--color-line-strong));
-  }
+  
 
-  .app-input:focus {
-    border-color: rgb(var(--color-brand));
-    box-shadow: var(--focus-ring);
-  }
+  
 
   /* Button */
   .ui-button {
@@ -1742,16 +1691,7 @@ select:-webkit-autofill:active {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.92) !important;
   }
 
-  /* Button da material dilinə uyğun olsun */
-  .customers-detail-clean button,
-  .customers-detail-lines-off button,
-  .customers-premium-page aside[class*="customers-detail"] button {
-    border-color: rgba(198, 210, 226, 0.95) !important;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.98),
-      0 10px 24px -22px rgba(15,23,42,0.18) !important;
-  }
+  
 }
 /* customers-premium-detail-harmony:end */
 
@@ -1815,35 +1755,9 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
     max-width: 260px !important;
   }
 
-  .customers-premium-page thead th:first-child > div > div > button,
-  .customers-premium-page thead select,
-  .customers-premium-page thead input[type="date"] {
-    height: 38px !important;
-    min-height: 38px !important;
-    border: 1.5px solid rgb(var(--color-line)) !important;
-    border-radius: var(--ui-radius-control-outer) !important;
-    background:
-      linear-gradient(
-        180deg,
-        rgb(var(--color-surface)) 0%,
-        rgb(var(--color-surface-muted)) 100%
-      ) !important;
-    color: rgb(var(--color-text)) !important;
-    font-size: 13.2px !important;
-    font-weight: var(--font-weight-semibold) !important;
-    letter-spacing: var(--tracking-tight-sm) !important;
-    box-shadow: var(--shadow-control) !important;
-    transition:
-      border-color var(--motion-base) var(--motion-premium),
-      box-shadow var(--motion-base) var(--motion-premium),
-      background-color var(--motion-base) var(--motion-premium) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button {
-    padding-left: 13px !important;
-    padding-right: 12px !important;
-    gap: 9px !important;
-  }
+  
 
   .customers-premium-page thead select {
     width: 142px !important;
@@ -1852,67 +1766,23 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
     appearance: auto !important;
   }
 
-  .customers-premium-page thead input[type="date"] {
-    width: 148px !important;
-    padding-left: 13px !important;
-    padding-right: 10px !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button:hover,
-  .customers-premium-page thead select:hover,
-  .customers-premium-page thead input[type="date"]:hover {
-    border-color: rgb(var(--color-line-strong)) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button:focus-visible,
-  .customers-premium-page thead select:focus,
-  .customers-premium-page thead input[type="date"]:focus {
-    border-color: rgb(var(--color-brand)) !important;
-    box-shadow: var(--shadow-control-focus) !important;
-    outline: none !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child svg,
-  .customers-premium-page thead th:first-child > div > div > button span:last-child {
-    color: rgb(var(--color-text-subtle)) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button:focus-visible svg {
-    color: rgb(var(--color-brand)) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button + div {
-    width: 320px !important;
-    border: 1px solid rgb(var(--color-line-soft)) !important;
-    border-radius: var(--radius-xl) !important;
-    background: rgb(var(--color-surface)) !important;
-    box-shadow: var(--shadow-md) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button + div input {
-    height: 38px !important;
-    border: 0 !important;
-    background: transparent !important;
-    color: rgb(var(--color-text)) !important;
-    font-size: 13.2px !important;
-    font-weight: var(--font-weight-semibold) !important;
-    letter-spacing: var(--tracking-tight-sm) !important;
-    outline: 0 !important;
-    box-shadow: none !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button + div input::placeholder {
-    color: rgb(var(--color-text-subtle)) !important;
-    font-weight: var(--font-weight-medium) !important;
-  }
+  
 
-  .customers-premium-page thead th:first-child > div > div > button + div > div:first-child > div {
-    height: 40px !important;
-    border: 1.5px solid rgb(var(--color-line)) !important;
-    border-radius: var(--ui-radius-control-outer) !important;
-    background: rgb(var(--color-surface)) !important;
-    box-shadow: var(--shadow-control) !important;
-  }
+  
 }
 /* customers-header-controls-ui-language:end */
 
@@ -1977,13 +1847,7 @@ body:has([data-aihq-customers-page]) [data-aihq-customers-page] section {
   background-image: none !important;
 }
 
-body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead button,
-body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead th,
-body:has([data-aihq-customers-page]) [data-aihq-customers-page] thead tr {
-  background: #ffffff !important;
-  background-color: #ffffff !important;
-  background-image: none !important;
-}
+
 
 
 /* Customers: pure white canvas */
@@ -2286,22 +2150,6 @@ html body #root .customers-detail-panel .customers-detail-divider {
   border-radius: 7px !important;
 }
 
-.ui-button {
-  border-radius: 7px !important;
-}
-
-.ui-button__inner {
-  border-radius: 6px !important;
-}
-
-.ui-field-shell {
-  border-radius: 7px !important;
-}
-
-.ui-field-inner,
-.ui-field-control {
-  border-radius: 6px !important;
-}
 
 /* Tailwind rounded-ləri də sərtləşdir */
 .rounded-\[22px\],

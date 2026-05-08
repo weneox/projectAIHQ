@@ -1,11 +1,13 @@
 ﻿import { forwardRef } from "react";
 import { ChevronDown, X } from "lucide-react";
+
 import { cx } from "../../lib/cx.js";
 
 function appearanceClass(appearance = "default") {
   if (appearance === "product") return "ui-field--product";
   if (appearance === "quiet") return "ui-field--quiet";
   if (appearance === "large") return "ui-field--large";
+
   return "ui-field--default";
 }
 
@@ -38,11 +40,13 @@ function FieldShell({
 
 function ControlIconSlot({ children }) {
   if (!children) return null;
+
   return <span className="ui-field-icon">{children}</span>;
 }
 
 function RightSlot({ children }) {
   if (!children) return null;
+
   return <div className="ui-field-right">{children}</div>;
 }
 
@@ -54,8 +58,8 @@ export function InputGroup({
   onClear,
   value,
   placeholder,
-  disabled,
-  readOnly,
+  disabled = false,
+  readOnly = false,
   invalid = false,
   appearance = "default",
   ...props
@@ -117,8 +121,8 @@ const Input = forwardRef(function Input(
   {
     className,
     inputClassName,
-    disabled,
-    readOnly,
+    disabled = false,
+    readOnly = false,
     invalid = false,
     leftIcon,
     right,
@@ -161,8 +165,8 @@ export const Textarea = forwardRef(function Textarea(
   {
     className,
     textClassName,
-    disabled,
-    readOnly,
+    disabled = false,
+    readOnly = false,
     invalid = false,
     rows = 5,
     appearance = "default",
@@ -186,10 +190,7 @@ export const Textarea = forwardRef(function Textarea(
           readOnly={readOnly}
           aria-invalid={invalid || undefined}
           spellCheck={false}
-          className={cx(
-            "ui-field-control ui-textarea-control",
-            textClassName
-          )}
+          className={cx("ui-field-control ui-textarea-control", textClassName)}
           {...props}
         />
       </div>
@@ -201,8 +202,8 @@ export const Select = forwardRef(function Select(
   {
     className,
     selectClassName,
-    disabled,
-    readOnly,
+    disabled = false,
+    readOnly = false,
     invalid = false,
     children,
     appearance = "default",
