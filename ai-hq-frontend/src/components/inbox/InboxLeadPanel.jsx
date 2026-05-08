@@ -190,7 +190,7 @@ function AvatarStack({ people = [] }) {
           key={`${name}-${index}`}
           title={name}
           className={cx(
-            "-ml-2 first:ml-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-[0_12px_24px_-18px_rgba(15,23,42,0.24)]",
+            "-ml-2 first:ml-0 flex h-8 w-8 items-center justify-center rounded-md border-2 border-white text-xs font-semibold shadow-[0_12px_24px_-18px_rgba(15,23,42,0.24)]",
             avatarTone(name)
           )}
         >

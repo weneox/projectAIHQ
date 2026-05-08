@@ -109,7 +109,7 @@ function InboundAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#E8EEF7] text-[12px] font-semibold text-[#587391] shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)]">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[#E8EEF7] text-[12px] font-semibold text-[#587391] shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -311,7 +311,7 @@ function OutboundDeliveryTruth({ truth }) {
       <span
         title={detail || label}
         className={[
-          "inline-flex max-w-[260px] items-center gap-1.5 rounded-full border px-2 py-[3px]",
+          "inline-flex max-w-[260px] items-center gap-1.5 rounded-md border px-2 py-[3px]",
           "text-[10.5px] font-semibold leading-none tracking-[-0.01em]",
           "shadow-[0_8px_18px_-16px_rgba(15,23,42,0.22)]",
           "transition-colors duration-200",

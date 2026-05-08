@@ -1,0 +1,33 @@
+.website-drawer-tabs
+.website-drawer-tabs > div
+.website-drawer-tabs button
+.website-drawer-tabs button svg
+.website-drawer-tabs button:hover
+.website-drawer-tabs button[data-active="true"]
+.website-drawer-tabs ~ div
+.website-drawer-tabs ~ div
+
+.website-chat-textarea
+.website-drawer-tabs ~ div pre,
+.website-drawer-tabs ~ div code,
+.website-drawer-tabs ~ div [class*="snippet"],
+.website-drawer-tabs ~ div [class*="code"]
+.website-drawer-tabs ~ div [class*="snippet"] * ,
+.website-drawer-tabs ~ div [class*="code"] *
+body:has(.customers-page-canvas) :where(main, section, div):has(> .customers-page-canvas)
+body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-canvas)
+.customers-page-canvas
+.customers-page-white,
+.customers-page-white table,
+.customers-page-white thead,
+.customers-page-white thead tr,
+.customers-page-white thead th,
+.customers-page-white tbody,
+.customers-page-white tbody tr,
+.customers-page-white tbody td,
+.customers-page-white aside,
+.customers-page-white section
+.customers-page-white button:not(:hover),
+.customers-page-white input,
+.customers-page-white select
+.customers-page-white [class*="bg-[linear-gradient"]

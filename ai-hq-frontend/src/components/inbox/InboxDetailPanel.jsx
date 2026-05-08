@@ -282,21 +282,21 @@ function EmptyComposerDock() {
             <button
               type="button"
               disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md text-[#B8C2D1]"
             >
               +
             </button>
             <button
               type="button"
               disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md text-[#B8C2D1]"
             >
               ☺
             </button>
             <button
               type="button"
               disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md text-[#B8C2D1]"
             >
               ⎋
             </button>
@@ -450,7 +450,7 @@ function ConversationLoadingState() {
         <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-[#DCE6F2]" />
 
         <div
-          className="absolute left-1/2 top-1/2 h-[2px] w-[94px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[linear-gradient(90deg,rgba(37,99,235,0)_0%,rgba(37,99,235,0.18)_18%,rgba(37,99,235,0.98)_50%,rgba(37,99,235,0.18)_82%,rgba(37,99,235,0)_100%)] shadow-[0_0_18px_rgba(37,99,235,0.18)]"
+          className="absolute left-1/2 top-1/2 h-[2px] w-[94px] -translate-x-1/2 -translate-y-1/2 rounded-md bg-[linear-gradient(90deg,rgba(37,99,235,0)_0%,rgba(37,99,235,0.18)_18%,rgba(37,99,235,0.98)_50%,rgba(37,99,235,0.18)_82%,rgba(37,99,235,0)_100%)] shadow-[0_0_18px_rgba(37,99,235,0.18)]"
           style={{
             animation:
               "inbox-detail-loading-sweep 1.8s cubic-bezier(0.22,1,0.36,1) infinite, inbox-detail-loading-track-breathe 1.8s ease-in-out infinite",

@@ -422,7 +422,7 @@ function StatusText({ tone = "neutral", children }) {
         toneText(tone)
       )}
     >
-      <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+      <span className={cx("h-1.5 w-1.5 rounded-md", toneDot(tone))} />
       {children}
     </span>
   );
@@ -445,7 +445,7 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
     <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
       <div className="max-w-[520px]">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface-subtle text-text-muted">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
           <Users className="h-5 w-5" strokeWidth={1.9} />
         </div>
 
@@ -501,7 +501,7 @@ function IconButton({ children, onClick, disabled, label = "Action" }) {
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] border border-line bg-white text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.05)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium hover:border-line-strong hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-white text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.05)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium hover:border-line-strong hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
@@ -530,7 +530,7 @@ function CompactActionButton({
       disabled={disabled || loading}
       onClick={onClick}
       className={cx(
-        "inline-flex h-8 w-[74px] items-center justify-center rounded-[7px] border px-2 text-[12px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium disabled:cursor-not-allowed disabled:opacity-55",
+        "inline-flex h-8 w-[74px] items-center justify-center rounded-md border px-2 text-[12px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium disabled:cursor-not-allowed disabled:opacity-55",
         toneClass
       )}
     >
@@ -556,7 +556,7 @@ function HeaderFilter({
         type="button"
         onClick={() => onOpen(open ? "" : id)}
         className={cx(
-          "relative flex h-8 w-full min-w-0 items-center justify-between gap-1.5 rounded-[7px] px-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-base ease-premium",
+          "relative flex h-8 w-full min-w-0 items-center justify-between gap-1.5 rounded-md px-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors duration-base ease-premium",
           active || open
             ? "bg-surface-subtle text-text"
             : "text-text-subtle hover:bg-surface-subtle hover:text-text"
@@ -573,14 +573,14 @@ function HeaderFilter({
         />
 
         {active ? (
-          <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-brand/80" />
+          <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-md bg-brand/80" />
         ) : null}
       </button>
 
       {open ? (
         <div
           className={cx(
-            "absolute top-[calc(100%+7px)] z-40 w-full min-w-[176px] overflow-visible rounded-[8px] border border-line bg-white shadow-[0_18px_45px_-34px_rgba(15,23,42,0.65)]",
+            "absolute top-[calc(100%+7px)] z-40 w-full min-w-[176px] overflow-visible rounded-md border border-line bg-white shadow-[0_18px_45px_-34px_rgba(15,23,42,0.65)]",
             align === "right" ? "right-0" : "left-0"
           )}
         >
@@ -598,7 +598,7 @@ function FilterMenuShell({ children }) {
 function FilterSearchInput({ value, onChange, placeholder = "Search..." }) {
   return (
     <div className="p-1.5">
-      <div className="team-filter-control flex h-8 min-w-0 items-center gap-2 rounded-[7px] bg-white px-2.5 text-text-muted transition-[background-color,box-shadow] duration-150 ease-premium focus-within:text-text">
+      <div className="team-filter-control flex h-8 min-w-0 items-center gap-2 rounded-md bg-white px-2.5 text-text-muted transition-[background-color,box-shadow] duration-150 ease-premium focus-within:text-text">
         <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} />
         <input
           value={value}
@@ -621,7 +621,7 @@ function FilterOption({ selected, children, onClick }) {
       type="button"
       onClick={onClick}
       className={cx(
-        "flex h-8 w-full items-center justify-between gap-3 rounded-[7px] px-2.5 text-left text-[12.5px] font-semibold transition-colors duration-base ease-premium",
+        "flex h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left text-[12.5px] font-semibold transition-colors duration-base ease-premium",
         selected ? "bg-brand/5 text-brand" : "text-text hover:bg-surface-subtle"
       )}
     >
@@ -649,7 +649,7 @@ function FilterAction({ children, onClick, disabled = false }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-7 w-full rounded-[7px] px-2.5 text-left text-[12px] font-semibold text-text-muted transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+      className="h-7 w-full rounded-md px-2.5 text-left text-[12px] font-semibold text-text-muted transition-colors duration-base ease-premium hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
     >
       <span className="block truncate whitespace-nowrap">{children}</span>
     </button>
@@ -838,12 +838,12 @@ function PaginationFooter({
           type="button"
           disabled={currentPage <= 1}
           onClick={() => onPageChange(currentPage - 1)}
-          className="inline-flex h-8 items-center justify-center rounded-[6px] border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
         >
           Previous
         </button>
 
-        <div className="inline-flex h-8 min-w-[54px] items-center justify-center rounded-[6px] border border-line-soft bg-surface-subtle px-2 text-[12px] font-semibold text-text-muted">
+        <div className="inline-flex h-8 min-w-[54px] items-center justify-center rounded-md border border-line-soft bg-surface-subtle px-2 text-[12px] font-semibold text-text-muted">
           {currentPage} / {totalPages}
         </div>
 
@@ -851,7 +851,7 @@ function PaginationFooter({
           type="button"
           disabled={currentPage >= totalPages}
           onClick={() => onPageChange(currentPage + 1)}
-          className="inline-flex h-8 items-center justify-center rounded-[6px] border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
         >
           Next
         </button>
@@ -878,7 +878,7 @@ function SoftInput({
   name = "",
 }) {
   return (
-    <div className="team-soft-control flex h-11 items-center rounded-[12px] bg-white px-3.5 transition-[background-color,box-shadow] duration-150 ease-premium">
+    <div className="team-soft-control flex h-11 items-center rounded-md bg-white px-3.5 transition-[background-color,box-shadow] duration-150 ease-premium">
       <input
         value={value}
         onChange={onChange}
@@ -902,7 +902,7 @@ function ChoiceButton({ selected, disabled = false, children, onClick }) {
       disabled={disabled}
       onClick={onClick}
       className={cx(
-        "flex h-10 min-w-0 items-center justify-between gap-2 rounded-[10px] px-3 text-left text-[13px] font-semibold transition-[background-color,box-shadow,color] duration-150 ease-premium disabled:cursor-not-allowed disabled:opacity-55",
+        "flex h-10 min-w-0 items-center justify-between gap-2 rounded-md px-3 text-left text-[13px] font-semibold transition-[background-color,box-shadow,color] duration-150 ease-premium disabled:cursor-not-allowed disabled:opacity-55",
         selected
           ? "bg-brand/5 text-brand shadow-[inset_0_0_0_2px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(37,99,235,0.08)]"
           : "bg-[rgb(var(--color-surface-subtle))] text-text-muted shadow-[inset_0_0_0_1px_rgba(203,213,225,0.86),inset_0_1px_0_rgba(255,255,255,0.76),0_1px_2px_rgba(15,23,42,0.035)] hover:bg-white hover:text-text hover:shadow-[inset_0_0_0_1px_rgba(148,163,184,0.72),inset_0_1px_0_rgba(255,255,255,0.9),0_2px_6px_rgba(15,23,42,0.04)]"
@@ -1865,7 +1865,7 @@ export default function Team() {
                             <button
                               type="button"
                               onClick={clearFilters}
-                              className="inline-flex h-7 items-center justify-center rounded-[7px] px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand transition-colors duration-base ease-premium hover:bg-brand/5"
+                              className="inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand transition-colors duration-base ease-premium hover:bg-brand/5"
                             >
                               Clear {activeFilterCount}
                             </button>

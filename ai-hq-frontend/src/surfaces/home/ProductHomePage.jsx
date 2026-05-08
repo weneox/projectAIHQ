@@ -324,11 +324,11 @@ function StatusPill({ tone = "neutral", children }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 rounded-full bg-surface-subtle px-3 py-1 text-[12px] font-semibold",
+        "inline-flex items-center gap-2 rounded-md bg-surface-subtle px-3 py-1 text-[12px] font-semibold",
         toneClass(tone)
       )}
     >
-      <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
+      <span className={cx("h-1.5 w-1.5 rounded-md", dotClass(tone))} />
       {children}
     </span>
   );
@@ -383,7 +383,7 @@ function QuietInfo({ title, body, tone = "neutral", muted = false }) {
     >
       <div className="px-6 py-5">
         <div className="flex items-center gap-2">
-          <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
+          <span className={cx("h-1.5 w-1.5 rounded-md", dotClass(tone))} />
           <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>

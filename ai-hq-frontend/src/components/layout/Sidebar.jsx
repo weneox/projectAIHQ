@@ -90,7 +90,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
         >
           <span
             className={cx(
-              "pointer-events-none absolute inset-y-[5px] left-0 w-[2.5px] rounded-r-full bg-brand",
+              "pointer-events-none absolute inset-y-[5px] left-0 w-[2.5px] rounded-md bg-brand",
               "transition-[opacity,transform] duration-slow ease-premium",
               isActive ? "opacity-100 translate-x-0 scale-y-100" : "opacity-0 -translate-x-0.5 scale-y-75"
             )}

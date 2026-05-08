@@ -30,7 +30,7 @@ function NotificationRow({ item, saving = false, onMarkRead }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {item.unread ? (
-              <span className="inline-flex h-2 w-2 rounded-full bg-brand" />
+              <span className="inline-flex h-2 w-2 rounded-md bg-brand" />
             ) : null}
 
             <div className="truncate text-[14px] font-medium text-text">

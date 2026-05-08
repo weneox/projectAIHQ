@@ -1,17 +1,17 @@
-export default function TruthProvenancePanel({ hasProvenance }) {
-  return (
-    <section className="border-t border-slate-200/80 px-5 py-5">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-        Provenance
-      </div>
-      <div className="mt-2 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-        {hasProvenance ? "Field-level provenance is available" : "Field-level provenance is limited"}
-      </div>
-      <div className="mt-3 text-sm leading-6 text-slate-600">
-        {hasProvenance
-          ? "Approved fields include source context where the backend exposed it."
-          : "The backend did not return field-level provenance for this snapshot."}
-      </div>
-    </section>
-  );
+/*
+  UI stripped intentionally.
+
+  Source-of-truth UI that remains:
+  - Login.jsx
+  - Team.jsx
+  - Inbox.jsx temporary
+  - components/ui/*
+  - components/inbox/* temporary
+
+  Original UI snapshot is stored under ui-stripped-backups/components.
+  Backend/data/API logic is not deleted from api/hooks/lib/pages/hooks.
+*/
+
+export default function TruthProvenancePanel() {
+  return null;
 }

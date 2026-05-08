@@ -13,7 +13,7 @@ export default function AppBootSurface({
         <div className="relative">
           <div className="text-sm font-medium text-text-muted">{label}</div>
           <div className="mt-4 flex items-center gap-3">
-            <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-text-subtle" />
+            <div className="h-2.5 w-2.5 animate-pulse rounded-md bg-text-subtle" />
             <div className="h-px flex-1 bg-line-soft" />
           </div>
           <p className="mt-6 max-w-[28rem] text-[15px] leading-7 text-text-muted">

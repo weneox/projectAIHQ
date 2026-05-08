@@ -1,44 +1,29 @@
-import Input, { Select, Textarea } from "../ui/Input.jsx";
+/*
+  UI stripped intentionally.
 
-export function LeadField({ label, children }) {
-  return (
-    <label className="grid gap-2">
-      <div className="text-[12px] font-semibold text-text-muted">
-        {label}
-      </div>
-      {children}
-    </label>
-  );
+  Source-of-truth UI that remains:
+  - Login.jsx
+  - Team.jsx
+  - Inbox.jsx temporary
+  - components/ui/*
+  - components/inbox/* temporary
+
+  Original UI snapshot is stored under ui-stripped-backups/components.
+  Backend/data/API logic is not deleted from api/hooks/lib/pages/hooks.
+*/
+
+export function LeadField() {
+  return null;
 }
 
-export function LeadInput({ value, onChange, placeholder = "", type = "text" }) {
-  return (
-    <Input
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      appearance="quiet"
-    />
-  );
+export function LeadInput() {
+  return null;
 }
 
-export function LeadSelect({ value, onChange, children }) {
-  return (
-    <Select value={value} onChange={onChange} appearance="quiet">
-      {children}
-    </Select>
-  );
+export function LeadSelect() {
+  return null;
 }
 
-export function LeadTextArea({ value, onChange, rows = 4, placeholder = "" }) {
-  return (
-    <Textarea
-      rows={rows}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      appearance="quiet"
-    />
-  );
+export function LeadTextArea() {
+  return null;
 }

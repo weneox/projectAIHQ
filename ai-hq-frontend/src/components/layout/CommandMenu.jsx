@@ -103,7 +103,7 @@ export default function CommandMenu() {
         <div className="command-overlay-anim fixed inset-0 z-[140] bg-overlay/60" />
 
         <div className="command-panel-anim fixed left-1/2 top-[10vh] z-[150] w-[min(560px,calc(100vw-24px))] -translate-x-1/2">
-          <div className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel-strong">
+          <div className="overflow-hidden rounded-md border border-line bg-surface shadow-panel-strong">
             <Command className="relative w-full">
               <div className="border-b border-line-soft px-4 py-3.5">
                 <div className="flex items-center gap-3">

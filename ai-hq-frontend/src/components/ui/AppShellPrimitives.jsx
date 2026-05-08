@@ -290,7 +290,7 @@ export function LaunchStatusBadge({
       size="sm"
       className={cx("!min-h-[25px] !px-2.5 !text-[11.5px]", className)}
     >
-      {dot ? <span className={cx("h-1.5 w-1.5 rounded-full", dotClass)} /> : null}
+      {dot ? <span className={cx("h-1.5 w-1.5 rounded-md", dotClass)} /> : null}
       {children}
     </Badge>
   );

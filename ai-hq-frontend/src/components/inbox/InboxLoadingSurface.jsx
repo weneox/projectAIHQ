@@ -61,7 +61,7 @@ export function InboxDetailSkeleton() {
       <div className="mt-auto w-full space-y-2">
         <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
           <div className="flex max-w-full items-end gap-2">
-            <Shimmer className="h-9 w-9 shrink-0 rounded-full" />
+            <Shimmer className="h-9 w-9 shrink-0 rounded-md" />
 
             <div className="w-[min(250px,52vw)]">
               <div className="rounded-[20px] rounded-bl-[8px] border border-line-soft bg-surface px-[15px] pb-[12px] pt-[12px] shadow-[0_18px_34px_-28px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.95)]">
@@ -90,7 +90,7 @@ export function InboxDetailSkeleton() {
 
         <div className="flex w-full justify-start px-3 py-[5px] sm:px-5">
           <div className="flex max-w-full items-end gap-2">
-            <Shimmer className="h-9 w-9 shrink-0 rounded-full" />
+            <Shimmer className="h-9 w-9 shrink-0 rounded-md" />
 
             <div className="w-[min(310px,58vw)]">
               <div className="rounded-[20px] rounded-bl-[8px] border border-line-soft bg-surface px-[15px] pb-[12px] pt-[12px] shadow-[0_18px_34px_-28px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.95)]">
@@ -144,7 +144,7 @@ function LeadSectionSkeleton({ rows = 3 }) {
   return (
     <section className="border-t border-line-soft px-4 py-4">
       <div className="flex items-center gap-2">
-        <Shimmer className="h-4 w-4 rounded-full opacity-80" />
+        <Shimmer className="h-4 w-4 rounded-md opacity-80" />
         <Shimmer className="h-4 w-24 rounded-[10px]" />
       </div>
 
@@ -180,7 +180,7 @@ export function InboxLeadSkeleton() {
 
       <section className="border-t border-line-soft px-4 py-4">
         <div className="flex items-center gap-2">
-          <Shimmer className="h-4 w-4 rounded-full opacity-80" />
+          <Shimmer className="h-4 w-4 rounded-md opacity-80" />
           <Shimmer className="h-4 w-28 rounded-[10px]" />
         </div>
 
