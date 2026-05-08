@@ -1,11 +1,14 @@
 ﻿import { cx } from "../../lib/cx.js";
 
 function toneClass(tone = "neutral") {
-  if (tone === "brand") return "ui-badge--brand";
+  if (tone === "brand" || tone === "info" || tone === "accent") {
+    return "ui-badge--brand";
+  }
+
   if (tone === "success") return "ui-badge--success";
-  if (tone === "warning") return "ui-badge--warning";
-  if (tone === "danger") return "ui-badge--danger";
-  if (tone === "info") return "ui-badge--info";
+  if (tone === "warning" || tone === "warn") return "ui-badge--warning";
+  if (tone === "danger" || tone === "error") return "ui-badge--danger";
+
   return "ui-badge--neutral";
 }
 
