@@ -1109,73 +1109,25 @@ table {
       );
   }
 
-  /* Badge */
-  .ui-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid rgb(var(--color-line));
-    border-radius: var(--ui-radius-badge);
-    background: rgb(var(--color-surface));
-    color: rgb(var(--color-text));
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: var(--tracking-tight-sm);
-    line-height: 1;
-  }
+  
 
-  .ui-badge--sm {
-    min-height: 24px;
-    padding: 0 10px;
-    font-size: 12px;
-  }
+  
 
-  .ui-badge--md {
-    min-height: 28px;
-    padding: 0 12px;
-    font-size: 12.5px;
-  }
+  
 
-  .ui-badge__icon,
-  .ui-badge__content {
-    display: inline-flex;
-    align-items: center;
-  }
+  
 
-  .ui-badge--neutral {
-    border-color: rgb(var(--color-line));
-    background: rgb(var(--color-surface));
-    color: rgb(var(--color-text));
-  }
+  
 
-  .ui-badge--brand {
-    border-color: rgba(var(--color-brand), 0.18);
-    background: rgba(var(--color-brand), 0.08);
-    color: rgb(var(--color-brand));
-  }
+  
 
-  .ui-badge--success {
-    border-color: rgba(var(--color-success), 0.18);
-    background: rgba(var(--color-success), 0.08);
-    color: rgb(var(--color-success));
-  }
+  
 
-  .ui-badge--warning {
-    border-color: rgba(var(--color-warning), 0.18);
-    background: rgba(var(--color-warning), 0.08);
-    color: rgb(var(--color-warning-strong));
-  }
+  
 
-  .ui-badge--danger {
-    border-color: rgba(var(--color-danger), 0.18);
-    background: rgba(var(--color-danger), 0.08);
-    color: rgb(var(--color-danger));
-  }
+  
 
-  .ui-badge--info {
-    border-color: rgba(var(--color-info), 0.18);
-    background: rgba(var(--color-info), 0.08);
-    color: rgb(var(--color-info));
-  }
+  
 }
 
 /* ==========================================================================
@@ -1943,4 +1895,356 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
   }
 }
 /* === AIHQ sharp-geometry-contract:end === */
+
+
+/* === AIHQ team-badge-language:start === */
+@layer components {
+  .ui-badge {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    letter-spacing: var(--tracking-tight-sm);
+    white-space: nowrap;
+  }
+
+  .ui-badge--sm {
+    font-size: 12.5px;
+  }
+
+  .ui-badge--md {
+    font-size: 13px;
+  }
+
+  .ui-badge__icon {
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+  }
+
+  .ui-badge__content {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    color: currentColor;
+  }
+
+  .ui-badge__content > span[class*="rounded-full"],
+  .ui-badge__content > span[class*="rounded-"] {
+    width: 6px;
+    height: 6px;
+    min-width: 6px;
+    min-height: 6px;
+    flex-shrink: 0;
+    border-radius: 999px !important;
+  }
+
+  .ui-badge--brand,
+  .ui-badge--info {
+    color: rgb(var(--color-brand));
+  }
+
+  .ui-badge--success {
+    color: rgb(var(--color-success));
+  }
+
+  .ui-badge--warning {
+    color: rgb(var(--color-warning));
+  }
+
+  .ui-badge--danger {
+    color: rgb(var(--color-danger));
+  }
+
+  .ui-badge--neutral {
+    color: rgb(var(--color-text-muted));
+  }
+}
+/* === AIHQ team-badge-language:end === */
+
+
+/* === AIHQ page-shell-contract:start === */
+:root {
+  --aihq-page-x: 24px;
+  --aihq-page-y: 24px;
+  --aihq-page-bottom: 24px;
+  --aihq-page-gap: 16px;
+  --aihq-page-max: none;
+}
+
+.app-route-frame {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-page-canvas {
+  width: 100% !important;
+  max-width: var(--aihq-page-max) !important;
+  min-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: var(--aihq-page-y) var(--aihq-page-x) var(--aihq-page-bottom) !important;
+}
+
+.app-page-canvas > * {
+  min-width: 0;
+}
+
+.app-page-canvas > :first-child {
+  margin-top: 0 !important;
+}
+
+.app-page-canvas > :last-child {
+  margin-bottom: 0 !important;
+}
+
+.app-page-canvas.space-y-3 > :not([hidden]) ~ :not([hidden]),
+.app-page-canvas.space-y-4 > :not([hidden]) ~ :not([hidden]),
+.app-page-canvas.space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: var(--aihq-page-gap) !important;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --aihq-page-x: 16px;
+    --aihq-page-y: 18px;
+    --aihq-page-bottom: 18px;
+    --aihq-page-gap: 14px;
+  }
+}
+/* === AIHQ page-shell-contract:end === */
+
+
+/* === AIHQ table-list-contract:start === */
+:root {
+  --aihq-surface-x: 24px;
+  --aihq-surface-y: 20px;
+  --aihq-row-height: 58px;
+  --aihq-header-height: 44px;
+  --aihq-section-gap: 16px;
+}
+
+/*
+  Team-style table/list language:
+  - same left/right internal rhythm
+  - same row height feeling
+  - no random oversized card/table spacing
+  - no page-specific visual drift
+*/
+.app-page-canvas table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+}
+
+.app-page-canvas thead tr {
+  min-height: var(--aihq-header-height);
+}
+
+.app-page-canvas tbody tr {
+  min-height: var(--aihq-row-height);
+}
+
+.app-page-canvas th,
+.app-page-canvas td {
+  padding-left: 16px;
+  padding-right: 16px;
+  vertical-align: middle;
+}
+
+.app-page-canvas .ui-card {
+  max-width: none;
+}
+
+.app-page-canvas .ui-card__inner {
+  min-width: 0;
+}
+
+.app-page-canvas .ui-card--padded-xs {
+  padding: 12px;
+}
+
+.app-page-canvas .ui-card--padded-sm {
+  padding: 16px;
+}
+
+.app-page-canvas .ui-card--padded-md {
+  padding: 20px;
+}
+
+.app-page-canvas .ui-card--padded-lg,
+.app-page-canvas .ui-card--padded-xl {
+  padding: 24px;
+}
+
+.app-page-canvas :where(section, article) {
+  min-width: 0;
+}
+
+.app-page-canvas :where(h1, h2, h3, p) {
+  max-width: none;
+}
+
+.app-page-canvas :where(canvas, svg, img) {
+  max-width: 100%;
+}
+
+.app-page-canvas [class*="max-w-["] {
+  max-width: none !important;
+}
+
+.app-page-canvas [class*="mx-auto"] {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.app-page-canvas [class*="px-6"],
+.app-page-canvas [class*="px-5"] {
+  padding-left: var(--aihq-surface-x);
+  padding-right: var(--aihq-surface-x);
+}
+
+.app-page-canvas [class*="py-6"],
+.app-page-canvas [class*="py-5"] {
+  padding-top: var(--aihq-surface-y);
+  padding-bottom: var(--aihq-surface-y);
+}
+
+/*
+  Keep Team local controls as the strongest visual source.
+*/
+.team-soft-control,
+.team-filter-control {
+  box-shadow:
+    inset 0 0 0 1px rgba(203, 213, 225, 0.86),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --aihq-surface-x: 16px;
+    --aihq-surface-y: 16px;
+    --aihq-row-height: 54px;
+    --aihq-header-height: 42px;
+  }
+
+  .app-page-canvas th,
+  .app-page-canvas td {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+/* === AIHQ table-list-contract:end === */
+
+
+/* === AIHQ detail-panel-contract:start === */
+:root {
+  --aihq-detail-top-gap: 10px;
+  --aihq-detail-right-gap: 10px;
+  --aihq-detail-bottom-gap: 10px;
+  --aihq-detail-width: 620px;
+  --aihq-detail-header-h: 66px;
+  --aihq-detail-x: 24px;
+  --aihq-detail-y: 20px;
+  --aihq-detail-gap: 16px;
+}
+
+.app-detail-overlay {
+  pointer-events: auto;
+}
+
+.app-detail-backdrop {
+  background: transparent !important;
+}
+
+.app-detail-panel-shell {
+  max-width: var(--aihq-detail-width) !important;
+  padding-top: var(--aihq-detail-top-gap);
+  padding-right: var(--aihq-detail-right-gap);
+  padding-bottom: var(--aihq-detail-bottom-gap);
+}
+
+.app-detail-panel-shell aside,
+.app-detail-panel-shell [class*="drawer"],
+.app-detail-panel-shell [class*="Drawer"] {
+  overflow: hidden;
+  border-left: 1px solid rgb(var(--color-line-soft));
+  border-radius: var(--aihq-sharp-radius-lg, 8px);
+  background: rgb(var(--color-surface));
+  box-shadow:
+    0 22px 70px -44px rgba(15, 23, 42, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.app-detail-panel-shell header {
+  min-height: var(--aihq-detail-header-h);
+  padding: var(--aihq-detail-y) var(--aihq-detail-x);
+  border-bottom: 1px solid rgb(var(--color-line-soft));
+  background: rgb(var(--color-surface));
+}
+
+.app-detail-panel-shell .panel-scroll,
+.app-detail-panel-shell [class*="overflow-y-auto"] {
+  padding: var(--aihq-detail-y) var(--aihq-detail-x);
+  background: rgb(var(--color-surface-muted));
+}
+
+.app-detail-panel-shell .ui-card,
+.app-detail-panel-shell .ui-card__inner {
+  max-width: none;
+}
+
+.app-detail-panel-shell .ui-card__inner {
+  padding: var(--aihq-detail-y) var(--aihq-detail-x);
+}
+
+.app-detail-panel-shell .ui-button,
+.app-detail-panel-shell .ui-field-shell,
+.app-detail-panel-shell .ui-card {
+  border-radius: var(--aihq-sharp-radius-md, 6px);
+}
+
+.app-detail-panel-shell .ui-button__inner,
+.app-detail-panel-shell .ui-field-inner,
+.app-detail-panel-shell .ui-card__inner {
+  border-radius: var(--aihq-sharp-radius-sm, 4px);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --aihq-detail-top-gap: 0px;
+    --aihq-detail-right-gap: 0px;
+    --aihq-detail-bottom-gap: 0px;
+    --aihq-detail-width: 100vw;
+    --aihq-detail-x: 16px;
+    --aihq-detail-y: 16px;
+  }
+
+  .app-detail-panel-shell {
+    max-width: 100vw !important;
+  }
+
+  .app-detail-panel-shell aside,
+  .app-detail-panel-shell [class*="drawer"],
+  .app-detail-panel-shell [class*="Drawer"] {
+    border-radius: 0;
+  }
+}
+/* === AIHQ detail-panel-contract:end === */
+
 

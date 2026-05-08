@@ -107,7 +107,7 @@ export function PageCanvas({ className, children, ...props }) {
     <div
       {...props}
       className={cx(
-        "app-page-canvas w-full space-y-4",
+        "mx-auto w-full max-w-shell-content space-y-5",
         className
       )}
     >
@@ -125,7 +125,7 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "app-page-header flex flex-col gap-4 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-4 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
@@ -166,7 +166,7 @@ export function SectionHeader({
   return (
     <div
       className={cx(
-        "app-section-header flex flex-col gap-3 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-3 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
@@ -601,7 +601,7 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "app-inline-notice relative overflow-hidden rounded-[10px] border bg-white shadow-[0_16px_42px_-34px_rgba(15,23,42,0.55),inset_0_1px_0_rgba(255,255,255,0.8)]",
+        "relative overflow-hidden rounded-[10px] border bg-white shadow-[0_16px_42px_-34px_rgba(15,23,42,0.55),inset_0_1px_0_rgba(255,255,255,0.8)]",
         "before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px]",
         palette.container,
         compact ? "px-3.5 py-2.5" : "px-4 py-3",
@@ -649,7 +649,7 @@ export function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
-      className={cx("app-state-skeleton animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle", className)}
+      className={cx("animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle", className)}
     />
   );
 }
@@ -662,7 +662,7 @@ export function SectionLoading({
   compact = false,
 }) {
   return (
-    <Surface className={cx("app-state app-state-loading", className)} tone="muted" shadow="sm">
+    <Surface className={className} tone="muted" shadow="sm">
       <div className="flex items-center gap-3">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-[13px] border border-line bg-surface text-text-subtle shadow-[var(--shadow-inset-top)]">
           <Spin size="small" />
@@ -720,7 +720,7 @@ export function Section({
 
 export function EmptyState({ title, description, action, className }) {
   return (
-    <Surface className={cx("app-state app-empty-state text-center", className)} tone="muted">
+    <Surface className={cx("text-center", className)} tone="muted">
       <div className="mx-auto flex max-w-[420px] flex-col items-center gap-3 py-4">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-line bg-surface text-text-subtle">
           <Info className="h-4 w-4" strokeWidth={2.1} />
@@ -745,7 +745,7 @@ export function EmptyState({ title, description, action, className }) {
 
 export function CompactState({ title, description, action, className }) {
   return (
-    <Surface className={cx("app-state app-compact-state", className)} padded="sm" tone="muted">
+    <Surface className={className} padded="sm" tone="muted">
       <div className="space-y-1.5">
         <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
           {title}
@@ -900,7 +900,7 @@ export function SlidingDetailOverlay({
     <div
       className={cx(
         absolute ? "absolute inset-0" : "fixed inset-0",
-        "app-detail-overlay z-[180] overflow-visible",
+        "z-[180] overflow-visible",
         className
       )}
     >
@@ -910,7 +910,6 @@ export function SlidingDetailOverlay({
         onClick={() => onClose?.()}
         className={cx(
           "absolute inset-0 opacity-100 transition-opacity duration-base ease-premium",
-          "app-detail-backdrop",
           backdropClassName
         )}
       />
@@ -918,7 +917,7 @@ export function SlidingDetailOverlay({
       <div className="absolute inset-y-0 right-0 flex w-full justify-end overflow-visible">
         <div
           className={cx(
-            "app-detail-panel-shell h-full w-full min-w-0 transform-gpu translate-x-0 overflow-visible transition-transform duration-base ease-premium",
+            "h-full w-full min-w-0 transform-gpu translate-x-0 overflow-visible transition-transform duration-base ease-premium",
             "animate-[shellFadeIn_var(--motion-fast)_var(--motion-premium)_both]",
             panelWidthClassName,
             panelClassName
