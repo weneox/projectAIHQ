@@ -17,9 +17,7 @@ import {
 
 import { listLeads } from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
-import Input from "../components/ui/Input.jsx";
 import Card from "../components/ui/Card.jsx";
-import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
 import AppIconButton from "../components/ui/AppIconButton.jsx";
 import AppIdentityMark from "../components/ui/AppIdentityMark.jsx";
 import AppInfoRow from "../components/ui/AppInfoRow.jsx";
@@ -59,10 +57,11 @@ import {
   PageHeader,
   SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
-import { cx } from "../lib/cx.js";
 
 const PAGE_SIZE = 6;
+
 const TABLE_MIN_WIDTH = "min-w-[1180px] w-full";
+
 const TABLE_GRID_STYLE = {
   gridTemplateColumns:
     "280px minmax(280px,1fr) 150px 140px 140px 150px 112px",
@@ -389,13 +388,7 @@ function statusTone(status = "") {
   return "brand";
 }
 
-function sourceTone(source = "") {
-  const safe = lower(source);
-
-  if (["website", "instagram", "telegram", "facebook"].includes(safe)) {
-    return "neutral";
-  }
-
+function sourceTone() {
   return "neutral";
 }
 
@@ -435,7 +428,6 @@ function uniqueOptions(values = [], priority = []) {
 
 function createDefaultFilters() {
   return {
-    search: "",
     customer: "",
     contact: "",
     sources: [],
@@ -447,13 +439,12 @@ function createDefaultFilters() {
 
 function countActiveFilters(filters = {}) {
   return [
-    s(filters.search),
     s(filters.customer),
     s(filters.contact),
     normalizeAppFilterList(filters.sources).length ? "sources" : "",
     normalizeAppFilterList(filters.stages).length ? "stages" : "",
     normalizeAppFilterList(filters.statuses).length ? "statuses" : "",
-    s(filters.updatedSort),
+    filters.updatedSort && filters.updatedSort !== "newest" ? "updatedSort" : "",
   ].filter(Boolean).length;
 }
 
@@ -465,6 +456,13 @@ function customerComparator(sortValue = "newest") {
     if (sortValue === "oldest") return aTime - bTime;
     return bTime - aTime;
   };
+}
+
+function rangeLabel(page, totalItems, pageSize) {
+  if (!totalItems) return "No records";
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(totalItems, page * pageSize);
+  return `Showing ${start}-${end} of ${totalItems} records`;
 }
 
 function CustomerIdentity({ customer }) {
@@ -485,7 +483,7 @@ function CustomerIdentity({ customer }) {
   );
 }
 
-function CustomerRow({ customer, selected, onSelect, onOpenThread, onOpenDetail }) {
+function CustomerRow({ customer, selected, onOpenThread, onOpenDetail }) {
   const source = customerSource(customer);
   const stage = customerStage(customer);
   const status = customerStatus(customer);
@@ -504,7 +502,9 @@ function CustomerRow({ customer, selected, onSelect, onOpenThread, onOpenDetail 
       </AppTableCell>
 
       <AppTableCell>
-        <AppTableText muted>{customerContact(customer) || "No contact details"}</AppTableText>
+        <AppTableText muted>
+          {customerContact(customer) || "No contact details"}
+        </AppTableText>
       </AppTableCell>
 
       <AppTableCell>
@@ -529,7 +529,6 @@ function CustomerRow({ customer, selected, onSelect, onOpenThread, onOpenDetail 
             label="View customer"
             onClick={(event) => {
               event.stopPropagation();
-              onSelect?.();
               onOpenDetail?.();
             }}
           >
@@ -547,9 +546,9 @@ function CustomerRow({ customer, selected, onSelect, onOpenThread, onOpenDetail 
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
             </AppIconButton>
           ) : (
-            <AppCompactActionButton disabled muted>
+            <AppIconButton disabled label="No thread">
               —
-            </AppCompactActionButton>
+            </AppIconButton>
           )}
         </div>
       </AppTableCell>
@@ -568,37 +567,17 @@ function CustomerTable({
   onOpenFilter,
   onPatchFilters,
   onClearFilters,
-  onSelect,
+  activeFilterCount,
   onOpenThread,
   onOpenDetail,
 }) {
-  const filtered = countActiveFilters(filters) > 1 || s(filters.search);
-
   return (
     <AppTableCard>
       <AppTableToolbar
         title="Records"
-        description={`Showing ${customers.length} customer record${customers.length === 1 ? "" : "s"}`}
-        controls={
-          <div className="w-full xl:w-[420px]">
-            <Input
-              value={filters.search}
-              onChange={(event) => onPatchFilters({ search: event.target.value })}
-              placeholder="Search customers..."
-              appearance="quiet"
-              leftIcon={<Search className="h-4 w-4" strokeWidth={2.1} />}
-              autoComplete="new-password"
-            />
-          </div>
-        }
         filters={
-          countActiveFilters(filters) ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onClearFilters}
-            >
+          activeFilterCount ? (
+            <Button type="button" variant="secondary" size="sm" onClick={onClearFilters}>
               Clear filters
             </Button>
           ) : null
@@ -716,7 +695,7 @@ function CustomerTable({
               id="updated"
               label="Updated"
               openFilter={openFilter}
-              active={Boolean(filters.updatedSort)}
+              active={filters.updatedSort === "oldest"}
               onOpen={onOpenFilter}
             >
               <AppFilterMenuShell>
@@ -726,17 +705,19 @@ function CustomerTable({
                 >
                   Newest first
                 </AppFilterOption>
+
                 <AppFilterOption
                   selected={filters.updatedSort === "oldest"}
                   onClick={() => onPatchFilters({ updatedSort: "oldest" })}
                 >
                   Oldest first
                 </AppFilterOption>
+
                 <AppFilterAction
-                  onClick={() => onPatchFilters({ updatedSort: "" })}
-                  disabled={!filters.updatedSort}
+                  onClick={() => onPatchFilters({ updatedSort: "newest" })}
+                  disabled={filters.updatedSort === "newest"}
                 >
-                  Clear sort
+                  Reset sort
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -753,11 +734,7 @@ function CustomerTable({
                   key={key}
                   customer={customer}
                   selected={selectedKey === key}
-                  onSelect={() => onSelect(customer, key)}
-                  onOpenDetail={() => {
-                    onSelect(customer, key);
-                    onOpenDetail(customer, key);
-                  }}
+                  onOpenDetail={() => onOpenDetail(customer, key)}
                   onOpenThread={onOpenThread}
                 />
               );
@@ -769,16 +746,6 @@ function CustomerTable({
               description="Adjust the active filters to bring customer records back into view."
             />
           )}
-
-          <AppPaginationFooter
-            currentPage={1}
-            totalPages={1}
-            totalItems={customers.length}
-            pageSize={Math.max(customers.length, 1)}
-            filtered={filtered}
-            minWidthClass="w-full"
-            onPageChange={() => {}}
-          />
         </div>
       </div>
     </AppTableCard>
@@ -788,7 +755,12 @@ function CustomerTable({
 function CustomerDetailOverlay({ customer, open, onClose, onOpenThread }) {
   if (!customer) {
     return (
-      <SlidingDetailOverlay open={open} onClose={onClose} panelWidthClassName="max-w-[560px]">
+      <SlidingDetailOverlay
+        open={open}
+        onClose={onClose}
+        className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
+        panelWidthClassName="max-w-[560px]"
+      >
         <Card padded={false} clip className="h-full">
           <AppDetailEmpty
             icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
@@ -809,7 +781,12 @@ function CustomerDetailOverlay({ customer, open, onClose, onOpenThread }) {
   const threadId = customerThreadId(customer);
 
   return (
-    <SlidingDetailOverlay open={open} onClose={onClose} panelWidthClassName="max-w-[560px]">
+    <SlidingDetailOverlay
+      open={open}
+      onClose={onClose}
+      className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
+      panelWidthClassName="max-w-[560px]"
+    >
       <Card padded={false} clip className="h-full">
         <AppDetailHeader>
           <div className="flex items-start justify-between gap-4">
@@ -845,7 +822,10 @@ function CustomerDetailOverlay({ customer, open, onClose, onOpenThread }) {
           <AppInfoRow label="Source" value={titleize(source)} />
           <AppInfoRow label="Interest" value={s(customer.interest) || "Not recorded"} />
           <AppInfoRow label="Value" value={formatMoney(customerValue(customer))} />
-          <AppInfoRow label="Owner" value={s(customer.owner || customer.assigned_to) || "Unassigned"} />
+          <AppInfoRow
+            label="Owner"
+            value={s(customer.owner || customer.assigned_to) || "Unassigned"}
+          />
           <AppInfoRow label="Created" value={formatDate(customerCreatedRaw(customer))} />
           <AppInfoRow label="Updated" value={formatDate(customerUpdatedRaw(customer))} />
           <AppInfoRow
@@ -970,7 +950,6 @@ export default function Customers() {
     const statuses = normalizeAppFilterList(filters.statuses);
 
     return arr(customers)
-      .filter((customer) => matchesText(customer, filters.search))
       .filter((customer) =>
         filters.customer
           ? lower(customerName(customer)).includes(lower(filters.customer))
@@ -990,17 +969,26 @@ export default function Customers() {
       .filter((customer) =>
         statuses.length ? statuses.includes(customerStatus(customer)) : true
       )
+      .filter((customer) =>
+        matchesText(customer, [
+          filters.customer,
+          filters.contact,
+          ...sources,
+          ...stages,
+          ...statuses,
+        ].join(" "))
+      )
       .sort(customerComparator(filters.updatedSort));
   }, [customers, filters]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
 
-  const pageItems = useMemo(() => {
-    const safePage = Math.min(Math.max(1, page), totalPages);
-    const start = (safePage - 1) * PAGE_SIZE;
+  const safePage = Math.min(Math.max(1, page), totalPages);
 
+  const pageItems = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
     return filteredCustomers.slice(start, start + PAGE_SIZE);
-  }, [filteredCustomers, page, totalPages]);
+  }, [filteredCustomers, safePage]);
 
   useEffect(() => {
     setPage(1);
@@ -1031,12 +1019,10 @@ export default function Customers() {
     return { total, active, won, value };
   }, [customers]);
 
+  const activeFilterCount = countActiveFilters(filters);
+
   function patchFilters(next = {}) {
     setFilters((current) => ({ ...current, ...next }));
-  }
-
-  function handleSelect(customer, key) {
-    setSelectedKey(key || customerKey(customer));
   }
 
   function handleOpenThread(threadId = "") {
@@ -1044,6 +1030,11 @@ export default function Customers() {
     if (!id) return;
 
     navigate(`/inbox?thread=${encodeURIComponent(id)}`);
+  }
+
+  function handleOpenDetail(customer, key) {
+    setSelectedKey(key || customerKey(customer));
+    setDetailOpen(true);
   }
 
   if (loading) {
@@ -1090,7 +1081,11 @@ export default function Customers() {
         <AppStatCard icon={Users} label="Directory records" value={metrics.total} />
         <AppStatCard icon={CheckCircle2} label="Engaged contacts" value={metrics.active} />
         <AppStatCard icon={TrendingUp} label="Won accounts" value={metrics.won} />
-        <AppStatCard icon={Sparkles} label="Pipeline value" value={formatMoney(metrics.value)} />
+        <AppStatCard
+          icon={Sparkles}
+          label="Pipeline value"
+          value={formatMoney(metrics.value)}
+        />
       </div>
 
       <CustomerTable
@@ -1101,23 +1096,20 @@ export default function Customers() {
         sourceOptions={sourceOptions}
         stageOptions={stageOptions}
         statusOptions={statusOptions}
+        activeFilterCount={activeFilterCount}
         onOpenFilter={setOpenFilter}
         onPatchFilters={patchFilters}
         onClearFilters={() => setFilters(createDefaultFilters())}
-        onSelect={handleSelect}
         onOpenThread={handleOpenThread}
-        onOpenDetail={(customer, key) => {
-          handleSelect(customer, key);
-          setDetailOpen(true);
-        }}
+        onOpenDetail={handleOpenDetail}
       />
 
       <AppPaginationFooter
-        currentPage={Math.min(page, totalPages)}
+        currentPage={safePage}
         totalPages={totalPages}
         totalItems={filteredCustomers.length}
         pageSize={PAGE_SIZE}
-        filtered={countActiveFilters(filters) > 1 || Boolean(filters.search)}
+        filtered={activeFilterCount > 0}
         onPageChange={setPage}
       />
 
