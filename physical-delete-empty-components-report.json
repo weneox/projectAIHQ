@@ -1,0 +1,56 @@
+{
+  "deleted": [
+    "ai-hq-frontend/src/components/admin/AdminShell.jsx",
+    "ai-hq-frontend/src/components/feedback/SurfaceBanner.jsx",
+    "ai-hq-frontend/src/components/layout/FloatingAiWidget.jsx"
+  ],
+  "removedDirs": [
+    "ai-hq-frontend/src/components/comments",
+    "ai-hq-frontend/src/components/customers",
+    "ai-hq-frontend/src/components/executions",
+    "ai-hq-frontend/src/components/feedback",
+    "ai-hq-frontend/src/components/governance",
+    "ai-hq-frontend/src/components/leads",
+    "ai-hq-frontend/src/components/truth"
+  ],
+  "kept": [
+    "ai-hq-frontend/src/components/admin/AdminRouteGuard.jsx",
+    "ai-hq-frontend/src/components/auth/AppEntryRedirect.jsx",
+    "ai-hq-frontend/src/components/auth/OperatorRouteGuard.jsx",
+    "ai-hq-frontend/src/components/auth/UserRouteGuard.jsx",
+    "ai-hq-frontend/src/components/inbox/hooks/useInboxComposerSurface.js",
+    "ai-hq-frontend/src/components/inbox/hooks/useInboxThreadListSurface.js",
+    "ai-hq-frontend/src/components/inbox/hooks/useThreadOutboundAttemptsSurface.js",
+    "ai-hq-frontend/src/components/inbox/InboxComposer.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxDetailHeaderCompact.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxDetailPanel.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxLeadPanel.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxLoadingSurface.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxMessageBubble.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxReplayTraceCard.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxThreadCard.jsx",
+    "ai-hq-frontend/src/components/inbox/InboxThreadListPanel.jsx",
+    "ai-hq-frontend/src/components/inbox/outboundAttemptTruth.js",
+    "ai-hq-frontend/src/components/layout/CommandMenu.jsx",
+    "ai-hq-frontend/src/components/layout/Header.jsx",
+    "ai-hq-frontend/src/components/layout/NotificationsPanel.jsx",
+    "ai-hq-frontend/src/components/layout/Shell.jsx",
+    "ai-hq-frontend/src/components/layout/Sidebar.jsx",
+    "ai-hq-frontend/src/components/loading/AppBootSurface.jsx",
+    "ai-hq-frontend/src/components/ui/AppShellPrimitives.jsx",
+    "ai-hq-frontend/src/components/ui/Badge.jsx",
+    "ai-hq-frontend/src/components/ui/Button.jsx",
+    "ai-hq-frontend/src/components/ui/Card.jsx",
+    "ai-hq-frontend/src/components/ui/FocusDialog.jsx",
+    "ai-hq-frontend/src/components/ui/Input.jsx"
+  ],
+  "skippedNotStub": [
+    "ai-hq-frontend/src/components/admin/hooks/useProviderSecretsSurface.js",
+    "ai-hq-frontend/src/components/channels/channelCatalogModel.js",
+    "ai-hq-frontend/src/components/layout/setupInterviewQuestions.js",
+    "ai-hq-frontend/src/components/layout/setupSourceIntake.js",
+    "ai-hq-frontend/src/components/layout/shellNavigation.js",
+    "ai-hq-frontend/src/components/proposals/proposal-utils.js",
+    "ai-hq-frontend/src/components/readiness/dispatchRepairAction.js"
+  ]
+}
