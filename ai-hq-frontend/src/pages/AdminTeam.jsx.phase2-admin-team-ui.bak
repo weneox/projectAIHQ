@@ -12,18 +12,19 @@ import {
 } from "lucide-react";
 
 import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
-import Badge from "../components/ui/Badge.jsx";
-import Button from "../components/ui/Button.jsx";
-import Card from "../components/ui/Card.jsx";
-import Input, { Select as UiSelect } from "../components/ui/Input.jsx";
 import { cx } from "../lib/cx.js";
 import { useAdminTeamSurface } from "./hooks/useAdminTeamSurface.js";
 
 function Surface({ className = "", children }) {
   return (
-    <Card padded={false} clip className={className}>
+    <section
+      className={cx(
+        "overflow-hidden rounded-[32px] border border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-panel",
+        className
+      )}
+    >
       {children}
-    </Card>
+    </section>
   );
 }
 
@@ -37,46 +38,74 @@ function Label({ children }) {
 
 function Field({ icon: Icon, className = "", ...props }) {
   return (
-    <Input
-      {...props}
-      appearance="quiet"
-      className={className}
-      leftIcon={Icon ? <Icon className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-    />
+    <div className={cx("relative", className)}>
+      {Icon ? (
+        <Icon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+      ) : null}
+      <input
+        {...props}
+        className={cx(
+          "w-full rounded-[22px] border border-line bg-surface px-4 py-3.5 text-[15px] text-text outline-none transition",
+          "placeholder:text-text-subtle",
+          "focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10",
+          props.disabled && "cursor-not-allowed bg-surface-subtle text-text-subtle",
+          Icon && "pl-11"
+        )}
+      />
+    </div>
   );
 }
 
 function Select({ className = "", ...props }) {
-  return <UiSelect {...props} appearance="quiet" className={className} />;
+  return (
+    <select
+      {...props}
+      className={cx(
+        "w-full rounded-[22px] border border-line bg-surface px-4 py-3.5 text-[15px] text-text outline-none transition",
+        "focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10",
+        props.disabled && "cursor-not-allowed bg-surface-subtle text-text-subtle",
+        className
+      )}
+    />
+  );
 }
 
 function Btn({ children, variant = "secondary", className = "", ...props }) {
-  const resolvedVariant =
+  const tone =
     variant === "primary"
-      ? "primary"
+      ? "border border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong"
       : variant === "danger"
-        ? "danger"
+        ? "border border-danger/20 bg-danger-soft text-danger hover:border-danger/30"
         : variant === "ghost"
-          ? "ghost"
-          : "secondary";
+          ? "border border-transparent bg-transparent text-text-muted hover:bg-surface-muted hover:text-text"
+          : "border border-line bg-surface text-text hover:border-line-strong hover:bg-surface-muted";
 
   return (
-    <Button
+    <button
       {...props}
-      variant={resolvedVariant}
-      size="sm"
-      className={className}
+      className={cx(
+        "inline-flex items-center justify-center rounded-[16px] px-4 py-2.5 text-sm font-medium transition-all duration-150",
+        "focus:outline-none focus:ring-4 focus:ring-cyan-500/10",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        tone,
+        className
+      )}
     >
       {children}
-    </Button>
+    </button>
   );
 }
 
 function Chip({ children, className = "" }) {
   return (
-    <Badge size="sm" className={className}>
+    <span
+      className={cx(
+        "inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-medium",
+        className
+      )}
+    >
       {children}
-    </Badge>
+    </span>
   );
 }
 
@@ -405,13 +434,13 @@ export default function AdminTeam() {
           </div>
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl flex-1">
-              <Input
+            <div className="relative max-w-xl flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
+              <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by email, name, role, or status"
-                appearance="quiet"
-                leftIcon={<Search className="h-4 w-4" strokeWidth={2.1} />}
+                className="w-full rounded-[22px] border border-line bg-surface py-3.5 pl-11 pr-4 text-[15px] text-text outline-none transition placeholder:text-text-subtle focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10"
               />
             </div>
 

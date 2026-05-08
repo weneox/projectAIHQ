@@ -1531,7 +1531,7 @@ select:-webkit-autofill:active {
 
   
 
-/* customers-premium-detail-harmony:end */
+
 
 /* customers-real-flush-top:start */
 
@@ -2662,58 +2662,58 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
   Metric / chart language:
   Team-style compact data surfaces, sharp geometry, no pill/yumru report material.
 */
-.app-page-canvas .reports-premium-page {
+.app-page-canvas .app-data-page {
   min-width: 0;
   background: rgb(var(--color-surface)) !important;
 }
 
-.app-page-canvas .reports-premium-page > div {
+.app-page-canvas .app-data-page > div {
   border-color: rgb(var(--color-line-soft)) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="bg-[linear-gradient"],
-.app-page-canvas .reports-premium-page [class*="bg-[radial-gradient"] {
+.app-page-canvas .app-data-page [class*="bg-[linear-gradient"],
+.app-page-canvas .app-data-page [class*="bg-[radial-gradient"] {
   background: rgb(var(--color-surface)) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="rounded-full"] {
+.app-page-canvas .app-data-page [class*="rounded-full"] {
   border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="rounded-["] {
+.app-page-canvas .app-data-page [class*="rounded-["] {
   border-radius: var(--aihq-sharp-radius-md, 6px) !important;
 }
 
 /*
   Reports range switch becomes Team filter-button language.
 */
-.app-page-canvas .reports-premium-page > div:first-of-type button,
-.app-page-canvas .reports-premium-page button {
+.app-page-canvas .app-data-page > div:first-of-type button,
+.app-page-canvas .app-data-page button {
   border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
 }
 
 /*
   Metric cells align with Team StatCard proportions.
 */
-.app-page-canvas .reports-premium-page [class*="MetricCell"],
-.app-page-canvas .reports-premium-page .metric-cell {
+.app-page-canvas .app-data-page [class*="MetricCell"],
+.app-page-canvas .app-data-page .metric-cell {
   min-height: var(--aihq-metric-h);
 }
 
-.app-page-canvas .reports-premium-page .grid.border-b > div[class*="px-6"][class*="py-4"] {
+.app-page-canvas .app-data-page .grid.border-b > div[class*="px-6"][class*="py-4"] {
   min-height: var(--aihq-metric-h);
   padding: var(--aihq-metric-y) var(--aihq-metric-x) !important;
   border-color: rgb(var(--color-line-soft)) !important;
   background: rgb(var(--color-surface)) !important;
 }
 
-.app-page-canvas .reports-premium-page .grid.border-b > div[class*="px-6"][class*="py-4"] svg {
+.app-page-canvas .app-data-page .grid.border-b > div[class*="px-6"][class*="py-4"] svg {
   width: 14px;
   height: 14px;
   color: rgb(var(--color-text-muted));
 }
 
-.app-page-canvas .reports-premium-page .grid.border-b > div[class*="px-6"][class*="py-4"] [class*="text-[24px]"] {
+.app-page-canvas .app-data-page .grid.border-b > div[class*="px-6"][class*="py-4"] [class*="text-[24px]"] {
   margin-top: 6px !important;
   color: rgb(var(--color-text)) !important;
   font-size: 22px !important;
@@ -2722,7 +2722,7 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
   letter-spacing: -0.04em !important;
 }
 
-.app-page-canvas .reports-premium-page .grid.border-b > div[class*="px-6"][class*="py-4"] [class*="text-[12px]"] {
+.app-page-canvas .app-data-page .grid.border-b > div[class*="px-6"][class*="py-4"] [class*="text-[12px]"] {
   margin-top: 6px !important;
   color: rgb(var(--color-text-muted)) !important;
 }
@@ -2730,11 +2730,11 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
 /*
   Chart container gets same page rhythm.
 */
-.app-page-canvas .reports-premium-page .recharts-responsive-container {
+.app-page-canvas .app-data-page .recharts-responsive-container {
   min-width: 0;
 }
 
-.app-page-canvas .reports-premium-page [class*="h-[390px]"] {
+.app-page-canvas .app-data-page [class*="h-[390px]"] {
   height: var(--aihq-chart-h) !important;
   padding: var(--aihq-chart-y) var(--aihq-chart-x) !important;
   background: rgb(var(--color-surface)) !important;
@@ -2757,38 +2757,38 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
   Breakdown bars and rails:
   no pill bars, compact rows, same line color.
 */
-.app-page-canvas .reports-premium-page [class*="h-2"][class*="rounded-full"] {
+.app-page-canvas .app-data-page [class*="h-2"][class*="rounded-full"] {
   height: 6px !important;
   border-radius: var(--aihq-sharp-radius-xs, 3px) !important;
   background: rgb(var(--color-surface-subtle)) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="h-full"][class*="rounded-full"] {
+.app-page-canvas .app-data-page [class*="h-full"][class*="rounded-full"] {
   border-radius: var(--aihq-sharp-radius-xs, 3px) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="border-dashed"] {
+.app-page-canvas .app-data-page [class*="border-dashed"] {
   border-radius: var(--aihq-sharp-radius-md, 6px) !important;
   border-color: rgb(var(--color-line-soft)) !important;
   background: rgb(var(--color-surface-subtle)) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="xl:border-l"],
-.app-page-canvas .reports-premium-page [class*="lg:border-r"],
-.app-page-canvas .reports-premium-page [class*="border-r"],
-.app-page-canvas .reports-premium-page [class*="border-b"] {
+.app-page-canvas .app-data-page [class*="xl:border-l"],
+.app-page-canvas .app-data-page [class*="lg:border-r"],
+.app-page-canvas .app-data-page [class*="border-r"],
+.app-page-canvas .app-data-page [class*="border-b"] {
   border-color: rgb(var(--color-line-soft)) !important;
 }
 
-.app-page-canvas .reports-premium-page [class*="bg-[#FBFDFF]"],
-.app-page-canvas .reports-premium-page [class*="bg-[#F8FAFC]"] {
+.app-page-canvas .app-data-page [class*="bg-[#FBFDFF]"],
+.app-page-canvas .app-data-page [class*="bg-[#F8FAFC]"] {
   background: rgb(var(--color-surface-muted)) !important;
 }
 
 /*
   Small data pills in insight rail lose pill material.
 */
-.app-page-canvas .reports-premium-page [class*="max-w-[132px]"][class*="truncate"] {
+.app-page-canvas .app-data-page [class*="max-w-[132px]"][class*="truncate"] {
   border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
   border-color: rgb(var(--color-line-soft)) !important;
   background: rgb(var(--color-surface)) !important;
@@ -2980,4 +2980,234 @@ body:has(.customers-page-canvas) :where(main, section, div):has(.customers-page-
   }
 }
 /* === AIHQ table-filter-contract:end === */
+
+
+/* === AIHQ toolbar-action-contract:start === */
+:root {
+  --aihq-toolbar-h: 40px;
+  --aihq-toolbar-button-h: 34px;
+  --aihq-toolbar-gap: 8px;
+  --aihq-toolbar-x: 12px;
+}
+
+/*
+  Toolbar / action row language:
+  Team-style compact action rhythm for page headers, section headers, filter bars.
+*/
+.app-page-header > div:last-child,
+.app-section-header > div:last-child,
+.app-page-canvas [class*="toolbar"],
+.app-page-canvas [class*="Toolbar"],
+.app-page-canvas [class*="actions"],
+.app-page-canvas [class*="Actions"] {
+  min-height: var(--aihq-toolbar-h);
+  align-items: center !important;
+  gap: var(--aihq-toolbar-gap) !important;
+}
+
+/*
+  Header/toolbar buttons are compact, not hero-sized.
+*/
+.app-page-header .ui-button,
+.app-section-header .ui-button,
+.app-page-canvas [class*="toolbar"] .ui-button,
+.app-page-canvas [class*="Toolbar"] .ui-button,
+.app-page-canvas [class*="actions"] .ui-button,
+.app-page-canvas [class*="Actions"] .ui-button {
+  border-radius: var(--aihq-sharp-radius-md, 6px) !important;
+  box-shadow:
+    0 10px 24px -22px rgba(15, 23, 42, 0.18) !important;
+}
+
+.app-page-header .ui-button__inner,
+.app-section-header .ui-button__inner,
+.app-page-canvas [class*="toolbar"] .ui-button__inner,
+.app-page-canvas [class*="Toolbar"] .ui-button__inner,
+.app-page-canvas [class*="actions"] .ui-button__inner,
+.app-page-canvas [class*="Actions"] .ui-button__inner {
+  height: var(--aihq-toolbar-button-h) !important;
+  min-height: var(--aihq-toolbar-button-h) !important;
+  padding-left: var(--aihq-toolbar-x) !important;
+  padding-right: var(--aihq-toolbar-x) !important;
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+  font-size: 12.5px !important;
+  font-weight: var(--font-weight-semibold) !important;
+  letter-spacing: var(--tracking-tight-sm) !important;
+}
+
+/*
+  Icon-only actions inside toolbars match Team IconButton proportions.
+*/
+.app-page-header .ui-button--icon .ui-button__inner,
+.app-section-header .ui-button--icon .ui-button__inner,
+.app-page-canvas [class*="toolbar"] .ui-button--icon .ui-button__inner,
+.app-page-canvas [class*="Toolbar"] .ui-button--icon .ui-button__inner,
+.app-page-canvas [class*="actions"] .ui-button--icon .ui-button__inner,
+.app-page-canvas [class*="Actions"] .ui-button--icon .ui-button__inner {
+  width: var(--aihq-toolbar-button-h) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/*
+  Native/custom toolbar buttons that are not Button.jsx still get Team-like action material.
+*/
+.app-page-canvas [class*="toolbar"] button:not(.ui-button),
+.app-page-canvas [class*="Toolbar"] button:not(.ui-button),
+.app-page-canvas [class*="actions"] button:not(.ui-button),
+.app-page-canvas [class*="Actions"] button:not(.ui-button),
+.app-page-header button:not(.ui-button),
+.app-section-header button:not(.ui-button) {
+  min-height: var(--aihq-toolbar-button-h) !important;
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+  font-size: 12.5px !important;
+  font-weight: var(--font-weight-semibold) !important;
+  letter-spacing: var(--tracking-tight-sm) !important;
+}
+
+/*
+  Toolbar inputs/search boxes keep Team soft control proportions.
+*/
+.app-page-canvas [class*="toolbar"] input,
+.app-page-canvas [class*="Toolbar"] input,
+.app-page-canvas [class*="actions"] input,
+.app-page-canvas [class*="Actions"] input {
+  height: var(--aihq-toolbar-button-h) !important;
+  min-height: var(--aihq-toolbar-button-h) !important;
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+  font-size: 12.5px !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+/*
+  Segmented controls/range switches lose pill look.
+*/
+.app-page-canvas [class*="rounded-full"] button,
+.app-page-canvas [class*="rounded-full"] .ui-button,
+.app-page-canvas [class*="rounded-full"] .ui-button__inner {
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+}
+
+.app-page-canvas [class*="rounded-full"] {
+  border-radius: var(--aihq-sharp-radius-md, 6px) !important;
+}
+
+/*
+  Keep Team action buttons as the strongest local source.
+*/
+.team-soft-control,
+.team-filter-control {
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --aihq-toolbar-h: 38px;
+    --aihq-toolbar-button-h: 32px;
+    --aihq-toolbar-gap: 6px;
+    --aihq-toolbar-x: 10px;
+  }
+
+  .app-page-header > div:last-child,
+  .app-section-header > div:last-child {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+}
+/* === AIHQ toolbar-action-contract:end === */
+
+
+/* === AIHQ team-filter-input-fix:start === */
+/*
+  Team filter/soft controls are wrapper-based.
+  Inner native inputs must stay transparent.
+*/
+.team-filter-control input,
+.team-soft-control input {
+  height: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  color: rgb(var(--color-text)) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  letter-spacing: var(--tracking-tight-sm) !important;
+}
+
+.team-filter-control input {
+  font-size: 12.5px !important;
+}
+
+.team-soft-control input {
+  font-size: 13.5px !important;
+}
+
+.team-filter-control input:focus,
+.team-filter-control input:focus-visible,
+.team-soft-control input:focus,
+.team-soft-control input:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.team-filter-control input::placeholder,
+.team-soft-control input::placeholder {
+  color: rgb(var(--color-text-subtle)) !important;
+  opacity: 1 !important;
+}
+
+.team-filter-control {
+  overflow: hidden;
+  border-radius: var(--aihq-sharp-radius-sm, 4px) !important;
+}
+
+.team-soft-control {
+  overflow: hidden;
+  border-radius: var(--aihq-sharp-radius-md, 6px) !important;
+}
+/* === AIHQ team-filter-input-fix:end === */
+
+
+/* === AIHQ textarea-transparent-contract:start === */
+/*
+  Approved Textarea can be used inside composer/chat surfaces without creating
+  a second visible input box.
+*/
+.ui-field-shell.app-transparent-textarea {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ui-field-shell.app-transparent-textarea .ui-field-border {
+  display: none !important;
+}
+
+.ui-field-shell.app-transparent-textarea .ui-field-inner {
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ui-field-shell.app-transparent-textarea .ui-textarea-wrap {
+  width: 100%;
+  min-height: 0;
+}
+
+.ui-field-shell.app-transparent-textarea .ui-textarea-control {
+  min-height: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  resize: none;
+}
+/* === AIHQ textarea-transparent-contract:end === */
 

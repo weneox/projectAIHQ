@@ -10,7 +10,6 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { Textarea } from "../ui/Input.jsx";
 import { getApiBase } from "../../api/client.js";
 import { fetchLatestDraft } from "../../features/proposals/proposal.api.js";
 import { DetailSection, MetaRow } from "./ProposalSections.jsx";
@@ -835,15 +834,14 @@ export default function ProposalExpanded({
                         Change request
                       </div>
 
-                      <Textarea
+                      <textarea
                         value={feedback}
                         onChange={(e) => setFeedback(e.target.value)}
                         rows={5}
-                       
-      textClassName="mt-2 w-full rounded-[20px] border border-white/[0.08] bg-white/[0.04] p-3 text-[13px] text-white outline-none placeholder:text-white/24 transition focus:border-cyan-300/20 focus:bg-white/[0.055]"
+                        className="mt-2 w-full rounded-[20px] border border-white/[0.08] bg-white/[0.04] p-3 text-[13px] text-white outline-none placeholder:text-white/24 transition focus:border-cyan-300/20 focus:bg-white/[0.055]"
                         placeholder='Məs: "Caption daha qısa. 8 hashtag. CTA WhatsApp. Dizaynda 3 kadr..."'
                         disabled={effectiveBusy || isRegenerating || isRejected || isPublished}
-                       />
+                      />
 
                       <div className="mt-3">
                         <GlassButton

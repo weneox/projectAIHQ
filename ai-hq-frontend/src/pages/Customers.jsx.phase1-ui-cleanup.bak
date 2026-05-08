@@ -17,7 +17,6 @@ import {
   LoadingSurface,
   PageCanvas,
 } from "../components/ui/AppShellPrimitives.jsx";
-import Input from "../components/ui/Input.jsx";
 import { cx } from "../lib/cx.js";
 import CustomerMetricCards from "../components/customers/CustomerMetricCards.jsx";
 const STAGES = [
@@ -289,26 +288,26 @@ function CustomerPicker({ leads, value = "all", onChange }) {
       {open ? (
         <div className="absolute left-3 top-[calc(100%+8px)] z-[220] w-[320px] overflow-hidden rounded-[18px] border border-[#D7E1EC] bg-white shadow-[0_26px_70px_-38px_rgba(15,23,42,0.38),0_12px_28px_-22px_rgba(15,23,42,0.18)]">
           <div className="border-b border-[#E5EBF3] bg-white p-2">
-            <Input
-              autoFocus
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              placeholder="Search or select customer"
-              appearance="quiet"
-              leftIcon={<Search className="h-[14px] w-[14px]" strokeWidth={2.15} />}
-              right={
-                term ? (
-                  <button
-                    type="button"
-                    onClick={() => setTerm("")}
-                    className="ui-field-clear"
-                    aria-label="Clear customer search"
-                  >
-                    <X className="h-[15px] w-[15px]" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
-                  </button>
-                ) : null
-              }
-            />
+            <div className="flex h-9 items-center gap-2 rounded-[12px] border border-[#D3DEEA] bg-white px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_18px_-17px_rgba(15,23,42,0.12)]">
+              <Search className="h-[14px] w-[14px] shrink-0 text-[#66768A]" strokeWidth={2.15} />
+              <input
+                autoFocus
+                value={term}
+                onChange={(event) => setTerm(event.target.value)}
+                placeholder="Search or select customer"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
+              />
+              {term ? (
+                <button
+                  type="button"
+                  onClick={() => setTerm("")}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-[8px] text-[#94A3B8] hover:bg-[#F2F6FB] hover:text-[#0F172A]"
+                  aria-label="Clear customer search"
+                >
+                  <X className="h-[15px] w-[15px] text-[#94A3B8] transition-colors duration-base ease-premium" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" />
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="max-h-[320px] overflow-y-auto py-1">
@@ -606,14 +605,14 @@ function CustomerTable({
                 </div>
 
                 <div className="p-3">
-                  <Input
+                  <input
                     type="date"
                     value={dateFilter}
                     onChange={(event) => {
                       onDateFilterChange?.(event.target.value);
                       setDateOpen(false);
                     }}
-                    appearance="quiet"
+                    className="h-10 w-full rounded-[12px] border border-[#D3DEEA] bg-white px-3 text-[13px] font-semibold text-[#0F172A] outline-none transition-[border-color,box-shadow] hover:border-[#B9C8DA] focus:border-[#315CFF] focus:shadow-[0_0_0_4px_rgba(49,92,255,0.12)]"
                     aria-label="Filter by updated date"
                   />
 
@@ -788,7 +787,7 @@ function CustomerDetailPanel({ lead, onOpen, onClose, closed = false, closing = 
 
   if (!lead) {
     return (
-      <aside className={cx("customers-detail-panel app-detail-panel hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
+      <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
         <div className="flex h-full min-h-[420px] items-center justify-center bg-white text-center">
           <div className="max-w-[240px]">
             <div className="text-[15px] font-semibold text-[#0F172A]">
@@ -814,7 +813,7 @@ function CustomerDetailPanel({ lead, onOpen, onClose, closed = false, closing = 
   const notes = s(lead.notes || lead.summary || lead.interest || lead.intent);
 
   return (
-    <aside className={cx("customers-detail-panel app-detail-panel hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
+    <aside className={cx("customers-detail-panel customers-detail-clean hidden h-full min-h-0 overflow-y-auto bg-white px-6 pb-6 xl:block", closing && "customers-detail-panel-closing", opening && "customers-detail-panel-opening")}>
       <div className="flex min-h-full flex-col bg-white py-5">
         <div className="flex items-start justify-between gap-4 pb-4">
           <div className="flex min-w-0 items-start gap-3.5">
@@ -1074,7 +1073,7 @@ const selectedLead = useMemo(() => {
         </div>
       ) : null}
 
-      <section className="app-data-page h-full min-h-0 overflow-hidden bg-white">
+      <section className="customers-premium-page h-full min-h-0 overflow-hidden bg-white">
 
         <div className="grid h-full min-h-0 overflow-hidden bg-white xl:grid-cols-[minmax(0,1fr)_386px]">
           <div className="min-w-0 overflow-y-auto bg-white">

@@ -19,7 +19,6 @@ import {
 } from "../api/settings.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
-import { Select } from "../components/ui/Input.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -217,40 +216,40 @@ function QuietHours({ policy, onChange, disabled = false }) {
             <span className="text-[12px] font-semibold text-text-muted">
               Start
             </span>
-            <Select
+            <select
               value={number(policy.quiet_hours.startHour, 22)}
               disabled={disabled}
               onChange={(event) =>
                 updateQuietHours({ startHour: number(event.target.value, 22) })
               }
-              appearance="quiet"
+              className="h-10 rounded-full border border-line bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors duration-base ease-premium focus:border-brand disabled:bg-surface-subtle"
             >
               {hours.map((item) => (
                 <option key={`start-${item.value}`} value={item.value}>
                   {item.label}
                 </option>
               ))}
-            </Select>
+            </select>
           </label>
 
           <label className="grid gap-1.5">
             <span className="text-[12px] font-semibold text-text-muted">
               End
             </span>
-            <Select
+            <select
               value={number(policy.quiet_hours.endHour, 8)}
               disabled={disabled}
               onChange={(event) =>
                 updateQuietHours({ endHour: number(event.target.value, 8) })
               }
-              appearance="quiet"
+              className="h-10 rounded-full border border-line bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors duration-base ease-premium focus:border-brand disabled:bg-surface-subtle"
             >
               {hours.map((item) => (
                 <option key={`end-${item.value}`} value={item.value}>
                   {item.label}
                 </option>
               ))}
-            </Select>
+            </select>
           </label>
         </div>
       ) : null}

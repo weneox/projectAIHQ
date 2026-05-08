@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   Sparkles,
 } from "lucide-react";
-import { Textarea } from "../ui/Input.jsx";
 import { AnimatePresence, motion } from "framer-motion";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
@@ -898,7 +897,7 @@ function Composer({
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[1px] bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.16),rgba(15,23,42,0))]" />
 
         <div className="flex items-end gap-3">
-          <Textarea
+          <textarea
             ref={textareaRef}
             rows={3}
             value={value}
@@ -910,10 +909,9 @@ function Composer({
               }
             }}
             placeholder={placeholder}
-           
-      textClassName="min-h-[84px] flex-1 resize-none appearance-none border-0 bg-transparent px-1 py-1.5 text-[14px] leading-[1.68] tracking-[-0.01em] text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+            className="min-h-[84px] flex-1 resize-none appearance-none border-0 bg-transparent px-1 py-1.5 text-[14px] leading-[1.68] tracking-[-0.01em] text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
             style={{ boxShadow: "none" }}
-           />
+          />
 
           <button
             type="button"

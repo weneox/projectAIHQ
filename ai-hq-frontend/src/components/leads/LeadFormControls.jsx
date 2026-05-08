@@ -1,9 +1,9 @@
-import React from "react";
+import Input, { Select, Textarea } from "../ui/Input.jsx";
 
 export function LeadField({ label, children }) {
   return (
-    <label className="block">
-      <div className="mb-2 text-sm font-medium text-text-muted">
+    <label className="grid gap-2">
+      <div className="text-[12px] font-semibold text-text-muted">
         {label}
       </div>
       {children}
@@ -13,36 +13,32 @@ export function LeadField({ label, children }) {
 
 export function LeadInput({ value, onChange, placeholder = "", type = "text" }) {
   return (
-    <input
+    <Input
       type={type}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-text outline-none transition focus:border-brand"
+      appearance="quiet"
     />
   );
 }
 
 export function LeadSelect({ value, onChange, children }) {
   return (
-    <select
-      value={value}
-      onChange={onChange}
-      className="h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-text outline-none transition focus:border-brand"
-    >
+    <Select value={value} onChange={onChange} appearance="quiet">
       {children}
-    </select>
+    </Select>
   );
 }
 
 export function LeadTextArea({ value, onChange, rows = 4, placeholder = "" }) {
   return (
-    <textarea
+    <Textarea
       rows={rows}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full resize-none rounded-md border border-line bg-surface px-3 py-3 text-sm leading-6 text-text outline-none transition focus:border-brand"
+      appearance="quiet"
     />
   );
 }

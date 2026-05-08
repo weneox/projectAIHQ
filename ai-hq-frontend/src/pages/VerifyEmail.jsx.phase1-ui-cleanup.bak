@@ -12,7 +12,6 @@ import {
   verifyEmail,
 } from "../api/auth.js";
 import Button from "../components/ui/Button.jsx";
-import Input from "../components/ui/Input.jsx";
 import Card from "../components/ui/Card.jsx";
 import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
 import { clearAppSessionContext } from "../lib/appSession.js";
@@ -282,15 +281,14 @@ export default function VerifyEmail() {
 
           {!verified && !token ? (
             <form className="border-t border-line-soft px-6 py-5" onSubmit={handleVerifyCode}>
-              <Input
+              <input
                 name="verificationCode"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 value={verificationCode}
                 onChange={(event) => setVerificationCode(normalizeCode(event.target.value))}
                 placeholder="6-digit code"
-                appearance="large"
-                inputClassName="text-center text-[22px] tracking-[0.28em] placeholder:text-[14px] placeholder:tracking-normal"
+                className="h-12 w-full rounded-[16px] border border-line bg-white px-5 text-center text-[22px] font-semibold tracking-[0.28em] text-text outline-none transition-colors duration-base ease-premium placeholder:text-[14px] placeholder:tracking-normal placeholder:text-text-subtle focus:border-brand"
               />
 
               <Button

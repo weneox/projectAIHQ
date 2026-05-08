@@ -5,7 +5,6 @@ import {
   SendHorizontal,
   ShieldAlert,
 } from "lucide-react";
-import { Textarea } from "../components/ui/Input.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -548,7 +547,7 @@ export default function PublicWebsiteWidget() {
 
         <form onSubmit={handleSend} className="border-t border-slate-200/80 bg-white px-4 py-4">
           <div className="flex items-end gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3">
-            <Textarea
+            <textarea
               value={draft}
               onChange={(event) => {
                 const nextValue = event.target.value;
@@ -564,9 +563,8 @@ export default function PublicWebsiteWidget() {
               rows={1}
               placeholder="Write your message"
               disabled={!canSend || sending}
-             
-      textClassName="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-[14px] leading-6 text-slate-900 outline-none placeholder:text-slate-400"
-             />
+              className="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-[14px] leading-6 text-slate-900 outline-none placeholder:text-slate-400"
+            />
             <button
               type="submit"
               disabled={!s(draft) || sending || !canSend}
