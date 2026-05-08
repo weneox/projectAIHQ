@@ -22,6 +22,9 @@ import {
 } from "../api/team.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
+import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
+import AppIconButton from "../components/ui/AppIconButton.jsx";
+import AppStatCard from "../components/ui/AppStatCard.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -475,70 +478,6 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
   );
 }
 
-function StatCard({ icon, label, value }) {
-  return (
-    <Card padded={false} clip>
-      <div className="flex h-[68px] items-center gap-4 px-4">
-        <div className="shrink-0 text-text">{icon}</div>
-
-        <div className="min-w-0">
-          <div className="truncate text-[10.5px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-            {label}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold leading-none tracking-[-0.04em] text-text">
-            {value}
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function IconButton({ children, onClick, disabled, label = "Action" }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-white text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.05)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium hover:border-line-strong hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function CompactActionButton({
-  children,
-  onClick,
-  disabled,
-  loading = false,
-  muted = false,
-  tone = "default",
-}) {
-  const toneClass = muted
-    ? "border-line-soft bg-surface-subtle text-text-subtle shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
-    : tone === "danger"
-      ? "border-danger/28 bg-danger/5 text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_1px_2px_rgba(190,24,93,0.08)] hover:border-danger/42 hover:bg-danger/8"
-      : tone === "success"
-        ? "border-success/28 bg-success/5 text-success shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_1px_2px_rgba(22,101,52,0.08)] hover:border-success/42 hover:bg-success/8"
-        : "border-line bg-white text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.05)] hover:bg-surface-subtle";
-
-  return (
-    <button
-      type="button"
-      disabled={disabled || loading}
-      onClick={onClick}
-      className={cx(
-        "inline-flex h-8 w-[74px] items-center justify-center rounded-md border px-2 text-[12px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-150 ease-premium disabled:cursor-not-allowed disabled:opacity-55",
-        toneClass
-      )}
-    >
-      {loading ? "..." : children}
-    </button>
-  );
-}
-
 function HeaderFilter({
   id,
   label,
@@ -782,27 +721,27 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
 
       <div className="flex items-center justify-end gap-2 px-4">
         {canManage && !owner ? (
-          <CompactActionButton
+          <AppCompactActionButton
             loading={busy}
             disabled={!id || busy}
             tone={active ? "danger" : "success"}
             onClick={() => onToggleStatus(user)}
           >
             {active ? "Disable" : "Activate"}
-          </CompactActionButton>
+          </AppCompactActionButton>
         ) : (
-          <CompactActionButton disabled muted>
+          <AppCompactActionButton disabled muted>
             Owner
-          </CompactActionButton>
+          </AppCompactActionButton>
         )}
 
-        <IconButton
+        <AppIconButton
           disabled={!canManage || !id}
           onClick={() => onEdit(user)}
           label="Edit member"
         >
           <Pencil className="h-3.5 w-3.5" strokeWidth={2.1} />
-        </IconButton>
+        </AppIconButton>
       </div>
     </div>
   );
@@ -1137,9 +1076,9 @@ function CenterModal({ open, title, description, children, onClose }) {
                   </p>
                 </div>
 
-                <IconButton onClick={onClose} label="Close panel">
+                <AppIconButton onClick={onClose} label="Close panel">
                   <X className="h-4 w-4" strokeWidth={2.1} />
-                </IconButton>
+                </AppIconButton>
               </div>
             </div>
 
@@ -1672,26 +1611,26 @@ export default function Team() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
+              <AppStatCard
                 icon={<Users className="h-[30px] w-[30px]" strokeWidth={1.85} />}
                 label="Total members"
                 value={stats.total}
               />
-              <StatCard
+              <AppStatCard
                 icon={
                   <UserCheck className="h-[30px] w-[30px]" strokeWidth={1.85} />
                 }
                 label="Active members"
                 value={stats.active}
               />
-              <StatCard
+              <AppStatCard
                 icon={
                   <MailPlus className="h-[30px] w-[30px]" strokeWidth={1.85} />
                 }
                 label="Invited members"
                 value={stats.invited}
               />
-              <StatCard
+              <AppStatCard
                 icon={<UserX className="h-[30px] w-[30px]" strokeWidth={1.85} />}
                 label="Disabled members"
                 value={stats.disabled}
