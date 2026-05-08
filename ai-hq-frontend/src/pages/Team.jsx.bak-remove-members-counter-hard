@@ -828,6 +828,9 @@ export default function Team() {
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-start gap-3 lg:justify-end">
+              <Button type="button" variant="secondary" size="sm" disabled>
+                {stats.total} member{stats.total === 1 ? "" : "s"}
+              </Button>
 
               <Button
                 type="button"
@@ -951,7 +954,6 @@ export default function Team() {
     </>
   );
 }
-
 
 
 

@@ -159,6 +159,165 @@ function buildAuthMe() {
   };
 }
 
+
+function daysAgo(days = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() - Number(days || 0));
+  return date.toISOString();
+}
+
+function buildDesignTeam() {
+  const users = [
+    {
+      id: "user_local_owner",
+      user_id: "user_local_owner",
+      user_email: "emil@weneox.com",
+      email: "emil@weneox.com",
+      full_name: "Emil Bagirov",
+      fullName: "Emil Bagirov",
+      name: "Emil Bagirov",
+      display_name: "Emil Bagirov",
+      displayName: "Emil Bagirov",
+      role: "owner",
+      status: "active",
+      created_at: daysAgo(42),
+      createdAt: daysAgo(42),
+      updated_at: nowIso(),
+      updatedAt: nowIso(),
+    },
+    {
+      id: "user_local_admin",
+      user_id: "user_local_admin",
+      user_email: "ops@weneox.com",
+      email: "ops@weneox.com",
+      full_name: "Nigar Aliyeva",
+      fullName: "Nigar Aliyeva",
+      name: "Nigar Aliyeva",
+      display_name: "Nigar Aliyeva",
+      displayName: "Nigar Aliyeva",
+      role: "admin",
+      status: "active",
+      created_at: daysAgo(31),
+      createdAt: daysAgo(31),
+      updated_at: daysAgo(1),
+      updatedAt: daysAgo(1),
+    },
+    {
+      id: "user_local_operator",
+      user_id: "user_local_operator",
+      user_email: "operator@local.design",
+      email: "operator@local.design",
+      full_name: "AI Operator",
+      fullName: "AI Operator",
+      name: "AI Operator",
+      display_name: "AI Operator",
+      displayName: "AI Operator",
+      role: "operator",
+      status: "active",
+      created_at: daysAgo(18),
+      createdAt: daysAgo(18),
+      updated_at: nowIso(),
+      updatedAt: nowIso(),
+    },
+    {
+      id: "user_local_support",
+      user_id: "user_local_support",
+      user_email: "support@weneox.com",
+      email: "support@weneox.com",
+      full_name: "Support Agent",
+      fullName: "Support Agent",
+      name: "Support Agent",
+      display_name: "Support Agent",
+      displayName: "Support Agent",
+      role: "operator",
+      status: "invited",
+      created_at: daysAgo(5),
+      createdAt: daysAgo(5),
+      updated_at: daysAgo(5),
+      updatedAt: daysAgo(5),
+    },
+    {
+      id: "user_local_automation",
+      user_id: "user_local_automation",
+      user_email: "automation@weneox.com",
+      email: "automation@weneox.com",
+      full_name: "Automation Lead",
+      fullName: "Automation Lead",
+      name: "Automation Lead",
+      display_name: "Automation Lead",
+      displayName: "Automation Lead",
+      role: "admin",
+      status: "disabled",
+      created_at: daysAgo(12),
+      createdAt: daysAgo(12),
+      updated_at: daysAgo(2),
+      updatedAt: daysAgo(2),
+    },
+  ];
+
+  return {
+    ok: true,
+    designMode: true,
+    tenantId: DESIGN_TENANT_ID,
+    tenant_id: DESIGN_TENANT_ID,
+    tenantKey: getDesignTenantKey(),
+    tenant_key: getDesignTenantKey(),
+    viewerRole: "owner",
+    viewer_role: "owner",
+    count: users.length,
+    users,
+  };
+}
+
+function buildDesignTeamCreate(body = {}) {
+  const email = s(body?.user_email || body?.email || "new.member@local.design").toLowerCase();
+  const fullName = s(body?.full_name || body?.fullName || body?.name || email.split("@")[0] || "New member");
+  const role = lower(body?.role || "operator");
+  const status = lower(body?.status || "active");
+
+  return {
+    ok: true,
+    designMode: true,
+    created: true,
+    user: {
+      id: `user_local_${Date.now()}`,
+      user_id: `user_local_${Date.now()}`,
+      user_email: email,
+      email,
+      full_name: fullName,
+      fullName,
+      name: fullName,
+      display_name: fullName,
+      displayName: fullName,
+      role,
+      status,
+      created_at: nowIso(),
+      createdAt: nowIso(),
+      updated_at: nowIso(),
+      updatedAt: nowIso(),
+    },
+  };
+}
+
+function buildDesignTeamStatus(path = "", body = {}) {
+  const match = cleanPath(path).match(/\/api\/team\/([^/]+)\/status$/);
+  const id = match ? decodeURIComponent(match[1]) : "user_local_operator";
+  const status = lower(body?.status || "active");
+
+  return {
+    ok: true,
+    designMode: true,
+    updated: true,
+    user: {
+      id,
+      user_id: id,
+      status,
+      updated_at: nowIso(),
+      updatedAt: nowIso(),
+    },
+  };
+}
+
 function buildBootstrap() {
   const user = buildDesignUser();
   const tenant = buildDesignTenant();
@@ -985,6 +1144,15 @@ export async function getDesignModeApiResponse(path = "", options = {}) {
   }
 
   if (pathOnly === "/api/app/bootstrap") return buildBootstrap();
+
+  if (pathOnly === "/api/team") {
+    if (method === "POST") return buildDesignTeamCreate(body);
+    return buildDesignTeam();
+  }
+
+  if (/^\/api\/team\/[^/]+\/status$/.test(pathOnly)) {
+    return buildDesignTeamStatus(fullPath, body);
+  }
 
   if (pathOnly === "/api/channels/meta/status") return buildChannelStatus("meta");
   if (pathOnly === "/api/channels/telegram/status") return buildChannelStatus("telegram");
