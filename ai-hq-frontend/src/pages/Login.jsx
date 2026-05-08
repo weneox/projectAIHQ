@@ -332,7 +332,7 @@ function PasswordStrengthPanel({ assessment }) {
               {rule.passed ? (
                 <Check className="h-[9px] w-[9px]" strokeWidth={3} />
               ) : (
-                <span className="h-[3px] w-[3px] rounded-md bg-text-subtle" />
+                <span className="h-[3px] w-[3px] rounded-full bg-text-subtle" />
               )}
             </span>
             <span>{rule.label}</span>

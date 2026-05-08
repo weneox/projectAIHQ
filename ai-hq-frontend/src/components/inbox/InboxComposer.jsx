@@ -280,7 +280,7 @@ function InboxComposer({
                 disabled={threadAiSwitchPending || !globalAiActive}
                 onClick={handleThreadAiToggle}
                 className={[
-                  "inline-flex h-9 items-center gap-2 rounded-md border px-2.5 pr-3",
+                  "inline-flex h-9 items-center gap-2 rounded-full border px-2.5 pr-3",
                   "text-[12px] font-semibold transition-all duration-200",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   threadAiActive
@@ -290,13 +290,13 @@ function InboxComposer({
               >
                 <span
                   className={[
-                    "relative inline-flex h-[20px] w-[34px] items-center rounded-md transition-colors duration-200",
+                    "relative inline-flex h-[20px] w-[34px] items-center rounded-full transition-colors duration-200",
                     threadAiActive ? "bg-[#2F8FEA]" : "bg-[#CBD5E1]",
                   ].join(" ")}
                 >
                   <span
                     className={[
-                      "absolute top-[3px] h-[14px] w-[14px] rounded-md bg-white shadow-[0_2px_6px_rgba(15,23,42,0.18)] transition-transform duration-200",
+                      "absolute top-[3px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_2px_6px_rgba(15,23,42,0.18)] transition-transform duration-200",
                       threadAiActive ? "translate-x-[17px]" : "translate-x-[3px]",
                     ].join(" ")}
                   />
@@ -307,7 +307,7 @@ function InboxComposer({
               <button
                 type="button"
                 onClick={() => setAiNoticeThreadId("")}
-                className="inline-flex h-9 items-center rounded-md px-3 text-[12px] font-semibold text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#1E293B]"
+                className="inline-flex h-9 items-center rounded-full px-3 text-[12px] font-semibold text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#1E293B]"
               >
                 Bağla
               </button>

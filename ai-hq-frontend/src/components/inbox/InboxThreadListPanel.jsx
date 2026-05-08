@@ -147,7 +147,7 @@ function AllChannelsLeadMark({ selected }) {
     <span
       aria-hidden="true"
       className={cx(
-        "relative flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md",
+        "relative flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full",
         "transition-[background-color,color] duration-base ease-premium",
         selected ? "bg-success text-white" : "bg-surface-subtle text-text-subtle"
       )}
@@ -527,7 +527,7 @@ function InboxAutopilotControl({
         aria-label={enabled ? "Turn off inbox AI" : "Turn on inbox AI"}
         title={enabled ? "AI ON" : "AI OFF"}
         className={cx(
-          "relative inline-flex h-[30px] w-[66px] shrink-0 items-center rounded-md border",
+          "relative inline-flex h-[30px] w-[66px] shrink-0 items-center rounded-full border",
           "transition-[background-color,border-color,opacity] duration-base ease-premium",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--color-brand),0.24)] focus-visible:ring-offset-2",
           disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
@@ -548,7 +548,7 @@ function InboxAutopilotControl({
         <span
           aria-hidden="true"
           className={cx(
-            "absolute top-[3px] h-[22px] w-[22px] rounded-md bg-white shadow-[0_5px_12px_-6px_rgba(15,23,42,0.55)]",
+            "absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-[0_5px_12px_-6px_rgba(15,23,42,0.55)]",
             "transition-transform duration-base ease-premium",
             enabled ? "translate-x-[39px]" : "translate-x-[3px]"
           )}

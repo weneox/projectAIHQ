@@ -61,7 +61,7 @@ function ThreadCardAvatar({ title, avatarUrl }) {
   const initials = initialsFromName(title);
 
   return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[#E8EEF7] text-[12px] font-semibold text-[#587391] shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)]">
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#E8EEF7] text-[12px] font-semibold text-[#587391] shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)]">
       {avatarUrl ? (
         <img
           src={avatarUrl}

@@ -25,7 +25,7 @@ export default function InboxReplayTraceCard({
   return (
     <div
       className={[
-        "rounded-md border border-line bg-surface",
+        "rounded-panel border border-line bg-surface",
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
       ].join(" ")}
     >
@@ -42,7 +42,7 @@ export default function InboxReplayTraceCard({
         <div className="flex flex-wrap gap-2">
           {s(trace.runtimeReference) ? (
             <span
-              className={`rounded-md border px-2.5 py-1 text-[11px] ${badgeTone(
+              className={`rounded-pill border px-2.5 py-1 text-[11px] ${badgeTone(
                 "runtime"
               )}`}
             >
@@ -51,7 +51,7 @@ export default function InboxReplayTraceCard({
           ) : null}
           {s(trace.usecase) ? (
             <span
-              className={`rounded-md border px-2.5 py-1 text-[11px] ${badgeTone(
+              className={`rounded-pill border px-2.5 py-1 text-[11px] ${badgeTone(
                 "usecase"
               )}`}
             >
@@ -71,7 +71,7 @@ export default function InboxReplayTraceCard({
             {trace.promptLayers.map((layer) => (
               <span
                 key={layer}
-                className="rounded-md border border-line bg-surface-subtle px-2.5 py-1 text-[11px] text-text-muted"
+                className="rounded-pill border border-line bg-surface-subtle px-2.5 py-1 text-[11px] text-text-muted"
               >
                 {layer}
               </span>

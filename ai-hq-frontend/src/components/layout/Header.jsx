@@ -426,7 +426,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
               <div className="min-w-0 flex-1">
                 {workspaceResolving ? (
-                  <div className="h-3.5 w-28 rounded-md bg-[rgba(15,23,42,0.08)]" />
+                  <div className="h-3.5 w-28 rounded-full bg-[rgba(15,23,42,0.08)]" />
                 ) : (
                   <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
                     {displayName || "Workspace"}
@@ -487,7 +487,7 @@ function NotificationsButton({ notifications }) {
     >
       <Bell className="h-[18px] w-[18px]" strokeWidth={1.95} />
       {unread > 0 ? (
-        <span className="absolute right-[7px] top-[7px] z-[2] h-[4px] w-[4px] rounded-md bg-brand" />
+        <span className="absolute right-[7px] top-[7px] z-[2] h-[4px] w-[4px] rounded-full bg-brand" />
       ) : null}
     </ShellIconButton>
   );
