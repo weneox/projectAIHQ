@@ -137,7 +137,7 @@ function pickFirstWorkspaceName(...values) {
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-  if (path.startsWith("/inbox") || path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/reports") || path.startsWith("/team")) return "immersive";
+  if (path.startsWith("/inbox") || path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/reports") || path.startsWith("/channels") || path.startsWith("/launch") || path.startsWith("/welcome") || path.startsWith("/truth") || path.startsWith("/team")) return "immersive";
   return "standard";
 }
 
@@ -660,7 +660,7 @@ export default function Shell() {
     !emailVerificationDismissed;
   const topBannerVisible = topWarningVisible || emailVerificationVisible;
   const topOffset = topBannerVisible ? GLOBAL_ALERT_HEIGHT : 0;
-  const standardFullBleed = ["/customers", "/leads", "/reports", "/team"].some((prefix) => String(location.pathname || "").startsWith(prefix));
+  const standardFullBleed = ["/customers", "/leads", "/reports", "/channels", "/team", "/settings"].some((prefix) => String(location.pathname || "").startsWith(prefix));
 
 
   return (
