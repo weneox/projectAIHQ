@@ -608,7 +608,7 @@ function FilterSearchInput({ value, onChange, placeholder = "Search..." }) {
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
-          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[12.5px] font-semibold text-text outline-none ring-0 shadow-none placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
+          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[12.5px] font-semibold text-text outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none"
         />
       </div>
     </div>
@@ -889,7 +889,7 @@ function SoftInput({
         autoCapitalize="none"
         spellCheck={false}
         name={name || undefined}
-        className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[13.5px] font-semibold text-text outline-none ring-0 shadow-none placeholder:text-text-subtle disabled:cursor-not-allowed focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
+        className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[13.5px] font-semibold text-text outline-none ring-0 placeholder:text-text-subtle disabled:cursor-not-allowed focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none"
       />
     </div>
   );

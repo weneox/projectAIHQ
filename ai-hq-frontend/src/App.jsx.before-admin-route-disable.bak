@@ -6,6 +6,8 @@ import {
   Routes,
 } from "react-router-dom";
 import Shell from "./components/layout/Shell.jsx";
+import AdminShell from "./components/admin/AdminShell.jsx";
+import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
@@ -31,6 +33,10 @@ import {
 } from "./lib/appSession.js";
 
 const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
+const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
+const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
+const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail.jsx"));
 
@@ -44,6 +50,9 @@ const LEGACY_LAUNCH_FREEZE_ROUTES = [
   "executions",
   "incidents",
 ];
+
+const ADMIN_ROUTES_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADMIN_ROUTES === "1";
 
 function withSuspense(element) {
   return <Suspense fallback={null}>{element}</Suspense>;
@@ -159,10 +168,32 @@ function renderLegacyLaunchFreezeRedirects() {
 }
 
 function renderAdminRoutes() {
+  if (!ADMIN_ROUTES_ENABLED) {
+    return (
+      <>
+        <Route path="/admin/login" element={<Navigate to="/" replace />} />
+        <Route path="/admin/*" element={<Navigate to="/" replace />} />
+      </>
+    );
+  }
+
   return (
     <>
-      <Route path="/admin/login" element={<Navigate to="/" replace />} />
-      <Route path="/admin/*" element={<Navigate to="/" replace />} />
+      <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
+
+      <Route
+        path="/admin"
+        element={
+          <AdminRouteGuard>
+            <AdminShell />
+          </AdminRouteGuard>
+        }
+      >
+        <Route index element={<Navigate to="/admin/tenants" replace />} />
+        <Route path="tenants" element={withSuspense(<AdminTenants />)} />
+        <Route path="team" element={withSuspense(<AdminTeam />)} />
+        <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
+      </Route>
     </>
   );
 }

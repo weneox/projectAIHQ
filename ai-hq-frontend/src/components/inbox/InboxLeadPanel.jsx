@@ -10,9 +10,7 @@ import {
   leadHandle,
   leadName,
   prettyLeadSource,
-} from "../../lib/inbox-ui.js";
-import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
-import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
+} from "../../lib/inbox-ui.js";import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
 import Card from "../ui/Card.jsx";
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
@@ -370,10 +368,15 @@ export default function InboxLeadPanel({
 
             {showSurfaceBanner ? (
               <div className="px-4 pb-2">
-                <SurfaceBanner
-                  surface={surface}
-                  unavailableMessage="Related context is temporarily unavailable."
-                  refreshLabel="Refresh context"
+                <InlineNotice
+                  tone="warning"
+                  title="Context unavailable"
+                  description={
+                    surface?.error ||
+                    surface?.message ||
+                    "Related context is temporarily unavailable."
+                  }
+                  compact
                 />
               </div>
             ) : null}

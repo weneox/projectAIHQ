@@ -1,4 +1,4 @@
-﻿import {
+import {
   memo,
   useCallback,
   useEffect,
@@ -9,9 +9,7 @@
 } from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
 import { Textarea } from "../ui/Input.jsx";
-
-import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
-import InboxMessageBubble from "./InboxMessageBubble.jsx";
+import { InlineNotice } from "../ui/AppShellPrimitives.jsx";import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
@@ -717,10 +715,23 @@ function InboxDetailPanel({
                   >
                     {showSurfaceBanner ? (
                       <div className="mb-4 w-full">
-                        <SurfaceBanner
-                          surface={surface}
-                          unavailableMessage="Conversation detail is temporarily unavailable."
-                          refreshLabel="Refresh conversation"
+                        <InlineNotice
+                          tone={surface?.saveError ? "danger" : surface?.saveSuccess ? "success" : "warning"}
+                          title={
+                            surface?.saveSuccess
+                              ? "Saved"
+                              : surface?.saveError
+                                ? "Update failed"
+                                : "Conversation unavailable"
+                          }
+                          description={
+                            surface?.saveSuccess ||
+                            surface?.saveError ||
+                            surface?.error ||
+                            surface?.message ||
+                            "Conversation detail is temporarily unavailable."
+                          }
+                          compact
                         />
                       </div>
                     ) : null}
