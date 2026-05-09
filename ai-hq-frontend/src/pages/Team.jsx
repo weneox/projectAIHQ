@@ -483,6 +483,40 @@ function TeamEmptyVisual() {
 }
 
 
+
+function TeamEmptyLibraryVisual() {
+  return (
+    <div className="relative mx-auto h-[190px] w-[390px] max-w-full">
+      <div className="absolute left-1/2 top-8 h-28 w-64 -translate-x-1/2 rounded-full bg-blue-100/80 blur-3xl" />
+      <div className="absolute left-1/2 top-10 h-28 w-56 -translate-x-1/2 rounded-full bg-violet-100/80 blur-3xl" />
+
+      <div className="absolute left-[92px] top-[104px] h-px w-[206px] bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+
+      <UserCirclePlus
+        weight="duotone"
+        className="absolute left-[32px] top-[70px] h-[82px] w-[82px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
+      />
+
+      <UsersThree
+        weight="duotone"
+        className="absolute left-1/2 top-[18px] h-[148px] w-[148px] -translate-x-1/2 text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
+      />
+
+      <PhShieldCheck
+        weight="duotone"
+        className="absolute right-[32px] top-[70px] h-[82px] w-[82px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
+      />
+
+      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+        <span className="h-1.5 w-16 rounded-full bg-slate-300" />
+        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+      </div>
+    </div>
+  );
+}
+
+
 function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
     <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
