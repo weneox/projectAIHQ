@@ -24,6 +24,26 @@ export async function listLeads({
   return apiGet(`/api/leads?${search.toString()}`);
 }
 
+export async function listCustomers({
+  q = "",
+  stage = "",
+  status = "",
+  owner = "",
+  priority = "",
+  limit = 200,
+} = {}) {
+  const search = new URLSearchParams();
+
+  if (s(q)) search.set("q", s(q));
+  if (s(stage)) search.set("stage", s(stage));
+  if (s(status)) search.set("status", s(status));
+  if (s(owner)) search.set("owner", s(owner));
+  if (s(priority)) search.set("priority", s(priority));
+  search.set("limit", String(Math.max(1, Math.min(200, Number(limit || 200)))));
+
+  return apiGet(`/api/customers?${search.toString()}`);
+}
+
 
 export async function getLeadByThreadId(threadId = "") {
   return apiGet(`/api/leads/by-thread/${encodeURIComponent(s(threadId))}`);

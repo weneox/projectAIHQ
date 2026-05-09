@@ -7,6 +7,7 @@ export function leadsRoutes({ db, wsHub }) {
 
   const h = createLeadHandlers({ db, wsHub });
 
+  r.get("/customers", requireOperatorSurfaceAccess, h.getCustomers);
   r.get("/leads", requireOperatorSurfaceAccess, h.getLeads);
   r.get("/leads/by-thread/:threadId", requireOperatorSurfaceAccess, h.getLeadByInboxThreadId);
   r.get("/leads/:id", requireOperatorSurfaceAccess, h.getLeadById);

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { listLeads } from "../api/leads.js";
+import { listCustomers } from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppIdentityMark from "../components/ui/AppIdentityMark.jsx";
@@ -227,6 +227,7 @@ function isLocalDesignMode() {
 
 function normalizeResponse(payload) {
   if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.customers)) return payload.customers;
   if (Array.isArray(payload?.leads)) return payload.leads;
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -282,15 +283,34 @@ function customerSource(customer = {}) {
 }
 
 function customerStage(customer = {}) {
-  return lower(customer.stage || "new");
+  return lower(
+    customer.displayStage ||
+      customer.display_stage ||
+      customer.stageLabel ||
+      customer.stage ||
+      "new"
+  );
 }
 
 function customerStatus(customer = {}) {
-  return lower(customer.status || "open");
+  return lower(
+    customer.displayStatus ||
+      customer.display_status ||
+      customer.statusLabel ||
+      customer.status ||
+      "open"
+  );
 }
 
 function customerValue(customer = {}) {
-  return n(customer.value || customer.estimated_value || customer.deal_value || 0);
+  return n(
+    customer.value_azn ??
+      customer.valueAzn ??
+      customer.value ??
+      customer.estimated_value ??
+      customer.deal_value ??
+      0
+  );
 }
 
 function customerThreadId(customer = {}) {
@@ -393,7 +413,7 @@ function formatMoney(value = 0) {
 
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: "USD",
+    currency: "AZN",
     maximumFractionDigits: 0,
   }).format(amount);
 }
@@ -811,6 +831,9 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
   const status = customerStatus(customer);
   const threadId = customerThreadId(customer);
   const latest =
+    s(customer.latestMessageText) ||
+    s(customer.latest_message_text) ||
+    s(customer.lastMessageText) ||
     s(customer.last_message_text) ||
     s(customer.latest_message) ||
     "No message preview is available yet.";
@@ -996,7 +1019,7 @@ export default function Customers() {
     setError("");
 
     try {
-      const response = await listLeads({ limit: 200 });
+      const response = await listCustomers({ limit: 200 });
       const nextCustomers = withLocalCustomers(normalizeResponse(response));
       setCustomers(nextCustomers);
     } catch (err) {

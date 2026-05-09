@@ -29,6 +29,54 @@ const LEAD_SELECT = `
   updated_at
 `;
 
+
+function leadSelectForAlias(alias = "") {
+  const prefix = alias ? `${alias}.` : "";
+
+  return [
+    "id",
+    "tenant_key",
+    "source",
+    "source_ref",
+    "inbox_thread_id",
+    "proposal_id",
+    "full_name",
+    "username",
+    "company",
+    "phone",
+    "email",
+    "interest",
+    "notes",
+    "stage",
+    "score",
+    "status",
+    "owner",
+    "priority",
+    "value_azn",
+    "follow_up_at",
+    "next_action",
+    "won_reason",
+    "lost_reason",
+    "extra",
+    "created_at",
+    "updated_at",
+  ].map((column) => `  ${prefix}${column}`).join(",\n");
+}
+
+function isOptionalInboxProjectionMissing(error) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("inbox_threads") ||
+    message.includes("inbox_messages") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
 const LEAD_EVENT_SELECT = `
   id,
   lead_id,
@@ -264,26 +312,26 @@ export async function insertLeadEvent(db, { leadId, tenantKey, type, actor, payl
 
 export async function listLeads(db, { tenantKey, stage, status, owner, priority, q, limit }) {
   const values = [tenantKey];
-  const where = [`tenant_key = $1::text`];
+  const where = [`l.tenant_key = $1::text`];
 
   if (stage) {
     values.push(stage);
-    where.push(`stage = $${values.length}::text`);
+    where.push(`l.stage = $${values.length}::text`);
   }
 
   if (status) {
     values.push(status);
-    where.push(`status = $${values.length}::text`);
+    where.push(`l.status = $${values.length}::text`);
   }
 
   if (owner) {
     values.push(owner);
-    where.push(`coalesce(owner, '') = $${values.length}::text`);
+    where.push(`coalesce(l.owner, '') = $${values.length}::text`);
   }
 
   if (priority) {
     values.push(priority);
-    where.push(`priority = $${values.length}::text`);
+    where.push(`l.priority = $${values.length}::text`);
   }
 
   if (q) {
@@ -291,32 +339,84 @@ export async function listLeads(db, { tenantKey, stage, status, owner, priority,
     const i = values.length;
     where.push(`
       (
-        coalesce(full_name, '') ilike $${i}
-        or coalesce(username, '') ilike $${i}
-        or coalesce(company, '') ilike $${i}
-        or coalesce(phone, '') ilike $${i}
-        or coalesce(email, '') ilike $${i}
-        or coalesce(interest, '') ilike $${i}
-        or coalesce(notes, '') ilike $${i}
-        or coalesce(owner, '') ilike $${i}
-        or coalesce(next_action, '') ilike $${i}
+        coalesce(l.full_name, '') ilike $${i}
+        or coalesce(l.username, '') ilike $${i}
+        or coalesce(l.company, '') ilike $${i}
+        or coalesce(l.phone, '') ilike $${i}
+        or coalesce(l.email, '') ilike $${i}
+        or coalesce(l.interest, '') ilike $${i}
+        or coalesce(l.notes, '') ilike $${i}
+        or coalesce(l.owner, '') ilike $${i}
+        or coalesce(l.next_action, '') ilike $${i}
       )
     `);
   }
 
   values.push(limit);
 
-  const sql = `
+  const whereSql = where.join(" and ");
+  const limitParam = `$${values.length}::int`;
+
+  const baseSql = `
     select
-      ${LEAD_SELECT}
-    from leads
-    where ${where.join(" and ")}
-    order by updated_at desc, created_at desc
-    limit $${values.length}::int
+      ${leadSelectForAlias("l")}
+    from leads l
+    where ${whereSql}
+    order by l.updated_at desc, l.created_at desc
+    limit ${limitParam}
   `;
 
-  const result = await db.query(sql, values);
-  return (result.rows || []).map(normalizeLead);
+  const enrichedSql = `
+    select
+      ${leadSelectForAlias("l")},
+      coalesce(latest_message.text, '') as latest_message_text,
+      latest_message.sent_at as latest_message_at,
+      coalesce(latest_thread.status, '') as thread_status,
+      coalesce(latest_thread.unread_count, 0) as thread_unread_count
+    from leads l
+    left join inbox_threads latest_thread
+      on latest_thread.id = l.inbox_thread_id
+      and latest_thread.tenant_key = l.tenant_key
+    left join lateral (
+      select
+        m.text,
+        coalesce(m.sent_at, m.created_at) as sent_at
+      from inbox_messages m
+      where m.thread_id = l.inbox_thread_id
+        and m.tenant_key = l.tenant_key
+        and nullif(btrim(coalesce(m.text, '')), '') is not null
+        and lower(coalesce(m.message_type, 'text')) not in (
+          'system',
+          'typing',
+          'typing_on',
+          'typing_off',
+          'mark_seen',
+          'seen',
+          'read',
+          'delivery',
+          'reaction',
+          'echo'
+        )
+        and lower(coalesce(m.sender_type, '')) not in ('system', 'decision')
+      order by coalesce(m.sent_at, m.created_at) desc, m.created_at desc
+      limit 1
+    ) latest_message on true
+    where ${whereSql}
+    order by l.updated_at desc, l.created_at desc
+    limit ${limitParam}
+  `;
+
+  try {
+    const result = await db.query(enrichedSql, values);
+    return (result.rows || []).map(normalizeLead);
+  } catch (error) {
+    if (!isOptionalInboxProjectionMissing(error)) {
+      throw error;
+    }
+
+    const result = await db.query(baseSql, values);
+    return (result.rows || []).map(normalizeLead);
+  }
 }
 
 export async function updateLeadById(db, id, fields, values, paramIndex) {

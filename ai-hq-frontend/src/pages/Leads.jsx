@@ -332,19 +332,47 @@ function leadSource(lead = {}) {
 }
 
 function leadStage(lead = {}) {
-  return lower(lead.stage || lead.pipeline_stage || "new");
+  return lower(
+    lead.displayStage ||
+      lead.display_stage ||
+      lead.stageLabel ||
+      lead.stage ||
+      lead.pipeline_stage ||
+      "new"
+  );
 }
 
 function leadStatus(lead = {}) {
-  return lower(lead.status || "open");
+  return lower(
+    lead.displayStatus ||
+      lead.display_status ||
+      lead.statusLabel ||
+      lead.status ||
+      "open"
+  );
 }
 
 function leadPriority(lead = {}) {
-  return lower(lead.priority || lead.urgency || "medium");
+  return lower(
+    lead.displayPriority ||
+      lead.display_priority ||
+      lead.priorityLabel ||
+      lead.priority ||
+      lead.urgency ||
+      "medium"
+  );
 }
 
 function leadValue(lead = {}) {
-  return n(lead.value || lead.estimated_value || lead.deal_value || lead.amount || 0);
+  return n(
+    lead.value_azn ??
+      lead.valueAzn ??
+      lead.value ??
+      lead.estimated_value ??
+      lead.deal_value ??
+      lead.amount ??
+      0
+  );
 }
 
 function leadOwner(lead = {}) {
@@ -395,7 +423,7 @@ function formatMoney(value = 0) {
 
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: "USD",
+    currency: "AZN",
     maximumFractionDigits: 0,
   }).format(amount);
 }
@@ -457,6 +485,9 @@ function matchesText(lead = {}, query = "") {
       titleize(leadPriority(lead)),
       leadOwner(lead),
       lead.interest,
+      lead.latestMessageText,
+      lead.latest_message_text,
+      lead.lastMessageText,
       lead.last_message_text,
       lead.latest_message,
     ].join(" ")
@@ -906,6 +937,9 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
           <AppInfoRow
             label="Context"
             value={
+              s(lead.latestMessageText) ||
+              s(lead.latest_message_text) ||
+              s(lead.lastMessageText) ||
               s(lead.last_message_text) ||
               s(lead.latest_message) ||
               "No message preview is available yet."
