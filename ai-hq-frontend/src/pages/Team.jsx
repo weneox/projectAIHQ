@@ -1,41 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Crown, MailPlus, Pencil, Plus, RefreshCw, Search, UserCheck, UserRound, Users, UserX, X } from "lucide-react";
-
-import {
-  createTeamUser,
-  getTeam,
-  updateTeamUserStatus,
-} from "../api/team.js";
-import Button from "../components/ui/Button.jsx";
-import Card from "../components/ui/Card.jsx";
-import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
-import AppIconButton from "../components/ui/AppIconButton.jsx";
-import AppStatCard from "../components/ui/AppStatCard.jsx";
-import {
-  AppFilterAction as AppTeamFilterAction,
-  AppFilterMenuShell as AppTeamFilterMenuShell,
-  AppFilterOption as AppTeamFilterOption,
-  AppFilterSearchInput as AppTeamFilterSearchInput,
-  AppMultiSelectMenu as AppTeamMultiSelectMenu,
-  AppTableHeaderFilter as AppTeamHeaderFilter,
-  normalizeAppFilterList as normalizeTeamFilterList,
-  toggleAppFilterListValue as toggleTeamFilterListValue,
-} from "../components/ui/AppTableFilters.jsx";
-import {
-  AppChoiceButton as AppTeamChoiceButton,
-  AppChoiceGroup as AppTeamChoiceGroup,
-  AppPageField as AppTeamPageField,
-  AppPageInput as AppTeamPageInput,
-} from "../components/ui/AppPageField.jsx";
-import {
-  InlineNotice,
-  LoadingSurface,
-  PageCanvas,
-  PageHeader,
-} from "../components/ui/AppShellPrimitives.jsx";
-import { cx } from "../lib/cx.js";
 
 import { ShieldCheck as PhShieldCheck, UserCirclePlus, UsersThree } from "@phosphor-icons/react";
+
+const TeamEmptyLibraryVisual = () => (
+  <div className="relative mx-auto flex h-[190px] w-[420px] max-w-full items-center justify-center">
+    <div className="absolute h-28 w-72 rounded-full bg-blue-100/70 blur-3xl" />
+    <div className="absolute h-24 w-56 rounded-full bg-violet-100/70 blur-3xl" />
+
+    <UserCirclePlus
+      weight="duotone"
+      className="absolute left-8 h-[86px] w-[86px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
+    />
+
+    <UsersThree
+      weight="duotone"
+      className="relative z-10 h-[160px] w-[160px] text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
+    />
+
+    <PhShieldCheck
+      weight="duotone"
+      className="absolute right-8 h-[86px] w-[86px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
+    />
+  </div>
+);
+
 const PAGE_SIZE = 6;
 const TABLE_MIN_WIDTH = "min-w-[1240px] w-full";
 const TABLE_BODY_MIN_HEIGHT = "min-h-[348px]";
@@ -445,31 +432,7 @@ function RoleText({ role = "" }) {
 
 
 
-function TeamEmptyLibraryVisual() {
-  return (
-    <div className="relative mx-auto h-[190px] w-[420px] max-w-full">
-      <div className="absolute left-1/2 top-8 h-28 w-64 -translate-x-1/2 rounded-full bg-blue-100/70 blur-3xl" />
-      <div className="absolute left-1/2 top-10 h-28 w-56 -translate-x-1/2 rounded-full bg-violet-100/70 blur-3xl" />
 
-      <div className="absolute left-[104px] top-[102px] h-px w-[212px] bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
-
-      <UserCirclePlus
-        weight="duotone"
-        className="absolute left-[32px] top-[68px] h-[88px] w-[88px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
-      />
-
-      <UsersThree
-        weight="duotone"
-        className="absolute left-1/2 top-[10px] h-[160px] w-[160px] -translate-x-1/2 text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
-      />
-
-      <PhShieldCheck
-        weight="duotone"
-        className="absolute right-[32px] top-[68px] h-[88px] w-[88px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
-      />
-    </div>
-  );
-}
 
 
 function EmptyState({ onAddMember, canManage, filtered = false }) {
