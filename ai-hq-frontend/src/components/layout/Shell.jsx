@@ -79,15 +79,7 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
-function obj(value, fallback = {}) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : fallback;
-}
 
-function arr(value, fallback = []) {
-  return Array.isArray(value) ? value : fallback;
-}
 
 function pickFirstString(...values) {
   for (const value of values) {
