@@ -1,4 +1,5 @@
-﻿import { Check, ChevronDown, Search } from "lucide-react";
+/* eslint-disable react-refresh/only-export-components */
+import { Check, ChevronDown, Search } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 
 function s(value, fallback = "") {

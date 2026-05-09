@@ -4,7 +4,7 @@ import { Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
 import { resendVerificationEmail } from "../../api/auth.js";
 import warningIcon from "../../assets/channels/warning.png";
-import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
+import { clearAppAuthContext } from "../../lib/appSession.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
@@ -97,23 +97,7 @@ function pickFirstString(...values) {
   return "";
 }
 
-function isEmailVerified(auth) {
-  return (
-    auth?.user?.emailVerified === true ||
-    auth?.user?.email_verified === true ||
-    auth?.identity?.emailVerified === true ||
-    auth?.identity?.email_verified === true
-  );
-}
 
-function userEmail(auth) {
-  return s(
-    auth?.user?.email ||
-      auth?.identity?.email ||
-      auth?.raw?.user?.email ||
-      ""
-  );
-}
 
 function normalizeWorkspaceName(value, { allowGeneric = false } = {}) {
   const text = s(value);
@@ -227,181 +211,6 @@ function buildHostFallbackMeta() {
   };
 }
 
-function extractWorkspaceMeta(payload) {
-  const root = obj(payload);
-  const bootstrap = obj(root.bootstrap);
-  const session = obj(root.session);
-  const auth = obj(root.auth);
-
-  const workspace = obj(
-    root.workspace ||
-      bootstrap.workspace ||
-      session.workspace ||
-      auth.workspace ||
-      root.account
-  );
-
-  const tenant = obj(
-    root.tenant ||
-      bootstrap.tenant ||
-      workspace.tenant ||
-      session.tenant ||
-      auth.tenant ||
-      bootstrap.workspace?.tenant ||
-      auth.workspace?.tenant
-  );
-
-  const membership = obj(
-    root.membership ||
-      bootstrap.membership ||
-      session.membership ||
-      auth.membership ||
-      arr(root.memberships)[0] ||
-      arr(auth.memberships)[0]
-  );
-
-  const user = obj(
-    root.user ||
-      root.profile ||
-      root.viewer ||
-      bootstrap.viewer ||
-      session.user ||
-      auth.user
-  );
-
-  const workspaceName = pickFirstWorkspaceName(
-    workspace.displayName,
-    workspace.display_name,
-    workspace.companyName,
-    workspace.company_name,
-    workspace.businessName,
-    workspace.business_name,
-    workspace.name,
-    workspace.workspaceName,
-    workspace.workspace_name,
-    workspace.tenantName,
-    workspace.tenant_name,
-
-    tenant.displayName,
-    tenant.display_name,
-    tenant.companyName,
-    tenant.company_name,
-    tenant.businessName,
-    tenant.business_name,
-    tenant.name,
-    tenant.workspaceName,
-    tenant.workspace_name,
-    tenant.tenantName,
-    tenant.tenant_name,
-
-    membership.workspaceName,
-    membership.workspace_name,
-    membership.companyName,
-    membership.company_name,
-    membership.tenantName,
-    membership.tenant_name,
-
-    root.workspaceName,
-    root.workspace_name,
-    root.companyName,
-    root.company_name,
-    root.businessName,
-    root.business_name,
-    root.tenantName,
-    root.tenant_name,
-
-    bootstrap.workspaceName,
-    bootstrap.workspace_name,
-    bootstrap.companyName,
-    bootstrap.company_name,
-    bootstrap.businessName,
-    bootstrap.business_name,
-    bootstrap.tenantName,
-    bootstrap.tenant_name,
-
-    session.workspaceName,
-    session.workspace_name,
-    session.companyName,
-    session.company_name,
-    session.tenantName,
-    session.tenant_name,
-
-    auth.workspaceName,
-    auth.workspace_name,
-    auth.companyName,
-    auth.company_name,
-    auth.tenantName,
-    auth.tenant_name
-  );
-
-  const workspaceKey = pickFirstString(
-    workspace.key,
-    workspace.slug,
-    workspace.workspaceKey,
-    workspace.workspace_key,
-    workspace.tenantKey,
-    workspace.tenant_key,
-
-    tenant.key,
-    tenant.slug,
-    tenant.workspaceKey,
-    tenant.workspace_key,
-    tenant.tenantKey,
-    tenant.tenant_key,
-
-    membership.workspaceKey,
-    membership.workspace_key,
-    membership.tenantKey,
-    membership.tenant_key,
-
-    root.workspaceKey,
-    root.workspace_key,
-    root.tenantKey,
-    root.tenant_key,
-
-    bootstrap.workspaceKey,
-    bootstrap.workspace_key,
-    bootstrap.tenantKey,
-    bootstrap.tenant_key,
-
-    session.workspaceKey,
-    session.workspace_key,
-    session.tenantKey,
-    session.tenant_key,
-
-    auth.workspaceKey,
-    auth.workspace_key,
-    auth.tenantKey,
-    auth.tenant_key
-  );
-
-  const userName = pickFirstString(
-    user.name,
-    user.fullName,
-    user.full_name,
-    user.displayName,
-    user.display_name,
-    root.userName,
-    root.user_name,
-    root.viewerName,
-    root.viewer_name
-  );
-
-  const userEmail = pickFirstString(
-    user.email,
-    user.user_email,
-    root.userEmail,
-    root.user_email,
-    membership.email
-  );
-
-  return {
-    workspaceName,
-    workspaceKey,
-    userName,
-    userEmail,
-  };
-}
 
 function mergeWorkspaceMeta(currentMeta, nextMeta) {
   return {
@@ -509,7 +318,7 @@ function getInitialCollapsedState() {
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);  const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
-  const [workspaceMeta, setWorkspaceMeta] = useState(() =>
+  const [workspaceMeta] = useState(() =>
     mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(

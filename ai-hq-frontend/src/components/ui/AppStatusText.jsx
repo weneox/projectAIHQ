@@ -1,4 +1,5 @@
-﻿import { cx } from "../../lib/cx.js";
+/* eslint-disable react-refresh/only-export-components */
+import { cx } from "../../lib/cx.js";
 
 export function appToneText(tone = "neutral") {
   if (tone === "success") return "text-success";

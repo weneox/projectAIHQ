@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -166,19 +166,26 @@ function statusLabel(status = "") {
   return titleize(safe);
 }
 
-function actionIcon(source = {}) {
+function actionIconElement(source = {}, className = "h-4 w-4") {
   const safe = lower(source.action);
 
-  if (safe.includes("add")) return Plus;
-  if (safe.includes("upload")) return Upload;
-  if (safe.includes("edit")) return Pencil;
+  if (safe.includes("add")) {
+    return <Plus className={className} strokeWidth={2.1} />;
+  }
 
-  return ArrowRight;
+  if (safe.includes("upload")) {
+    return <Upload className={className} strokeWidth={2.1} />;
+  }
+
+  if (safe.includes("edit")) {
+    return <Pencil className={className} strokeWidth={2.1} />;
+  }
+
+  return <ArrowRight className={className} strokeWidth={2.1} />;
 }
 
 function SourceCard({ source, selected = false, onOpen }) {
   const Icon = source.icon || Database;
-  const ActionIcon = actionIcon(source);
 
   return (
     <article
@@ -252,7 +259,7 @@ function SourceCard({ source, selected = false, onOpen }) {
               event.stopPropagation();
               onOpen?.();
             }}
-            rightIcon={<ActionIcon className="h-4 w-4" strokeWidth={2.1} />}
+            rightIcon={actionIconElement(source)}
           >
             {source.action}
           </Button>
@@ -306,7 +313,6 @@ function SourceDialog({ source, open, onClose }) {
   if (!open || !source) return null;
 
   const Icon = source.icon || Database;
-  const ActionIcon = actionIcon(source);
 
   return (
     <AppModal open={open} onClose={onClose} maxWidth="max-w-[720px]">
@@ -389,7 +395,7 @@ function SourceDialog({ source, open, onClose }) {
           type="button"
           size="md"
           variant={lower(source.status) === "connected" ? "secondary" : "primary"}
-          rightIcon={<ActionIcon className="h-4 w-4" strokeWidth={2.1} />}
+          rightIcon={actionIconElement(source)}
         >
           {source.action} source
         </Button>
