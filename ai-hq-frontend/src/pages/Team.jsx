@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Crown, MailPlus, Pencil, Plus, RefreshCw, Search, UserCheck, UserRound, Users, UserX, X, UserPlus, ShieldCheck } from "lucide-react";
+import { Check, ChevronDown, Crown, MailPlus, Pencil, Plus, RefreshCw, Search, UserCheck, UserRound, Users, UserX, X } from "lucide-react";
+import { ShieldCheck as PhShieldCheck, UserCirclePlus, UsersThree } from "@phosphor-icons/react";
 
 import {
   createTeamUser,
@@ -491,7 +492,7 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
             <Users className="h-5 w-5" strokeWidth={1.9} />
           </div>
         ) : (
-          <TeamEmptyVisual />
+          <TeamEmptyLibraryVisual />
         )}
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
