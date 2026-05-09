@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   BookOpen,
-  CheckCircle2,
   Globe2,
   Inbox,
   MessageSquare,
@@ -12,20 +11,65 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
-  UserRound,
 } from "lucide-react";
 
+import wavingIcon from "../../assets/channels/waving.png";
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
-import AppTag from "../../components/ui/AppTag.jsx";
 import AppStatusText from "../../components/ui/AppStatusText.jsx";
 import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
+  PageHeader,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import useProductHome from "../../view-models/useProductHome.js";
 import { cx } from "../../lib/cx.js";
+
+const ACCENTS = {
+  blue: {
+    icon: "text-brand",
+    line: "bg-brand",
+    tint: "hover:bg-[rgba(var(--color-brand),0.04)]",
+    dot: "bg-brand",
+    text: "text-brand",
+  },
+  violet: {
+    icon: "text-violet-600",
+    line: "bg-violet-500",
+    tint: "hover:bg-violet-50/55",
+    dot: "bg-violet-500",
+    text: "text-violet-700",
+  },
+  emerald: {
+    icon: "text-emerald-600",
+    line: "bg-emerald-500",
+    tint: "hover:bg-emerald-50/55",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700",
+  },
+  amber: {
+    icon: "text-amber-600",
+    line: "bg-amber-500",
+    tint: "hover:bg-amber-50/55",
+    dot: "bg-amber-500",
+    text: "text-amber-700",
+  },
+  slate: {
+    icon: "text-slate-700",
+    line: "bg-slate-400",
+    tint: "hover:bg-slate-50",
+    dot: "bg-slate-400",
+    text: "text-slate-700",
+  },
+  orange: {
+    icon: "text-orange-600",
+    line: "bg-orange-500",
+    tint: "hover:bg-orange-50/55",
+    dot: "bg-orange-500",
+    text: "text-orange-700",
+  },
+};
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -135,7 +179,7 @@ function readPossibleLocalName() {
 
       if (name) return name;
     } catch {
-      // ignore local preview keys
+      // Ignore local preview keys.
     }
   }
 
@@ -173,16 +217,35 @@ function statusTone(status = "") {
   return "neutral";
 }
 
+function toneDot(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function toneText(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand") return "text-brand";
+  return "text-text-muted";
+}
+
 function optionalItems(home = {}) {
   return [
     {
       id: "inbox",
       icon: Inbox,
-      title: "Check inbox",
+      accent: ACCENTS.blue,
+      title: "Inbox",
       description:
         unreadCount(home) > 0
-          ? `${unreadCount(home)} unread message${unreadCount(home) === 1 ? "" : "s"} waiting.`
-          : "Open conversations when you want to review customer activity.",
+          ? `${unreadCount(home)} unread message${
+              unreadCount(home) === 1 ? "" : "s"
+            } waiting.`
+          : "Review conversations when needed.",
       status: unreadCount(home) > 0 ? "review" : "optional",
       label: unreadCount(home) > 0 ? "Needs attention" : "Optional",
       path: "/inbox",
@@ -191,11 +254,14 @@ function optionalItems(home = {}) {
     {
       id: "channels",
       icon: Globe2,
-      title: "Connect channels",
+      accent: ACCENTS.violet,
+      title: "Channels",
       description:
         readyChannelCount(home) > 0
-          ? `${readyChannelCount(home)} channel${readyChannelCount(home) === 1 ? "" : "s"} ready for messages.`
-          : "Connect Website Chat, Instagram, Telegram, or WhatsApp when needed.",
+          ? `${readyChannelCount(home)} ready channel${
+              readyChannelCount(home) === 1 ? "" : "s"
+            }.`
+          : "Connect website, Instagram, Telegram, or WhatsApp.",
       status: readyChannelCount(home) > 0 ? "ready" : "optional",
       label: readyChannelCount(home) > 0 ? "Ready" : "Optional",
       path: "/channels",
@@ -204,11 +270,12 @@ function optionalItems(home = {}) {
     {
       id: "business-info",
       icon: ShieldCheck,
-      title: "Review business info",
+      accent: ACCENTS.emerald,
+      title: "Business info",
       description:
         truthReady(home) && runtimeReady(home)
-          ? "Business information is available for assistant answers."
-          : "Keep approved business details here when you want the assistant to answer safely.",
+          ? "Approved information is available."
+          : "Review facts the assistant can use.",
       status: truthReady(home) && runtimeReady(home) ? "ready" : "optional",
       label: truthReady(home) && runtimeReady(home) ? "Ready" : "Optional",
       path: "/truth",
@@ -217,9 +284,9 @@ function optionalItems(home = {}) {
     {
       id: "knowledge",
       icon: BookOpen,
-      title: "Add knowledge",
-      description:
-        "Add documents, FAQs, policies, and notes when the assistant needs more context.",
+      accent: ACCENTS.amber,
+      title: "Knowledge",
+      description: "Add FAQs, documents, policies, and notes.",
       status: "optional",
       label: "Optional",
       path: "/knowledge",
@@ -228,67 +295,89 @@ function optionalItems(home = {}) {
   ];
 }
 
-function QuickShortcut({ icon: Icon, title, description, path, onNavigate }) {
+function quickShortcuts() {
+  return [
+    {
+      icon: MessageSquare,
+      accent: ACCENTS.blue,
+      title: "Customers",
+      description: "Records and context.",
+      path: "/customers",
+    },
+    {
+      icon: Sparkles,
+      accent: ACCENTS.violet,
+      title: "Reports",
+      description: "Performance overview.",
+      path: "/reports",
+    },
+    {
+      icon: Settings2,
+      accent: ACCENTS.slate,
+      title: "Settings",
+      description: "Workspace behavior.",
+      path: "/settings",
+    },
+    {
+      icon: Rocket,
+      accent: ACCENTS.orange,
+      title: "Launch",
+      description: "Release checklist.",
+      path: "/launch",
+    },
+  ];
+}
+
+function HeaderTitle({ name }) {
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(path)}
-      className="group rounded-md border border-line-soft bg-white p-4 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
-    >
-      <div className="flex items-start gap-3.5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text">
-          <Icon className="h-5 w-5" strokeWidth={2.05} />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-text">{title}</div>
-          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            {description}
-          </div>
-        </div>
-
-        <ArrowRight
-          className="mt-1 h-4 w-4 shrink-0 text-text-subtle transition-transform duration-base ease-premium group-hover:translate-x-0.5 group-hover:text-brand"
-          strokeWidth={2.1}
-        />
-      </div>
-    </button>
+    <span className="inline-flex min-w-0 items-center gap-2.5">
+      <span>Hello, {name}</span>
+      <img
+        src={wavingIcon}
+        alt=""
+        draggable="false"
+        className="mt-[1px] h-[29px] w-[29px] shrink-0 object-contain"
+      />
+    </span>
   );
 }
 
-function OptionalActionRow({ item, onNavigate }) {
-  const Icon = item.icon;
-
+function StatusLabel({ tone = "neutral", children }) {
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(item.path)}
-      className="grid w-full gap-4 border-b border-line-soft px-5 py-4 text-left transition-colors duration-base ease-premium last:border-b-0 hover:bg-surface-subtle md:grid-cols-[minmax(0,1fr)_132px] md:items-center"
+    <span
+      className={cx(
+        "inline-flex items-center gap-2 text-[12.5px] font-semibold tracking-[var(--tracking-tight-sm)]",
+        toneText(tone)
+      )}
     >
-      <div className="flex min-w-0 items-start gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text">
-          <Icon className="h-5.5 w-5.5" strokeWidth={2.05} />
-        </div>
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDot(tone))} />
+      {children}
+    </span>
+  );
+}
 
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[14px] font-semibold text-text">{item.title}</div>
-            <AppTag tone={statusTone(item.status)} dot>
-              {item.label}
-            </AppTag>
-          </div>
+function AccentIcon({ icon: Icon, accent, size = "lg" }) {
+  return (
+    <Icon
+      className={cx(
+        "shrink-0",
+        size === "xl" ? "h-[34px] w-[34px]" : "h-[30px] w-[30px]",
+        accent.icon
+      )}
+      strokeWidth={1.85}
+    />
+  );
+}
 
-          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            {item.description}
-          </div>
-        </div>
+function SummaryItem({ label, value, tone = "neutral" }) {
+  return (
+    <div className="flex min-h-[56px] items-center justify-between gap-4 border-b border-line-soft px-4 py-3 last:border-b-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {label}
       </div>
 
-      <div className="flex items-center justify-start gap-2 md:justify-end">
-        <span className="text-[13px] font-semibold text-brand">{item.action}</span>
-        <ArrowRight className="h-4 w-4 text-brand" strokeWidth={2.1} />
-      </div>
-    </button>
+      <AppStatusText tone={tone}>{value}</AppStatusText>
+    </div>
   );
 }
 
@@ -299,46 +388,167 @@ function WorkspaceSummary({ home }) {
   const inboxStatus = inboxUnavailable(home)
     ? "Unavailable"
     : unreadCount(home) > 0
-      ? "Needs attention"
+      ? "Review"
       : "Calm";
 
-  const rows = [
-    {
-      label: "Workspace state",
-      value: live ? "Live" : "Setup mode",
-      tone: live ? "success" : "warning",
-    },
-    {
-      label: "Inbox",
-      value: inboxStatus,
-      tone: unreadCount(home) > 0 ? "warning" : inboxUnavailable(home) ? "danger" : "success",
-    },
-    {
-      label: "Channels",
-      value: `${channelReady}/${Math.max(channelConnected, 1)} ready`,
-      tone: channelReady > 0 ? "success" : "neutral",
-    },
-    {
-      label: "Open conversations",
-      value: openCount(home),
-      tone: openCount(home) > 0 ? "brand" : "neutral",
-    },
-  ];
+  return (
+    <Card padded={false} className="overflow-hidden">
+      <div className="border-b border-line-soft px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-[3px] rounded-full bg-brand" />
+          <div>
+            <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Workspace state
+            </div>
+            <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
+              Current operational snapshot.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <SummaryItem
+        label="Status"
+        value={live ? "Live" : "Setup mode"}
+        tone={live ? "success" : "warning"}
+      />
+      <SummaryItem
+        label="Inbox"
+        value={inboxStatus}
+        tone={
+          unreadCount(home) > 0
+            ? "warning"
+            : inboxUnavailable(home)
+              ? "danger"
+              : "success"
+        }
+      />
+      <SummaryItem
+        label="Channels"
+        value={`${channelReady}/${Math.max(channelConnected, 1)} ready`}
+        tone={channelReady > 0 ? "success" : "neutral"}
+      />
+      <SummaryItem
+        label="Open conversations"
+        value={openCount(home)}
+        tone={openCount(home) > 0 ? "brand" : "neutral"}
+      />
+    </Card>
+  );
+}
+
+function OptionalActionRow({ item, onNavigate }) {
+  const tone = statusTone(item.status);
 
   return (
-    <div className="grid divide-y divide-line-soft rounded-md border border-line-soft bg-white">
-      {rows.map((row) => (
-        <div
-          key={row.label}
-          className="flex items-center justify-between gap-4 px-4 py-3.5"
-        >
-          <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-            {row.label}
-          </span>
+    <button
+      type="button"
+      onClick={() => onNavigate(item.path)}
+      className={cx(
+        "group relative grid w-full gap-4 border-b border-line-soft px-4 py-3.5 text-left transition-colors duration-base ease-premium last:border-b-0 md:grid-cols-[minmax(0,1fr)_112px] md:items-center",
+        item.accent.tint
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          "absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full opacity-80",
+          item.accent.line
+        )}
+      />
 
-          <AppStatusText tone={row.tone}>{row.value}</AppStatusText>
+      <div className="flex min-w-0 items-center gap-4 pl-1.5">
+        <AccentIcon icon={item.icon} accent={item.accent} size="xl" />
+
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+              {item.title}
+            </div>
+
+            <StatusLabel tone={tone}>{item.label}</StatusLabel>
+          </div>
+
+          <div className="mt-1 truncate text-[12.5px] font-medium text-text-muted">
+            {item.description}
+          </div>
         </div>
-      ))}
+      </div>
+
+      <div
+        className={cx(
+          "flex items-center justify-start gap-1.5 text-[13px] font-semibold md:justify-end",
+          item.accent.text
+        )}
+      >
+        <span>{item.action}</span>
+        <ArrowRight
+          className="h-3.5 w-3.5 transition-transform duration-base ease-premium group-hover:translate-x-0.5"
+          strokeWidth={2.15}
+        />
+      </div>
+    </button>
+  );
+}
+
+function QuickShortcut({ icon: Icon, accent, title, description, path, onNavigate }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(path)}
+      className={cx(
+        "group relative flex items-center justify-between gap-3 rounded-md border border-line-soft bg-white px-4 py-3.5 text-left transition-[background-color,border-color] duration-base ease-premium hover:border-line",
+        accent.tint
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          "absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full opacity-75",
+          accent.line
+        )}
+      />
+
+      <div className="flex min-w-0 items-center gap-4 pl-1.5">
+        <AccentIcon icon={Icon} accent={accent} />
+
+        <div className="min-w-0">
+          <div className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+            {title}
+          </div>
+          <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
+            {description}
+          </div>
+        </div>
+      </div>
+
+      <ArrowRight
+        className={cx(
+          "h-4 w-4 shrink-0 transition-transform duration-base ease-premium group-hover:translate-x-0.5",
+          accent.text
+        )}
+        strokeWidth={2.1}
+      />
+    </button>
+  );
+}
+
+function SectionTitle({ title, description, accent = ACCENTS.blue }) {
+  return (
+    <div className="border-b border-line-soft px-4 py-3.5">
+      <div className="flex items-start gap-3">
+        <div className={cx("mt-1 h-7 w-[3px] rounded-full", accent.line)} />
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {title}
+          </div>
+          {description ? (
+            <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
+              {description}
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -351,6 +561,7 @@ export default function ProductHomePage() {
   const name = greetingName(home);
 
   const items = useMemo(() => optionalItems(home), [home]);
+  const shortcuts = useMemo(() => quickShortcuts(), []);
 
   function go(path = "") {
     const target = s(path);
@@ -381,120 +592,80 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <Card padded={false} clip className="overflow-hidden">
-        <div className="grid gap-6 border-b border-line-soft px-6 py-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <AppTag tone={workspaceLive(home) ? "success" : "neutral"} dot>
-                {workspaceLive(home) ? "Workspace live" : "Workspace ready when you are"}
-              </AppTag>
+      <PageHeader
+        title={<HeaderTitle name={name} />}
+        description="Your workspace cockpit for messages, channels, business info, and reports."
+        actions={
+          <>
+            <Button
+              type="button"
+              onClick={() => go("/inbox")}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Open inbox
+            </Button>
 
-              <AppTag tone="neutral">Home</AppTag>
-            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => go("/reports")}
+            >
+              View reports
+            </Button>
 
-            <h1 className="mt-4 text-[34px] font-semibold tracking-[var(--tracking-tight-xl)] text-text md:text-[40px]">
-              Hello, {name}
-            </h1>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => window.location.reload()}
+              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
-            <p className="mt-2 max-w-[760px] text-[14px] font-medium leading-7 text-text-muted">
-              This is your workspace cockpit. Nothing here is mandatory — use the
-              shortcuts below only when you need to check messages, connect a channel,
-              review business info, or look at reports.
-            </p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card padded={false} clip className="overflow-hidden">
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-w-0 border-b border-line-soft xl:border-b-0 xl:border-r">
+              <SectionTitle
+                title="Next steps"
+                description="Only open what you need right now."
+                accent={ACCENTS.blue}
+              />
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="md"
-                onClick={() => go("/inbox")}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                Open inbox
-              </Button>
+              {items.map((item) => (
+                <OptionalActionRow key={item.id} item={item} onNavigate={go} />
+              ))}
+            </section>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => go("/reports")}
-              >
-                View reports
-              </Button>
+            <section className="min-w-0 bg-surface-subtle">
+              <SectionTitle
+                title="Quick access"
+                description="Main surfaces in one place."
+                accent={ACCENTS.violet}
+              />
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => window.location.reload()}
-                leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-              >
-                Refresh
-              </Button>
-            </div>
+              <div className="grid gap-2.5 p-3.5">
+                {shortcuts.map((shortcut) => (
+                  <QuickShortcut
+                    key={shortcut.path}
+                    icon={shortcut.icon}
+                    accent={shortcut.accent}
+                    title={shortcut.title}
+                    description={shortcut.description}
+                    path={shortcut.path}
+                    onNavigate={go}
+                  />
+                ))}
+              </div>
+            </section>
           </div>
+        </Card>
 
-          <WorkspaceSummary home={home} />
-        </div>
-
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="border-b border-line-soft xl:border-b-0 xl:border-r">
-            <div className="border-b border-line-soft px-5 py-4">
-              <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                Optional next steps
-              </div>
-              <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                Small actions you can open whenever they are useful.
-              </div>
-            </div>
-
-            {items.map((item) => (
-              <OptionalActionRow key={item.id} item={item} onNavigate={go} />
-            ))}
-          </section>
-
-          <section className="bg-surface-subtle">
-            <div className="border-b border-line-soft px-5 py-4">
-              <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                Quick access
-              </div>
-              <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                Jump to the surfaces you use most.
-              </div>
-            </div>
-
-            <div className="grid gap-3 p-4">
-              <QuickShortcut
-                icon={MessageSquare}
-                title="Customers"
-                description="Review customer records and context."
-                path="/customers"
-                onNavigate={go}
-              />
-              <QuickShortcut
-                icon={Sparkles}
-                title="Reports"
-                description="See performance and team workload."
-                path="/reports"
-                onNavigate={go}
-              />
-              <QuickShortcut
-                icon={Settings2}
-                title="Settings"
-                description="Change workspace behavior."
-                path="/settings"
-                onNavigate={go}
-              />
-              <QuickShortcut
-                icon={Rocket}
-                title="Launch guide"
-                description="Optional launch preparation path."
-                path="/launch"
-                onNavigate={go}
-              />
-            </div>
-          </section>
-        </div>
-      </Card>
+        <WorkspaceSummary home={home} />
+      </div>
     </PageCanvas>
   );
 }

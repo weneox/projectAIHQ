@@ -137,7 +137,7 @@ function pickFirstWorkspaceName(...values) {
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-  if (path.startsWith("/inbox") || path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/reports") || path.startsWith("/channels") || path.startsWith("/launch") || path.startsWith("/welcome") || path.startsWith("/truth") || path.startsWith("/team")) return "immersive";
+  if (path.startsWith("/home") || path.startsWith("/inbox") || path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/reports") || path.startsWith("/channels") || path.startsWith("/knowledge") || path.startsWith("/settings") || path.startsWith("/launch") || path.startsWith("/welcome") || path.startsWith("/truth") || path.startsWith("/team")) return "immersive";
   return "standard";
 }
 

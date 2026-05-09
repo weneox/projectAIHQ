@@ -45,6 +45,7 @@ import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
+  PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
@@ -365,6 +366,7 @@ function normalizeList(values = []) {
 function toggleListValue(values = [], value = "") {
   return toggleTeamFilterListValue(values, value);
 }
+
 function uniqueOptions(values = [], priority = []) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
   const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
@@ -489,21 +491,27 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
 function HeaderFilter(props) {
   return <AppTeamHeaderFilter {...props} />;
 }
+
 function FilterMenuShell(props) {
   return <AppTeamFilterMenuShell {...props} />;
 }
+
 function FilterSearchInput(props) {
   return <AppTeamFilterSearchInput {...props} />;
 }
+
 function FilterOption(props) {
   return <AppTeamFilterOption {...props} />;
 }
+
 function FilterAction(props) {
   return <AppTeamFilterAction {...props} />;
 }
+
 function MultiSelectMenu(props) {
   return <AppTeamMultiSelectMenu {...props} />;
 }
+
 function UpdatedMenu({
   options,
   selectedValues,
@@ -689,15 +697,19 @@ function PaginationFooter({
 function FieldInput(props) {
   return <AppTeamPageField {...props} />;
 }
+
 function SoftInput(props) {
   return <AppTeamPageInput {...props} />;
 }
+
 function ChoiceButton(props) {
   return <AppTeamChoiceButton {...props} />;
 }
+
 function ChoiceGroup(props) {
   return <AppTeamChoiceGroup {...props} />;
 }
+
 function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
   return (
     <form onSubmit={onSubmit} autoComplete="off" className="grid gap-5">
@@ -1412,44 +1424,36 @@ export default function Team() {
           ) : null}
 
           <section className="space-y-5">
-            <div className="flex flex-col gap-5 border-b border-line-soft px-1 pb-5 pt-1 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <h1 className="text-[30px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  Workspace members
-                </h1>
-                <p className="mt-2 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
-                  Manage the people who can access this workspace and handle
-                  customer operations.
-                </p>
-              </div>
+            <PageHeader
+              title="Workspace members"
+              description="Manage the people who can access this workspace and handle customer operations."
+              actions={
+                <>
+                  <Button
+                    type="button"
+                    onClick={() => setShowAddMember(true)}
+                    disabled={!canManage}
+                    leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
+                  >
+                    Add member
+                  </Button>
 
-              <div className="flex shrink-0 flex-wrap items-center justify-start gap-3 lg:justify-end lg:pt-4">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setShowAddMember(true)}
-                  disabled={!canManage}
-                  leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
-                >
-                  Add member
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  loading={state.refreshing}
-                  onClick={() => load({ refreshing: true })}
-                  leftIcon={
-                    !state.refreshing ? (
-                      <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
-                    ) : undefined
-                  }
-                >
-                  Refresh
-                </Button>
-              </div>
-            </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={state.refreshing}
+                    onClick={() => load({ refreshing: true })}
+                    leftIcon={
+                      !state.refreshing ? (
+                        <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
+                      ) : undefined
+                    }
+                  >
+                    Refresh
+                  </Button>
+                </>
+              }
+            />
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <AppStatCard
@@ -1657,25 +1661,23 @@ export default function Team() {
                     </div>
 
                     {filteredUsers.length ? (
-                      <>
-                        <div
-                          className={cx(
-                            "relative z-10 divide-y divide-line-soft",
-                            TABLE_BODY_MIN_HEIGHT
-                          )}
-                        >
-                          {visibleUsers.map((user) => (
-                            <TeamRow
-                              key={userId(user) || userEmail(user)}
-                              user={user}
-                              busyId={busyId}
-                              canManage={canManage}
-                              onToggleStatus={handleToggleStatus}
-                              onEdit={openEditUser}
-                            />
-                          ))}
-                        </div>
-                      </>
+                      <div
+                        className={cx(
+                          "relative z-10 divide-y divide-line-soft",
+                          TABLE_BODY_MIN_HEIGHT
+                        )}
+                      >
+                        {visibleUsers.map((user) => (
+                          <TeamRow
+                            key={userId(user) || userEmail(user)}
+                            user={user}
+                            busyId={busyId}
+                            canManage={canManage}
+                            onToggleStatus={handleToggleStatus}
+                            onEdit={openEditUser}
+                          />
+                        ))}
+                      </div>
                     ) : (
                       <div className={TABLE_BODY_MIN_HEIGHT}>
                         <EmptyState filtered canManage={canManage} />
@@ -1739,17 +1741,3 @@ export default function Team() {
     </>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

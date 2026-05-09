@@ -6,6 +6,7 @@ const SIZE_CLASS = {
   sm: "ui-button--sm",
   md: "ui-button--md",
   lg: "ui-button--lg",
+  header: "ui-button--header",
   hero: "ui-button--hero",
   auth: "ui-button--auth",
   xl: "ui-button--xl",

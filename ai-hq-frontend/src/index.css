@@ -567,41 +567,44 @@ table {
     font-size: 14px;
   }
 
-  .ui-button--primary {
-    background: rgba(46, 96, 255, 0.28);
-    box-shadow: var(--shadow-button-brand);
-  }
+  
 
-  .ui-button--primary .ui-button__inner {
-    background: rgb(var(--color-brand));
-    color: #fff;
-  }
+.ui-button--primary {
+  background: rgba(46, 96, 255, 0.28);
+  box-shadow: var(--shadow-button-brand);
+}
 
-  .ui-button--primary:not(:disabled):hover {
-    box-shadow: var(--shadow-button-brand-hover);
-  }
+.ui-button--primary .ui-button__inner {
+  background: rgb(var(--color-brand));
+  color: #fff;
+}
 
-  .ui-button--primary:not(:disabled):hover .ui-button__inner,
-  .ui-button--primary:not(:disabled):active .ui-button__inner {
-    background: rgb(var(--color-brand-strong));
-  }
+.ui-button--primary:not(:disabled):hover {
+  box-shadow: var(--shadow-button-brand-hover);
+}
 
-  .ui-button--secondary,
-  .ui-button--outline {
-    background: rgb(var(--color-line-strong));
-    box-shadow: 0 12px 28px -26px rgba(15, 23, 42, 0.18);
-  }
+.ui-button--primary:not(:disabled):hover .ui-button__inner,
+.ui-button--primary:not(:disabled):active .ui-button__inner {
+  background: rgb(var(--color-brand-strong));
+}
 
-  .ui-button--secondary .ui-button__inner,
-  .ui-button--outline .ui-button__inner {
-    background: rgb(var(--color-surface));
-    color: rgb(var(--color-text));
-  }
+  
+.ui-button--secondary,
+.ui-button--outline {
+  background: rgb(var(--color-line-strong));
+  box-shadow: 0 12px 28px -26px rgba(15, 23, 42, 0.18);
+}
 
-  .ui-button--secondary:not(:disabled):hover .ui-button__inner,
-  .ui-button--outline:not(:disabled):hover .ui-button__inner {
-    background: rgb(var(--color-surface-muted));
-  }
+.ui-button--secondary .ui-button__inner,
+.ui-button--outline .ui-button__inner {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+.ui-button--secondary:not(:disabled):hover .ui-button__inner,
+.ui-button--outline:not(:disabled):hover .ui-button__inner {
+  background: rgb(var(--color-surface-muted));
+}
 
   .ui-button--ghost {
     background: transparent;
@@ -618,33 +621,36 @@ table {
     color: rgb(var(--color-text));
   }
 
-  .ui-button--soft {
-    background: rgba(var(--color-brand), 0.18);
-    box-shadow: 0 12px 28px -26px rgba(46, 96, 255, 0.22);
-  }
+  
 
-  .ui-button--soft .ui-button__inner {
-    background: rgba(var(--color-brand), 0.08);
-    color: rgb(var(--color-brand));
-  }
+.ui-button--soft {
+  background: rgba(var(--color-brand), 0.18);
+  box-shadow: 0 12px 28px -26px rgba(46, 96, 255, 0.22);
+}
 
-  .ui-button--soft:not(:disabled):hover .ui-button__inner {
-    background: rgba(var(--color-brand), 0.12);
-  }
+.ui-button--soft .ui-button__inner {
+  background: rgba(var(--color-brand), 0.08);
+  color: rgb(var(--color-brand));
+}
 
-  .ui-button--danger {
-    background: rgba(var(--color-danger), 0.24);
-    box-shadow: 0 14px 32px -24px rgba(190, 24, 93, 0.28);
-  }
+.ui-button--soft:not(:disabled):hover .ui-button__inner {
+  background: rgba(var(--color-brand), 0.12);
+}
 
-  .ui-button--danger .ui-button__inner {
-    background: rgb(var(--color-danger));
-    color: #fff;
-  }
+  
+.ui-button--danger {
+  background: rgba(var(--color-danger), 0.24);
+  box-shadow: 0 14px 32px -24px rgba(190, 24, 93, 0.28);
+}
 
-  .ui-button--danger:not(:disabled):hover .ui-button__inner {
-    background: rgba(var(--color-danger), 0.94);
-  }
+.ui-button--danger .ui-button__inner {
+  background: rgb(var(--color-danger));
+  color: #fff;
+}
+
+.ui-button--danger:not(:disabled):hover .ui-button__inner {
+  background: rgba(var(--color-danger), 0.94);
+}
 
   /* Fields */
   .ui-field-shell {
@@ -1482,3 +1488,68 @@ select:-webkit-autofill:active {
   -webkit-appearance: none;
 }
 /* === team-filter-native-input-fix:end === */
+
+/* Team-sized page header action buttons */
+.app-page-header .ui-button--md .ui-button__inner,
+.app-page-header .ui-button--sm .ui-button__inner {
+  height: 54px;
+  padding-left: 24px;
+  padding-right: 24px;
+  font-size: 15px;
+}
+
+.app-page-header .ui-button--secondary,
+.app-page-header .ui-button--outline {
+  box-shadow: 0 12px 28px -26px rgba(15, 23, 42, 0.18);
+}
+
+/* HARD FORCE TEAM PAGE HEADER CONTRACT */
+.app-page-header-title {
+  font-size: 35.84px !important;
+  font-weight: 620 !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.055em !important;
+  margin: 0 !important;
+}
+
+.app-page-header-description {
+  margin-top: 10px !important;
+  max-width: 760px !important;
+  font-size: 14.5px !important;
+  font-weight: 520 !important;
+  line-height: 24px !important;
+  letter-spacing: -0.012em !important;
+  margin-bottom: 0 !important;
+}
+
+.app-page-header-actions .ui-button__inner {
+  height: 54px !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  font-size: 15px !important;
+}
+
+.app-page-header-actions .ui-button {
+  border-radius: var(--ui-radius-control-outer) !important;
+}
+
+
+/* === page-header-button-size:start === */
+.ui-button--header .ui-button__inner {
+  min-height: 38px;
+  height: 38px;
+  padding-inline: 16px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: var(--tracking-tight-sm);
+  gap: 8px;
+}
+
+.ui-button--header .ui-button__icon svg {
+  width: 15px;
+  height: 15px;
+}
+/* === page-header-button-size:end === */
+

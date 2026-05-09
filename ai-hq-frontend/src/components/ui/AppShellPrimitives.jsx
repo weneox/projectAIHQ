@@ -1,4 +1,9 @@
-import { createElement } from "react";
+import {
+  Children,
+  cloneElement,
+  createElement,
+  isValidElement,
+} from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
@@ -16,28 +21,20 @@ import Badge from "./Badge.jsx";
 
 const NOTICE_TONES = {
   info: {
-    container:
-      "border-line-soft bg-white text-text before:bg-[#173b67]",
-    icon:
-      "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]",
+    container: "border-line-soft bg-white text-text before:bg-[#173b67]",
+    icon: "border-[#7aa9df] bg-[#d8ebff] text-[#173b67]",
   },
   success: {
-    container:
-      "border-line-soft bg-white text-text before:bg-[#155a2f]",
-    icon:
-      "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]",
+    container: "border-line-soft bg-white text-text before:bg-[#155a2f]",
+    icon: "border-[#69c57a] bg-[#d8f3de] text-[#155a2f]",
   },
   warning: {
-    container:
-      "border-line-soft bg-white text-text before:bg-[#5f4a00]",
-    icon:
-      "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]",
+    container: "border-line-soft bg-white text-text before:bg-[#5f4a00]",
+    icon: "border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]",
   },
   danger: {
-    container:
-      "border-line-soft bg-white text-text before:bg-[#6c1f2a]",
-    icon:
-      "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]",
+    container: "border-line-soft bg-white text-text before:bg-[#6c1f2a]",
+    icon: "border-[#df7a86] bg-[#ffd9de] text-[#6c1f2a]",
   },
 };
 
@@ -66,6 +63,7 @@ function resolveSurfaceVariant({ tone = "default", subdued = false }) {
 
 function resolveSurfaceTone({ tone = "default" }) {
   if (tone === "brand-soft") return "brand";
+
   if (
     tone === "info" ||
     tone === "success" ||
@@ -102,19 +100,66 @@ function bannerToneClass(tone = "info") {
   return "border-line-soft bg-white text-text before:bg-[#173b67]";
 }
 
+function unwrapPageHeaderActions(actions) {
+  const items = Children.toArray(actions);
+
+  if (items.length !== 1) return actions;
+
+  const only = items[0];
+
+  if (
+    isValidElement(only) &&
+    only.type === "div" &&
+    String(only.props?.className || "").includes("flex")
+  ) {
+    return only.props.children;
+  }
+
+  return actions;
+}
+
+function normalizePageHeaderActionNode(node) {
+  if (!isValidElement(node)) return node;
+
+  const children =
+    node.props?.children !== undefined
+      ? Children.map(node.props.children, normalizePageHeaderActionNode)
+      : node.props?.children;
+
+  if (node.type === Button) {
+    return cloneElement(node, {
+      ...node.props,
+      size: "header",
+      children,
+    });
+  }
+
+  if (children !== node.props?.children) {
+    return cloneElement(node, {
+      ...node.props,
+      children,
+    });
+  }
+
+  return node;
+}
+
+function normalizePageHeaderActions(actions) {
+  const unwrapped = unwrapPageHeaderActions(actions);
+  return Children.map(unwrapped, normalizePageHeaderActionNode);
+}
+
 export function PageCanvas({ className, children, ...props }) {
   return (
     <div
       {...props}
-      className={cx(
-        "app-page-canvas w-full space-y-4",
-        className
-      )}
+      className={cx("app-page-canvas w-full space-y-4", className)}
     >
       {children}
     </div>
   );
 }
+
 export function PageHeader({
   eyebrow,
   title,
@@ -125,31 +170,31 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "app-page-header flex flex-col gap-4 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
+        "app-page-header flex flex-col gap-5 border-b border-line-soft px-1 pb-5 pt-1 lg:flex-row lg:items-start lg:justify-between",
         className
       )}
     >
-      <div className="max-w-[860px]">
+      <div className="min-w-0">
         {eyebrow ? (
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="font-display text-[1.95rem] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[2.24rem]">
+        <h1 className="text-[30px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
           {title}
         </h1>
 
         {description ? (
-          <p className="mt-2.5 max-w-[760px] text-[14.5px] font-medium leading-6 tracking-[var(--tracking-tight-sm)] text-text-muted">
+          <p className="mt-2 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
             {description}
           </p>
         ) : null}
       </div>
 
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {actions}
+        <div className="flex shrink-0 flex-wrap items-center justify-start gap-3 lg:justify-end lg:pt-4">
+          {normalizePageHeaderActions(actions)}
         </div>
       ) : null}
     </div>
@@ -649,7 +694,10 @@ export function StateSkeletonBlock({ className }) {
   return (
     <div
       aria-hidden="true"
-      className={cx("app-state-skeleton animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle", className)}
+      className={cx(
+        "app-state-skeleton animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle",
+        className
+      )}
     />
   );
 }
@@ -662,7 +710,11 @@ export function SectionLoading({
   compact = false,
 }) {
   return (
-    <Surface className={cx("app-state app-state-loading", className)} tone="muted" shadow="sm">
+    <Surface
+      className={cx("app-state app-state-loading", className)}
+      tone="muted"
+      shadow="sm"
+    >
       <div className="flex items-center gap-3">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-[13px] border border-line bg-surface text-text-subtle shadow-[var(--shadow-inset-top)]">
           <Spin size="small" />
@@ -672,6 +724,7 @@ export function SectionLoading({
           <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>
+
           {description ? (
             <div className="text-[13.5px] font-medium leading-6 text-current/85">
               {description}
@@ -713,6 +766,7 @@ export function Section({
           actions={actions}
         />
       ) : null}
+
       {children}
     </section>
   );
@@ -720,7 +774,10 @@ export function Section({
 
 export function EmptyState({ title, description, action, className }) {
   return (
-    <Surface className={cx("app-state app-empty-state text-center", className)} tone="muted">
+    <Surface
+      className={cx("app-state app-empty-state text-center", className)}
+      tone="muted"
+    >
       <div className="mx-auto flex max-w-[420px] flex-col items-center gap-3 py-4">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-line bg-surface text-text-subtle">
           <Info className="h-4 w-4" strokeWidth={2.1} />
@@ -730,6 +787,7 @@ export function EmptyState({ title, description, action, className }) {
           <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>
+
           {description ? (
             <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
               {description}
@@ -745,16 +803,22 @@ export function EmptyState({ title, description, action, className }) {
 
 export function CompactState({ title, description, action, className }) {
   return (
-    <Surface className={cx("app-state app-compact-state", className)} padded="sm" tone="muted">
+    <Surface
+      className={cx("app-state app-compact-state", className)}
+      padded="sm"
+      tone="muted"
+    >
       <div className="space-y-1.5">
         <div className="text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
           {title}
         </div>
+
         {description ? (
           <div className="text-[13.5px] font-medium leading-5 text-text-muted">
             {description}
           </div>
         ) : null}
+
         {action ? <div className="pt-1">{action}</div> : null}
       </div>
     </Surface>

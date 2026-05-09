@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
-  CheckCircle2,
   ExternalLink,
   Flame,
   Mail,
@@ -979,22 +978,13 @@ export default function Leads() {
     try {
       const response = await listLeads({ limit: 200 });
       const nextLeads = withLocalLeads(normalizeResponse(response));
-
       setLeads(nextLeads);
-      setSelectedKey((current) => {
-        if (
-          current &&
-          nextLeads.some((item, index) => leadKey(item, index) === current)
-        ) {
-          return current;
-        }
-
-        return nextLeads.length ? leadKey(nextLeads[0], 0) : "";
-      });
     } catch (err) {
-      setError(err?.message || "Unable to load leads.");
+      setError(
+        s(err?.payload?.error || err?.payload?.message || err?.message) ||
+          "Leads could not be loaded."
+      );
       setLeads(withLocalLeads([]));
-      setSelectedKey((current) => current || leadKey(LOCAL_LEADS[0], 0));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1002,129 +992,137 @@ export default function Leads() {
   }, []);
 
   useEffect(() => {
-    loadLeads();
+    void loadLeads();
   }, [loadLeads]);
-
-  const sourceOptions = useMemo(
-    () => uniqueOptions(leads.map(leadSource), SOURCE_PRIORITY),
-    [leads]
-  );
-
-  const stageOptions = useMemo(
-    () => uniqueOptions(leads.map(leadStage), STAGE_PRIORITY),
-    [leads]
-  );
-
-  const priorityOptions = useMemo(
-    () => uniqueOptions(leads.map(leadPriority), PRIORITY_PRIORITY),
-    [leads]
-  );
-
-  const statusOptions = useMemo(
-    () => uniqueOptions(leads.map(leadStatus), STATUS_PRIORITY),
-    [leads]
-  );
-
-  const filteredLeads = useMemo(() => {
-    const sources = normalizeAppFilterList(filters.sources);
-    const stages = normalizeAppFilterList(filters.stages);
-    const priorities = normalizeAppFilterList(filters.priorities);
-    const statuses = normalizeAppFilterList(filters.statuses);
-
-    return arr(leads)
-      .filter((lead) =>
-        filters.lead ? lower(leadName(lead)).includes(lower(filters.lead)) : true
-      )
-      .filter((lead) =>
-        filters.contact
-          ? lower(leadContact(lead)).includes(lower(filters.contact))
-          : true
-      )
-      .filter((lead) => (sources.length ? sources.includes(leadSource(lead)) : true))
-      .filter((lead) => (stages.length ? stages.includes(leadStage(lead)) : true))
-      .filter((lead) =>
-        priorities.length ? priorities.includes(leadPriority(lead)) : true
-      )
-      .filter((lead) =>
-        statuses.length ? statuses.includes(leadStatus(lead)) : true
-      )
-      .filter((lead) =>
-        matchesText(
-          lead,
-          [
-            filters.lead,
-            filters.contact,
-            ...sources,
-            ...stages,
-            ...priorities,
-            ...statuses,
-          ].join(" ")
-        )
-      )
-      .sort(leadComparator(filters.updatedSort));
-  }, [leads, filters]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const pageItems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredLeads.slice(start, start + PAGE_SIZE);
-  }, [filteredLeads, safePage]);
 
   useEffect(() => {
     setPage(1);
   }, [filters]);
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const activeFilterCount = countActiveFilters(filters);
 
-  const selectedLead = useMemo(() => {
-    return (
-      leads.find((lead, index) => leadKey(lead, index) === selectedKey) ||
-      filteredLeads[0] ||
-      null
-    );
-  }, [leads, filteredLeads, selectedKey]);
+  const filteredLeads = useMemo(() => {
+    const sourceValues = normalizeAppFilterList(filters.sources);
+    const stageValues = normalizeAppFilterList(filters.stages);
+    const priorityValues = normalizeAppFilterList(filters.priorities);
+    const statusValues = normalizeAppFilterList(filters.statuses);
 
-  const metrics = useMemo(() => {
-    const total = leads.length;
-    const open = leads.filter((lead) =>
-      ["open", "active", "waiting"].includes(leadStatus(lead))
-    ).length;
-    const hot = leads.filter((lead) =>
+    return arr(leads)
+      .filter((lead) => {
+        if (filters.lead && !matchesText(lead, filters.lead)) return false;
+
+        if (filters.contact) {
+          const q = lower(filters.contact);
+          if (!lower(leadContact(lead)).includes(q)) return false;
+        }
+
+        if (sourceValues.length && !sourceValues.includes(leadSource(lead))) {
+          return false;
+        }
+
+        if (stageValues.length && !stageValues.includes(leadStage(lead))) {
+          return false;
+        }
+
+        if (
+          priorityValues.length &&
+          !priorityValues.includes(leadPriority(lead))
+        ) {
+          return false;
+        }
+
+        if (statusValues.length && !statusValues.includes(leadStatus(lead))) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort(leadComparator(filters.updatedSort));
+  }, [filters, leads]);
+
+  const stats = useMemo(() => {
+    const total = arr(leads).length;
+    const hot = arr(leads).filter((lead) =>
       ["urgent", "high"].includes(leadPriority(lead))
     ).length;
-    const value = leads.reduce((sum, lead) => sum + leadValue(lead), 0);
+    const qualified = arr(leads).filter((lead) =>
+      ["qualified", "demo requested", "proposal", "negotiation"].includes(
+        leadStage(lead)
+      )
+    ).length;
+    const won = arr(leads).filter((lead) =>
+      ["won", "converted"].includes(leadStage(lead)) ||
+      ["won", "converted"].includes(leadStatus(lead))
+    ).length;
 
-    return { total, open, hot, value };
+    return { total, hot, qualified, won };
   }, [leads]);
 
-  const activeFilterCount = countActiveFilters(filters);
+  const sourceOptions = useMemo(
+    () => uniqueOptions(arr(leads).map((lead) => leadSource(lead)), SOURCE_PRIORITY),
+    [leads]
+  );
+
+  const stageOptions = useMemo(
+    () => uniqueOptions(arr(leads).map((lead) => leadStage(lead)), STAGE_PRIORITY),
+    [leads]
+  );
+
+  const priorityOptions = useMemo(
+    () =>
+      uniqueOptions(
+        arr(leads).map((lead) => leadPriority(lead)),
+        PRIORITY_PRIORITY
+      ),
+    [leads]
+  );
+
+  const statusOptions = useMemo(
+    () =>
+      uniqueOptions(
+        arr(leads).map((lead) => leadStatus(lead)),
+        STATUS_PRIORITY
+      ),
+    [leads]
+  );
+
+  const totalItems = filteredLeads.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const selectedLead = useMemo(() => {
+    return filteredLeads.find((lead, index) => leadKey(lead, index) === selectedKey) || null;
+  }, [filteredLeads, selectedKey]);
+
+  const visibleLeads = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredLeads.slice(start, start + PAGE_SIZE);
+  }, [currentPage, filteredLeads]);
 
   function patchFilters(next = {}) {
     setFilters((current) => ({ ...current, ...next }));
   }
 
-  function handleOpenThread(threadId = "") {
-    const id = s(threadId);
-    if (!id) return;
-
-    navigate(`/inbox?thread=${encodeURIComponent(id)}`);
+  function clearFilters() {
+    setFilters(createDefaultFilters());
+    setOpenFilter("");
   }
 
-  function handleOpenDetail(lead, key) {
-    setSelectedKey(key || leadKey(lead));
+  function openDetail(lead, key) {
+    setSelectedKey(key);
     setDetailOpen(true);
+  }
+
+  function openThread(threadId = "") {
+    if (!threadId) return;
+    navigate(`/inbox?thread=${encodeURIComponent(threadId)}`);
   }
 
   if (loading) {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading sales pipeline"
-          description="Building a clean operational view of active leads."
+          title="Loading leads"
+          description="Preparing the sales pipeline and lead context."
           rows={5}
         />
       </PageCanvas>
@@ -1135,43 +1133,56 @@ export default function Leads() {
     <PageCanvas>
       <PageHeader
         title="Lead pipeline"
-        description="Track active opportunities, priority, source quality, and conversation handoff from one sales workspace."
+        description="Track active opportunities, source quality, priority, and the conversations that need follow-up."
         actions={
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            loading={refreshing}
-            onClick={() => loadLeads({ silent: true })}
-            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Refresh
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={refreshing}
+              onClick={() => loadLeads({ silent: true })}
+              leftIcon={
+                !refreshing ? (
+                  <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
+                ) : undefined
+              }
+            >
+              Refresh
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => navigate("/inbox")}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Open inbox
+            </Button>
+          </>
         }
       />
 
       {error ? (
         <InlineNotice
-          tone="warning"
-          title="Using local preview data"
+          tone="danger"
+          title="Leads unavailable"
           description={error}
           compact
         />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={Users} label="Total leads" value={metrics.total} />
-        <AppStatCard icon={CheckCircle2} label="Open leads" value={metrics.open} />
-        <AppStatCard icon={Flame} label="High priority" value={metrics.hot} />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AppStatCard icon={Target} label="Total leads" value={stats.total} />
+        <AppStatCard icon={Flame} label="Hot priority" value={stats.hot} />
         <AppStatCard
           icon={TrendingUp}
-          label="Pipeline value"
-          value={formatMoney(metrics.value)}
+          label="Qualified"
+          value={stats.qualified}
         />
+        <AppStatCard icon={Users} label="Won / converted" value={stats.won} />
       </div>
 
       <LeadsTable
-        leads={pageItems}
+        leads={visibleLeads}
         selectedKey={selectedKey}
         filters={filters}
         openFilter={openFilter}
@@ -1179,28 +1190,31 @@ export default function Leads() {
         stageOptions={stageOptions}
         priorityOptions={priorityOptions}
         statusOptions={statusOptions}
-        activeFilterCount={activeFilterCount}
         onOpenFilter={setOpenFilter}
         onPatchFilters={patchFilters}
-        onClearFilters={() => setFilters(createDefaultFilters())}
-        onOpenThread={handleOpenThread}
-        onOpenDetail={handleOpenDetail}
+        onClearFilters={clearFilters}
+        activeFilterCount={activeFilterCount}
+        onOpenThread={openThread}
+        onOpenDetail={openDetail}
       />
 
-      <AppPaginationFooter
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalItems={filteredLeads.length}
-        pageSize={PAGE_SIZE}
-        filtered={activeFilterCount > 0}
-        onPageChange={setPage}
-      />
+      {totalItems > PAGE_SIZE ? (
+        <AppPaginationFooter
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={PAGE_SIZE}
+          filtered={activeFilterCount > 0}
+          minWidthClass="w-full"
+          onPageChange={setPage}
+        />
+      ) : null}
 
       <LeadDetailOverlay
-        open={detailOpen}
         lead={selectedLead}
+        open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        onOpenThread={handleOpenThread}
+        onOpenThread={openThread}
       />
     </PageCanvas>
   );

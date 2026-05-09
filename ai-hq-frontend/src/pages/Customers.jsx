@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
-  CircleDollarSign,
   Mail,
   MessageCircle,
   Phone,
@@ -183,40 +182,6 @@ const LOCAL_CUSTOMERS = [
     created_at: daysAgo(13),
     updated_at: daysAgo(2),
     last_message_text: "Approved the first milestone.",
-  },
-  {
-    id: "local_customer_07",
-    full_name: "Theo Knight",
-    email: "theo@knightlegal.co",
-    phone: "+44 7711 920 144",
-    username: "theoknight",
-    source: "email",
-    stage: "lost",
-    status: "closed",
-    value: 2400,
-    interest: "Legal intake automation",
-    owner: "Emil",
-    inbox_thread_id: "",
-    created_at: daysAgo(17),
-    updated_at: daysAgo(7),
-    last_message_text: "Budget postponed until next quarter.",
-  },
-  {
-    id: "local_customer_08",
-    full_name: "Nigar Aliyeva",
-    email: "ops@weneox.com",
-    phone: "",
-    username: "",
-    source: "website",
-    stage: "qualified",
-    status: "open",
-    value: 3800,
-    interest: "Automation operations",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_08",
-    created_at: daysAgo(3),
-    updated_at: daysAgo(0),
-    last_message_text: "Asked for a customer operations system.",
   },
 ];
 
@@ -477,24 +442,6 @@ function statusTone(status = "") {
   return "brand";
 }
 
-function matchesText(customer = {}, query = "") {
-  const q = lower(query);
-  if (!q) return true;
-
-  return lower(
-    [
-      customerName(customer),
-      customerContact(customer),
-      titleize(customerSource(customer)),
-      titleize(customerStage(customer)),
-      titleize(customerStatus(customer)),
-      customer.interest,
-      customer.owner,
-      customer.assigned_to,
-    ].join(" ")
-  ).includes(q);
-}
-
 function uniqueOptions(values = [], priority = []) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
   const unique = [
@@ -543,6 +490,24 @@ function customerComparator(sortValue = "newest") {
     if (sortValue === "oldest") return aTime - bTime;
     return bTime - aTime;
   };
+}
+
+function matchesCustomerText(customer = {}, query = "") {
+  const q = lower(query);
+  if (!q) return true;
+
+  return lower(
+    [
+      customerName(customer),
+      customerContact(customer),
+      titleize(customerSource(customer)),
+      titleize(customerStage(customer)),
+      titleize(customerStatus(customer)),
+      customer.interest,
+      customer.owner,
+      customer.assigned_to,
+    ].join(" ")
+  ).includes(q);
 }
 
 function CustomerIdentity({ customer }) {
@@ -1016,7 +981,7 @@ export default function Customers() {
   const [selectedKey, setSelectedKey] = useState("");
   const [openFilter, setOpenFilter] = useState("");
   const [filters, setFilters] = useState(() => createDefaultFilters());
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -1033,26 +998,13 @@ export default function Customers() {
     try {
       const response = await listLeads({ limit: 200 });
       const nextCustomers = withLocalCustomers(normalizeResponse(response));
-
       setCustomers(nextCustomers);
-      setSelectedKey((current) => {
-        if (
-          current &&
-          nextCustomers.some(
-            (item, index) => customerKey(item, index) === current
-          )
-        ) {
-          return current;
-        }
-
-        return nextCustomers.length ? customerKey(nextCustomers[0], 0) : "";
-      });
     } catch (err) {
-      const fallback = withLocalCustomers([]);
-
-      setError(err?.message || "Unable to load customers.");
-      setCustomers(fallback);
-      setSelectedKey((current) => current || customerKey(fallback[0], 0));
+      setError(
+        s(err?.payload?.error || err?.payload?.message || err?.message) ||
+          "Customers could not be loaded."
+      );
+      setCustomers(withLocalCustomers([]));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1060,123 +1012,116 @@ export default function Customers() {
   }, []);
 
   useEffect(() => {
-    loadCustomers();
+    void loadCustomers();
   }, [loadCustomers]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  const activeFilterCount = countActiveFilters(filters);
+
+  const filteredCustomers = useMemo(() => {
+    const sourceValues = normalizeAppFilterList(filters.sources);
+    const stageValues = normalizeAppFilterList(filters.stages);
+    const statusValues = normalizeAppFilterList(filters.statuses);
+
+    return arr(customers)
+      .filter((customer) => {
+        if (filters.customer && !matchesCustomerText(customer, filters.customer)) {
+          return false;
+        }
+
+        if (filters.contact) {
+          const q = lower(filters.contact);
+          if (!lower(customerContact(customer)).includes(q)) return false;
+        }
+
+        if (
+          sourceValues.length &&
+          !sourceValues.includes(customerSource(customer))
+        ) {
+          return false;
+        }
+
+        if (stageValues.length && !stageValues.includes(customerStage(customer))) {
+          return false;
+        }
+
+        if (
+          statusValues.length &&
+          !statusValues.includes(customerStatus(customer))
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort(customerComparator(filters.updatedSort));
+  }, [customers, filters]);
+
+  const stats = useMemo(() => {
+    const total = arr(customers).length;
+    const engaged = arr(customers).filter((customer) =>
+      ["qualified", "demo requested", "proposal", "won"].includes(
+        customerStage(customer)
+      )
+    ).length;
+    const won = arr(customers).filter((customer) =>
+      ["won", "converted"].includes(customerStage(customer)) ||
+      ["won", "converted"].includes(customerStatus(customer))
+    ).length;
+    const value = arr(customers).reduce(
+      (sum, customer) => sum + customerValue(customer),
+      0
+    );
+
+    return { total, engaged, won, value };
+  }, [customers]);
+
   const sourceOptions = useMemo(
-    () => uniqueOptions(customers.map(customerSource), SOURCE_PRIORITY),
+    () =>
+      uniqueOptions(
+        arr(customers).map((customer) => customerSource(customer)),
+        SOURCE_PRIORITY
+      ),
     [customers]
   );
 
   const stageOptions = useMemo(
-    () => uniqueOptions(customers.map(customerStage), STAGE_PRIORITY),
+    () =>
+      uniqueOptions(
+        arr(customers).map((customer) => customerStage(customer)),
+        STAGE_PRIORITY
+      ),
     [customers]
   );
 
   const statusOptions = useMemo(
-    () => uniqueOptions(customers.map(customerStatus), STATUS_PRIORITY),
+    () =>
+      uniqueOptions(
+        arr(customers).map((customer) => customerStatus(customer)),
+        STATUS_PRIORITY
+      ),
     [customers]
   );
 
-  const filteredCustomers = useMemo(() => {
-    const sources = normalizeAppFilterList(filters.sources);
-    const stages = normalizeAppFilterList(filters.stages);
-    const statuses = normalizeAppFilterList(filters.statuses);
-
-    return arr(customers)
-      .filter((customer) =>
-        filters.customer
-          ? lower(customerName(customer)).includes(lower(filters.customer))
-          : true
-      )
-      .filter((customer) =>
-        filters.contact
-          ? lower(customerContact(customer)).includes(lower(filters.contact))
-          : true
-      )
-      .filter((customer) =>
-        sources.length ? sources.includes(customerSource(customer)) : true
-      )
-      .filter((customer) =>
-        stages.length ? stages.includes(customerStage(customer)) : true
-      )
-      .filter((customer) =>
-        statuses.length ? statuses.includes(customerStatus(customer)) : true
-      )
-      .filter((customer) =>
-        matchesText(
-          customer,
-          [
-            filters.customer,
-            filters.contact,
-            ...sources,
-            ...stages,
-            ...statuses,
-          ].join(" ")
-        )
-      )
-      .sort(customerComparator(filters.updatedSort));
-  }, [customers, filters]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const pageItems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredCustomers.slice(start, start + PAGE_SIZE);
-  }, [filteredCustomers, safePage]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [
-    filters.customer,
-    filters.contact,
-    filters.sources,
-    filters.stages,
-    filters.statuses,
-    filters.updatedSort,
-  ]);
-
-  useEffect(() => {
-    setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-
-  const activeFilterCount = countActiveFilters(filters);
+  const totalItems = filteredCustomers.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const visibleCustomers = filteredCustomers.slice(
+    pageStart,
+    pageStart + PAGE_SIZE
+  );
 
   const selectedCustomer = useMemo(() => {
     return (
       filteredCustomers.find(
         (customer, index) => customerKey(customer, index) === selectedKey
-      ) ||
-      customers.find(
-        (customer, index) => customerKey(customer, index) === selectedKey
-      ) ||
-      null
+      ) || null
     );
-  }, [customers, filteredCustomers, selectedKey]);
-
-  const stats = useMemo(() => {
-    const items = arr(customers);
-    const engaged = items.filter((customer) =>
-      ["open", "active", "converted"].includes(customerStatus(customer))
-    ).length;
-    const won = items.filter(
-      (customer) =>
-        ["won", "converted"].includes(customerStage(customer)) ||
-        ["won", "converted"].includes(customerStatus(customer))
-    ).length;
-    const value = items.reduce(
-      (total, customer) => total + customerValue(customer),
-      0
-    );
-
-    return {
-      total: items.length,
-      engaged,
-      won,
-      value,
-    };
-  }, [customers]);
+  }, [filteredCustomers, selectedKey]);
 
   function patchFilters(next = {}) {
     setFilters((current) => ({ ...current, ...next }));
@@ -1192,10 +1137,8 @@ export default function Customers() {
   }
 
   function openThread(threadId = "") {
-    const safeThreadId = s(threadId);
-    if (!safeThreadId) return;
-
-    navigate(`/inbox?threadId=${encodeURIComponent(safeThreadId)}`);
+    if (!threadId) return;
+    navigate(`/inbox?thread=${encodeURIComponent(threadId)}`);
   }
 
   if (loading) {
@@ -1213,7 +1156,6 @@ export default function Customers() {
   return (
     <PageCanvas>
       <PageHeader
-        eyebrow="Customer operations"
         title="Customer intelligence"
         description="Track who is interested, where they came from, what stage they are in, and which conversation needs action."
         actions={
@@ -1221,7 +1163,6 @@ export default function Customers() {
             <Button
               type="button"
               variant="secondary"
-              size="md"
               loading={refreshing}
               onClick={() => loadCustomers({ silent: true })}
               leftIcon={
@@ -1235,7 +1176,6 @@ export default function Customers() {
 
             <Button
               type="button"
-              size="md"
               onClick={() => navigate("/inbox")}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
             >
@@ -1254,7 +1194,7 @@ export default function Customers() {
         />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AppStatCard icon={Users} label="Directory records" value={stats.total} />
         <AppStatCard
           icon={CheckCircle2}
@@ -1263,14 +1203,14 @@ export default function Customers() {
         />
         <AppStatCard icon={Trophy} label="Won accounts" value={stats.won} />
         <AppStatCard
-          icon={CircleDollarSign}
+          icon={MessageCircle}
           label="Pipeline value"
           value={formatMoney(stats.value)}
         />
       </div>
 
       <CustomerWorkspace
-        customers={pageItems}
+        customers={visibleCustomers}
         selectedCustomer={selectedCustomer}
         selectedKey={selectedKey}
         filters={filters}
@@ -1281,13 +1221,13 @@ export default function Customers() {
         activeFilterCount={activeFilterCount}
         currentPage={safePage}
         totalPages={totalPages}
-        totalItems={filteredCustomers.length}
+        totalItems={totalItems}
         onOpenFilter={setOpenFilter}
         onPatchFilters={patchFilters}
         onClearFilters={clearFilters}
         onOpenDetail={openDetail}
         onOpenThread={openThread}
-        onPageChange={setPage}
+        onPageChange={setCurrentPage}
       />
     </PageCanvas>
   );
