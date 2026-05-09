@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -25,6 +25,7 @@ import Card from "../components/ui/Card.jsx";
 import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
 import AppIconButton from "../components/ui/AppIconButton.jsx";
 import AppStatCard from "../components/ui/AppStatCard.jsx";
+import { AppPageInput as AppTeamPageInput } from "../components/ui/AppPageField.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -116,12 +117,12 @@ function updatedLabel(user = {}) {
 
 function displayUserId(value = "") {
   const raw = s(value);
-  if (!raw) return "—";
+  if (!raw) return "â€”";
 
   const cleaned = raw.replace(/^user_local_/, "");
   if (cleaned.length <= 18) return cleaned;
 
-  return `…${cleaned.slice(-14)}`;
+  return `â€¦${cleaned.slice(-14)}`;
 }
 
 function isLocalDesignMode() {
@@ -716,7 +717,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
       </div>
 
       <div className="px-4 text-[12.5px] font-medium text-text-subtle">
-        {updated || "—"}
+        {updated || "â€”"}
       </div>
 
       <div className="flex items-center justify-end gap-2 px-4">
@@ -808,32 +809,9 @@ function FieldInput({ label, children }) {
   );
 }
 
-function SoftInput({
-  value,
-  onChange,
-  placeholder = "",
-  disabled = false,
-  autoComplete = "new-password",
-  name = "",
-}) {
-  return (
-    <div className="team-soft-control flex h-11 items-center rounded-md bg-white px-3.5 transition-[background-color,box-shadow] duration-150 ease-premium">
-      <input
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoComplete={autoComplete}
-        autoCorrect="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        name={name || undefined}
-        className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[13.5px] font-semibold text-text outline-none ring-0 shadow-none placeholder:text-text-subtle disabled:cursor-not-allowed focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
-      />
-    </div>
-  );
+function SoftInput(props) {
+  return <AppTeamPageInput {...props} />;
 }
-
 function ChoiceButton({ selected, disabled = false, children, onClick }) {
   return (
     <button
@@ -1896,3 +1874,6 @@ export default function Team() {
     </>
   );
 }
+
+
+
