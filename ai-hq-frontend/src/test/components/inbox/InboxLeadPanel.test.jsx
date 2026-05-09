@@ -23,6 +23,6 @@ describe("InboxLeadPanel", () => {
     );
 
     expect(screen.getByText(/related context is temporarily unavailable/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /refresh context/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /close details/i })).toBeInTheDocument();
   });
 });

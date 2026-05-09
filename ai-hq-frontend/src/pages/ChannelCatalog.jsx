@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -374,7 +374,7 @@ export default function ChannelCatalog() {
   return (
     <PageCanvas>
       <PageHeader
-        title="Channel marketplace"
+        title="Channel catalog"
         description="Connect the places where customers message you and route every conversation into the workspace."
       />
 
