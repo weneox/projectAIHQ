@@ -91,9 +91,6 @@ const INITIAL_SETTINGS = {
   environment: "Local workspace",
 };
 
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
-}
 
 function SettingRow({ icon: Icon, title, description, children, last = false }) {
   return (
