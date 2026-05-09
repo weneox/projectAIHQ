@@ -1,4 +1,4 @@
-﻿import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -125,7 +125,7 @@ describe("App shell smoke", () => {
 
   it.each([
     ["/login", "Login Page"],
-    ["/admin/login", "Admin Login Page"],
+    ["/admin/login", "App Entry Redirect"],
     ["/select-workspace", "Select Workspace Page"],
   ])("renders %s from the top-level route tree", async (path, text) => {
     window.history.replaceState({}, "", path);

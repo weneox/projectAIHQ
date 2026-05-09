@@ -32,6 +32,10 @@ describe("Sidebar", () => {
       "href",
       "/customers"
     );
+    expect(screen.getByRole("link", { name: /leads 5/i })).toHaveAttribute(
+      "href",
+      "/leads"
+    );
     expect(screen.getByRole("link", { name: /^reports$/i })).toHaveAttribute(
       "href",
       "/reports"
@@ -61,6 +65,7 @@ describe("Sidebar", () => {
       "/launch",
       "/inbox",
       "/customers",
+      "/leads",
       "/reports",
       "/channels",
       "/truth",
@@ -78,7 +83,6 @@ describe("Sidebar", () => {
       "/voice",
       "/workspace",
       "/publish",
-      "/leads",
       "/proposals",
       "/executions",
     ]) {
