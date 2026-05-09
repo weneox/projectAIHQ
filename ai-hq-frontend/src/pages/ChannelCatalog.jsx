@@ -1,23 +1,23 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
   Globe2,
+  Instagram,
   Mail,
   MessageCircle,
   Plug,
-  RefreshCw,
-  Search,
+  Send,
   ShieldAlert,
   Smartphone,
+  X,
 } from "lucide-react";
 
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
-import Input from "../components/ui/Input.jsx";
-import AppIcon from "../components/ui/AppIcon.jsx";
-import AppStatusText from "../components/ui/AppStatusText.jsx";
+import AppTag from "../components/ui/AppTag.jsx";
 import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../lib/cx.js";
 
 const CHANNELS = [
   {
@@ -26,7 +26,11 @@ const CHANNELS = [
     type: "Website",
     status: "connected",
     health: "ready",
+    icon: Globe2,
     description: "Capture website visitors and route conversations into Inbox.",
+    setupNote: "Widget is already installed and ready to receive conversations.",
+    connects: ["Website widget", "Inbox routing", "Lead capture"],
+    requirements: ["Website domain", "Widget installation", "Workspace inbox"],
   },
   {
     id: "instagram",
@@ -34,7 +38,11 @@ const CHANNELS = [
     type: "Social",
     status: "connected",
     health: "ready",
+    icon: Instagram,
     description: "Connect Instagram DMs and qualify social conversations.",
+    setupNote: "Instagram permissions are active for this workspace.",
+    connects: ["Instagram DMs", "Conversation history", "Lead qualification"],
+    requirements: ["Instagram Business account", "Meta permission", "Connected page"],
   },
   {
     id: "facebook",
@@ -42,7 +50,11 @@ const CHANNELS = [
     type: "Social",
     status: "pending",
     health: "action required",
+    icon: MessageCircle,
     description: "Receive Facebook page messages after permission review.",
+    setupNote: "Continue setup to finish page permissions.",
+    connects: ["Facebook page messages", "Inbox routing", "Customer handoff"],
+    requirements: ["Facebook page", "Meta permission", "Page admin access"],
   },
   {
     id: "telegram",
@@ -50,7 +62,11 @@ const CHANNELS = [
     type: "Messaging",
     status: "connected",
     health: "ready",
+    icon: Send,
     description: "Route Telegram conversations into your workspace inbox.",
+    setupNote: "Telegram bot is connected and ready.",
+    connects: ["Telegram bot", "Inbox routing", "Message automation"],
+    requirements: ["Telegram bot token", "Workspace routing", "Webhook access"],
   },
   {
     id: "whatsapp",
@@ -58,7 +74,11 @@ const CHANNELS = [
     type: "Messaging",
     status: "not connected",
     health: "disabled",
+    icon: Smartphone,
     description: "Connect WhatsApp Business for customer messaging.",
+    setupNote: "Connect a WhatsApp Business account to start receiving messages.",
+    connects: ["WhatsApp Business", "Customer conversations", "Inbox routing"],
+    requirements: ["WhatsApp Business account", "Meta business verification", "Phone number"],
   },
   {
     id: "email",
@@ -66,11 +86,13 @@ const CHANNELS = [
     type: "Email",
     status: "pending",
     health: "paused",
+    icon: Mail,
     description: "Send follow-up emails and operational handoff messages.",
+    setupNote: "Email setup is paused until sender configuration is completed.",
+    connects: ["Outbound email", "Follow-up messages", "Customer handoff"],
+    requirements: ["Sender address", "Domain verification", "Email provider access"],
   },
 ];
-
-const CATEGORIES = ["All", "Website", "Social", "Messaging", "Email"];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -86,60 +108,6 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function channelIcon(type = "") {
-  const safe = lower(type);
-
-  if (safe === "website") return Globe2;
-  if (safe === "social") return MessageCircle;
-  if (safe === "messaging") return Smartphone;
-  if (safe === "email") return Mail;
-
-  return Plug;
-}
-
-function statusTone(status = "") {
-  const safe = lower(status);
-
-  if (safe === "connected") return "success";
-  if (safe === "pending") return "warning";
-  return "neutral";
-}
-
-function healthSignal(channel = {}) {
-  const status = lower(channel.status);
-  const health = lower(channel.health);
-
-  if (status === "connected" && health === "ready") {
-    return {
-      icon: CheckCircle2,
-      text: "Ready",
-      className: "text-success",
-    };
-  }
-
-  if (health === "action required") {
-    return {
-      icon: ShieldAlert,
-      text: "Needs setup",
-      className: "text-warning",
-    };
-  }
-
-  if (status === "pending") {
-    return {
-      icon: ShieldAlert,
-      text: "Setup paused",
-      className: "text-brand",
-    };
-  }
-
-  return {
-    icon: Plug,
-    text: "Not connected",
-    className: "text-text-muted",
-  };
-}
-
 function actionLabel(channel = {}) {
   const status = lower(channel.status);
 
@@ -153,168 +121,292 @@ function actionVariant(channel = {}) {
   return lower(channel.status) === "connected" ? "secondary" : "primary";
 }
 
-function matchesChannel(channel = {}, query = "") {
-  const q = lower(query);
-  if (!q) return true;
+function statusTone(status = "") {
+  const safe = lower(status);
 
-  return lower(
-    [
-      channel.name,
-      channel.type,
-      channel.status,
-      channel.health,
-      channel.description,
-      actionLabel(channel),
-    ].join(" ")
-  ).includes(q);
+  if (safe === "connected") return "success";
+  if (safe === "pending") return "warning";
+
+  return "neutral";
 }
 
-function ChannelRow({ channel }) {
-  const Icon = channelIcon(channel.type);
+function healthSignal(channel = {}) {
+  const status = lower(channel.status);
+  const health = lower(channel.health);
+
+  if (status === "connected" && health === "ready") {
+    return {
+      icon: CheckCircle2,
+      label: "Ready",
+      tone: "success",
+      className: "text-success",
+    };
+  }
+
+  if (health === "action required") {
+    return {
+      icon: ShieldAlert,
+      label: "Needs setup",
+      tone: "warning",
+      className: "text-warning",
+    };
+  }
+
+  if (status === "pending") {
+    return {
+      icon: ShieldAlert,
+      label: "Setup paused",
+      tone: "warning",
+      className: "text-warning",
+    };
+  }
+
+  return {
+    icon: Plug,
+    label: "Not connected",
+    tone: "neutral",
+    className: "text-text-muted",
+  };
+}
+
+function ChannelCard({ channel, selected = false, onOpen }) {
+  const Icon = channel.icon || Plug;
   const signal = healthSignal(channel);
   const SignalIcon = signal.icon;
 
   return (
-    <div className="grid min-h-[76px] grid-cols-[minmax(240px,0.9fr)_minmax(280px,1fr)_160px_132px] items-center gap-4 border-b border-line-soft px-5 py-3 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-4">
-        <AppIcon
-          icon={Icon}
-          size="lg"
-          tone="text"
-          strokeWidth={2.05}
-          className="shrink-0"
-        />
-
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen?.();
+        }
+      }}
+      className={cx(
+        "group cursor-pointer rounded-md border bg-white p-5 transition-[background-color,border-color,box-shadow,transform] duration-base ease-premium",
+        selected
+          ? "border-brand shadow-[inset_3px_0_0_rgb(var(--color-brand)),0_18px_34px_-30px_rgba(37,99,235,0.62)]"
+          : "border-line-soft hover:border-line hover:bg-surface-subtle hover:shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
+      )}
+    >
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_150px] xl:items-center">
         <div className="min-w-0">
-          <div className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-            {channel.name}
-          </div>
-          <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-            {channel.type}
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center text-text">
+              <Icon className="h-9 w-9" strokeWidth={1.85} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  {channel.name}
+                </h3>
+
+                <AppTag tone={statusTone(channel.status)}>
+                  {titleize(channel.status)}
+                </AppTag>
+              </div>
+
+              <p className="mt-1.5 max-w-[680px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {channel.description}
+              </p>
+
+              <div className="mt-4 border-t border-line-soft pt-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <SignalIcon
+                      className={cx("h-4 w-4 shrink-0", signal.className)}
+                      strokeWidth={2.1}
+                    />
+                    <span className={cx("text-[12.5px] font-semibold", signal.className)}>
+                      {signal.label}
+                    </span>
+                  </div>
+
+                  <div className="text-[12.5px] font-medium text-text-muted">
+                    {channel.type}
+                  </div>
+
+                  <div className="min-w-0 truncate text-[12.5px] font-medium text-text-muted">
+                    {channel.setupNote}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
+        <div className="flex justify-start xl:justify-end">
+          <Button
+            type="button"
+            size="md"
+            variant={actionVariant(channel)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen?.();
+            }}
+            rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {actionLabel(channel)}
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DetailList({ title, items }) {
+  return (
+    <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {title}
       </div>
 
-      <div className="min-w-0 truncate text-[13px] font-medium text-text-muted">
-        {channel.description}
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2">
-        <SignalIcon className={`h-4 w-4 shrink-0 ${signal.className}`} strokeWidth={2.1} />
-        <span className={`truncate text-[12.5px] font-semibold ${signal.className}`}>
-          {signal.text}
-        </span>
-      </div>
-
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          size="sm"
-          variant={actionVariant(channel)}
-          rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.15} />}
-        >
-          {actionLabel(channel)}
-        </Button>
+      <div className="mt-3 grid gap-2">
+        {items.map((item) => (
+          <div key={item} className="flex items-center gap-2 text-[13px] font-medium text-text">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={2.05} />
+            <span className="min-w-0">{item}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-export default function ChannelCatalog() {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
+function ConnectDialog({ channel, open, onClose }) {
+  if (!open || !channel) return null;
 
-  const filteredChannels = useMemo(() => {
-    return CHANNELS.filter((channel) =>
-      category === "All" ? true : channel.type === category
-    ).filter((channel) => matchesChannel(channel, query));
-  }, [category, query]);
+  const Icon = channel.icon || Plug;
+  const signal = healthSignal(channel);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
+      <div
+        role="presentation"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+
+      <Card
+        padded={false}
+        clip
+        className="relative z-[81] w-full max-w-[620px] shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
+      >
+        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
+              <Icon className="h-11 w-11" strokeWidth={1.78} />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+                Channel setup
+              </div>
+
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {channel.name}
+              </h2>
+
+              <p className="mt-2 max-w-[440px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {channel.description}
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <AppTag tone={statusTone(channel.status)}>
+                  {titleize(channel.status)}
+                </AppTag>
+                <AppTag tone={signal.tone} dot>
+                  {signal.label}
+                </AppTag>
+                <AppTag tone="neutral">{channel.type}</AppTag>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
+            aria-label="Close channel setup"
+          >
+            <X className="h-4 w-4" strokeWidth={2.1} />
+          </button>
+        </div>
+
+        <div className="grid gap-4 p-6">
+          <div className="rounded-md border border-line-soft bg-white p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Setup note
+            </div>
+            <div className="mt-2 text-[13.5px] font-medium leading-6 text-text">
+              {channel.setupNote}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailList title="This connects" items={channel.connects} />
+            <DetailList title="Requirements" items={channel.requirements} />
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-surface-subtle p-5 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            size="md"
+            rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {actionLabel(channel)} channel
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export default function ChannelCatalog() {
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [dialogChannel, setDialogChannel] = useState(null);
+
+  const selectedChannel = useMemo(() => {
+    return CHANNELS.find((channel) => channel.id === selectedChannelId) || null;
+  }, [selectedChannelId]);
+
+  function openChannel(channel) {
+    setSelectedChannelId(channel.id);
+    setDialogChannel(channel);
+  }
 
   return (
     <PageCanvas>
       <PageHeader
-        title="Channel catalog"
-        description="Connect messaging, social, website, and email channels to your workspace."
-        actions={
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Refresh
-          </Button>
-        }
+        title="Channel marketplace"
+        description="Connect the places where customers message you and route every conversation into the workspace."
       />
 
-      <div className="flex flex-col gap-4 border-b border-line-soft pb-5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((item) => (
-            <Button
-              key={item}
-              type="button"
-              size="sm"
-              variant={category === item ? "primary" : "ghost"}
-              onClick={() => setCategory(item)}
-            >
-              {item}
-            </Button>
-          ))}
-        </div>
-
-        <div className="w-full xl:w-[380px]">
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search channels..."
-            appearance="quiet"
-            leftIcon={<Search className="h-4 w-4" strokeWidth={2.1} />}
+      <div className="grid gap-3">
+        {CHANNELS.map((channel) => (
+          <ChannelCard
+            key={channel.id}
+            channel={channel}
+            selected={selectedChannel?.id === channel.id}
+            onOpen={() => openChannel(channel)}
           />
-        </div>
+        ))}
       </div>
 
-      <Card padded={false} clip>
-        <div className="grid h-11 grid-cols-[minmax(240px,0.9fr)_minmax(280px,1fr)_160px_132px] items-center gap-4 border-b border-line-soft px-5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-          <div>Channel</div>
-          <div>Purpose</div>
-          <div>Health</div>
-          <div className="text-right">Action</div>
-        </div>
-
-        {filteredChannels.length ? (
-          filteredChannels.map((channel) => (
-            <ChannelRow key={channel.id} channel={channel} />
-          ))
-        ) : (
-          <div className="flex min-h-[260px] items-center justify-center px-6 py-12 text-center">
-            <div className="max-w-[420px]">
-              <Plug className="mx-auto h-8 w-8 text-text-muted" strokeWidth={2.05} />
-
-              <div className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                No channels found
-              </div>
-
-              <div className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-                Clear the search or choose another category to see available providers.
-              </div>
-
-              <div className="mt-5">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  onClick={() => {
-                    setQuery("");
-                    setCategory("All");
-                  }}
-                >
-                  Clear search
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
+      <ConnectDialog
+        channel={dialogChannel}
+        open={Boolean(dialogChannel)}
+        onClose={() => setDialogChannel(null)}
+      />
     </PageCanvas>
   );
 }

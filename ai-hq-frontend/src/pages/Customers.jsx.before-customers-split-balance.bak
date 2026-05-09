@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   CircleDollarSign,
+  ExternalLink,
   Mail,
   MessageCircle,
   Phone,
@@ -16,13 +17,14 @@ import {
 import { listLeads } from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
+import AppIconButton from "../components/ui/AppIconButton.jsx";
 import AppIdentityMark from "../components/ui/AppIdentityMark.jsx";
 import AppInfoRow from "../components/ui/AppInfoRow.jsx";
 import AppPaginationFooter from "../components/ui/AppPaginationFooter.jsx";
 import AppStatCard from "../components/ui/AppStatCard.jsx";
 import AppStatusText from "../components/ui/AppStatusText.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
-import AppDetailPane, {
+import {
   AppDetailBody,
   AppDetailEmpty,
   AppDetailHeader,
@@ -38,8 +40,10 @@ import {
   toggleAppFilterListValue,
 } from "../components/ui/AppTableFilters.jsx";
 import {
+  AppTableCard,
   AppTableCell,
   AppTableEmptyState,
+  AppTableHeaderCell,
   AppTableHeaderRow,
   AppTableRow,
   AppTableText,
@@ -52,13 +56,13 @@ import {
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
 
-const PAGE_SIZE = 7;
+const PAGE_SIZE = 6;
 
-const TABLE_MIN_WIDTH = "w-full";
+const TABLE_MIN_WIDTH = "min-w-[980px] w-full";
 
 const TABLE_GRID_STYLE = {
   gridTemplateColumns:
-    "minmax(210px,1.2fr) minmax(190px,1fr) minmax(96px,.52fr) minmax(108px,.55fr) minmax(96px,.52fr) minmax(112px,.54fr)",
+    "260px minmax(240px,1fr) 130px 128px 128px 132px 104px",
 };
 
 const STAGE_PRIORITY = [
@@ -376,7 +380,15 @@ function customerDedupeKey(customer = {}) {
   if (email) return `email:${email}`;
   if (phone) return `phone:${phone}`;
 
-  return lower([name, source, customer.interest].filter(Boolean).join("|"));
+  return lower(
+    [
+      name,
+      source,
+      customer.interest,
+    ]
+      .filter(Boolean)
+      .join("|")
+  );
 }
 
 function dedupeCustomers(customers = []) {
@@ -497,9 +509,7 @@ function matchesText(customer = {}, query = "") {
 
 function uniqueOptions(values = [], priority = []) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
-  const unique = [
-    ...new Set(values.map((value) => lower(value)).filter(Boolean)),
-  ];
+  const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
 
   return unique
     .sort((a, b) => {
@@ -563,10 +573,11 @@ function CustomerIdentity({ customer }) {
   );
 }
 
-function CustomerRow({ customer, selected, onOpenDetail }) {
+function CustomerRow({ customer, selected, onOpenThread, onOpenDetail }) {
   const source = customerSource(customer);
   const stage = customerStage(customer);
   const status = customerStatus(customer);
+  const threadId = customerThreadId(customer);
 
   return (
     <AppTableRow
@@ -574,7 +585,7 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
       onClick={onOpenDetail}
       minWidthClass={TABLE_MIN_WIDTH}
       gridStyle={TABLE_GRID_STYLE}
-      className="!min-h-[66px]"
+      className="min-h-[58px]"
     >
       <AppTableCell>
         <CustomerIdentity customer={customer} />
@@ -595,13 +606,41 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={statusTone(status)}>
-          {titleize(status)}
-        </AppStatusText>
+        <AppStatusText tone={statusTone(status)}>{titleize(status)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
         <AppTableText muted>{formatDate(customerUpdatedRaw(customer))}</AppTableText>
+      </AppTableCell>
+
+      <AppTableCell align="right">
+        <div className="flex items-center justify-end gap-2">
+          <AppIconButton
+            label="View customer"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenDetail?.();
+            }}
+          >
+            <UserRound className="h-3.5 w-3.5" strokeWidth={2.1} />
+          </AppIconButton>
+
+          {threadId ? (
+            <AppIconButton
+              label="Open thread"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenThread?.(threadId);
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
+            </AppIconButton>
+          ) : (
+            <AppIconButton disabled label="No thread">
+              —
+            </AppIconButton>
+          )}
+        </div>
       </AppTableCell>
     </AppTableRow>
   );
@@ -615,18 +654,15 @@ function CustomerTable({
   sourceOptions,
   stageOptions,
   statusOptions,
-  activeFilterCount,
-  currentPage,
-  totalPages,
-  totalItems,
   onOpenFilter,
   onPatchFilters,
   onClearFilters,
+  activeFilterCount,
+  onOpenThread,
   onOpenDetail,
-  onPageChange,
 }) {
   return (
-    <div className="flex h-full min-h-[690px] min-w-0 flex-col">
+    <AppTableCard className="h-full min-h-[640px]">
       <AppTableToolbar
         title="Customer records"
         description="Profiles, source quality, pipeline state, and next actions."
@@ -644,13 +680,9 @@ function CustomerTable({
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-visible">
+      <div className="overflow-x-auto">
         <div className={TABLE_MIN_WIDTH}>
-          <AppTableHeaderRow
-            minWidthClass="w-full"
-            gridStyle={TABLE_GRID_STYLE}
-            className="bg-surface-subtle"
-          >
+          <AppTableHeaderRow minWidthClass="w-full" gridStyle={TABLE_GRID_STYLE}>
             <AppTableHeaderFilter
               id="customer"
               label="Customer"
@@ -785,6 +817,8 @@ function CustomerTable({
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
+
+            <AppTableHeaderCell align="right">Actions</AppTableHeaderCell>
           </AppTableHeaderRow>
 
           {customers.length ? (
@@ -797,6 +831,7 @@ function CustomerTable({
                   customer={customer}
                   selected={selectedKey === key}
                   onOpenDetail={() => onOpenDetail(customer, key)}
+                  onOpenThread={onOpenThread}
                 />
               );
             })
@@ -809,32 +844,20 @@ function CustomerTable({
           )}
         </div>
       </div>
-
-      <div className="shrink-0 border-t border-line-soft">
-        <AppPaginationFooter
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          pageSize={PAGE_SIZE}
-          filtered={activeFilterCount > 0}
-          minWidthClass="w-full"
-          onPageChange={onPageChange}
-        />
-      </div>
-    </div>
+    </AppTableCard>
   );
 }
 
 function CustomerDetailPanel({ customer, onOpenThread }) {
   if (!customer) {
     return (
-      <AppDetailPane className="flex h-full min-h-[690px] flex-col">
+      <Card padded={false} clip className="h-full min-h-[560px] xl:sticky xl:top-4">
         <AppDetailEmpty
           icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
           title="Select a customer"
           description="Choose a customer row to inspect contact details, source quality, and next action."
         />
-      </AppDetailPane>
+      </Card>
     );
   }
 
@@ -851,7 +874,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
     "No message preview is available yet.";
 
   return (
-    <AppDetailPane className="flex h-full min-h-[690px] flex-col">
+    <Card padded={false} clip className="h-full min-h-[560px] xl:sticky xl:top-4">
       <AppDetailHeader>
         <div className="flex items-start gap-4">
           <AppIdentityMark label={initialsFromName(name)} size="lg" />
@@ -877,7 +900,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
         </div>
       </AppDetailHeader>
 
-      <AppDetailBody className="flex flex-1 flex-col">
+      <AppDetailBody>
         <div className="grid gap-2">
           <Button
             type="button"
@@ -917,10 +940,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
           </div>
         </div>
 
-        <AppInfoRow
-          label="Contact"
-          value={customerContact(customer) || "Not recorded"}
-        />
+        <AppInfoRow label="Contact" value={customerContact(customer) || "Not recorded"} />
         <AppInfoRow label="Source" value={titleize(source)} />
         <AppInfoRow label="Stage" value={titleize(stage)} />
         <AppInfoRow label="Status" value={titleize(status)} />
@@ -932,7 +952,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
         <AppInfoRow label="Created" value={formatDate(customerCreatedRaw(customer))} />
         <AppInfoRow label="Updated" value={formatDate(customerUpdatedRaw(customer))} />
 
-        <Card padded="sm" className="mt-auto bg-surface-subtle">
+        <Card padded="sm" className="bg-surface-subtle">
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
             Latest context
           </div>
@@ -952,59 +972,6 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
           ) : null}
         </Card>
       </AppDetailBody>
-    </AppDetailPane>
-  );
-}
-
-function CustomerWorkspace({
-  customers,
-  selectedCustomer,
-  selectedKey,
-  filters,
-  openFilter,
-  sourceOptions,
-  stageOptions,
-  statusOptions,
-  activeFilterCount,
-  currentPage,
-  totalPages,
-  totalItems,
-  onOpenFilter,
-  onPatchFilters,
-  onClearFilters,
-  onOpenDetail,
-  onOpenThread,
-  onPageChange,
-}) {
-  return (
-    <Card padded={false} className="overflow-visible">
-      <div className="grid min-h-[690px] items-stretch xl:grid-cols-[minmax(0,1fr)_390px]">
-        <div className="min-w-0">
-          <CustomerTable
-            customers={customers}
-            selectedKey={selectedKey}
-            filters={filters}
-            openFilter={openFilter}
-            sourceOptions={sourceOptions}
-            stageOptions={stageOptions}
-            statusOptions={statusOptions}
-            activeFilterCount={activeFilterCount}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            onOpenFilter={onOpenFilter}
-            onPatchFilters={onPatchFilters}
-            onClearFilters={onClearFilters}
-            onOpenDetail={onOpenDetail}
-            onPageChange={onPageChange}
-          />
-        </div>
-
-        <CustomerDetailPanel
-          customer={selectedCustomer}
-          onOpenThread={onOpenThread}
-        />
-      </div>
     </Card>
   );
 }
@@ -1038,9 +1005,7 @@ export default function Customers() {
       setSelectedKey((current) => {
         if (
           current &&
-          nextCustomers.some(
-            (item, index) => customerKey(item, index) === current
-          )
+          nextCustomers.some((item, index) => customerKey(item, index) === current)
         ) {
           return current;
         }
@@ -1269,26 +1234,46 @@ export default function Customers() {
         />
       </div>
 
-      <CustomerWorkspace
-        customers={pageItems}
-        selectedCustomer={selectedCustomer}
-        selectedKey={selectedKey}
-        filters={filters}
-        openFilter={openFilter}
-        sourceOptions={sourceOptions}
-        stageOptions={stageOptions}
-        statusOptions={statusOptions}
-        activeFilterCount={activeFilterCount}
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalItems={filteredCustomers.length}
-        onOpenFilter={setOpenFilter}
-        onPatchFilters={patchFilters}
-        onClearFilters={clearFilters}
-        onOpenDetail={openDetail}
-        onOpenThread={openThread}
-        onPageChange={setPage}
-      />
+      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <div className="flex min-w-0 flex-col">
+          <CustomerTable
+            customers={pageItems}
+            selectedKey={selectedKey}
+            filters={filters}
+            openFilter={openFilter}
+            sourceOptions={sourceOptions}
+            stageOptions={stageOptions}
+            statusOptions={statusOptions}
+            onOpenFilter={setOpenFilter}
+            onPatchFilters={patchFilters}
+            onClearFilters={clearFilters}
+            activeFilterCount={activeFilterCount}
+            onOpenThread={openThread}
+            onOpenDetail={openDetail}
+          />
+
+          <div className="overflow-x-auto">
+            <AppPaginationFooter
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={filteredCustomers.length}
+              pageSize={PAGE_SIZE}
+              filtered={activeFilterCount > 0}
+              minWidthClass={TABLE_MIN_WIDTH}
+              onPageChange={setPage}
+            />
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <CustomerDetailPanel
+            customer={selectedCustomer}
+            onOpenThread={openThread}
+          />
+        </div>
+      </div>
     </PageCanvas>
   );
 }
+
+

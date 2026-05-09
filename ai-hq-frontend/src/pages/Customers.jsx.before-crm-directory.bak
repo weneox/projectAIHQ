@@ -3,26 +3,29 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
-  CircleDollarSign,
+  ExternalLink,
   Mail,
-  MessageCircle,
   Phone,
   RefreshCw,
-  Trophy,
+  Search,
+  Sparkles,
+  TrendingUp,
   UserRound,
   Users,
+  X,
 } from "lucide-react";
 
 import { listLeads } from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
+import AppIconButton from "../components/ui/AppIconButton.jsx";
 import AppIdentityMark from "../components/ui/AppIdentityMark.jsx";
 import AppInfoRow from "../components/ui/AppInfoRow.jsx";
 import AppPaginationFooter from "../components/ui/AppPaginationFooter.jsx";
 import AppStatCard from "../components/ui/AppStatCard.jsx";
 import AppStatusText from "../components/ui/AppStatusText.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
-import AppDetailPane, {
+import {
   AppDetailBody,
   AppDetailEmpty,
   AppDetailHeader,
@@ -38,8 +41,10 @@ import {
   toggleAppFilterListValue,
 } from "../components/ui/AppTableFilters.jsx";
 import {
+  AppTableCard,
   AppTableCell,
   AppTableEmptyState,
+  AppTableHeaderCell,
   AppTableHeaderRow,
   AppTableRow,
   AppTableText,
@@ -50,91 +55,25 @@ import {
   LoadingSurface,
   PageCanvas,
   PageHeader,
+  SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
 
-const PAGE_SIZE = 7;
+const PAGE_SIZE = 6;
 
-const TABLE_MIN_WIDTH = "w-full";
+const TABLE_MIN_WIDTH = "min-w-[1180px] w-full";
 
 const TABLE_GRID_STYLE = {
   gridTemplateColumns:
-    "minmax(210px,1.2fr) minmax(190px,1fr) minmax(96px,.52fr) minmax(108px,.55fr) minmax(96px,.52fr) minmax(112px,.54fr)",
+    "280px minmax(280px,1fr) 150px 140px 140px 150px 112px",
 };
 
-const STAGE_PRIORITY = [
-  "new",
-  "qualified",
-  "demo requested",
-  "proposal",
-  "won",
-  "lost",
-];
-
+const STAGE_PRIORITY = ["new", "qualified", "proposal", "won", "lost"];
 const STATUS_PRIORITY = ["open", "active", "converted", "closed", "lost"];
-
-const SOURCE_PRIORITY = [
-  "website",
-  "website chat",
-  "instagram",
-  "facebook",
-  "telegram",
-  "email",
-];
+const SOURCE_PRIORITY = ["website", "instagram", "facebook", "telegram", "email"];
 
 const LOCAL_CUSTOMERS = [
   {
     id: "local_customer_01",
-    full_name: "Aylin Məmmədova",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "",
-    source: "instagram",
-    stage: "qualified",
-    status: "open",
-    value: 4200,
-    interest: "Customer profile",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_01",
-    created_at: daysAgo(8),
-    updated_at: daysAgo(0),
-    last_message_text: "Asked for a website automation proposal.",
-  },
-  {
-    id: "local_customer_02",
-    full_name: "Website visitor",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "",
-    source: "website chat",
-    stage: "demo requested",
-    status: "open",
-    value: 1900,
-    interest: "Customer profile",
-    owner: "Unassigned",
-    inbox_thread_id: "local_thread_02",
-    created_at: daysAgo(2),
-    updated_at: daysAgo(0),
-    last_message_text: "Requested examples of previous chatbot projects.",
-  },
-  {
-    id: "local_customer_03",
-    full_name: "Marcus Hale",
-    email: "marcus@northline.co",
-    phone: "+44 20 4420 1882",
-    username: "marcushale",
-    source: "instagram",
-    stage: "proposal",
-    status: "open",
-    value: 7800,
-    interest: "CRM automation",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_03",
-    created_at: daysAgo(6),
-    updated_at: daysAgo(0),
-    last_message_text: "Waiting for automation architecture and price.",
-  },
-  {
-    id: "local_customer_04",
     full_name: "Aylin Carter",
     email: "aylin@studioflow.ai",
     phone: "+994 50 120 32 11",
@@ -145,10 +84,61 @@ const LOCAL_CUSTOMERS = [
     value: 4200,
     interest: "AI website assistant",
     owner: "Emil",
-    inbox_thread_id: "local_thread_04",
+    inbox_thread_id: "local_thread_01",
     created_at: daysAgo(8),
     updated_at: daysAgo(1),
-    last_message_text: "Asked for a premium website assistant.",
+    last_message_text: "Asked for a website automation proposal.",
+  },
+  {
+    id: "local_customer_02",
+    full_name: "Marcus Hale",
+    email: "marcus@northline.co",
+    phone: "+44 20 4420 1882",
+    username: "marcushale",
+    source: "instagram",
+    stage: "proposal",
+    status: "open",
+    value: 7800,
+    interest: "CRM automation",
+    owner: "Emil",
+    inbox_thread_id: "local_thread_02",
+    created_at: daysAgo(6),
+    updated_at: daysAgo(0),
+    last_message_text: "Waiting for automation architecture and price.",
+  },
+  {
+    id: "local_customer_03",
+    full_name: "Selin Ward",
+    email: "selin@brightlabs.dev",
+    phone: "+90 532 410 92 40",
+    username: "selinward",
+    source: "telegram",
+    stage: "won",
+    status: "converted",
+    value: 12500,
+    interest: "Internal AI operations dashboard",
+    owner: "Emil",
+    inbox_thread_id: "local_thread_03",
+    created_at: daysAgo(13),
+    updated_at: daysAgo(2),
+    last_message_text: "Approved the first milestone.",
+  },
+  {
+    id: "local_customer_04",
+    full_name: "Noah Rivers",
+    email: "noah@riversupply.com",
+    phone: "+1 415 209 7712",
+    username: "noahrivers",
+    source: "website",
+    stage: "new",
+    status: "open",
+    value: 1900,
+    interest: "Lead capture chatbot",
+    owner: "Unassigned",
+    inbox_thread_id: "local_thread_04",
+    created_at: daysAgo(2),
+    updated_at: daysAgo(2),
+    last_message_text: "Requested examples of previous chatbot projects.",
   },
   {
     id: "local_customer_05",
@@ -169,23 +159,6 @@ const LOCAL_CUSTOMERS = [
   },
   {
     id: "local_customer_06",
-    full_name: "Selin Ward",
-    email: "selin@brightlabs.dev",
-    phone: "+90 532 410 92 40",
-    username: "selinward",
-    source: "telegram",
-    stage: "won",
-    status: "converted",
-    value: 12500,
-    interest: "Internal AI operations dashboard",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_06",
-    created_at: daysAgo(13),
-    updated_at: daysAgo(2),
-    last_message_text: "Approved the first milestone.",
-  },
-  {
-    id: "local_customer_07",
     full_name: "Theo Knight",
     email: "theo@knightlegal.co",
     phone: "+44 7711 920 144",
@@ -200,23 +173,6 @@ const LOCAL_CUSTOMERS = [
     created_at: daysAgo(17),
     updated_at: daysAgo(7),
     last_message_text: "Budget postponed until next quarter.",
-  },
-  {
-    id: "local_customer_08",
-    full_name: "Nigar Aliyeva",
-    email: "ops@weneox.com",
-    phone: "",
-    username: "",
-    source: "website",
-    stage: "qualified",
-    status: "open",
-    value: 3800,
-    interest: "Automation operations",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_08",
-    created_at: daysAgo(3),
-    updated_at: daysAgo(0),
-    last_message_text: "Asked for a customer operations system.",
   },
 ];
 
@@ -269,6 +225,37 @@ function normalizeResponse(payload) {
   return [];
 }
 
+function customerKey(customer = {}, index = 0) {
+  return s(
+    customer.id ||
+      customer.customer_id ||
+      customer.lead_id ||
+      customer.inbox_thread_id ||
+      customer.inboxThreadId ||
+      customer.thread_id ||
+      customer.email ||
+      customer.phone ||
+      customer.username ||
+      `customer-${index}`
+  );
+}
+
+function withLocalCustomers(customers = []) {
+  const base = arr(customers);
+
+  if (!isLocalDesignMode()) return base;
+  if (base.length >= 4) return base;
+
+  const existing = new Set(base.map((item, index) => customerKey(item, index)));
+
+  return [
+    ...base,
+    ...LOCAL_CUSTOMERS.filter(
+      (item, index) => !existing.has(customerKey(item, index))
+    ),
+  ];
+}
+
 function customerName(customer = {}) {
   return s(
     customer.full_name ||
@@ -283,26 +270,18 @@ function customerName(customer = {}) {
   );
 }
 
+function customerContact(customer = {}) {
+  return [s(customer.email), s(customer.phone), s(customer.username)]
+    .filter(Boolean)
+    .join("  •  ");
+}
+
 function customerEmail(customer = {}) {
   return s(customer.email || customer.user_email);
 }
 
 function customerPhone(customer = {}) {
   return s(customer.phone || customer.phone_number);
-}
-
-function customerUsername(customer = {}) {
-  return s(customer.username || customer.handle);
-}
-
-function customerContact(customer = {}) {
-  return [
-    customerEmail(customer),
-    customerPhone(customer),
-    customerUsername(customer),
-  ]
-    .filter(Boolean)
-    .join("  •  ");
 }
 
 function customerSource(customer = {}) {
@@ -329,9 +308,7 @@ function customerValue(customer = {}) {
 }
 
 function customerThreadId(customer = {}) {
-  return s(
-    customer.inbox_thread_id || customer.inboxThreadId || customer.thread_id
-  );
+  return s(customer.inbox_thread_id || customer.inboxThreadId || customer.thread_id);
 }
 
 function customerUpdatedRaw(customer = {}) {
@@ -350,57 +327,6 @@ function customerCreatedRaw(customer = {}) {
       customer.updated_at ||
       customer.updatedAt
   );
-}
-
-function customerKey(customer = {}, index = 0) {
-  return s(
-    customer.id ||
-      customer.customer_id ||
-      customer.lead_id ||
-      customer.inbox_thread_id ||
-      customer.inboxThreadId ||
-      customer.thread_id ||
-      customer.email ||
-      customer.phone ||
-      customer.username ||
-      `customer-${index}`
-  );
-}
-
-function customerDedupeKey(customer = {}) {
-  const email = lower(customerEmail(customer));
-  const phone = lower(customerPhone(customer));
-  const name = lower(customerName(customer));
-  const source = lower(customerSource(customer));
-
-  if (email) return `email:${email}`;
-  if (phone) return `phone:${phone}`;
-
-  return lower([name, source, customer.interest].filter(Boolean).join("|"));
-}
-
-function dedupeCustomers(customers = []) {
-  const seen = new Set();
-
-  return arr(customers).filter((customer, index) => {
-    const semanticKey = customerDedupeKey(customer);
-    const fallbackKey = customerKey(customer, index);
-    const key = semanticKey || fallbackKey;
-
-    if (seen.has(key)) return false;
-
-    seen.add(key);
-    return true;
-  });
-}
-
-function withLocalCustomers(customers = []) {
-  const base = dedupeCustomers(customers);
-
-  if (!isLocalDesignMode()) return base;
-  if (base.length >= 8) return base;
-
-  return dedupeCustomers([...base, ...LOCAL_CUSTOMERS]).slice(0, 12);
 }
 
 function updatedTimestamp(customer = {}) {
@@ -443,16 +369,6 @@ function initialsFromName(value = "") {
     .join("");
 }
 
-function sourceTone(source = "") {
-  const safe = lower(source);
-
-  if (["instagram", "facebook", "telegram"].includes(safe)) return "info";
-  if (["website", "website chat"].includes(safe)) return "brand";
-  if (safe === "email") return "neutral";
-
-  return "neutral";
-}
-
 function stageTone(stage = "") {
   const safe = lower(stage);
 
@@ -460,21 +376,20 @@ function stageTone(stage = "") {
   if (["proposal", "negotiation"].includes(safe)) return "brand";
   if (["qualified", "demo requested"].includes(safe)) return "info";
   if (["lost", "closed_lost"].includes(safe)) return "danger";
-
   return "neutral";
 }
 
 function statusTone(status = "") {
   const safe = lower(status);
 
-  if (["won", "converted", "active", "resolved"].includes(safe)) {
-    return "success";
-  }
-
+  if (["won", "converted", "active", "resolved"].includes(safe)) return "success";
   if (["pending", "waiting", "invited"].includes(safe)) return "warning";
   if (["lost", "closed", "disabled", "blocked"].includes(safe)) return "danger";
-
   return "brand";
+}
+
+function sourceTone() {
+  return "neutral";
 }
 
 function matchesText(customer = {}, query = "") {
@@ -497,9 +412,7 @@ function matchesText(customer = {}, query = "") {
 
 function uniqueOptions(values = [], priority = []) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
-  const unique = [
-    ...new Set(values.map((value) => lower(value)).filter(Boolean)),
-  ];
+  const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
 
   return unique
     .sort((a, b) => {
@@ -545,6 +458,13 @@ function customerComparator(sortValue = "newest") {
   };
 }
 
+function rangeLabel(page, totalItems, pageSize) {
+  if (!totalItems) return "No records";
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(totalItems, page * pageSize);
+  return `Showing ${start}-${end} of ${totalItems} records`;
+}
+
 function CustomerIdentity({ customer }) {
   const name = customerName(customer);
 
@@ -563,10 +483,11 @@ function CustomerIdentity({ customer }) {
   );
 }
 
-function CustomerRow({ customer, selected, onOpenDetail }) {
+function CustomerRow({ customer, selected, onOpenThread, onOpenDetail }) {
   const source = customerSource(customer);
   const stage = customerStage(customer);
   const status = customerStatus(customer);
+  const threadId = customerThreadId(customer);
 
   return (
     <AppTableRow
@@ -574,7 +495,7 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
       onClick={onOpenDetail}
       minWidthClass={TABLE_MIN_WIDTH}
       gridStyle={TABLE_GRID_STYLE}
-      className="!min-h-[66px]"
+      className="min-h-[58px]"
     >
       <AppTableCell>
         <CustomerIdentity customer={customer} />
@@ -595,13 +516,41 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={statusTone(status)}>
-          {titleize(status)}
-        </AppStatusText>
+        <AppStatusText tone={statusTone(status)}>{titleize(status)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
         <AppTableText muted>{formatDate(customerUpdatedRaw(customer))}</AppTableText>
+      </AppTableCell>
+
+      <AppTableCell align="right">
+        <div className="flex items-center justify-end gap-2">
+          <AppIconButton
+            label="View customer"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenDetail?.();
+            }}
+          >
+            <UserRound className="h-3.5 w-3.5" strokeWidth={2.1} />
+          </AppIconButton>
+
+          {threadId ? (
+            <AppIconButton
+              label="Open thread"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenThread?.(threadId);
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
+            </AppIconButton>
+          ) : (
+            <AppIconButton disabled label="No thread">
+              —
+            </AppIconButton>
+          )}
+        </div>
       </AppTableCell>
     </AppTableRow>
   );
@@ -615,42 +564,29 @@ function CustomerTable({
   sourceOptions,
   stageOptions,
   statusOptions,
-  activeFilterCount,
-  currentPage,
-  totalPages,
-  totalItems,
   onOpenFilter,
   onPatchFilters,
   onClearFilters,
+  activeFilterCount,
+  onOpenThread,
   onOpenDetail,
-  onPageChange,
 }) {
   return (
-    <div className="flex h-full min-h-[690px] min-w-0 flex-col">
+    <AppTableCard>
       <AppTableToolbar
-        title="Customer records"
-        description="Profiles, source quality, pipeline state, and next actions."
+        title="Records"
         filters={
           activeFilterCount ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onClearFilters}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClearFilters}>
               Clear filters
             </Button>
           ) : null
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-visible">
+      <div className="overflow-x-auto">
         <div className={TABLE_MIN_WIDTH}>
-          <AppTableHeaderRow
-            minWidthClass="w-full"
-            gridStyle={TABLE_GRID_STYLE}
-            className="bg-surface-subtle"
-          >
+          <AppTableHeaderRow minWidthClass="w-full" gridStyle={TABLE_GRID_STYLE}>
             <AppTableHeaderFilter
               id="customer"
               label="Customer"
@@ -785,6 +721,8 @@ function CustomerTable({
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
+
+            <AppTableHeaderCell align="right">Actions</AppTableHeaderCell>
           </AppTableHeaderRow>
 
           {customers.length ? (
@@ -797,6 +735,7 @@ function CustomerTable({
                   customer={customer}
                   selected={selectedKey === key}
                   onOpenDetail={() => onOpenDetail(customer, key)}
+                  onOpenThread={onOpenThread}
                 />
               );
             })
@@ -809,32 +748,27 @@ function CustomerTable({
           )}
         </div>
       </div>
-
-      <div className="shrink-0 border-t border-line-soft">
-        <AppPaginationFooter
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          pageSize={PAGE_SIZE}
-          filtered={activeFilterCount > 0}
-          minWidthClass="w-full"
-          onPageChange={onPageChange}
-        />
-      </div>
-    </div>
+    </AppTableCard>
   );
 }
 
-function CustomerDetailPanel({ customer, onOpenThread }) {
+function CustomerDetailOverlay({ customer, open, onClose, onOpenThread }) {
   if (!customer) {
     return (
-      <AppDetailPane className="flex h-full min-h-[690px] flex-col">
-        <AppDetailEmpty
-          icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
-          title="Select a customer"
-          description="Choose a customer row to inspect contact details, source quality, and next action."
-        />
-      </AppDetailPane>
+      <SlidingDetailOverlay
+        open={open}
+        onClose={onClose}
+        className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
+        panelWidthClassName="max-w-[560px]"
+      >
+        <Card padded={false} clip className="h-full">
+          <AppDetailEmpty
+            icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
+            title="Select a customer"
+            description="Choose a row to inspect customer details."
+          />
+        </Card>
+      </SlidingDetailOverlay>
     );
   }
 
@@ -845,167 +779,102 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
   const stage = customerStage(customer);
   const status = customerStatus(customer);
   const threadId = customerThreadId(customer);
-  const latest =
-    s(customer.last_message_text) ||
-    s(customer.latest_message) ||
-    "No message preview is available yet.";
 
   return (
-    <AppDetailPane className="flex h-full min-h-[690px] flex-col">
-      <AppDetailHeader>
-        <div className="flex items-start gap-4">
-          <AppIdentityMark label={initialsFromName(name)} size="lg" />
+    <SlidingDetailOverlay
+      open={open}
+      onClose={onClose}
+      className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
+      panelWidthClassName="max-w-[560px]"
+    >
+      <Card padded={false} clip className="h-full">
+        <AppDetailHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-4">
+              <AppIdentityMark label={initialsFromName(name)} size="lg" />
 
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-              {name}
+              <div className="min-w-0">
+                <div className="truncate text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  {name}
+                </div>
+                <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
+                  {customerContact(customer) || "No contact details"}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <AppTag tone={stageTone(stage)} dot>
+                    {titleize(stage)}
+                  </AppTag>
+                  <AppTag tone={statusTone(status)} dot>
+                    {titleize(status)}
+                  </AppTag>
+                </div>
+              </div>
             </div>
-            <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-              {s(customer.interest) || "Customer profile"}
-            </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <AppTag tone={sourceTone(source)}>{titleize(source)}</AppTag>
-              <AppTag tone={stageTone(stage)} dot>
-                {titleize(stage)}
-              </AppTag>
-              <AppTag tone={statusTone(status)} dot>
-                {titleize(status)}
-              </AppTag>
-            </div>
+            <AppIconButton label="Close details" onClick={onClose}>
+              <X className="h-3.5 w-3.5" strokeWidth={2.15} />
+            </AppIconButton>
           </div>
-        </div>
-      </AppDetailHeader>
+        </AppDetailHeader>
 
-      <AppDetailBody className="flex flex-1 flex-col">
-        <div className="grid gap-2">
-          <Button
-            type="button"
-            size="md"
-            fullWidth
-            disabled={!threadId}
-            onClick={() => threadId && onOpenThread(threadId)}
-            leftIcon={<MessageCircle className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Open thread
-          </Button>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              as="a"
-              href={email ? `mailto:${email}` : undefined}
-              variant="secondary"
-              size="md"
-              fullWidth
-              disabled={!email}
-              leftIcon={<Mail className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Email
-            </Button>
-
-            <Button
-              as="a"
-              href={phone ? `tel:${phone}` : undefined}
-              variant="secondary"
-              size="md"
-              fullWidth
-              disabled={!phone}
-              leftIcon={<Phone className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Call
-            </Button>
-          </div>
-        </div>
-
-        <AppInfoRow
-          label="Contact"
-          value={customerContact(customer) || "Not recorded"}
-        />
-        <AppInfoRow label="Source" value={titleize(source)} />
-        <AppInfoRow label="Stage" value={titleize(stage)} />
-        <AppInfoRow label="Status" value={titleize(status)} />
-        <AppInfoRow label="Value" value={formatMoney(customerValue(customer))} />
-        <AppInfoRow
-          label="Owner"
-          value={s(customer.owner || customer.assigned_to) || "Unassigned"}
-        />
-        <AppInfoRow label="Created" value={formatDate(customerCreatedRaw(customer))} />
-        <AppInfoRow label="Updated" value={formatDate(customerUpdatedRaw(customer))} />
-
-        <Card padded="sm" className="mt-auto bg-surface-subtle">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-            Latest context
-          </div>
-          <div className="mt-2 text-[13px] font-medium leading-6 text-text">
-            {latest}
-          </div>
-
-          {threadId ? (
-            <button
-              type="button"
-              onClick={() => onOpenThread(threadId)}
-              className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand"
-            >
-              Open in thread
-              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
-            </button>
-          ) : null}
-        </Card>
-      </AppDetailBody>
-    </AppDetailPane>
-  );
-}
-
-function CustomerWorkspace({
-  customers,
-  selectedCustomer,
-  selectedKey,
-  filters,
-  openFilter,
-  sourceOptions,
-  stageOptions,
-  statusOptions,
-  activeFilterCount,
-  currentPage,
-  totalPages,
-  totalItems,
-  onOpenFilter,
-  onPatchFilters,
-  onClearFilters,
-  onOpenDetail,
-  onOpenThread,
-  onPageChange,
-}) {
-  return (
-    <Card padded={false} className="overflow-visible">
-      <div className="grid min-h-[690px] items-stretch xl:grid-cols-[minmax(0,1fr)_390px]">
-        <div className="min-w-0">
-          <CustomerTable
-            customers={customers}
-            selectedKey={selectedKey}
-            filters={filters}
-            openFilter={openFilter}
-            sourceOptions={sourceOptions}
-            stageOptions={stageOptions}
-            statusOptions={statusOptions}
-            activeFilterCount={activeFilterCount}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            onOpenFilter={onOpenFilter}
-            onPatchFilters={onPatchFilters}
-            onClearFilters={onClearFilters}
-            onOpenDetail={onOpenDetail}
-            onPageChange={onPageChange}
+        <AppDetailBody>
+          <AppInfoRow label="Source" value={titleize(source)} />
+          <AppInfoRow label="Interest" value={s(customer.interest) || "Not recorded"} />
+          <AppInfoRow label="Value" value={formatMoney(customerValue(customer))} />
+          <AppInfoRow
+            label="Owner"
+            value={s(customer.owner || customer.assigned_to) || "Unassigned"}
           />
-        </div>
+          <AppInfoRow label="Created" value={formatDate(customerCreatedRaw(customer))} />
+          <AppInfoRow label="Updated" value={formatDate(customerUpdatedRaw(customer))} />
+          <AppInfoRow
+            label="Context"
+            value={
+              s(customer.last_message_text) ||
+              s(customer.latest_message) ||
+              "No message preview is available yet."
+            }
+          />
 
-        <CustomerDetailPanel
-          customer={selectedCustomer}
-          onOpenThread={onOpenThread}
-        />
-      </div>
-    </Card>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              type="button"
+              size="md"
+              disabled={!threadId}
+              onClick={() => threadId && onOpenThread(threadId)}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.15} />}
+            >
+              Open thread
+            </Button>
+
+            {email ? (
+              <Button
+                as="a"
+                href={`mailto:${email}`}
+                variant="secondary"
+                size="md"
+                leftIcon={<Mail className="h-4 w-4" strokeWidth={2.1} />}
+              >
+                Email
+              </Button>
+            ) : null}
+
+            {phone ? (
+              <Button
+                as="a"
+                href={`tel:${phone}`}
+                variant="secondary"
+                size="md"
+                leftIcon={<Phone className="h-4 w-4" strokeWidth={2.1} />}
+              >
+                Call
+              </Button>
+            ) : null}
+          </div>
+        </AppDetailBody>
+      </Card>
+    </SlidingDetailOverlay>
   );
 }
 
@@ -1014,6 +883,7 @@ export default function Customers() {
 
   const [customers, setCustomers] = useState([]);
   const [selectedKey, setSelectedKey] = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
   const [openFilter, setOpenFilter] = useState("");
   const [filters, setFilters] = useState(() => createDefaultFilters());
   const [page, setPage] = useState(1);
@@ -1038,9 +908,7 @@ export default function Customers() {
       setSelectedKey((current) => {
         if (
           current &&
-          nextCustomers.some(
-            (item, index) => customerKey(item, index) === current
-          )
+          nextCustomers.some((item, index) => customerKey(item, index) === current)
         ) {
           return current;
         }
@@ -1048,11 +916,9 @@ export default function Customers() {
         return nextCustomers.length ? customerKey(nextCustomers[0], 0) : "";
       });
     } catch (err) {
-      const fallback = withLocalCustomers([]);
-
       setError(err?.message || "Unable to load customers.");
-      setCustomers(fallback);
-      setSelectedKey((current) => current || customerKey(fallback[0], 0));
+      setCustomers(withLocalCustomers([]));
+      setSelectedKey((current) => current || customerKey(LOCAL_CUSTOMERS[0], 0));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1104,21 +970,19 @@ export default function Customers() {
         statuses.length ? statuses.includes(customerStatus(customer)) : true
       )
       .filter((customer) =>
-        matchesText(
-          customer,
-          [
-            filters.customer,
-            filters.contact,
-            ...sources,
-            ...stages,
-            ...statuses,
-          ].join(" ")
-        )
+        matchesText(customer, [
+          filters.customer,
+          filters.contact,
+          ...sources,
+          ...stages,
+          ...statuses,
+        ].join(" "))
       )
       .sort(customerComparator(filters.updatedSort));
   }, [customers, filters]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+
   const safePage = Math.min(Math.max(1, page), totalPages);
 
   const pageItems = useMemo(() => {
@@ -1128,82 +992,57 @@ export default function Customers() {
 
   useEffect(() => {
     setPage(1);
-  }, [
-    filters.customer,
-    filters.contact,
-    filters.sources,
-    filters.stages,
-    filters.statuses,
-    filters.updatedSort,
-  ]);
+  }, [filters]);
 
   useEffect(() => {
-    setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-
-  const activeFilterCount = countActiveFilters(filters);
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const selectedCustomer = useMemo(() => {
     return (
-      filteredCustomers.find(
-        (customer, index) => customerKey(customer, index) === selectedKey
-      ) ||
-      customers.find(
-        (customer, index) => customerKey(customer, index) === selectedKey
-      ) ||
+      customers.find((customer, index) => customerKey(customer, index) === selectedKey) ||
+      filteredCustomers[0] ||
       null
     );
   }, [customers, filteredCustomers, selectedKey]);
 
-  const stats = useMemo(() => {
-    const items = arr(customers);
-    const engaged = items.filter((customer) =>
-      ["open", "active", "converted"].includes(customerStatus(customer))
+  const metrics = useMemo(() => {
+    const total = customers.length;
+    const active = customers.filter((customer) =>
+      ["open", "active", "converted", "won"].includes(customerStatus(customer))
     ).length;
-    const won = items.filter(
-      (customer) =>
-        ["won", "converted"].includes(customerStage(customer)) ||
-        ["won", "converted"].includes(customerStatus(customer))
+    const won = customers.filter((customer) =>
+      ["won", "converted", "customer"].includes(customerStage(customer))
     ).length;
-    const value = items.reduce(
-      (total, customer) => total + customerValue(customer),
-      0
-    );
+    const value = customers.reduce((sum, customer) => sum + customerValue(customer), 0);
 
-    return {
-      total: items.length,
-      engaged,
-      won,
-      value,
-    };
+    return { total, active, won, value };
   }, [customers]);
+
+  const activeFilterCount = countActiveFilters(filters);
 
   function patchFilters(next = {}) {
     setFilters((current) => ({ ...current, ...next }));
   }
 
-  function clearFilters() {
-    setFilters(createDefaultFilters());
-    setOpenFilter("");
+  function handleOpenThread(threadId = "") {
+    const id = s(threadId);
+    if (!id) return;
+
+    navigate(`/inbox?thread=${encodeURIComponent(id)}`);
   }
 
-  function openDetail(customer, key) {
-    setSelectedKey(key);
-  }
-
-  function openThread(threadId = "") {
-    const safeThreadId = s(threadId);
-    if (!safeThreadId) return;
-
-    navigate(`/inbox?threadId=${encodeURIComponent(safeThreadId)}`);
+  function handleOpenDetail(customer, key) {
+    setSelectedKey(key || customerKey(customer));
+    setDetailOpen(true);
   }
 
   if (loading) {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading customers"
-          description="Preparing customer records, pipeline state, and contact context."
+          title="Loading customer directory"
+          description="Building a clean operational view of your customer records."
           rows={5}
         />
       </PageCanvas>
@@ -1213,65 +1052,44 @@ export default function Customers() {
   return (
     <PageCanvas>
       <PageHeader
-        eyebrow="Customer operations"
-        title="Customer intelligence"
-        description="Track who is interested, where they came from, what stage they are in, and which conversation needs action."
+        title="Customer directory"
+        description="Manage contact records, source quality, engagement state, and thread access from one operational workspace."
         actions={
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              loading={refreshing}
-              onClick={() => loadCustomers({ silent: true })}
-              leftIcon={
-                !refreshing ? (
-                  <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
-                ) : undefined
-              }
-            >
-              Refresh
-            </Button>
-
-            <Button
-              type="button"
-              size="md"
-              onClick={() => navigate("/inbox")}
-              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-            >
-              Open inbox
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            loading={refreshing}
+            onClick={() => loadCustomers({ silent: true })}
+            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            Refresh
+          </Button>
         }
       />
 
       {error ? (
         <InlineNotice
-          tone="danger"
-          title="Customers unavailable"
+          tone="warning"
+          title="Using local preview data"
           description={error}
           compact
         />
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={Users} label="Directory records" value={stats.total} />
+        <AppStatCard icon={Users} label="Directory records" value={metrics.total} />
+        <AppStatCard icon={CheckCircle2} label="Engaged contacts" value={metrics.active} />
+        <AppStatCard icon={TrendingUp} label="Won accounts" value={metrics.won} />
         <AppStatCard
-          icon={CheckCircle2}
-          label="Engaged contacts"
-          value={stats.engaged}
-        />
-        <AppStatCard icon={Trophy} label="Won accounts" value={stats.won} />
-        <AppStatCard
-          icon={CircleDollarSign}
+          icon={Sparkles}
           label="Pipeline value"
-          value={formatMoney(stats.value)}
+          value={formatMoney(metrics.value)}
         />
       </div>
 
-      <CustomerWorkspace
+      <CustomerTable
         customers={pageItems}
-        selectedCustomer={selectedCustomer}
         selectedKey={selectedKey}
         filters={filters}
         openFilter={openFilter}
@@ -1279,15 +1097,27 @@ export default function Customers() {
         stageOptions={stageOptions}
         statusOptions={statusOptions}
         activeFilterCount={activeFilterCount}
+        onOpenFilter={setOpenFilter}
+        onPatchFilters={patchFilters}
+        onClearFilters={() => setFilters(createDefaultFilters())}
+        onOpenThread={handleOpenThread}
+        onOpenDetail={handleOpenDetail}
+      />
+
+      <AppPaginationFooter
         currentPage={safePage}
         totalPages={totalPages}
         totalItems={filteredCustomers.length}
-        onOpenFilter={setOpenFilter}
-        onPatchFilters={patchFilters}
-        onClearFilters={clearFilters}
-        onOpenDetail={openDetail}
-        onOpenThread={openThread}
+        pageSize={PAGE_SIZE}
+        filtered={activeFilterCount > 0}
         onPageChange={setPage}
+      />
+
+      <CustomerDetailOverlay
+        open={detailOpen}
+        customer={selectedCustomer}
+        onClose={() => setDetailOpen(false)}
+        onOpenThread={handleOpenThread}
       />
     </PageCanvas>
   );

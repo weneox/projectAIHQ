@@ -2,29 +2,30 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
+  BookOpen,
   CheckCircle2,
-  Database,
+  Globe2,
   Inbox,
   MessageSquare,
   RefreshCw,
   Rocket,
-  ShieldAlert,
+  Settings2,
   ShieldCheck,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
-import AppIcon from "../../components/ui/AppIcon.jsx";
-import AppStatCard from "../../components/ui/AppStatCard.jsx";
+import AppTag from "../../components/ui/AppTag.jsx";
 import AppStatusText from "../../components/ui/AppStatusText.jsx";
 import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
-  PageHeader,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import useProductHome from "../../view-models/useProductHome.js";
+import { cx } from "../../lib/cx.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -55,41 +56,6 @@ function openCount(home = {}) {
   return n(home?.inboxState?.counts?.openCount);
 }
 
-function handoffCount(home = {}) {
-  return n(home?.inboxState?.counts?.handoffCount);
-}
-
-function pendingOutboundCount(home = {}) {
-  return n(
-    home?.inboxState?.counts?.pendingOutboundCount ??
-      home?.inboxState?.counts?.outboundPending
-  );
-}
-
-function failedOutboundCount(home = {}) {
-  return n(home?.inboxState?.counts?.failedOutboundCount);
-}
-
-function retryingOutboundCount(home = {}) {
-  return n(home?.inboxState?.counts?.retryingOutboundCount);
-}
-
-function outboundAttention(home = {}) {
-  return (
-    pendingOutboundCount(home) +
-    failedOutboundCount(home) +
-    retryingOutboundCount(home)
-  );
-}
-
-function truthReady(home = {}) {
-  return home?.truthRuntime?.truthReady === true;
-}
-
-function runtimeReady(home = {}) {
-  return home?.truthRuntime?.ready === true;
-}
-
 function readyChannelCount(home = {}) {
   const states = providerStates(home);
 
@@ -112,6 +78,14 @@ function connectedChannelCount(home = {}) {
   return n(home?.launchChannel?.connectedCount);
 }
 
+function truthReady(home = {}) {
+  return home?.truthRuntime?.truthReady === true;
+}
+
+function runtimeReady(home = {}) {
+  return home?.truthRuntime?.ready === true;
+}
+
 function inboxUnavailable(home = {}) {
   return lower(home?.inboxState?.status) === "unavailable";
 }
@@ -125,287 +99,247 @@ function workspaceLive(home = {}) {
   );
 }
 
-function healthTone(value = "") {
-  const safe = lower(value);
+function firstName(value = "") {
+  const text = s(value);
+  if (!text) return "";
+  return text.split(/\s+/)[0] || "";
+}
 
-  if (safe === "ready" || safe === "live" || safe === "verified") return "success";
-  if (safe === "review" || safe === "attention") return "warning";
-  if (safe === "blocked" || safe === "unavailable") return "danger";
+function readPossibleLocalName() {
+  if (typeof window === "undefined") return "";
+
+  const keys = [
+    "user",
+    "profile",
+    "appUser",
+    "aihq:user",
+    "aihq:profile",
+    "aihq.auth",
+    "app_auth_context",
+  ];
+
+  for (const key of keys) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const name = s(
+        parsed?.name ||
+          parsed?.fullName ||
+          parsed?.full_name ||
+          parsed?.user?.name ||
+          parsed?.user?.fullName ||
+          parsed?.profile?.name
+      );
+
+      if (name) return name;
+    } catch {
+      // ignore local preview keys
+    }
+  }
+
+  return "";
+}
+
+function greetingName(home = {}) {
+  return (
+    firstName(
+      home?.user?.name ||
+        home?.user?.fullName ||
+        home?.profile?.name ||
+        home?.operator?.name ||
+        home?.workspace?.ownerName ||
+        readPossibleLocalName()
+    ) || "Emil"
+  );
+}
+
+function statusTone(status = "") {
+  const safe = lower(status);
+
+  if (safe === "ready" || safe === "live" || safe === "connected") {
+    return "success";
+  }
+
+  if (safe === "review" || safe === "setup" || safe === "optional") {
+    return "warning";
+  }
+
+  if (safe === "blocked" || safe === "unavailable") {
+    return "danger";
+  }
 
   return "neutral";
 }
 
-function buildReadiness(home = {}) {
-  const checks = [
+function optionalItems(home = {}) {
+  return [
     {
-      id: "truth",
-      label: "Business truth",
-      description: "Approved facts and workspace profile.",
-      ready: truthReady(home),
-      route: "/truth",
-    },
-    {
-      id: "runtime",
-      label: "AI runtime",
-      description: "Assistant runtime and safe response mode.",
-      ready: runtimeReady(home),
-      route: "/truth",
+      id: "inbox",
+      icon: Inbox,
+      title: "Check inbox",
+      description:
+        unreadCount(home) > 0
+          ? `${unreadCount(home)} unread message${unreadCount(home) === 1 ? "" : "s"} waiting.`
+          : "Open conversations when you want to review customer activity.",
+      status: unreadCount(home) > 0 ? "review" : "optional",
+      label: unreadCount(home) > 0 ? "Needs attention" : "Optional",
+      path: "/inbox",
+      action: "Open inbox",
     },
     {
       id: "channels",
-      label: "Customer channel",
-      description: "At least one route is ready for customers.",
-      ready: readyChannelCount(home) > 0,
-      route: "/channels",
+      icon: Globe2,
+      title: "Connect channels",
+      description:
+        readyChannelCount(home) > 0
+          ? `${readyChannelCount(home)} channel${readyChannelCount(home) === 1 ? "" : "s"} ready for messages.`
+          : "Connect Website Chat, Instagram, Telegram, or WhatsApp when needed.",
+      status: readyChannelCount(home) > 0 ? "ready" : "optional",
+      label: readyChannelCount(home) > 0 ? "Ready" : "Optional",
+      path: "/channels",
+      action: "Open channels",
     },
     {
-      id: "inbox",
-      label: "Inbox health",
-      description: "Inbox can be checked for customer work.",
-      ready: !inboxUnavailable(home),
-      route: "/inbox",
+      id: "business-info",
+      icon: ShieldCheck,
+      title: "Review business info",
+      description:
+        truthReady(home) && runtimeReady(home)
+          ? "Business information is available for assistant answers."
+          : "Keep approved business details here when you want the assistant to answer safely.",
+      status: truthReady(home) && runtimeReady(home) ? "ready" : "optional",
+      label: truthReady(home) && runtimeReady(home) ? "Ready" : "Optional",
+      path: "/truth",
+      action: "Open info",
+    },
+    {
+      id: "knowledge",
+      icon: BookOpen,
+      title: "Add knowledge",
+      description:
+        "Add documents, FAQs, policies, and notes when the assistant needs more context.",
+      status: "optional",
+      label: "Optional",
+      path: "/knowledge",
+      action: "Open library",
     },
   ];
-
-  const ready = checks.filter((item) => item.ready).length;
-
-  return {
-    checks,
-    ready,
-    total: checks.length,
-    percent: checks.length ? Math.round((ready / checks.length) * 100) : 0,
-  };
 }
 
-function buildNextAction(home = {}) {
-  if (unreadCount(home) > 0) {
-    return {
-      tone: "warning",
-      icon: MessageSquare,
-      title: "Customer messages need attention",
-      description: "Open the inbox and handle unread conversations before moving on.",
-      action: "Open inbox",
-      route: "/inbox",
-    };
-  }
-
-  if (outboundAttention(home) > 0) {
-    return {
-      tone: "warning",
-      icon: ShieldAlert,
-      title: "Outbound replies need review",
-      description: "Some outbound work is waiting for safe delivery review.",
-      action: "Review inbox",
-      route: "/inbox",
-    };
-  }
-
-  if (!truthReady(home)) {
-    return {
-      tone: "brand",
-      icon: Database,
-      title: "Prepare the business truth",
-      description: "Approve the facts the assistant can use with customers.",
-      action: "Open truth",
-      route: "/truth",
-    };
-  }
-
-  if (!runtimeReady(home)) {
-    return {
-      tone: "brand",
-      icon: ShieldCheck,
-      title: "Review the AI runtime",
-      description: "Confirm runtime state before real customer usage.",
-      action: "Review runtime",
-      route: "/truth",
-    };
-  }
-
-  if (readyChannelCount(home) <= 0) {
-    return {
-      tone: "brand",
-      icon: MessageSquare,
-      title: "Connect one customer channel",
-      description: "Choose the first customer lane for inbound conversations.",
-      action: "Open channels",
-      route: "/channels",
-    };
-  }
-
-  if (inboxUnavailable(home)) {
-    return {
-      tone: "danger",
-      icon: ShieldAlert,
-      title: "Inbox is unavailable",
-      description: "Customer activity cannot be checked right now.",
-      action: "Open inbox",
-      route: "/inbox",
-    };
-  }
-
-  return {
-    tone: "success",
-    icon: CheckCircle2,
-    title: "Workspace is calm",
-    description: "No customer queue or release blocker is visible right now.",
-    action: "Open inbox",
-    route: "/inbox",
-  };
-}
-
-function ReadinessCard({ readiness }) {
+function QuickShortcut({ icon: Icon, title, description, path, onNavigate }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Readiness
+    <button
+      type="button"
+      onClick={() => onNavigate(path)}
+      className="group rounded-md border border-line-soft bg-white p-4 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
+    >
+      <div className="flex items-start gap-3.5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text">
+          <Icon className="h-5 w-5" strokeWidth={2.05} />
         </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Core systems required before the workspace is considered live.
-        </div>
-      </div>
 
-      <div className="px-5 py-5">
-        <div className="flex items-end justify-between gap-5">
-          <div>
-            <div className="text-[32px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              {readiness.percent}%
-            </div>
-            <div className="mt-1 text-[12.5px] font-semibold text-text-muted">
-              {readiness.ready} of {readiness.total} checks ready
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold text-text">{title}</div>
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {description}
           </div>
-
-          <AppStatusText tone={readiness.percent === 100 ? "success" : "warning"}>
-            {readiness.percent === 100 ? "Ready" : "In progress"}
-          </AppStatusText>
         </div>
 
-        <div className="mt-5 h-2 overflow-hidden rounded-md bg-surface-subtle">
-          <div
-            className="h-full rounded-md bg-brand transition-[width] duration-300 ease-premium"
-            style={{ width: `${readiness.percent}%` }}
-          />
-        </div>
-
-        <div className="mt-5 space-y-3">
-          {readiness.checks.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-4 border-b border-line-soft pb-3 last:border-b-0 last:pb-0"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold text-text">
-                  {item.label}
-                </div>
-                <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
-                  {item.description}
-                </div>
-              </div>
-
-              <AppStatusText tone={item.ready ? "success" : "warning"}>
-                {item.ready ? "Ready" : "Review"}
-              </AppStatusText>
-            </div>
-          ))}
-        </div>
+        <ArrowRight
+          className="mt-1 h-4 w-4 shrink-0 text-text-subtle transition-transform duration-base ease-premium group-hover:translate-x-0.5 group-hover:text-brand"
+          strokeWidth={2.1}
+        />
       </div>
-    </Card>
+    </button>
   );
 }
 
-function QueueCard({ home }) {
+function OptionalActionRow({ item, onNavigate }) {
+  const Icon = item.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item.path)}
+      className="grid w-full gap-4 border-b border-line-soft px-5 py-4 text-left transition-colors duration-base ease-premium last:border-b-0 hover:bg-surface-subtle md:grid-cols-[minmax(0,1fr)_132px] md:items-center"
+    >
+      <div className="flex min-w-0 items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text">
+          <Icon className="h-5.5 w-5.5" strokeWidth={2.05} />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[14px] font-semibold text-text">{item.title}</div>
+            <AppTag tone={statusTone(item.status)} dot>
+              {item.label}
+            </AppTag>
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {item.description}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-start gap-2 md:justify-end">
+        <span className="text-[13px] font-semibold text-brand">{item.action}</span>
+        <ArrowRight className="h-4 w-4 text-brand" strokeWidth={2.1} />
+      </div>
+    </button>
+  );
+}
+
+function WorkspaceSummary({ home }) {
+  const live = workspaceLive(home);
+  const channelReady = readyChannelCount(home);
+  const channelConnected = Math.max(connectedChannelCount(home), channelReady);
+  const inboxStatus = inboxUnavailable(home)
+    ? "Unavailable"
+    : unreadCount(home) > 0
+      ? "Needs attention"
+      : "Calm";
+
   const rows = [
     {
-      label: "Unread",
-      value: unreadCount(home),
-      tone: unreadCount(home) > 0 ? "warning" : "success",
+      label: "Workspace state",
+      value: live ? "Live" : "Setup mode",
+      tone: live ? "success" : "warning",
     },
     {
-      label: "Open",
+      label: "Inbox",
+      value: inboxStatus,
+      tone: unreadCount(home) > 0 ? "warning" : inboxUnavailable(home) ? "danger" : "success",
+    },
+    {
+      label: "Channels",
+      value: `${channelReady}/${Math.max(channelConnected, 1)} ready`,
+      tone: channelReady > 0 ? "success" : "neutral",
+    },
+    {
+      label: "Open conversations",
       value: openCount(home),
       tone: openCount(home) > 0 ? "brand" : "neutral",
     },
-    {
-      label: "Handoff",
-      value: handoffCount(home),
-      tone: handoffCount(home) > 0 ? "warning" : "neutral",
-    },
-    {
-      label: "Reply review",
-      value: outboundAttention(home),
-      tone: outboundAttention(home) > 0 ? "warning" : "success",
-    },
   ];
 
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Customer queue
+    <div className="grid divide-y divide-line-soft rounded-md border border-line-soft bg-white">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="flex items-center justify-between gap-4 px-4 py-3.5"
+        >
+          <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+            {row.label}
+          </span>
+
+          <AppStatusText tone={row.tone}>{row.value}</AppStatusText>
         </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Live inbox and delivery workload.
-        </div>
-      </div>
-
-      <div className="space-y-3 px-5 py-5">
-        {rows.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center justify-between gap-4 border-b border-line-soft pb-3 last:border-b-0 last:pb-0"
-          >
-            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-              {row.label}
-            </span>
-
-            <AppStatusText tone={row.tone}>{row.value}</AppStatusText>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function NextAction({ action, onNavigate }) {
-  const Icon = action.icon;
-
-  return (
-    <Card padded={false} clip>
-      <div className="px-5 py-5">
-        <div className="flex items-start gap-4">
-          <AppIcon
-            icon={Icon}
-            size="lg"
-            tone={action.tone === "danger" ? "danger" : "text"}
-            strokeWidth={2.05}
-            className="shrink-0"
-          />
-
-          <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              {action.title}
-            </div>
-
-            <div className="mt-1 text-[13px] font-medium leading-5 text-text-muted">
-              {action.description}
-            </div>
-
-            <div className="mt-5">
-              <Button
-                type="button"
-                size="md"
-                onClick={() => onNavigate(action.route)}
-                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.15} />}
-              >
-                {action.action}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
+      ))}
+    </div>
   );
 }
 
@@ -414,10 +348,11 @@ export default function ProductHomePage() {
   const home = useProductHome();
 
   const loading = home?.loading === true || home?.isLoading === true;
-  const readiness = useMemo(() => buildReadiness(home), [home]);
-  const nextAction = useMemo(() => buildNextAction(home), [home]);
+  const name = greetingName(home);
 
-  function handleNavigate(path = "") {
+  const items = useMemo(() => optionalItems(home), [home]);
+
+  function go(path = "") {
     const target = s(path);
     if (!target) return;
     navigate(target);
@@ -428,7 +363,7 @@ export default function ProductHomePage() {
       <PageCanvas>
         <LoadingSurface
           title="Loading workspace"
-          description="Checking inbox, channels, truth runtime, and launch posture."
+          description="Checking inbox, channels, business info, and workspace state."
           rows={5}
         />
       </PageCanvas>
@@ -437,22 +372,6 @@ export default function ProductHomePage() {
 
   return (
     <PageCanvas>
-      <PageHeader
-        title="Workspace home"
-        description="Start from the operational state of inbox, channels, assistant readiness, and launch posture."
-        actions={
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-            onClick={() => window.location.reload()}
-          >
-            Refresh
-          </Button>
-        }
-      />
-
       {home?.availabilityNote ? (
         <InlineNotice
           tone="warning"
@@ -462,29 +381,120 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={Inbox} label="Unread messages" value={unreadCount(home)} />
-        <AppStatCard icon={MessageSquare} label="Open threads" value={openCount(home)} />
-        <AppStatCard
-          icon={Sparkles}
-          label="Ready channels"
-          value={`${readyChannelCount(home)}/${Math.max(connectedChannelCount(home), 1)}`}
-        />
-        <AppStatCard
-          icon={Rocket}
-          label="Workspace state"
-          value={workspaceLive(home) ? "Live" : "Setup"}
-        />
-      </div>
+      <Card padded={false} clip className="overflow-hidden">
+        <div className="grid gap-6 border-b border-line-soft px-6 py-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <AppTag tone={workspaceLive(home) ? "success" : "neutral"} dot>
+                {workspaceLive(home) ? "Workspace live" : "Workspace ready when you are"}
+              </AppTag>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
-          <ReadinessCard readiness={readiness} />
-          <NextAction action={nextAction} onNavigate={handleNavigate} />
+              <AppTag tone="neutral">Home</AppTag>
+            </div>
+
+            <h1 className="mt-4 text-[34px] font-semibold tracking-[var(--tracking-tight-xl)] text-text md:text-[40px]">
+              Hello, {name}
+            </h1>
+
+            <p className="mt-2 max-w-[760px] text-[14px] font-medium leading-7 text-text-muted">
+              This is your workspace cockpit. Nothing here is mandatory — use the
+              shortcuts below only when you need to check messages, connect a channel,
+              review business info, or look at reports.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="md"
+                onClick={() => go("/inbox")}
+                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+              >
+                Open inbox
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => go("/reports")}
+              >
+                View reports
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => window.location.reload()}
+                leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          <WorkspaceSummary home={home} />
         </div>
 
-        <QueueCard home={home} />
-      </div>
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="border-b border-line-soft xl:border-b-0 xl:border-r">
+            <div className="border-b border-line-soft px-5 py-4">
+              <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                Optional next steps
+              </div>
+              <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                Small actions you can open whenever they are useful.
+              </div>
+            </div>
+
+            {items.map((item) => (
+              <OptionalActionRow key={item.id} item={item} onNavigate={go} />
+            ))}
+          </section>
+
+          <section className="bg-surface-subtle">
+            <div className="border-b border-line-soft px-5 py-4">
+              <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                Quick access
+              </div>
+              <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                Jump to the surfaces you use most.
+              </div>
+            </div>
+
+            <div className="grid gap-3 p-4">
+              <QuickShortcut
+                icon={MessageSquare}
+                title="Customers"
+                description="Review customer records and context."
+                path="/customers"
+                onNavigate={go}
+              />
+              <QuickShortcut
+                icon={Sparkles}
+                title="Reports"
+                description="See performance and team workload."
+                path="/reports"
+                onNavigate={go}
+              />
+              <QuickShortcut
+                icon={Settings2}
+                title="Settings"
+                description="Change workspace behavior."
+                path="/settings"
+                onNavigate={go}
+              />
+              <QuickShortcut
+                icon={Rocket}
+                title="Launch guide"
+                description="Optional launch preparation path."
+                path="/launch"
+                onNavigate={go}
+              />
+            </div>
+          </section>
+        </div>
+      </Card>
     </PageCanvas>
   );
 }

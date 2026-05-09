@@ -1,13 +1,10 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Check,
-  ChevronDown,
   Crown,
   MailPlus,
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   UserCheck,
   UserRound,
   Users,
@@ -409,7 +406,7 @@ function MemberIdentityBadge({ role = "" }) {
   const owner = lower(role) === "owner";
 
   return (
-    <span className="flex w-8 shrink-0 items-center justify-center">
+    <span className="team-member-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_1px_2px_rgba(15,23,42,0.04)]">
       {owner ? (
         <Crown
           className="h-[22px] w-[22px] text-brand drop-shadow-[0_2px_10px_rgba(37,99,235,0.2)]"
@@ -563,9 +560,9 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
   return (
     <div
       className={cx(
-        "team-member-row grid min-h-[58px]",
+        "team-member-row grid min-h-[64px]",
         TABLE_MIN_WIDTH,
-        "items-center gap-0 px-0 transition-colors duration-base ease-premium hover:bg-surface-subtle/55"
+        "items-center gap-0 px-0 transition-[background-color,box-shadow] duration-base ease-premium"
       )}
       style={TABLE_GRID_STYLE}
     >
@@ -1360,24 +1357,85 @@ export default function Team() {
               0 1px 2px rgba(15, 23, 42, 0.045);
           }
 
-          /* === team-solid-zebra:start === */
           .team-table-head {
-            background: #f2f5f9;
-            box-shadow: inset 0 -1px 0 #d8e0ea;
+            background:
+              linear-gradient(
+                180deg,
+                rgba(244, 247, 251, 0.99),
+                rgba(238, 242, 248, 0.98)
+              );
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.96),
+              inset 0 -1px 0 rgba(214, 223, 235, 0.9);
+          }
+
+          .team-table-head > div > div > button svg {
+            width: 12px;
+            height: 12px;
+            opacity: 0.38;
+            transition:
+              opacity 160ms var(--motion-premium),
+              color 160ms var(--motion-premium),
+              transform 160ms var(--motion-premium);
+          }
+
+          .team-table-head > div > div > button:hover svg,
+          .team-table-head > div > div > button:focus-visible svg {
+            opacity: 0.88;
           }
 
           .team-member-row {
-            background: #ffffff;
+            position: relative;
+            background:
+              linear-gradient(
+                180deg,
+                rgba(252, 253, 255, 1),
+                rgba(247, 249, 252, 0.99)
+              );
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.96),
+              inset 0 -1px 0 rgba(226, 232, 240, 0.92);
           }
 
           .team-member-row:nth-child(even) {
-            background: #f6f8fb;
+            background:
+              linear-gradient(
+                180deg,
+                rgba(247, 250, 254, 1),
+                rgba(241, 246, 251, 0.99)
+              );
           }
 
           .team-member-row:hover {
-            background: #edf2f8;
+            background:
+              linear-gradient(
+                180deg,
+                rgba(239, 244, 252, 1),
+                rgba(233, 239, 248, 0.99)
+              );
+            box-shadow:
+              inset 4px 0 0 rgba(46, 96, 255, 0.54),
+              inset 0 1px 0 rgba(255, 255, 255, 0.98),
+              inset 0 -1px 0 rgba(214, 223, 235, 0.9),
+              0 12px 30px -26px rgba(15, 23, 42, 0.34);
           }
-          /* === team-solid-zebra:end === */
+
+          .team-member-row:hover .team-member-avatar {
+            border-color: rgba(46, 96, 255, 0.26);
+            background:
+              linear-gradient(
+                180deg,
+                rgba(248, 250, 255, 1),
+                rgba(240, 245, 255, 0.98)
+              );
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.98),
+              0 8px 18px -14px rgba(46, 96, 255, 0.28);
+          }
+
+          .team-member-row:hover .team-member-primary {
+            color: rgb(var(--color-brand));
+          }
           .team-page-scope input:-webkit-autofill,
           .team-page-scope input:-webkit-autofill:hover,
           .team-page-scope input:-webkit-autofill:focus,
@@ -1482,7 +1540,7 @@ export default function Team() {
               {arr(state.users).length ? (
                 <div className="relative overflow-visible">
                   <div className={TABLE_MIN_WIDTH}>
-                    <div className="team-table-head relative z-20 border-b border-line-soft px-0 py-2">
+                    <div className="team-table-head relative z-20 border-b border-line-soft bg-surface-muted/60 px-0 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
                       <div
                         className={cx(
                           "grid",
@@ -1739,6 +1797,8 @@ export default function Team() {
     </>
   );
 }
+
+
 
 
 

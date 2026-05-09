@@ -1,168 +1,197 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
-  ArrowRight,
+  Bot,
+  Briefcase,
+  Building2,
   CheckCircle2,
-  Database,
-  ExternalLink,
-  FileCheck2,
-  Filter,
-  RefreshCw,
-  Search,
-  ShieldAlert,
+  DollarSign,
+  LockKeyhole,
+  Pencil,
+  Phone,
+  Save,
   ShieldCheck,
-  TriangleAlert,
+  X,
 } from "lucide-react";
 
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
-import AppIcon from "../../components/ui/AppIcon.jsx";
-import AppIconButton from "../../components/ui/AppIconButton.jsx";
-import AppPaginationFooter from "../../components/ui/AppPaginationFooter.jsx";
-import AppStatCard from "../../components/ui/AppStatCard.jsx";
-import AppStatusText from "../../components/ui/AppStatusText.jsx";
 import AppTag from "../../components/ui/AppTag.jsx";
-import {
-  AppFilterAction,
-  AppFilterMenuShell,
-  AppFilterOption,
-  AppFilterSearchInput,
-  AppMultiSelectMenu,
-  AppTableHeaderFilter,
-  normalizeAppFilterList,
-  toggleAppFilterListValue,
-} from "../../components/ui/AppTableFilters.jsx";
-import {
-  AppTableCard,
-  AppTableCell,
-  AppTableEmptyState,
-  AppTableHeaderCell,
-  AppTableHeaderRow,
-  AppTableRow,
-  AppTableText,
-  AppTableToolbar,
-} from "../../components/ui/AppTable.jsx";
 import {
   PageCanvas,
   PageHeader,
 } from "../../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../../lib/cx.js";
 
-const PAGE_SIZE = 7;
-
-const TABLE_MIN_WIDTH = "min-w-[1240px] w-full";
-
-const TABLE_GRID_STYLE = {
-  gridTemplateColumns:
-    "minmax(340px,1fr) 150px 145px 130px minmax(220px,0.8fr) 150px 112px",
-};
-
-const AREA_PRIORITY = [
-  "identity",
-  "auth",
-  "routing",
-  "inbox",
-  "knowledge",
-  "release",
-];
-
-const STATUS_PRIORITY = ["verified", "review", "stale", "blocked"];
-const RISK_PRIORITY = ["high", "medium", "low"];
-
-const TRUTH_RECORDS = [
+const BUSINESS_SECTIONS = [
   {
-    id: "truth_identity_001",
-    title: "Workspace identity is configured",
-    description: "Workspace name, support email, and visible shell identity are present.",
-    area: "identity",
-    status: "verified",
-    risk: "low",
-    evidence: "settings.workspaceName + supportEmail",
-    source: "Workspace settings",
-    updated_at: daysAgo(0),
+    id: "company",
+    title: "Company identity",
+    description: "Basic public information the assistant can safely use.",
+    status: "ready",
+    icon: Building2,
+    fields: [
+      {
+        key: "companyName",
+        label: "Company name",
+        value: "Neosentic",
+      },
+      {
+        key: "positioning",
+        label: "Positioning",
+        value: "AI automation and conversion-focused website systems for service businesses.",
+        wide: true,
+      },
+      {
+        key: "shortIntro",
+        label: "Short introduction",
+        value:
+          "We help businesses automate customer conversations, lead capture, follow-up, and operational workflows with AI-assisted systems.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
   {
-    id: "truth_auth_001",
-    title: "Email verification protects sensitive actions",
-    description: "Sensitive workspace actions stay restricted until verification completes.",
-    area: "auth",
-    status: "verified",
-    risk: "medium",
-    evidence: "verify-email gate + secure action checks",
-    source: "Auth guard",
-    updated_at: daysAgo(1),
+    id: "services",
+    title: "Services",
+    description: "What the business offers and what should be presented to customers.",
+    status: "ready",
+    icon: Briefcase,
+    fields: [
+      {
+        key: "mainService",
+        label: "Main service",
+        value: "AI-powered business automation",
+      },
+      {
+        key: "secondaryService",
+        label: "Secondary service",
+        value: "Premium websites and landing pages",
+      },
+      {
+        key: "serviceDetails",
+        label: "Service details",
+        value:
+          "Website chat assistants, CRM routing, lead qualification, customer follow-up, workflow automation, and internal operations dashboards.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
   {
-    id: "truth_routing_001",
-    title: "Inbox routing can receive connected channel threads",
-    description: "Connected channels should create inbox threads and expose follow-up state.",
-    area: "routing",
+    id: "pricing",
+    title: "Pricing & offer",
+    description: "How pricing should be explained before a human takes over.",
     status: "review",
-    risk: "medium",
-    evidence: "channel state + thread creation path",
-    source: "Inbox routing",
-    updated_at: daysAgo(1),
+    icon: DollarSign,
+    fields: [
+      {
+        key: "pricingModel",
+        label: "Pricing model",
+        value: "Project-based setup with optional monthly support.",
+      },
+      {
+        key: "startingPoint",
+        label: "Starting point",
+        value: "Depends on scope, integrations, and automation complexity.",
+      },
+      {
+        key: "pricingBoundary",
+        label: "Assistant pricing boundary",
+        value:
+          "The assistant should not promise a fixed final price. It can explain that pricing depends on scope and offer to arrange a consultation.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
   {
-    id: "truth_leads_001",
-    title: "Qualified conversations can become lead records",
-    description: "Lead creation flow is visible in the sales pipeline and customer directory.",
-    area: "inbox",
-    status: "verified",
-    risk: "low",
-    evidence: "listLeads response + pipeline records",
-    source: "Leads API",
-    updated_at: daysAgo(0),
-  },
-  {
-    id: "truth_knowledge_001",
-    title: "Knowledge sources are trusted answer inputs",
-    description: "Assistant answers should only use enabled and reviewed sources.",
-    area: "knowledge",
+    id: "policies",
+    title: "Policies",
+    description: "Customer-facing rules, limits, and promises.",
     status: "review",
-    risk: "high",
-    evidence: "source status + review marker",
-    source: "Knowledge base",
-    updated_at: daysAgo(2),
+    icon: ShieldCheck,
+    fields: [
+      {
+        key: "responsePolicy",
+        label: "Response policy",
+        value: "Customers should receive a clear reply and be routed to a human when needed.",
+        wide: true,
+      },
+      {
+        key: "refundPolicy",
+        label: "Refund / cancellation policy",
+        value: "Not configured yet.",
+      },
+      {
+        key: "dataPolicy",
+        label: "Data handling note",
+        value:
+          "Customer information should only be used to provide service, support, and follow-up. Sensitive requests should be escalated to an operator.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
   {
-    id: "truth_release_001",
-    title: "Production smoke is not blocking release",
-    description: "Health, release identity, and workspace lane checks must pass together.",
-    area: "release",
-    status: "blocked",
-    risk: "high",
-    evidence: "prod smoke result",
-    source: "Release gate",
-    updated_at: daysAgo(0),
+    id: "contact",
+    title: "Contact & handoff",
+    description: "Where the assistant should send serious customer intent.",
+    status: "ready",
+    icon: Phone,
+    fields: [
+      {
+        key: "supportEmail",
+        label: "Support email",
+        value: "support@neosentic.com",
+      },
+      {
+        key: "salesOwner",
+        label: "Sales owner",
+        value: "Emil",
+      },
+      {
+        key: "handoffRule",
+        label: "Handoff rule",
+        value:
+          "When a customer asks about pricing, project scope, legal terms, or custom integration, the assistant should collect context and hand off to an operator.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
   {
-    id: "truth_inbox_001",
-    title: "Outbound health summary is available",
-    description: "Outbound attempt state can be inspected before customer-impacting sends.",
-    area: "inbox",
-    status: "stale",
-    risk: "medium",
-    evidence: "outbound summary snapshot",
-    source: "Inbox repository",
-    updated_at: daysAgo(6),
-  },
-  {
-    id: "truth_team_001",
-    title: "Operator access is separated from owner access",
-    description: "Owner, admin, and operator roles are visible and assignable.",
-    area: "auth",
-    status: "verified",
-    risk: "medium",
-    evidence: "team role records",
-    source: "Team page",
-    updated_at: daysAgo(0),
+    id: "assistant",
+    title: "Assistant boundaries",
+    description: "What the assistant can say and where it must stop.",
+    status: "review",
+    icon: Bot,
+    fields: [
+      {
+        key: "canAnswer",
+        label: "Can answer",
+        value: "Services, general process, lead qualification, consultation booking, and basic project explanation.",
+        type: "textarea",
+        wide: true,
+      },
+      {
+        key: "mustNotAnswer",
+        label: "Must not answer",
+        value:
+          "Final legal terms, guaranteed pricing, sensitive credentials, private customer data, or unsupported technical promises.",
+        type: "textarea",
+        wide: true,
+      },
+      {
+        key: "fallback",
+        label: "Fallback behavior",
+        value: "If unsure, the assistant should say it will ask an operator and continue with a safe handoff.",
+        type: "textarea",
+        wide: true,
+      },
+    ],
   },
 ];
-
-function daysAgo(days = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() - Number(days || 0));
-  return date.toISOString();
-}
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -178,473 +207,350 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatDate(value = "") {
-  const raw = s(value);
-  if (!raw) return "—";
-
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function updatedTimestamp(record = {}) {
-  const date = new Date(record.updated_at);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
 function statusTone(status = "") {
   const safe = lower(status);
 
-  if (safe === "verified") return "success";
+  if (safe === "ready") return "success";
   if (safe === "review") return "warning";
   if (safe === "blocked") return "danger";
-  if (safe === "stale") return "neutral";
 
   return "neutral";
 }
 
-function riskTone(risk = "") {
-  const safe = lower(risk);
+function statusLabel(status = "") {
+  const safe = lower(status);
 
-  if (safe === "high") return "danger";
-  if (safe === "medium") return "warning";
-  return "success";
+  if (safe === "review") return "Needs review";
+  return titleize(safe);
 }
 
-function areaIcon(area = "") {
-  const safe = lower(area);
+function sectionStatus(section = {}) {
+  const hasMissing = section.fields.some(
+    (field) => !s(field.value) || lower(field.value) === "not configured yet."
+  );
 
-  if (safe === "auth") return ShieldCheck;
-  if (safe === "routing") return Filter;
-  if (safe === "knowledge") return Database;
-  if (safe === "release") return ShieldAlert;
-  if (safe === "inbox") return FileCheck2;
-
-  return CheckCircle2;
+  if (hasMissing) return "review";
+  return section.status || "ready";
 }
 
-function uniqueOptions(values = [], priority = []) {
-  const priorityMap = new Map(priority.map((item, index) => [item, index]));
-  const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
-
-  return unique
-    .sort((a, b) => {
-      const aPriority = priorityMap.has(a) ? priorityMap.get(a) : 100;
-      const bPriority = priorityMap.has(b) ? priorityMap.get(b) : 100;
-
-      if (aPriority !== bPriority) return aPriority - bPriority;
-
-      return titleize(a).localeCompare(titleize(b));
-    })
-    .map((value) => ({ value, label: titleize(value) }));
+function getDraftFromSection(section = {}) {
+  return Object.fromEntries(
+    section.fields.map((field) => [field.key, s(field.value)])
+  );
 }
 
-function createDefaultFilters() {
-  return {
-    record: "",
-    areas: [],
-    statuses: [],
-    risks: [],
-    updatedSort: "newest",
-  };
-}
-
-function countActiveFilters(filters = {}) {
-  return [
-    s(filters.record),
-    normalizeAppFilterList(filters.areas).length ? "areas" : "",
-    normalizeAppFilterList(filters.statuses).length ? "statuses" : "",
-    normalizeAppFilterList(filters.risks).length ? "risks" : "",
-    filters.updatedSort && filters.updatedSort !== "newest" ? "updatedSort" : "",
-  ].filter(Boolean).length;
-}
-
-function recordComparator(sortValue = "newest") {
-  return (a, b) => {
-    const aTime = updatedTimestamp(a);
-    const bTime = updatedTimestamp(b);
-
-    if (sortValue === "oldest") return aTime - bTime;
-    return bTime - aTime;
-  };
-}
-
-function matchesRecord(record = {}, query = "") {
-  const q = lower(query);
-  if (!q) return true;
-
-  return lower(
-    [
-      record.title,
-      record.description,
-      record.area,
-      record.status,
-      record.risk,
-      record.evidence,
-      record.source,
-    ].join(" ")
-  ).includes(q);
-}
-
-function RecordIdentity({ record }) {
-  const Icon = areaIcon(record.area);
+function LockedField({ field }) {
+  const value = s(field.value) || "Not configured yet";
 
   return (
-    <div className="flex min-w-0 items-center gap-4">
-      <AppIcon
-        icon={Icon}
-        size="lg"
-        tone="text"
-        strokeWidth={2.05}
-        className="shrink-0"
-      />
+    <div className={cx("grid gap-2", field.wide ? "md:col-span-2" : "")}>
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-[12px] font-semibold text-text-muted">
+          {field.label}
+        </label>
 
-      <div className="min-w-0">
-        <div className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-          {record.title}
+        <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-text-subtle">
+          <LockKeyhole className="h-3.5 w-3.5" strokeWidth={2.1} />
+          Locked
         </div>
+      </div>
 
-        <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {record.description}
-        </div>
+      <div
+        className={cx(
+          "rounded-md border border-line-soft bg-surface-subtle px-3.5 py-3 text-[13.5px] font-semibold leading-6 text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]",
+          field.type === "textarea" ? "min-h-[92px] whitespace-pre-line" : "min-h-11 truncate"
+        )}
+      >
+        {value}
       </div>
     </div>
   );
 }
 
-function TruthRow({ record }) {
+function EditField({ field, value, onChange }) {
   return (
-    <AppTableRow
-      minWidthClass={TABLE_MIN_WIDTH}
-      gridStyle={TABLE_GRID_STYLE}
-      className="min-h-[64px]"
-    >
-      <AppTableCell>
-        <RecordIdentity record={record} />
-      </AppTableCell>
+    <div className={cx("grid gap-2", field.wide ? "md:col-span-2" : "")}>
+      <label className="text-[12px] font-semibold text-text-muted">
+        {field.label}
+      </label>
 
-      <AppTableCell>
-        <AppTag>{titleize(record.area)}</AppTag>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppStatusText tone={statusTone(record.status)}>
-          {titleize(record.status)}
-        </AppStatusText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppStatusText tone={riskTone(record.risk)}>
-          {titleize(record.risk)}
-        </AppStatusText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTableText muted>{record.evidence}</AppTableText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTableText muted>{formatDate(record.updated_at)}</AppTableText>
-      </AppTableCell>
-
-      <AppTableCell align="right">
-        <div className="flex justify-end gap-2">
-          <AppIconButton label="Open evidence">
-            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
-          </AppIconButton>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={lower(record.status) === "blocked" ? "primary" : "secondary"}
-            rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.15} />}
-          >
-            Review
-          </Button>
-        </div>
-      </AppTableCell>
-    </AppTableRow>
+      {field.type === "textarea" ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          rows={4}
+          className="min-h-[112px] resize-y rounded-md border border-line bg-white px-3.5 py-3 text-[13.5px] font-semibold leading-6 text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium placeholder:text-text-subtle focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-11 rounded-md border border-line bg-white px-3.5 text-[13.5px] font-semibold text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium placeholder:text-text-subtle focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        />
+      )}
+    </div>
   );
 }
 
-function TruthTable({
-  records,
-  filters,
-  openFilter,
-  areaOptions,
-  statusOptions,
-  riskOptions,
-  activeFilterCount,
-  onOpenFilter,
-  onPatchFilters,
-  onClearFilters,
-}) {
+function BusinessSectionCard({ section, selected = false, onEdit }) {
+  const Icon = section.icon || CheckCircle2;
+  const status = sectionStatus(section);
+
   return (
-    <AppTableCard>
-      <AppTableToolbar
-        title="Truth records"
-        description="Claims, evidence, and release-critical review state."
-        filters={
-          activeFilterCount ? (
-            <Button type="button" variant="secondary" size="sm" onClick={onClearFilters}>
-              Clear filters
-            </Button>
-          ) : null
-        }
-      />
+    <Card
+      padded={false}
+      clip
+      className={cx(
+        "transition-[border-color,box-shadow] duration-base ease-premium",
+        selected ? "border-brand shadow-[inset_3px_0_0_rgb(var(--color-brand))]" : ""
+      )}
+    >
+      <div className="grid gap-5 border-b border-line-soft p-5 xl:grid-cols-[minmax(0,1fr)_126px] xl:items-center">
+        <div className="flex min-w-0 items-start gap-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center text-text">
+            <Icon className="h-9 w-9" strokeWidth={1.85} />
+          </div>
 
-      <div className="overflow-x-auto">
-        <div className={TABLE_MIN_WIDTH}>
-          <AppTableHeaderRow minWidthClass="w-full" gridStyle={TABLE_GRID_STYLE}>
-            <AppTableHeaderFilter
-              id="record"
-              label="Record"
-              openFilter={openFilter}
-              active={Boolean(filters.record)}
-              onOpen={onOpenFilter}
-            >
-              <AppFilterSearchInput
-                value={filters.record}
-                onChange={(value) => onPatchFilters({ record: value })}
-                placeholder="Search record"
-              />
-              <AppFilterMenuShell>
-                <AppFilterAction
-                  onClick={() => onPatchFilters({ record: "" })}
-                  disabled={!filters.record}
-                >
-                  Clear record filter
-                </AppFilterAction>
-              </AppFilterMenuShell>
-            </AppTableHeaderFilter>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[20px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {section.title}
+              </h2>
 
-            <AppTableHeaderFilter
-              id="area"
-              label="Area"
-              openFilter={openFilter}
-              active={normalizeAppFilterList(filters.areas).length > 0}
-              onOpen={onOpenFilter}
-            >
-              <AppMultiSelectMenu
-                options={areaOptions}
-                selectedValues={filters.areas}
-                allLabel="All areas"
-                onClear={() => onPatchFilters({ areas: [] })}
-                onToggle={(value) =>
-                  onPatchFilters({
-                    areas: toggleAppFilterListValue(filters.areas, value),
-                  })
-                }
-              />
-            </AppTableHeaderFilter>
+              <AppTag tone={statusTone(status)} dot>
+                {statusLabel(status)}
+              </AppTag>
+            </div>
 
-            <AppTableHeaderFilter
-              id="status"
-              label="Status"
-              openFilter={openFilter}
-              active={normalizeAppFilterList(filters.statuses).length > 0}
-              onOpen={onOpenFilter}
-            >
-              <AppMultiSelectMenu
-                options={statusOptions}
-                selectedValues={filters.statuses}
-                allLabel="All statuses"
-                onClear={() => onPatchFilters({ statuses: [] })}
-                onToggle={(value) =>
-                  onPatchFilters({
-                    statuses: toggleAppFilterListValue(filters.statuses, value),
-                  })
-                }
-              />
-            </AppTableHeaderFilter>
+            <p className="mt-1.5 max-w-[780px] text-[13.5px] font-medium leading-6 text-text-muted">
+              {section.description}
+            </p>
+          </div>
+        </div>
 
-            <AppTableHeaderFilter
-              id="risk"
-              label="Risk"
-              openFilter={openFilter}
-              active={normalizeAppFilterList(filters.risks).length > 0}
-              onOpen={onOpenFilter}
-            >
-              <AppMultiSelectMenu
-                options={riskOptions}
-                selectedValues={filters.risks}
-                allLabel="All risk"
-                onClear={() => onPatchFilters({ risks: [] })}
-                onToggle={(value) =>
-                  onPatchFilters({
-                    risks: toggleAppFilterListValue(filters.risks, value),
-                  })
-                }
-              />
-            </AppTableHeaderFilter>
-
-            <AppTableHeaderCell>Evidence</AppTableHeaderCell>
-
-            <AppTableHeaderFilter
-              id="updated"
-              label="Updated"
-              openFilter={openFilter}
-              active={filters.updatedSort === "oldest"}
-              onOpen={onOpenFilter}
-            >
-              <AppFilterMenuShell>
-                <AppFilterOption
-                  selected={filters.updatedSort === "newest"}
-                  onClick={() => onPatchFilters({ updatedSort: "newest" })}
-                >
-                  Newest first
-                </AppFilterOption>
-
-                <AppFilterOption
-                  selected={filters.updatedSort === "oldest"}
-                  onClick={() => onPatchFilters({ updatedSort: "oldest" })}
-                >
-                  Oldest first
-                </AppFilterOption>
-
-                <AppFilterAction
-                  onClick={() => onPatchFilters({ updatedSort: "newest" })}
-                  disabled={filters.updatedSort === "newest"}
-                >
-                  Reset sort
-                </AppFilterAction>
-              </AppFilterMenuShell>
-            </AppTableHeaderFilter>
-
-            <AppTableHeaderCell align="right">Action</AppTableHeaderCell>
-          </AppTableHeaderRow>
-
-          {records.length ? (
-            records.map((record) => <TruthRow key={record.id} record={record} />)
-          ) : (
-            <AppTableEmptyState
-              icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.9} />}
-              title="No matching truth records"
-              description="Adjust filters to bring governance records back into view."
-            />
-          )}
+        <div className="xl:text-right">
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={() => onEdit(section)}
+            leftIcon={<Pencil className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            Edit
+          </Button>
         </div>
       </div>
-    </AppTableCard>
+
+      <div className="grid gap-4 bg-white p-5 md:grid-cols-2">
+        {section.fields.map((field) => (
+          <LockedField key={field.key} field={field} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function EditBusinessDialog({
+  section,
+  draft,
+  open,
+  onClose,
+  onDraftChange,
+  onSave,
+}) {
+  if (!open || !section) return null;
+
+  const Icon = section.icon || CheckCircle2;
+  const status = sectionStatus(section);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
+      <div role="presentation" className="absolute inset-0" onClick={onClose} />
+
+      <Card
+        padded={false}
+        clip
+        className="relative z-[81] max-h-[calc(100vh-64px)] w-full max-w-[760px] overflow-hidden shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
+      >
+        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
+              <Icon className="h-11 w-11" strokeWidth={1.78} />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+                Edit business truth
+              </div>
+
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {section.title}
+              </h2>
+
+              <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+                Update the locked business information. After saving, this section returns to read-only mode.
+              </p>
+
+              <div className="mt-4">
+                <AppTag tone={statusTone(status)} dot>
+                  {statusLabel(status)}
+                </AppTag>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
+            aria-label="Close edit dialog"
+          >
+            <X className="h-4 w-4" strokeWidth={2.1} />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100vh-270px)] overflow-y-auto bg-surface-subtle p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            {section.fields.map((field) => (
+              <EditField
+                key={field.key}
+                field={field}
+                value={draft[field.key] ?? ""}
+                onChange={(value) => onDraftChange(field.key, value)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-white p-5 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            size="md"
+            onClick={onSave}
+            leftIcon={<Save className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            Save changes
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }
 
 export default function TruthViewerPage() {
-  const [records] = useState(TRUTH_RECORDS);
-  const [filters, setFilters] = useState(() => createDefaultFilters());
-  const [openFilter, setOpenFilter] = useState("");
-  const [page, setPage] = useState(1);
+  const [sections, setSections] = useState(BUSINESS_SECTIONS);
+  const [editingId, setEditingId] = useState("");
+  const [draft, setDraft] = useState({});
 
-  const areaOptions = useMemo(
-    () => uniqueOptions(records.map((record) => record.area), AREA_PRIORITY),
-    [records]
-  );
+  const editingSection = useMemo(() => {
+    return sections.find((section) => section.id === editingId) || null;
+  }, [editingId, sections]);
 
-  const statusOptions = useMemo(
-    () => uniqueOptions(records.map((record) => record.status), STATUS_PRIORITY),
-    [records]
-  );
-
-  const riskOptions = useMemo(
-    () => uniqueOptions(records.map((record) => record.risk), RISK_PRIORITY),
-    [records]
-  );
-
-  const filteredRecords = useMemo(() => {
-    const areas = normalizeAppFilterList(filters.areas);
-    const statuses = normalizeAppFilterList(filters.statuses);
-    const risks = normalizeAppFilterList(filters.risks);
-
-    return records
-      .filter((record) => matchesRecord(record, filters.record))
-      .filter((record) => (areas.length ? areas.includes(lower(record.area)) : true))
-      .filter((record) =>
-        statuses.length ? statuses.includes(lower(record.status)) : true
-      )
-      .filter((record) => (risks.length ? risks.includes(lower(record.risk)) : true))
-      .sort(recordComparator(filters.updatedSort));
-  }, [records, filters]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const pageItems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredRecords.slice(start, start + PAGE_SIZE);
-  }, [filteredRecords, safePage]);
-
-  const metrics = useMemo(() => {
-    const total = records.length;
-    const verified = records.filter(
-      (record) => lower(record.status) === "verified"
+  const summary = useMemo(() => {
+    const ready = sections.filter(
+      (section) => sectionStatus(section) === "ready"
     ).length;
-    const review = records.filter((record) => lower(record.status) === "review").length;
-    const blocked = records.filter(
-      (record) => lower(record.status) === "blocked"
+    const review = sections.filter(
+      (section) => sectionStatus(section) === "review"
     ).length;
 
-    return { total, verified, review, blocked };
-  }, [records]);
+    return {
+      ready,
+      review,
+      total: sections.length,
+    };
+  }, [sections]);
 
-  const activeFilterCount = countActiveFilters(filters);
+  function openEdit(section) {
+    setEditingId(section.id);
+    setDraft(getDraftFromSection(section));
+  }
 
-  function patchFilters(next = {}) {
-    setFilters((current) => ({ ...current, ...next }));
-    setPage(1);
+  function closeEdit() {
+    setEditingId("");
+    setDraft({});
+  }
+
+  function updateDraft(key, value) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function saveEdit() {
+    if (!editingSection) return;
+
+    setSections((current) =>
+      current.map((section) => {
+        if (section.id !== editingSection.id) return section;
+
+        return {
+          ...section,
+          status: "ready",
+          fields: section.fields.map((field) => ({
+            ...field,
+            value: draft[field.key] ?? field.value,
+          })),
+        };
+      })
+    );
+
+    closeEdit();
   }
 
   return (
     <PageCanvas>
       <PageHeader
-        title="Truth review"
-        description="Inspect governed system claims, supporting evidence, and release-critical verification state."
-        actions={
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Refresh
-          </Button>
-        }
+        title="Business info"
+        description="Locked source-of-truth inputs for what the assistant can say about your business. Edit only when the business information changes."
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={ShieldCheck} label="Truth records" value={metrics.total} />
-        <AppStatCard icon={CheckCircle2} label="Verified" value={metrics.verified} />
-        <AppStatCard icon={TriangleAlert} label="Needs review" value={metrics.review} />
-        <AppStatCard icon={ShieldAlert} label="Blocked" value={metrics.blocked} />
+      <Card padded={false} clip>
+        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-center">
+          <div>
+            <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Approved business truth
+            </div>
+            <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
+              These fields stay locked after setup. Use Edit to update a section, then save it back into read-only mode.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <AppTag tone="success" dot>
+              {summary.ready} ready
+            </AppTag>
+            <AppTag tone="warning" dot>
+              {summary.review} review
+            </AppTag>
+            <AppTag tone="neutral">
+              {summary.total} sections
+            </AppTag>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-4">
+        {sections.map((section) => (
+          <BusinessSectionCard
+            key={section.id}
+            section={section}
+            selected={editingId === section.id}
+            onEdit={openEdit}
+          />
+        ))}
       </div>
 
-      <TruthTable
-        records={pageItems}
-        filters={filters}
-        openFilter={openFilter}
-        areaOptions={areaOptions}
-        statusOptions={statusOptions}
-        riskOptions={riskOptions}
-        activeFilterCount={activeFilterCount}
-        onOpenFilter={setOpenFilter}
-        onPatchFilters={patchFilters}
-        onClearFilters={() => {
-          setFilters(createDefaultFilters());
-          setPage(1);
-        }}
-      />
-
-      <AppPaginationFooter
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalItems={filteredRecords.length}
-        pageSize={PAGE_SIZE}
-        filtered={activeFilterCount > 0}
-        onPageChange={setPage}
+      <EditBusinessDialog
+        section={editingSection}
+        draft={draft}
+        open={Boolean(editingSection)}
+        onClose={closeEdit}
+        onDraftChange={updateDraft}
+        onSave={saveEdit}
       />
     </PageCanvas>
   );

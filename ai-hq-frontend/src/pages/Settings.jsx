@@ -1,11 +1,14 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Bell,
   Bot,
   CheckCircle2,
+  Code2,
   Globe2,
   KeyRound,
   LockKeyhole,
+  Mail,
+  Plug,
   RefreshCw,
   Save,
   Settings2,
@@ -17,9 +20,6 @@ import {
 
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
-import Input from "../components/ui/Input.jsx";
-import AppIcon from "../components/ui/AppIcon.jsx";
-import AppStatusText from "../components/ui/AppStatusText.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
 import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
@@ -29,40 +29,60 @@ const SECTIONS = [
     id: "workspace",
     label: "Workspace",
     icon: Settings2,
-    description: "Identity, domain, and public workspace details.",
+    description: "Identity, region, domain, and support details.",
   },
   {
     id: "assistant",
     label: "Assistant",
     icon: Bot,
-    description: "Default behavior, routing tone, and automation limits.",
+    description: "Tone, automation behavior, and handoff rules.",
   },
   {
     id: "security",
     label: "Security",
     icon: ShieldCheck,
-    description: "Verification, access control, and sensitive actions.",
+    description: "Verification, sessions, and protected actions.",
   },
   {
     id: "notifications",
     label: "Notifications",
     icon: Bell,
-    description: "Inbox, leads, and operational alerts.",
+    description: "Inbox, lead, and weekly operational alerts.",
+  },
+  {
+    id: "developer",
+    label: "Developer",
+    icon: Code2,
+    description: "API mode, webhook URL, and integration settings.",
   },
 ];
 
 const INITIAL_SETTINGS = {
   workspaceName: "AI HQ",
+  workspaceRegion: "Azerbaijan",
   publicDomain: "aihq.local",
   supportEmail: "support@weneox.com",
+
   assistantName: "AI Operator",
   responseTone: "Professional",
+  fallbackBehavior: "Collect context and hand off to operator",
   autoRouteLeads: true,
+  safeHandoff: true,
+
   requireEmailVerification: true,
   sensitiveActionLock: true,
-  weeklySummary: true,
-  leadAlerts: true,
+  adminApproval: true,
+  sessionTimeout: "24 hours",
+
   inboxAlerts: true,
+  leadAlerts: true,
+  weeklySummary: true,
+  notificationEmail: "support@weneox.com",
+
+  apiMode: "Test mode",
+  webhookUrl: "https://aihq.local/api/webhooks/inbound",
+  developerAccess: false,
+  environment: "Local workspace",
 };
 
 function s(value, fallback = "") {
@@ -80,7 +100,7 @@ function Toggle({ checked, onChange, label }) {
       className={cx(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-[background-color,border-color,box-shadow] duration-150 ease-premium",
         checked
-          ? "border-brand bg-brand shadow-[0_8px_20px_-14px_rgba(var(--color-brand),0.85)]"
+          ? "border-brand bg-brand shadow-[0_8px_20px_-14px_rgba(37,99,235,0.85)]"
           : "border-line bg-surface-subtle"
       )}
     >
@@ -94,61 +114,97 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-function SettingsRow({
-  icon,
-  title,
-  description,
-  children,
-  border = true,
-}) {
+function TextInput({ value, onChange, placeholder = "", type = "text" }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      className="h-11 w-full rounded-md border border-line bg-white px-3.5 text-[13.5px] font-semibold text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium placeholder:text-text-subtle focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+    />
+  );
+}
+
+function TextArea({ value, onChange, placeholder = "" }) {
+  return (
+    <textarea
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      rows={4}
+      className="min-h-[112px] w-full resize-y rounded-md border border-line bg-white px-3.5 py-3 text-[13.5px] font-semibold leading-6 text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium placeholder:text-text-subtle focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+    />
+  );
+}
+
+function SelectControl({ value, options, onChange }) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-11 w-full rounded-md border border-line bg-white px-3.5 text-[13.5px] font-semibold text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium focus:border-brand focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function SettingRow({ icon: Icon, title, description, children, last = false }) {
   return (
     <div
       className={cx(
-        "grid gap-4 px-5 py-4 lg:grid-cols-[minmax(260px,1fr)_minmax(280px,0.9fr)] lg:items-center",
-        border ? "border-b border-line-soft" : ""
+        "grid gap-4 px-5 py-5 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1fr)] lg:items-start",
+        last ? "" : "border-b border-line-soft"
       )}
     >
       <div className="flex min-w-0 items-start gap-3.5">
-        <AppIcon
-          icon={icon}
-          size="md"
-          tone="text"
-          strokeWidth={2.05}
-          className="mt-0.5 shrink-0"
-        />
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text-muted">
+          <Icon className="h-4.5 w-4.5" strokeWidth={2.05} />
+        </div>
 
         <div className="min-w-0">
           <div className="text-[14px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
             {title}
           </div>
-
-          {description ? (
-            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-              {description}
-            </div>
-          ) : null}
+          <div className="mt-1 max-w-[420px] text-[12.5px] font-medium leading-5 text-text-muted">
+            {description}
+          </div>
         </div>
       </div>
 
-      <div className="min-w-0 lg:justify-self-end">{children}</div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function ToggleControl({ checked, onChange, enabledLabel = "Enabled", disabledLabel = "Disabled", label }) {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border border-line bg-white px-3.5">
+      <div className="text-[13.5px] font-semibold text-text">
+        {checked ? enabledLabel : disabledLabel}
+      </div>
+      <Toggle checked={checked} onChange={onChange} label={label} />
     </div>
   );
 }
 
 function SectionNav({ activeSection, onChange }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+    <aside className="border-b border-line-soft bg-surface-subtle/60 p-3 xl:border-b-0 xl:border-r">
+      <div className="px-2 pb-3 pt-1">
+        <div className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
           Settings
-        </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Configure workspace behavior.
         </div>
       </div>
 
-      <div className="p-2">
+      <div className="grid gap-1">
         {SECTIONS.map((section) => {
+          const Icon = section.icon;
           const active = activeSection === section.id;
 
           return (
@@ -157,28 +213,28 @@ function SectionNav({ activeSection, onChange }) {
               type="button"
               onClick={() => onChange(section.id)}
               className={cx(
-                "flex w-full items-start gap-3 rounded-md px-3 py-3 text-left transition-colors duration-150 ease-premium",
+                "group flex w-full items-start gap-3 rounded-md px-3 py-3 text-left transition-[background-color,color,box-shadow] duration-base ease-premium",
                 active
-                  ? "bg-brand-soft text-brand"
-                  : "text-text-muted hover:bg-surface-subtle hover:text-text"
+                  ? "bg-white text-text shadow-[inset_3px_0_0_rgb(var(--color-brand)),0_8px_20px_-18px_rgba(15,23,42,0.35)]"
+                  : "text-text-muted hover:bg-white hover:text-text"
               )}
             >
-              <AppIcon
-                icon={section.icon}
-                size="md"
-                tone={active ? "brand" : "muted"}
+              <Icon
+                className={cx(
+                  "mt-0.5 h-4.5 w-4.5 shrink-0",
+                  active ? "text-brand" : "text-text-subtle group-hover:text-text-muted"
+                )}
                 strokeWidth={2.05}
-                className="mt-0.5 shrink-0"
               />
 
               <span className="min-w-0">
-                <span className="block text-[13px] font-semibold text-current">
+                <span className="block text-[13.5px] font-semibold">
                   {section.label}
                 </span>
                 <span
                   className={cx(
                     "mt-0.5 block text-[12px] font-medium leading-5",
-                    active ? "text-brand/75" : "text-text-subtle"
+                    active ? "text-text-muted" : "text-text-subtle"
                   )}
                 >
                   {section.description}
@@ -188,262 +244,321 @@ function SectionNav({ activeSection, onChange }) {
           );
         })}
       </div>
-    </Card>
+    </aside>
   );
 }
 
-function WorkspaceSettings({ settings, onPatch }) {
+function WorkspaceContent({ settings, onPatch }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Workspace configuration
-        </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Core identity and public-facing workspace details.
-        </div>
-      </div>
-
-      <SettingsRow
+    <>
+      <SettingRow
         icon={Globe2}
         title="Workspace name"
-        description="Shown in the shell, customer-facing surfaces, and internal workspace context."
+        description="Shown inside the app shell and used as the default workspace identity."
       >
-        <Input
+        <TextInput
           value={settings.workspaceName}
-          onChange={(event) => onPatch({ workspaceName: event.target.value })}
+          onChange={(workspaceName) => onPatch({ workspaceName })}
           placeholder="Workspace name"
-          appearance="quiet"
         />
-      </SettingsRow>
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={Globe2}
-        title="Public domain"
-        description="Used for hosted pages, routing previews, and public workspace links."
+        title="Workspace region"
+        description="Used for workspace defaults, operational language, and support context."
       >
-        <Input
-          value={settings.publicDomain}
-          onChange={(event) => onPatch({ publicDomain: event.target.value })}
-          placeholder="workspace.domain.com"
-          appearance="quiet"
+        <SelectControl
+          value={settings.workspaceRegion}
+          onChange={(workspaceRegion) => onPatch({ workspaceRegion })}
+          options={["Azerbaijan", "United States", "United Kingdom", "United Arab Emirates", "Turkey", "European Union"]}
         />
-      </SettingsRow>
+      </SettingRow>
 
-      <SettingsRow
-        icon={UserCog}
-        title="Support email"
-        description="Fallback contact for customer replies, escalation, and manual handoff."
-        border={false}
+      <SettingRow
+        icon={Plug}
+        title="Public domain"
+        description="Used for hosted pages, widgets, and workspace public links."
       >
-        <Input
-          value={settings.supportEmail}
-          onChange={(event) => onPatch({ supportEmail: event.target.value })}
-          placeholder="support@example.com"
-          appearance="quiet"
+        <TextInput
+          value={settings.publicDomain}
+          onChange={(publicDomain) => onPatch({ publicDomain })}
+          placeholder="workspace.domain.com"
         />
-      </SettingsRow>
-    </Card>
+      </SettingRow>
+
+      <SettingRow
+        icon={Mail}
+        title="Support email"
+        description="Fallback email for customer support, escalations, and handoff."
+        last
+      >
+        <TextInput
+          type="email"
+          value={settings.supportEmail}
+          onChange={(supportEmail) => onPatch({ supportEmail })}
+          placeholder="support@example.com"
+        />
+      </SettingRow>
+    </>
   );
 }
 
-function AssistantSettings({ settings, onPatch }) {
+function AssistantContent({ settings, onPatch }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Assistant behavior
-        </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Default behavior for workspace automation and conversation routing.
-        </div>
-      </div>
-
-      <SettingsRow
+    <>
+      <SettingRow
         icon={Bot}
         title="Assistant name"
-        description="Internal operator name used in previews and handoff surfaces."
+        description="Internal assistant identity used in previews and handoff surfaces."
       >
-        <Input
+        <TextInput
           value={settings.assistantName}
-          onChange={(event) => onPatch({ assistantName: event.target.value })}
+          onChange={(assistantName) => onPatch({ assistantName })}
           placeholder="Assistant name"
-          appearance="quiet"
         />
-      </SettingsRow>
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={SlidersHorizontal}
         title="Response tone"
-        description="Default style for generated replies and lead qualification messages."
+        description="Default style for generated replies and qualification messages."
       >
-        <div className="flex flex-wrap gap-2">
-          {["Professional", "Direct", "Warm"].map((tone) => (
-            <Button
-              key={tone}
-              type="button"
-              size="sm"
-              variant={settings.responseTone === tone ? "primary" : "secondary"}
-              onClick={() => onPatch({ responseTone: tone })}
-            >
-              {tone}
-            </Button>
-          ))}
-        </div>
-      </SettingsRow>
+        <SelectControl
+          value={settings.responseTone}
+          onChange={(responseTone) => onPatch({ responseTone })}
+          options={["Professional", "Direct", "Warm", "Premium", "Technical"]}
+        />
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={Sparkles}
         title="Auto-route qualified leads"
-        description="Automatically move qualified conversations into the lead pipeline."
-        border={false}
+        description="Move qualified conversations into the lead pipeline automatically."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.autoRouteLeads ? "success" : "neutral"}>
-            {settings.autoRouteLeads ? "Enabled" : "Disabled"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.autoRouteLeads}
-            onChange={(value) => onPatch({ autoRouteLeads: value })}
-            label="Auto-route qualified leads"
-          />
-        </div>
-      </SettingsRow>
-    </Card>
+        <ToggleControl
+          checked={settings.autoRouteLeads}
+          onChange={(autoRouteLeads) => onPatch({ autoRouteLeads })}
+          enabledLabel="Auto-routing is on"
+          disabledLabel="Auto-routing is off"
+          label="Auto-route qualified leads"
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={UserCog}
+        title="Fallback behavior"
+        description="What the assistant should do when the request needs a human."
+        last
+      >
+        <TextArea
+          value={settings.fallbackBehavior}
+          onChange={(fallbackBehavior) => onPatch({ fallbackBehavior })}
+          placeholder="Describe fallback behavior"
+        />
+      </SettingRow>
+    </>
   );
 }
 
-function SecuritySettings({ settings, onPatch }) {
+function SecurityContent({ settings, onPatch }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Security controls
-        </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Guard sensitive workspace actions and account-level verification.
-        </div>
-      </div>
-
-      <SettingsRow
+    <>
+      <SettingRow
         icon={KeyRound}
-        title="Email verification required"
-        description="Restrict sensitive actions until the workspace user verifies email access."
+        title="Email verification"
+        description="Require verified email access before sensitive workspace actions."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.requireEmailVerification ? "success" : "warning"}>
-            {settings.requireEmailVerification ? "Required" : "Optional"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.requireEmailVerification}
-            onChange={(value) => onPatch({ requireEmailVerification: value })}
-            label="Email verification required"
-          />
-        </div>
-      </SettingsRow>
+        <ToggleControl
+          checked={settings.requireEmailVerification}
+          onChange={(requireEmailVerification) => onPatch({ requireEmailVerification })}
+          enabledLabel="Verification required"
+          disabledLabel="Verification optional"
+          label="Email verification required"
+        />
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={LockKeyhole}
         title="Sensitive action lock"
-        description="Require guarded confirmation before destructive or customer-impacting actions."
-        border={false}
+        description="Protect destructive or customer-impacting actions with confirmation."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.sensitiveActionLock ? "success" : "neutral"}>
-            {settings.sensitiveActionLock ? "Active" : "Disabled"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.sensitiveActionLock}
-            onChange={(value) => onPatch({ sensitiveActionLock: value })}
-            label="Sensitive action lock"
-          />
-        </div>
-      </SettingsRow>
-    </Card>
+        <ToggleControl
+          checked={settings.sensitiveActionLock}
+          onChange={(sensitiveActionLock) => onPatch({ sensitiveActionLock })}
+          enabledLabel="Protected"
+          disabledLabel="Not protected"
+          label="Sensitive action lock"
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={ShieldCheck}
+        title="Admin approval"
+        description="Require owner/admin approval for restricted workspace changes."
+      >
+        <ToggleControl
+          checked={settings.adminApproval}
+          onChange={(adminApproval) => onPatch({ adminApproval })}
+          enabledLabel="Approval required"
+          disabledLabel="Approval not required"
+          label="Admin approval"
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={KeyRound}
+        title="Session timeout"
+        description="How long an operator session can remain active."
+        last
+      >
+        <SelectControl
+          value={settings.sessionTimeout}
+          onChange={(sessionTimeout) => onPatch({ sessionTimeout })}
+          options={["1 hour", "8 hours", "24 hours", "7 days", "30 days"]}
+        />
+      </SettingRow>
+    </>
   );
 }
 
-function NotificationSettings({ settings, onPatch }) {
+function NotificationsContent({ settings, onPatch }) {
   return (
-    <Card padded={false} clip>
-      <div className="border-b border-line-soft px-5 py-4">
-        <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-          Notification rules
-        </div>
-        <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-          Decide which operational signals should notify the workspace.
-        </div>
-      </div>
-
-      <SettingsRow
+    <>
+      <SettingRow
         icon={Bell}
         title="Inbox alerts"
-        description="Notify when new conversations arrive or existing threads need response."
+        description="Notify when new conversations arrive or need attention."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.inboxAlerts ? "success" : "neutral"}>
-            {settings.inboxAlerts ? "On" : "Off"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.inboxAlerts}
-            onChange={(value) => onPatch({ inboxAlerts: value })}
-            label="Inbox alerts"
-          />
-        </div>
-      </SettingsRow>
+        <ToggleControl
+          checked={settings.inboxAlerts}
+          onChange={(inboxAlerts) => onPatch({ inboxAlerts })}
+          enabledLabel="Inbox alerts on"
+          disabledLabel="Inbox alerts off"
+          label="Inbox alerts"
+        />
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={Sparkles}
         title="Lead alerts"
-        description="Notify when a conversation becomes a qualified lead or needs follow-up."
+        description="Notify when a conversation becomes a qualified lead."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.leadAlerts ? "success" : "neutral"}>
-            {settings.leadAlerts ? "On" : "Off"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.leadAlerts}
-            onChange={(value) => onPatch({ leadAlerts: value })}
-            label="Lead alerts"
-          />
-        </div>
-      </SettingsRow>
+        <ToggleControl
+          checked={settings.leadAlerts}
+          onChange={(leadAlerts) => onPatch({ leadAlerts })}
+          enabledLabel="Lead alerts on"
+          disabledLabel="Lead alerts off"
+          label="Lead alerts"
+        />
+      </SettingRow>
 
-      <SettingsRow
+      <SettingRow
         icon={CheckCircle2}
         title="Weekly summary"
-        description="Send a weekly summary of inbox load, leads, and workspace health."
-        border={false}
+        description="Send a weekly operational summary for inbox, leads, and workspace health."
       >
-        <div className="flex items-center justify-end gap-3">
-          <AppStatusText tone={settings.weeklySummary ? "success" : "neutral"}>
-            {settings.weeklySummary ? "On" : "Off"}
-          </AppStatusText>
-          <Toggle
-            checked={settings.weeklySummary}
-            onChange={(value) => onPatch({ weeklySummary: value })}
-            label="Weekly summary"
-          />
-        </div>
-      </SettingsRow>
-    </Card>
+        <ToggleControl
+          checked={settings.weeklySummary}
+          onChange={(weeklySummary) => onPatch({ weeklySummary })}
+          enabledLabel="Weekly summary on"
+          disabledLabel="Weekly summary off"
+          label="Weekly summary"
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={Mail}
+        title="Notification email"
+        description="Where operational alerts and weekly summaries should be sent."
+        last
+      >
+        <TextInput
+          type="email"
+          value={settings.notificationEmail}
+          onChange={(notificationEmail) => onPatch({ notificationEmail })}
+          placeholder="alerts@example.com"
+        />
+      </SettingRow>
+    </>
   );
 }
 
-function ActiveSettingsPanel({ activeSection, settings, onPatch }) {
+function DeveloperContent({ settings, onPatch }) {
+  return (
+    <>
+      <SettingRow
+        icon={Code2}
+        title="Environment"
+        description="Current workspace environment used for integrations and previews."
+      >
+        <SelectControl
+          value={settings.environment}
+          onChange={(environment) => onPatch({ environment })}
+          options={["Local workspace", "Staging", "Production"]}
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={Plug}
+        title="API mode"
+        description="Choose whether API-related actions run in test or live mode."
+      >
+        <SelectControl
+          value={settings.apiMode}
+          onChange={(apiMode) => onPatch({ apiMode })}
+          options={["Test mode", "Live mode", "Disabled"]}
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={Plug}
+        title="Webhook URL"
+        description="Inbound webhook endpoint used by connected channels and integrations."
+      >
+        <TextInput
+          value={settings.webhookUrl}
+          onChange={(webhookUrl) => onPatch({ webhookUrl })}
+          placeholder="https://example.com/webhook"
+        />
+      </SettingRow>
+
+      <SettingRow
+        icon={KeyRound}
+        title="Developer access"
+        description="Allow developer tools and integration controls inside this workspace."
+        last
+      >
+        <ToggleControl
+          checked={settings.developerAccess}
+          onChange={(developerAccess) => onPatch({ developerAccess })}
+          enabledLabel="Developer access enabled"
+          disabledLabel="Developer access disabled"
+          label="Developer access"
+        />
+      </SettingRow>
+    </>
+  );
+}
+
+function ActiveContent({ activeSection, settings, onPatch }) {
   if (activeSection === "assistant") {
-    return <AssistantSettings settings={settings} onPatch={onPatch} />;
+    return <AssistantContent settings={settings} onPatch={onPatch} />;
   }
 
   if (activeSection === "security") {
-    return <SecuritySettings settings={settings} onPatch={onPatch} />;
+    return <SecurityContent settings={settings} onPatch={onPatch} />;
   }
 
   if (activeSection === "notifications") {
-    return <NotificationSettings settings={settings} onPatch={onPatch} />;
+    return <NotificationsContent settings={settings} onPatch={onPatch} />;
   }
 
-  return <WorkspaceSettings settings={settings} onPatch={onPatch} />;
+  if (activeSection === "developer") {
+    return <DeveloperContent settings={settings} onPatch={onPatch} />;
+  }
+
+  return <WorkspaceContent settings={settings} onPatch={onPatch} />;
 }
 
 export default function Settings() {
@@ -451,36 +566,39 @@ export default function Settings() {
   const [settings, setSettings] = useState(INITIAL_SETTINGS);
   const [saved, setSaved] = useState(true);
 
-  const activeMeta = useMemo(
-    () => SECTIONS.find((section) => section.id === activeSection) || SECTIONS[0],
-    [activeSection]
-  );
+  const activeMeta = useMemo(() => {
+    return SECTIONS.find((section) => section.id === activeSection) || SECTIONS[0];
+  }, [activeSection]);
+
+  const ActiveIcon = activeMeta.icon;
 
   function patchSettings(next = {}) {
     setSettings((current) => ({ ...current, ...next }));
     setSaved(false);
   }
 
-  function handleSave() {
+  function resetSettings() {
+    setSettings(INITIAL_SETTINGS);
+    setSaved(true);
+  }
+
+  function saveSettings() {
     setSaved(true);
   }
 
   return (
     <PageCanvas>
       <PageHeader
-        title="Workspace settings"
-        description="Control identity, assistant behavior, security, and notification rules."
+        title="Settings"
+        description="Configure the workspace from one clean settings surface."
         actions={
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="secondary"
               size="md"
+              onClick={resetSettings}
               leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
-              onClick={() => {
-                setSettings(INITIAL_SETTINGS);
-                setSaved(true);
-              }}
             >
               Reset
             </Button>
@@ -488,8 +606,8 @@ export default function Settings() {
             <Button
               type="button"
               size="md"
+              onClick={saveSettings}
               leftIcon={<Save className="h-4 w-4" strokeWidth={2.1} />}
-              onClick={handleSave}
             >
               Save changes
             </Button>
@@ -497,44 +615,42 @@ export default function Settings() {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <SectionNav activeSection={activeSection} onChange={setActiveSection} />
+      <Card padded={false} clip className="overflow-visible">
+        <div className="grid min-h-[690px] xl:grid-cols-[310px_minmax(0,1fr)]">
+          <SectionNav activeSection={activeSection} onChange={setActiveSection} />
 
-        <div className="space-y-4">
-          <Card padded={false} clip>
-            <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex min-w-0 items-start gap-3.5">
-                <AppIcon
-                  icon={activeMeta.icon}
-                  size="lg"
-                  tone="text"
-                  strokeWidth={2.05}
-                  className="mt-0.5 shrink-0"
-                />
+          <section className="flex min-w-0 flex-col bg-white">
+            <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text">
+                  <ActiveIcon className="h-6 w-6" strokeWidth={2.05} />
+                </div>
 
                 <div className="min-w-0">
-                  <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                  <div className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
                     {activeMeta.label}
                   </div>
-                  <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                  <div className="mt-1 max-w-[640px] text-[13.5px] font-medium leading-6 text-text-muted">
                     {activeMeta.description}
                   </div>
                 </div>
               </div>
 
-              <AppTag tone={saved ? "success" : "warning"}>
+              <AppTag tone={saved ? "success" : "warning"} dot>
                 {saved ? "Saved" : "Unsaved changes"}
               </AppTag>
             </div>
-          </Card>
 
-          <ActiveSettingsPanel
-            activeSection={activeSection}
-            settings={settings}
-            onPatch={patchSettings}
-          />
+            <div className="min-h-0 flex-1">
+              <ActiveContent
+                activeSection={activeSection}
+                settings={settings}
+                onPatch={patchSettings}
+              />
+            </div>
+          </section>
         </div>
-      </div>
+      </Card>
     </PageCanvas>
   );
 }

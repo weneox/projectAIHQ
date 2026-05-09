@@ -509,7 +509,7 @@ export default function LaunchChecklist() {
         </div>
       </Card>
 
-      <div className="grid w-full gap-0">
+      <div className="grid max-w-[1180px] gap-0">
         {LAUNCH_STAGES.map((stage, index) => {
           const status = stageStatus(stage);
           const isLast = index === LAUNCH_STAGES.length - 1;
@@ -532,4 +532,3 @@ export default function LaunchChecklist() {
     </PageCanvas>
   );
 }
-

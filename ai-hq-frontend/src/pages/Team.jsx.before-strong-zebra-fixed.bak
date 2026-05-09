@@ -565,7 +565,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
       className={cx(
         "team-member-row grid min-h-[58px]",
         TABLE_MIN_WIDTH,
-        "items-center gap-0 px-0 transition-colors duration-base ease-premium hover:bg-surface-subtle/55"
+        "items-center gap-0 px-0 transition-colors duration-base ease-premium"
       )}
       style={TABLE_GRID_STYLE}
     >
@@ -1739,6 +1739,7 @@ export default function Team() {
     </>
   );
 }
+
 
 
 

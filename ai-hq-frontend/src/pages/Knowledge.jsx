@@ -1,149 +1,137 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
   Database,
-  ExternalLink,
   FileText,
   Globe2,
+  HelpCircle,
+  LockKeyhole,
+  Pencil,
+  Plus,
   RefreshCw,
-  Search,
+  ShieldCheck,
   Upload,
+  X,
 } from "lucide-react";
 
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
-import Input from "../components/ui/Input.jsx";
-import AppIcon from "../components/ui/AppIcon.jsx";
-import AppIconButton from "../components/ui/AppIconButton.jsx";
-import AppPaginationFooter from "../components/ui/AppPaginationFooter.jsx";
-import AppStatCard from "../components/ui/AppStatCard.jsx";
-import AppStatusText from "../components/ui/AppStatusText.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
-import {
-  AppFilterAction,
-  AppFilterMenuShell,
-  AppFilterOption,
-  AppFilterSearchInput,
-  AppMultiSelectMenu,
-  AppTableHeaderFilter,
-  normalizeAppFilterList,
-  toggleAppFilterListValue,
-} from "../components/ui/AppTableFilters.jsx";
-import {
-  AppTableCard,
-  AppTableCell,
-  AppTableEmptyState,
-  AppTableHeaderCell,
-  AppTableHeaderRow,
-  AppTableRow,
-  AppTableText,
-  AppTableToolbar,
-} from "../components/ui/AppTable.jsx";
 import {
   PageCanvas,
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../lib/cx.js";
 
-const PAGE_SIZE = 7;
-
-const TABLE_MIN_WIDTH = "min-w-[1180px] w-full";
-
-const TABLE_GRID_STYLE = {
-  gridTemplateColumns:
-    "320px minmax(260px,1fr) 150px 150px 150px 130px 96px",
-};
-
-const TYPE_PRIORITY = ["document", "website", "faq", "policy"];
-const STATUS_PRIORITY = ["ready", "syncing", "needs review", "disabled"];
-
-const SOURCES = [
+const KNOWLEDGE_SOURCES = [
   {
-    id: "kb_001",
-    title: "AIHQ product overview",
-    type: "document",
-    status: "ready",
-    owner: "system",
-    chunks: 84,
-    updated_at: daysAgo(0),
-    description: "Core platform positioning, capabilities, and product language.",
-  },
-  {
-    id: "kb_002",
-    title: "Website service FAQ",
-    type: "faq",
-    status: "ready",
-    owner: "operator",
-    chunks: 42,
-    updated_at: daysAgo(1),
-    description: "Frequently asked questions for website build and automation services.",
-  },
-  {
-    id: "kb_003",
-    title: "Pricing and proposal rules",
-    type: "policy",
-    status: "needs review",
-    owner: "Emil",
-    chunks: 28,
-    updated_at: daysAgo(2),
-    description: "Proposal boundaries, pricing notes, and handoff requirements.",
-  },
-  {
-    id: "kb_004",
-    title: "Public website copy",
-    type: "website",
-    status: "syncing",
-    owner: "system",
+    id: "website",
+    title: "Website knowledge",
+    type: "Website",
+    status: "connected",
+    icon: Globe2,
+    description: "Public website pages that the assistant can use for general answers.",
+    owner: "System",
+    updated: "May 9, 2026",
     chunks: 66,
-    updated_at: daysAgo(0),
-    description: "Synced website content used for public-facing assistant answers.",
+    action: "Manage",
+    note: "Synced website content is available for public-facing answers.",
+    includes: ["Homepage copy", "Service pages", "Public positioning"],
+    boundaries: ["Do not invent unpublished offers", "Escalate unclear pricing questions"],
+    preview:
+      "The business helps customers automate conversations, capture leads, and route operational work through AI-assisted systems.",
   },
   {
-    id: "kb_005",
-    title: "Automation onboarding guide",
-    type: "document",
-    status: "ready",
-    owner: "operator",
-    chunks: 51,
-    updated_at: daysAgo(3),
-    description: "Steps for qualifying automation projects and collecting requirements.",
+    id: "business-faq",
+    title: "Business FAQ",
+    type: "FAQ",
+    status: "needs review",
+    icon: HelpCircle,
+    description: "Common customer questions and approved short answers.",
+    owner: "Operator",
+    updated: "May 8, 2026",
+    chunks: 42,
+    action: "Review",
+    note: "Some answers should be reviewed before the assistant relies on them.",
+    includes: ["Project questions", "Setup questions", "Delivery process"],
+    boundaries: ["Do not guarantee timelines", "Route custom requests to an operator"],
+    preview:
+      "Customers can ask about services, process, consultation, and general automation possibilities. Final scope should be confirmed by an operator.",
   },
   {
-    id: "kb_006",
-    title: "Customer support boundaries",
-    type: "policy",
-    status: "ready",
-    owner: "system",
+    id: "policies",
+    title: "Policies",
+    type: "Policy",
+    status: "empty",
+    icon: ShieldCheck,
+    description: "Rules for refunds, cancellation, sensitive requests, and customer data.",
+    owner: "Not assigned",
+    updated: "Not configured",
+    chunks: 0,
+    action: "Add source",
+    note: "Policy knowledge has not been added yet.",
+    includes: ["Refund policy", "Data handling", "Cancellation rules"],
+    boundaries: ["Do not answer policy questions until configured"],
+    preview:
+      "No approved policy source is configured yet. The assistant should hand off policy-related questions to an operator.",
+  },
+  {
+    id: "services",
+    title: "Service docs",
+    type: "Document",
+    status: "connected",
+    icon: FileText,
+    description: "Detailed service notes for automation, websites, and AI assistant work.",
+    owner: "Emil",
+    updated: "May 9, 2026",
+    chunks: 84,
+    action: "Manage",
+    note: "Service documents are indexed and available.",
+    includes: ["AI automation", "Website builds", "CRM routing", "Workflow systems"],
+    boundaries: ["Avoid unsupported technical promises", "Confirm integrations before quoting"],
+    preview:
+      "Services include AI assistants, premium websites, CRM routing, customer follow-up, lead qualification, and internal workflow automation.",
+  },
+  {
+    id: "uploads",
+    title: "Uploaded files",
+    type: "Files",
+    status: "empty",
+    icon: Upload,
+    description: "PDFs, documents, briefs, and files uploaded for assistant knowledge.",
+    owner: "Not assigned",
+    updated: "Not configured",
+    chunks: 0,
+    action: "Upload",
+    note: "No uploaded files are active yet.",
+    includes: ["PDF documents", "Project briefs", "Internal references"],
+    boundaries: ["Only use reviewed files", "Ignore outdated drafts"],
+    preview:
+      "No uploaded source is active yet. Upload reviewed files before allowing the assistant to answer from documents.",
+  },
+  {
+    id: "custom-notes",
+    title: "Custom notes",
+    type: "Notes",
+    status: "needs review",
+    icon: BookOpen,
+    description: "Manual notes for tone, answer style, objections, and handoff behavior.",
+    owner: "Operator",
+    updated: "May 7, 2026",
     chunks: 19,
-    updated_at: daysAgo(5),
-    description: "Rules for escalation, unsupported claims, and sensitive actions.",
-  },
-  {
-    id: "kb_007",
-    title: "Legacy launch checklist",
-    type: "document",
-    status: "disabled",
-    owner: "system",
-    chunks: 17,
-    updated_at: daysAgo(8),
-    description: "Old launch checklist retained for reference but excluded from answers.",
+    action: "Edit",
+    note: "Custom notes exist, but review is recommended.",
+    includes: ["Tone rules", "Sales notes", "Handoff rules"],
+    boundaries: ["Keep claims conservative", "Escalate uncertain requests"],
+    preview:
+      "Assistant tone should be clear, direct, premium, and operational. If the answer is uncertain, collect context and hand off.",
   },
 ];
 
-function daysAgo(days = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() - Number(days || 0));
-  return date.toISOString();
-}
-
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
-}
-
-function n(value, fallback = 0) {
-  const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
 }
 
 function lower(value, fallback = "") {
@@ -156,403 +144,288 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatDate(value = "") {
-  const raw = s(value);
-  if (!raw) return "—";
-
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function updatedTimestamp(source = {}) {
-  const date = new Date(source.updated_at);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function sourceIcon(type = "") {
-  const safe = lower(type);
-
-  if (safe === "website") return Globe2;
-  if (safe === "faq") return BookOpen;
-  if (safe === "policy") return Database;
-
-  return FileText;
-}
-
 function statusTone(status = "") {
   const safe = lower(status);
 
-  if (safe === "ready") return "success";
-  if (safe === "syncing") return "brand";
+  if (safe === "connected") return "success";
   if (safe === "needs review") return "warning";
-  if (safe === "disabled") return "neutral";
+  if (safe === "empty") return "neutral";
 
   return "neutral";
 }
 
-function createDefaultFilters() {
-  return {
-    source: "",
-    types: [],
-    statuses: [],
-    owner: "",
-    updatedSort: "newest",
-  };
+function statusLabel(status = "") {
+  const safe = lower(status);
+
+  if (safe === "needs review") return "Needs review";
+  return titleize(safe);
 }
 
-function countActiveFilters(filters = {}) {
-  return [
-    s(filters.source),
-    normalizeAppFilterList(filters.types).length ? "types" : "",
-    normalizeAppFilterList(filters.statuses).length ? "statuses" : "",
-    s(filters.owner),
-    filters.updatedSort && filters.updatedSort !== "newest" ? "updatedSort" : "",
-  ].filter(Boolean).length;
+function actionIcon(source = {}) {
+  const safe = lower(source.action);
+
+  if (safe.includes("add")) return Plus;
+  if (safe.includes("upload")) return Upload;
+  if (safe.includes("edit")) return Pencil;
+
+  return ArrowRight;
 }
 
-function uniqueOptions(values = [], priority = []) {
-  const priorityMap = new Map(priority.map((item, index) => [item, index]));
-  const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
-
-  return unique
-    .sort((a, b) => {
-      const aPriority = priorityMap.has(a) ? priorityMap.get(a) : 100;
-      const bPriority = priorityMap.has(b) ? priorityMap.get(b) : 100;
-
-      if (aPriority !== bPriority) return aPriority - bPriority;
-
-      return titleize(a).localeCompare(titleize(b));
-    })
-    .map((value) => ({ value, label: titleize(value) }));
-}
-
-function sourceComparator(sortValue = "newest") {
-  return (a, b) => {
-    const aTime = updatedTimestamp(a);
-    const bTime = updatedTimestamp(b);
-
-    if (sortValue === "oldest") return aTime - bTime;
-    return bTime - aTime;
-  };
-}
-
-function matchesSource(source = {}, query = "") {
-  const q = lower(query);
-  if (!q) return true;
-
-  return lower(
-    [
-      source.title,
-      source.description,
-      source.type,
-      source.status,
-      source.owner,
-    ].join(" ")
-  ).includes(q);
-}
-
-function KnowledgeSourceIdentity({ source }) {
-  const Icon = sourceIcon(source.type);
+function SourceCard({ source, selected = false, onOpen }) {
+  const Icon = source.icon || Database;
+  const ActionIcon = actionIcon(source);
 
   return (
-    <div className="flex min-w-0 items-center gap-4">
-      <AppIcon
-        icon={Icon}
-        size="lg"
-        tone="text"
-        strokeWidth={2.05}
-        className="shrink-0"
-      />
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen?.();
+        }
+      }}
+      className={cx(
+        "group cursor-pointer rounded-md border bg-white p-5 transition-[background-color,border-color,box-shadow] duration-base ease-premium",
+        selected
+          ? "border-brand shadow-[inset_3px_0_0_rgb(var(--color-brand)),0_18px_34px_-30px_rgba(37,99,235,0.62)]"
+          : "border-line-soft hover:border-line hover:bg-surface-subtle hover:shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
+      )}
+    >
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_150px] xl:items-center">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center text-text">
+              <Icon className="h-9 w-9" strokeWidth={1.85} />
+            </div>
 
-      <div className="min-w-0">
-        <div className="truncate text-[14.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-          {source.title}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                  {source.title}
+                </h3>
+
+                <AppTag tone={statusTone(source.status)} dot>
+                  {statusLabel(source.status)}
+                </AppTag>
+              </div>
+
+              <p className="mt-1.5 max-w-[780px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {source.description}
+              </p>
+
+              <div className="mt-4 border-t border-line-soft pt-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <div className="text-[12.5px] font-semibold text-text-muted">
+                    {source.type}
+                  </div>
+
+                  <div className="text-[12.5px] font-medium text-text-muted">
+                    {source.chunks} indexed chunks
+                  </div>
+
+                  <div className="text-[12.5px] font-medium text-text-muted">
+                    Owner: {source.owner}
+                  </div>
+
+                  <div className="min-w-0 truncate text-[12.5px] font-medium text-text-muted">
+                    Updated: {source.updated}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {source.description}
+
+        <div className="flex justify-start xl:justify-end">
+          <Button
+            type="button"
+            size="md"
+            variant={lower(source.status) === "connected" ? "secondary" : "primary"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen?.();
+            }}
+            rightIcon={<ActionIcon className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {source.action}
+          </Button>
         </div>
+      </div>
+    </article>
+  );
+}
+
+function DetailList({ title, items }) {
+  return (
+    <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {title}
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        {items.map((item) => (
+          <div key={item} className="flex items-center gap-2 text-[13px] font-medium text-text">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={2.05} />
+            <span className="min-w-0">{item}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function KnowledgeRow({ source }) {
+function LockedPreview({ value }) {
   return (
-    <AppTableRow
-      minWidthClass={TABLE_MIN_WIDTH}
-      gridStyle={TABLE_GRID_STYLE}
-      className="min-h-[62px]"
-    >
-      <AppTableCell>
-        <KnowledgeSourceIdentity source={source} />
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTableText muted>{source.description}</AppTableText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTag>{titleize(source.type)}</AppTag>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppStatusText tone={statusTone(source.status)}>
-          {titleize(source.status)}
-        </AppStatusText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTableText muted>{titleize(source.owner)}</AppTableText>
-      </AppTableCell>
-
-      <AppTableCell>
-        <AppTableText muted>{formatDate(source.updated_at)}</AppTableText>
-      </AppTableCell>
-
-      <AppTableCell align="right">
-        <div className="flex items-center justify-end gap-2">
-          <AppIconButton label="Open source">
-            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
-          </AppIconButton>
+    <div className="rounded-md border border-line-soft bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          Source preview
         </div>
-      </AppTableCell>
-    </AppTableRow>
+
+        <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-text-subtle">
+          <LockKeyhole className="h-3.5 w-3.5" strokeWidth={2.1} />
+          Read-only
+        </div>
+      </div>
+
+      <div className="mt-3 text-[13.5px] font-medium leading-6 text-text">
+        {value}
+      </div>
+    </div>
   );
 }
 
-function KnowledgeTable({
-  sources,
-  filters,
-  openFilter,
-  typeOptions,
-  statusOptions,
-  activeFilterCount,
-  onOpenFilter,
-  onPatchFilters,
-  onClearFilters,
-}) {
+function SourceDialog({ source, open, onClose }) {
+  if (!open || !source) return null;
+
+  const Icon = source.icon || Database;
+  const ActionIcon = actionIcon(source);
+
   return (
-    <AppTableCard>
-      <AppTableToolbar
-        title="Knowledge sources"
-        filters={
-          activeFilterCount ? (
-            <Button type="button" variant="secondary" size="sm" onClick={onClearFilters}>
-              Clear filters
-            </Button>
-          ) : null
-        }
-      />
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
+      <div role="presentation" className="absolute inset-0" onClick={onClose} />
 
-      <div className="overflow-x-auto">
-        <div className={TABLE_MIN_WIDTH}>
-          <AppTableHeaderRow minWidthClass="w-full" gridStyle={TABLE_GRID_STYLE}>
-            <AppTableHeaderFilter
-              id="source"
-              label="Source"
-              openFilter={openFilter}
-              active={Boolean(filters.source)}
-              onOpen={onOpenFilter}
-            >
-              <AppFilterSearchInput
-                value={filters.source}
-                onChange={(value) => onPatchFilters({ source: value })}
-                placeholder="Search source"
-              />
-              <AppFilterMenuShell>
-                <AppFilterAction
-                  onClick={() => onPatchFilters({ source: "" })}
-                  disabled={!filters.source}
-                >
-                  Clear source filter
-                </AppFilterAction>
-              </AppFilterMenuShell>
-            </AppTableHeaderFilter>
+      <Card
+        padded={false}
+        clip
+        className="relative z-[81] w-full max-w-[720px] shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
+      >
+        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
+          <div className="flex min-w-0 items-start gap-5">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
+              <Icon className="h-11 w-11" strokeWidth={1.78} />
+            </div>
 
-            <AppTableHeaderCell>Purpose</AppTableHeaderCell>
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+                Knowledge source
+              </div>
 
-            <AppTableHeaderFilter
-              id="type"
-              label="Type"
-              openFilter={openFilter}
-              active={normalizeAppFilterList(filters.types).length > 0}
-              onOpen={onOpenFilter}
-            >
-              <AppMultiSelectMenu
-                options={typeOptions}
-                selectedValues={filters.types}
-                allLabel="All types"
-                onClear={() => onPatchFilters({ types: [] })}
-                onToggle={(value) =>
-                  onPatchFilters({
-                    types: toggleAppFilterListValue(filters.types, value),
-                  })
-                }
-              />
-            </AppTableHeaderFilter>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {source.title}
+              </h2>
 
-            <AppTableHeaderFilter
-              id="status"
-              label="Status"
-              openFilter={openFilter}
-              active={normalizeAppFilterList(filters.statuses).length > 0}
-              onOpen={onOpenFilter}
-            >
-              <AppMultiSelectMenu
-                options={statusOptions}
-                selectedValues={filters.statuses}
-                allLabel="All statuses"
-                onClear={() => onPatchFilters({ statuses: [] })}
-                onToggle={(value) =>
-                  onPatchFilters({
-                    statuses: toggleAppFilterListValue(filters.statuses, value),
-                  })
-                }
-              />
-            </AppTableHeaderFilter>
+              <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {source.note}
+              </p>
 
-            <AppTableHeaderFilter
-              id="owner"
-              label="Owner"
-              openFilter={openFilter}
-              active={Boolean(filters.owner)}
-              onOpen={onOpenFilter}
-            >
-              <AppFilterSearchInput
-                value={filters.owner}
-                onChange={(value) => onPatchFilters({ owner: value })}
-                placeholder="Search owner"
-              />
-              <AppFilterMenuShell>
-                <AppFilterAction
-                  onClick={() => onPatchFilters({ owner: "" })}
-                  disabled={!filters.owner}
-                >
-                  Clear owner filter
-                </AppFilterAction>
-              </AppFilterMenuShell>
-            </AppTableHeaderFilter>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <AppTag tone={statusTone(source.status)} dot>
+                  {statusLabel(source.status)}
+                </AppTag>
+                <AppTag tone="neutral">{source.type}</AppTag>
+                <AppTag tone="neutral">{source.chunks} chunks</AppTag>
+              </div>
+            </div>
+          </div>
 
-            <AppTableHeaderFilter
-              id="updated"
-              label="Updated"
-              openFilter={openFilter}
-              active={filters.updatedSort === "oldest"}
-              onOpen={onOpenFilter}
-            >
-              <AppFilterMenuShell>
-                <AppFilterOption
-                  selected={filters.updatedSort === "newest"}
-                  onClick={() => onPatchFilters({ updatedSort: "newest" })}
-                >
-                  Newest first
-                </AppFilterOption>
-
-                <AppFilterOption
-                  selected={filters.updatedSort === "oldest"}
-                  onClick={() => onPatchFilters({ updatedSort: "oldest" })}
-                >
-                  Oldest first
-                </AppFilterOption>
-
-                <AppFilterAction
-                  onClick={() => onPatchFilters({ updatedSort: "newest" })}
-                  disabled={filters.updatedSort === "newest"}
-                >
-                  Reset sort
-                </AppFilterAction>
-              </AppFilterMenuShell>
-            </AppTableHeaderFilter>
-
-            <AppTableHeaderCell align="right">Action</AppTableHeaderCell>
-          </AppTableHeaderRow>
-
-          {sources.length ? (
-            sources.map((source) => <KnowledgeRow key={source.id} source={source} />)
-          ) : (
-            <AppTableEmptyState
-              icon={<BookOpen className="h-5 w-5" strokeWidth={1.9} />}
-              title="No matching sources"
-              description="Adjust the active filters to bring knowledge sources back into view."
-            />
-          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
+            aria-label="Close source detail"
+          >
+            <X className="h-4 w-4" strokeWidth={2.1} />
+          </button>
         </div>
-      </div>
-    </AppTableCard>
+
+        <div className="grid gap-4 bg-surface-subtle p-5">
+          <LockedPreview value={source.preview} />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailList title="Included knowledge" items={source.includes} />
+            <DetailList title="Answer boundaries" items={source.boundaries} />
+          </div>
+
+          <div className="grid gap-3 rounded-md border border-line-soft bg-white p-4 md:grid-cols-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Owner
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-text">
+                {source.owner}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Updated
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-text">
+                {source.updated}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Index
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-text">
+                {source.chunks} chunks
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-white p-5 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" size="md" onClick={onClose}>
+            Close
+          </Button>
+
+          <Button
+            type="button"
+            size="md"
+            variant={lower(source.status) === "connected" ? "secondary" : "primary"}
+            rightIcon={<ActionIcon className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {source.action} source
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }
 
 export default function Knowledge() {
-  const [sources] = useState(SOURCES);
-  const [filters, setFilters] = useState(() => createDefaultFilters());
-  const [openFilter, setOpenFilter] = useState("");
-  const [page, setPage] = useState(1);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [dialogSource, setDialogSource] = useState(null);
 
-  const typeOptions = useMemo(
-    () => uniqueOptions(sources.map((source) => source.type), TYPE_PRIORITY),
-    [sources]
-  );
+  const selectedSource = useMemo(() => {
+    return KNOWLEDGE_SOURCES.find((source) => source.id === selectedSourceId) || null;
+  }, [selectedSourceId]);
 
-  const statusOptions = useMemo(
-    () => uniqueOptions(sources.map((source) => source.status), STATUS_PRIORITY),
-    [sources]
-  );
-
-  const filteredSources = useMemo(() => {
-    const types = normalizeAppFilterList(filters.types);
-    const statuses = normalizeAppFilterList(filters.statuses);
-
-    return sources
-      .filter((source) => matchesSource(source, filters.source))
-      .filter((source) =>
-        types.length ? types.includes(lower(source.type)) : true
-      )
-      .filter((source) =>
-        statuses.length ? statuses.includes(lower(source.status)) : true
-      )
-      .filter((source) =>
-        filters.owner ? lower(source.owner).includes(lower(filters.owner)) : true
-      )
-      .sort(sourceComparator(filters.updatedSort));
-  }, [sources, filters]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSources.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-
-  const pageItems = useMemo(() => {
-    const start = (safePage - 1) * PAGE_SIZE;
-    return filteredSources.slice(start, start + PAGE_SIZE);
-  }, [filteredSources, safePage]);
-
-  const metrics = useMemo(() => {
-    const total = sources.length;
-    const ready = sources.filter((source) => lower(source.status) === "ready").length;
-    const review = sources.filter(
-      (source) => lower(source.status) === "needs review"
-    ).length;
-    const chunks = sources.reduce((sum, source) => sum + n(source.chunks), 0);
-
-    return { total, ready, review, chunks };
-  }, [sources]);
-
-  const activeFilterCount = countActiveFilters(filters);
-
-  function patchFilters(next = {}) {
-    setFilters((current) => ({ ...current, ...next }));
-    setPage(1);
+  function openSource(source) {
+    setSelectedSourceId(source.id);
+    setDialogSource(source);
   }
 
   return (
     <PageCanvas>
       <PageHeader
-        title="Knowledge base"
-        description="Manage trusted sources used by assistants, routing, and customer-facing answers."
+        title="Knowledge library"
+        description="Connect and review the sources the assistant can use for answers. Keep the page simple: source cards first, details only when opened."
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -567,7 +440,7 @@ export default function Knowledge() {
             <Button
               type="button"
               size="md"
-              leftIcon={<Upload className="h-4 w-4" strokeWidth={2.1} />}
+              leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
             >
               Add source
             </Button>
@@ -575,47 +448,46 @@ export default function Knowledge() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={BookOpen} label="Sources" value={metrics.total} />
-        <AppStatCard icon={CheckCircle2} label="Ready" value={metrics.ready} />
-        <AppStatCard icon={Search} label="Needs review" value={metrics.review} />
-        <AppStatCard icon={Database} label="Indexed chunks" value={metrics.chunks} />
-      </div>
+      <Card padded={false} clip>
+        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+          <div>
+            <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Assistant answer sources
+            </div>
+            <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
+              Each source can be connected, reviewed, or left empty until you need it.
+            </div>
+          </div>
 
-      <div className="flex justify-end">
-        <div className="w-full xl:w-[420px]">
-          <Input
-            value={filters.source}
-            onChange={(event) => patchFilters({ source: event.target.value })}
-            placeholder="Search knowledge sources..."
-            appearance="quiet"
-            leftIcon={<Search className="h-4 w-4" strokeWidth={2.1} />}
-          />
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <AppTag tone="success" dot>
+              2 connected
+            </AppTag>
+            <AppTag tone="warning" dot>
+              2 review
+            </AppTag>
+            <AppTag tone="neutral" dot>
+              2 empty
+            </AppTag>
+          </div>
         </div>
+      </Card>
+
+      <div className="grid gap-3">
+        {KNOWLEDGE_SOURCES.map((source) => (
+          <SourceCard
+            key={source.id}
+            source={source}
+            selected={selectedSource?.id === source.id}
+            onOpen={() => openSource(source)}
+          />
+        ))}
       </div>
 
-      <KnowledgeTable
-        sources={pageItems}
-        filters={filters}
-        openFilter={openFilter}
-        typeOptions={typeOptions}
-        statusOptions={statusOptions}
-        activeFilterCount={activeFilterCount}
-        onOpenFilter={setOpenFilter}
-        onPatchFilters={patchFilters}
-        onClearFilters={() => {
-          setFilters(createDefaultFilters());
-          setPage(1);
-        }}
-      />
-
-      <AppPaginationFooter
-        currentPage={safePage}
-        totalPages={totalPages}
-        totalItems={filteredSources.length}
-        pageSize={PAGE_SIZE}
-        filtered={activeFilterCount > 0}
-        onPageChange={setPage}
+      <SourceDialog
+        source={dialogSource}
+        open={Boolean(dialogSource)}
+        onClose={() => setDialogSource(null)}
       />
     </PageCanvas>
   );
