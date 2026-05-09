@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -47,6 +47,7 @@ import {
   PageCanvas,
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
+import TeamEmptyIllustration from "../assets/channels/team.svg";
 import { cx } from "../lib/cx.js";
 
 const PAGE_SIZE = 6;
@@ -458,9 +459,19 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
     <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
       <div className="max-w-[520px]">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
-          <Users className="h-5 w-5" strokeWidth={1.9} />
-        </div>
+        {filtered ? (
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
+            <Users className="h-5 w-5" strokeWidth={1.9} />
+          </div>
+        ) : (
+          <img
+            src={TeamEmptyIllustration}
+            alt=""
+            aria-hidden="true"
+            draggable="false"
+            className="mx-auto h-auto w-[270px] max-w-full select-none"
+          />
+        )}
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
           {filtered ? "No matching members" : "No team members yet"}
