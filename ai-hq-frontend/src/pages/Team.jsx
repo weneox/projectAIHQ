@@ -1,19 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Check,
-  ChevronDown,
-  Crown,
-  MailPlus,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  UserCheck,
-  UserRound,
-  Users,
-  UserX,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Crown, MailPlus, Pencil, Plus, RefreshCw, Search, UserCheck, UserRound, Users, UserX, X, UserPlus, ShieldCheck } from "lucide-react";
 
 import {
   createTeamUser,
@@ -47,7 +33,6 @@ import {
   PageCanvas,
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
-import TeamEmptyIllustration from "../assets/channels/team.svg";
 import { cx } from "../lib/cx.js";
 
 const PAGE_SIZE = 6;
@@ -455,6 +440,48 @@ function RoleText({ role = "" }) {
   );
 }
 
+
+function TeamEmptyVisual() {
+  return (
+    <div className="relative mx-auto flex h-[180px] w-[280px] items-center justify-center">
+      <div className="absolute inset-x-8 top-4 h-24 rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 shadow-[0_24px_70px_rgba(15,23,42,0.10)]" />
+
+      <div className="absolute left-8 top-10 h-20 w-24 rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
+        <div className="mx-3 mt-3 h-2 w-10 rounded-full bg-slate-200" />
+        <div className="mx-3 mt-3 flex items-center gap-2">
+          <span className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500" />
+          <span className="space-y-1">
+            <span className="block h-1.5 w-10 rounded-full bg-slate-200" />
+            <span className="block h-1.5 w-7 rounded-full bg-slate-100" />
+          </span>
+        </div>
+      </div>
+
+      <div className="absolute right-8 top-10 h-20 w-24 rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
+        <div className="mx-3 mt-3 h-2 w-12 rounded-full bg-slate-200" />
+        <div className="mx-3 mt-3 flex -space-x-2">
+          <span className="h-7 w-7 rounded-full border-2 border-white bg-blue-500" />
+          <span className="h-7 w-7 rounded-full border-2 border-white bg-violet-500" />
+          <span className="h-7 w-7 rounded-full border-2 border-white bg-cyan-400" />
+        </div>
+      </div>
+
+      <div className="relative z-10 mt-8 flex h-24 w-24 items-center justify-center rounded-[30px] border border-blue-100 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 shadow-[0_26px_70px_rgba(79,70,229,0.28)]">
+        <Users className="h-11 w-11 text-white" strokeWidth={1.9} />
+      </div>
+
+      <div className="absolute bottom-4 left-16 h-10 w-10 rounded-2xl border border-blue-100 bg-white shadow-[0_16px_40px_rgba(37,99,235,0.16)]">
+        <UserPlus className="m-2.5 h-5 w-5 text-blue-600" strokeWidth={2} />
+      </div>
+
+      <div className="absolute bottom-4 right-16 h-10 w-10 rounded-2xl border border-violet-100 bg-white shadow-[0_16px_40px_rgba(124,58,237,0.16)]">
+        <ShieldCheck className="m-2.5 h-5 w-5 text-violet-600" strokeWidth={2} />
+      </div>
+    </div>
+  );
+}
+
+
 function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
     <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
@@ -464,13 +491,7 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
             <Users className="h-5 w-5" strokeWidth={1.9} />
           </div>
         ) : (
-          <img
-            src={TeamEmptyIllustration}
-            alt=""
-            aria-hidden="true"
-            draggable="false"
-            className="mx-auto h-auto w-[270px] max-w-full select-none"
-          />
+          <TeamEmptyVisual />
         )}
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
