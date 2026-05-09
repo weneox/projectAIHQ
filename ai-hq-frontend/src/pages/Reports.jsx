@@ -32,6 +32,8 @@ import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
 import AppStatusText from "../components/ui/AppStatusText.jsx";
+import AppSegmentedControl from "../components/ui/AppSegmentedControl.jsx";
+import AppMetricCell from "../components/ui/AppMetricCell.jsx";
 import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
@@ -226,28 +228,6 @@ function initials(value = "") {
     .join("");
 }
 
-function SegmentedControl({ value, options, onChange }) {
-  return (
-    <div className="inline-flex rounded-md border border-line bg-surface-subtle p-1">
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          onClick={() => onChange(option.id)}
-          className={cx(
-            "h-9 rounded-[5px] px-4 text-[13px] font-semibold transition-[background-color,color,box-shadow] duration-base ease-premium",
-            value === option.id
-              ? "bg-white text-text shadow-[0_6px_18px_-16px_rgba(15,23,42,0.8)]"
-              : "text-text-muted hover:text-text"
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function MetricCell({ icon: Icon, label, value, helper, tone = "neutral" }) {
   return (
     <div className="min-h-[132px] border-b border-line-soft px-5 py-4 md:border-r xl:border-b-0">
@@ -425,12 +405,12 @@ function OverviewReport({ report }) {
   return (
     <>
       <div className="grid bg-white md:grid-cols-2 xl:grid-cols-6">
-        <MetricCell icon={MessageSquare} label="Conversations" value={formatNumber(report.metrics.conversations)} helper="Inbound customer conversations." tone="brand" />
-        <MetricCell icon={Sparkles} label="AI replies" value={formatNumber(report.metrics.aiReplies)} helper="Replies handled by automation." />
-        <MetricCell icon={Target} label="Leads" value={formatNumber(report.metrics.leads)} helper="Qualified opportunities." tone="success" />
-        <MetricCell icon={Users} label="Customers" value={formatNumber(report.metrics.customers)} helper="Converted records." tone="success" />
-        <MetricCell icon={TrendingUp} label="Conversion" value={`${report.metrics.conversion}%`} helper="Lead to customer signal." tone="success" />
-        <MetricCell icon={Clock3} label="Avg response" value={report.metrics.avgResponse} helper="Average response time." />
+        <AppMetricCell icon={MessageSquare} label="Conversations" value={formatNumber(report.metrics.conversations)} helper="Inbound customer conversations." tone="brand" />
+        <AppMetricCell icon={Sparkles} label="AI replies" value={formatNumber(report.metrics.aiReplies)} helper="Replies handled by automation." />
+        <AppMetricCell icon={Target} label="Leads" value={formatNumber(report.metrics.leads)} helper="Qualified opportunities." tone="success" />
+        <AppMetricCell icon={Users} label="Customers" value={formatNumber(report.metrics.customers)} helper="Converted records." tone="success" />
+        <AppMetricCell icon={TrendingUp} label="Conversion" value={`${report.metrics.conversion}%`} helper="Lead to customer signal." tone="success" />
+        <AppMetricCell icon={Clock3} label="Avg response" value={report.metrics.avgResponse} helper="Average response time." />
       </div>
 
       <div className="border-t border-line-soft px-5 py-5">
@@ -539,12 +519,12 @@ function TeamReport({ report }) {
   return (
     <>
       <div className="grid bg-white md:grid-cols-2 xl:grid-cols-6">
-        <MetricCell icon={UserRound} label="Members" value={formatNumber(team.metrics.members)} helper="Active team members." />
-        <MetricCell icon={MessageSquare} label="Handled" value={formatNumber(team.metrics.handled)} helper="Assigned conversations." tone="brand" />
-        <MetricCell icon={CheckCircle2} label="Resolved" value={formatNumber(team.metrics.resolved)} helper="Completed conversations." tone="success" />
-        <MetricCell icon={Target} label="Leads" value={formatNumber(team.metrics.leads)} helper="Leads created by team." tone="success" />
-        <MetricCell icon={Clock3} label="Avg response" value={team.metrics.avgResponse} helper="Team response average." />
-        <MetricCell icon={Bot} label="Balance" value={`${team.metrics.balance}%`} helper="Workload distribution." tone="success" />
+        <AppMetricCell icon={UserRound} label="Members" value={formatNumber(team.metrics.members)} helper="Active team members." />
+        <AppMetricCell icon={MessageSquare} label="Handled" value={formatNumber(team.metrics.handled)} helper="Assigned conversations." tone="brand" />
+        <AppMetricCell icon={CheckCircle2} label="Resolved" value={formatNumber(team.metrics.resolved)} helper="Completed conversations." tone="success" />
+        <AppMetricCell icon={Target} label="Leads" value={formatNumber(team.metrics.leads)} helper="Leads created by team." tone="success" />
+        <AppMetricCell icon={Clock3} label="Avg response" value={team.metrics.avgResponse} helper="Team response average." />
+        <AppMetricCell icon={Bot} label="Balance" value={`${team.metrics.balance}%`} helper="Workload distribution." tone="success" />
       </div>
 
       <div className="border-t border-line-soft">
@@ -688,8 +668,8 @@ export default function Reports() {
           </div>
 
           <div className="flex flex-wrap gap-2 xl:justify-end">
-            <SegmentedControl value={view} options={VIEWS} onChange={setView} />
-            <SegmentedControl value={period} options={PERIODS} onChange={setPeriod} />
+            <AppSegmentedControl value={view} options={VIEWS} onChange={setView} />
+            <AppSegmentedControl value={period} options={PERIODS} onChange={setPeriod} />
           </div>
         </div>
 
@@ -702,3 +682,6 @@ export default function Reports() {
     </PageCanvas>
   );
 }
+
+
+

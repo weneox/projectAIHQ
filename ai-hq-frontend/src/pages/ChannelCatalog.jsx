@@ -10,12 +10,18 @@ import {
   Send,
   ShieldAlert,
   Smartphone,
-  X,
+
 } from "lucide-react";
 
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
+import AppModal, {
+  AppModalBody,
+  AppModalCloseButton,
+  AppModalFooter,
+  AppModalHeader,
+} from "../components/ui/AppModal.jsx";
 import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
@@ -284,90 +290,71 @@ function ConnectDialog({ channel, open, onClose }) {
   const signal = healthSignal(channel);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
-      <div
-        role="presentation"
-        className="absolute inset-0"
-        onClick={onClose}
-      />
-
-      <Card
-        padded={false}
-        clip
-        className="relative z-[81] w-full max-w-[620px] shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
-      >
-        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
-          <div className="flex min-w-0 items-start gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
-              <Icon className="h-11 w-11" strokeWidth={1.78} />
-            </div>
-
-            <div className="min-w-0">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-                Channel setup
-              </div>
-
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-                {channel.name}
-              </h2>
-
-              <p className="mt-2 max-w-[440px] text-[13.5px] font-medium leading-6 text-text-muted">
-                {channel.description}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <AppTag tone={statusTone(channel.status)}>
-                  {titleize(channel.status)}
-                </AppTag>
-                <AppTag tone={signal.tone} dot>
-                  {signal.label}
-                </AppTag>
-                <AppTag tone="neutral">{channel.type}</AppTag>
-              </div>
-            </div>
+    <AppModal open={open} onClose={onClose} maxWidth="max-w-[620px]">
+      <AppModalHeader>
+        <div className="flex min-w-0 items-start gap-5">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
+            <Icon className="h-11 w-11" strokeWidth={1.78} />
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
-            aria-label="Close channel setup"
-          >
-            <X className="h-4 w-4" strokeWidth={2.1} />
-          </button>
-        </div>
-
-        <div className="grid gap-4 p-6">
-          <div className="rounded-md border border-line-soft bg-white p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Setup note
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+              Channel setup
             </div>
-            <div className="mt-2 text-[13.5px] font-medium leading-6 text-text">
-              {channel.setupNote}
-            </div>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <DetailList title="This connects" items={channel.connects} />
-            <DetailList title="Requirements" items={channel.requirements} />
+            <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              {channel.name}
+            </h2>
+
+            <p className="mt-2 max-w-[440px] text-[13.5px] font-medium leading-6 text-text-muted">
+              {channel.description}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <AppTag tone={statusTone(channel.status)}>
+                {titleize(channel.status)}
+              </AppTag>
+              <AppTag tone={signal.tone} dot>
+                {signal.label}
+              </AppTag>
+              <AppTag tone="neutral">{channel.type}</AppTag>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-surface-subtle p-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
+        <AppModalCloseButton onClick={onClose} label="Close channel setup" />
+      </AppModalHeader>
 
-          <Button
-            type="button"
-            size="md"
-            rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            {actionLabel(channel)} channel
-          </Button>
+      <AppModalBody>
+        <div className="rounded-md border border-line-soft bg-white p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Setup note
+          </div>
+          <div className="mt-2 text-[13.5px] font-medium leading-6 text-text">
+            {channel.setupNote}
+          </div>
         </div>
-      </Card>
-    </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DetailList title="This connects" items={channel.connects} />
+          <DetailList title="Requirements" items={channel.requirements} />
+        </div>
+      </AppModalBody>
+
+      <AppModalFooter>
+        <Button type="button" variant="secondary" size="md" onClick={onClose}>
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          size="md"
+          rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+        >
+          {actionLabel(channel)} channel
+        </Button>
+      </AppModalFooter>
+    </AppModal>
   );
 }
 
@@ -410,3 +397,4 @@ export default function ChannelCatalog() {
     </PageCanvas>
   );
 }
+

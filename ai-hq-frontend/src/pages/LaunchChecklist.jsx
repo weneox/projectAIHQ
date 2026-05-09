@@ -11,12 +11,17 @@ import {
   ShieldAlert,
   ShieldCheck,
   Users,
-  X,
 } from "lucide-react";
 
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
+import AppModal, {
+  AppModalBody,
+  AppModalCloseButton,
+  AppModalFooter,
+  AppModalHeader,
+} from "../components/ui/AppModal.jsx";
 import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
@@ -379,87 +384,72 @@ function StageDialog({ stage, onClose }) {
   const status = stageStatus(stage);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
-      <div role="presentation" className="absolute inset-0" onClick={onClose} />
-
-      <Card
-        padded={false}
-        clip
-        className="relative z-[81] w-full max-w-[720px] shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
-      >
-        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
-          <div className="flex min-w-0 items-start gap-5">
-            <div
-              className={cx(
-                "flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-white text-[26px] font-semibold",
-                status === "ready"
-                  ? "border-success/30 text-success"
-                  : status === "blocked"
-                    ? "border-danger/30 text-danger"
-                    : "border-warning/35 text-warning"
-              )}
-            >
-              {stage.number}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Icon className="h-6 w-6 text-text" strokeWidth={1.9} />
-                <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-                  Launch stage
-                </div>
-              </div>
-
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-                {stage.title}
-              </h2>
-
-              <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
-                {stage.description}
-              </p>
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <AppTag tone={statusTone(status)} dot>
-                  {statusLabel(status)}
-                </AppTag>
-                <AppTag tone="neutral">{stageSummary(stage)}</AppTag>
-              </div>
-            </div>
+    <AppModal open={Boolean(stage)} onClose={onClose} maxWidth="max-w-[720px]">
+      <AppModalHeader>
+        <div className="flex min-w-0 items-start gap-5">
+          <div
+            className={cx(
+              "flex h-16 w-16 shrink-0 items-center justify-center rounded-md border bg-white text-[26px] font-semibold",
+              status === "ready"
+                ? "border-success/30 text-success"
+                : status === "blocked"
+                  ? "border-danger/30 text-danger"
+                  : "border-warning/35 text-warning"
+            )}
+          >
+            {stage.number}
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
-            aria-label="Close launch stage"
-          >
-            <X className="h-4 w-4" strokeWidth={2.1} />
-          </button>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Icon className="h-6 w-6 text-text" strokeWidth={1.9} />
+              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+                Launch stage
+              </div>
+            </div>
+
+            <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              {stage.title}
+            </h2>
+
+            <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+              {stage.description}
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <AppTag tone={statusTone(status)} dot>
+                {statusLabel(status)}
+              </AppTag>
+              <AppTag tone="neutral">{stageSummary(stage)}</AppTag>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-3 bg-surface-subtle p-5">
-          {stage.checks.map((check) => (
-            <CheckRow key={check.title} check={check} />
-          ))}
-        </div>
+        <AppModalCloseButton onClick={onClose} label="Close launch stage" />
+      </AppModalHeader>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-white p-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Close
-          </Button>
+      <AppModalBody className="grid gap-3 bg-surface-subtle p-5">
+        {stage.checks.map((check) => (
+          <CheckRow key={check.title} check={check} />
+        ))}
+      </AppModalBody>
 
-          <Button
-            type="button"
-            size="md"
-            variant={status === "blocked" ? "primary" : "secondary"}
-            onClick={() => navigate(stage.path)}
-            rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            {stage.action}
-          </Button>
-        </div>
-      </Card>
-    </div>
+      <AppModalFooter className="bg-white">
+        <Button type="button" variant="secondary" size="md" onClick={onClose}>
+          Close
+        </Button>
+
+        <Button
+          type="button"
+          size="md"
+          variant={status === "blocked" ? "primary" : "secondary"}
+          onClick={() => navigate(stage.path)}
+          rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+        >
+          {stage.action}
+        </Button>
+      </AppModalFooter>
+    </AppModal>
   );
 }
 
@@ -532,4 +522,5 @@ export default function LaunchChecklist() {
     </PageCanvas>
   );
 }
+
 

@@ -10,12 +10,17 @@ import {
   Phone,
   Save,
   ShieldCheck,
-  X,
 } from "lucide-react";
 
 import Button from "../../components/ui/Button.jsx";
 import Card from "../../components/ui/Card.jsx";
 import AppTag from "../../components/ui/AppTag.jsx";
+import AppModal, {
+  AppModalBody,
+  AppModalCloseButton,
+  AppModalFooter,
+  AppModalHeader,
+} from "../../components/ui/AppModal.jsx";
 import {
   PageCanvas,
   PageHeader,
@@ -365,80 +370,69 @@ function EditBusinessDialog({
   const status = sectionStatus(section);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.28)] px-4 py-8 backdrop-blur-[7px]">
-      <div role="presentation" className="absolute inset-0" onClick={onClose} />
-
-      <Card
-        padded={false}
-        clip
-        className="relative z-[81] max-h-[calc(100vh-64px)] w-full max-w-[760px] overflow-hidden shadow-[0_28px_90px_-45px_rgba(15,23,42,0.75)]"
-      >
-        <div className="flex items-start justify-between gap-5 border-b border-line-soft p-6">
-          <div className="flex min-w-0 items-start gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
-              <Icon className="h-11 w-11" strokeWidth={1.78} />
-            </div>
-
-            <div className="min-w-0">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-                Edit business truth
-              </div>
-
-              <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-                {section.title}
-              </h2>
-
-              <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
-                Update the locked business information. After saving, this section returns to read-only mode.
-              </p>
-
-              <div className="mt-4">
-                <AppTag tone={statusTone(status)} dot>
-                  {statusLabel(status)}
-                </AppTag>
-              </div>
-            </div>
+    <AppModal
+      open={open}
+      onClose={onClose}
+      maxWidth="max-w-[760px]"
+    >
+      <AppModalHeader>
+        <div className="flex min-w-0 items-start gap-5">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
+            <Icon className="h-11 w-11" strokeWidth={1.78} />
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted transition-colors duration-base ease-premium hover:border-line hover:text-text"
-            aria-label="Close edit dialog"
-          >
-            <X className="h-4 w-4" strokeWidth={2.1} />
-          </button>
-        </div>
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+              Edit business truth
+            </div>
 
-        <div className="max-h-[calc(100vh-270px)] overflow-y-auto bg-surface-subtle p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            {section.fields.map((field) => (
-              <EditField
-                key={field.key}
-                field={field}
-                value={draft[field.key] ?? ""}
-                onChange={(value) => onDraftChange(field.key, value)}
-              />
-            ))}
+            <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              {section.title}
+            </h2>
+
+            <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+              Update the locked business information. After saving, this section returns to read-only mode.
+            </p>
+
+            <div className="mt-4">
+              <AppTag tone={statusTone(status)} dot>
+                {statusLabel(status)}
+              </AppTag>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-line-soft bg-white p-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
+        <AppModalCloseButton onClick={onClose} label="Close edit dialog" />
+      </AppModalHeader>
 
-          <Button
-            type="button"
-            size="md"
-            onClick={onSave}
-            leftIcon={<Save className="h-4 w-4" strokeWidth={2.1} />}
-          >
-            Save changes
-          </Button>
+      <AppModalBody className="max-h-[calc(100vh-270px)] overflow-y-auto bg-surface-subtle p-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          {section.fields.map((field) => (
+            <EditField
+              key={field.key}
+              field={field}
+              value={draft[field.key] ?? ""}
+              onChange={(value) => onDraftChange(field.key, value)}
+            />
+          ))}
         </div>
-      </Card>
-    </div>
+      </AppModalBody>
+
+      <AppModalFooter className="bg-white">
+        <Button type="button" variant="secondary" size="md" onClick={onClose}>
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          size="md"
+          onClick={onSave}
+          leftIcon={<Save className="h-4 w-4" strokeWidth={2.1} />}
+        >
+          Save changes
+        </Button>
+      </AppModalFooter>
+    </AppModal>
   );
 }
 
@@ -555,3 +549,4 @@ export default function TruthViewerPage() {
     </PageCanvas>
   );
 }
+
