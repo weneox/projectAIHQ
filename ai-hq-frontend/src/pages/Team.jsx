@@ -1,5 +1,53 @@
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  Crown,
+  MailPlus,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  UserCheck,
+  UserRound,
+  Users,
+  UserX,
+  X,
+} from "lucide-react";
 
-
+import {
+  createTeamUser,
+  getTeam,
+  updateTeamUserStatus,
+} from "../api/team.js";
+import Button from "../components/ui/Button.jsx";
+import Card from "../components/ui/Card.jsx";
+import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
+import AppIconButton from "../components/ui/AppIconButton.jsx";
+import AppStatCard from "../components/ui/AppStatCard.jsx";
+import {
+  AppFilterAction as AppTeamFilterAction,
+  AppFilterMenuShell as AppTeamFilterMenuShell,
+  AppFilterOption as AppTeamFilterOption,
+  AppFilterSearchInput as AppTeamFilterSearchInput,
+  AppMultiSelectMenu as AppTeamMultiSelectMenu,
+  AppTableHeaderFilter as AppTeamHeaderFilter,
+  normalizeAppFilterList as normalizeTeamFilterList,
+  toggleAppFilterListValue as toggleTeamFilterListValue,
+} from "../components/ui/AppTableFilters.jsx";
+import {
+  AppChoiceButton as AppTeamChoiceButton,
+  AppChoiceGroup as AppTeamChoiceGroup,
+  AppPageField as AppTeamPageField,
+  AppPageInput as AppTeamPageInput,
+} from "../components/ui/AppPageField.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+  PageHeader,
+} from "../components/ui/AppShellPrimitives.jsx";
+import { cx } from "../lib/cx.js";
 
 const PAGE_SIZE = 6;
 const TABLE_MIN_WIDTH = "min-w-[1240px] w-full";
@@ -406,29 +454,13 @@ function RoleText({ role = "" }) {
   );
 }
 
-
-
-
-
-
-
-
 function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
     <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
       <div className="max-w-[520px]">
-        {filtered ? (
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
-            <Users className="h-5 w-5" strokeWidth={1.9} />
-          </div>
-        ) : (
-          <div className="mx-auto flex h-[120px] items-center justify-center">
-            <Users
-              className="h-24 w-24 text-blue-600 drop-shadow-[0_18px_32px_rgba(37,99,235,0.20)]"
-              strokeWidth={1.45}
-            />
-          </div>
-        )}
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
+          <Users className="h-5 w-5" strokeWidth={1.9} />
+        </div>
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
           {filtered ? "No matching members" : "No team members yet"}
