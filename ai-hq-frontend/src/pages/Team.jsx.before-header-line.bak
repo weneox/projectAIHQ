@@ -1394,7 +1394,7 @@ export default function Team() {
           ) : null}
 
           <section className="space-y-5">
-            <div className="flex flex-col gap-5 border-b border-line-soft px-1 pb-5 pt-1 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-5 px-1 pt-1 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <h1 className="text-[30px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
                   Workspace members
@@ -1405,7 +1405,7 @@ export default function Team() {
                 </p>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center justify-start gap-3 lg:justify-end lg:pt-4">
+              <div className="flex shrink-0 flex-wrap items-center justify-start gap-3 lg:justify-end">
                 <Button
                   type="button"
                   size="sm"
@@ -1721,8 +1721,6 @@ export default function Team() {
     </>
   );
 }
-
-
 
 
 

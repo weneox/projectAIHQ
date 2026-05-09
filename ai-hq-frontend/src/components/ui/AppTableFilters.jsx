@@ -84,28 +84,25 @@ export function AppFilterSearchInput({
   value,
   onChange,
   placeholder = "Search...",
-  autoFocus = true,
 }) {
   return (
     <div className="p-1.5">
-      <div className="flex h-8 min-w-0 items-center gap-2 rounded-md bg-white px-2.5 text-text-muted shadow-[inset_0_0_0_1px_rgb(var(--color-line))] transition-[background-color,box-shadow,color] duration-150 ease-premium focus-within:text-text focus-within:shadow-[inset_0_0_0_1.5px_rgba(var(--color-brand),0.95),0_0_0_3px_rgba(var(--color-brand),0.08)]">
+      <div className="team-filter-control flex h-8 min-w-0 items-center gap-2 rounded-md bg-white px-2.5 text-text-muted transition-[background-color,box-shadow] duration-150 ease-premium focus-within:text-text">
         <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} />
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          autoFocus={autoFocus}
           autoComplete="new-password"
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
-          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[12.5px] font-semibold text-text outline-none ring-0 shadow-none placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-none"
+          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[12.5px] font-semibold text-text outline-none ring-0 shadow-none placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
         />
       </div>
     </div>
   );
 }
-
 export function AppFilterOption({ selected, children, onClick }) {
   return (
     <button
@@ -168,3 +165,4 @@ export function AppMultiSelectMenu({ options, selectedValues, onToggle, onClear,
     </AppFilterMenuShell>
   );
 }
+
