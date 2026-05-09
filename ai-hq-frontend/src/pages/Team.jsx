@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Crown, MailPlus, Pencil, Plus, RefreshCw, Search, UserCheck, UserRound, Users, UserX, X } from "lucide-react";
-import { ShieldCheck as PhShieldCheck, UserCirclePlus, UsersThree } from "@phosphor-icons/react";
 
 import {
   createTeamUser,
@@ -36,6 +35,7 @@ import {
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
+import { ShieldCheck as PhShieldCheck, UserCirclePlus, UsersThree } from "@phosphor-icons/react";
 const PAGE_SIZE = 6;
 const TABLE_MIN_WIDTH = "min-w-[1240px] w-full";
 const TABLE_BODY_MIN_HEIGHT = "min-h-[348px]";
@@ -442,76 +442,31 @@ function RoleText({ role = "" }) {
 }
 
 
-function TeamEmptyVisual() {
-  return (
-    <div className="relative mx-auto flex h-[180px] w-[280px] items-center justify-center">
-      <div className="absolute inset-x-8 top-4 h-24 rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 shadow-[0_24px_70px_rgba(15,23,42,0.10)]" />
-
-      <div className="absolute left-8 top-10 h-20 w-24 rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
-        <div className="mx-3 mt-3 h-2 w-10 rounded-full bg-slate-200" />
-        <div className="mx-3 mt-3 flex items-center gap-2">
-          <span className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500" />
-          <span className="space-y-1">
-            <span className="block h-1.5 w-10 rounded-full bg-slate-200" />
-            <span className="block h-1.5 w-7 rounded-full bg-slate-100" />
-          </span>
-        </div>
-      </div>
-
-      <div className="absolute right-8 top-10 h-20 w-24 rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.10)]">
-        <div className="mx-3 mt-3 h-2 w-12 rounded-full bg-slate-200" />
-        <div className="mx-3 mt-3 flex -space-x-2">
-          <span className="h-7 w-7 rounded-full border-2 border-white bg-blue-500" />
-          <span className="h-7 w-7 rounded-full border-2 border-white bg-violet-500" />
-          <span className="h-7 w-7 rounded-full border-2 border-white bg-cyan-400" />
-        </div>
-      </div>
-
-      <div className="relative z-10 mt-8 flex h-24 w-24 items-center justify-center rounded-[30px] border border-blue-100 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 shadow-[0_26px_70px_rgba(79,70,229,0.28)]">
-        <Users className="h-11 w-11 text-white" strokeWidth={1.9} />
-      </div>
-
-      <div className="absolute bottom-4 left-16 h-10 w-10 rounded-2xl border border-blue-100 bg-white shadow-[0_16px_40px_rgba(37,99,235,0.16)]">
-        <UserPlus className="m-2.5 h-5 w-5 text-blue-600" strokeWidth={2} />
-      </div>
-
-      <div className="absolute bottom-4 right-16 h-10 w-10 rounded-2xl border border-violet-100 bg-white shadow-[0_16px_40px_rgba(124,58,237,0.16)]">
-        <ShieldCheck className="m-2.5 h-5 w-5 text-violet-600" strokeWidth={2} />
-      </div>
-    </div>
-  );
-}
 
 
 
 function TeamEmptyLibraryVisual() {
   return (
-    <div className="relative mx-auto h-[190px] w-[390px] max-w-full">
-      <div className="absolute left-1/2 top-8 h-28 w-64 -translate-x-1/2 rounded-full bg-blue-100/80 blur-3xl" />
-      <div className="absolute left-1/2 top-10 h-28 w-56 -translate-x-1/2 rounded-full bg-violet-100/80 blur-3xl" />
+    <div className="relative mx-auto h-[190px] w-[420px] max-w-full">
+      <div className="absolute left-1/2 top-8 h-28 w-64 -translate-x-1/2 rounded-full bg-blue-100/70 blur-3xl" />
+      <div className="absolute left-1/2 top-10 h-28 w-56 -translate-x-1/2 rounded-full bg-violet-100/70 blur-3xl" />
 
-      <div className="absolute left-[92px] top-[104px] h-px w-[206px] bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+      <div className="absolute left-[104px] top-[102px] h-px w-[212px] bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
 
       <UserCirclePlus
         weight="duotone"
-        className="absolute left-[32px] top-[70px] h-[82px] w-[82px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
+        className="absolute left-[32px] top-[68px] h-[88px] w-[88px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
       />
 
       <UsersThree
         weight="duotone"
-        className="absolute left-1/2 top-[18px] h-[148px] w-[148px] -translate-x-1/2 text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
+        className="absolute left-1/2 top-[10px] h-[160px] w-[160px] -translate-x-1/2 text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
       />
 
       <PhShieldCheck
         weight="duotone"
-        className="absolute right-[32px] top-[70px] h-[82px] w-[82px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
+        className="absolute right-[32px] top-[68px] h-[88px] w-[88px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
       />
-
-      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        <span className="h-1.5 w-16 rounded-full bg-slate-300" />
-        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-      </div>
     </div>
   );
 }
