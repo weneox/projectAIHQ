@@ -1,27 +1,5 @@
 
-import { ShieldCheck as PhShieldCheck, UserCirclePlus, UsersThree } from "@phosphor-icons/react";
 
-const TeamEmptyLibraryVisual = () => (
-  <div className="relative mx-auto flex h-[190px] w-[420px] max-w-full items-center justify-center">
-    <div className="absolute h-28 w-72 rounded-full bg-blue-100/70 blur-3xl" />
-    <div className="absolute h-24 w-56 rounded-full bg-violet-100/70 blur-3xl" />
-
-    <UserCirclePlus
-      weight="duotone"
-      className="absolute left-8 h-[86px] w-[86px] text-blue-500 drop-shadow-[0_18px_30px_rgba(37,99,235,0.22)]"
-    />
-
-    <UsersThree
-      weight="duotone"
-      className="relative z-10 h-[160px] w-[160px] text-indigo-600 drop-shadow-[0_28px_42px_rgba(79,70,229,0.28)]"
-    />
-
-    <PhShieldCheck
-      weight="duotone"
-      className="absolute right-8 h-[86px] w-[86px] text-violet-600 drop-shadow-[0_18px_30px_rgba(124,58,237,0.22)]"
-    />
-  </div>
-);
 
 const PAGE_SIZE = 6;
 const TABLE_MIN_WIDTH = "min-w-[1240px] w-full";
@@ -444,7 +422,12 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
             <Users className="h-5 w-5" strokeWidth={1.9} />
           </div>
         ) : (
-          <TeamEmptyLibraryVisual />
+          <div className="mx-auto flex h-[120px] items-center justify-center">
+            <Users
+              className="h-24 w-24 text-blue-600 drop-shadow-[0_18px_32px_rgba(37,99,235,0.20)]"
+              strokeWidth={1.45}
+            />
+          </div>
         )}
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
