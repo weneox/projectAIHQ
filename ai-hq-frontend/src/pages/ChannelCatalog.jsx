@@ -392,7 +392,7 @@ async function safeStatus(loader) {
       error:
         s(payload.error || payload.message || error?.message) ||
         "Channel status unavailable.",
-      payload: null,
+      payload,
     };
   }
 }
@@ -1161,9 +1161,11 @@ function MetaPanel({
   const review = obj(payload.review);
   const candidates = arr(pendingSelection.candidates);
   const blockers = readBlockers(payload);
-  const planRestricted = isPlanRestricted(channel);
-
-  async function runLocal(action, successMessage) {
+  const connectDisabled = backendConnectDisabled(channel);
+  const connectDisabledMessage = connectDisabled ? backendExactMessage(payload) : "";
+const connectDisabled = backendConnectDisabled(channel);
+  const connectDisabledMessage = connectDisabled ? backendExactMessage(payload) : "";
+async function runLocal(action, successMessage) {
     setLocalMessage("");
     setLocalError("");
 
@@ -1290,7 +1292,7 @@ function MetaPanel({
           type="button"
           variant="secondary"
           size="md"
-          disabled={planRestricted}
+          disabled={connectDisabled}
           loading={busyAction === "instagram-connect"}
           onClick={onMetaConnect}
           rightIcon={<ExternalLink className="h-4 w-4" strokeWidth={2.1} />}
