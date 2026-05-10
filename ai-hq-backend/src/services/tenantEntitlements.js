@@ -43,7 +43,7 @@ const CAPABILITY_DEFS = Object.freeze({
     summary: "Source sync, review queue, and truth governance",
   },
   metaChannelConnect: {
-    minimumPlan: "growth",
+    minimumPlan: "starter",
     summary: "Meta channel onboarding and reconnect flows",
   },
   agentConfigMutation: {
