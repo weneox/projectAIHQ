@@ -141,192 +141,9 @@ function displayUserId(value = "") {
   return `â€¦${cleaned.slice(-14)}`;
 }
 
-function isLocalDesignMode() {
-  const host =
-    typeof window !== "undefined" ? lower(window.location.hostname) : "";
 
-  return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    Boolean(import.meta.env?.DEV)
-  );
-}
 
-function localDesignTeamUsers() {
-  const now = new Date().toISOString();
 
-  return [
-    {
-      id: "user_local_design_01",
-      user_id: "user_local_design_01",
-      full_name: "Aylin Carter",
-      user_email: "aylin@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_02",
-      user_id: "user_local_design_02",
-      full_name: "Marcus Hale",
-      user_email: "marcus@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_03",
-      user_id: "user_local_design_03",
-      full_name: "Selin Ward",
-      user_email: "selin@local.design",
-      role: "admin",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_04",
-      user_id: "user_local_design_04",
-      full_name: "Leo Bennett",
-      user_email: "leo@local.design",
-      role: "operator",
-      status: "invited",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_05",
-      user_id: "user_local_design_05",
-      full_name: "Maya Stone",
-      user_email: "maya@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_06",
-      user_id: "user_local_design_06",
-      full_name: "Noah Rivers",
-      user_email: "noah@local.design",
-      role: "operator",
-      status: "disabled",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_07",
-      user_id: "user_local_design_07",
-      full_name: "Elara Fox",
-      user_email: "elara@local.design",
-      role: "admin",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_08",
-      user_id: "user_local_design_08",
-      full_name: "Jonas Reed",
-      user_email: "jonas@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_09",
-      user_id: "user_local_design_09",
-      full_name: "Nora Blake",
-      user_email: "nora@local.design",
-      role: "operator",
-      status: "invited",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_10",
-      user_id: "user_local_design_10",
-      full_name: "Adrian Cole",
-      user_email: "adrian@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_11",
-      user_id: "user_local_design_11",
-      full_name: "Lina Gray",
-      user_email: "lina@local.design",
-      role: "admin",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_12",
-      user_id: "user_local_design_12",
-      full_name: "Ethan Cross",
-      user_email: "ethan@local.design",
-      role: "operator",
-      status: "disabled",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_13",
-      user_id: "user_local_design_13",
-      full_name: "Mila Quinn",
-      user_email: "mila@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_14",
-      user_id: "user_local_design_14",
-      full_name: "Theo Knight",
-      user_email: "theo@local.design",
-      role: "operator",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: "user_local_design_15",
-      user_id: "user_local_design_15",
-      full_name: "Sofia Lane",
-      user_email: "sofia@local.design",
-      role: "operator",
-      status: "invited",
-      created_at: now,
-      updated_at: now,
-    },
-  ];
-}
-
-function withLocalDesignTeamUsers(users = []) {
-  const baseUsers = arr(users);
-
-  if (!isLocalDesignMode()) {
-    return baseUsers;
-  }
-
-  const existingIds = new Set(baseUsers.map((user) => userId(user)));
-  const extras = localDesignTeamUsers().filter(
-    (user) => !existingIds.has(userId(user))
-  );
-
-  return [...baseUsers, ...extras];
-}
-
-function isLocalDesignUser(user = {}) {
-  return userId(user).startsWith("user_local_design_");
-}
 
 function toneForRole(role = "") {
   const safe = lower(role);
@@ -968,7 +785,7 @@ export default function Team() {
         loading: false,
         refreshing: false,
         error: "",
-        users: withLocalDesignTeamUsers(arr(payload?.users)),
+        users: arr(payload?.users),
         viewerRole: lower(payload?.viewerRole || ""),
       });
     } catch (error) {
@@ -1278,54 +1095,58 @@ export default function Team() {
   }
 
   async function handleEditSubmit(event) {
-    event?.preventDefault?.();
+    event.preventDefault();
 
     const id = s(edit.id);
-    if (!id || busyId) return;
+    const email = s(edit.email);
+    const fullName = s(edit.fullName);
+    const role = lower(edit.role || "operator");
+    const status = lower(edit.status || "active");
+
+    if (!id) {
+      setNotice({
+        tone: "danger",
+        title: "Member not selected",
+        description: "Select a team member before saving changes.",
+      });
+      return;
+    }
+
+    if (!email) {
+      setNotice({
+        tone: "danger",
+        title: "Email required",
+        description: "Team member email is required.",
+      });
+      return;
+    }
+
+    setBusyId(id);
+    setNotice(null);
 
     try {
-      setBusyId(`edit:${id}`);
-      setNotice(null);
-
-      const originalStatus = userStatus(editingUser || {});
-      const nextStatus = s(edit.status, "active");
-
-      if (originalStatus !== nextStatus && !isLocalDesignUser(editingUser || {})) {
-        await updateTeamUserStatus(id, nextStatus);
-      }
-
-      setState((current) => ({
-        ...current,
-        users: arr(current.users).map((user) => {
-          if (userId(user) !== id) return user;
-
-          return {
-            ...user,
-            full_name: s(edit.fullName),
-            fullName: s(edit.fullName),
-            user_email: s(edit.email).toLowerCase(),
-            email: s(edit.email).toLowerCase(),
-            role: s(edit.role, "operator"),
-            status: nextStatus,
-            updated_at: new Date().toISOString(),
-          };
-        }),
-      }));
+      await updateTeamUser(id, {
+        user_email: email,
+        full_name: fullName,
+        role,
+        status,
+      });
 
       setNotice({
         tone: "success",
         title: "Member updated",
-        description: "The member information was updated.",
+        description: "Team member changes were saved.",
       });
 
       setEditingUser(null);
+      await load({ refreshing: true });
     } catch (error) {
       setNotice({
         tone: "danger",
-        title: "Could not update member",
+        title: "Update failed",
         description:
           s(error?.payload?.error || error?.payload?.message || error?.message) ||
-          "Check permissions and try again.",
+          "Team member could not be updated.",
       });
     } finally {
       setBusyId("");

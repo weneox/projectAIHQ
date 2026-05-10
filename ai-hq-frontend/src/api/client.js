@@ -1,11 +1,4 @@
-// src/api/client.js
-
-import {
-  getDesignModeApiResponse,
-  shouldMockApiRequest,
-} from "../lib/designMode.js";
-
-const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
+﻿const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
 const API_BASE = RAW ? RAW.replace(/\/+$/, "") : "";
 const DEFAULT_TIMEOUT_MS = 12000;
 const IS_DEV = Boolean(import.meta.env?.DEV);
@@ -183,18 +176,6 @@ export async function apiRequest(path, options = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     signal: externalSignal,
   } = options;
-
-  if (shouldMockApiRequest(path)) {
-    return getDesignModeApiResponse(path, {
-      method,
-      body,
-      headers: extraHeaders,
-      credentials,
-      allowStatuses,
-      rawBody,
-      timeoutMs,
-    });
-  }
 
   const url = apiUrl(path);
   const headers = {
