@@ -1,20 +1,23 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  BookOpen,
+  BookOpenCheck,
   CheckCircle2,
+  CircleAlert,
   Database,
+  ExternalLink,
   FileText,
   Globe2,
-  HelpCircle,
   LockKeyhole,
-  Pencil,
-  Plus,
   RefreshCw,
+  RotateCw,
   ShieldCheck,
-  Upload,
 } from "lucide-react";
 
+import {
+  listKnowledgeSources,
+  syncKnowledgeSource,
+} from "../api/knowledge.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
@@ -25,115 +28,12 @@ import AppModal, {
   AppModalHeader,
 } from "../components/ui/AppModal.jsx";
 import {
+  InlineNotice,
+  LoadingSurface,
   PageCanvas,
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
-
-const KNOWLEDGE_SOURCES = [
-  {
-    id: "website",
-    title: "Website knowledge",
-    type: "Website",
-    status: "connected",
-    icon: Globe2,
-    description: "Public website pages that the assistant can use for general answers.",
-    owner: "System",
-    updated: "May 9, 2026",
-    chunks: 66,
-    action: "Manage",
-    note: "Synced website content is available for public-facing answers.",
-    includes: ["Homepage copy", "Service pages", "Public positioning"],
-    boundaries: ["Do not invent unpublished offers", "Escalate unclear pricing questions"],
-    preview:
-      "The business helps customers automate conversations, capture leads, and route operational work through AI-assisted systems.",
-  },
-  {
-    id: "business-faq",
-    title: "Business FAQ",
-    type: "FAQ",
-    status: "needs review",
-    icon: HelpCircle,
-    description: "Common customer questions and approved short answers.",
-    owner: "Operator",
-    updated: "May 8, 2026",
-    chunks: 42,
-    action: "Review",
-    note: "Some answers should be reviewed before the assistant relies on them.",
-    includes: ["Project questions", "Setup questions", "Delivery process"],
-    boundaries: ["Do not guarantee timelines", "Route custom requests to an operator"],
-    preview:
-      "Customers can ask about services, process, consultation, and general automation possibilities. Final scope should be confirmed by an operator.",
-  },
-  {
-    id: "policies",
-    title: "Policies",
-    type: "Policy",
-    status: "empty",
-    icon: ShieldCheck,
-    description: "Rules for refunds, cancellation, sensitive requests, and customer data.",
-    owner: "Not assigned",
-    updated: "Not configured",
-    chunks: 0,
-    action: "Add source",
-    note: "Policy knowledge has not been added yet.",
-    includes: ["Refund policy", "Data handling", "Cancellation rules"],
-    boundaries: ["Do not answer policy questions until configured"],
-    preview:
-      "No approved policy source is configured yet. The assistant should hand off policy-related questions to an operator.",
-  },
-  {
-    id: "services",
-    title: "Service docs",
-    type: "Document",
-    status: "connected",
-    icon: FileText,
-    description: "Detailed service notes for automation, websites, and AI assistant work.",
-    owner: "Emil",
-    updated: "May 9, 2026",
-    chunks: 84,
-    action: "Manage",
-    note: "Service documents are indexed and available.",
-    includes: ["AI automation", "Website builds", "CRM routing", "Workflow systems"],
-    boundaries: ["Avoid unsupported technical promises", "Confirm integrations before quoting"],
-    preview:
-      "Services include AI assistants, premium websites, CRM routing, customer follow-up, lead qualification, and internal workflow automation.",
-  },
-  {
-    id: "uploads",
-    title: "Uploaded files",
-    type: "Files",
-    status: "empty",
-    icon: Upload,
-    description: "PDFs, documents, briefs, and files uploaded for assistant knowledge.",
-    owner: "Not assigned",
-    updated: "Not configured",
-    chunks: 0,
-    action: "Upload",
-    note: "No uploaded files are active yet.",
-    includes: ["PDF documents", "Project briefs", "Internal references"],
-    boundaries: ["Only use reviewed files", "Ignore outdated drafts"],
-    preview:
-      "No uploaded source is active yet. Upload reviewed files before allowing the assistant to answer from documents.",
-  },
-  {
-    id: "custom-notes",
-    title: "Custom notes",
-    type: "Notes",
-    status: "needs review",
-    icon: BookOpen,
-    description: "Manual notes for tone, answer style, objections, and handoff behavior.",
-    owner: "Operator",
-    updated: "May 7, 2026",
-    chunks: 19,
-    action: "Edit",
-    note: "Custom notes exist, but review is recommended.",
-    includes: ["Tone rules", "Sales notes", "Handoff rules"],
-    boundaries: ["Keep claims conservative", "Escalate uncertain requests"],
-    preview:
-      "Assistant tone should be clear, direct, premium, and operational. If the answer is uncertain, collect context and hand off.",
-  },
-];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -143,49 +43,212 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 function titleize(value = "") {
   return s(value || "unknown")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatWhen(value = "") {
+  const raw = s(value);
+  if (!raw) return "Not available";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function sourceId(source = {}) {
+  return s(source.id || source.source_id || source.sourceId);
+}
+
+function sourceType(source = {}) {
+  return lower(source.source_type || source.sourceType || source.type || "source");
+}
+
+function sourceStatus(source = {}) {
+  return lower(source.status || source.sync_status || source.syncStatus || "unknown");
+}
+
+function syncStatus(source = {}) {
+  return lower(source.sync_status || source.syncStatus || source.status || "unknown");
+}
+
+function sourceName(source = {}) {
+  return (
+    s(source.display_name || source.displayName) ||
+    s(source.source_key || source.sourceKey) ||
+    titleize(sourceType(source))
+  );
+}
+
+function sourceUrl(source = {}) {
+  return s(source.source_url || source.sourceUrl || source.url);
+}
+
+function sourceKey(source = {}) {
+  return s(source.source_key || source.sourceKey || source.external_account_id || source.externalAccountId);
+}
+
+function updatedAt(source = {}) {
+  return s(source.updated_at || source.updatedAt || source.last_sync_at || source.lastSyncAt || source.created_at || source.createdAt);
+}
+
+function chunkCount(source = {}) {
+  const direct = n(
+    source.chunk_count ??
+      source.chunkCount ??
+      source.chunks_count ??
+      source.chunksCount,
+    NaN
+  );
+
+  if (Number.isFinite(direct)) return direct;
+
+  const metadata = obj(source.metadata_json || source.metadataJson || source.metadata);
+  const indexed = n(metadata.chunkCount ?? metadata.chunks ?? metadata.indexedChunks, NaN);
+
+  return Number.isFinite(indexed) ? indexed : 0;
+}
+
 function statusTone(status = "") {
   const safe = lower(status);
 
-  if (safe === "connected") return "success";
-  if (safe === "needs review") return "warning";
-  if (safe === "empty") return "neutral";
+  if (["active", "connected", "ready", "synced", "completed", "approved"].includes(safe)) {
+    return "success";
+  }
+
+  if (["syncing", "queued", "pending", "needs_review", "review", "stale"].includes(safe)) {
+    return "warning";
+  }
+
+  if (["failed", "error", "blocked", "disabled", "unavailable"].includes(safe)) {
+    return "danger";
+  }
 
   return "neutral";
 }
 
-function statusLabel(status = "") {
-  const safe = lower(status);
+function typeIcon(type = "") {
+  const safe = lower(type);
 
-  if (safe === "needs review") return "Needs review";
-  return titleize(safe);
+  if (safe.includes("website") || safe.includes("web")) return Globe2;
+  if (safe.includes("file") || safe.includes("document") || safe.includes("pdf")) return FileText;
+  if (safe.includes("policy")) return ShieldCheck;
+
+  return Database;
 }
 
-function actionIconElement(source = {}, className = "h-4 w-4") {
-  const safe = lower(source.action);
-
-  if (safe.includes("add")) {
-    return <Plus className={className} strokeWidth={2.1} />;
-  }
-
-  if (safe.includes("upload")) {
-    return <Upload className={className} strokeWidth={2.1} />;
-  }
-
-  if (safe.includes("edit")) {
-    return <Pencil className={className} strokeWidth={2.1} />;
-  }
-
-  return <ArrowRight className={className} strokeWidth={2.1} />;
+function sourceEnabled(source = {}) {
+  if (typeof source.is_enabled === "boolean") return source.is_enabled;
+  if (typeof source.isEnabled === "boolean") return source.isEnabled;
+  if (typeof source.enabled === "boolean") return source.enabled;
+  return true;
 }
 
-function SourceCard({ source, selected = false, onOpen }) {
-  const Icon = source.icon || Database;
+function normalizeSource(source = {}) {
+  const type = sourceType(source);
+  const status = sourceStatus(source);
+  const sync = syncStatus(source);
+
+  return {
+    raw: source,
+    id: sourceId(source),
+    name: sourceName(source),
+    type,
+    typeLabel: titleize(type),
+    icon: typeIcon(type),
+    status,
+    statusLabel: titleize(status),
+    syncStatus: sync,
+    syncLabel: titleize(sync),
+    statusTone: statusTone(status),
+    syncTone: statusTone(sync),
+    enabled: sourceEnabled(source),
+    key: sourceKey(source),
+    url: sourceUrl(source),
+    chunks: chunkCount(source),
+    updated: formatWhen(updatedAt(source)),
+    updatedRaw: updatedAt(source),
+    authStatus: lower(source.auth_status || source.authStatus || ""),
+    connectionMode: lower(source.connection_mode || source.connectionMode || ""),
+    accessScope: lower(source.access_scope || source.accessScope || ""),
+    isPrimary: source.is_primary === true || source.isPrimary === true,
+    metadata: obj(source.metadata_json || source.metadataJson || source.metadata),
+    permissions: obj(source.permissions_json || source.permissionsJson || source.permissions),
+    settings: obj(source.settings_json || source.settingsJson || source.settings),
+  };
+}
+
+function SourceStat({ label, value }) {
+  return (
+    <div className="rounded-md border border-line-soft bg-white px-4 py-3 shadow-[var(--shadow-inset-top)]">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-1 truncate text-[14px] font-semibold text-text">
+        {value || "Not available"}
+      </div>
+    </div>
+  );
+}
+
+function EmptyKnowledgeState() {
+  return (
+    <Card padded={false} clip>
+      <div className="flex min-h-[420px] items-center justify-center px-6 py-12 text-center">
+        <div className="max-w-[560px]">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text-muted">
+            <BookOpenCheck className="h-8 w-8" strokeWidth={1.9} />
+          </div>
+
+          <h2 className="mt-5 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            No knowledge sources yet
+          </h2>
+
+          <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
+            The backend returned an empty source list. No fake FAQ, policy, website, or upload cards are shown.
+            Add real sources through the source governance flow before allowing the assistant to answer from documents.
+          </p>
+
+          <div className="mt-5 rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-left">
+            <div className="text-[13px] font-semibold text-text">
+              Professional rule
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              If a source does not exist in backend, the UI must not pretend it exists.
+            </div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SourceCard({ source, selected = false, busy = false, onOpen, onSync }) {
+  const Icon = source.icon;
 
   return (
     <article
@@ -205,7 +268,7 @@ function SourceCard({ source, selected = false, onOpen }) {
           : "border-line-soft hover:border-line hover:bg-surface-subtle hover:shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
       )}
     >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_150px] xl:items-center">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_170px] xl:items-center">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-5">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center text-text">
@@ -215,22 +278,30 @@ function SourceCard({ source, selected = false, onOpen }) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="truncate text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                  {source.title}
+                  {source.name}
                 </h3>
 
-                <AppTag tone={statusTone(source.status)} dot>
-                  {statusLabel(source.status)}
+                <AppTag tone={source.statusTone} dot>
+                  {source.statusLabel}
+                </AppTag>
+
+                <AppTag tone={source.enabled ? "success" : "danger"} dot>
+                  {source.enabled ? "Enabled" : "Disabled"}
                 </AppTag>
               </div>
 
-              <p className="mt-1.5 max-w-[780px] text-[13.5px] font-medium leading-6 text-text-muted">
-                {source.description}
+              <p className="mt-1.5 max-w-[820px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {source.url
+                  ? source.url
+                  : source.key
+                    ? source.key
+                    : "No public URL or source key is exposed for this source."}
               </p>
 
               <div className="mt-4 border-t border-line-soft pt-3">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                   <div className="text-[12.5px] font-semibold text-text-muted">
-                    {source.type}
+                    {source.typeLabel}
                   </div>
 
                   <div className="text-[12.5px] font-medium text-text-muted">
@@ -238,7 +309,7 @@ function SourceCard({ source, selected = false, onOpen }) {
                   </div>
 
                   <div className="text-[12.5px] font-medium text-text-muted">
-                    Owner: {source.owner}
+                    Sync: {source.syncLabel}
                   </div>
 
                   <div className="min-w-0 truncate text-[12.5px] font-medium text-text-muted">
@@ -250,18 +321,32 @@ function SourceCard({ source, selected = false, onOpen }) {
           </div>
         </div>
 
-        <div className="flex justify-start xl:justify-end">
+        <div className="flex justify-start gap-2 xl:justify-end">
           <Button
             type="button"
-            size="md"
-            variant={lower(source.status) === "connected" ? "secondary" : "primary"}
+            size="sm"
+            variant="secondary"
             onClick={(event) => {
               event.stopPropagation();
               onOpen?.();
             }}
-            rightIcon={actionIconElement(source)}
+            rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
           >
-            {source.action}
+            Details
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            loading={busy}
+            disabled={!source.id || busy || !source.enabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSync?.();
+            }}
+            rightIcon={!busy ? <RotateCw className="h-3.5 w-3.5" strokeWidth={2.1} /> : undefined}
+          >
+            Sync
           </Button>
         </div>
       </div>
@@ -269,31 +354,15 @@ function SourceCard({ source, selected = false, onOpen }) {
   );
 }
 
-function DetailList({ title, items }) {
-  return (
-    <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-        {title}
-      </div>
+function DetailJsonBlock({ title, value }) {
+  const payload = obj(value);
+  const hasValue = Object.keys(payload).length > 0;
 
-      <div className="mt-3 grid gap-2">
-        {items.map((item) => (
-          <div key={item} className="flex items-center gap-2 text-[13px] font-medium text-text">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" strokeWidth={2.05} />
-            <span className="min-w-0">{item}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LockedPreview({ value }) {
   return (
     <div className="rounded-md border border-line-soft bg-white p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-          Source preview
+          {title}
         </div>
 
         <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-text-subtle">
@@ -302,20 +371,20 @@ function LockedPreview({ value }) {
         </div>
       </div>
 
-      <div className="mt-3 text-[13.5px] font-medium leading-6 text-text">
-        {value}
-      </div>
+      <pre className="mt-3 max-h-[240px] overflow-auto rounded-md bg-surface-subtle p-3 text-[12px] leading-5 text-text-muted">
+        {hasValue ? JSON.stringify(payload, null, 2) : "No structured metadata exposed."}
+      </pre>
     </div>
   );
 }
 
-function SourceDialog({ source, open, onClose }) {
+function SourceDialog({ source, open, busy = false, onClose, onSync }) {
   if (!open || !source) return null;
 
-  const Icon = source.icon || Database;
+  const Icon = source.icon;
 
   return (
-    <AppModal open={open} onClose={onClose} maxWidth="max-w-[720px]">
+    <AppModal open={open} onClose={onClose} maxWidth="max-w-[760px]">
       <AppModalHeader>
         <div className="flex min-w-0 items-start gap-5">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center text-text">
@@ -324,23 +393,27 @@ function SourceDialog({ source, open, onClose }) {
 
           <div className="min-w-0">
             <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-              Knowledge source
+              Real backend source
             </div>
 
             <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              {source.title}
+              {source.name}
             </h2>
 
-            <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
-              {source.note}
+            <p className="mt-2 max-w-[580px] text-[13.5px] font-medium leading-6 text-text-muted">
+              This record comes from /api/settings/sources. No local demo source data is injected.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <AppTag tone={statusTone(source.status)} dot>
-                {statusLabel(source.status)}
+              <AppTag tone={source.statusTone} dot>
+                {source.statusLabel}
               </AppTag>
-              <AppTag tone="neutral">{source.type}</AppTag>
-              <AppTag tone="neutral">{source.chunks} chunks</AppTag>
+              <AppTag tone={source.syncTone} dot>
+                Sync {source.syncLabel}
+              </AppTag>
+              <AppTag tone={source.enabled ? "success" : "danger"} dot>
+                {source.enabled ? "Enabled" : "Disabled"}
+              </AppTag>
             </div>
           </div>
         </div>
@@ -349,40 +422,43 @@ function SourceDialog({ source, open, onClose }) {
       </AppModalHeader>
 
       <AppModalBody className="bg-surface-subtle p-5">
-        <LockedPreview value={source.preview} />
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <DetailList title="Included knowledge" items={source.includes} />
-          <DetailList title="Answer boundaries" items={source.boundaries} />
+        <div className="grid gap-3 md:grid-cols-3">
+          <SourceStat label="Type" value={source.typeLabel} />
+          <SourceStat label="Chunks" value={String(source.chunks)} />
+          <SourceStat label="Primary" value={source.isPrimary ? "Yes" : "No"} />
+          <SourceStat label="Auth status" value={titleize(source.authStatus)} />
+          <SourceStat label="Connection" value={titleize(source.connectionMode)} />
+          <SourceStat label="Access scope" value={titleize(source.accessScope)} />
         </div>
 
-        <div className="grid gap-3 rounded-md border border-line-soft bg-white p-4 md:grid-cols-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Owner
+        <Card padded={false} clip>
+          <div className="grid gap-3 p-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Source URL / key
+              </div>
+              <div className="mt-1 break-all text-[13.5px] font-semibold text-text">
+                {source.url || source.key || "Not available"}
+              </div>
             </div>
-            <div className="mt-1 text-[13px] font-semibold text-text">
-              {source.owner}
-            </div>
-          </div>
 
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Updated
-            </div>
-            <div className="mt-1 text-[13px] font-semibold text-text">
-              {source.updated}
-            </div>
+            {source.url ? (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-fit items-center gap-2 text-[13px] font-semibold text-brand"
+              >
+                Open source
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
+              </a>
+            ) : null}
           </div>
+        </Card>
 
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Index
-            </div>
-            <div className="mt-1 text-[13px] font-semibold text-text">
-              {source.chunks} chunks
-            </div>
-          </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <DetailJsonBlock title="Metadata" value={source.metadata} />
+          <DetailJsonBlock title="Settings" value={source.settings} />
         </div>
       </AppModalBody>
 
@@ -394,41 +470,163 @@ function SourceDialog({ source, open, onClose }) {
         <Button
           type="button"
           size="md"
-          variant={lower(source.status) === "connected" ? "secondary" : "primary"}
-          rightIcon={actionIconElement(source)}
+          loading={busy}
+          disabled={!source.id || busy || !source.enabled}
+          onClick={onSync}
+          rightIcon={!busy ? <RotateCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
         >
-          {source.action} source
+          Sync source
         </Button>
       </AppModalFooter>
     </AppModal>
   );
 }
 
+function SummaryBar({ sources }) {
+  const connected = sources.filter((source) =>
+    ["active", "connected", "ready", "synced", "completed"].includes(source.status)
+  ).length;
+  const review = sources.filter((source) =>
+    ["needs_review", "review", "pending", "syncing", "queued", "stale"].includes(source.status)
+  ).length;
+  const disabled = sources.filter((source) => !source.enabled).length;
+  const chunks = sources.reduce((total, source) => total + n(source.chunks), 0);
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+        <div>
+          <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            Assistant answer sources
+          </div>
+          <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
+            Backend-backed source registry. Existing sources can be reviewed and synced; non-existing sources are not invented.
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <AppTag tone={connected ? "success" : "neutral"} dot>
+            {connected} ready
+          </AppTag>
+          <AppTag tone={review ? "warning" : "neutral"} dot>
+            {review} review
+          </AppTag>
+          <AppTag tone={disabled ? "danger" : "success"} dot>
+            {disabled} disabled
+          </AppTag>
+          <AppTag tone="neutral">
+            {chunks} chunks
+          </AppTag>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function Knowledge() {
+  const [sources, setSources] = useState([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
-  const [dialogSource, setDialogSource] = useState(null);
+  const [dialogSourceId, setDialogSourceId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [syncingId, setSyncingId] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const normalizedSources = useMemo(
+    () => arr(sources).map(normalizeSource).filter((source) => source.id || source.name),
+    [sources]
+  );
 
   const selectedSource = useMemo(() => {
-    return KNOWLEDGE_SOURCES.find((source) => source.id === selectedSourceId) || null;
-  }, [selectedSourceId]);
+    return normalizedSources.find((source) => source.id === selectedSourceId) || null;
+  }, [normalizedSources, selectedSourceId]);
+
+  const dialogSource = useMemo(() => {
+    return normalizedSources.find((source) => source.id === dialogSourceId) || null;
+  }, [dialogSourceId, normalizedSources]);
+
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    setError("");
+    setNotice("");
+
+    try {
+      const payload = await listKnowledgeSources({ limit: 100 });
+      setSources(arr(payload?.items));
+    } catch (err) {
+      setSources([]);
+      setError(
+        s(err?.payload?.error || err?.payload?.message || err?.message) ||
+          "Knowledge sources could not be loaded."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function syncSource(source) {
+    if (!source?.id) return;
+
+    setSyncingId(source.id);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await syncKnowledgeSource(source.id);
+      setNotice(response?.message || "Source sync accepted.");
+      await load({ silent: true });
+    } catch (err) {
+      setError(
+        s(err?.payload?.error || err?.payload?.message || err?.message) ||
+          "Source sync could not be started."
+      );
+    } finally {
+      setSyncingId("");
+    }
+  }
 
   function openSource(source) {
     setSelectedSourceId(source.id);
-    setDialogSource(source);
+    setDialogSourceId(source.id);
+  }
+
+  if (loading) {
+    return (
+      <PageCanvas>
+        <LoadingSurface
+          title="Loading knowledge sources"
+          description="Reading real source registry from backend."
+          rows={5}
+        />
+      </PageCanvas>
+    );
   }
 
   return (
     <PageCanvas>
       <PageHeader
         title="Knowledge library"
-        description="Connect and review the sources the assistant can use for answers. Keep the page simple: source cards first, details only when opened."
+        description="Real source governance for assistant knowledge. No demo cards, no fake chunks, no fake policy sources."
         actions={
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="secondary"
               size="md"
-              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.1} />}
+              loading={refreshing}
+              onClick={() => load({ silent: true })}
+              leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
             >
               Refresh
             </Button>
@@ -436,56 +634,50 @@ export default function Knowledge() {
             <Button
               type="button"
               size="md"
-              leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
+              variant="secondary"
+              disabled
+              leftIcon={<ShieldCheck className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Add source
+              Add source via connector
             </Button>
           </div>
         }
       />
 
-      <Card padded={false} clip>
-        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
-          <div>
-            <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              Assistant answer sources
-            </div>
-            <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
-              Each source can be connected, reviewed, or left empty until you need it.
-            </div>
-          </div>
+      {error ? (
+        <InlineNotice tone="danger" title="Knowledge unavailable" description={error} />
+      ) : null}
 
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <AppTag tone="success" dot>
-              2 connected
-            </AppTag>
-            <AppTag tone="warning" dot>
-              2 review
-            </AppTag>
-            <AppTag tone="neutral" dot>
-              2 empty
-            </AppTag>
-          </div>
+      {notice ? (
+        <InlineNotice tone="success" title="Sync requested" description={notice} compact />
+      ) : null}
+
+      <SummaryBar sources={normalizedSources} />
+
+      {normalizedSources.length ? (
+        <div className="grid gap-3">
+          {normalizedSources.map((source) => (
+            <SourceCard
+              key={source.id || source.name}
+              source={source}
+              selected={selectedSource?.id === source.id}
+              busy={syncingId === source.id}
+              onOpen={() => openSource(source)}
+              onSync={() => syncSource(source)}
+            />
+          ))}
         </div>
-      </Card>
-
-      <div className="grid gap-3">
-        {KNOWLEDGE_SOURCES.map((source) => (
-          <SourceCard
-            key={source.id}
-            source={source}
-            selected={selectedSource?.id === source.id}
-            onOpen={() => openSource(source)}
-          />
-        ))}
-      </div>
+      ) : (
+        <EmptyKnowledgeState />
+      )}
 
       <SourceDialog
         source={dialogSource}
         open={Boolean(dialogSource)}
-        onClose={() => setDialogSource(null)}
+        busy={syncingId === dialogSource?.id}
+        onClose={() => setDialogSourceId("")}
+        onSync={() => syncSource(dialogSource)}
       />
     </PageCanvas>
   );
 }
-

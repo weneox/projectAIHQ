@@ -1,29 +1,23 @@
 import { apiGet, apiPost } from "./client.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
+  return String(value ?? fallback).trim() || fallback;
 }
 
-export async function listKnowledgeCandidates({
-  status = "",
-  category = "",
-  limit = 100,
-} = {}) {
+export async function listKnowledgeSources({ limit = 100, status = "", sourceType = "" } = {}) {
   const search = new URLSearchParams();
+  search.set("limit", String(limit));
 
   if (s(status)) search.set("status", s(status));
-  if (s(category)) search.set("category", s(category));
-  search.set("limit", String(Math.max(1, Math.min(200, Number(limit || 100)))));
+  if (s(sourceType)) search.set("sourceType", s(sourceType));
 
-  return apiGet(`/api/knowledge/candidates?${search.toString()}`);
+  return apiGet(`/api/settings/sources?${search.toString()}`);
 }
 
-export async function approveKnowledgeCandidate(id) {
-  return apiPost(`/api/knowledge/candidates/${encodeURIComponent(s(id))}/approve`, {});
-}
-
-export async function rejectKnowledgeCandidate(id, { reason = "" } = {}) {
-  return apiPost(`/api/knowledge/candidates/${encodeURIComponent(s(id))}/reject`, {
-    reason,
+export async function syncKnowledgeSource(sourceId) {
+  return apiPost(`/api/settings/sources/${encodeURIComponent(s(sourceId))}/sync`, {
+    runnerKey: "settings.manual",
+    runType: "sync",
+    triggerType: "manual",
   });
 }
