@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowRight, ArrowUpRight, RefreshCw, X } from "lucide-react";
 
 import { getLaunchPosture } from "../api/launch.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
@@ -14,7 +14,6 @@ import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
-  SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
@@ -232,76 +231,6 @@ function connectedLaneName(readinessState = {}, channels = []) {
   return s(channels.find((channel) => channel.id === id)?.name);
 }
 
-function Header({
-  activeLane,
-  readinessState,
-  channelCount = 3,
-  refreshing,
-  onRefresh,
-  onNavigate,
-}) {
-  const readyCount = n(readinessState?.channelSummary?.readyCount);
-  const readyLabel = `${readyCount}/${channelCount} ready`;
-
-  return (
-    <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0">
-        <h1 className="mt-1 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          Launch channels
-        </h1>
-        <p className="mt-2 max-w-[680px] text-[13.5px] font-medium leading-6 text-text-muted">
-          Pick the channel you want to use with customers. Unused lanes can stay quiet.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate("/truth")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
-            Open Business Info
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("/inbox")}
-            className="inline-flex h-8 items-center rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted transition-colors hover:text-text"
-          >
-            Open Inbox
-          </button>
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="inline-flex h-9 items-center gap-2 rounded-full bg-surface-subtle px-3 text-[12px] font-semibold text-text-muted">
-          <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--color-text-soft))]" />
-          {readyLabel}
-        </span>
-
-        {activeLane ? (
-          <span
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-success-soft px-3 text-[12px] font-semibold text-success"
-            title={activeLane}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Active lane
-          </span>
-        ) : null}
-
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          loading={refreshing}
-          onClick={onRefresh}
-          leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
-        >
-          Refresh
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function launchRepairCopy(readinessState = {}) {
   const truth = obj(readinessState.truth);
   const runtime = obj(readinessState.runtime);
@@ -316,6 +245,136 @@ function launchRepairCopy(readinessState = {}) {
 
   return "";
 }
+
+function StatusPill({ tone = "neutral", children }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[12px] font-semibold",
+        tone === "success"
+          ? "border-success/15 bg-success-soft text-success"
+          : tone === "warning"
+            ? "border-warning/20 bg-warning/5 text-warning"
+            : tone === "danger"
+              ? "border-danger/20 bg-danger/5 text-danger"
+              : "border-line-soft bg-surface-subtle text-text-muted"
+      )}
+    >
+      <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(tone))} />
+      {children}
+    </span>
+  );
+}
+
+function MetricTile({ label, value, tone = "neutral" }) {
+  return (
+    <div className="min-h-[76px] rounded-md border border-line-soft bg-white px-4 py-3 shadow-[0_18px_45px_-42px_rgba(15,23,42,0.48)]">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {label}
+      </div>
+      <div className={cx("mt-2 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)]", textClass(tone))}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Header({
+  activeLane,
+  readinessState,
+  channelCount = 3,
+  refreshing,
+  onRefresh,
+  onNavigate,
+}) {
+  const readyCount = n(readinessState?.channelSummary?.readyCount);
+  const connectedCount = n(readinessState?.channelSummary?.connectedCount);
+  const readyLabel = `${readyCount}/${channelCount} ready`;
+
+  return (
+    <Card padded={false} clip className="overflow-hidden">
+      <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <div className="min-w-0 border-b border-line-soft px-5 py-5 xl:border-b-0 xl:border-r">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
+                Omnichannel intake
+              </div>
+              <h1 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                Launch channels
+              </h1>
+              <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
+                Connect the customer lanes that should feed your inbox. Each connector keeps its own backend truth, runtime checks, and repair actions.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => onNavigate("/truth")}
+              >
+                Open Business Info
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => onNavigate("/inbox")}
+              >
+                Open Inbox
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={refreshing}
+                onClick={onRefresh}
+                leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <StatusPill tone={readyCount > 0 ? "success" : "neutral"}>
+              {readyLabel}
+            </StatusPill>
+            <StatusPill tone={connectedCount > 0 ? "success" : "neutral"}>
+              {connectedCount} connected
+            </StatusPill>
+            {activeLane ? (
+              <StatusPill tone="success">Active lane</StatusPill>
+            ) : (
+              <StatusPill tone="neutral">No active lane</StatusPill>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-2 bg-surface-subtle p-4">
+          <MetricTile
+            label="Ready lanes"
+            value={`${readyCount}/${channelCount}`}
+            tone={readyCount > 0 ? "success" : "neutral"}
+          />
+          <MetricTile
+            label="Connected"
+            value={connectedCount}
+            tone={connectedCount > 0 ? "success" : "neutral"}
+          />
+          <MetricTile
+            label="Primary lane"
+            value={activeLane || "None"}
+            tone={activeLane ? "brand" : "neutral"}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
   const status = laneStatus(runtime);
   const primaryAction = runtime.deliveryReady
@@ -323,57 +382,143 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
     : () => onInspect(channel.id);
 
   return (
-    <div className="flex min-h-[230px] flex-col px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center">
-            <div className="scale-[1.35] transform-gpu">
-              <ChannelIcon channel={channel} size="md" />
+    <article className="group relative min-h-[250px] overflow-hidden rounded-md border border-line-soft bg-white transition-[border-color,box-shadow,transform] duration-base ease-premium hover:border-line hover:shadow-[0_24px_64px_-56px_rgba(15,23,42,0.62)]">
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-surface-subtle">
+        <div
+          className={cx(
+            "h-full w-1/2 rounded-r-full",
+            status.tone === "success"
+              ? "bg-success"
+              : status.tone === "warning"
+                ? "bg-warning"
+                : "bg-[rgb(var(--color-text-soft))]"
+          )}
+        />
+      </div>
+
+      <div className="flex h-full flex-col px-5 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-subtle">
+              <div className="scale-[1.28] transform-gpu">
+                <ChannelIcon channel={channel} size="md" />
+              </div>
             </div>
-          </div>
 
-          <div className="min-w-0">
-            <h2 className="truncate text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              {channel.name}
-            </h2>
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                {channel.name}
+              </h2>
 
-            <div className={cx("mt-1 flex items-center gap-2 text-[12px] font-semibold", textClass(status.tone))}>
-              <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(status.tone))} />
-              {status.label}
+              <div className={cx("mt-1 flex items-center gap-2 text-[12.5px] font-semibold", textClass(status.tone))}>
+                <span className={cx("h-1.5 w-1.5 rounded-full", dotClass(status.tone))} />
+                {status.label}
+              </div>
             </div>
           </div>
         </div>
+
+        <p className="mt-5 line-clamp-3 text-[13.5px] font-medium leading-6 text-text-muted">
+          {s(runtime.summary) || channel.summary}
+        </p>
+
+        <div className="mt-5 grid gap-2 border-t border-line-soft pt-4 text-[12.5px] font-medium text-text-muted">
+          <div className="flex items-center justify-between gap-3">
+            <span>Backend status</span>
+            <span className={cx("font-semibold", textClass(status.tone))}>
+              {status.label}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Delivery</span>
+            <span className={cx("font-semibold", runtime.deliveryReady ? "text-success" : "text-text-muted")}>
+              {runtime.deliveryReady ? "Ready" : "Not ready"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+          <button
+            type="button"
+            onClick={() => onInspect(channel.id)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-2 text-[13px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-brand-soft"
+          >
+            Details
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          </button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant={runtime.deliveryReady ? "secondary" : "primary"}
+            disabled={runtime.available === false}
+            onClick={primaryAction}
+            aria-label={status.action}
+            rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
+          >
+            {status.action}
+          </Button>
+        </div>
       </div>
+    </article>
+  );
+}
 
-      <p className="mt-5 line-clamp-3 text-[13.5px] font-medium leading-6 text-text-muted">
-        {s(runtime.summary) || channel.summary}
-      </p>
+function CenterChannelModal({ open, onClose, children }) {
+  if (!open) return null;
 
-      <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center px-4 py-6">
+      <style>
+        {`
+          @keyframes channelModalIn {
+            from {
+              opacity: 0;
+              transform: translate3d(0, 10px, 0) scale(0.985);
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0) scale(1);
+            }
+          }
+        `}
+      </style>
+
+      <button
+        type="button"
+        aria-label="Close connector details"
+        className="absolute inset-0 bg-[rgba(15,23,42,0.38)] backdrop-blur-[4px]"
+        onClick={onClose}
+      />
+
+      <div
+        className="relative w-full max-w-[720px]"
+        style={{
+          animation: "channelModalIn 160ms cubic-bezier(0.16, 1, 0.3, 1)",
+          willChange: "opacity, transform",
+        }}
+      >
         <button
           type="button"
-          onClick={() => onInspect(channel.id)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full px-2 text-[13px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-brand-soft"
+          aria-label="Close connector details"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-[95] inline-flex h-10 w-10 items-center justify-center rounded-md border border-line-soft bg-white text-text-muted shadow-[0_16px_38px_-28px_rgba(15,23,42,0.72)] transition-colors hover:border-line hover:text-text"
         >
-          Details
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+          <X className="h-4 w-4" strokeWidth={2.1} />
         </button>
 
-        <Button
-          type="button"
-          size="sm"
-          variant={runtime.deliveryReady ? "secondary" : "primary"}
-          disabled={runtime.available === false}
-          onClick={primaryAction}
-          aria-label={status.action}
-          rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
+        <Card
+          padded={false}
+          clip
+          className="h-[min(820px,calc(100vh-48px))] overflow-hidden shadow-[0_28px_86px_-50px_rgba(15,23,42,0.78)]"
         >
-          {status.action}
-        </Button>
+          <div className="h-full min-h-0">{children}</div>
+        </Card>
       </div>
     </div>
   );
 }
+
 export default function ChannelCatalog() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -385,7 +530,7 @@ export default function ChannelCatalog() {
 
   const [manualRefresh, setManualRefresh] = useState(0);
   const [readinessState, setReadinessState] = useState(EMPTY_READINESS_STATE);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [closingChannel, setClosingChannel] = useState(null);
   const closeTimerRef = useRef(null);
 
@@ -394,7 +539,7 @@ export default function ChannelCatalog() {
     () => findChannelById(selectedChannelId),
     [selectedChannelId]
   );
-  const drawerChannel = selectedChannel || closingChannel;
+  const modalChannel = selectedChannel || closingChannel;
 
   const requestKey = useMemo(() => {
     if (!workspace.ready) return "";
@@ -409,7 +554,6 @@ export default function ChannelCatalog() {
     let alive = true;
     const tenantKey = workspace.tenantKey;
     const currentRequestKey = requestKey;
-
 
     getLaunchPosture()
       .then((posture) => {
@@ -448,7 +592,7 @@ export default function ChannelCatalog() {
     if (!selectedChannel) return undefined;
 
     const raf = window.requestAnimationFrame(() => {
-      setDrawerOpen(true);
+      setModalOpen(true);
     });
 
     return () => window.cancelAnimationFrame(raf);
@@ -490,7 +634,7 @@ export default function ChannelCatalog() {
     [channels, effectiveReadinessState]
   );
 
-  function updateSelectedChannel(channelId = "") {
+  const updateSelectedChannel = useCallback((channelId = "") => {
     const nextParams = new URLSearchParams(searchParams);
 
     if (channelId) {
@@ -500,16 +644,16 @@ export default function ChannelCatalog() {
     }
 
     setSearchParams(nextParams);
-  }
+  }, [searchParams, setSearchParams]);
 
-  function handleDrawerClose() {
-    if (!drawerChannel) {
+  const handleModalClose = useCallback(() => {
+    if (!modalChannel) {
       updateSelectedChannel("");
       return;
     }
 
-    setClosingChannel(drawerChannel);
-    setDrawerOpen(false);
+    setClosingChannel(modalChannel);
+    setModalOpen(false);
 
     if (closeTimerRef.current) {
       window.clearTimeout(closeTimerRef.current);
@@ -519,12 +663,35 @@ export default function ChannelCatalog() {
       setClosingChannel(null);
       updateSelectedChannel("");
       closeTimerRef.current = null;
-    }, 320);
-  }
+    }, 180);
+  }, [modalChannel, updateSelectedChannel]);
 
   function refresh() {
     setManualRefresh((value) => value + 1);
   }
+
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("channel");
+        setClosingChannel(null);
+        setModalOpen(false);
+        setSearchParams(nextParams);
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modalOpen, searchParams, setSearchParams]);
 
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
@@ -546,55 +713,41 @@ export default function ChannelCatalog() {
           />
         ) : null}
 
-        <Card
-          padded={false}
-          clip
-          className="shadow-[0_28px_80px_-64px_rgba(15,23,42,0.55)]"
-        >
-          <Header
-            activeLane={activeLane}
-            readinessState={effectiveReadinessState}
-            channelCount={channels.length}
-            refreshing={effectiveReadinessState.loading}
-            onRefresh={refresh}
-            onNavigate={navigate}
-          />
+        <Header
+          activeLane={activeLane}
+          readinessState={effectiveReadinessState}
+          channelCount={channels.length}
+          refreshing={effectiveReadinessState.loading}
+          onRefresh={refresh}
+          onNavigate={navigate}
+        />
 
-          {launchRepairCopy(effectiveReadinessState) ? (
-            <div className="sr-only">{launchRepairCopy(effectiveReadinessState)}</div>
-          ) : null}
+        {launchRepairCopy(effectiveReadinessState) ? (
+          <div className="sr-only">{launchRepairCopy(effectiveReadinessState)}</div>
+        ) : null}
 
-          <div className="grid divide-y divide-line-soft md:grid-cols-3 md:divide-x md:divide-y-0">
-            {channels.map((channel) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                runtime={runtimeFor(channel, effectiveReadinessState)}
-                onInspect={updateSelectedChannel}
-                onNavigate={navigate}
-              />
-            ))}
-          </div>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-3">
+          {channels.map((channel) => (
+            <ChannelCard
+              key={channel.id}
+              channel={channel}
+              runtime={runtimeFor(channel, effectiveReadinessState)}
+              onInspect={updateSelectedChannel}
+              onNavigate={navigate}
+            />
+          ))}
+        </div>
       </PageCanvas>
 
-      {drawerChannel ? (
-        <SlidingDetailOverlay
-          open={drawerOpen}
-          onClose={handleDrawerClose}
-          closeLabel="Close connector details"
-          className="top-[56px]"
-          panelWidthClassName="max-w-[640px]"
-          backdropClassName="bg-transparent"
-          panelClassName="bg-white shadow-[0_24px_80px_-38px_rgba(15,23,42,0.35)]"
-        >
+      {modalChannel ? (
+        <CenterChannelModal open={modalOpen} onClose={handleModalClose}>
           <ChannelDetailDrawer
-            channel={drawerChannel}
-            open={drawerOpen}
-            onClose={handleDrawerClose}
+            channel={modalChannel}
+            open={modalOpen}
+            onClose={handleModalClose}
             onNavigate={navigate}
           />
-        </SlidingDetailOverlay>
+        </CenterChannelModal>
       ) : null}
     </>
   );
