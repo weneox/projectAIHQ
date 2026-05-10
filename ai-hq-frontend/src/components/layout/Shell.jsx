@@ -4,9 +4,11 @@ import { Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
 import { resendVerificationEmail } from "../../api/auth.js";
 import warningIcon from "../../assets/channels/warning.png";
-import { clearAppAuthContext } from "../../lib/appSession.js";
+import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
-import { realtimeStore } from "../../lib/realtime/realtimeStore.js";import Sidebar, {
+import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
+import FloatingAiWidget from "./FloatingAiWidget.jsx";
+import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
 } from "./Sidebar.jsx";
@@ -79,7 +81,15 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
 
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
 
 function pickFirstString(...values) {
   for (const value of values) {
@@ -89,7 +99,23 @@ function pickFirstString(...values) {
   return "";
 }
 
+function isEmailVerified(auth) {
+  return (
+    auth?.user?.emailVerified === true ||
+    auth?.user?.email_verified === true ||
+    auth?.identity?.emailVerified === true ||
+    auth?.identity?.email_verified === true
+  );
+}
 
+function userEmail(auth) {
+  return s(
+    auth?.user?.email ||
+      auth?.identity?.email ||
+      auth?.raw?.user?.email ||
+      ""
+  );
+}
 
 function normalizeWorkspaceName(value, { allowGeneric = false } = {}) {
   const text = s(value);
@@ -113,7 +139,7 @@ function pickFirstWorkspaceName(...values) {
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-  if (path.startsWith("/home") || path.startsWith("/inbox") || path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/reports") || path.startsWith("/channels") || path.startsWith("/knowledge") || path.startsWith("/settings") || path.startsWith("/launch") || path.startsWith("/welcome") || path.startsWith("/truth") || path.startsWith("/team")) return "immersive";
+  if (path.startsWith("/inbox")) return "immersive";
   return "standard";
 }
 
@@ -203,6 +229,181 @@ function buildHostFallbackMeta() {
   };
 }
 
+function extractWorkspaceMeta(payload) {
+  const root = obj(payload);
+  const bootstrap = obj(root.bootstrap);
+  const session = obj(root.session);
+  const auth = obj(root.auth);
+
+  const workspace = obj(
+    root.workspace ||
+      bootstrap.workspace ||
+      session.workspace ||
+      auth.workspace ||
+      root.account
+  );
+
+  const tenant = obj(
+    root.tenant ||
+      bootstrap.tenant ||
+      workspace.tenant ||
+      session.tenant ||
+      auth.tenant ||
+      bootstrap.workspace?.tenant ||
+      auth.workspace?.tenant
+  );
+
+  const membership = obj(
+    root.membership ||
+      bootstrap.membership ||
+      session.membership ||
+      auth.membership ||
+      arr(root.memberships)[0] ||
+      arr(auth.memberships)[0]
+  );
+
+  const user = obj(
+    root.user ||
+      root.profile ||
+      root.viewer ||
+      bootstrap.viewer ||
+      session.user ||
+      auth.user
+  );
+
+  const workspaceName = pickFirstWorkspaceName(
+    workspace.displayName,
+    workspace.display_name,
+    workspace.companyName,
+    workspace.company_name,
+    workspace.businessName,
+    workspace.business_name,
+    workspace.name,
+    workspace.workspaceName,
+    workspace.workspace_name,
+    workspace.tenantName,
+    workspace.tenant_name,
+
+    tenant.displayName,
+    tenant.display_name,
+    tenant.companyName,
+    tenant.company_name,
+    tenant.businessName,
+    tenant.business_name,
+    tenant.name,
+    tenant.workspaceName,
+    tenant.workspace_name,
+    tenant.tenantName,
+    tenant.tenant_name,
+
+    membership.workspaceName,
+    membership.workspace_name,
+    membership.companyName,
+    membership.company_name,
+    membership.tenantName,
+    membership.tenant_name,
+
+    root.workspaceName,
+    root.workspace_name,
+    root.companyName,
+    root.company_name,
+    root.businessName,
+    root.business_name,
+    root.tenantName,
+    root.tenant_name,
+
+    bootstrap.workspaceName,
+    bootstrap.workspace_name,
+    bootstrap.companyName,
+    bootstrap.company_name,
+    bootstrap.businessName,
+    bootstrap.business_name,
+    bootstrap.tenantName,
+    bootstrap.tenant_name,
+
+    session.workspaceName,
+    session.workspace_name,
+    session.companyName,
+    session.company_name,
+    session.tenantName,
+    session.tenant_name,
+
+    auth.workspaceName,
+    auth.workspace_name,
+    auth.companyName,
+    auth.company_name,
+    auth.tenantName,
+    auth.tenant_name
+  );
+
+  const workspaceKey = pickFirstString(
+    workspace.key,
+    workspace.slug,
+    workspace.workspaceKey,
+    workspace.workspace_key,
+    workspace.tenantKey,
+    workspace.tenant_key,
+
+    tenant.key,
+    tenant.slug,
+    tenant.workspaceKey,
+    tenant.workspace_key,
+    tenant.tenantKey,
+    tenant.tenant_key,
+
+    membership.workspaceKey,
+    membership.workspace_key,
+    membership.tenantKey,
+    membership.tenant_key,
+
+    root.workspaceKey,
+    root.workspace_key,
+    root.tenantKey,
+    root.tenant_key,
+
+    bootstrap.workspaceKey,
+    bootstrap.workspace_key,
+    bootstrap.tenantKey,
+    bootstrap.tenant_key,
+
+    session.workspaceKey,
+    session.workspace_key,
+    session.tenantKey,
+    session.tenant_key,
+
+    auth.workspaceKey,
+    auth.workspace_key,
+    auth.tenantKey,
+    auth.tenant_key
+  );
+
+  const userName = pickFirstString(
+    user.name,
+    user.fullName,
+    user.full_name,
+    user.displayName,
+    user.display_name,
+    root.userName,
+    root.user_name,
+    root.viewerName,
+    root.viewer_name
+  );
+
+  const userEmail = pickFirstString(
+    user.email,
+    user.user_email,
+    root.userEmail,
+    root.user_email,
+    membership.email
+  );
+
+  return {
+    workspaceName,
+    workspaceKey,
+    userName,
+    userEmail,
+  };
+}
 
 function mergeWorkspaceMeta(currentMeta, nextMeta) {
   return {
@@ -309,8 +510,10 @@ function getInitialCollapsedState() {
 }
 
 export default function Shell() {
-  const [mobileOpen, setMobileOpen] = useState(false);  const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
-  const [workspaceMeta] = useState(() =>
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [widgetOpen, setWidgetOpen] = useState(false);
+  const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
+  const [workspaceMeta, setWorkspaceMeta] = useState(() =>
     mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -332,7 +535,14 @@ export default function Shell() {
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
-  const warningMessageRef = useRef(INITIAL_SHELL_STATS.message);  const shellMode = useMemo(
+  const warningMessageRef = useRef(INITIAL_SHELL_STATS.message);
+
+  const assistantRequested = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    return s(params.get("assistant")).toLowerCase() === "setup";
+  }, [location.search]);
+
+  const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
   );
@@ -380,7 +590,128 @@ export default function Shell() {
       }, delay);
     },
     [loadShellStats]
-  );  useEffect(() => {
+  );
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadEmailVerificationState() {
+      try {
+        const auth = await getAppAuthContext({ force: true });
+        if (!alive) return;
+
+        const authenticated = auth?.authenticated === true;
+        const verified = isEmailVerified(auth);
+
+        setEmailVerificationState({
+          loading: false,
+          visible: authenticated && !verified,
+          email: userEmail(auth),
+        });
+      } catch {
+        if (!alive) return;
+
+        setEmailVerificationState({
+          loading: false,
+          visible: false,
+          email: "",
+        });
+      }
+    }
+
+    loadEmailVerificationState();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWorkspaceMeta = async () => {
+      try {
+        const response = await apiGet("/api/app/bootstrap");
+        if (cancelled) return;
+
+        const extracted = extractWorkspaceMeta(response);
+        const hostFallback = buildHostFallbackMeta();
+
+        setWorkspaceMeta((prev) =>
+          mergeWorkspaceMeta(mergeWorkspaceMeta(prev, hostFallback), extracted)
+        );
+      } catch {
+        if (cancelled) return;
+
+        setWorkspaceMeta((prev) =>
+          mergeWorkspaceMeta(prev, buildHostFallbackMeta())
+        );
+      }
+    };
+
+    loadWorkspaceMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      sidebarCollapsed ? "1" : "0"
+    );
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setMobileOpen(false);
+    });
+
+    loadShellStats();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [location.pathname, loadShellStats]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = mobileOpen || widgetOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen, widgetOpen]);
+
+  useEffect(() => {
+    if (!assistantRequested) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      setWidgetOpen(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [assistantRequested]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleOpenAssistant = () => {
+      setWidgetOpen(true);
+    };
+
+    window.addEventListener("aihq:open-assistant", handleOpenAssistant);
+
+    return () => {
+      window.removeEventListener("aihq:open-assistant", handleOpenAssistant);
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
       setShellStats((prev) => ({
         ...prev,
@@ -450,7 +781,28 @@ export default function Shell() {
     } finally {
       setEmailVerificationSending(false);
     }
-  }, [emailVerificationSending]);  const shellSidebarWidth = sidebarCollapsed
+  }, [emailVerificationSending]);
+
+  const handleWidgetOpenChange = useCallback(
+    (nextOpen) => {
+      setWidgetOpen(Boolean(nextOpen));
+
+      if (!nextOpen && assistantRequested) {
+        const params = new URLSearchParams(location.search || "");
+        params.delete("assistant");
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : "",
+          },
+          { replace: true }
+        );
+      }
+    },
+    [assistantRequested, location.pathname, location.search, navigate]
+  );
+
+  const shellSidebarWidth = sidebarCollapsed
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
@@ -461,7 +813,6 @@ export default function Shell() {
     !emailVerificationDismissed;
   const topBannerVisible = topWarningVisible || emailVerificationVisible;
   const topOffset = topBannerVisible ? GLOBAL_ALERT_HEIGHT : 0;
-  const standardFullBleed = ["/customers", "/leads", "/reports", "/channels", "/team", "/settings"].some((prefix) => String(location.pathname || "").startsWith(prefix));
 
 
   return (
@@ -516,28 +867,25 @@ export default function Shell() {
 
         <main className="relative min-h-0 flex-1 overflow-hidden bg-white">
           {shellMode === "immersive" ? (
-            <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white p-6 box-border [&>*]:min-h-0">
+            <div className="h-full min-h-0 overflow-hidden bg-white">
               <Outlet />
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto bg-white">
-              <div
-                className={
-                  standardFullBleed
-                    ? "relative min-h-full w-full bg-white pb-10 pt-6"
-                    : "relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6"
-                }
-              >
+              <div className="relative mx-auto min-h-full w-full max-w-shell-content bg-white px-6 pb-10 pt-6">
                 <Outlet />
               </div>
             </div>
           )}
         </main>
-</div>
+
+        <FloatingAiWidget
+          open={widgetOpen}
+          onOpenChange={handleWidgetOpenChange}
+        />
+      </div>
     </div>
   );
 }
-
-
 
 

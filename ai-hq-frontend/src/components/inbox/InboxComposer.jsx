@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Paperclip, Plus, SendHorizonal, Smile } from "lucide-react";
-import { Textarea } from "../ui/Input.jsx";
 
 function s(value) {
   return String(value ?? "");
@@ -380,7 +379,7 @@ function InboxComposer({
           </div>
 
           <div className="min-w-0 flex-1 self-center">
-            <Textarea
+            <textarea
               ref={textareaRef}
               value={normalizedValue}
               onChange={handleTextareaChange}
@@ -389,8 +388,7 @@ function InboxComposer({
               placeholder={placeholder}
               rows={1}
               spellCheck="true"
-              className="app-transparent-textarea"
-              textClassName={[
+              className={[
                 "block w-full resize-none overflow-y-auto bg-transparent",
                 "border-0 p-0",
                 "text-[15px] font-medium leading-[28px] tracking-[-0.01em] text-[#102033]",
@@ -403,6 +401,10 @@ function InboxComposer({
                 "[&:focus]:outline-none [&:focus]:ring-0 [&:focus]:[box-shadow:none]",
                 "[&:focus-visible]:outline-none [&:focus-visible]:ring-0 [&:focus-visible]:[box-shadow:none]",
               ].join(" ")}
+              style={{
+                outline: "none",
+                boxShadow: "none",
+              }}
             />
           </div>
 

@@ -1,15 +1,5 @@
-import {
-  activateInboxHandoff,
-  assignInboxThread,
-  changeInboxThreadStatus,
-  getInboxThread,
-  listInboxMessages,
-  listInboxThreads,
-  markInboxThreadRead,
-  releaseInboxHandoff,
-  sendInboxThreadMessage,
-} from "../api/inbox.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiGet, apiPost } from "../api/client.js";
 import { getLeadByThreadId } from "../api/leads.js";
 import { useActionState } from "./useActionState.js";
 import { useAsyncSurfaceState } from "./useAsyncSurfaceState.js";
@@ -327,7 +317,7 @@ export function useInboxData({
 
         const j = await withSharedInboxRequest(
           `${requestScopePrefix}threads:list`,
-          () => listInboxThreads()
+          () => apiGet("/api/inbox/threads")
         );
 
         const arr = Array.isArray(j?.threads) ? j.threads : [];
@@ -398,7 +388,7 @@ export function useInboxData({
 
         const j = await withSharedInboxRequest(
           `${requestScopePrefix}threads:detail:${safeThreadId}`,
-          () => getInboxThread(safeThreadId)
+          () => apiGet(`/api/inbox/threads/${safeThreadId}`)
         );
 
         if (threadDetailRequestSeqRef.current !== requestSeq) return;
@@ -463,7 +453,7 @@ export function useInboxData({
       try {
         const j = await withSharedInboxRequest(
           `${requestScopePrefix}threads:messages:${safeThreadId}`,
-          () => listInboxMessages(safeThreadId, { limit: 200 })
+          () => apiGet(`/api/inbox/threads/${safeThreadId}/messages?limit=200`)
         );
 
         if (messagesRequestSeqRef.current !== requestSeq) return;
@@ -551,7 +541,7 @@ export function useInboxData({
       try {
         beginSave();
         await actionState.runAction("read", () =>
-          markInboxThreadRead(threadId)
+          apiPost(`/api/inbox/threads/${threadId}/read`, {})
         );
         clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await syncSelected(threadId);
@@ -570,7 +560,7 @@ export function useInboxData({
       try {
         beginSave();
         await actionState.runAction("assign", () =>
-          assignInboxThread(threadId, {
+          apiPost(`/api/inbox/threads/${threadId}/assign`, {
             assignedTo: actorName,
             actor: actorName,
           })
@@ -604,7 +594,7 @@ export function useInboxData({
       try {
         beginSave();
         await actionState.runAction("handoff", () =>
-          activateInboxHandoff(threadId, {
+          apiPost(`/api/inbox/threads/${threadId}/handoff/activate`, {
             reason: "manual_review",
             priority: "high",
             assignedTo: actorName,
@@ -645,7 +635,7 @@ export function useInboxData({
       try {
         beginSave();
         await actionState.runAction("release", () =>
-          releaseInboxHandoff(threadId, {
+          apiPost(`/api/inbox/threads/${threadId}/handoff/release`, {
             actor: actorName,
           })
         );
@@ -681,7 +671,7 @@ export function useInboxData({
       try {
         beginSave();
         await actionState.runAction(status, () =>
-          changeInboxThreadStatus(threadId, {
+          apiPost(`/api/inbox/threads/${threadId}/status`, {
             status,
             actor: actorName,
           })
@@ -761,7 +751,7 @@ export function useInboxData({
         }));
 
         const response = await actionState.runAction("reply", () =>
-          sendInboxThreadMessage(safeThreadId, {
+          apiPost(`/api/inbox/threads/${safeThreadId}/messages`, {
             direction: "outbound",
             senderType: "agent",
             operatorName: actorName,

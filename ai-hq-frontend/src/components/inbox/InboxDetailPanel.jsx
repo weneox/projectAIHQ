@@ -1,4 +1,4 @@
-import {
+﻿import {
   memo,
   useCallback,
   useEffect,
@@ -8,8 +8,9 @@ import {
   useState,
 } from "react";
 import { ArrowRight, PlugZap } from "lucide-react";
-import { Textarea } from "../ui/Input.jsx";
-import { InlineNotice } from "../ui/AppShellPrimitives.jsx";import InboxMessageBubble from "./InboxMessageBubble.jsx";
+
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
+import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxDetailHeaderCompact from "./InboxDetailHeaderCompact.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
@@ -300,12 +301,11 @@ function EmptyComposerDock() {
             </button>
           </div>
 
-          <Textarea
+          <textarea
             disabled
             rows={1}
             placeholder="Write a reply..."
-            className="app-transparent-textarea flex-1"
-            textClassName="min-h-[30px] resize-none bg-transparent px-0 py-2 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
+            className="min-h-[30px] flex-1 resize-none bg-transparent px-0 py-2 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
           />
 
           <button
@@ -715,23 +715,10 @@ function InboxDetailPanel({
                   >
                     {showSurfaceBanner ? (
                       <div className="mb-4 w-full">
-                        <InlineNotice
-                          tone={surface?.saveError ? "danger" : surface?.saveSuccess ? "success" : "warning"}
-                          title={
-                            surface?.saveSuccess
-                              ? "Saved"
-                              : surface?.saveError
-                                ? "Update failed"
-                                : "Conversation unavailable"
-                          }
-                          description={
-                            surface?.saveSuccess ||
-                            surface?.saveError ||
-                            surface?.error ||
-                            surface?.message ||
-                            "Conversation detail is temporarily unavailable."
-                          }
-                          compact
+                        <SurfaceBanner
+                          surface={surface}
+                          unavailableMessage="Conversation detail is temporarily unavailable."
+                          refreshLabel="Refresh conversation"
                         />
                       </div>
                     ) : null}

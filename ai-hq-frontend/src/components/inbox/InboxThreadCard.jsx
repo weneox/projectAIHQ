@@ -1,3 +1,4 @@
+﻿import { useState } from "react";
 import { Clock3, MessageCircle, Send, UserCheck } from "lucide-react";
 
 import globeLogo from "../../assets/channels/globe.png";
@@ -33,50 +34,6 @@ function initialsFromName(value = "") {
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
 }
-
-function obj(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
-
-function resolveThreadCardAvatarUrl(thread = {}) {
-  const meta = obj(thread?.meta);
-
-  return s(
-    thread?.avatar_url ||
-      thread?.avatarUrl ||
-      thread?.sender_avatar_url ||
-      thread?.senderAvatarUrl ||
-      thread?.profile_picture ||
-      thread?.profilePicture ||
-      meta?.avatarUrl ||
-      meta?.avatar_url ||
-      meta?.profilePicture ||
-      meta?.profile_picture
-  );
-}
-
-function ThreadCardAvatar({ title, avatarUrl }) {
-  const initials = initialsFromName(title);
-
-  return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#E8EEF7] text-[12px] font-semibold text-[#587391] shadow-[0_10px_18px_-16px_rgba(15,23,42,0.2)]">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={title}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-        />
-      ) : (
-        initials
-      )}
-    </div>
-  );
-}
-
 
 function looksLikeNumericIdentity(value = "") {
   const safe = s(value);
@@ -152,6 +109,9 @@ function resolveChannelKey(thread = {}) {
   );
 }
 
+function resolveAvatarUrl(thread = {}) {
+  return s(thread?.avatar_url || thread?.avatarUrl || "");
+}
 
 function resolveHandoffActive(thread = {}) {
   const status = normalizeChannelKey(thread?.status);
@@ -191,6 +151,20 @@ function formatRelativeTime(value = "") {
   });
 }
 
+function resolveAvatarTone(seed = "") {
+  const tones = [
+    "border-[rgba(var(--color-line),0.92)] bg-[linear-gradient(180deg,#F8FBFF_0%,#E8F1FA_100%)] text-[#235B98]",
+    "border-[rgba(var(--color-line),0.92)] bg-[linear-gradient(180deg,#FFFFFF_0%,#EEF3F8_100%)] text-[#43566E]",
+    "border-[rgba(var(--color-success),0.16)] bg-[linear-gradient(180deg,#F8FFFB_0%,#E8F6EF_100%)] text-[#0F766E]",
+    "border-[rgba(var(--color-warning),0.16)] bg-[linear-gradient(180deg,#FFFDF9_0%,#F5EBDD_100%)] text-[#9A5A19]",
+  ];
+
+  const score = String(seed || "")
+    .split("")
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+
+  return tones[score % tones.length];
+}
 
 function isWebsiteChannel(channel = "") {
   const normalized = normalizeChannelKey(channel);
@@ -305,9 +279,12 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const timeLabel = formatRelativeTime(
     thread?.last_message_at || thread?.updated_at || thread?.created_at
   );
-  const avatarUrl = resolveThreadCardAvatarUrl(thread);
+  const avatarUrl = resolveAvatarUrl(thread);
   const channelKey = resolveChannelKey(thread);
   const handoffActive = resolveHandoffActive(thread);
+  const avatarKey = `${s(thread?.id)}:${avatarUrl}`;
+  const [failedAvatarKey, setFailedAvatarKey] = useState("");
+  const avatarFailed = failedAvatarKey === avatarKey;
 
   return (
     <button
@@ -330,7 +307,36 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
       />
 
       <div className="relative mt-0.5 shrink-0">
-        <ThreadCardAvatar title={name} avatarUrl={avatarUrl} />
+        <div
+          className={cx(
+            "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border text-[12px] font-bold",
+            "shadow-[0_18px_34px_-28px_rgba(15,23,42,0.30),inset_0_1px_0_rgba(255,255,255,0.95)]",
+            "ring-1 ring-white/70",
+            "transition-[background-color,border-color,color,box-shadow] duration-base ease-premium",
+            resolveAvatarTone(name)
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.18)_48%,rgba(255,255,255,0)_100%)]"
+          />
+
+          {avatarUrl && !avatarFailed ? (
+            <img
+              key={avatarKey}
+              src={avatarUrl}
+              alt={name}
+              loading="lazy"
+              decoding="async"
+              className="relative z-[1] h-full w-full object-cover"
+              onError={() => setFailedAvatarKey(avatarKey)}
+            />
+          ) : (
+            <span className="relative z-[1] tracking-[var(--tracking-tight-sm)]">
+              {initialsFromName(name)}
+            </span>
+          )}
+        </div>
 
         <ChannelMark channel={channelKey} />
       </div>
