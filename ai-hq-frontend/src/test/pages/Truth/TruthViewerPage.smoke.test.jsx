@@ -1,71 +1,615 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
+const useWorkspaceTenantKey = vi.fn();
+const getSettingsTrustView = vi.fn();
+
+vi.mock("../../../api/truth.js", () => ({
+  getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
+    fields: [
+      {
+        key: "companyName",
+        label: "Company name",
+        value: "North Clinic",
+        provenance: "Website, https://north.example/about - Authority 1",
+      },
+      {
+        key: "description",
+        label: "Summary",
+        value: "Cosmetic dentistry and consultation-led care.",
+        provenance: "Website, https://north.example/about - Authority 1",
+      },
+      {
+        key: "primaryPhone",
+        label: "Phone",
+        value: "+15551112222",
+        provenance: "Website, https://north.example/contact - Authority 1",
+      },
+      {
+        key: "websiteUrl",
+        label: "Website",
+        value: "https://north.example",
+        provenance: "Website, https://north.example - Authority 1",
+      },
+    ],
+    approval: {
+      approvedAt: "2026-03-25T10:00:00.000Z",
+      approvedBy: "reviewer@aihq.test",
+      version: "v3",
+    },
+    history: [
+      {
+        id: "v3",
+        version: "v3",
+        versionLabel: "Truth version v3",
+        previousVersionId: "v2",
+        profileStatus: "approved",
+        approvedAt: "2026-03-24T09:00:00.000Z",
+        approvedBy: "owner@aihq.test",
+        sourceSummary: "Website - https://north.example/about",
+        diffSummary: "companyName changed",
+      },
+    ],
+    notices: [],
+    hasProvenance: true,
+    approvedTruthUnavailable: false,
+    readiness: {
+      status: "ready",
+      blockers: [],
+    },
+    sourceSummary: {
+      latestImport: {
+        sourceType: "website",
+        sourceUrl: "https://north.example/about",
+      },
+    },
+    metadata: {},
+    governance: {},
+    finalizeImpact: {},
+  }),
+  getTruthReviewWorkbench: vi.fn().mockResolvedValue({
+    summary: {
+      total: 1,
+      pending: 0,
+    },
+    items: [],
+  }),
+  getTruthVersionDetail: vi.fn().mockResolvedValue({
+    selectedVersion: {
+      id: "v3",
+      version: "v3",
+      versionLabel: "Truth version v3",
+      approvedAt: "2026-03-25T10:00:00.000Z",
+      approvedBy: "reviewer@aihq.test",
+      sourceSummary: "Website - https://north.example/about",
+    },
+    comparedVersion: {
+      id: "v2",
+      version: "v2",
+      versionLabel: "Truth version v2",
+      approvedAt: "2026-03-24T09:00:00.000Z",
+      approvedBy: "owner@aihq.test",
+    },
+    currentVersion: {
+      id: "v4",
+      version: "v4",
+      versionLabel: "Truth version v4",
+      approvedAt: "2026-03-26T11:00:00.000Z",
+      approvedBy: "reviewer@aihq.test",
+    },
+    behavior: {
+      selected: {
+        summary: "Clinic · Book your consultation · Warm Reassuring",
+        rows: [
+          { key: "businessType", label: "Business type", value: "Clinic" },
+          {
+            key: "primaryCta",
+            label: "Primary CTA",
+            value: "Book your consultation",
+          },
+          {
+            key: "toneProfile",
+            label: "Tone profile",
+            value: "Warm Reassuring",
+          },
+        ],
+      },
+      compared: {
+        summary: "Clinic · Contact the team · Professional",
+        rows: [
+          { key: "businessType", label: "Business type", value: "Clinic" },
+          {
+            key: "primaryCta",
+            label: "Primary CTA",
+            value: "Contact the team",
+          },
+          {
+            key: "toneProfile",
+            label: "Tone profile",
+            value: "Professional",
+          },
+        ],
+      },
+      changes: [
+        {
+          key: "behavior.primaryCta",
+          label: "Primary CTA",
+          beforeSummary: "Contact the team",
+          afterSummary: "Book your consultation",
+        },
+      ],
+    },
+    changedFields: [{ key: "companyName", label: "Company name" }],
+    fieldChanges: [
+      {
+        key: "companyName",
+        label: "Company name",
+        beforeSummary: "Old Clinic",
+        afterSummary: "North Clinic",
+      },
+    ],
+    sectionChanges: [],
+    versionDiff: {
+      canonicalAreasChanged: ["business_profile"],
+      canonicalPathsChanged: ["profile.companyName"],
+      runtimeAreasLikelyAffected: ["tenant_profile"],
+      affectedSurfaces: ["inbox"],
+      autonomyImpact: "follow_up_required",
+      valueSummary: {
+        changed: 1,
+      },
+      summaryExplanation: "1 canonical field change spans 1 governed area.",
+    },
+    rollbackPreview: {
+      currentApprovedVersion: {
+        id: "v4",
+        version: "v4",
+        versionLabel: "Truth version v4",
+      },
+      targetRollbackVersion: {
+        id: "v3",
+        version: "v3",
+        versionLabel: "Truth version v3",
+      },
+      canonicalAreasChangedBack: ["business_profile"],
+      canonicalPathsChangedBack: ["profile.companyName"],
+      runtimeAreasLikelyAffected: ["tenant_profile"],
+      affectedSurfaces: ["inbox"],
+      postureImpact: {
+        autonomyDelta: "reviewable",
+      },
+      readinessImplications: [
+        "Runtime projection refresh will be required before governed runtime reflects the rollback.",
+      ],
+      rollbackDisposition: "follow_up_required",
+      summaryExplanation:
+        "Rolling back to v3 would revert 1 canonical field and trigger runtime follow-up.",
+      action: {
+        actionType: "execute_safe_rollback",
+        label: "Execute governed rollback",
+        allowed: true,
+        reason:
+          "Rollback is allowed, but runtime verification and follow-up will still be required.",
+      },
+    },
+    diffSummary: "companyName changed",
+    hasStructuredDiff: true,
+  }),
+  rollbackTruthVersion: vi.fn().mockResolvedValue({
+    ok: true,
+    rollbackReceipt: {
+      rollbackActionResult: "executed",
+      rollbackStatus: "follow_up_required",
+      sourceCurrentVersion: {
+        id: "v4",
+        version: "v4",
+        versionLabel: "Truth version v4",
+      },
+      targetRollbackVersion: {
+        id: "v3",
+        version: "v3",
+        versionLabel: "Truth version v3",
+      },
+      resultingTruthVersion: {
+        id: "v5",
+        version: "v5",
+        versionLabel: "Truth version v5",
+      },
+      resultingTruthVersionId: "v5",
+      runtimeProjectionId: "runtime-projection-rollback",
+      runtimeRefreshResult: "refreshed",
+      actual: {
+        canonical: {
+          areas: ["business_profile"],
+          paths: ["profile.companyName"],
+        },
+        runtime: {
+          areas: ["tenant_profile"],
+          paths: ["profile.companyName"],
+        },
+        channels: {
+          affectedSurfaces: ["inbox"],
+        },
+        policy: {
+          autonomyDelta: "reviewable",
+          executionPostureDelta: "unknown",
+          riskDelta: "unknown",
+        },
+      },
+      previewComparison: { status: "matched" },
+      verification: {
+        truthVersionCreated: true,
+        runtimeProjectionRefreshed: true,
+        runtimeControlWarnings: [],
+        repairRecommendation: "",
+      },
+      actor: "owner@aihq.test",
+      timestamp: "2026-03-28T10:20:00.000Z",
+      summaryExplanation:
+        "Rollback committed, but follow-up is required before the governed revert path is fully clean.",
+    },
+  }),
+}));
+
+vi.mock("../../../api/trust.js", () => ({
+  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
+}));
+
+vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
+  default: (...args) => useWorkspaceTenantKey(...args),
+  useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+}));
+
 import TruthViewerPage from "../../../pages/Truth/TruthViewerPage.jsx";
+import { emitLaunchSliceRefresh } from "../../../lib/launchSliceRefresh.js";
+import {
+  getCanonicalTruthSnapshot,
+  rollbackTruthVersion,
+} from "../../../api/truth.js";
 
 afterEach(() => {
   cleanup();
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+
+  useWorkspaceTenantKey.mockReturnValue({
+    tenantKey: "acme",
+    loading: false,
+    ready: true,
+  });
+
+  getSettingsTrustView.mockResolvedValue({
+    summary: {
+      truth: {
+        latestVersionId: "v3",
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+      },
+      runtimeProjection: {
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        health: {
+          usable: true,
+        },
+        authority: {
+          available: true,
+        },
+      },
+    },
+  });
+});
+
 describe("Truth viewer smoke", () => {
-  function renderPage() {
+  function renderPage(entry = "/truth") {
     return render(
-      <MemoryRouter initialEntries={["/truth"]}>
+      <MemoryRouter initialEntries={[entry]}>
         <TruthViewerPage />
       </MemoryRouter>
     );
   }
 
-  it("renders the current v1 business info surface", () => {
+  async function clickButton(name) {
+    const button = await screen.findByRole("button", { name });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    return button;
+  }
+
+  async function openVersionsTab() {
+    await clickButton(/^versions$/i);
+  }
+
+  async function openVersionCompare() {
+    await openVersionsTab();
+
+    const compareButtons = await screen.findAllByRole("button", {
+      name: /compare/i,
+    });
+
+    const explicitCompareButton =
+      compareButtons.find((button) => button.textContent?.trim() === "Compare") ||
+      compareButtons[compareButtons.length - 1];
+
+    await act(async () => {
+      fireEvent.click(explicitCompareButton);
+    });
+  }
+
+  it("renders the current business truth surface and opens version compare", async () => {
+    renderPage();
+
+    expect(screen.getByText(/loading truth/i)).toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("heading", { name: /business truth runtime/i })
+    ).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(/North Clinic/i);
+    expect(document.body).toHaveTextContent(
+      /Cosmetic dentistry and consultation-led care/i
+    );
+    expect(document.body).toHaveTextContent(/\+15551112222/i);
+    expect(document.body).toHaveTextContent(/https:\/\/north\.example/i);
+    expect(document.body).toHaveTextContent(/Version:\s*v3/i);
+    expect(document.body).toHaveTextContent(/Runtime:\s*Healthy/i);
+    expect(document.body).toHaveTextContent(
+      /Source:\s*website\s*·\s*https:\/\/north\.example\/about/i
+    );
+
+    await openVersionCompare();
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText(/^selected version behavior$/i)
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/^compared version behavior$/i)
+    ).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(
+      /Rolling back to v3 would revert 1 canonical field/i
+    );
+    expect(document.body).toHaveTextContent(/Primary CTA/i);
+    expect(document.body).toHaveTextContent(/Old Clinic/i);
+    expect(document.body).toHaveTextContent(/North Clinic/i);
+  });
+
+  it("shows an explicit unavailable state without fallback data", async () => {
+    getCanonicalTruthSnapshot.mockResolvedValueOnce({
+      fields: [],
+      approval: { approvedAt: "", approvedBy: "", version: "" },
+      history: [],
+      notices: [
+        {
+          tone: "warning",
+          title: "Approved truth is unavailable.",
+          message: "No non-approved fallback data is being shown.",
+        },
+      ],
+      hasProvenance: false,
+      approvedTruthUnavailable: true,
+      readiness: {
+        status: "blocked",
+        blockers: [],
+      },
+      sourceSummary: {},
+      metadata: {},
+      governance: {},
+      finalizeImpact: {},
+    });
+
     renderPage();
 
     expect(
-      screen.getByRole("heading", { name: /^business info$/i })
+      await screen.findByRole("heading", { name: /business truth runtime/i })
     ).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/approved business truth/i);
-    expect(screen.getAllByText(/^company identity$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^services$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^pricing & offer$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^policies$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^contact & handoff$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^assistant boundaries$/i).length).toBeGreaterThan(0);
+    expect(document.body).toHaveTextContent(/Approved truth is unavailable/i);
+    expect(document.body).toHaveTextContent(
+      /No non-approved fallback data is being shown/i
+    );
+    expect(document.body).toHaveTextContent(/Unavailable/i);
+    expect(document.body).toHaveTextContent(/Saved:/i);
+    expect(document.body).toHaveTextContent(/Pending review:/i);
+
+    await openVersionsTab();
+
+    expect(
+      screen.getByText(/no approved truth versions are available yet/i)
+    ).toBeInTheDocument();
   });
 
-  it("keeps truth fields locked by default", () => {
+  it("renders safely when metadata is partial", async () => {
+    getCanonicalTruthSnapshot.mockResolvedValueOnce({
+      fields: [
+        {
+          key: "companyName",
+          label: "Company name",
+          value: "North Clinic",
+          provenance: "",
+        },
+      ],
+      approval: {
+        approvedAt: "",
+        approvedBy: "",
+        version: "approved",
+      },
+      history: [],
+      notices: [],
+      hasProvenance: false,
+      approvedTruthUnavailable: false,
+      readiness: {
+        status: "ready",
+        blockers: [],
+      },
+      sourceSummary: {},
+      metadata: {},
+      governance: {},
+      finalizeImpact: {},
+    });
+
     renderPage();
 
-    expect(screen.getAllByText(/^locked$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^company name$/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^neosentic$/i).length).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("heading", { name: /business truth runtime/i })
+    ).toBeInTheDocument();
+
+    expect(document.body).toHaveTextContent(/North Clinic/i);
+    expect(document.body).toHaveTextContent(/Version:\s*approved/i);
+    expect(document.body).toHaveTextContent(/Runtime:\s*Healthy/i);
+    expect(document.body).toHaveTextContent(/Source:\s*Not available/i);
+
+    await openVersionsTab();
+
+    expect(
+      screen.getByText(/no approved truth versions are available yet/i)
+    ).toBeInTheDocument();
   });
 
-  it("opens the edit dialog for a business section", () => {
-    renderPage();
+  it("opens a deep-linked version from the url", async () => {
+    renderPage("/truth?versionId=v3&focus=history");
 
-    const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
-    fireEvent.click(editButtons[0]);
+    expect(
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
+      })
+    ).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/edit business truth/i);
-    expect(screen.getAllByRole("button", { name: /save changes/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
+    expect(document.body).toHaveTextContent(/Old Clinic/i);
   });
 
-  it("saves edited business information back into the read-only surface", () => {
+  it("executes governed rollback from compare and shows the receipt", async () => {
     renderPage();
 
-    const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
-    fireEvent.click(editButtons[0]);
+    expect(
+      await screen.findByRole("heading", { name: /business truth runtime/i })
+    ).toBeInTheDocument();
 
-    const input = screen.getByDisplayValue("Neosentic");
-    fireEvent.change(input, { target: { value: "Neosentic Group" } });
+    await openVersionCompare();
 
-    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(
+      await screen.findByRole("dialog", {
+        name: /business data version compare/i,
+      })
+    ).toBeInTheDocument();
 
-    expect(document.body).not.toHaveTextContent(/edit business truth/i);
-    expect(screen.getByText(/neosentic group/i)).toBeInTheDocument();
+    const rollbackButton = await screen.findByRole("button", {
+      name: /execute governed rollback/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(rollbackButton);
+    });
+
+    await waitFor(() => {
+      expect(rollbackTruthVersion).toHaveBeenCalled();
+    });
+
+    expect(rollbackTruthVersion.mock.calls.at(-1)?.[0]).toBe("v3");
+
+    expect(
+      await screen.findByText(/rollback verification/i)
+    ).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(
+      /Rollback committed, but follow-up is required/i
+    );
+    expect(document.body).toHaveTextContent(/Truth version v5/i);
+  });
+
+  it("refreshes the approved truth surface after a launch-slice refresh signal", async () => {
+    getCanonicalTruthSnapshot
+      .mockResolvedValueOnce({
+        fields: [
+          {
+            key: "companyName",
+            label: "Company name",
+            value: "North Clinic",
+            provenance: "Website, https://north.example/about - Authority 1",
+          },
+        ],
+        approval: {
+          approvedAt: "2026-03-25T10:00:00.000Z",
+          approvedBy: "reviewer@aihq.test",
+          version: "v3",
+        },
+        history: [],
+        notices: [],
+        hasProvenance: true,
+        approvedTruthUnavailable: false,
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        sourceSummary: {},
+        metadata: {},
+        governance: {},
+        finalizeImpact: {},
+      })
+      .mockResolvedValueOnce({
+        fields: [
+          {
+            key: "companyName",
+            label: "Company name",
+            value: "North Clinic Group",
+            provenance: "Website, https://north.example/about - Authority 1",
+          },
+        ],
+        approval: {
+          approvedAt: "2026-03-26T10:00:00.000Z",
+          approvedBy: "reviewer@aihq.test",
+          version: "v4",
+        },
+        history: [],
+        notices: [],
+        hasProvenance: true,
+        approvedTruthUnavailable: false,
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        sourceSummary: {},
+        metadata: {},
+        governance: {},
+        finalizeImpact: {},
+      });
+
+    renderPage();
+
+    expect(await screen.findByText("North Clinic")).toBeInTheDocument();
+
+    await act(async () => {
+      emitLaunchSliceRefresh({
+        tenantKey: "acme",
+        reason: "truth-updated",
+      });
+    });
+
+    await waitFor(() => {
+      expect(getCanonicalTruthSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("North Clinic Group")).toBeInTheDocument();
   });
 });

@@ -829,53 +829,7 @@ export default function Inbox() {
 
 
 
-  const visibleLaunchReadinessNotice = useMemo(() => {
-    const truth = obj(readinessState.truth);
-    const runtime = obj(readinessState.runtime);
-    const overall = obj(readinessState.overall);
-
-    const truthStatus = lower(
-      truth.status ||
-        truth.readiness?.status ||
-        truth.health?.status ||
-        truth.reasonCode
-    );
-
-    const runtimeStatus = lower(
-      runtime.status ||
-        runtime.readiness?.status ||
-        runtime.health?.status ||
-        runtime.reasonCode
-    );
-
-    const overallStatus = lower(overall.status);
-
-    const truthReady =
-      truth.ready === true ||
-      truth.usable === true ||
-      truthStatus === "ready" ||
-      truthStatus === "healthy";
-
-    const runtimeReady =
-      runtime.ready === true ||
-      runtime.usable === true ||
-      runtime.health?.usable === true ||
-      runtimeStatus === "ready" ||
-      runtimeStatus === "healthy";
-
-    const launchReady =
-      overall.launchReady === true ||
-      overall.ready === true ||
-      overallStatus === "ready";
-
-    return _buildLaunchReadinessNotice({
-      readinessState,
-      hasDeliveryReadyLaunchChannel,
-      truthReady,
-      runtimeReady,
-      launchReady,
-    });
-  }, [hasDeliveryReadyLaunchChannel, readinessState]);
+  const visibleLaunchReadinessNotice = null;
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 
