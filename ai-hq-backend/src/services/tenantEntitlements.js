@@ -1,4 +1,4 @@
-function s(v, d = "") {
+﻿function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
@@ -43,7 +43,7 @@ const CAPABILITY_DEFS = Object.freeze({
     summary: "Source sync, review queue, and truth governance",
   },
   metaChannelConnect: {
-    minimumPlan: "starter",
+    minimumPlan: "growth",
     summary: "Meta channel onboarding and reconnect flows",
   },
   agentConfigMutation: {
@@ -137,3 +137,4 @@ export function buildTenantEntitlements(tenant = {}) {
 export function getTenantCapability(tenant = {}, capabilityKey = "") {
   return buildTenantEntitlements(tenant).capabilities[capabilityKey] || null;
 }
+
