@@ -1,24 +1,22 @@
 import {
   BarChart3,
   BookOpenCheck,
+  BriefcaseBusiness,
+  Inbox,
+  LayoutDashboard,
+  PlugZap,
   Rocket,
   Settings,
-  
-  Target,UserCog,
+  Target,
+  UserCog,
   Users,
 } from "lucide-react";
-
-import dashboardIcon from "../../assets/channels/dashboard.png";
-import inboxIcon from "../../assets/channels/inbox.png";
-import connectIcon from "../../assets/channels/connect.png";
-import businessInformationsIcon from "../../assets/channels/businessinformations.png";
 
 const PRIMARY_SECTIONS = [
   {
     id: "home",
     label: "Home",
-    iconType: "image",
-    iconSrc: dashboardIcon,
+    icon: LayoutDashboard,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
@@ -44,8 +42,7 @@ const PRIMARY_SECTIONS = [
   {
     id: "inbox",
     label: "Inbox",
-    iconType: "image",
-    iconSrc: inboxIcon,
+    icon: Inbox,
     to: "/inbox",
     badgeKey: "inboxUnread",
     paths: ["/inbox"],
@@ -102,8 +99,7 @@ const SECONDARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    iconType: "image",
-    iconSrc: connectIcon,
+    icon: PlugZap,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
@@ -116,8 +112,7 @@ const SECONDARY_SECTIONS = [
   {
     id: "business-info",
     label: "Business Info",
-    iconType: "image",
-    iconSrc: businessInformationsIcon,
+    icon: BriefcaseBusiness,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
