@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+﻿import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -466,7 +466,7 @@ describe("Inbox", () => {
     });
   });
 
-  it("shows the launch readiness banner when no launch channel is connected", async () => {
+  it("keeps the launch readiness banner hidden when no launch channel is connected", async () => {
     renderInbox();
 
     expect(
@@ -484,8 +484,8 @@ describe("Inbox", () => {
     expect(
       screen.getByText(/automation-status:\s*AI ON/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/launch channel required/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open channels/i })).toBeInTheDocument();
+    expect(screen.queryByText(/launch channel required/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open channels/i })).not.toBeInTheDocument();
     expect(screen.getByText(/launch-channel-connected:no/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread:none/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread-name:none/i)).toBeInTheDocument();
@@ -605,7 +605,7 @@ describe("Inbox", () => {
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
-  it("shows the launch readiness unavailable banner when launch posture cannot be loaded", async () => {
+  it("keeps the launch readiness banner hidden when launch posture cannot be loaded", async () => {
     getLaunchPosture.mockRejectedValue(new Error("posture unavailable"));
 
     renderInbox();
@@ -615,8 +615,8 @@ describe("Inbox", () => {
     expect(
       await screen.findByText(/launch-channel-connected:no/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/launch readiness unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/posture unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/launch readiness unavailable/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/posture unavailable/i)).not.toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();

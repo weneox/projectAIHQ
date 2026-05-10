@@ -3,7 +3,8 @@ import {
   BookOpenCheck,
   Rocket,
   Settings,
-  UserCog,
+  
+  Target,UserCog,
   Users,
 } from "lucide-react";
 
@@ -65,6 +66,20 @@ const PRIMARY_SECTIONS = [
       {
         title: "Navigation",
         items: [{ label: "Customers", to: "/customers" }],
+      },
+    ],
+  },
+  {
+    id: "leads",
+    label: "Leads",
+    icon: Target,
+    to: "/leads",
+    badgeKey: "leadsOpen",
+    paths: ["/leads"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Leads", to: "/leads" }],
       },
     ],
   },
