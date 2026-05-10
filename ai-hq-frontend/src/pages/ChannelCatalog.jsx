@@ -498,6 +498,28 @@ function healthSignal(channel = {}) {
   };
 }
 
+function backendReasonCode(channel = {}) {
+  const payload = obj(channel.payload);
+  const readiness = readReadiness(payload);
+  const runtime = obj(payload.runtime);
+  const launchReadiness = obj(payload.launchReadiness || payload.install?.launchReadiness);
+
+  return lower(
+    firstText(
+      payload.reasonCode,
+      payload.code,
+      payload.error,
+      readiness.reasonCode,
+      launchReadiness.reasonCode,
+      runtime.reasonCode
+    )
+  );
+}
+
+function isPlanRestricted(channel = {}) {
+  return backendReasonCode(channel) === "plan_capability_restricted";
+}
+
 function backendFacts(channel = {}) {
   const payload = obj(channel.payload);
   const readiness = readReadiness(payload);
@@ -837,6 +859,12 @@ function WebsitePanel({
       <ActionNotice>{localMessage}</ActionNotice>
       <ActionNotice tone="danger">{localError}</ActionNotice>
 
+      {planRestricted ? (
+        <ActionNotice tone="warning">
+          Instagram connect is blocked by the current workspace plan. Backend returned plan_capability_restricted, so this button is intentionally disabled until the tenant plan/capability is upgraded internally.
+        </ActionNotice>
+      ) : null}
+
       <div className="rounded-md border border-line-soft bg-white p-4">
         <div className="mb-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
@@ -1133,6 +1161,7 @@ function MetaPanel({
   const review = obj(payload.review);
   const candidates = arr(pendingSelection.candidates);
   const blockers = readBlockers(payload);
+  const planRestricted = isPlanRestricted(channel);
 
   async function runLocal(action, successMessage) {
     setLocalMessage("");
@@ -1261,6 +1290,7 @@ function MetaPanel({
           type="button"
           variant="secondary"
           size="md"
+          disabled={planRestricted}
           loading={busyAction === "instagram-connect"}
           onClick={onMetaConnect}
           rightIcon={<ExternalLink className="h-4 w-4" strokeWidth={2.1} />}
