@@ -80,7 +80,10 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
     >
       {({ isActive }) => (
         <div
-          className="group relative grid h-10 items-center overflow-hidden px-[17px] transition-[color,opacity] duration-base ease-premium"
+          className={cx(
+            "group relative grid h-10 items-center overflow-hidden transition-[color,opacity] duration-base ease-premium",
+            collapsed ? "justify-center px-0" : "px-[17px]"
+          )}
           style={{
             gridTemplateColumns: collapsed ? "24px 0px" : "24px minmax(0,1fr)",
             columnGap: collapsed ? "0px" : "12px",
@@ -142,7 +145,7 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
           {collapsed && badgeCount ? (
             <span
               className={cx(
-                "absolute right-[6px] top-[6px] z-[3] text-[9px] font-semibold",
+                "absolute right-[5px] top-[5px] z-[3] rounded-full bg-white/85 px-[3px] text-[9px] font-semibold shadow-[0_6px_14px_-10px_rgba(15,23,42,0.45)]",
                 isActive ? "text-brand" : "text-text-subtle"
               )}
             >
