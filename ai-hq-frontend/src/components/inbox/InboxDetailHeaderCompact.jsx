@@ -1,19 +1,18 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useState } from "react";
 import { Dropdown, Switch, Tooltip } from "antd";
 import {
   Ban,
   CheckCircle2,
+  Info,
   MailOpen,
   MoreHorizontal,
+  RefreshCw,
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
 
-import infoIcon from "../../assets/channels/info.png";
-import refreshIcon from "../../assets/channels/refresh.gif";
 import { cx } from "../../lib/cx.js";
 
-const REFRESH_SPIN_MS = 720;
 
 function s(value) {
   return String(value ?? "").trim();
@@ -55,67 +54,6 @@ const tooltipStyle = {
   fontWeight: 600,
   boxShadow: "0 12px 32px -18px rgba(15,23,42,0.45)",
 };
-
-function HeaderAssetIcon({ src, alt = "" }) {
-  return (
-    <img
-      src={src}
-      alt={alt}
-      draggable="false"
-      className="pointer-events-none h-[23px] w-[23px] select-none object-contain"
-    />
-  );
-}
-
-function RefreshAssetIcon({ spinning = false }) {
-  const canvasRef = useRef(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const image = new Image();
-
-    image.onload = () => {
-      if (cancelled) return;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const size = 23;
-      const dpr = window.devicePixelRatio || 1;
-
-      canvas.width = Math.round(size * dpr);
-      canvas.height = Math.round(size * dpr);
-      canvas.style.width = `${size}px`;
-      canvas.style.height = `${size}px`;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, size, size);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(image, 0, 0, size, size);
-    };
-
-    image.src = refreshIcon;
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className={cx(
-        "pointer-events-none h-[23px] w-[23px] select-none",
-        spinning && "inbox-refresh-icon-spin"
-      )}
-    />
-  );
-}
 
 function headerActionColor({ danger = false, active = false }) {
   if (danger) return "text-danger";
@@ -382,17 +320,6 @@ export default function InboxDetailHeaderCompact({
   onResolve,
   disabledMap = {},
 }) {
-  const refreshTimerRef = useRef(null);
-  const [refreshSpinning, setRefreshSpinning] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (refreshTimerRef.current) {
-        window.clearTimeout(refreshTimerRef.current);
-      }
-    };
-  }, []);
-
   const hasThread =
     typeof hasThreadProp === "boolean" ? hasThreadProp : Boolean(thread?.id);
 
@@ -422,47 +349,13 @@ export default function InboxDetailHeaderCompact({
   const unread = Number(unreadCount || 0);
 
   const handleRefreshClick = () => {
-    if (typeof onRefresh !== "function") return;
-
-    if (refreshTimerRef.current) {
-      window.clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-
-    setRefreshSpinning(false);
-
-    window.requestAnimationFrame(() => {
-      setRefreshSpinning(true);
-
-      refreshTimerRef.current = window.setTimeout(() => {
-        setRefreshSpinning(false);
-        refreshTimerRef.current = null;
-      }, REFRESH_SPIN_MS);
-    });
-
-    onRefresh();
+    if (typeof onRefresh === "function") onRefresh();
   };
 
   return (
     <>
       <style>
         {`
-          @keyframes inboxRefreshSpinOnce {
-            0% {
-              transform: rotate(0deg);
-            }
-
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-
-          .inbox-refresh-icon-spin {
-            animation: inboxRefreshSpinOnce ${REFRESH_SPIN_MS}ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
-            transform-origin: 50% 50%;
-            will-change: transform;
-          }
-
           .inbox-detail-header-ai-switch.ant-switch {
             min-width: 66px !important;
             width: 66px !important;
@@ -611,7 +504,7 @@ export default function InboxDetailHeaderCompact({
             onClick={onOpenDetails}
             disabled={disableActions || typeof onOpenDetails !== "function"}
           >
-            <HeaderAssetIcon src={infoIcon} alt="" />
+            <Info className="pointer-events-none h-[20px] w-[20px]" strokeWidth={2.1} />
           </HeaderIconButton>
 
           <HeaderIconButton
@@ -619,7 +512,7 @@ export default function InboxDetailHeaderCompact({
             onClick={handleRefreshClick}
             disabled={typeof onRefresh !== "function"}
           >
-            <RefreshAssetIcon spinning={refreshSpinning} />
+            <RefreshCw className="pointer-events-none h-[20px] w-[20px]" strokeWidth={2.1} />
           </HeaderIconButton>
 
           <OverflowMenu

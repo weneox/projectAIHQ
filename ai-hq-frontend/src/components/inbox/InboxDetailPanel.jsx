@@ -7,7 +7,7 @@
   useRef,
   useState,
 } from "react";
-import { ArrowRight, PlugZap } from "lucide-react";
+import { ArrowRight, MessageCircle, PlugZap } from "lucide-react";
 
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
@@ -272,55 +272,6 @@ function ConnectChannelEmptyState({ onOpenChannels }) {
   );
 }
 
-function EmptyComposerDock() {
-  return (
-    <div className="w-full px-4 pb-4 md:px-5 md:pb-6">
-      <div className="w-full rounded-[30px] border border-[#E7ECF3] bg-white px-5 py-4 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.16)]">
-        <div className="flex items-end gap-4">
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
-            >
-              ☺
-            </button>
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#B8C2D1]"
-            >
-              ⎋
-            </button>
-          </div>
-
-          <textarea
-            disabled
-            rows={1}
-            placeholder="Write a reply..."
-            className="min-h-[30px] flex-1 resize-none bg-transparent px-0 py-2 text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] outline-none disabled:cursor-not-allowed"
-          />
-
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#E6ECF5] bg-[#EEF3FA] text-[#A0AEC0]"
-          >
-            →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FloatingComposerSlot({ children }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
@@ -389,14 +340,24 @@ function TypingIndicatorBubble({ side = "left" }) {
 
 function EmptyConversationState() {
   return (
-    <div className="flex h-full min-h-[320px] items-center justify-center px-8 py-10">
-      <div className="w-full max-w-[520px] rounded-[28px] border border-[#E6EAF0] bg-white px-8 py-10 text-center shadow-[0_30px_70px_-52px_rgba(15,23,42,0.18)]">
-        <div className="text-[18px] font-semibold text-[#0F172A]">
-          Select a conversation
+    <div className="flex h-full min-h-[520px] items-center justify-center px-8 py-12">
+      <div className="flex w-full max-w-[560px] flex-col items-center text-center">
+        <div className="relative mb-7 flex h-[132px] w-[132px] items-center justify-center">
+          <div className="absolute inset-0 rounded-[38px] bg-[linear-gradient(180deg,#F8FAFC_0%,#EEF3FA_100%)] shadow-[0_34px_90px_-58px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.92),inset_0_-1px_0_rgba(15,23,42,0.055)]" />
+          <div className="absolute inset-[16px] rounded-[30px] border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]" />
+          <MessageCircle
+            className="relative h-[58px] w-[58px] text-[#64748B]"
+            strokeWidth={1.75}
+          />
         </div>
-        <div className="mt-2 text-[14px] leading-7 text-[#64748B]">
-          Choose a conversation from the left to review the messages and send a
-          reply.
+
+        <div className="text-[25px] font-semibold tracking-[-0.025em] text-[#0F172A]">
+          Select conversation
+        </div>
+
+        <div className="mt-3 max-w-[420px] text-[14.5px] font-medium leading-7 text-[#64748B]">
+          Choose a conversation from the left panel to review messages, context,
+          and reply when you are ready.
         </div>
       </div>
     </div>
@@ -701,7 +662,7 @@ function InboxDetailPanel({
           <>
             <div
               ref={scrollViewportRef}
-              className="h-full overflow-y-auto pb-[92px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className={["h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", hasThread ? "pb-[92px]" : "pb-0"].join(" ")}
             >
               <div className="min-h-full">
                 {surface?.loading ? (
