@@ -788,17 +788,25 @@ function StandardChannelDetailDrawer({
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full min-h-0 w-full flex-col overflow-visible border-l border-line-soft bg-surface shadow-panel"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface"
     >
-      <header className="relative z-40 shrink-0 overflow-visible border-b border-line-soft bg-surface py-5 pl-6 pr-24 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_64px] items-start gap-x-4 gap-y-2 overflow-visible">
-          <div className="row-span-2 shrink-0 pt-0.5">
-            <ChannelIcon channel={channel} size="lg" />
-          </div>
+      <header className="relative z-40 shrink-0 border-b border-line-soft bg-surface px-7 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+        <div className="flex items-center justify-between gap-5">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center">
+              <div className="scale-[1.22] transform-gpu">
+                <ChannelIcon channel={channel} size="lg" />
+              </div>
+            </div>
 
-          <div className="min-w-0 self-center">
-            <div className="truncate text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-              {channel?.name}
+            <div className="min-w-0">
+              <div className="truncate text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {channel?.name}
+              </div>
+
+              <div className="mt-2">
+                <DrawerStatus status={effectiveStatus} />
+              </div>
             </div>
           </div>
 
@@ -806,18 +814,14 @@ function StandardChannelDetailDrawer({
             type="button"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="absolute right-7 top-5 z-50 inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-line-soft bg-surface text-text shadow-[0_14px_34px_-24px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-[background-color,border-color,box-shadow,color] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface text-text-muted shadow-[0_14px_34px_-26px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-[background-color,border-color,box-shadow,color] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
           >
             <X className="h-4.5 w-4.5" strokeWidth={2.25} />
           </button>
-
-          <div className="min-w-0 self-start">
-            <DrawerStatus status={effectiveStatus} />
-          </div>
         </div>
       </header>
 
-      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto bg-surface-muted px-6 py-6">
+      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto bg-surface-muted px-7 py-6">
         <div className="space-y-4">
           {feedback.connected ? (
             <FeedbackBanner>
@@ -1136,7 +1140,7 @@ function StandardChannelDetailDrawer({
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-line-soft bg-surface px-6 py-4">
+      <footer className="shrink-0 border-t border-line-soft bg-surface px-7 py-4 shadow-[0_-18px_42px_-36px_rgba(15,23,42,0.58)]">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] [&>button]:min-w-0 sm:[&>button:first-child]:!w-full sm:[&>button]:!w-auto">
           <Button
             type="button"
