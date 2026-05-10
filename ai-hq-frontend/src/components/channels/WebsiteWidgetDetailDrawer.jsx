@@ -2241,22 +2241,30 @@ export default function WebsiteWidgetDetailDrawer({
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full min-h-0 w-full flex-col overflow-visible border-l border-line-soft bg-surface shadow-panel"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface"
     >
-      <header className="shrink-0 border-b border-line-soft bg-surface px-6 py-2.5">
-  <div className="flex items-center justify-between gap-4">
-    <div className="flex min-w-0 items-center gap-2.5">
-      <img src={websiteGlobeIcon} alt="" aria-hidden="true" draggable="false" className="h-[44px] w-[44px] shrink-0 object-contain" />
+      <header className="relative z-40 shrink-0 border-b border-line-soft bg-surface px-7 py-5 shadow-[inset_0_-1px_0_rgba(15,23,42,0.025)]">
+  <div className="flex items-center justify-between gap-5">
+    <div className="flex min-w-0 items-center gap-4">
+      <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center">
+        <img
+          src={websiteGlobeIcon}
+          alt=""
+          aria-hidden="true"
+          draggable="false"
+          className="h-[50px] w-[50px] shrink-0 object-contain"
+        />
+      </div>
 
       <div className="min-w-0">
-        <h2 className="truncate text-[20px] font-semibold leading-[1.04] tracking-[var(--tracking-tight-lg)] text-text">
+        <h2 className="truncate text-[24px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text">
           Website chat
         </h2>
 
-        <div className="mt-1 flex min-w-0 items-center">
+        <div className="mt-2 flex min-w-0 items-center">
           <span
             className={cx(
-              "inline-flex h-[22px] max-w-full items-center gap-1.5 rounded-[9px] border px-2.5 text-[12px] font-semibold leading-none tracking-[var(--tracking-tight-sm)] shadow-[var(--shadow-inset-top)]",
+              "inline-flex h-[24px] max-w-full items-center gap-1.5 rounded-[9px] border px-2.5 text-[12px] font-semibold leading-none tracking-[var(--tracking-tight-sm)] shadow-[var(--shadow-inset-top)]",
               posture.tone === "success"
                 ? "border-[rgba(var(--color-success),0.32)] bg-success-soft text-success"
                 : posture.tone === "danger"
@@ -2282,7 +2290,7 @@ export default function WebsiteWidgetDetailDrawer({
       type="button"
       onClick={onClose}
       aria-label="Close website chat details"
-      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line-soft bg-surface text-text-muted shadow-[var(--shadow-inset-top)] transition-[background-color,border-color,color,box-shadow] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface text-text-muted shadow-[0_14px_34px_-26px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-[background-color,border-color,color,box-shadow] duration-base ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
     >
       <X className="h-[18px] w-[18px]" strokeWidth={2.1} />
     </button>
@@ -2318,7 +2326,7 @@ export default function WebsiteWidgetDetailDrawer({
         </div>
       </div>
 
-      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto bg-surface-muted px-6 py-6">
+      <div className="panel-scroll min-h-0 flex-1 overflow-y-auto bg-surface-muted px-7 py-6">
         <div className="space-y-4">
           <Feedback
             success={statusMessage || verificationMessage || handoffMessage}
@@ -2361,7 +2369,7 @@ export default function WebsiteWidgetDetailDrawer({
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-line-soft bg-surface px-6 py-4">
+      <footer className="shrink-0 border-t border-line-soft bg-surface px-7 py-4 shadow-[0_-18px_42px_-36px_rgba(15,23,42,0.58)]">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] [&>button]:min-w-0 sm:[&>button:first-child]:!w-full sm:[&>button]:!w-auto">
           {renderFooterActions()}
         </div>

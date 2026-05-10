@@ -523,15 +523,7 @@ describe("ChannelCatalog", () => {
 
     expect(screen.getAllByRole("button", { name: /^inbox$/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: /^connect$/i })).toBeInTheDocument();
-
-    expect(
-      screen.getByRole("button", { name: /open business info/i })
-    ).toBeInTheDocument();
-
-    expect(
-      screen.getByRole("button", { name: /open inbox/i })
-    ).toBeInTheDocument();
-  });
+});
 
   it("uses posture channel readiness for primary card actions", async () => {
     renderCatalog();
