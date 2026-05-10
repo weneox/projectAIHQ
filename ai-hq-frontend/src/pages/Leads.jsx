@@ -92,128 +92,6 @@ const SOURCE_PRIORITY = [
   "manual",
 ];
 
-const LOCAL_LEADS = [
-  {
-    id: "local_lead_01",
-    full_name: "Aylin Məmmədova",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "aylinm",
-    source: "instagram",
-    stage: "qualified",
-    status: "open",
-    priority: "high",
-    value: 3200,
-    owner: "operator",
-    company: "Local Design",
-    interest: "Customer profile",
-    inbox_thread_id: "local_thread_lead_01",
-    created_at: daysAgo(1),
-    updated_at: daysAgo(0),
-    last_message_text: "Asked about AI assistant setup for customer support.",
-  },
-  {
-    id: "local_lead_02",
-    full_name: "Website visitor",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "website",
-    source: "website chat",
-    stage: "demo requested",
-    status: "open",
-    priority: "medium",
-    value: 1800,
-    owner: "operator",
-    company: "",
-    interest: "Customer profile",
-    inbox_thread_id: "local_thread_lead_02",
-    created_at: daysAgo(1),
-    updated_at: daysAgo(0),
-    last_message_text: "Requested a quick demo for website chat automation.",
-  },
-  {
-    id: "local_lead_03",
-    full_name: "Marcus Hale",
-    email: "marcus@northline.co",
-    phone: "+44 20 4420 1882",
-    username: "marcushale",
-    source: "instagram",
-    stage: "proposal",
-    status: "open",
-    priority: "urgent",
-    value: 7800,
-    owner: "Emil",
-    company: "Northline",
-    interest: "CRM automation",
-    inbox_thread_id: "local_thread_lead_03",
-    created_at: daysAgo(3),
-    updated_at: daysAgo(0),
-    last_message_text: "Waiting for automation architecture and price.",
-  },
-  {
-    id: "local_lead_04",
-    full_name: "Aylin Carter",
-    email: "aylin@studioflow.ai",
-    phone: "+994 50 120 32 11",
-    username: "aylincarter",
-    source: "website",
-    stage: "qualified",
-    status: "open",
-    priority: "high",
-    value: 4200,
-    owner: "Emil",
-    company: "Studioflow",
-    interest: "AI website assistant",
-    inbox_thread_id: "local_thread_lead_04",
-    created_at: daysAgo(4),
-    updated_at: daysAgo(1),
-    last_message_text: "Asked for a website automation proposal.",
-  },
-  {
-    id: "local_lead_05",
-    full_name: "Maya Stone",
-    email: "maya@stonecapital.ae",
-    phone: "+971 55 182 9004",
-    username: "mayastone",
-    source: "facebook",
-    stage: "qualified",
-    status: "open",
-    priority: "medium",
-    value: 5600,
-    owner: "Emil",
-    company: "Stone Capital",
-    interest: "Investor relations landing page",
-    inbox_thread_id: "local_thread_lead_05",
-    created_at: daysAgo(5),
-    updated_at: daysAgo(1),
-    last_message_text: "Needs premium landing page with CRM routing.",
-  },
-  {
-    id: "local_lead_06",
-    full_name: "Selin Ward",
-    email: "selin@brightlabs.dev",
-    phone: "+90 532 410 92 40",
-    username: "selinward",
-    source: "telegram",
-    stage: "won",
-    status: "converted",
-    priority: "low",
-    value: 12500,
-    owner: "Emil",
-    company: "Brightlabs",
-    interest: "Internal AI operations dashboard",
-    inbox_thread_id: "local_thread_lead_06",
-    created_at: daysAgo(8),
-    updated_at: daysAgo(2),
-    last_message_text: "Approved the first milestone.",
-  },
-];
-
-function daysAgo(days = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() - Number(days || 0));
-  return date.toISOString();
-}
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -238,16 +116,6 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function isLocalDesignMode() {
-  const host =
-    typeof window !== "undefined" ? lower(window.location.hostname) : "";
-
-  return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    Boolean(import.meta.env?.DEV)
-  );
-}
 
 function normalizeResponse(payload) {
   if (Array.isArray(payload)) return payload;
@@ -257,6 +125,11 @@ function normalizeResponse(payload) {
   if (Array.isArray(payload?.rows)) return payload.rows;
   return [];
 }
+
+function withLocalLeads(leads = []) {
+  return arr(leads);
+}
+
 
 function leadKey(lead = {}, index = 0) {
   return s(
@@ -273,19 +146,6 @@ function leadKey(lead = {}, index = 0) {
   );
 }
 
-function withLocalLeads(leads = []) {
-  const base = arr(leads);
-
-  if (!isLocalDesignMode()) return base;
-  if (base.length >= 4) return base;
-
-  const existing = new Set(base.map((item, index) => leadKey(item, index)));
-
-  return [
-    ...base,
-    ...LOCAL_LEADS.filter((item, index) => !existing.has(leadKey(item, index))),
-  ];
-}
 
 function leadName(lead = {}) {
   return s(
@@ -1011,7 +871,7 @@ export default function Leads() {
 
     try {
       const response = await listLeads({ limit: 200 });
-      const nextLeads = withLocalLeads(normalizeResponse(response));
+      const nextLeads = normalizeResponse(response);
       setLeads(nextLeads);
     } catch (err) {
       setError(

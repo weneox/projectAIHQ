@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -14,10 +14,10 @@ import {
   UserX,
   X,
 } from "lucide-react";
-
 import {
   createTeamUser,
   getTeam,
+  updateTeamUser,
   updateTeamUserStatus,
 } from "../api/team.js";
 import Button from "../components/ui/Button.jsx";
@@ -990,7 +990,7 @@ export default function Team() {
     });
   }
 
-  function updateLocalUserStatus(id, nextStatus) {
+  function _updateLocalUserStatus(id, nextStatus) {
     setState((current) => ({
       ...current,
       users: arr(current.users).map((user) =>
@@ -1069,12 +1069,10 @@ export default function Team() {
       setBusyId(id);
       setNotice(null);
 
-      if (isLocalDesignUser(user)) {
-        updateLocalUserStatus(id, nextStatus);
-      } else {
+      
         await updateTeamUserStatus(id, nextStatus);
         await load({ refreshing: true });
-      }
+      
 
       setNotice({
         tone: "success",

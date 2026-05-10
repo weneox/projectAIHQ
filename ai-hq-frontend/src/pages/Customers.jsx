@@ -80,116 +80,6 @@ const SOURCE_PRIORITY = [
   "email",
 ];
 
-const LOCAL_CUSTOMERS = [
-  {
-    id: "local_customer_01",
-    full_name: "Aylin Məmmədova",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "",
-    source: "instagram",
-    stage: "qualified",
-    status: "open",
-    value: 4200,
-    interest: "Customer profile",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_01",
-    created_at: daysAgo(8),
-    updated_at: daysAgo(0),
-    last_message_text: "Asked for a website automation proposal.",
-  },
-  {
-    id: "local_customer_02",
-    full_name: "Website visitor",
-    email: "lead@local.design",
-    phone: "+994 50 000 00 00",
-    username: "",
-    source: "website chat",
-    stage: "demo requested",
-    status: "open",
-    value: 1900,
-    interest: "Customer profile",
-    owner: "Unassigned",
-    inbox_thread_id: "local_thread_02",
-    created_at: daysAgo(2),
-    updated_at: daysAgo(0),
-    last_message_text: "Requested examples of previous chatbot projects.",
-  },
-  {
-    id: "local_customer_03",
-    full_name: "Marcus Hale",
-    email: "marcus@northline.co",
-    phone: "+44 20 4420 1882",
-    username: "marcushale",
-    source: "instagram",
-    stage: "proposal",
-    status: "open",
-    value: 7800,
-    interest: "CRM automation",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_03",
-    created_at: daysAgo(6),
-    updated_at: daysAgo(0),
-    last_message_text: "Waiting for automation architecture and price.",
-  },
-  {
-    id: "local_customer_04",
-    full_name: "Aylin Carter",
-    email: "aylin@studioflow.ai",
-    phone: "+994 50 120 32 11",
-    username: "aylincarter",
-    source: "website",
-    stage: "qualified",
-    status: "open",
-    value: 4200,
-    interest: "AI website assistant",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_04",
-    created_at: daysAgo(8),
-    updated_at: daysAgo(1),
-    last_message_text: "Asked for a premium website assistant.",
-  },
-  {
-    id: "local_customer_05",
-    full_name: "Maya Stone",
-    email: "maya@stonecapital.ae",
-    phone: "+971 55 182 9004",
-    username: "mayastone",
-    source: "facebook",
-    stage: "qualified",
-    status: "open",
-    value: 5600,
-    interest: "Investor relations landing page",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_05",
-    created_at: daysAgo(4),
-    updated_at: daysAgo(1),
-    last_message_text: "Needs premium landing page with CRM routing.",
-  },
-  {
-    id: "local_customer_06",
-    full_name: "Selin Ward",
-    email: "selin@brightlabs.dev",
-    phone: "+90 532 410 92 40",
-    username: "selinward",
-    source: "telegram",
-    stage: "won",
-    status: "converted",
-    value: 12500,
-    interest: "Internal AI operations dashboard",
-    owner: "Emil",
-    inbox_thread_id: "local_thread_06",
-    created_at: daysAgo(13),
-    updated_at: daysAgo(2),
-    last_message_text: "Approved the first milestone.",
-  },
-];
-
-function daysAgo(days = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() - Number(days || 0));
-  return date.toISOString();
-}
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -214,16 +104,6 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function isLocalDesignMode() {
-  const host =
-    typeof window !== "undefined" ? lower(window.location.hostname) : "";
-
-  return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    Boolean(import.meta.env?.DEV)
-  );
-}
 
 function normalizeResponse(payload) {
   if (Array.isArray(payload)) return payload;
@@ -234,6 +114,11 @@ function normalizeResponse(payload) {
   if (Array.isArray(payload?.rows)) return payload.rows;
   return [];
 }
+
+function withLocalCustomers(customers = []) {
+  return arr(customers);
+}
+
 
 function customerName(customer = {}) {
   return s(
@@ -352,41 +237,6 @@ function customerKey(customer = {}, index = 0) {
   );
 }
 
-function customerDedupeKey(customer = {}) {
-  const email = lower(customerEmail(customer));
-  const phone = lower(customerPhone(customer));
-  const name = lower(customerName(customer));
-  const source = lower(customerSource(customer));
-
-  if (email) return `email:${email}`;
-  if (phone) return `phone:${phone}`;
-
-  return lower([name, source, customer.interest].filter(Boolean).join("|"));
-}
-
-function dedupeCustomers(customers = []) {
-  const seen = new Set();
-
-  return arr(customers).filter((customer, index) => {
-    const semanticKey = customerDedupeKey(customer);
-    const fallbackKey = customerKey(customer, index);
-    const key = semanticKey || fallbackKey;
-
-    if (seen.has(key)) return false;
-
-    seen.add(key);
-    return true;
-  });
-}
-
-function withLocalCustomers(customers = []) {
-  const base = dedupeCustomers(customers);
-
-  if (!isLocalDesignMode()) return base;
-  if (base.length >= 8) return base;
-
-  return dedupeCustomers([...base, ...LOCAL_CUSTOMERS]).slice(0, 12);
-}
 
 function updatedTimestamp(customer = {}) {
   const date = new Date(customerUpdatedRaw(customer));
@@ -1020,7 +870,7 @@ export default function Customers() {
 
     try {
       const response = await listCustomers({ limit: 200 });
-      const nextCustomers = withLocalCustomers(normalizeResponse(response));
+      const nextCustomers = normalizeResponse(response);
       setCustomers(nextCustomers);
     } catch (err) {
       setError(

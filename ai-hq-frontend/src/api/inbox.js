@@ -86,3 +86,10 @@ export async function markOutboundAttemptDead(attemptId, payload = {}) {
     payload
   );
 }
+
+export async function sendInboxThreadMessage(threadId, payload = {}) {
+  return apiPost(
+    `/api/inbox/threads/${encodeURIComponent(threadId)}/messages`,
+    payload
+  );
+}
