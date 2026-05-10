@@ -721,15 +721,13 @@ function InboxDetailPanel({
               </div>
             </div>
 
-            <FloatingComposerSlot>
-              {hasThread && composer ? (
+            {hasThread && composer ? (
+              <FloatingComposerSlot>
                 <div className="w-full px-4 pb-4 md:px-5 md:pb-6 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
                   {composer}
                 </div>
-              ) : (
-                <EmptyComposerDock />
-              )}
-            </FloatingComposerSlot>
+              </FloatingComposerSlot>
+            ) : null}
           </>
         )}
       </div>
