@@ -352,6 +352,7 @@ function normalizeBackendChannelStatus(payload = {}) {
   };
 }
 
+
 async function safeStatus(loader) {
   try {
     const payload = await loader();
@@ -364,6 +365,23 @@ async function safeStatus(loader) {
       ...normalized,
     };
   } catch (error) {
+    const payload = obj(error?.payload);
+    const code = lower(error?.code || payload.code || payload.error);
+    const surface = lower(payload.surface);
+
+    if (code === "surface_frozen") {
+      return {
+        ok: true,
+        status: "not connected",
+        health: "disabled",
+        connected: false,
+        deliveryReady: false,
+        backendStatus: surface ? `${surface}_surface_frozen` : "surface_frozen",
+        error: "",
+        payload,
+      };
+    }
+
     return {
       ok: false,
       status: "not connected",
@@ -372,7 +390,7 @@ async function safeStatus(loader) {
       deliveryReady: false,
       backendStatus: "unavailable",
       error:
-        s(error?.payload?.error || error?.payload?.message || error?.message) ||
+        s(payload.error || payload.message || error?.message) ||
         "Channel status unavailable.",
       payload: null,
     };
@@ -1580,7 +1598,7 @@ function ChannelModal({
         <AppModalCloseButton onClick={onClose} label="Close channel connect" />
       </AppModalHeader>
 
-      <AppModalBody>
+      <AppModalBody className="max-h-[calc(100vh-280px)] overflow-y-auto overscroll-contain">
         <ActionNotice>{actionMessage}</ActionNotice>
         <ActionNotice tone="danger">{actionError}</ActionNotice>
 
