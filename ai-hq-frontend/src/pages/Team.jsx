@@ -135,7 +135,7 @@ function displayUserId(value = "") {
   const raw = s(value);
   if (!raw) return "â€”";
 
-  const cleaned = raw.replace(/^user_local_/, "");
+  const cleaned = raw;
   if (cleaned.length <= 18) return cleaned;
 
   return `â€¦${cleaned.slice(-14)}`;
