@@ -1,73 +1,10 @@
-import { isAppDesignModeEnabled } from "../designMode.js";
 import { createWsClient } from "../ws.js";
 
 function ignoreError() {
   return undefined;
 }
 
-function createDesignRealtimeClient() {
-  const eventListeners = new Set();
-  const statusListeners = new Set();
-  let lastStatus = { state: "off" };
-
-  function emitStatus(status) {
-    lastStatus = status || { state: "off" };
-
-    for (const listener of statusListeners) {
-      try {
-        listener(lastStatus);
-      } catch {
-        ignoreError();
-      }
-    }
-  }
-
-  return {
-    subscribe(listener) {
-      if (typeof listener !== "function") return () => {};
-      eventListeners.add(listener);
-
-      return () => {
-        eventListeners.delete(listener);
-      };
-    },
-
-    subscribeStatus(listener) {
-      if (typeof listener !== "function") return () => {};
-
-      statusListeners.add(listener);
-
-      try {
-        listener(lastStatus);
-      } catch {
-        ignoreError();
-      }
-
-      return () => {
-        statusListeners.delete(listener);
-      };
-    },
-
-    getStatus() {
-      return lastStatus;
-    },
-
-    canUseWs() {
-      return false;
-    },
-
-    send() {
-      emitStatus({ state: "off" });
-      return false;
-    },
-  };
-}
-
 function createRealtimeClient() {
-  if (isAppDesignModeEnabled()) {
-    return createDesignRealtimeClient();
-  }
-
   const eventListeners = new Set();
   const statusListeners = new Set();
   let client = null;

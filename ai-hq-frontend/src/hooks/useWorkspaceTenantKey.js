@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 
 import {
-  getDesignTenantKey,
-  isAppDesignModeEnabled,
-} from "../lib/designMode.js";
-import {
   getAppSessionContext,
   peekAppSessionContext,
 } from "../lib/appSession.js";
@@ -14,10 +10,6 @@ function normalizeTenantKey(value = "") {
 }
 
 export function getCachedWorkspaceTenantKey() {
-  if (isAppDesignModeEnabled()) {
-    return getDesignTenantKey();
-  }
-
   return normalizeTenantKey(peekAppSessionContext()?.tenantKey);
 }
 
@@ -27,28 +19,21 @@ export function buildWorkspaceScopedQueryKey(baseKey, tenantKey) {
 }
 
 export function useWorkspaceTenantKey({ enabled = true } = {}) {
-  const designTenantKey = normalizeTenantKey(
-    isAppDesignModeEnabled() ? getDesignTenantKey() : ""
-  );
-
   const cachedTenantKey = normalizeTenantKey(getCachedWorkspaceTenantKey());
-  const immediateTenantKey = normalizeTenantKey(
-    designTenantKey || cachedTenantKey
-  );
 
   const [sessionState, setSessionState] = useState(() => ({
-    fetched: Boolean(immediateTenantKey),
-    tenantKey: immediateTenantKey,
+    fetched: Boolean(cachedTenantKey),
+    tenantKey: cachedTenantKey,
   }));
 
   const tenantKey = enabled
-    ? normalizeTenantKey(immediateTenantKey || sessionState.tenantKey)
+    ? normalizeTenantKey(cachedTenantKey || sessionState.tenantKey)
     : "";
 
   const loading = enabled && !tenantKey && !sessionState.fetched;
 
   useEffect(() => {
-    if (!enabled || immediateTenantKey) return undefined;
+    if (!enabled || cachedTenantKey) return undefined;
 
     let alive = true;
 
@@ -73,7 +58,7 @@ export function useWorkspaceTenantKey({ enabled = true } = {}) {
     return () => {
       alive = false;
     };
-  }, [enabled, immediateTenantKey]);
+  }, [enabled, cachedTenantKey]);
 
   return {
     tenantKey,

@@ -126,11 +126,6 @@ function normalizeResponse(payload) {
   return [];
 }
 
-function withLocalLeads(leads = []) {
-  return arr(leads);
-}
-
-
 function leadKey(lead = {}, index = 0) {
   return s(
     lead.id ||
@@ -878,7 +873,7 @@ export default function Leads() {
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
           "Leads could not be loaded."
       );
-      setLeads(withLocalLeads([]));
+      setLeads([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

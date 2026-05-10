@@ -115,11 +115,6 @@ function normalizeResponse(payload) {
   return [];
 }
 
-function withLocalCustomers(customers = []) {
-  return arr(customers);
-}
-
-
 function customerName(customer = {}) {
   return s(
     customer.full_name ||
@@ -877,7 +872,7 @@ export default function Customers() {
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
           "Customers could not be loaded."
       );
-      setCustomers(withLocalCustomers([]));
+      setCustomers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

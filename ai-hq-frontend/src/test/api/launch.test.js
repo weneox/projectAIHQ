@@ -2,11 +2,6 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../lib/designMode.js", () => ({
-  getDesignModeApiResponse: vi.fn(),
-  shouldMockApiRequest: vi.fn(() => false),
-}));
-
 import { getLaunchPosture } from "../../api/launch.js";
 
 function jsonResponse(payload, init = {}) {
