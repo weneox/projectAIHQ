@@ -105,6 +105,128 @@ function joinFacts(items = [], language = "en") {
   );
 }
 
+
+const SEMANTIC_REPLY_INTENTS = new Set([
+  "sales_interest",
+  "business.summary",
+  "business.services",
+  "business.products",
+  "business.pricing",
+  "business.booking",
+]);
+
+function truncateSemanticText(value = "", limit = 420) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text || text.length <= limit) return text;
+  return text.slice(0, Math.max(0, limit - 1)).trim() + "…";
+}
+
+function formatSemanticMatch(match = {}) {
+  const title = s(match.title);
+  const text = truncateSemanticText(match.text);
+  if (!text && !title) return "";
+  if (!title) return sentence(text);
+
+  const normalizedTitle = title.toLowerCase();
+  const normalizedText = text.toLowerCase();
+
+  if (normalizedText.startsWith(normalizedTitle)) {
+    return sentence(text);
+  }
+
+  return sentence(title + ": " + text);
+}
+
+function buildSemanticReply({ facts = {}, intents = [] } = {}) {
+  if (!arr(intents).some((intent) => SEMANTIC_REPLY_INTENTS.has(s(intent)))) {
+    return null;
+  }
+
+  const retrieval = facts?.retrieval || {};
+  const matches = arr(retrieval.matches)
+    .filter((match) => s(match?.text || match?.title))
+    .slice(0, 2);
+
+  const bestScore = Number(retrieval.bestScore || matches[0]?.score || 0);
+  if (!matches.length || bestScore < 2) return null;
+
+  const replyText = cleanReply(
+    matches
+      .map(formatSemanticMatch)
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (!replyText) return null;
+
+  return {
+    replyText,
+    factsUsed: uniqStrings(
+      matches.map((match) =>
+        [match.source, match.title, match.text]
+          .map((part) => s(part))
+          .filter(Boolean)
+          .join(": ")
+      )
+    ),
+  };
+}
+
+function truncateRetrievedText(value = "", limit = 440) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text || text.length <= limit) return text;
+  return text.slice(0, Math.max(0, limit - 1)).trim() + "…";
+}
+
+function formatRetrievedMatch(match = {}) {
+  const title = s(match.title);
+  const text = truncateRetrievedText(match.text);
+
+  if (!title && !text) return "";
+  if (!title) return sentence(text);
+
+  const cleanTitle = title.toLowerCase();
+  const cleanText = text.toLowerCase();
+
+  if (cleanText.startsWith(cleanTitle)) {
+    return sentence(text);
+  }
+
+  return sentence(title + ": " + text);
+}
+
+function buildRetrievedTruthReply({ facts = {} } = {}) {
+  const retrieval = facts?.retrieval || {};
+  if (retrieval.ok !== true) return null;
+
+  const matches = arr(retrieval.matches)
+    .filter((match) => s(match?.text || match?.title))
+    .slice(0, 2);
+
+  if (!matches.length) return null;
+
+  const replyText = cleanReply(
+    matches
+      .map(formatRetrievedMatch)
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (!replyText) return null;
+
+  return {
+    replyText,
+    factsUsed: uniqStrings(
+      matches.map((match) =>
+        [match.source, match.title, match.text]
+          .map((part) => s(part))
+          .filter(Boolean)
+          .join(": ")
+      )
+    ),
+  };
+}
+
 function behaviorFactParts(facts = {}) {
   return [
     facts.behavior?.tone ? `Tone: ${facts.behavior.tone}` : "",
@@ -524,6 +646,12 @@ export function composeApprovedTruthAnswer({
 } = {}) {
   const language = normalizeIsoLanguage(classification.language || "en", "en");
   const intents = normalizeIntentOrder(classification);
+
+  const semanticReply = buildSemanticReply({ facts, intents });
+  if (semanticReply) return semanticReply;
+
+  const retrievedReply = buildRetrievedTruthReply({ facts });
+  if (retrievedReply) return retrievedReply;
 
   const parts = [];
   const factsUsed = [];

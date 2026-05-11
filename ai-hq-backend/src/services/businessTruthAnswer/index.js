@@ -1,9 +1,11 @@
-﻿import { classifyApprovedTruthIntentWithModel } from "./classifier.js";
+import { classifyApprovedTruthIntentWithModel } from "./classifier.js";
 import { composeApprovedTruthAnswer } from "./composer.js";
 import { localizeApprovedTruthAnswer } from "./localizer.js";
 import { detectConversationRecoveryWithModel } from "./recovery.js";
 import { detectRepeatedApprovedTruthRequest } from "./repeat.js";
 import { resolveApprovedTruthFacts } from "./resolver.js";
+import { retrieveApprovedTruthFacts } from "./retrieval.js";
+import { composeRetrievedTruthAnswerWithModel } from "./modelComposer.js";
 import { validateApprovedTruthAnswer } from "./validator.js";
 import { arr, normalizeIsoLanguage, s } from "./normalize.js";
 
@@ -110,7 +112,7 @@ export async function answerFromApprovedTruth({
   conversationContext = {},
   threadState = null,
 } = {}) {
-  const facts = resolveApprovedTruthFacts({
+  const baseFacts = resolveApprovedTruthFacts({
     runtimeGrounding,
     profile,
   });
@@ -128,7 +130,7 @@ export async function answerFromApprovedTruth({
     return answerConversationRecovery({
       text,
       detection: recoveryDetection,
-      facts,
+      facts: baseFacts,
     });
   }
 
@@ -145,10 +147,30 @@ export async function answerFromApprovedTruth({
     return null;
   }
 
-  const composed = composeApprovedTruthAnswer({
+  const retrieval = await retrieveApprovedTruthFacts({
+    text,
+    facts: baseFacts,
+    runtimeGrounding,
+    profile,
+  });
+
+  const facts = {
+    ...baseFacts,
+    retrieval,
+  };
+
+  let composed = await composeRetrievedTruthAnswerWithModel({
+    text,
     classification,
     facts,
   });
+
+  if (!composed) {
+    composed = composeApprovedTruthAnswer({
+      classification,
+      facts,
+    });
+  }
 
   const repeatContext = detectRepeatedApprovedTruthRequest({
     classification,
@@ -171,6 +193,11 @@ export async function answerFromApprovedTruth({
     localized,
     source: "approved_truth_answer_engine",
     extraDiagnostics: {
+      retrievalMethod: s(retrieval.method),
+      retrievalOk: retrieval.ok === true,
+      retrievalReasonCode: s(retrieval.reasonCode),
+      retrievalBestScore: Number(retrieval.bestScore || 0),
+      retrievalMatchCount: arr(retrieval.matches).length,
       repeatDetected: repeatContext.isRepeat === true,
       repeatReason: s(repeatContext.reason),
       repeatCoverageScore: repeatContext.coverageScore || 0,
