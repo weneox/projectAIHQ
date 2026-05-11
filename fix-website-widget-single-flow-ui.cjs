@@ -1,4 +1,9 @@
-import { useState } from "react";
+﻿const fs = require("fs");
+const path = require("path");
+
+const file = path.join(process.cwd(), "ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx");
+
+const code = `import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -41,7 +46,7 @@ function arr(value) {
 }
 
 function normalizeDomain(value = "") {
-  const raw = s(value).replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const raw = s(value).replace(/^https?:\\/\\//i, "").replace(/^www\\./i, "");
   return raw.split("/")[0].split("?")[0].trim().toLowerCase();
 }
 
@@ -178,10 +183,10 @@ function buildSnippet({ widgetId = "", accentColor = "" } = {}) {
 
   return [
     "<script",
-    "src=\"" + origin + "/website-widget-loader.js\"",
-    "data-widget-id=\"" + s(widgetId) + "\"",
-    "data-api-base=\"" + origin + "/api\"",
-    s(accentColor) ? "data-accent=\"" + s(accentColor) + "\"" : "",
+    "src=\\"" + origin + "/website-widget-loader.js\\"",
+    "data-widget-id=\\"" + s(widgetId) + "\\"",
+    "data-api-base=\\"" + origin + "/api\\"",
+    s(accentColor) ? "data-accent=\\"" + s(accentColor) + "\\"" : "",
     "async",
     "></script>",
   ]
@@ -686,3 +691,7 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+`;
+
+fs.writeFileSync(file, code, "utf8");
+console.log("rewrote WebsiteWidgetDetailDrawer as single-flow premium panel");
