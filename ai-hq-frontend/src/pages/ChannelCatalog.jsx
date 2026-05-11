@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
@@ -11,6 +11,7 @@ import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
+  PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
@@ -53,7 +54,7 @@ function lower(value, fallback = "") {
 
 function launchChannels() {
   return CHANNELS.filter((channel) =>
-    ["website", "instagram"].includes(channel.id)
+    ["website", "instagram", "telegram"].includes(channel.id)
   );
 }
 
@@ -536,7 +537,11 @@ export default function ChannelCatalog() {
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
       <PageCanvas className="max-w-[1180px] py-3">
-        <LoadingSurface title="Loading channels" description="Reading live channel readiness from launch posture." />
+                <PageHeader
+          title="Launch channels"
+          description="Connect Website Chat, Instagram, or Telegram for the v1 launch lane. WhatsApp and Gmail stay Phase 2 until their self-serve flows are launch-ready."
+        />
+<LoadingSurface title="Loading channels" description="Reading live channel readiness from launch posture." />
       </PageCanvas>
     );
   }
@@ -544,7 +549,11 @@ export default function ChannelCatalog() {
   return (
     <>
       <PageCanvas className="max-w-[1120px] space-y-4 py-3">
-        {s(effectiveReadinessState.error) ? (
+                <PageHeader
+          title="Launch channels"
+          description="Connect Website Chat, Instagram, or Telegram for the v1 launch lane. WhatsApp and Gmail stay Phase 2 until their self-serve flows are launch-ready."
+        />
+{s(effectiveReadinessState.error) ? (
           <InlineNotice
             tone="danger"
             title="Channels unavailable"
