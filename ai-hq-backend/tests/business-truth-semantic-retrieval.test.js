@@ -4,14 +4,33 @@ import assert from "node:assert/strict";
 import { retrieveApprovedTruthFacts } from "../src/services/businessTruthAnswer/retrieval.js";
 import { composeApprovedTruthAnswer } from "../src/services/businessTruthAnswer/composer.js";
 
-test("approved truth semantic retrieval ranks matching service details", () => {
+function fakeEmbeddingForText(text = "") {
+  const value = String(text || "").toLowerCase();
+
+  if (value.includes("unrelated car question") || value.includes("sell cars")) {
+    return [0, 0, 1];
+  }
+
+  if (value.includes("social content")) {
+    return [0, 1, 0];
+  }
+
+  return [1, 0, 0];
+}
+
+async function fakeEmbedTexts(texts = []) {
+  return texts.map(fakeEmbeddingForText);
+}
+
+test("embedding retrieval ranks semantically matching approved service details", async () => {
   const runtimeGrounding = {
     raw: {
       projection: {
         services_json: [
           {
             name: "Website automation",
-            description: "We build website chat, inbox routing, and review-first automation for businesses.",
+            description:
+              "We build website chat, inbox routing, and review-first automation for businesses.",
             pricing: "Pricing depends on the approved project scope.",
           },
           {
@@ -23,17 +42,11 @@ test("approved truth semantic retrieval ranks matching service details", () => {
     },
   };
 
-  const facts = {
-    services: ["Website automation", "Social content"],
-  };
-
-  const retrieval = retrieveApprovedTruthFacts({
-    text: "Do you build website chat and inbox automation?",
-    facts,
+  const retrieval = await retrieveApprovedTruthFacts({
+    text: "Customer wants automated website conversations",
     runtimeGrounding,
-    classification: {
-      primaryIntent: "business.services",
-    },
+    embedTexts: fakeEmbedTexts,
+    minScore: 0.5,
   });
 
   assert.equal(retrieval.ok, true);
@@ -43,21 +56,6 @@ test("approved truth semantic retrieval ranks matching service details", () => {
 });
 
 test("approved truth composer uses retrieved service details for real answer", () => {
-  const facts = {
-    services: ["Website automation"],
-    retrieval: {
-      bestScore: 6,
-      matches: [
-        {
-          source: "approved_truth.services",
-          title: "Website automation",
-          text: "We build website chat, inbox routing, and review-first automation for businesses.",
-          score: 6,
-        },
-      ],
-    },
-  };
-
   const composed = composeApprovedTruthAnswer({
     classification: {
       language: "en",
@@ -65,7 +63,23 @@ test("approved truth composer uses retrieved service details for real answer", (
       intents: ["business.services"],
       shouldHandle: true,
     },
-    facts,
+    facts: {
+      services: ["Website automation"],
+      retrieval: {
+        ok: true,
+        method: "approved_truth_embedding_retrieval_v1",
+        bestScore: 0.91,
+        matches: [
+          {
+            source: "approved_truth.services",
+            title: "Website automation",
+            text:
+              "We build website chat, inbox routing, and review-first automation for businesses.",
+            score: 0.91,
+          },
+        ],
+      },
+    },
   });
 
   assert.match(composed.replyText, /Website automation/i);
@@ -73,25 +87,26 @@ test("approved truth composer uses retrieved service details for real answer", (
   assert.match(composed.factsUsed[0], /approved_truth\.services/i);
 });
 
-test("approved truth retrieval does not match unrelated customer question", () => {
-  const retrieval = retrieveApprovedTruthFacts({
-    text: "Do you sell cars?",
-    facts: {
-      services: ["Website chat"],
-    },
+test("embedding retrieval returns no match for unrelated semantic vector", async () => {
+  const retrieval = await retrieveApprovedTruthFacts({
+    text: "Unrelated car question",
     runtimeGrounding: {
       raw: {
         projection: {
           services_json: [
             {
               name: "Website chat",
-              description: "AIHQ captures website messages and routes them into the inbox.",
+              description:
+                "AIHQ captures website messages and routes them into the inbox.",
             },
           ],
         },
       },
     },
+    embedTexts: fakeEmbedTexts,
+    minScore: 0.5,
   });
 
+  assert.equal(retrieval.ok, true);
   assert.equal(retrieval.matches.length, 0);
 });

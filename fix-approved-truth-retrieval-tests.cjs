@@ -1,4 +1,13 @@
-import test from "node:test";
+﻿const fs = require("fs");
+const path = require("path");
+
+const root = process.cwd();
+
+function write(rel, content) {
+  fs.writeFileSync(path.join(root, rel), content, "utf8");
+}
+
+const embeddingTest = `import test from "node:test";
 import assert from "node:assert/strict";
 
 import { retrieveApprovedTruthFacts } from "../src/services/businessTruthAnswer/retrieval.js";
@@ -84,7 +93,7 @@ test("approved truth composer uses retrieved service details for real answer", (
 
   assert.match(composed.replyText, /Website automation/i);
   assert.match(composed.replyText, /inbox routing/i);
-  assert.match(composed.factsUsed[0], /approved_truth\.services/i);
+  assert.match(composed.factsUsed[0], /approved_truth\\.services/i);
 });
 
 test("embedding retrieval returns no match for unrelated semantic vector", async () => {
@@ -110,3 +119,11 @@ test("embedding retrieval returns no match for unrelated semantic vector", async
   assert.equal(retrieval.ok, true);
   assert.equal(retrieval.matches.length, 0);
 });
+`;
+
+write("ai-hq-backend/tests/business-truth-embedding-retrieval.test.js", embeddingTest);
+
+// Köhnə keyword-era test faylını da yeni embedding contract-a uyğunlaşdırırıq.
+write("ai-hq-backend/tests/business-truth-semantic-retrieval.test.js", embeddingTest);
+
+console.log("fixed approved truth retrieval tests");
