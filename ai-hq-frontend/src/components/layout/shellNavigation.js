@@ -7,9 +7,6 @@ import {
   PlugZap,
   Rocket,
   Settings,
-  Target,
-  UserCog,
-  Users,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
@@ -27,15 +24,41 @@ const PRIMARY_SECTIONS = [
     ],
   },
   {
-    id: "launch",
-    label: "Launch",
+    id: "setup",
+    label: "Setup",
     icon: Rocket,
-    to: "/launch",
-    paths: ["/launch"],
+    to: "/home?assistant=setup",
+    paths: ["/setup"],
     contextGroups: [
       {
         title: "Navigation",
-        items: [{ label: "Launch", to: "/launch" }],
+        items: [{ label: "Setup", to: "/home?assistant=setup" }],
+      },
+    ],
+  },
+  {
+    id: "business-info",
+    label: "Business Info",
+    icon: BriefcaseBusiness,
+    to: "/truth",
+    paths: ["/truth"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Business Info", to: "/truth" }],
+      },
+    ],
+  },
+  {
+    id: "channels",
+    label: "Channels",
+    icon: PlugZap,
+    to: "/channels",
+    paths: ["/channels"],
+    contextGroups: [
+      {
+        title: "Navigation",
+        items: [{ label: "Channels", to: "/channels" }],
       },
     ],
   },
@@ -54,29 +77,15 @@ const PRIMARY_SECTIONS = [
     ],
   },
   {
-    id: "customers",
-    label: "Customers",
-    icon: Users,
-    to: "/customers",
-    paths: ["/customers"],
+    id: "knowledge",
+    label: "Knowledge",
+    icon: BookOpenCheck,
+    to: "/knowledge",
+    paths: ["/knowledge"],
     contextGroups: [
       {
         title: "Navigation",
-        items: [{ label: "Customers", to: "/customers" }],
-      },
-    ],
-  },
-  {
-    id: "leads",
-    label: "Leads",
-    icon: Target,
-    to: "/leads",
-    badgeKey: "leadsOpen",
-    paths: ["/leads"],
-    contextGroups: [
-      {
-        title: "Navigation",
-        items: [{ label: "Leads", to: "/leads" }],
+        items: [{ label: "Knowledge", to: "/knowledge" }],
       },
     ],
   },
@@ -95,62 +104,9 @@ const PRIMARY_SECTIONS = [
   },
 ];
 
-const SECONDARY_SECTIONS = [
-  {
-    id: "channels",
-    label: "Channels",
-    icon: PlugZap,
-    to: "/channels",
-    paths: ["/channels"],
-    contextGroups: [
-      {
-        title: "Navigation",
-        items: [{ label: "Channels", to: "/channels" }],
-      },
-    ],
-  },
-  {
-    id: "business-info",
-    label: "Business Info",
-    icon: BriefcaseBusiness,
-    to: "/truth",
-    paths: ["/truth"],
-    contextGroups: [
-      {
-        title: "Navigation",
-        items: [{ label: "Business Info", to: "/truth" }],
-      },
-    ],
-  },
-  {
-    id: "knowledge",
-    label: "Knowledge",
-    icon: BookOpenCheck,
-    to: "/knowledge",
-    paths: ["/knowledge"],
-    contextGroups: [
-      {
-        title: "Navigation",
-        items: [{ label: "Knowledge", to: "/knowledge" }],
-      },
-    ],
-  },
-];
+const SECONDARY_SECTIONS = [];
 
 const UTILITY_SECTIONS = [
-  {
-    id: "team",
-    label: "Team",
-    icon: UserCog,
-    to: "/team",
-    paths: ["/team"],
-    contextGroups: [
-      {
-        title: "Navigation",
-        items: [{ label: "Team", to: "/team" }],
-      },
-    ],
-  },
   {
     id: "settings",
     label: "Settings",

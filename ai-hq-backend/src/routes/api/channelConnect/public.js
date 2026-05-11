@@ -1312,6 +1312,15 @@ export function channelConnectPublicRoutes({
         reasonCode: s(error?.reasonCode),
       });
 
+      return res.status(200).json(
+        buildPublicWidgetFailClosed({
+          reasonCode: s(error?.reasonCode, "website_widget_bootstrap_failed"),
+          message: "Website chat is temporarily unavailable.",
+        })
+      );
+    }
+  });
+
   router.post("/channels/webchat/message", async (req, res) => {
     try {
       const normalized = normalizeWebsiteWidgetMessage(req);
@@ -1417,15 +1426,6 @@ export function channelConnectPublicRoutes({
         reasonCode: s(error?.reasonCode, "website_widget_message_failed"),
         message: "Website chat is temporarily unavailable.",
       });
-    }
-  });
-
-      return res.status(200).json(
-        buildPublicWidgetFailClosed({
-          reasonCode: s(error?.reasonCode, "website_widget_bootstrap_failed"),
-          message: "Website chat is temporarily unavailable.",
-        })
-      );
     }
   });
 

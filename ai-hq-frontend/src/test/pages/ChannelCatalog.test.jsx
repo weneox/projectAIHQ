@@ -505,11 +505,11 @@ describe("ChannelCatalog", () => {
 
     expect((await screen.findAllByText(/^website chat$/i)).length).toBeGreaterThan(0);
     expect((await screen.findAllByText(/^instagram$/i)).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText(/^telegram$/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^telegram$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^whatsapp$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^gmail$/i)).not.toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/2\/3 ready/i);
+    expect(document.body).toHaveTextContent(/2\/2 ready/i);
 
     await waitFor(() => {
       expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThanOrEqual(
@@ -519,9 +519,9 @@ describe("ChannelCatalog", () => {
 
     expect(
       screen.getAllByRole("button", { name: /details/i }).length
-    ).toBeGreaterThanOrEqual(3);
+    ).toBeGreaterThanOrEqual(2);
 
-    expect(screen.getAllByRole("button", { name: /^inbox$/i }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("button", { name: /^inbox$/i }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: /^connect$/i })).toBeInTheDocument();
 });
 
@@ -583,9 +583,9 @@ describe("ChannelCatalog", () => {
     ).toBeInTheDocument();
 
     expect(document.body).toHaveTextContent(/posture down/i);
-    expect(document.body).toHaveTextContent(/0\/3 ready/i);
+    expect(document.body).toHaveTextContent(/0\/2 ready/i);
     expect(screen.queryAllByRole("button", { name: /^inbox$/i }).length).toBe(0);
-    expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(2);
   });
 
   it("opens the Instagram modal with live tenant status", async () => {
@@ -744,14 +744,14 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(document.body).toHaveTextContent(/0\/3 ready/i);
+      expect(document.body).toHaveTextContent(/0\/2 ready/i);
     });
 
     expect(await findChannelCard("Instagram")).toBeInTheDocument();
-    expect(await findChannelCard("Telegram")).toBeInTheDocument();
+    expect(screen.queryByText(/^telegram$/i)).not.toBeInTheDocument();
     expect(await findChannelCard("Website chat")).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/0\/3 ready/i);
+    expect(document.body).toHaveTextContent(/0\/2 ready/i);
   });
 });
 

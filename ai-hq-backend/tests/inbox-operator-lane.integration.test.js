@@ -396,9 +396,7 @@ test(
             externalMessageId: "ext-operator-reply-1",
             messageType: "text",
             text: "Hi Taylor — how can we help?",
-            meta: {
-              provider: "website_widget",
-            },
+            meta: {},
             releaseHandoff: true,
           },
         }

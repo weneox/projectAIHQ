@@ -59,6 +59,7 @@ export default mergeConfig(
         "src/test/pages/Comments.test.jsx",
         "src/test/pages/Inbox.test.jsx",
         "src/test/pages/Publish.test.jsx",
+        "src/test/pages/PublicWebsiteWidget.test.jsx",
         "src/test/pages/Truth/TruthViewerPage.smoke.test.jsx",
         "src/test/surfaces/workspace/WorkspacePage.smoke.test.jsx",
       ],

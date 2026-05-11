@@ -6,7 +6,15 @@ import { lower, normalizeObj } from "./shared.js";
 import { isControlMessageType, normalizeInboxMessageType } from "./execution.js";
 
 function defaultProviderForChannel(channel = "") {
-  return lower(channel) === "telegram" ? "telegram" : "meta";
+  const normalized = lower(channel);
+  if (["web", "webchat", "website", "website_widget"].includes(normalized)) {
+    return "website_widget";
+  }
+  if (normalized === "telegram") return "telegram";
+  if (["facebook", "instagram", "messenger", "meta", "whatsapp"].includes(normalized)) {
+    return "meta";
+  }
+  return "unsupported";
 }
 
 function defaultPlatformForChannel(channel = "") {

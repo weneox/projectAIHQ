@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { __test__ } from "../src/routes/api/channelConnect/public.js";
+import {
+  __test__,
+  channelConnectPublicRoutes,
+} from "../src/routes/api/channelConnect/public.js";
 
 function createReq({
   body = {},
@@ -123,6 +126,25 @@ test("public webchat fail-closed payload stays safe for public clients", () => {
   assert.equal(payload.status, 200);
   assert.equal(payload.reasonCode, "website_widget_origin_not_allowed");
   assert.equal(payload.assistant.statusLabel, "Setup required");
+});
+
+test("legacy public webchat message route is registered at module scope", () => {
+  const router = channelConnectPublicRoutes({});
+  const routes = router.stack
+    .filter((layer) => layer.route)
+    .map((layer) => ({
+      path: layer.route.path,
+      methods: layer.route.methods,
+    }));
+
+  assert.equal(
+    routes.some(
+      (route) =>
+        route.path === "/channels/webchat/message" &&
+        route.methods?.post === true
+    ),
+    true
+  );
 });
 
 

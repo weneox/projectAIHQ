@@ -39,6 +39,38 @@ async function withInboxOpenAiFallback(run) {
   }
 }
 
+function createOutboundPersistClient({ threadId, messageId, meta = {}, sentAt = null }) {
+  return {
+    async query(text) {
+      const sql = String(text || "").toLowerCase();
+      if (sql.includes("insert into inbox_messages")) {
+        return {
+          rows: [
+            {
+              id: messageId,
+              thread_id: threadId,
+              tenant_key: "acme",
+              direction: "outbound",
+              sender_type: "agent",
+              external_message_id: null,
+              message_type: "text",
+              text: "manual reply",
+              attachments: [],
+              meta,
+              sent_at: sentAt,
+              created_at: "2026-03-27T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+      if (sql.includes("update inbox_threads")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+}
+
 test("strict inbox runtime loading stays fail-closed and requests strict authority", async () => {
   let captured = null;
 
@@ -418,6 +450,111 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
   );
   assert.equal(enqueueCalls[0]?.correlationIds?.messageId, result.message.id);
   assert.equal(enqueueCalls[0]?.safeMetadata?.recipientId, "user-ext-1");
+});
+
+test("persistOutboundMessage resolves website manual replies to website_widget without Meta delivery", async () => {
+  const threadId = "11111111-1111-4111-8111-111111111111";
+  const createAttemptCalls = [];
+  const enqueueCalls = [];
+
+  const result = await persistOutboundMessage({
+    client: createOutboundPersistClient({
+      threadId,
+      messageId: "55555555-5555-4555-8555-555555555555",
+      sentAt: "2026-03-27T00:00:00.000Z",
+    }),
+    thread: { id: threadId, channel: "website" },
+    tenantId: "22222222-2222-4222-8222-222222222222",
+    tenantKey: "acme",
+    channel: "website",
+    recipientId: "visitor-1",
+    senderType: "agent",
+    requestedMessageType: "text",
+    text: "manual reply",
+    meta: {},
+    createAttempt: async (input) => {
+      createAttemptCalls.push(input);
+      return { id: "attempt-website", ...input };
+    },
+    enqueueOutboundExecution: async (input) => {
+      enqueueCalls.push(input);
+    },
+  });
+
+  assert.equal(result.provider, "website_widget");
+  assert.equal(result.mergedMeta?.provider, "website_widget");
+  assert.equal(result.mergedMeta?.delivery?.provider, "website_widget");
+  assert.equal(createAttemptCalls[0]?.provider, "website_widget");
+  assert.equal(createAttemptCalls[0]?.status, "sent");
+  assert.equal(enqueueCalls.length, 0);
+});
+
+test("persistOutboundMessage still resolves Meta channels to Meta", async () => {
+  const threadId = "11111111-1111-4111-8111-111111111111";
+  const createAttemptCalls = [];
+  const enqueueCalls = [];
+
+  const result = await persistOutboundMessage({
+    client: createOutboundPersistClient({
+      threadId,
+      messageId: "66666666-6666-4666-8666-666666666666",
+    }),
+    thread: { id: threadId, channel: "instagram" },
+    tenantId: "22222222-2222-4222-8222-222222222222",
+    tenantKey: "acme",
+    channel: "instagram",
+    recipientId: "ig-user-1",
+    senderType: "agent",
+    requestedMessageType: "text",
+    text: "manual reply",
+    meta: {},
+    createAttempt: async (input) => {
+      createAttemptCalls.push(input);
+      return { id: "attempt-meta", ...input };
+    },
+    enqueueOutboundExecution: async (input) => {
+      enqueueCalls.push(input);
+    },
+  });
+
+  assert.equal(result.provider, "meta");
+  assert.equal(result.mergedMeta?.provider, "meta");
+  assert.equal(createAttemptCalls[0]?.provider, "meta");
+  assert.equal(enqueueCalls[0]?.provider, "meta");
+});
+
+test("persistOutboundMessage fails unknown channels safely instead of defaulting to Meta", async () => {
+  const threadId = "11111111-1111-4111-8111-111111111111";
+  const createAttemptCalls = [];
+  const enqueueCalls = [];
+
+  const result = await persistOutboundMessage({
+    client: createOutboundPersistClient({
+      threadId,
+      messageId: "77777777-7777-4777-8777-777777777777",
+    }),
+    thread: { id: threadId, channel: "" },
+    tenantId: "22222222-2222-4222-8222-222222222222",
+    tenantKey: "acme",
+    channel: "",
+    recipientId: "unknown-user-1",
+    senderType: "agent",
+    requestedMessageType: "text",
+    text: "manual reply",
+    meta: {},
+    createAttempt: async (input) => {
+      createAttemptCalls.push(input);
+      return { id: "attempt-unsupported", ...input };
+    },
+    enqueueOutboundExecution: async (input) => {
+      enqueueCalls.push(input);
+    },
+  });
+
+  assert.equal(result.provider, "unsupported");
+  assert.equal(result.mergedMeta?.provider, "unsupported");
+  assert.equal(createAttemptCalls[0]?.provider, "unsupported");
+  assert.equal(enqueueCalls[0]?.provider, "unsupported");
 });
 
 test("decision thread-state shaping keeps queued execution and handoff semantics explicit", () => {

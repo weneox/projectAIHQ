@@ -11,62 +11,115 @@ function jsonResponse(payload = {}) {
 }
 
 describe("PublicWebsiteWidget", () => {
-  const originalLocation = window.location;
+  const originalHref = window.location.href;
 
   beforeEach(() => {
     vi.restoreAllMocks();
 
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: new URL(
-        "https://widget.example.com/public-widget?tenantKey=acme&widgetId=ww_test&origin=https%3A%2F%2Fwww.acme.com&brand=Acme"
-      ),
-    });
+    window.history.pushState(
+      {},
+      "",
+      "/widget/website-chat?widgetId=ww_test&bootstrapToken=boot_test&apiBase=https%3A%2F%2Fapi.example.com%2Fapi&brand=Acme&accent=%230f172a"
+    );
 
     global.fetch = vi.fn((url, options = {}) => {
       const method = String(options.method || "GET").toUpperCase();
       const target = String(url);
 
-      if (method === "GET" && target.includes("/api/channels/webchat/bootstrap")) {
+      if (
+        method === "POST" &&
+        target === "https://api.example.com/api/public/widget/bootstrap"
+      ) {
         return jsonResponse({
           ok: true,
-          live: true,
-          tenantKey: "acme",
-          widgetId: "ww_test",
-          origin: "https://www.acme.com",
-          assistant: {
+          sessionToken: "session_test",
+          session: {
+            sessionId: "web_test_session",
+            widgetId: "ww_test",
+          },
+          widget: {
             title: "Acme Web Chat",
             subtitle: "Ask a question.",
             accentColor: "#0f172a",
-            statusLabel: "Live",
             initialPrompts: ["Pricing", "Talk to sales"],
           },
-          controls: {
-            manualFirst: false,
-            approvedTruthOnly: true,
-            publicAnswering: true,
-            approvedTruthReady: true,
-            messageCaptureReady: true,
+          automation: {
+            available: true,
+            mode: "assistant_available",
+          },
+          messages: [],
+          delivery: {
+            mode: "awaiting_reply",
           },
         });
       }
 
-      if (method === "POST" && target.includes("/api/channels/webchat/message")) {
+      if (
+        method === "POST" &&
+        target === "https://api.example.com/api/public/widget/message"
+      ) {
         return jsonResponse({
           ok: true,
-          received: true,
-          live: true,
-          sessionId: "web_test_session",
-          threadId: "thread_test",
-          messageId: "message_test",
-          assistant: {
-            mode: "approved_truth_answer",
-            text: "Based on approved business information: Pricing starts after a short business fit review.",
-            source: {
-              title: "Pricing",
-              type: "service_catalog",
-            },
+          sessionToken: "session_next",
+          thread: {
+            id: "thread_test",
+            channel: "website",
           },
+          messages: [
+            {
+              id: "message_test",
+              direction: "inbound",
+              role: "visitor",
+              text: "Do you have pricing?",
+            },
+            {
+              id: "reply_test",
+              direction: "outbound",
+              role: "assistant",
+              text: "Based on approved business information: Pricing starts after a short business fit review.",
+              mode: "approved_truth_answer",
+              source: {
+                title: "Pricing",
+                type: "service_catalog",
+              },
+            },
+          ],
+          delivery: {
+            mode: "assistant_replied",
+          },
+        });
+      }
+
+      if (
+        method === "POST" &&
+        target === "https://api.example.com/api/public/widget/transcript"
+      ) {
+        return jsonResponse({
+          ok: true,
+          sessionToken: "session_transcript",
+          thread: {
+            id: "thread_test",
+            channel: "website",
+          },
+          messages: [
+            {
+              id: "message_test",
+              direction: "inbound",
+              role: "visitor",
+              text: "Do you have pricing?",
+            },
+            {
+              id: "reply_test",
+              direction: "outbound",
+              role: "assistant",
+              text: "Based on approved business information: Pricing starts after a short business fit review.",
+              mode: "approved_truth_answer",
+              source: {
+                title: "Pricing",
+                type: "service_catalog",
+              },
+            },
+          ],
         });
       }
 
@@ -79,10 +132,7 @@ describe("PublicWebsiteWidget", () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: originalLocation,
-    });
+    window.history.pushState({}, "", originalHref);
 
     vi.restoreAllMocks();
   });
@@ -106,7 +156,7 @@ describe("PublicWebsiteWidget", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/channels/webchat/message"),
+        "https://api.example.com/api/public/widget/message",
         expect.objectContaining({
           method: "POST",
         })
@@ -120,15 +170,28 @@ describe("PublicWebsiteWidget", () => {
       )
     ).toBeInTheDocument();
 
-    const [, messageCall] = global.fetch.mock.calls;
     expect(await screen.findByText("Approved business info")).toBeInTheDocument();
     expect(await screen.findByText("Source: Pricing")).toBeInTheDocument();
 
-    expect(JSON.parse(messageCall[1].body)).toMatchObject({
-      tenantKey: "acme",
+    const [bootstrapCall, messageCall, transcriptCall] = global.fetch.mock.calls;
+    expect(bootstrapCall[0]).toBe(
+      "https://api.example.com/api/public/widget/bootstrap"
+    );
+    expect(JSON.parse(bootstrapCall[1].body)).toEqual({
       widgetId: "ww_test",
-      origin: "https://www.acme.com",
+      bootstrapToken: "boot_test",
+    });
+    expect(JSON.parse(messageCall[1].body)).toMatchObject({
+      sessionToken: "session_test",
       text: "Do you have pricing?",
+    });
+    expect(JSON.parse(messageCall[1].body)).not.toHaveProperty("tenantKey");
+    expect(JSON.parse(messageCall[1].body)).not.toHaveProperty("origin");
+    expect(transcriptCall[0]).toBe(
+      "https://api.example.com/api/public/widget/transcript"
+    );
+    expect(JSON.parse(transcriptCall[1].body)).toEqual({
+      sessionToken: "session_next",
     });
   });
 });

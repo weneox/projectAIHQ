@@ -466,7 +466,7 @@ describe("Inbox", () => {
     });
   });
 
-  it("keeps the launch readiness banner hidden when no launch channel is connected", async () => {
+  it("shows the launch readiness banner when no launch channel is connected", async () => {
     renderInbox();
 
     expect(
@@ -484,8 +484,8 @@ describe("Inbox", () => {
     expect(
       screen.getByText(/automation-status:\s*AI ON/i)
     ).toBeInTheDocument();
-    expect(screen.queryByText(/launch channel required/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /open channels/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/launch channel required/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open channels/i })).toBeInTheDocument();
     expect(screen.getByText(/launch-channel-connected:no/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread:none/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread-name:none/i)).toBeInTheDocument();
@@ -496,7 +496,7 @@ describe("Inbox", () => {
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
-  it("keeps the launch readiness banner hidden when truth is not ready", async () => {
+  it("shows the launch readiness banner when truth is not ready", async () => {
     getLaunchPosture.mockResolvedValue(
       buildLaunchPosture({
         truthReady: false,
@@ -520,15 +520,15 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
-    expect(screen.queryByText(/truth approval required/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/approve truth before trusting live ai replies/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/business info approval required/i)).toBeInTheDocument();
+    expect(screen.getByText(/approve business info before trusting live ai replies/i)).toBeInTheDocument();
     expect(screen.getByText(/launch-channel-connected:yes/i)).toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
-  it("keeps the launch readiness banner hidden while trust policy is still loading", async () => {
+  it("shows launch posture blockers while trust policy is still loading", async () => {
     let resolveTrustView;
 
     getSettingsTrustView.mockImplementation(
@@ -556,7 +556,7 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
-    expect(screen.queryByText(/truth approval required/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/business info approval required/i)).toBeInTheDocument();
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
@@ -605,7 +605,7 @@ describe("Inbox", () => {
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();
   });
 
-  it("keeps the launch readiness banner hidden when launch posture cannot be loaded", async () => {
+  it("shows the launch readiness banner when launch posture cannot be loaded", async () => {
     getLaunchPosture.mockRejectedValue(new Error("posture unavailable"));
 
     renderInbox();
@@ -615,8 +615,8 @@ describe("Inbox", () => {
     expect(
       await screen.findByText(/launch-channel-connected:no/i)
     ).toBeInTheDocument();
-    expect(screen.queryByText(/launch readiness unavailable/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/posture unavailable/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/launch readiness unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/posture unavailable/i)).toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
     expect(getWebsiteWidgetStatus).not.toHaveBeenCalled();

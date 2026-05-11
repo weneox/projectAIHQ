@@ -6,10 +6,7 @@ import { getLaunchPosture } from "../api/launch.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
 import ChannelIcon from "../components/channels/ChannelIcon.jsx";
 import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
-import {
-  CHANNELS,
-  findChannelById,
-} from "../components/channels/channelCatalogModel.js";
+import { CHANNELS } from "../components/channels/channelCatalogModel.js";
 import {
   InlineNotice,
   LoadingSurface,
@@ -56,8 +53,14 @@ function lower(value, fallback = "") {
 
 function launchChannels() {
   return CHANNELS.filter((channel) =>
-    ["website", "instagram", "telegram"].includes(channel.id)
+    ["website", "instagram"].includes(channel.id)
   );
+}
+
+function findLaunchChannelById(channelId = "") {
+  const id = s(channelId);
+  if (!id) return null;
+  return launchChannels().find((channel) => channel.id === id) || null;
 }
 
 function normalizePostureChannel(channelId = "", rawChannel = null) {
@@ -384,7 +387,7 @@ export default function ChannelCatalog() {
 
   const selectedChannelId = searchParams.get("channel") || "";
   const selectedChannel = useMemo(
-    () => findChannelById(selectedChannelId),
+    () => findLaunchChannelById(selectedChannelId),
     [selectedChannelId]
   );
   const modalChannel = selectedChannel || closingChannel;

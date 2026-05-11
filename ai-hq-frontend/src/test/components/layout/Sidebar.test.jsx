@@ -20,40 +20,28 @@ describe("Sidebar", () => {
       "href",
       "/home"
     );
-    expect(screen.getByRole("link", { name: /^launch$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^setup$/i })).toHaveAttribute(
       "href",
-      "/launch"
+      "/home?assistant=setup"
+    );
+    expect(
+      screen.getByRole("link", { name: /^business info$/i })
+    ).toHaveAttribute("href", "/truth");
+    expect(screen.getByRole("link", { name: /^channels$/i })).toHaveAttribute(
+      "href",
+      "/channels"
     );
     expect(screen.getByRole("link", { name: /inbox 3/i })).toHaveAttribute(
       "href",
       "/inbox"
     );
-    expect(screen.getByRole("link", { name: /^customers$/i })).toHaveAttribute(
-      "href",
-      "/customers"
-    );
-    expect(screen.getByRole("link", { name: /leads 5/i })).toHaveAttribute(
-      "href",
-      "/leads"
-    );
-    expect(screen.getByRole("link", { name: /^reports$/i })).toHaveAttribute(
-      "href",
-      "/reports"
-    );
-    expect(screen.getByRole("link", { name: /^channels$/i })).toHaveAttribute(
-      "href",
-      "/channels"
-    );
-    expect(
-      screen.getByRole("link", { name: /^business info$/i })
-    ).toHaveAttribute("href", "/truth");
     expect(screen.getByRole("link", { name: /^knowledge$/i })).toHaveAttribute(
       "href",
       "/knowledge"
     );
-    expect(screen.getByRole("link", { name: /^team$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^reports$/i })).toHaveAttribute(
       "href",
-      "/team"
+      "/reports"
     );
     expect(screen.getByRole("link", { name: /^settings$/i })).toHaveAttribute(
       "href",
@@ -62,15 +50,12 @@ describe("Sidebar", () => {
 
     const expectedVisibleHrefs = [
       "/home",
-      "/launch",
-      "/inbox",
-      "/customers",
-      "/leads",
-      "/reports",
-      "/channels",
+      "/home?assistant=setup",
       "/truth",
+      "/channels",
+      "/inbox",
       "/knowledge",
-      "/team",
+      "/reports",
       "/settings",
     ];
 
@@ -82,9 +67,13 @@ describe("Sidebar", () => {
       "/comments",
       "/voice",
       "/workspace",
+      "/launch",
+      "/customers",
+      "/leads",
       "/publish",
       "/proposals",
       "/executions",
+      "/team",
     ]) {
       expect(document.querySelector(`a[href="${href}"]`)).toBeNull();
     }

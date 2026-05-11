@@ -11,6 +11,15 @@ import { lower, normalizeArr, normalizeObj, nowIso } from "./shared.js";
 const META_PROVIDER = "meta";
 const TELEGRAM_PROVIDER = "telegram";
 const WEBSITE_WIDGET_PROVIDER = "website_widget";
+const UNSUPPORTED_PROVIDER = "unsupported";
+
+const META_CHANNELS = new Set([
+  "facebook",
+  "instagram",
+  "messenger",
+  "meta",
+  "whatsapp",
+]);
 
 const STORED_INBOX_MESSAGE_TYPES = new Set([
   "text",
@@ -83,11 +92,13 @@ function resolveExecutionProvider({ provider = "", channel = "", action = {} } =
     lower(action?.meta?.provider);
 
   if (explicit) return explicit;
-  if (["web", "webchat", "website", WEBSITE_WIDGET_PROVIDER].includes(lower(channel))) {
+  const normalizedChannel = lower(channel);
+  if (["web", "webchat", "website", WEBSITE_WIDGET_PROVIDER].includes(normalizedChannel)) {
     return WEBSITE_WIDGET_PROVIDER;
   }
-  if (lower(channel) === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
-  return META_PROVIDER;
+  if (normalizedChannel === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
+  if (META_CHANNELS.has(normalizedChannel)) return META_PROVIDER;
+  return UNSUPPORTED_PROVIDER;
 }
 
 const CUSTOMER_VISIBLE_EXECUTION_ACTIONS = new Set(["send_message"]);

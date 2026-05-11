@@ -13,6 +13,8 @@ import {
 
 const META_PROVIDER = "meta";
 const TELEGRAM_PROVIDER = "telegram";
+const WEBSITE_WIDGET_PROVIDER = "website_widget";
+const UNSUPPORTED_PROVIDER = "unsupported";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -66,14 +68,22 @@ function buildDeliverySuccess({
 }
 
 function resolveDeliveryProvider({ execution = {}, payload = {}, thread = {} } = {}) {
-  return (
+  const explicit =
     lower(execution?.provider) ||
     lower(payload?.provider) ||
-    lower(obj(payload?.meta)?.provider) ||
-    (lower(thread?.channel) === TELEGRAM_PROVIDER
-      ? TELEGRAM_PROVIDER
-      : META_PROVIDER)
-  );
+    lower(obj(payload?.meta)?.provider);
+  if (explicit) return explicit;
+
+  const channel = lower(thread?.channel);
+  if (["web", "webchat", "website", WEBSITE_WIDGET_PROVIDER].includes(channel)) {
+    return WEBSITE_WIDGET_PROVIDER;
+  }
+  if (channel === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
+  if (["facebook", "instagram", "messenger", "meta", "whatsapp"].includes(channel)) {
+    return META_PROVIDER;
+  }
+
+  return UNSUPPORTED_PROVIDER;
 }
 
 function resolvePayloadActionType(payload = {}) {

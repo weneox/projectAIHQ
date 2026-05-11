@@ -831,11 +831,13 @@ export default function Inbox() {
     [readinessState.channelSummary]
   );
 
-
-
-
-
-  const visibleLaunchReadinessNotice = null;
+  const visibleLaunchReadinessNotice = _buildLaunchReadinessNotice({
+    readinessState,
+    hasDeliveryReadyLaunchChannel,
+    truthReady: readinessState.truth?.ready === true,
+    runtimeReady: readinessState.runtime?.ready === true,
+    launchReady: readinessState.overall?.launchReady === true,
+  });
   const surfaceNotice = buildSurfaceNotice(surface);
   const inboxInitializing = !workspace.ready || readinessState.loading;
 

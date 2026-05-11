@@ -26,110 +26,185 @@ function obj(value, fallback = {}) {
 function getWidgetParams() {
   if (typeof window === "undefined") {
     return {
-      tenantKey: "",
       widgetId: "",
+      bootstrapToken: "",
+      sessionToken: "",
+      apiBase: "",
       brand: "Website",
-      origin: "",
+      accent: "",
     };
   }
 
   const params = new URLSearchParams(window.location.search);
 
   return {
-    tenantKey: s(
-      params.get("tenantKey") ||
-        params.get("workspace") ||
-        params.get("tenant")
-    ),
     widgetId: s(params.get("widgetId") || params.get("id") || params.get("w")),
+    bootstrapToken: s(params.get("bootstrapToken") || params.get("token")),
+    sessionToken: s(params.get("sessionToken")),
+    apiBase: s(params.get("apiBase")),
     brand: s(
       params.get("brand") ||
         params.get("workspace") ||
         params.get("tenant"),
       "Website"
     ),
-    origin: s(
-      params.get("origin") ||
-        window.location.ancestorOrigins?.[0] ||
-        document.referrer ||
-        window.location.origin
-    ),
+    accent: s(params.get("accent")),
   };
 }
 
-function buildBootstrapUrl({ tenantKey = "", widgetId = "", origin = "" } = {}) {
-  const query = new URLSearchParams();
+function normalizeApiBase(raw = "") {
+  const value = s(raw);
+  if (!value) return "";
 
-  if (tenantKey) query.set("tenantKey", tenantKey);
-  if (widgetId) query.set("widgetId", widgetId);
-  if (origin) query.set("origin", origin);
-
-  return apiUrl("/api/channels/webchat/bootstrap?" + query.toString());
+  try {
+    return new URL(value, window.location.origin).toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
 }
 
-function buildMessageUrl() {
-  return apiUrl("/api/channels/webchat/message");
+function buildPublicWidgetUrl(params = {}, path = "") {
+  const apiBase = normalizeApiBase(params.apiBase);
+  if (apiBase) return `${apiBase}${path}`;
+
+  return apiUrl(`/api${path}`);
+}
+
+function buildBootstrapUrl(params = {}) {
+  return buildPublicWidgetUrl(params, "/public/widget/bootstrap");
+}
+
+function buildMessageUrl(params = {}) {
+  return buildPublicWidgetUrl(params, "/public/widget/message");
+}
+
+function buildTranscriptUrl(params = {}) {
+  return buildPublicWidgetUrl(params, "/public/widget/transcript");
+}
+
+function normalizePublicMessage(message = {}) {
+  const root = obj(message);
+  const direction = s(root.direction).toLowerCase();
+  const senderType = s(root.senderType || root.sender_type).toLowerCase();
+  const role = s(
+    root.role,
+    direction === "inbound"
+      ? "visitor"
+      : senderType === "operator" || senderType === "agent"
+        ? "operator"
+        : senderType === "system"
+          ? "system"
+          : "assistant"
+  );
+
+  return {
+    id: s(root.id || root.messageId || root.message_id, "message-" + Date.now()),
+    role,
+    direction,
+    senderType,
+    text: s(root.text || root.body),
+    mode: s(root.mode || root.assistantMode || root.assistant_mode),
+    source: obj(root.source, null),
+    guard: obj(root.guard, null),
+  };
+}
+
+function normalizePublicMessages(messages = []) {
+  return arr(messages)
+    .map(normalizePublicMessage)
+    .filter((message) => message.text);
 }
 
 function normalizeWidgetReply(payload = {}) {
   const root = obj(payload);
-  const assistant = obj(root.assistant);
+  const messages = normalizePublicMessages(root.messages);
+  const latestAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" || message.role === "operator");
 
   return {
     ok: root.ok === true,
-    received: root.received === true,
-    reasonCode: s(root.reasonCode),
-    message: s(root.message || root.error),
-    sessionId: s(root.sessionId),
-    threadId: s(root.threadId),
-    messageId: s(root.messageId),
+    reasonCode: s(root.reasonCode || root.error),
+    message: s(root.message || root.details?.message || root.error),
+    sessionToken: s(root.sessionToken),
+    threadId: s(root.thread?.id || root.threadId),
+    messages,
     assistant: {
-      mode: s(assistant.mode, "manual_first"),
+      mode: s(root.delivery?.mode || latestAssistant?.mode, "manual_first"),
       text: s(
-        assistant.text,
-        root.received === true
+        latestAssistant?.text,
+        root.ok === true
           ? "Thanks — your message was received. Our team can review it and reply shortly."
           : "Website chat is temporarily unavailable."
       ),
-      source: obj(assistant.source, null),
-      guard: obj(assistant.guard, null),
+      source: obj(latestAssistant?.source, null),
+      guard: obj(latestAssistant?.guard, null),
     },
   };
 }
 
+function withManualReceipt(messages = [], reply = {}) {
+  const transcript = normalizePublicMessages(messages);
+  const hasVisibleReply = transcript.some((message) =>
+    ["assistant", "operator", "system"].includes(message.role)
+  );
+
+  if (hasVisibleReply || reply.ok !== true) return transcript;
+
+  return [
+    ...transcript,
+    {
+      id: "receipt-" + Date.now(),
+      role: "assistant",
+      text: reply.assistant?.text || "Thanks - your message was received.",
+      mode: reply.assistant?.mode || "manual_first",
+      source: reply.assistant?.source || null,
+      guard: reply.assistant?.guard || null,
+    },
+  ];
+}
+
 function normalizeBootstrapPayload(payload = {}) {
   const root = obj(payload);
-  const assistant = obj(root.assistant);
+  const widget = obj(root.widget || root.assistant);
+  const automation = obj(root.automation);
   const controls = obj(root.controls);
+  const sessionToken = s(root.sessionToken);
+  const publicAnswering =
+    controls.publicAnswering === true ||
+    automation.available === true ||
+    s(root.delivery?.mode) === "assistant_replied";
 
   return {
     ok: root.ok === true,
-    live: root.live === true,
-    reasonCode: s(root.reasonCode),
-    message: s(root.message),
-    widgetId: s(root.widgetId),
-    tenantKey: s(root.tenantKey),
-    origin: s(root.origin),
+    live: root.ok === true && !!sessionToken,
+    reasonCode: s(root.reasonCode || root.error),
+    message: s(root.message || root.details?.message || root.error),
+    sessionToken,
+    widgetId: s(root.widgetId || root.session?.widgetId),
+    session: obj(root.session, null),
+    thread: obj(root.thread, null),
+    messages: normalizePublicMessages(root.messages),
     assistant: {
-      title: s(assistant.title, "Website chat"),
+      title: s(widget.title, "Website chat"),
       subtitle: s(
-        assistant.subtitle,
+        widget.subtitle,
         "Ask a question and our team will help you."
       ),
-      accentColor: s(assistant.accentColor, "#0f172a"),
+      accentColor: s(widget.accentColor, "#0f172a"),
       statusLabel: s(
-        assistant.statusLabel,
-        root.live === true ? "Live" : "Setup required"
+        widget.statusLabel,
+        root.ok === true && sessionToken ? "Live" : "Setup required"
       ),
-      initialPrompts: arr(assistant.initialPrompts)
+      initialPrompts: arr(widget.initialPrompts)
         .map((item) => s(item))
         .filter(Boolean),
     },
     controls: {
-      manualFirst: controls.manualFirst !== false,
+      manualFirst: controls.manualFirst !== false && !publicAnswering,
       approvedTruthOnly: controls.approvedTruthOnly !== false,
-      publicAnswering: controls.publicAnswering === true,
-      messageCaptureReady: controls.messageCaptureReady === true,
+      publicAnswering,
+      messageCaptureReady: controls.messageCaptureReady === true || root.ok === true,
     },
   };
 }
@@ -187,10 +262,24 @@ function GuardedState({ payload, brand = "Website" }) {
   );
 }
 
+function buildInitialMessages(payload = {}) {
+  const transcript = normalizePublicMessages(payload.messages);
+  if (transcript.length) return transcript;
+
+  return [
+    {
+      id: "welcome",
+      role: "assistant",
+      text:
+        "Hi! Ask a question and we will answer from approved business information when it is available.",
+    },
+  ];
+}
+
 function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
   const assistant = obj(payload.assistant);
   const prompts = arr(assistant.initialPrompts).slice(0, 4);
-  const accentColor = s(assistant.accentColor, "#0f172a");
+  const accentColor = s(params.accent || assistant.accentColor, "#0f172a");
   const title = s(assistant.title, brand + " chat");
   const subtitle = s(
     assistant.subtitle,
@@ -205,7 +294,16 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
       text: "Salam! Mən yalnız təsdiqlənmiş biznes məlumatlarına əsasən kömək edə bilərəm.",
     },
   ]);
+  const [sessionToken, setSessionToken] = useState(payload.sessionToken || "");
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (payload.sessionToken) setSessionToken(payload.sessionToken);
+
+    const transcript = normalizePublicMessages(payload.messages);
+    if (transcript.length) setMessages(transcript);
+    else setMessages(buildInitialMessages(payload));
+  }, [payload]);
 
   async function sendMessage() {
     const text = s(messageDraft);
@@ -223,7 +321,12 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
     setSending(true);
 
     try {
-      const response = await fetch(buildMessageUrl(), {
+      if (!sessionToken) {
+        throw new Error("Website chat session is not ready.");
+      }
+
+      const clientMessageId = `widget-${Date.now()}`;
+      const response = await fetch(buildMessageUrl(params), {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -231,20 +334,54 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
         },
         credentials: "omit",
         body: JSON.stringify({
-          tenantKey: params.tenantKey || payload.tenantKey,
-          widgetId: params.widgetId || payload.widgetId,
-          origin: params.origin || payload.origin,
+          sessionToken,
           text,
+          messageId: clientMessageId,
         }),
       });
 
       const reply = normalizeWidgetReply(await response.json().catch(() => ({})));
+      const nextSessionToken = reply.sessionToken || sessionToken;
+
+      if (reply.sessionToken) setSessionToken(reply.sessionToken);
+
+      if (reply.ok && nextSessionToken) {
+        try {
+          const transcriptResponse = await fetch(buildTranscriptUrl(params), {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json; charset=utf-8",
+            },
+            credentials: "omit",
+            body: JSON.stringify({
+              sessionToken: nextSessionToken,
+            }),
+          });
+          const transcript = normalizeWidgetReply(
+            await transcriptResponse.json().catch(() => ({}))
+          );
+
+          if (transcript.sessionToken) setSessionToken(transcript.sessionToken);
+          if (transcript.messages.length) {
+            setMessages(withManualReceipt(transcript.messages, reply));
+            return;
+          }
+        } catch {
+          // Transcript is a best-effort refresh; the message response still carries a safe fallback.
+        }
+      }
+
+      if (reply.messages.length) {
+        setMessages(withManualReceipt(reply.messages, reply));
+        return;
+      }
 
       setMessages((items) => [
         ...items,
         {
-          id: reply.messageId || "reply-" + Date.now(),
-          role: reply.received ? "assistant" : "system",
+          id: "reply-" + Date.now(),
+          role: reply.ok ? "assistant" : "system",
           text: reply.assistant.text || reply.message,
           mode: reply.assistant.mode,
           source: reply.assistant.source,
@@ -406,20 +543,25 @@ export default function PublicWebsiteWidget() {
 
     async function loadBootstrap() {
       try {
-        const response = await fetch(
-          buildBootstrapUrl({
-            tenantKey: params.tenantKey,
-            widgetId: params.widgetId,
-            origin: params.origin,
-          }),
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-            credentials: "omit",
-          }
-        );
+        if (!params.widgetId || (!params.bootstrapToken && !params.sessionToken)) {
+          throw new Error("Website chat bootstrap token is missing.");
+        }
+
+        const body = {
+          widgetId: params.widgetId,
+        };
+        if (params.bootstrapToken) body.bootstrapToken = params.bootstrapToken;
+        if (params.sessionToken) body.sessionToken = params.sessionToken;
+
+        const response = await fetch(buildBootstrapUrl(params), {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json; charset=utf-8",
+          },
+          credentials: "omit",
+          body: JSON.stringify(body),
+        });
 
         const payload = await response.json().catch(() => ({}));
 

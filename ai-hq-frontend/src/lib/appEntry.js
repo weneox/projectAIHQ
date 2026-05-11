@@ -208,6 +208,9 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/truth",
   "/inbox",
   "/channels",
+  "/knowledge",
+  "/reports",
+  "/settings",
 ]);
 
 export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([

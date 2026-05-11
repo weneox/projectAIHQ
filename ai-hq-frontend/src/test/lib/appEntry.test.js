@@ -102,12 +102,15 @@ describe("resolveAuthenticatedLanding", () => {
   });
 
   it("defines a bounded production route list and a separate internal-only route list", () => {
-    expect(CORE_APP_ROUTES).toEqual([
-      "/home",
-      "/truth",
-      "/inbox",
-      "/channels",
-    ]);
+      expect(CORE_APP_ROUTES).toEqual([
+        "/home",
+        "/truth",
+        "/inbox",
+        "/channels",
+        "/knowledge",
+        "/reports",
+        "/settings",
+      ]);
 
     expect(INTERNAL_ONLY_APP_ROUTES).toEqual([
       "/command-demo",

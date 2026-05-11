@@ -1038,7 +1038,7 @@ export function inboxHandlers({ db, wsHub }) {
             thread: existingThread,
             tenantId: existingThread?.tenant_id || "",
             tenantKey,
-            channel: existingThread?.channel || "instagram",
+            channel: existingThread?.channel || "",
             recipientId:
               s(mergedMeta?.recipientId) ||
               s(existingThread?.external_user_id) ||
@@ -1050,7 +1050,7 @@ export function inboxHandlers({ db, wsHub }) {
             text,
             attachments,
             meta: mergedMeta,
-            provider: s(mergedMeta?.provider || "meta") || "meta",
+            provider: s(mergedMeta?.provider),
             maxAttempts: clamp(toInt(req.body?.maxAttempts, 5), 1, 20),
             enqueueExecution: !externalMessageId,
           });
