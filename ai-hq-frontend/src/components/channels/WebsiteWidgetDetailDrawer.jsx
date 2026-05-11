@@ -275,9 +275,10 @@ function guidedStepLabel(status = "") {
   return "Pending";
 }
 
-function GuidedWebsiteSetupCard({ guidedSetup = {} }) {
+function GuidedWebsiteSetupCard({ guidedSetup = {}, busy = false, onPrimaryAction }) {
   const setup = obj(guidedSetup);
   const steps = arr(setup.steps);
+  const primaryAction = obj(setup.primaryAction);
 
   if (!steps.length) return null;
 
@@ -344,17 +345,53 @@ function GuidedWebsiteSetupCard({ guidedSetup = {} }) {
           </div>
         </div>
 
-        <InlineNotice
-          tone={setup.productionReady ? "success" : "info"}
-          compact
-          description={s(
-            setup.oneClickGoal,
-            "One guided flow prepares website knowledge, Business Info review, and the safest install handoff."
-          )}
-        />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+          <InlineNotice
+            tone={setup.productionReady ? "success" : "info"}
+            compact
+            description={s(
+              setup.oneClickGoal,
+              "One guided flow prepares website knowledge, Business Info review, and the safest install handoff."
+            )}
+          />
+
+          <Button
+            type="button"
+            fullWidth
+            disabled={busy || !s(primaryAction.action)}
+            onClick={() => onPrimaryAction?.(primaryAction)}
+            rightIcon={<CheckCircle2 className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            {busy ? "Working..." : s(primaryAction.label, "Continue setup")}
+          </Button>
+        </div>
       </div>
     </SectionCard>
   );
+}
+
+function clickFirstWebsiteSetupButton(pattern) {
+  if (typeof document === "undefined") return false;
+
+  const buttons = Array.from(document.querySelectorAll("button"));
+  const target = buttons.find((button) => pattern.test(s(button.textContent)));
+
+  if (!target) return false;
+
+  target.click();
+  return true;
+}
+
+function scrollFirstWebsiteSetupText(pattern) {
+  if (typeof document === "undefined") return false;
+
+  const nodes = Array.from(document.querySelectorAll("section, div, article"));
+  const target = nodes.find((node) => pattern.test(s(node.textContent)));
+
+  if (!target?.scrollIntoView) return false;
+
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
 }
 
 const WEBSITE_ACCESS_OPTIONS = [
@@ -2341,6 +2378,39 @@ export default function WebsiteWidgetDetailDrawer({
   if (activePanel === "verify") mainContent = renderVerifyPanel();
   if (activePanel === "install") mainContent = renderInstallPanel();
 
+  function handleGuidedSetupAction(action = {}) {
+    const next = obj(action);
+    const actionName = s(next.action).toLowerCase();
+
+    if (s(next.path)) {
+      window.location.assign(s(next.path));
+      return;
+    }
+
+    if (actionName === "open_truth") {
+      window.location.assign("/truth");
+      return;
+    }
+
+    if (actionName === "prepare_install") {
+      if (clickFirstWebsiteSetupButton(/prepare|install|developer|gtm|wordpress|continue install/i)) return;
+      scrollFirstWebsiteSetupText(/recommended install|install access|copy snippet|developer package/i);
+      return;
+    }
+
+    if (actionName === "verify_domain") {
+      if (clickFirstWebsiteSetupButton(/verify|check domain|create verification|continue setup/i)) return;
+      scrollFirstWebsiteSetupText(/verify|ownership|domain verification|trusted domain/i);
+      return;
+    }
+
+    if (actionName === "edit_settings") {
+      if (clickFirstWebsiteSetupButton(/edit appearance|settings|save settings|change settings/i)) return;
+      scrollFirstWebsiteSetupText(/settings|appearance|allowed domains|website domain/i);
+    }
+  }
+
+
   return (
     <aside
       aria-hidden={!open}
@@ -2444,12 +2514,23 @@ export default function WebsiteWidgetDetailDrawer({
               description="Checking current website chat status."
             />
           ) : null}          {activePanel === "overview" && !statusQuery.isLoading ? (
-            <GuidedWebsiteSetupCard guidedSetup={obj(statusQuery.data?.guidedSetup)} />
+            <>
+            <GuidedWebsiteSetupCard
+              guidedSetup={obj(statusQuery.data?.guidedSetup)}
+              busy={
+                checkVerificationMutation.isPending ||
+                developerHandoffMutation.isPending ||
+                gtmHandoffMutation.isPending ||
+                wordpressHandoffMutation.isPending
+              }
+              onPrimaryAction={handleGuidedSetupAction}
+            />
 
             <AccessHelperCard
               value={selectedWebsiteAccessHints}
               onChange={setWebsiteAccessHints}
             />
+            </>
           ) : null}
 
 
