@@ -1,4 +1,10 @@
-import { useState } from "react";
+﻿const fs = require("fs");
+const path = require("path");
+
+const root = process.cwd();
+const file = path.join(root, "ai-hq-frontend/src/components/channels/WebsiteWidgetDetailDrawer.jsx");
+
+const code = `import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -43,7 +49,7 @@ function arr(value) {
 }
 
 function normalizeDomain(value = "") {
-  const raw = s(value).replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const raw = s(value).replace(/^https?:\\/\\//i, "").replace(/^www\\./i, "");
   return raw.split("/")[0].split("?")[0].trim().toLowerCase();
 }
 
@@ -75,7 +81,7 @@ function buildInitialForm(payload = {}) {
     title: s(widget.title, "How can we help?"),
     subtitle: s(widget.subtitle, "Ask anything about the business."),
     accentColor: s(widget.accentColor, "#2e60ff"),
-    initialPrompts: arr(widget.initialPrompts).join("\n"),
+    initialPrompts: arr(widget.initialPrompts).join("\\n"),
   };
 }
 
@@ -187,10 +193,10 @@ function buildSnippet({ widgetId = "", accentColor = "" } = {}) {
 
   return [
     '<script',
-    `src="${origin}/website-widget-loader.js"`,
-    `data-widget-id="${s(widgetId)}"`,
-    `data-api-base="${origin}/api"`,
-    s(accentColor) ? `data-accent="${s(accentColor)}"` : "",
+    \`src="\${origin}/website-widget-loader.js"\`,
+    \`data-widget-id="\${s(widgetId)}"\`,
+    \`data-api-base="\${origin}/api"\`,
+    s(accentColor) ? \`data-accent="\${s(accentColor)}"\` : "",
     "async",
     "></script>",
   ]
@@ -285,7 +291,7 @@ export default function WebsiteWidgetDetailDrawer({
 }) {
   const queryClient = useQueryClient();
   const workspace = useWorkspaceTenantKey({ enabled: open });
-  const [formDraft, setFormDraft] = useState(null);
+  const [form, setForm] = useState(() => buildInitialForm());
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -302,9 +308,8 @@ export default function WebsiteWidgetDetailDrawer({
     refetchOnWindowFocus: false,
   });
 
-  const widgetStatus = obj(statusQuery.data);
-  const form = formDraft || buildInitialForm(widgetStatus);
   const domain = normalizeDomain(form.domain);
+  const widgetStatus = obj(statusQuery.data);
   const widgetId = getWidgetId(widgetStatus);
 
   const verificationQuery = useQuery({
@@ -324,6 +329,11 @@ export default function WebsiteWidgetDetailDrawer({
   const copy = getStatusCopy(widgetStatus, verification);
   const snippet = buildSnippet({ widgetId, accentColor: form.accentColor });
 
+  useEffect(() => {
+    if (!statusQuery.data) return;
+    setForm(buildInitialForm(statusQuery.data));
+  }, [statusQuery.data]);
+
   const saveMutation = useMutation({
     mutationFn: () =>
       saveWebsiteWidgetConfig({
@@ -332,15 +342,14 @@ export default function WebsiteWidgetDetailDrawer({
         subtitle: s(form.subtitle),
         accentColor: s(form.accentColor),
         allowedDomains: domain ? [domain] : [],
-        allowedOrigins: domain ? [`https://${domain}`] : [],
+        allowedOrigins: domain ? [\`https://\${domain}\`] : [],
         initialPrompts: String(form.initialPrompts || "")
-          .split(/[\n,]/)
+          .split(/[\\n,]/)
           .map((item) => s(item))
           .filter(Boolean),
       }),
     async onSuccess() {
       setNotice({ tone: "success", text: "Website chat settings saved." });
-      setFormDraft(null);
       await queryClient.invalidateQueries({ queryKey: statusQueryKey });
       emitLaunchSliceRefresh({
         tenantKey: workspace.tenantKey,
@@ -437,32 +446,35 @@ export default function WebsiteWidgetDetailDrawer({
     },
   });
 
-  const steps = [
-    {
-      title: "Configure",
-      body: widgetId
-        ? "Widget identity is created."
-        : "Save once to create the public widget ID.",
-      done: Boolean(widgetId),
-      current: !widgetId,
-    },
-    {
-      title: "Verify domain",
-      body: verified
-        ? "Domain ownership is verified."
-        : "Confirm this website can load the widget.",
-      done: verified,
-      current: Boolean(widgetId) && !verified,
-    },
-    {
-      title: "Install & test",
-      body: productionReady
-        ? "Snippet is ready for production install."
-        : "Copy snippet and send a test message to Inbox.",
-      done: productionReady,
-      current: Boolean(widgetId) && verified && !productionReady,
-    },
-  ];
+  const steps = useMemo(
+    () => [
+      {
+        title: "Configure",
+        body: widgetId
+          ? "Widget identity is created."
+          : "Save once to create the public widget ID.",
+        done: Boolean(widgetId),
+        current: !widgetId,
+      },
+      {
+        title: "Verify domain",
+        body: verified
+          ? "Domain ownership is verified."
+          : "Confirm this website can load the widget.",
+        done: verified,
+        current: Boolean(widgetId) && !verified,
+      },
+      {
+        title: "Install & test",
+        body: productionReady
+          ? "Snippet is ready for production install."
+          : "Copy snippet and send a test message to Inbox.",
+        done: productionReady,
+        current: Boolean(widgetId) && verified && !productionReady,
+      },
+    ],
+    [productionReady, verified, widgetId]
+  );
 
   async function handleCopy() {
     const ok = await copyText(snippet);
@@ -622,8 +634,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <TextInput
                     value={form.domain}
                     onChange={(value) =>
-                      setFormDraft((current) => ({
-                        ...form,
+                      setForm((current) => ({
                         ...current,
                         domain: value,
                       }))
@@ -636,8 +647,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <TextInput
                     value={form.accentColor}
                     onChange={(value) =>
-                      setFormDraft((current) => ({
-                        ...form,
+                      setForm((current) => ({
                         ...current,
                         accentColor: value,
                       }))
@@ -650,8 +660,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <TextInput
                     value={form.title}
                     onChange={(value) =>
-                      setFormDraft((current) => ({
-                        ...form,
+                      setForm((current) => ({
                         ...current,
                         title: value,
                       }))
@@ -664,8 +673,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <TextInput
                     value={form.subtitle}
                     onChange={(value) =>
-                      setFormDraft((current) => ({
-                        ...form,
+                      setForm((current) => ({
                         ...current,
                         subtitle: value,
                       }))
@@ -680,8 +688,7 @@ export default function WebsiteWidgetDetailDrawer({
                   type="checkbox"
                   checked={form.enabled}
                   onChange={(event) =>
-                    setFormDraft((current) => ({
-                        ...form,
+                    setForm((current) => ({
                       ...current,
                       enabled: event.target.checked,
                     }))
@@ -834,3 +841,7 @@ export default function WebsiteWidgetDetailDrawer({
     </aside>
   );
 }
+`;
+
+fs.writeFileSync(file, code, "utf8");
+console.log("replaced WebsiteWidgetDetailDrawer with clean 3-step UI");
