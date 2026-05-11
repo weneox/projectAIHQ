@@ -92,6 +92,49 @@ export function AppPageTextarea({
     </div>
   );
 }
+
+export function AppSwitch({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange?.(!checked)}
+      className={cx(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-[background-color,border-color,box-shadow] duration-150 ease-premium",
+        checked
+          ? "border-brand bg-brand shadow-[0_8px_20px_-14px_rgba(37,99,235,0.85)]"
+          : "border-line bg-surface-subtle"
+      )}
+    >
+      <span
+        className={cx(
+          "block h-4.5 w-4.5 rounded-full bg-white shadow-[0_2px_8px_-4px_rgba(15,23,42,0.55)] transition-transform duration-150 ease-premium",
+          checked ? "translate-x-5" : "translate-x-1"
+        )}
+      />
+    </button>
+  );
+}
+
+export function AppToggleControl({
+  checked,
+  onChange,
+  enabledLabel = "Enabled",
+  disabledLabel = "Disabled",
+  label,
+}) {
+  return (
+    <div className="team-soft-control flex min-h-11 items-center justify-between gap-4 rounded-md bg-white px-3.5">
+      <div className="text-[13.5px] font-semibold text-text">
+        {checked ? enabledLabel : disabledLabel}
+      </div>
+
+      <AppSwitch checked={checked} onChange={onChange} label={label} />
+    </div>
+  );
+}
 export function AppChoiceButton({ selected, disabled = false, children, onClick }) {
   return (
     <button
