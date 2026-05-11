@@ -16,13 +16,16 @@ import {
 
 describe("resolveAuthenticatedLanding", () => {
   const originalForceWorkspaceEntry = import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY;
+  const originalDesignMode = import.meta.env?.VITE_APP_DESIGN_MODE;
 
   beforeEach(() => {
     import.meta.env.VITE_FORCE_WORKSPACE_ENTRY = "";
+    import.meta.env.VITE_APP_DESIGN_MODE = "";
   });
 
   afterEach(() => {
     import.meta.env.VITE_FORCE_WORKSPACE_ENTRY = originalForceWorkspaceEntry;
+    import.meta.env.VITE_APP_DESIGN_MODE = originalDesignMode;
   });
 
   it("routes incomplete workspaces into setup studio", () => {

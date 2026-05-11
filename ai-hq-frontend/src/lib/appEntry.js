@@ -230,7 +230,8 @@ export function areInternalRoutesEnabled() {
 export function isLocalWorkspaceEntryEnabled() {
   return (
     !!import.meta.env?.DEV &&
-    s(import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY) === "1"
+    (s(import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY) === "1" ||
+      s(import.meta.env?.VITE_APP_DESIGN_MODE) === "1")
   );
 }
 

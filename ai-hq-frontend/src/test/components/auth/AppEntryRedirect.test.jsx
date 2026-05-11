@@ -6,6 +6,7 @@ const navigate = vi.fn();
 const getAppAuthContext = vi.fn();
 const getAppBootstrapContext = vi.fn();
 const hasMultipleWorkspaceChoices = vi.fn();
+const isLocalWorkspaceEntryEnabled = vi.fn();
 const resolveAuthenticatedLanding = vi.fn();
 const isWelcomeIdentityComplete = vi.fn();
 
@@ -15,8 +16,10 @@ vi.mock("../../../lib/appSession.js", () => ({
 }));
 
 vi.mock("../../../lib/appEntry.js", () => ({
+  PRODUCT_HOME_ROUTE: "/home",
   WORKSPACE_SELECTION_ROUTE: "/select-workspace",
   hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
+  isLocalWorkspaceEntryEnabled: (...args) => isLocalWorkspaceEntryEnabled(...args),
   resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
 }));
 
@@ -38,8 +41,26 @@ describe("AppEntryRedirect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hasMultipleWorkspaceChoices.mockReturnValue(false);
+    isLocalWorkspaceEntryEnabled.mockReturnValue(false);
     resolveAuthenticatedLanding.mockReturnValue("/home");
     isWelcomeIdentityComplete.mockReturnValue(true);
+  });
+
+  it("sends local design entry straight to the product home without auth", async () => {
+    isLocalWorkspaceEntryEnabled.mockReturnValue(true);
+
+    render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
+    });
+
+    expect(getAppAuthContext).not.toHaveBeenCalled();
+    expect(getAppBootstrapContext).not.toHaveBeenCalled();
   });
 
   it("sends an unauthenticated user to login", async () => {
@@ -118,7 +139,7 @@ describe("AppEntryRedirect", () => {
     );
 
     expect(
-      await screen.findByText((content) => content.includes("Account unavailable"))
+      await screen.findByText((content) => content.includes("Səhifə açılmır"))
     ).toBeInTheDocument();
   });
 
@@ -133,7 +154,7 @@ describe("AppEntryRedirect", () => {
     );
 
     expect(
-      await screen.findByText((content) => content.includes("Account unavailable"))
+      await screen.findByText((content) => content.includes("Səhifə açılmır"))
     ).toBeInTheDocument();
 
     expect(navigate).not.toHaveBeenCalledWith("/login", { replace: true });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAppSessionContext = vi.fn();
@@ -43,35 +44,37 @@ describe("Header", () => {
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     render(
-      <Header
-        notifications={{ open: false, setOpen, unreadCount: 2, notifications: [] }}
-        workspaceMeta={{}}
-      />
+      <MemoryRouter>
+        <Header
+          notifications={{ open: false, setOpen, unreadCount: 2, notifications: [] }}
+          workspaceMeta={{}}
+        />
+      </MemoryRouter>
     );
 
     await waitFor(() => {
       expect(getAppSessionContext).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole("button", { name: /open ask ai/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open notifications/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /köməkçini aç/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /bildirişləri aç/i })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /dental hq/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /open ask ai/i }));
+    fireEvent.click(screen.getByRole("button", { name: /köməkçini aç/i }));
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: "aihq:open-assistant" })
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /open notifications/i }));
+    fireEvent.click(screen.getByRole("button", { name: /bildirişləri aç/i }));
     expect(setOpen).toHaveBeenCalledWith(true);
 
     fireEvent.click(screen.getByRole("button", { name: /dental hq/i }));
 
-    expect(await screen.findByText("Notifications")).toBeInTheDocument();
-    expect(screen.getByText("Sign out")).toBeInTheDocument();
+    expect(await screen.findByText("Bildirişlər")).toBeInTheDocument();
+    expect(screen.getByText("Çıxış")).toBeInTheDocument();
     expect(screen.getByText("Dr. Avery")).toBeInTheDocument();
   });
 });

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
 import {
+  PRODUCT_HOME_ROUTE,
   WORKSPACE_SELECTION_ROUTE,
   hasMultipleWorkspaceChoices,
+  isLocalWorkspaceEntryEnabled,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
 import { isWelcomeIdentityComplete } from "../../lib/welcomeIdentity.js";
@@ -11,12 +13,19 @@ import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 export default function AppEntryRedirect() {
   const navigate = useNavigate();
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
 
     async function run() {
+      if (localWorkspaceEntry) {
+        setFailed(false);
+        navigate(PRODUCT_HOME_ROUTE, { replace: true });
+        return;
+      }
+
       try {
         const auth = await getAppAuthContext();
         if (!alive) return;
@@ -56,13 +65,13 @@ export default function AppEntryRedirect() {
     return () => {
       alive = false;
     };
-  }, [navigate]);
+  }, [localWorkspaceEntry, navigate]);
 
   if (failed) {
     return (
       <AppBootSurface
-        label="Account unavailable"
-        detail="We could not load your next step right now."
+        label="Səhifə açılmır"
+        detail="Növbəti addımı indi yükləmək mümkün olmadı."
       />
     );
   }

@@ -19,6 +19,7 @@ function createHomeState(overrides = {}) {
     assistant: {
       hasApprovedSetupBaseline: false,
       readyForApproval: false,
+      primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
     },
     truthRuntime: {
       truthReady: false,
@@ -47,35 +48,7 @@ function createHomeState(overrides = {}) {
       accountDisplayName: "",
       accountHandle: "",
     },
-    launchSteps: [
-      {
-        id: "truth",
-        label: "Business truth",
-        statusLabel: "Setup required",
-        tone: "danger",
-        summary: "Approve the business facts the AI can safely use.",
-        action: { label: "Open setup", path: "/home?assistant=setup" },
-        complete: false,
-      },
-      {
-        id: "channel",
-        label: "Channel",
-        statusLabel: "Not connected",
-        tone: "warning",
-        summary: "Connect one live customer channel.",
-        action: { label: "Open channels", path: "/channels?channel=telegram" },
-        complete: false,
-      },
-      {
-        id: "inbox",
-        label: "Inbox",
-        statusLabel: "Waiting",
-        tone: "success",
-        summary: "Operate conversations here after truth and channel are ready.",
-        action: { label: "Open inbox", path: "/inbox" },
-        complete: false,
-      },
-    ],
+    launchSteps: [],
     ...overrides,
   };
 }
@@ -100,7 +73,7 @@ describe("ProductHomePage", () => {
     useProductHome.mockReturnValue(createHomeState());
   });
 
-  it("renders Home as the launch surface and routes the primary CTA into setup", () => {
+  it("renders a clean Azerbaijani home surface and routes setup", () => {
     render(
       <MemoryRouter>
         <ProductHomePage />
@@ -108,23 +81,18 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", {
-        name: "Approve your business info",
-      })
+      screen.getByRole("heading", { name: "Müştəri mesajları bir yerdə." })
     ).toBeInTheDocument();
-    expect(screen.getByText("Home")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /AI should not answer customers until your business details are reviewed and approved/i
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText("Məlumat lazımdır")).toBeInTheDocument();
+    expect(screen.getByText("Başlama siyahısı")).toBeInTheDocument();
+    expect(screen.queryByText(/runtime|tenant|backend|workspace/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open setup" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /məlumatları tamamla/i }));
 
     expect(navigate).toHaveBeenCalledWith("/home?assistant=setup");
   });
 
-  it("keeps Home visible while the setup widget is requested from the query param", () => {
+  it("keeps Home visible while the setup assistant query is present", () => {
     render(
       <MemoryRouter initialEntries={["/home?assistant=setup"]}>
         <ProductHomePage />
@@ -132,51 +100,21 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Approve your business info" })
+      screen.getByRole("heading", { name: "Müştəri mesajları bir yerdə." })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open setup" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /məlumatları tamamla/i })
+    ).toBeInTheDocument();
   });
 
-  it("routes the primary CTA into channels after truth and runtime are ready", () => {
+  it("routes into channels after business info and assistant are ready", () => {
     useProductHome.mockReturnValue(
       createHomeState({
-        primaryAction: { label: "Open channels", path: "/channels?channel=telegram" },
-        secondaryAction: { label: "Open truth", path: "/truth" },
-        nextStep: { id: "channel" },
         truthRuntime: {
           truthReady: true,
           ready: true,
-          summary: "Approved business truth is backing runtime.",
+          summary: "Approved business info is ready.",
         },
-        launchSteps: [
-          {
-            id: "truth",
-            label: "Business truth",
-            statusLabel: "Ready",
-            tone: "success",
-            summary: "Runtime is using approved truth.",
-            action: { label: "Open truth", path: "/truth" },
-            complete: true,
-          },
-          {
-            id: "channel",
-            label: "Channel",
-            statusLabel: "Not connected",
-            tone: "warning",
-            summary: "Connect one live customer channel.",
-            action: { label: "Open channels", path: "/channels?channel=telegram" },
-            complete: false,
-          },
-          {
-            id: "inbox",
-            label: "Inbox",
-            statusLabel: "Waiting",
-            tone: "success",
-            summary: "Operate conversations here after truth and channel are ready.",
-            action: { label: "Open inbox", path: "/inbox" },
-            complete: false,
-          },
-        ],
       })
     );
 
@@ -186,24 +124,16 @@ describe("ProductHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(
-      screen.getByRole("heading", {
-        name: "Connect a customer channel",
-      })
-    ).toBeInTheDocument();
+    expect(screen.getByText("Kanal qoşulmayıb")).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^kanal qoş$/i }));
 
-    expect(navigate).toHaveBeenCalledWith("/channels?channel=telegram");
+    expect(navigate).toHaveBeenCalledWith("/channels");
   });
 
-  it("uses unread message pressure and pending outbound counts for launch-ready posture", () => {
+  it("shows customer pressure without exposing internal wording", () => {
     useProductHome.mockReturnValue(
       createHomeState({
-        primaryAction: { label: "Reply now", path: "/inbox" },
-        secondaryAction: { label: "Open channels", path: "/channels" },
-        launchReady: true,
-        nextStep: { id: "inbox" },
         truthRuntime: {
           truthReady: true,
           ready: true,
@@ -213,7 +143,7 @@ describe("ProductHomePage", () => {
           status: "attention",
           counts: {
             unreadCount: 24,
-            openCount: 0,
+            openCount: 8,
             handoffCount: 1,
             pendingOutboundCount: 72,
             outboundPending: 72,
@@ -226,9 +156,9 @@ describe("ProductHomePage", () => {
           readyCount: 3,
           connectedCount: 3,
           providerStates: [
-            { provider: "website", available: true },
-            { provider: "instagram", available: true },
-            { provider: "telegram", available: true },
+            { provider: "website", available: true, connected: true, deliveryReady: true },
+            { provider: "instagram", available: true, connected: true, deliveryReady: true },
+            { provider: "telegram", available: true, connected: true, deliveryReady: true },
           ],
         },
       })
@@ -240,62 +170,9 @@ describe("ProductHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(
-      screen.getByRole("heading", { name: "24 customer messages waiting" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "24 customer messages need a reply. Business info is ready and 3 channels can receive messages."
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/1 conversation need a reply/i)
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Pending")).toBeInTheDocument();
-    expect(screen.getByText("72")).toBeInTheDocument();
-    expect(screen.getByText("Replies pending")).toBeInTheDocument();
-  });
-
-  it("uses singular grammar for one unread customer message", () => {
-    useProductHome.mockReturnValue(
-      createHomeState({
-        primaryAction: { label: "Reply now", path: "/inbox" },
-        truthRuntime: {
-          truthReady: true,
-          ready: true,
-          summary: "Business info is ready.",
-        },
-        inboxState: {
-          status: "attention",
-          counts: {
-            unreadCount: 1,
-            openCount: 0,
-            handoffCount: 0,
-            pendingOutboundCount: 0,
-            outboundPending: 0,
-          },
-        },
-        launchChannel: {
-          provider: "telegram",
-          connected: true,
-          deliveryReady: true,
-          readyCount: 1,
-          connectedCount: 1,
-          providerStates: [{ provider: "telegram", available: true }],
-        },
-      })
-    );
-
-    render(
-      <MemoryRouter>
-        <ProductHomePage />
-      </MemoryRouter>
-    );
-
-    expect(
-      screen.getByText(
-        "1 customer message needs a reply. Business info is ready and 1 channel can receive messages."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Cavab gözləyir").length).toBeGreaterThan(0);
+    expect(screen.getByText("24 oxunmamış")).toBeInTheDocument();
+    expect(screen.getByText("Cavab əsası")).toBeInTheDocument();
+    expect(screen.queryByText(/runtime|tenant|backend|workspace/i)).not.toBeInTheDocument();
   });
 });

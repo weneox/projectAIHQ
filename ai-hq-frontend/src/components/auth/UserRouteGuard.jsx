@@ -139,8 +139,8 @@ export default function UserRouteGuard({ children }) {
   if (state.failed) {
     return (
       <AppBootSurface
-        label="Workspace unavailable"
-        detail="We could not verify your session right now."
+        label="Səhifə açılmır"
+        detail="Girişi indi yoxlamaq mümkün olmadı."
       />
     );
   }

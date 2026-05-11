@@ -14,80 +14,80 @@
 const PRIMARY_SECTIONS = [
   {
     id: "home",
-    label: "Home",
+    label: "Ana səhifə",
     icon: LayoutDashboard,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Home", to: "/home" }],
+        title: "Naviqasiya",
+        items: [{ label: "Ana səhifə", to: "/home" }],
       },
     ],
   },
   {
     id: "inbox",
-    label: "Inbox",
+    label: "Gələnlər",
     icon: Inbox,
     to: "/inbox",
     badgeKey: "inboxUnread",
     paths: ["/inbox"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Inbox", to: "/inbox" }],
+        title: "Naviqasiya",
+        items: [{ label: "Gələnlər", to: "/inbox" }],
       },
     ],
   },
   {
     id: "channels",
-    label: "Channels",
+    label: "Kanallar",
     icon: PlugZap,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Channels", to: "/channels" }],
+        title: "Naviqasiya",
+        items: [{ label: "Kanallar", to: "/channels" }],
       },
     ],
   },
   {
     id: "business-info",
-    label: "Business Info",
+    label: "Məlumatlar",
     icon: BriefcaseBusiness,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Business Info", to: "/truth" }],
+        title: "Naviqasiya",
+        items: [{ label: "Məlumatlar", to: "/truth" }],
       },
     ],
   },
   {
     id: "customers",
-    label: "Contacts",
+    label: "Müştərilər",
     icon: UserRound,
     to: "/customers",
     paths: ["/customers"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Contacts", to: "/customers" }],
+        title: "Naviqasiya",
+        items: [{ label: "Müştərilər", to: "/customers" }],
       },
     ],
   },
   {
     id: "leads",
-    label: "Leads",
+    label: "Fürsətlər",
     icon: Target,
     to: "/leads",
     paths: ["/leads"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Leads", to: "/leads" }],
+        title: "Naviqasiya",
+        items: [{ label: "Fürsətlər", to: "/leads" }],
       },
     ],
   },
@@ -96,40 +96,40 @@ const PRIMARY_SECTIONS = [
 const SECONDARY_SECTIONS = [
   {
     id: "knowledge",
-    label: "Knowledge",
+    label: "Baza",
     icon: BookOpenCheck,
     to: "/knowledge",
     paths: ["/knowledge"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Knowledge", to: "/knowledge" }],
+        title: "Naviqasiya",
+        items: [{ label: "Baza", to: "/knowledge" }],
       },
     ],
   },
   {
     id: "reports",
-    label: "Reports",
+    label: "Hesabat",
     icon: BarChart3,
     to: "/reports",
     paths: ["/reports"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Reports", to: "/reports" }],
+        title: "Naviqasiya",
+        items: [{ label: "Hesabat", to: "/reports" }],
       },
     ],
   },
   {
     id: "team",
-    label: "Team",
+    label: "Komanda",
     icon: Users,
     to: "/team",
     paths: ["/team"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Team", to: "/team" }],
+        title: "Naviqasiya",
+        items: [{ label: "Komanda", to: "/team" }],
       },
     ],
   },
@@ -138,14 +138,14 @@ const SECONDARY_SECTIONS = [
 const UTILITY_SECTIONS = [
   {
     id: "settings",
-    label: "Settings",
+    label: "Ayarlar",
     icon: Settings,
     to: "/settings",
     paths: ["/settings"],
     contextGroups: [
       {
-        title: "Navigation",
-        items: [{ label: "Settings", to: "/settings" }],
+        title: "Naviqasiya",
+        items: [{ label: "Ayarlar", to: "/settings" }],
       },
     ],
   },

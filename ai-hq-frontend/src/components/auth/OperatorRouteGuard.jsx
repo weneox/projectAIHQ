@@ -41,10 +41,10 @@ function deriveGuardState(auth = {}, session = {}, allowedRoles = DEFAULT_ALLOWE
   };
 }
 
-function AccessDeniedState({ title = "Operator access required", description }) {
+function AccessDeniedState({ title = "Giriş məhduddur", description }) {
   return (
     <section className="mx-auto flex min-h-[50vh] w-full max-w-3xl items-center justify-center px-4 py-8">
-      <div className="w-full rounded-[28px] border border-amber-400/18 bg-[linear-gradient(180deg,rgba(23,15,8,0.96),rgba(14,10,8,0.98))] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
+      <div className="w-full rounded-[6px] border border-amber-400/18 bg-[linear-gradient(180deg,rgba(23,15,8,0.96),rgba(14,10,8,0.98))] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-8">
         <div className="flex items-start gap-4">
           <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-300/20 bg-amber-300/10 text-amber-200">
             <ShieldAlert className="h-5 w-5" />
@@ -52,28 +52,28 @@ function AccessDeniedState({ title = "Operator access required", description }) 
 
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200/70">
-              Restricted surface
+              Məhdud bölmə
             </div>
-            <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-white">
+            <h1 className="mt-2 text-[28px] font-semibold tracking-normal text-white">
               {title}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-white/68 md:text-[15px]">
               {description ||
-                "This workspace route is reserved for operational users. Your account can continue using the launch-core product, but this surface is not available with the current role."}
+                "Bu bölmə yalnız səlahiyyətli komanda üzvləri üçündür. Gündəlik iş üçün ana səhifə və gələnlər qutusu açıq qalır."}
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
-                to="/truth"
+                to="/home"
                 className="inline-flex items-center justify-center rounded-md border border-white/12 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:border-white/18 hover:bg-white/[0.10]"
               >
-                Go to Business Truth
+                Ana səhifə
               </Link>
               <Link
                 to="/inbox"
                 className="inline-flex items-center justify-center rounded-md border border-cyan-300/18 bg-cyan-300/10 px-4 py-2.5 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/28 hover:bg-cyan-300/14"
               >
-                Open Inbox
+                Gələnlər
               </Link>
             </div>
           </div>
@@ -197,8 +197,8 @@ export default function OperatorRouteGuard({
   if (state.unavailable) {
     return (
       <AppBootSurface
-        label="Operator surface unavailable"
-        detail="We could not verify operator access right now."
+        label="Bölmə açılmır"
+        detail="Girişi indi yoxlamaq mümkün olmadı."
       />
     );
   }

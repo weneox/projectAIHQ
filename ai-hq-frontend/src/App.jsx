@@ -51,8 +51,8 @@ function withSuspense(element) {
 function deriveGuestInitialState({ localWorkspaceEntry = false } = {}) {
   if (localWorkspaceEntry) {
     return {
-      allowGuest: true,
-      redirectAuthenticated: false,
+      allowGuest: false,
+      redirectAuthenticated: true,
     };
   }
 
@@ -116,6 +116,10 @@ function GuestRouteGuard({ children }) {
       alive = false;
     };
   }, [localWorkspaceEntry]);
+
+  if (localWorkspaceEntry) {
+    return <Navigate to="/home" replace />;
+  }
 
   if (!localWorkspaceEntry && (state.redirectAuthenticated || !state.allowGuest)) {
     return <Navigate to="/" replace />;
@@ -233,8 +237,8 @@ export default function App() {
             path="truth"
             element={
               <OperatorRouteGuard
-                title="Operator access required"
-                description="Truth remains the governed review surface behind the launch lane and should stay aligned with setup approval and runtime health."
+                title="Giriş məhduddur"
+                description="Bu bölmə yalnız təsdiqli məlumatları idarə edən komanda üzvləri üçündür."
               >
                 <TruthViewerPage />
               </OperatorRouteGuard>

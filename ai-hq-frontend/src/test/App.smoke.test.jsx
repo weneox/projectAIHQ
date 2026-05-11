@@ -121,7 +121,7 @@ describe("App shell smoke", () => {
   });
 
   it.each([
-    ["/login", "Login Page"],
+    ["/login", "Home Page"],
     ["/admin/login", "App Entry Redirect"],
     ["/select-workspace", "Select Workspace Page"],
     ["/welcome", "Home Page"],
@@ -133,6 +133,5 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 });
-
 
 

@@ -143,9 +143,7 @@ describe("OperatorRouteGuard", () => {
       </MemoryRouter>
     );
 
-    expect(
-      await screen.findByText("Operator access required")
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Giriş məhduddur")).toBeInTheDocument();
     expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
   });
 
@@ -210,7 +208,7 @@ describe("OperatorRouteGuard", () => {
 
     expect(
       await screen.findByText((content) =>
-        content.includes("Operator surface unavailable")
+        content.includes("Bölmə açılmır")
       )
     ).toBeInTheDocument();
     expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
@@ -246,7 +244,7 @@ describe("OperatorRouteGuard", () => {
       expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
       expect(
         screen.queryByText((content) =>
-          content.includes("Operator surface unavailable")
+          content.includes("Bölmə açılmır")
         )
       ).not.toBeInTheDocument();
     }

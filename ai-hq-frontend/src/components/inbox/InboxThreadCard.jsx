@@ -273,7 +273,7 @@ export default function InboxThreadCard({ thread, selected = false, onOpen }) {
   const preview = resolvePreview(thread);
   const setupTest = isSetupTestThread(thread);
   const visiblePreview = setupTest
-    ? "Private setup test Â· no real visitor"
+    ? "Gizli test · real ziyarətçi yoxdur"
     : preview;
   const unreadCount = Number(thread?.unread_count || 0);
   const timeLabel = formatRelativeTime(

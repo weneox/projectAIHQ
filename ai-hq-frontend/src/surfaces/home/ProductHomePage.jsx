@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowRight,
   Bot,
   CheckCircle2,
@@ -14,7 +14,6 @@ import instagramIcon from "../../assets/channels/instagram.svg";
 import websiteIcon from "../../assets/channels/web.svg";
 
 import Button from "../../components/ui/Button.jsx";
-import Card from "../../components/ui/Card.jsx";
 import {
   LoadingSurface,
   PageCanvas,
@@ -144,14 +143,14 @@ function providerLabel(provider = "") {
   switch (lower(provider)) {
     case "website":
     case "webchat":
-      return "Website";
+      return "Veb sayt";
     case "instagram":
     case "meta":
       return "Instagram";
     case "telegram":
       return "Telegram";
     default:
-      return "Channel";
+      return "Kanal";
   }
 }
 
@@ -187,7 +186,7 @@ function normalizeChannels(home) {
         id: provider || item?.id || item?.channelLabel || "channel",
         provider,
         label: item?.channelLabel || providerLabel(provider),
-        status: ready ? "Live" : connected ? "Review" : "Off",
+        status: ready ? "Canlı" : connected ? "Yoxlanır" : "Bağlı",
         tone: ready ? "success" : connected ? "warning" : "neutral",
         path: providerPath(provider),
       };
@@ -198,7 +197,7 @@ function normalizeChannels(home) {
     id: provider,
     provider,
     label: providerLabel(provider),
-    status: "Off",
+    status: "Bağlı",
     tone: "neutral",
     path: providerPath(provider),
   }));
@@ -220,66 +219,74 @@ function toneDotClass(tone = "neutral") {
   return "bg-[rgb(var(--color-text-soft))]";
 }
 
+function actionWithLabel(action, label, fallbackPath) {
+  const next = normalizeNavigationAction(action) || {};
+  return {
+    label,
+    path: next.path || fallbackPath,
+  };
+}
+
 function buildHero(home) {
   const waiting = waitingCount(home);
 
   if (waiting > 0) {
     return {
       tone: "warning",
-      title: "Customer work is waiting",
-      detail: "Open the inbox and clear the queue.",
-      primary: { label: "Open inbox", path: "/inbox" },
-      secondary: { label: "Channels", path: "/channels" },
+      status: "Cavab gözləyir",
+      detail: "Gələnlər qutusunu açın və növbəni təmizləyin.",
+      primary: { label: "Gələnləri aç", path: "/inbox" },
+      secondary: { label: "Kanallar", path: "/channels" },
     };
   }
 
   if (!businessInfoReady(home)) {
     return {
       tone: "warning",
-      title: "Business Info needs attention",
-      detail: "Add the facts your assistant can safely use.",
-      primary:
-        normalizeNavigationAction(home?.assistant?.primaryAction) || {
-          label: "Open Business Info",
-          path: "/truth",
-        },
-      secondary: { label: "Channels", path: "/channels" },
+      status: "Məlumat lazımdır",
+      detail: "Köməkçinin istifadə edəcəyi əsas məlumatları təsdiqləyin.",
+      primary: actionWithLabel(
+        home?.assistant?.primaryAction,
+        "Məlumatları tamamla",
+        "/home?assistant=setup"
+      ),
+      secondary: { label: "Kanallar", path: "/channels" },
     };
   }
 
   if (!channelReady(home)) {
     return {
       tone: "warning",
-      title: "Connect a channel",
-      detail: "Bring Website, Instagram, or Telegram into the inbox.",
-      primary: { label: "Open channels", path: "/channels" },
-      secondary: { label: "Business Info", path: "/truth" },
+      status: "Kanal qoşulmayıb",
+      detail: "Veb sayt, Instagram və ya Telegram mesajlarını bir yerə gətirin.",
+      primary: { label: "Kanal qoş", path: "/channels" },
+      secondary: { label: "Məlumatlar", path: "/truth" },
     };
   }
 
   if (inboxUnavailable(home)) {
     return {
       tone: "danger",
-      title: "Inbox needs a check",
-      detail: "Your setup is ready, but inbox status could not be loaded.",
-      primary: { label: "Open inbox", path: "/inbox" },
-      secondary: { label: "Channels", path: "/channels" },
+      status: "Gələnlər yoxlanmalıdır",
+      detail: "Hazırlıq tamamdır, amma mesaj axını indi görünmür.",
+      primary: { label: "Gələnləri yoxla", path: "/inbox" },
+      secondary: { label: "Kanallar", path: "/channels" },
     };
   }
 
   return {
     tone: "success",
-    title: "Workspace is calm",
-    detail: "No urgent customer work is waiting.",
-    primary: { label: "Open inbox", path: "/inbox" },
-    secondary: { label: "Channels", path: "/channels" },
+    status: "Hər şey sakitdir",
+    detail: "Təcili müştəri işi yoxdur.",
+    primary: { label: "Gələnləri aç", path: "/inbox" },
+    secondary: { label: "Kanallar", path: "/channels" },
   };
 }
 
 function StatusText({ tone = "neutral", children }) {
   return (
     <span className="inline-flex items-center gap-2 text-[13px] font-semibold">
-      <span className={cx("h-1.5 w-1.5", toneDotClass(tone))} />
+      <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
       <span className={toneTextClass(tone)}>{children}</span>
     </span>
   );
@@ -297,27 +304,36 @@ function ChannelLogo({ provider }) {
   );
 }
 
+function HeroMetric({ label, value }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[30px] font-semibold leading-none text-text">
+        {value}
+      </div>
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+        {label}
+      </div>
+    </div>
+  );
+}
+
 function HeroSection({ hero, home, onAction }) {
   return (
-    <Card padded="md" className="overflow-hidden">
-      <div className="grid gap-8 px-2 py-2 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
+    <section className="border-b border-line-soft pb-8 pt-2">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
         <div className="min-w-0">
-          <StatusText tone={hero.tone}>{hero.title}</StatusText>
+          <StatusText tone={hero.tone}>{hero.status}</StatusText>
 
-          <h1 className="mt-5 max-w-[760px] font-display text-[42px] font-semibold leading-[0.98] tracking-[var(--tracking-tight-xl)] text-text md:text-[58px]">
-            Run the business from one place.
+          <h1 className="mt-5 max-w-[760px] font-display text-[40px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[56px]">
+            Müştəri mesajları bir yerdə.
           </h1>
 
-          <p className="mt-5 max-w-[680px] text-[15px] font-medium leading-7 text-text-muted">
-            Messages, channels, customer work, and assistant control in one clean workspace.
+          <p className="mt-5 max-w-[620px] text-[15px] font-medium leading-7 text-text-muted">
+            Söhbətlər, kanallar və gündəlik müştəri işi eyni sakit ekranda.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button
-              type="button"
-              size="md"
-              onClick={() => onAction(hero.primary)}
-            >
+            <Button type="button" size="md" onClick={() => onAction(hero.primary)}>
               {hero.primary.label}
               <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
             </Button>
@@ -333,77 +349,49 @@ function HeroSection({ hero, home, onAction }) {
           </div>
         </div>
 
-        <div className="border border-line-soft bg-surface-muted px-5 py-5">
+        <div className="border border-line-soft bg-surface-muted p-5">
           <p className="text-[13.5px] font-medium leading-6 text-text-muted">
             {hero.detail}
           </p>
 
           <div className="mt-6 grid grid-cols-3 gap-4">
-            <div>
-              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-                {waitingCount(home)}
-              </div>
-              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                Waiting
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-                {readyChannelCount(home)}/{availableChannelCount(home)}
-              </div>
-              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                Channels
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-                {workspaceReady(home) ? "On" : "Safe"}
-              </div>
-              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                Assistant
-              </div>
-            </div>
+            <HeroMetric label="Gözləyir" value={waitingCount(home)} />
+            <HeroMetric
+              label="Canlı kanal"
+              value={`${readyChannelCount(home)}/${availableChannelCount(home)}`}
+            />
+            <HeroMetric
+              label="Köməkçi"
+              value={workspaceReady(home) ? "Aktiv" : "Qorunur"}
+            />
           </div>
         </div>
       </div>
-    </Card>
+    </section>
   );
 }
 
-function MetricCard({ icon: Icon, label, value, note, tone = "neutral", onClick }) {
+function MetricButton({ icon: Icon, label, value, note, tone = "neutral", onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group block w-full text-left"
+      className="group grid min-h-[126px] grid-rows-[auto_1fr] border border-line-soft bg-white p-4 text-left transition-[border-color,background-color] duration-base ease-premium hover:border-line hover:bg-surface-muted"
     >
-      <Card
-        padded="sm"
-        className="h-full transition-[transform,box-shadow] duration-base ease-premium group-hover:-translate-y-0.5"
-      >
-        <div className="flex min-h-[128px] flex-col justify-between">
-          <div className="flex items-start justify-between gap-4">
-            <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
-            <span className={cx("mt-1 h-1.5 w-1.5", toneDotClass(tone))} />
-          </div>
+      <div className="flex items-start justify-between gap-4">
+        <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
+        <span className={cx("mt-1 h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
+      </div>
 
-          <div>
-            <div className="text-[13px] font-semibold text-text-muted">
-              {label}
-            </div>
-
-            <div className="mt-2 text-[30px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-              {value}
-            </div>
-
-            <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
-              {note}
-            </div>
-          </div>
+      <div className="mt-auto">
+        <div className="text-[13px] font-semibold text-text-muted">{label}</div>
+        <div className="mt-2 text-[30px] font-semibold leading-none text-text">
+          {value}
         </div>
-      </Card>
+        <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+          {note}
+        </div>
+      </div>
     </button>
   );
 }
@@ -415,122 +403,111 @@ function MetricsRow({ home, onNavigate }) {
   const ready = workspaceReady(home);
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <MetricButton
         icon={MessageCircle}
-        label="Conversations"
+        label="Söhbətlər"
         value={openConversationCount(home)}
-        note={unread > 0 ? `${unread} unread` : "No unread messages"}
+        note={unread > 0 ? `${unread} oxunmamış` : "Növbə təmiz"}
         tone={unread > 0 ? "warning" : "success"}
         onClick={() => onNavigate("/inbox")}
       />
 
-      <MetricCard
+      <MetricButton
         icon={Globe2}
-        label="Channels"
+        label="Kanallar"
         value={`${liveChannels}/${totalChannels}`}
-        note={`${connectedChannelCount(home)} connected`}
+        note={`${connectedChannelCount(home)} qoşulub`}
         tone={liveChannels > 0 ? "success" : "warning"}
         onClick={() => onNavigate("/channels")}
       />
 
-      <MetricCard
+      <MetricButton
         icon={ShieldCheck}
-        label="Business Info"
-        value={businessInfoReady(home) ? "Ready" : "Open"}
-        note={businessInfoReady(home) ? "Approved facts available" : "Review details"}
+        label="Məlumat"
+        value={businessInfoReady(home) ? "Hazır" : "Yoxla"}
+        note={businessInfoReady(home) ? "Təsdiqlənib" : "Tamamlanmalıdır"}
         tone={businessInfoReady(home) ? "success" : "warning"}
         onClick={() => onNavigate("/truth")}
       />
 
-      <MetricCard
+      <MetricButton
         icon={Bot}
-        label="Assistant"
-        value={ready ? "On" : "Safe"}
-        note={ready ? "Ready to help" : "Waiting for setup"}
+        label="Köməkçi"
+        value={ready ? "Aktiv" : "Qorunur"}
+        note={ready ? "Cavablar hazırdır" : "Hazırlıq gedir"}
         tone={ready ? "success" : "warning"}
         onClick={() => onNavigate(ready ? "/inbox" : "/truth")}
       />
-    </div>
+    </section>
   );
 }
 
-
-function LaunchChecklistCard({ home, onNavigate }) {
+function SetupProgressSection({ home, onNavigate }) {
   const steps = [
     {
       id: "business-info",
-      label: "Business Info",
-      description: "Approve the facts the assistant can safely use.",
+      label: "Məlumat",
+      description: "Əsas məlumat təsdiqlənib.",
       ready: businessInfoReady(home),
-      readyLabel: "Approved",
-      blockedLabel: "Needs review",
+      readyLabel: "Hazır",
+      blockedLabel: "Yoxla",
       path: "/truth",
       icon: ShieldCheck,
     },
     {
-      id: "runtime",
-      label: "Assistant runtime",
-      description: "Keep the live assistant aligned with approved Business Info.",
+      id: "assistant",
+      label: "Köməkçi",
+      description: "Cavablar nəzarətdədir.",
       ready: assistantReady(home),
-      readyLabel: "Ready",
-      blockedLabel: "Safe mode",
+      readyLabel: "Aktiv",
+      blockedLabel: "Qorunur",
       path: "/truth",
       icon: Bot,
     },
     {
       id: "channels",
-      label: "Launch channels",
-      description: "Connect Website Chat, Instagram, or Telegram.",
+      label: "Kanallar",
+      description: "Ən azı bir kanal canlıdır.",
       ready: channelReady(home),
-      readyLabel: `${readyChannelCount(home)}/${availableChannelCount(home)} ready`,
-      blockedLabel: `${connectedChannelCount(home)} connected`,
+      readyLabel: `${readyChannelCount(home)}/${availableChannelCount(home)} canlı`,
+      blockedLabel: `${connectedChannelCount(home)} qoşulub`,
       path: "/channels",
       icon: Globe2,
     },
     {
       id: "inbox",
-      label: "Inbox operations",
-      description: "Confirm customer conversations and replies are available.",
+      label: "Gələnlər",
+      description: "Mesajlar qəbul olunur.",
       ready: !inboxUnavailable(home),
-      readyLabel: "Available",
-      blockedLabel: "Check inbox",
+      readyLabel: "Açıq",
+      blockedLabel: "Yoxla",
       path: "/inbox",
       icon: Inbox,
     },
   ];
 
   const completed = steps.filter((step) => step.ready).length;
-  const launchReady = completed === steps.length;
+  const ready = completed === steps.length;
 
   return (
-    <Card padded="md">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+    <section className="space-y-4 border-y border-line-soft py-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <StatusText tone={launchReady ? "success" : "warning"}>
-            {launchReady ? "Launch lane is ready" : "Finish launch setup"}
+          <StatusText tone={ready ? "success" : "warning"}>
+            {ready ? "Hazırdır" : "Tamamlanır"}
           </StatusText>
-
-          <h2 className="mt-4 text-[28px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-            V1 launch checklist
+          <h2 className="mt-3 text-[26px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+            Başlama siyahısı
           </h2>
-
-          <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
-            Keep the product focused: approved Business Info, one ready channel, working Inbox, and controlled AI replies.
-          </p>
         </div>
 
-        <div className="border border-line-soft bg-surface-muted px-5 py-4">
-          <div className="text-[34px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-            {completed}/{steps.length}
-          </div>
-          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-            Steps ready
-          </div>
+        <div className="text-[28px] font-semibold leading-none text-text">
+          {completed}/{steps.length}
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-px overflow-hidden border border-line-soft bg-line-soft md:grid-cols-2 xl:grid-cols-4">
         {steps.map((step) => {
           const Icon = step.icon;
           const tone = step.ready ? "success" : "warning";
@@ -540,122 +517,117 @@ function LaunchChecklistCard({ home, onNavigate }) {
               key={step.id}
               type="button"
               onClick={() => onNavigate(step.path)}
-              className="group block h-full text-left"
+              className="grid min-h-[142px] bg-white p-4 text-left transition-colors duration-base ease-premium hover:bg-surface-muted"
             >
-              <div className="flex h-full min-h-[154px] flex-col justify-between border border-line-soft bg-white px-4 py-4 transition-[transform,border-color,box-shadow] duration-base ease-premium group-hover:-translate-y-0.5 group-hover:border-line">
-                <div className="flex items-start justify-between gap-3">
-                  <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
-                  <span className={cx("h-1.5 w-1.5", toneDotClass(tone))} />
-                </div>
+              <div className="flex items-start justify-between gap-3">
+                <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
+                <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
+              </div>
 
-                <div>
-                  <div className="text-[14px] font-semibold text-text">
-                    {step.label}
-                  </div>
-                  <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-                    {step.description}
-                  </div>
-                  <div className={cx("mt-3 text-[12.5px] font-semibold", toneTextClass(tone))}>
-                    {step.ready ? step.readyLabel : step.blockedLabel}
-                  </div>
+              <div className="mt-auto">
+                <div className="text-[14px] font-semibold text-text">{step.label}</div>
+                <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                  {step.description}
+                </div>
+                <div className={cx("mt-3 text-[12.5px] font-semibold", toneTextClass(tone))}>
+                  {step.ready ? step.readyLabel : step.blockedLabel}
                 </div>
               </div>
             </button>
           );
         })}
       </div>
-    </Card>
+    </section>
   );
 }
+
 function WorkPanel({ home, onNavigate }) {
   const waiting = waitingCount(home);
   const ready = workspaceReady(home);
 
   return (
-    <Card padded="md" className="h-full">
-      <div className="flex h-full flex-col justify-between gap-8">
-        <div>
-          <div className="flex items-center justify-between gap-5">
-            <div>
-              <h2 className="text-[26px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-                {waiting > 0 ? "Handle customer work" : ready ? "All clear" : "Finish setup"}
-              </h2>
+    <section className="grid min-h-[300px] border border-line-soft bg-white">
+      <div className="flex flex-col justify-between gap-8 p-5">
+        <div className="flex items-start justify-between gap-5">
+          <div>
+            <h2 className="text-[25px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              {waiting > 0 ? "Cavab gözləyir" : ready ? "Növbə boşdur" : "Hazırlığı bitirin"}
+            </h2>
 
-              <p className="mt-3 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
-                {waiting > 0
-                  ? "Messages or replies need attention."
-                  : ready
-                    ? "No urgent work is waiting."
-                    : "Complete Business Info and connect one channel."}
-              </p>
-            </div>
-
-            {waiting > 0 ? (
-              <Inbox className="h-6 w-6 text-warning" strokeWidth={2.1} />
-            ) : ready ? (
-              <CheckCircle2 className="h-6 w-6 text-success" strokeWidth={2.1} />
-            ) : (
-              <Inbox className="h-6 w-6 text-brand" strokeWidth={2.1} />
-            )}
+            <p className="mt-3 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+              {waiting > 0
+                ? "Müştəri mesajları diqqət istəyir."
+                : ready
+                  ? "Təcili iş yoxdur."
+                  : "Məlumatları tamamlayın və bir kanal qoşun."}
+            </p>
           </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <Button type="button" fullWidth onClick={() => onNavigate("/inbox")}>
-              Inbox
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              onClick={() => onNavigate("/channels")}
-            >
-              Channels
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              onClick={() => onNavigate("/truth")}
-            >
-              Business Info
-            </Button>
-          </div>
+          {waiting > 0 ? (
+            <Inbox className="h-6 w-6 text-warning" strokeWidth={2.1} />
+          ) : ready ? (
+            <CheckCircle2 className="h-6 w-6 text-success" strokeWidth={2.1} />
+          ) : (
+            <Inbox className="h-6 w-6 text-brand" strokeWidth={2.1} />
+          )}
         </div>
 
-        <div className="grid grid-cols-4 border border-line-soft bg-surface-muted">
-          {[
-            ["Unread", unreadCount(home)],
-            ["Open", openConversationCount(home)],
-            ["Handoff", handoffCount(home)],
-            ["Waiting", waiting],
-          ].map(([label, value]) => (
-            <div key={label} className="border-r border-line-soft px-4 py-4 last:border-r-0">
-              <div className="text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-                {value}
-              </div>
-              <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                {label}
-              </div>
-            </div>
-          ))}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Button type="button" fullWidth onClick={() => onNavigate("/inbox")}>
+            Gələnlər
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            onClick={() => onNavigate("/channels")}
+          >
+            Kanallar
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            onClick={() => onNavigate("/truth")}
+          >
+            Məlumatlar
+          </Button>
         </div>
       </div>
-    </Card>
+
+      <div className="grid grid-cols-4 border-t border-line-soft bg-surface-muted">
+        {[
+          ["Oxunmamış", unreadCount(home)],
+          ["Açıq", openConversationCount(home)],
+          ["Təhvil", handoffCount(home)],
+          ["Gözləyir", waiting],
+        ].map(([label, value]) => (
+          <div key={label} className="border-r border-line-soft px-4 py-4 last:border-r-0">
+            <div className="text-[22px] font-semibold leading-none text-text">
+              {value}
+            </div>
+            <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+              {label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
 function ChannelsPanel({ channels, onNavigate }) {
   return (
-    <Card padded={false} clip className="h-full">
+    <section className="border border-line-soft bg-white">
       <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
         <div>
           <h2 className="text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Channels
+            Kanallar
           </h2>
           <p className="mt-1 text-[12.5px] font-medium text-text-muted">
-            Website, Instagram, Telegram.
+            Canlı mesaj mənbələri.
           </p>
         </div>
 
@@ -664,7 +636,7 @@ function ChannelsPanel({ channels, onNavigate }) {
           onClick={() => onNavigate("/channels")}
           className="text-[12.5px] font-semibold text-brand"
         >
-          Manage
+          Aç
         </button>
       </div>
 
@@ -692,41 +664,41 @@ function ChannelsPanel({ channels, onNavigate }) {
           </button>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 
 function BusinessPanel({ home, onNavigate }) {
   const rows = [
     {
-      label: "Business Info",
-      value: businessInfoReady(home) ? "Ready" : "Review",
+      label: "Məlumatlar",
+      value: businessInfoReady(home) ? "Hazır" : "Yoxla",
       tone: businessInfoReady(home) ? "success" : "warning",
       path: "/truth",
     },
     {
-      label: "Knowledge",
-      value: "Open",
+      label: "Baza",
+      value: "Açıq",
       tone: "neutral",
       path: "/knowledge",
     },
     {
-      label: "Assistant",
-      value: assistantReady(home) ? "Ready" : "Safe",
+      label: "Köməkçi",
+      value: assistantReady(home) ? "Aktiv" : "Qorunur",
       tone: assistantReady(home) ? "success" : "warning",
       path: "/truth",
     },
   ];
 
   return (
-    <Card padded={false} clip className="h-full">
+    <section className="border border-line-soft bg-white">
       <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
         <div>
           <h2 className="text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Business control
+            Cavab əsası
           </h2>
           <p className="mt-1 text-[12.5px] font-medium text-text-muted">
-            What the assistant can use.
+            Köməkçinin istifadə etdiyi məlumat.
           </p>
         </div>
 
@@ -751,14 +723,14 @@ function BusinessPanel({ home, onNavigate }) {
           </button>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 
 function ProductHomeLoadingSurface() {
   return (
     <PageCanvas>
-      <LoadingSurface title="Loading home" />
+      <LoadingSurface title="Ana səhifə açılır" />
     </PageCanvas>
   );
 }
@@ -782,12 +754,12 @@ export default function ProductHomePage() {
   const channels = normalizeChannels(home);
 
   return (
-    <PageCanvas className="space-y-4 pt-4">
+    <PageCanvas className="space-y-6 pt-2">
       <HeroSection hero={hero} home={home} onAction={goFromAction} />
 
       <MetricsRow home={home} onNavigate={go} />
 
-      <LaunchChecklistCard home={home} onNavigate={go} />
+      <SetupProgressSection home={home} onNavigate={go} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <WorkPanel home={home} onNavigate={go} />

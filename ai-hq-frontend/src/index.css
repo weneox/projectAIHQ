@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   NEOX UI FOUNDATION
+   AIHQ UI FOUNDATION
    Single visual language for typography, material, controls, radius, motion.
    ========================================================================== */
 
@@ -26,11 +26,11 @@
   --font-weight-semibold: 620;
   --font-weight-bold: 700;
 
-  --tracking-tight-xs: -0.008em;
-  --tracking-tight-sm: -0.012em;
-  --tracking-tight-md: -0.018em;
-  --tracking-tight-lg: -0.03em;
-  --tracking-tight-xl: -0.055em;
+  --tracking-tight-xs: 0;
+  --tracking-tight-sm: 0;
+  --tracking-tight-md: 0;
+  --tracking-tight-lg: 0;
+  --tracking-tight-xl: 0;
 
   --line-tight: 1.05;
   --line-title: 1.15;
@@ -187,7 +187,7 @@ body {
   font-size: 14px;
   font-weight: var(--font-weight-regular);
   line-height: var(--line-body);
-  letter-spacing: var(--tracking-tight-xs);
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -926,45 +926,28 @@ table {
     padding: 12px 14px;
   }
 
-  /* Card — Channel Catalog / contact card material */
+  /* Card material */
   .ui-card {
     --ui-card-radius: var(--radius-md);
     --ui-card-inner-radius: var(--radius-md);
 
     position: relative;
     min-width: 0;
-    border: 0;
+    border: 1px solid rgb(var(--color-line-soft));
     border-radius: var(--ui-card-radius);
-    padding: 1.25px;
-    background:
-      linear-gradient(
-        135deg,
-        rgba(15, 23, 42, 0.18),
-        rgba(15, 23, 42, 0.045) 42%,
-        rgba(37, 99, 235, 0.22) 100%
-      );
-    box-shadow: 0 20px 46px -34px rgba(15, 23, 42, 0.42);
+    padding: 0;
+    background: rgb(var(--color-surface));
+    box-shadow: 0 12px 30px -26px rgba(15, 23, 42, 0.18);
     transition:
-      background var(--motion-base) var(--motion-premium),
+      border-color var(--motion-base) var(--motion-premium),
+      background-color var(--motion-base) var(--motion-premium),
       box-shadow var(--motion-base) var(--motion-premium),
       transform var(--motion-base) var(--motion-premium),
       opacity var(--motion-base) var(--motion-premium);
   }
 
   .ui-card::before {
-    content: "";
-    pointer-events: none;
-    position: absolute;
-    inset: 1.25px;
-    z-index: 0;
-    border-radius: var(--ui-card-inner-radius);
-    background:
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.96),
-        rgba(255, 255, 255, 0.88)
-      );
-    opacity: 0.92;
+    display: none;
   }
 
   .ui-card__inner {
@@ -974,9 +957,7 @@ table {
     min-height: 100%;
     border-radius: var(--ui-card-inner-radius);
     background: rgb(var(--color-surface));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.96),
-      inset 0 -1px 0 rgba(15, 23, 42, 0.025);
+    box-shadow: none;
   }
 
   .ui-card__inner--clip {
@@ -989,14 +970,8 @@ table {
 
   .ui-card--surface:hover,
   .ui-card--interactive:hover {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(15, 23, 42, 0.22),
-        rgba(37, 99, 235, 0.12) 44%,
-        rgba(37, 99, 235, 0.32) 100%
-      );
-    box-shadow: 0 30px 64px -40px rgba(15, 23, 42, 0.48);
+    border-color: rgb(var(--color-line));
+    box-shadow: 0 18px 38px -30px rgba(15, 23, 42, 0.22);
   }
 
   .ui-card--interactive:hover {
@@ -1032,14 +1007,9 @@ table {
   }
 
   .ui-card--subtle {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(148, 163, 184, 0.18),
-        rgba(148, 163, 184, 0.055) 48%,
-        rgba(15, 23, 42, 0.08) 100%
-      );
-    box-shadow: 0 14px 34px -30px rgba(15, 23, 42, 0.26);
+    border-color: rgb(var(--color-line-soft));
+    background: rgb(var(--color-surface-muted));
+    box-shadow: none;
   }
 
   .ui-card--subtle .ui-card__inner {
@@ -1047,19 +1017,14 @@ table {
   }
 
   .ui-card--elevated {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(15, 23, 42, 0.2),
-        rgba(15, 23, 42, 0.06) 42%,
-        rgba(46, 96, 255, 0.26) 100%
-      );
-    box-shadow: 0 28px 68px -46px rgba(15, 23, 42, 0.36);
+    border-color: rgb(var(--color-line));
+    box-shadow: var(--shadow-md);
   }
 
   .ui-card--plain {
     padding: 0;
     border-radius: 0;
+    border: 0;
     background: transparent;
     box-shadow: none;
   }
@@ -1076,43 +1041,19 @@ table {
 
   .ui-card--tone-brand,
   .ui-card--tone-info {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(46, 96, 255, 0.24),
-        rgba(46, 96, 255, 0.08) 45%,
-        rgba(37, 99, 235, 0.3) 100%
-      );
+    border-color: rgba(var(--color-brand), 0.28);
   }
 
   .ui-card--tone-success {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(21, 128, 61, 0.22),
-        rgba(21, 128, 61, 0.075) 45%,
-        rgba(5, 150, 105, 0.24) 100%
-      );
+    border-color: rgba(var(--color-success), 0.28);
   }
 
   .ui-card--tone-warning {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(180, 83, 9, 0.22),
-        rgba(180, 83, 9, 0.075) 45%,
-        rgba(217, 119, 6, 0.24) 100%
-      );
+    border-color: rgba(var(--color-warning), 0.28);
   }
 
   .ui-card--tone-danger {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(190, 24, 93, 0.2),
-        rgba(190, 24, 93, 0.07) 45%,
-        rgba(159, 18, 57, 0.22) 100%
-      );
+    border-color: rgba(var(--color-danger), 0.28);
   }
 
   
@@ -1508,7 +1449,7 @@ select:-webkit-autofill:active {
   font-size: 35.84px !important;
   font-weight: 620 !important;
   line-height: 1.02 !important;
-  letter-spacing: -0.055em !important;
+  letter-spacing: 0 !important;
   margin: 0 !important;
 }
 
@@ -1518,7 +1459,7 @@ select:-webkit-autofill:active {
   font-size: 14.5px !important;
   font-weight: 520 !important;
   line-height: 24px !important;
-  letter-spacing: -0.012em !important;
+  letter-spacing: 0 !important;
   margin-bottom: 0 !important;
 }
 

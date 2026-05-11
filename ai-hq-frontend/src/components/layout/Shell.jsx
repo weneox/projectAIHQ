@@ -4,6 +4,7 @@ import { Mail, X } from "lucide-react";
 import { apiGet } from "../../api/client.js";
 import { resendVerificationEmail } from "../../api/auth.js";
 import warningIcon from "../../assets/channels/warning.png";
+import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
 import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
@@ -146,14 +147,11 @@ function resolveShellMode(pathname = "") {
 async function fetchShellResource(path) {
   try {
     return { ok: true, data: await apiGet(path) };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
-      status: Number(error?.status || 0),
-      message:
-        typeof error?.message === "string" && error.message.trim()
-          ? error.message.trim()
-          : "Workspace stats are temporarily unavailable.",
+      status: 0,
+      message: "Məlumatlar müvəqqəti açılmır.",
     };
   }
 }
@@ -169,7 +167,7 @@ function buildShellStatsFromResponses(inboxRes, leadsRes) {
       dbDisabled: false,
       availability: "unavailable",
       message:
-        failedResponse.message || "Workspace stats are temporarily unavailable.",
+        failedResponse.message || "Məlumatlar müvəqqəti açılmır.",
     };
   }
 
@@ -211,7 +209,7 @@ function buildHostFallbackMeta() {
 
   if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") {
     return {
-      workspaceName: "Local workspace",
+      workspaceName: "Lokal hesab",
       workspaceKey: "localhost",
       userName: "",
       userEmail: "",
@@ -434,16 +432,16 @@ function GlobalWarningRibbon({
   if (!hasStatsMessage && !emailVisible) return null;
 
   const title = emailVisible
-    ? "Verify your email to secure this workspace"
-    : "Workspace stats unavailable";
+    ? "Emailinizi təsdiqləyin"
+    : "Məlumatlar müvəqqəti açılmır";
 
   const description = emailVisible
     ? emailNotice?.message ||
-      `We sent a 6-digit verification code${email ? ` to ${email}` : ""}. Some sensitive actions stay limited until verification is complete.`
+      `6 rəqəmli təsdiq kodu göndərildi${email ? `: ${email}` : ""}.`
     : s(statsMessage);
 
   const statsInline =
-    emailVisible && hasStatsMessage ? `Workspace stats unavailable · ${s(statsMessage)}` : "";
+    emailVisible && hasStatsMessage ? `Məlumatlar açılmır · ${s(statsMessage)}` : "";
 
   return (
     <div className="fixed left-0 right-0 top-0 z-[120] h-[42px] border-b border-[#d8c35c] bg-[#f7e995] text-[#5f4a00]">
@@ -455,7 +453,7 @@ function GlobalWarningRibbon({
           draggable="false"
         />
 
-        <div className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] tracking-[-0.01em]">
+        <div className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] tracking-normal">
           <div className="truncate">
             <span className="mr-2 font-semibold">{title}</span>
             {statsInline ? (
@@ -475,7 +473,7 @@ function GlobalWarningRibbon({
               onClick={onVerify}
               className="inline-flex h-8 items-center rounded-[10px] bg-[#5f4a00] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
             >
-              Verify now
+              Təsdiqlə
             </button>
 
             <button
@@ -485,7 +483,7 @@ function GlobalWarningRibbon({
               className="inline-flex h-8 items-center gap-2 rounded-[10px] border border-[#d2a23d] bg-[#fff3c6] px-3 text-[12px] font-semibold text-[#5f4a00] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Mail className="h-3.5 w-3.5" strokeWidth={2.2} />
-              {sending ? "Sending..." : "Resend code"}
+              {sending ? "Göndərilir..." : "Kodu yenilə"}
             </button>
           </div>
         ) : null}
@@ -493,8 +491,8 @@ function GlobalWarningRibbon({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Dismiss"
-          title="Dismiss"
+          aria-label="Bağla"
+          title="Bağla"
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-[#6f5600]/80 transition-colors hover:bg-[#edd96f] hover:text-[#5f4a00]"
         >
           <X className="h-[14px] w-[14px]" strokeWidth={2.1} />
@@ -532,6 +530,7 @@ export default function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const notifications = useNotificationsSurface();
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
@@ -548,6 +547,21 @@ export default function Shell() {
   );
 
   const loadShellStats = useCallback(async () => {
+    if (localWorkspaceEntry) {
+      const nextStats = {
+        ...INITIAL_SHELL_STATS,
+        availability: "ready",
+        message: "",
+      };
+      warningMessageRef.current = "";
+      setWarningDismissed(true);
+      setShellStats((prev) => ({
+        ...prev,
+        ...nextStats,
+      }));
+      return nextStats;
+    }
+
     if (statsRequestRef.current) return statsRequestRef.current;
 
     const request = fetchShellResource("/api/inbox/threads")
@@ -578,7 +592,7 @@ export default function Shell() {
 
     statsRequestRef.current = request;
     return request;
-  }, []);
+  }, [localWorkspaceEntry]);
 
   const scheduleShellRefresh = useCallback(
     (delay = 160) => {
@@ -594,6 +608,15 @@ export default function Shell() {
     let alive = true;
 
     async function loadEmailVerificationState() {
+      if (localWorkspaceEntry) {
+        setEmailVerificationState({
+          loading: false,
+          visible: false,
+          email: "",
+        });
+        return;
+      }
+
       try {
         const auth = await getAppAuthContext({ force: true });
         if (!alive) return;
@@ -622,12 +645,19 @@ export default function Shell() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [localWorkspaceEntry]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadWorkspaceMeta = async () => {
+      if (localWorkspaceEntry) {
+        setWorkspaceMeta((prev) =>
+          mergeWorkspaceMeta(prev, buildHostFallbackMeta())
+        );
+        return;
+      }
+
       try {
         const response = await apiGet("/api/app/bootstrap");
         if (cancelled) return;
@@ -652,7 +682,7 @@ export default function Shell() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [localWorkspaceEntry]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -748,7 +778,7 @@ export default function Shell() {
         }));
         setEmailVerificationNotice({
           tone: "success",
-          message: "Email already verified.",
+          message: "Email artıq təsdiqlənib.",
         });
         return;
       }
@@ -756,7 +786,7 @@ export default function Shell() {
       if (result?.sent) {
         setEmailVerificationNotice({
           tone: "success",
-          message: "Verification code sent. Check your inbox.",
+          message: "Kod göndərildi. Emailinizi yoxlayın.",
         });
         return;
       }
@@ -764,7 +794,7 @@ export default function Shell() {
       setEmailVerificationNotice({
         tone: "warning",
         message:
-          "Verification code was created, but email delivery is not configured yet.",
+          "Kod yaradıldı, amma email göndərişi hələ hazır deyil.",
       });
     } catch (error) {
       const retryAfter = error?.payload?.retryAfterSeconds;
@@ -772,9 +802,9 @@ export default function Shell() {
       setEmailVerificationNotice({
         tone: "danger",
         message: retryAfter
-          ? `Wait ${retryAfter} seconds before requesting another code.`
+          ? `${retryAfter} saniyə sonra yenidən cəhd edin.`
           : s(error?.payload?.error || error?.message) ||
-            "Could not resend verification code.",
+            "Kod yenidən göndərilə bilmədi.",
       });
     } finally {
       setEmailVerificationSending(false);
@@ -804,7 +834,8 @@ export default function Shell() {
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
-  const topWarningVisible = Boolean(shellStats?.message) && !warningDismissed;
+  const topWarningVisible =
+    !localWorkspaceEntry && Boolean(shellStats?.message) && !warningDismissed;
   const emailVerificationVisible =
     emailVerificationState.loading !== true &&
     emailVerificationState.visible === true &&

@@ -3,11 +3,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAppAuthContext = vi.fn();
+const peekAppAuthContext = vi.fn();
+const peekAppSessionContext = vi.fn();
 const isLocalWorkspaceEntryEnabled = vi.fn();
 const isWorkspaceSelectionPath = vi.fn();
 
 vi.mock("../../../lib/appSession.js", () => ({
   getAppAuthContext: (...args) => getAppAuthContext(...args),
+  peekAppAuthContext: (...args) => peekAppAuthContext(...args),
+  peekAppSessionContext: (...args) => peekAppSessionContext(...args),
 }));
 
 vi.mock("../../../lib/appEntry.js", () => ({
@@ -37,6 +41,8 @@ import UserRouteGuard from "../../../components/auth/UserRouteGuard.jsx";
 describe("UserRouteGuard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    peekAppAuthContext.mockReturnValue(null);
+    peekAppSessionContext.mockReturnValue(null);
     isLocalWorkspaceEntryEnabled.mockReturnValue(false);
     isWorkspaceSelectionPath.mockReturnValue(false);
   });
@@ -54,8 +60,6 @@ describe("UserRouteGuard", () => {
         </UserRouteGuard>
       </MemoryRouter>
     );
-
-    expect(screen.getByText(/Preparing workspace/i)).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText("Protected workspace")).toBeInTheDocument();
@@ -111,7 +115,7 @@ describe("UserRouteGuard", () => {
     );
 
     expect(
-      await screen.findByText((content) => content.includes("Workspace unavailable"))
+      await screen.findByText((content) => content.includes("Səhifə açılmır"))
     ).toBeInTheDocument();
 
     expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();

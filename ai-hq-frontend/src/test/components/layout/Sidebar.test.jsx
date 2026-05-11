@@ -16,42 +16,42 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /^home$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^ana səhifə$/i })).toHaveAttribute(
       "href",
       "/home"
     );
-    expect(screen.getByRole("link", { name: /inbox 3/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /gələnlər 3/i })).toHaveAttribute(
       "href",
       "/inbox"
     );
-    expect(screen.getByRole("link", { name: /^channels$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^kanallar$/i })).toHaveAttribute(
       "href",
       "/channels"
     );
     expect(
-      screen.getByRole("link", { name: /^business info$/i })
+      screen.getByRole("link", { name: /^məlumatlar$/i })
     ).toHaveAttribute("href", "/truth");
-    expect(screen.getByRole("link", { name: /^contacts$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^müştərilər$/i })).toHaveAttribute(
       "href",
       "/customers"
     );
-    expect(screen.getByRole("link", { name: /^leads$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^fürsətlər$/i })).toHaveAttribute(
       "href",
       "/leads"
     );
-    expect(screen.getByRole("link", { name: /^knowledge$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^baza$/i })).toHaveAttribute(
       "href",
       "/knowledge"
     );
-    expect(screen.getByRole("link", { name: /^reports$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^hesabat$/i })).toHaveAttribute(
       "href",
       "/reports"
     );
-    expect(screen.getByRole("link", { name: /^team$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^komanda$/i })).toHaveAttribute(
       "href",
       "/team"
     );
-    expect(screen.getByRole("link", { name: /^settings$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^ayarlar$/i })).toHaveAttribute(
       "href",
       "/settings"
     );

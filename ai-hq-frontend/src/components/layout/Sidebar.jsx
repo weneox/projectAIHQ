@@ -165,8 +165,8 @@ function CollapseControl({ collapsed = false, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-label={collapsed ? "Menyunu genişləndir" : "Menyunu yığ"}
+      title={collapsed ? "Menyunu genişləndir" : "Menyunu yığ"}
       className={cx(
         "group relative inline-flex h-9 items-center text-text-subtle transition-colors duration-base ease-premium hover:text-text",
         collapsed ? "w-9 justify-center" : "gap-2 px-1"
@@ -180,7 +180,7 @@ function CollapseControl({ collapsed = false, onToggle }) {
           collapsed ? "max-w-0 opacity-0" : "max-w-[108px] opacity-100"
         )}
       >
-        Collapse
+        Yığ
       </span>
     </button>
   );
@@ -221,7 +221,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={onCloseMobile}
-            aria-label="Close navigation"
+            aria-label="Naviqasiyanı bağla"
             className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors duration-base ease-premium hover:text-text"
           >
             <X className="h-[18px] w-[18px]" strokeWidth={1.95} />

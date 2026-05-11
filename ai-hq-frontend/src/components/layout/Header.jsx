@@ -260,10 +260,10 @@ function AskAiButton() {
         "bg-transparent text-[12px] font-semibold tracking-[var(--tracking-tight-md)] text-text-muted",
         "transition-[color,background-color] duration-base ease-premium hover:bg-[rgba(15,23,42,0.04)] hover:text-text"
       )}
-      aria-label="Open Ask AI"
+      aria-label="Köməkçini aç"
     >
       <Sparkles className="h-[17px] w-[17px]" strokeWidth={1.95} />
-      <span>Ask AI</span>
+      <span>Köməkçi</span>
     </button>
   );
 }
@@ -280,7 +280,7 @@ function HeaderPageTitle({ pathname = "" }) {
         <Icon className="h-5 w-5 shrink-0 text-[#2F3947]" strokeWidth={2.05} />
       ) : null}
 
-      <div className="truncate py-[2px] text-[20px] font-semibold leading-[1.25] tracking-[-0.025em] text-[#2F3947]">
+      <div className="truncate py-[2px] text-[20px] font-semibold leading-[1.25] tracking-normal text-[#2F3947]">
         {section.label}
       </div>
     </div>
@@ -394,7 +394,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     <div ref={menuRef} className="relative z-[520]">
       <button
         type="button"
-        aria-label={displayName || "Workspace"}
+        aria-label={displayName || "Hesab"}
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
         className={cx(
@@ -429,7 +429,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
                   <div className="h-3.5 w-28 rounded-full bg-[rgba(15,23,42,0.08)]" />
                 ) : (
                   <div className="truncate text-[14px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                    {displayName || "Workspace"}
+                    {displayName || "Hesab"}
                   </div>
                 )}
 
@@ -453,7 +453,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
             className="group relative mt-1 flex h-10 w-full items-center justify-between overflow-hidden rounded-[12px] px-3 text-left text-[13px] font-semibold text-text transition-colors duration-base ease-premium"
           >
             <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(15,23,42,0.034),rgba(15,23,42,0.014),rgba(15,23,42,0))]" />
-            <span className="relative z-[1]">Notifications</span>
+            <span className="relative z-[1]">Bildirişlər</span>
             <span className="relative z-[1] text-[12px] font-semibold text-text-subtle">
               {notificationsLoading ? "…" : unread > 99 ? "99+" : unread}
             </span>
@@ -466,7 +466,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
           >
             <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(220,38,38,0.08),rgba(220,38,38,0.035),rgba(220,38,38,0))]" />
             <span className="relative z-[1]">
-              {loggingOut ? "Signing out..." : "Sign out"}
+              {loggingOut ? "Çıxılır..." : "Çıxış"}
             </span>
           </button>
         </div>
@@ -482,7 +482,7 @@ function NotificationsButton({ notifications }) {
   return (
     <ShellIconButton
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      ariaLabel="Open notifications"
+      ariaLabel="Bildirişləri aç"
       active={notifications?.open}
     >
       <Bell className="h-[18px] w-[18px]" strokeWidth={1.95} />
@@ -513,7 +513,7 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
           <div className="flex min-w-0 items-center gap-2">
             <ShellIconButton
               onClick={onMenuClick}
-              ariaLabel="Open navigation"
+              ariaLabel="Naviqasiyanı aç"
               className="md:hidden"
             >
               <Menu className="h-[18px] w-[18px]" strokeWidth={2} />

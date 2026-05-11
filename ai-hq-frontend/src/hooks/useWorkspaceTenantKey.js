@@ -9,8 +9,16 @@ function normalizeTenantKey(value = "") {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function getDesignTenantKey() {
+  if (!import.meta.env?.DEV) return "";
+  if (String(import.meta.env?.VITE_APP_DESIGN_MODE || "").trim() !== "1") {
+    return "";
+  }
+  return normalizeTenantKey(import.meta.env?.VITE_DESIGN_TENANT_KEY || "local-dev");
+}
+
 export function getCachedWorkspaceTenantKey() {
-  return normalizeTenantKey(peekAppSessionContext()?.tenantKey);
+  return normalizeTenantKey(peekAppSessionContext()?.tenantKey) || getDesignTenantKey();
 }
 
 export function buildWorkspaceScopedQueryKey(baseKey, tenantKey) {
