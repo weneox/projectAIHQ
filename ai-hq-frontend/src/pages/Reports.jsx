@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import {
+  ArrowRight, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
   BarChart3,
@@ -244,10 +246,10 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function EmptyAnalyticsState({ range }) {
+function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
   return (
-    <div className="flex min-h-[300px] items-center justify-center px-6 py-12 text-center">
-      <div className="max-w-[520px]">
+    <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
+      <div className="max-w-[560px]">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text-muted">
           <Database className="h-6 w-6" strokeWidth={1.9} />
         </div>
@@ -258,13 +260,39 @@ function EmptyAnalyticsState({ range }) {
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
           The backend returned real empty data for the selected {rangeLabel(range)} range.
-          Once inbox messages, leads, webhooks, or usage records exist, this page will fill automatically.
+          Connect Website Chat, Instagram, or Telegram and send a test conversation to start filling this dashboard.
         </p>
+
+        <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+          <Button
+            type="button"
+            onClick={onOpenChannels}
+            rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+          >
+            Connect launch channel
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onOpenInbox}
+          >
+            Open inbox
+          </Button>
+        </div>
+
+        <div className="mt-5 rounded-md border border-line-soft bg-surface-subtle px-4 py-3 text-left">
+          <div className="text-[13px] font-semibold text-text">
+            What creates report data?
+          </div>
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            Website, Instagram, or Telegram messages, outbound replies, AI replies, leads, webhooks, and usage records.
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
 function ChannelRow({ channel, maxTotal }) {
   const width = maxTotal ? Math.max(5, Math.round((channel.total / maxTotal) * 100)) : 0;
 
@@ -388,7 +416,7 @@ function buildInsights({ summary, channels, degraded }) {
   return insights;
 }
 
-function ReportsSurface({ payload, range }) {
+function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
   const summary = useMemo(() => summarizeReport(payload), [payload]);
   const series = useMemo(() => normalizeSeries(payload), [payload]);
   const channels = useMemo(() => normalizeChannels(payload), [payload]);
@@ -482,7 +510,11 @@ function ReportsSurface({ payload, range }) {
       </div>
 
       {!active ? (
-        <EmptyAnalyticsState range={range} />
+        <EmptyAnalyticsState
+          range={range}
+          onOpenChannels={onOpenChannels}
+          onOpenInbox={onOpenInbox}
+        />
       ) : (
         <>
           <div className="border-t border-line-soft px-5 py-5">
@@ -664,6 +696,7 @@ function ReportsSurface({ payload, range }) {
 }
 
 export default function Reports() {
+  const navigate = useNavigate();
   const [range, setRange] = useState("7d");
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -747,7 +780,12 @@ export default function Reports() {
       ) : null}
 
       {payload ? (
-        <ReportsSurface payload={payload} range={range} />
+        <ReportsSurface
+          payload={payload}
+          range={range}
+          onOpenChannels={() => navigate("/channels")}
+          onOpenInbox={() => navigate("/inbox")}
+        />
       ) : !error ? (
         <InlineNotice
           tone="warning"
