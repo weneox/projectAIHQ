@@ -1,4 +1,9 @@
-import { render, screen } from "@testing-library/react";
+﻿const fs = require("fs");
+const path = require("path");
+
+const file = path.join(process.cwd(), "ai-hq-frontend/src/test/components/layout/Sidebar.test.jsx");
+
+const code = `import { render, screen } from " @testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -70,7 +75,7 @@ describe("Sidebar", () => {
     ];
 
     for (const href of expectedVisibleHrefs) {
-      expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
+      expect(document.querySelector(\`a[href="\${href}"]\`)).toBeTruthy();
     }
 
     for (const href of [
@@ -86,7 +91,7 @@ describe("Sidebar", () => {
       "/incidents",
       "/admin",
     ]) {
-      expect(document.querySelector(`a[href="${href}"]`)).toBeNull();
+      expect(document.querySelector(\`a[href="\${href}"]\`)).toBeNull();
     }
 
     const linkOrder = Array.from(document.querySelectorAll("a[href]")).map(
@@ -100,3 +105,7 @@ describe("Sidebar", () => {
     }
   });
 });
+`;
+
+fs.writeFileSync(file, code.replace('" @testing-library/react"', '"@testing-library/react"'), "utf8");
+console.log("updated Sidebar test for restored product navigation");
