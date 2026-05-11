@@ -33,6 +33,7 @@ import {
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
+  getWebsiteGuidedSetupReview,
 } from "./website.js";
 
 const log = createLogger({
@@ -235,6 +236,26 @@ export function channelConnectRoutes({ db }) {
       );
     }
   });
+
+  r.get(
+    "/channels/webchat/guided-setup/review",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await getWebsiteGuidedSetupReview({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to load guided website setup review",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
 
   r.get(
     "/channels/webchat/domain-verification",

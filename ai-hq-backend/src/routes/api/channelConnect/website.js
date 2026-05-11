@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { createTenantSourcesHelpers } from "../../../db/helpers/tenantSources.js";
+import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
 import {
   dbGetLatestTenantDomainVerification,
@@ -2092,4 +2093,99 @@ export async function checkWebsiteDomainVerification({ db, req, resolveTxtFn } =
       },
     };
   }
+}
+
+
+function normalizeWebsiteReviewLimit(value = 20) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 20;
+  return Math.max(1, Math.min(50, Math.floor(next)));
+}
+
+function isWebsiteReviewCandidate(item = {}) {
+  const sourceType = s(item.source_type || item.sourceType).toLowerCase();
+  const sourceName = s(item.source_display_name || item.sourceDisplayName).toLowerCase();
+  const itemKey = s(item.item_key || item.itemKey).toLowerCase();
+
+  return (
+    sourceType === "website" ||
+    sourceName.startsWith("website:") ||
+    itemKey.startsWith("website_page:")
+  );
+}
+
+function toWebsiteReviewItem(item = {}) {
+  return {
+    id: s(item.id),
+    candidateId: s(item.id || item.candidateId || item.candidate_id),
+    title: s(item.title, "Website information"),
+    valueText: s(item.value_text || item.valueText),
+    valueJson: obj(item.value_json || item.valueJson),
+    status: s(item.status).toLowerCase(),
+    category: s(item.category).toLowerCase(),
+    confidence: Number(item.confidence || 0),
+    confidenceLabel: s(item.confidence_label || item.confidenceLabel),
+    source: {
+      type: s(item.source_type || item.sourceType),
+      displayName: s(item.source_display_name || item.sourceDisplayName),
+      runId: s(item.source_run_id || item.sourceRunId),
+    },
+    evidence: arr(item.source_evidence_json || item.sourceEvidenceJson),
+    reviewReason: s(item.review_reason || item.reviewReason),
+    createdAt: s(item.created_at || item.createdAt),
+    updatedAt: s(item.updated_at || item.updatedAt),
+  };
+}
+
+export async function getWebsiteGuidedSetupReview({ db, req } = {}) {
+  const tenantKey = getReqTenantKey(req);
+  const tenant = await getTenantByKey(db, tenantKey);
+
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found.", 404, "tenant_not_found");
+  }
+
+  const limit = normalizeWebsiteReviewLimit(req?.query?.limit || req?.body?.limit || 20);
+  const knowledge = createTenantKnowledgeHelpers({ db });
+
+  const queue = await knowledge.listReviewQueue({
+    tenantId: tenant.id,
+    tenantKey: tenant.tenant_key || tenant.tenantKey || tenantKey,
+    category: "business_info",
+    limit: 50,
+    offset: 0,
+  });
+
+  const websiteItems = arr(queue)
+    .filter(isWebsiteReviewCandidate)
+    .slice(0, limit)
+    .map(toWebsiteReviewItem);
+
+  const summary = {
+    total: websiteItems.length,
+    needsReview: websiteItems.filter((item) =>
+      ["pending", "needs_review", "conflict"].includes(item.status)
+    ).length,
+    conflicts: websiteItems.filter((item) => item.status === "conflict").length,
+    highConfidence: websiteItems.filter((item) => Number(item.confidence || 0) >= 0.8).length,
+  };
+
+  return {
+    ok: true,
+    mode: "guided",
+    sourceType: "website",
+    reviewReady: websiteItems.length > 0,
+    summary,
+    items: websiteItems,
+    nextAction: websiteItems.length
+      ? {
+          label: "Review website information",
+          action: "open_truth_review",
+          path: "/truth?source=website&review=business_info",
+        }
+      : {
+          label: "Waiting for website scan",
+          action: "wait_for_crawl",
+        },
+  };
 }

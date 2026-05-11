@@ -87,3 +87,16 @@ export async function createWebsiteWidgetTestMessage(payload = {}) {
 export async function startWebsiteGuidedSetup(payload = {}) {
   return apiPost("/api/channels/webchat/guided-setup/start", payload);
 }
+
+
+export async function getWebsiteGuidedSetupReview(params = {}) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params || {})) {
+    const next = String(value ?? "").trim();
+    if (next) query.set(key, next);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return apiGet(`/api/channels/webchat/guided-setup/review${suffix}`);
+}
