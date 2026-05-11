@@ -124,3 +124,118 @@ test("public webchat fail-closed payload stays safe for public clients", () => {
   assert.equal(payload.reasonCode, "website_widget_origin_not_allowed");
   assert.equal(payload.assistant.statusLabel, "Setup required");
 });
+
+
+test("approved truth public reply uses only approved runtime facts", () => {
+  const reply = __test__.buildApprovedTruthPublicReplyFromRuntime({
+    text: "What is your pricing?",
+    runtime: {
+      authority: {
+        available: true,
+        stale: false,
+        source: "approved_runtime_projection",
+        runtimeProjectionId: "proj_approved_1",
+        projectionHash: "hash_approved_1",
+      },
+      businessContext: "Acme helps businesses automate customer messaging.",
+      serviceCatalog: [
+        {
+          name: "Pricing",
+          description: "Plans start after a short business fit review.",
+          pricing: "Starter packages begin from approved quoted plans.",
+        },
+        {
+          name: "Implementation",
+          description: "Setup includes website chat, inbox routing, and review-first automation.",
+        },
+      ],
+      knowledgeEntries: [],
+      responsePlaybooks: [],
+    },
+  });
+
+  assert.equal(reply.ok, true);
+  assert.equal(reply.mode, "approved_truth_answer");
+  assert.match(reply.text, /approved business information/i);
+  assert.match(reply.text, /pricing/i);
+  assert.equal(reply.source.authority.source, "approved_runtime_projection");
+  assert.equal(reply.source.authority.runtimeProjectionId, "proj_approved_1");
+});
+
+test("approved truth public reply falls back safely when no relevant approved fact exists", () => {
+  const reply = __test__.buildApprovedTruthPublicReplyFromRuntime({
+    text: "Do you sell cars?",
+    runtime: {
+      authority: {
+        available: true,
+        stale: false,
+        source: "approved_runtime_projection",
+        runtimeProjectionId: "proj_approved_2",
+        projectionHash: "hash_approved_2",
+      },
+      serviceCatalog: [
+        {
+          name: "Website chat",
+          description: "AIHQ captures website messages and routes them into the inbox.",
+        },
+      ],
+      knowledgeEntries: [],
+      responsePlaybooks: [],
+    },
+  });
+
+  assert.equal(reply.ok, true);
+  assert.equal(reply.mode, "approved_truth_fallback");
+  assert.equal(reply.reasonCode, "approved_truth_no_relevant_fact");
+  assert.match(reply.text, /do not have approved information/i);
+});
+
+test("approved truth public reply stays manual-first without approved runtime authority", () => {
+  const reply = __test__.buildApprovedTruthPublicReplyFromRuntime({
+    text: "What is your pricing?",
+    runtime: {
+      authority: {
+        available: false,
+        stale: false,
+        source: "",
+        reasonCode: "runtime_authority_unavailable",
+      },
+      serviceCatalog: [
+        {
+          name: "Pricing",
+          description: "This should not be used without authority.",
+        },
+      ],
+    },
+  });
+
+  assert.equal(reply.ok, false);
+  assert.equal(reply.mode, "manual_first");
+  assert.equal(reply.reasonCode, "approved_runtime_projection_unavailable");
+  assert.match(reply.text, /message was received/i);
+});
+
+test("approved truth public reply refuses stale runtime authority", () => {
+  const reply = __test__.buildApprovedTruthPublicReplyFromRuntime({
+    text: "What is your pricing?",
+    runtime: {
+      authority: {
+        available: true,
+        stale: true,
+        source: "approved_runtime_projection",
+        runtimeProjectionId: "proj_stale",
+        projectionHash: "hash_stale",
+      },
+      serviceCatalog: [
+        {
+          name: "Pricing",
+          description: "This stale projection must not be used.",
+        },
+      ],
+    },
+  });
+
+  assert.equal(reply.ok, false);
+  assert.equal(reply.mode, "manual_first");
+  assert.equal(reply.reasonCode, "approved_runtime_projection_unavailable");
+});
