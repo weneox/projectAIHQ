@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleAlert, Loader2, MessageCircle, Send } from "lucide-react";
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+  MessageCircle,
+  Send,
+} from "lucide-react";
 
 import { apiUrl } from "../api/client.js";
 
@@ -42,7 +48,12 @@ function getWidgetParams() {
         params.get("tenant"),
       "Website"
     ),
-    origin: s(params.get("origin") || window.location.ancestorOrigins?.[0] || document.referrer || window.location.origin),
+    origin: s(
+      params.get("origin") ||
+        window.location.ancestorOrigins?.[0] ||
+        document.referrer ||
+        window.location.origin
+    ),
   };
 }
 
@@ -53,7 +64,35 @@ function buildBootstrapUrl({ tenantKey = "", widgetId = "", origin = "" } = {}) 
   if (widgetId) query.set("widgetId", widgetId);
   if (origin) query.set("origin", origin);
 
-  return apiUrl(`/api/channels/webchat/bootstrap?${query.toString()}`);
+  return apiUrl("/api/channels/webchat/bootstrap?" + query.toString());
+}
+
+function buildMessageUrl() {
+  return apiUrl("/api/channels/webchat/message");
+}
+
+function normalizeWidgetReply(payload = {}) {
+  const root = obj(payload);
+  const assistant = obj(root.assistant);
+
+  return {
+    ok: root.ok === true,
+    received: root.received === true,
+    reasonCode: s(root.reasonCode),
+    message: s(root.message || root.error),
+    sessionId: s(root.sessionId),
+    threadId: s(root.threadId),
+    messageId: s(root.messageId),
+    assistant: {
+      mode: s(assistant.mode, "manual_first"),
+      text: s(
+        assistant.text,
+        root.received === true
+          ? "Thanks — your message was received. Our team can review it and reply shortly."
+          : "Website chat is temporarily unavailable."
+      ),
+    },
+  };
 }
 
 function normalizeBootstrapPayload(payload = {}) {
@@ -76,8 +115,13 @@ function normalizeBootstrapPayload(payload = {}) {
         "Ask a question and our team will help you."
       ),
       accentColor: s(assistant.accentColor, "#0f172a"),
-      statusLabel: s(assistant.statusLabel, root.live === true ? "Live" : "Setup required"),
-      initialPrompts: arr(assistant.initialPrompts).map((item) => s(item)).filter(Boolean),
+      statusLabel: s(
+        assistant.statusLabel,
+        root.live === true ? "Live" : "Setup required"
+      ),
+      initialPrompts: arr(assistant.initialPrompts)
+        .map((item) => s(item))
+        .filter(Boolean),
     },
     controls: {
       manualFirst: controls.manualFirst !== false,
@@ -90,7 +134,7 @@ function normalizeBootstrapPayload(payload = {}) {
 
 function GuardedState({ payload, brand = "Website" }) {
   const assistant = obj(payload.assistant);
-  const title = s(assistant.title, `${brand} chat`);
+  const title = s(assistant.title, brand + " chat");
   const message = s(
     payload.message,
     "This widget is guarded until setup is complete."
@@ -141,15 +185,86 @@ function GuardedState({ payload, brand = "Website" }) {
   );
 }
 
-function LiveWidgetShell({ payload, brand = "Website" }) {
+function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
   const assistant = obj(payload.assistant);
   const prompts = arr(assistant.initialPrompts).slice(0, 4);
   const accentColor = s(assistant.accentColor, "#0f172a");
-  const title = s(assistant.title, `${brand} chat`);
+  const title = s(assistant.title, brand + " chat");
   const subtitle = s(
     assistant.subtitle,
     "Ask a question and our team will help you."
   );
+
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      text: "Salam! Mən yalnız təsdiqlənmiş biznes məlumatlarına əsasən kömək edə bilərəm.",
+    },
+  ]);
+  const [sending, setSending] = useState(false);
+
+  async function sendMessage() {
+    const text = s(messageDraft);
+    if (!text || sending) return;
+
+    setMessages((items) => [
+      ...items,
+      {
+        id: "local-" + Date.now(),
+        role: "visitor",
+        text,
+      },
+    ]);
+    setMessageDraft("");
+    setSending(true);
+
+    try {
+      const response = await fetch(buildMessageUrl(), {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json; charset=utf-8",
+        },
+        credentials: "omit",
+        body: JSON.stringify({
+          tenantKey: params.tenantKey || payload.tenantKey,
+          widgetId: params.widgetId || payload.widgetId,
+          origin: params.origin || payload.origin,
+          text,
+        }),
+      });
+
+      const reply = normalizeWidgetReply(await response.json().catch(() => ({})));
+
+      setMessages((items) => [
+        ...items,
+        {
+          id: reply.messageId || "reply-" + Date.now(),
+          role: reply.received ? "assistant" : "system",
+          text: reply.assistant.text || reply.message,
+        },
+      ]);
+    } catch (error) {
+      setMessages((items) => [
+        ...items,
+        {
+          id: "error-" + Date.now(),
+          role: "system",
+          text: s(error?.message, "Website chat is temporarily unavailable."),
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleComposerKeyDown(event) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    sendMessage();
+  }
 
   return (
     <>
@@ -177,26 +292,43 @@ function LiveWidgetShell({ payload, brand = "Website" }) {
         </div>
       </header>
 
-      <div className="flex-1 bg-slate-50 px-4 py-4">
-        <div className="mr-auto max-w-[86%] rounded-[20px] bg-white px-4 py-3 text-[13px] leading-6 text-slate-800 shadow-sm ring-1 ring-slate-200">
-          Salam! Mən yalnız təsdiqlənmiş biznes məlumatlarına əsasən kömək edə bilərəm.
-        </div>
+      <div className="flex-1 space-y-3 bg-slate-50 px-4 py-4">
+        {messages.map((message) => {
+          const visitor = message.role === "visitor";
+          const system = message.role === "system";
 
-        <div className="mt-3 rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12.5px] font-medium leading-6 text-emerald-800">
+          return (
+            <div
+              key={message.id}
+              className={
+                visitor
+                  ? "ml-auto max-w-[84%] rounded-[20px] bg-slate-950 px-4 py-3 text-[13px] leading-6 text-white shadow-sm"
+                  : system
+                    ? "mx-auto max-w-[92%] rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-center text-[12.5px] font-medium leading-6 text-amber-800"
+                    : "mr-auto max-w-[86%] rounded-[20px] bg-white px-4 py-3 text-[13px] leading-6 text-slate-800 shadow-sm ring-1 ring-slate-200"
+              }
+            >
+              {message.text}
+            </div>
+          );
+        })}
+
+        <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12.5px] font-medium leading-6 text-emerald-800">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.1} />
             <span>
-              Website Chat live shell is ready. Message capture is the next runtime step.
+              Messages are captured safely. Public AI answers stay manual-first until approved runtime answering is enabled.
             </span>
           </div>
         </div>
 
         {prompts.length ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             {prompts.map((prompt) => (
               <button
                 key={prompt}
                 type="button"
+                onClick={() => setMessageDraft(prompt)}
                 className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[11.5px] font-semibold text-slate-600 shadow-sm"
               >
                 {prompt}
@@ -209,14 +341,19 @@ function LiveWidgetShell({ payload, brand = "Website" }) {
       <footer className="border-t border-slate-200/80 bg-white px-4 py-3">
         <div className="flex items-center gap-2 rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2">
           <input
-            disabled
-            placeholder="Message flow is being prepared"
-            className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-slate-500 outline-none placeholder:text-slate-400"
+            value={messageDraft}
+            onChange={(event) => setMessageDraft(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            disabled={sending}
+            placeholder={sending ? "Sending..." : "Write your message"}
+            className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-slate-700 outline-none placeholder:text-slate-400 disabled:text-slate-400"
           />
           <button
             type="button"
-            disabled
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-300 text-white"
+            disabled={sending || !s(messageDraft)}
+            onClick={sendMessage}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-white transition-opacity disabled:cursor-not-allowed disabled:bg-slate-300"
+            aria-label="Send message"
           >
             <Send className="h-3.5 w-3.5" strokeWidth={2.1} />
           </button>
@@ -235,7 +372,7 @@ export default function PublicWebsiteWidget() {
       live: false,
       message: "Loading Website Chat...",
       assistant: {
-        title: `${params.brand} chat`,
+        title: params.brand + " chat",
         statusLabel: "Loading",
       },
     }),
@@ -280,7 +417,7 @@ export default function PublicWebsiteWidget() {
             reasonCode: "website_widget_bootstrap_network_error",
             message: s(error?.message, "Website chat is temporarily unavailable."),
             assistant: {
-              title: `${params.brand} chat`,
+              title: params.brand + " chat",
               statusLabel: "Unavailable",
             },
           }),
@@ -312,7 +449,11 @@ export default function PublicWebsiteWidget() {
             </div>
           </div>
         ) : payload.live ? (
-          <LiveWidgetShell payload={payload} brand={params.brand} />
+          <LiveWidgetShell
+            payload={payload}
+            params={params}
+            brand={params.brand}
+          />
         ) : (
           <GuardedState payload={payload} brand={params.brand} />
         )}
