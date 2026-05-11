@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import pg from "pg";
 
 import { createTenantKnowledgeHelpers } from "../src/db/helpers/tenantKnowledge.js";
@@ -41,7 +42,8 @@ function normalizeUrl(raw = "", base = "") {
     return base ? new URL(value, base).toString() : new URL(value).toString();
   } catch {
     try {
-      return new URL(`https://${value.replace(/^\\/+/, "")}`).toString();
+      const withoutLeadingSlashes = value.replace(/^\/+/, "");
+      return new URL(`https://${withoutLeadingSlashes}`).toString();
     } catch {
       return "";
     }
