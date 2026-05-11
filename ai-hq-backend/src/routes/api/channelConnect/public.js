@@ -391,6 +391,78 @@ function originAllowedForWidget(origin = "", config = {}) {
   return [...allowedDomains, ...allowedOrigins].some((item) => item === host);
 }
 
+async function buildPublicWidgetRuntimeGuard({ db, tenantKey = "" } = {}) {
+  if (!db?.query || !tenantKey) {
+    return {
+      publicAnswering: false,
+      approvedTruthReady: false,
+      reasonCode: "runtime_authority_context_missing",
+      summary: "Approved runtime authority is unavailable.",
+      authority: null,
+    };
+  }
+
+  try {
+    const runtime = await getTenantBrainRuntime({
+      db,
+      tenantKey,
+      service: "website_widget",
+      channelType: "webchat",
+      authorityMode: "strict",
+    });
+
+    const authority = obj(runtime?.authority);
+    const available =
+      authority.available === true &&
+      authority.stale !== true &&
+      s(authority.source) === "approved_runtime_projection" &&
+      Boolean(s(authority.runtimeProjectionId || authority.projectionHash));
+
+    return {
+      publicAnswering: available,
+      approvedTruthReady: available,
+      reasonCode: available
+        ? ""
+        : s(authority.reasonCode, "approved_runtime_projection_unavailable"),
+      summary: available
+        ? "Approved runtime projection is available for guarded public answers."
+        : "Public AI answers are disabled until approved runtime truth is available.",
+      authority: {
+        mode: s(authority.mode, "strict"),
+        available: authority.available === true,
+        source: s(authority.source),
+        runtimeProjectionId: s(authority.runtimeProjectionId),
+        projectionHash: s(authority.projectionHash),
+        stale: authority.stale === true,
+        reasonCode: s(authority.reasonCode),
+      },
+    };
+  } catch (error) {
+    const authority = obj(error?.runtimeAuthority);
+
+    return {
+      publicAnswering: false,
+      approvedTruthReady: false,
+      reasonCode: s(
+        authority.reasonCode || error?.reasonCode || error?.code,
+        "runtime_authority_unavailable"
+      ),
+      summary: "Public AI answers are disabled until approved runtime truth is available.",
+      authority: Object.keys(authority).length
+        ? {
+            mode: s(authority.mode, "strict"),
+            available: authority.available === true,
+            source: s(authority.source),
+            runtimeProjectionId: s(authority.runtimeProjectionId),
+            projectionHash: s(authority.projectionHash),
+            stale: authority.stale === true,
+            reasonCode: s(authority.reasonCode),
+          }
+        : null,
+    };
+  }
+}
+
 function buildPublicWidgetFailClosed({
   reasonCode = "website_widget_not_ready",
   message = "Website chat is not live yet.",
@@ -473,6 +545,11 @@ async function getPublicWebsiteWidgetBootstrap({ db, req } = {}) {
     });
   }
 
+  const runtimeGuard = await buildPublicWidgetRuntimeGuard({
+    db,
+    tenantKey,
+  });
+
   return {
     ok: true,
     live: true,
@@ -490,10 +567,12 @@ async function getPublicWebsiteWidgetBootstrap({ db, req } = {}) {
         : [],
     },
     controls: {
-      manualFirst: true,
+      manualFirst: runtimeGuard.publicAnswering !== true,
       approvedTruthOnly: true,
-      publicAnswering: false,
+      publicAnswering: runtimeGuard.publicAnswering === true,
+      approvedTruthReady: runtimeGuard.approvedTruthReady === true,
       messageCaptureReady: true,
+      runtimeGuard,
     },
   };
 }
@@ -1096,11 +1175,12 @@ export function channelConnectPublicRoutes({
         threadId: s(payload.threadId || payload.thread?.id),
         messageId: s(payload.messageId || payload.message?.id),
         assistant: {
-          mode: bootstrap.controls?.publicAnswering === true ? "answering" : "manual_first",
+          mode: bootstrap.controls?.publicAnswering === true ? "approved_truth_ready" : "manual_first",
           text:
             bootstrap.controls?.publicAnswering === true
-              ? "Thanks — your message was received."
+              ? "Thanks — your message was received. Approved business knowledge is available, and guarded answering can be enabled next."
               : "Thanks — your message was received. Our team can review it and reply shortly.",
+          guard: bootstrap.controls?.runtimeGuard || null,
         },
       });
     } catch (error) {
@@ -1143,6 +1223,7 @@ export function channelConnectPublicRoutes({
 }
 
 export const __test__ = {
+  buildPublicWidgetRuntimeGuard,
   normalizeWebsiteWidgetMessage,
   originAllowedForWidget,
   buildPublicWidgetFailClosed,
