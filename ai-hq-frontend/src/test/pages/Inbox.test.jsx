@@ -520,8 +520,8 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
-    expect(screen.getByText(/business info approval required/i)).toBeInTheDocument();
-    expect(screen.getByText(/approve business info before trusting live ai replies/i)).toBeInTheDocument();
+    expect(screen.getByText(/business info needs review/i)).toBeInTheDocument();
+    expect(screen.getByText(/business info still needs review before ai can safely reply to customers/i)).toBeInTheDocument();
     expect(screen.getByText(/launch-channel-connected:yes/i)).toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();
@@ -556,7 +556,7 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
-    expect(screen.getByText(/business info approval required/i)).toBeInTheDocument();
+    expect(screen.getByText(/business info needs review/i)).toBeInTheDocument();
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
@@ -615,7 +615,7 @@ describe("Inbox", () => {
     expect(
       await screen.findByText(/launch-channel-connected:no/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/launch readiness unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/setup status unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/posture unavailable/i)).toBeInTheDocument();
     expect(getMetaChannelStatus).not.toHaveBeenCalled();
     expect(getTelegramChannelStatus).not.toHaveBeenCalled();

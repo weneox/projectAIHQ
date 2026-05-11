@@ -107,3 +107,6 @@ export async function getLeadEvents(id = "", { limit = 100 } = {}) {
   search.set("limit", String(Math.max(1, Math.min(500, Number(limit || 100)))));
   return apiGet(`/api/leads/${encodeURIComponent(s(id))}/events?${search.toString()}`);
 }
+export async function listContacts(options = {}) {
+  return listCustomers(options);
+}

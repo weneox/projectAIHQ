@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+﻿import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -31,7 +31,7 @@ describe("Sidebar", () => {
     expect(
       screen.getByRole("link", { name: /^business info$/i })
     ).toHaveAttribute("href", "/truth");
-    expect(screen.getByRole("link", { name: /^customers$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^contacts$/i })).toHaveAttribute(
       "href",
       "/customers"
     );
