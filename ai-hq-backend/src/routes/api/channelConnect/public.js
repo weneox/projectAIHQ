@@ -1444,6 +1444,13 @@ export function channelConnectPublicRoutes({
   return router;
 }
 
+
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+
 export const __test__ = {
   buildApprovedTruthPublicReplyFromRuntime,
   buildPublicWidgetRuntimeGuard,
