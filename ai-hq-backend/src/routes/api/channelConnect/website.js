@@ -82,12 +82,14 @@ function buildWebsiteDomainCandidates(status = {}) {
 
 
 function pickActorId(req = {}) {
-  const actor = obj(getReqActor(req));
+  const rawActor = getReqActor(req);
+  const actor = obj(rawActor);
 
   return s(
     actor.id ||
       actor.actorId ||
       actor.userId ||
+      rawActor ||
       req?.auth?.identityId ||
       req?.auth?.userId ||
       req?.user?.id ||
@@ -154,7 +156,7 @@ function buildVerifiedWebsiteSourceInput({ tenant = {}, domain = "", req = {} } 
 }
 
 async function provisionVerifiedWebsiteSource({ db, req, result = {} } = {}) {
-  const verification = obj(result.domainVerification || result.verification);
+  const verification = obj(result.domainVerification || result.verification || result);
   const verified =
     verification.verified === true ||
     s(verification.state).toLowerCase() === "verified";
