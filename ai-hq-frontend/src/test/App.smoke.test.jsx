@@ -79,9 +79,6 @@ vi.mock("../surfaces/home/ProductHomePage.jsx", () => ({
   default: () => <div>Home Page</div>,
 }));
 
-vi.mock("../pages/Welcome.jsx", () => ({
-  default: () => <div>Welcome Page</div>,
-}));
 
 vi.mock("../pages/Inbox.jsx", () => ({
   default: () => <div>Inbox Page</div>,
@@ -127,6 +124,7 @@ describe("App shell smoke", () => {
     ["/login", "Login Page"],
     ["/admin/login", "App Entry Redirect"],
     ["/select-workspace", "Select Workspace Page"],
+    ["/welcome", "Home Page"],
   ])("renders %s from the top-level route tree", async (path, text) => {
     window.history.replaceState({}, "", path);
     render(<App />);
