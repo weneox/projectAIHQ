@@ -65,7 +65,7 @@ const SECTIONS = [
   },
   {
     id: "assistant",
-    label: "AI policy",
+    label: "AI replies",
     icon: Bot,
     description: "Control when AI can reply and when a human should review.",
   },
@@ -292,7 +292,7 @@ function WorkspaceContent({ payload, navigate }) {
         <div className="grid gap-3 md:grid-cols-2">
           <ReadOnlyField label="Company name" value={tenant.company_name} />
           <ReadOnlyField label="Legal name" value={tenant.legal_name} />
-          <ReadOnlyField label="Tenant key" value={tenant.tenant_key} />
+          <ReadOnlyField label="Workspace" value={tenant.tenant_key} />
           <ReadOnlyField label="Plan" value={tenant.plan_key} />
           <ReadOnlyField label="Region" value={tenant.market_region || tenant.country_code} />
           <ReadOnlyField label="Timezone" value={tenant.timezone} />
@@ -318,9 +318,9 @@ function WorkspaceContent({ payload, navigate }) {
               type="button"
               size="sm"
               variant="secondary"
-              onClick={() => navigate("/home?assistant=setup")}
+              onClick={() => navigate("/truth")}
             >
-              Open setup review
+              Review Business Info
             </Button>
           </div>
         </div>
@@ -368,22 +368,22 @@ function AssistantPolicyContent({ aiPolicy, onPatch }) {
       >
         <div className="grid gap-3">
           <PolicyToggle
-            title="AI auto replies"
-            description="Allow the assistant to generate live replies when runtime and channel readiness allow it."
+            title="Automatic AI replies"
+            description="Allow the assistant to reply automatically when setup is ready."
             checked={aiPolicy.auto_reply_enabled}
             onChange={(value) => patch("auto_reply_enabled", value)}
           />
 
           <PolicyToggle
-            title="Suppress AI during handoff"
-            description="Stop autonomous replies while a human operator owns the conversation."
+            title="Pause AI during human takeover"
+            description="Stop AI replies while a teammate is handling the conversation."
             checked={aiPolicy.suppress_ai_during_handoff}
             onChange={(value) => patch("suppress_ai_during_handoff", value)}
           />
 
           <PolicyToggle
             title="Mark messages as seen"
-            description="Allow the system to mark inbound messages as seen when processing is active."
+            description="Mark inbound messages as seen when AI is processing them."
             checked={aiPolicy.mark_seen_enabled}
             onChange={(value) => patch("mark_seen_enabled", value)}
           />
@@ -402,23 +402,11 @@ function AssistantPolicyContent({ aiPolicy, onPatch }) {
             onChange={(value) => patch("create_lead_enabled", value)}
           />
 
-          <PolicyToggle
-            title="Content approval required"
-            description="Require operator approval before generated content is treated as publishable."
-            checked={aiPolicy.approval_required_content}
-            onChange={(value) => patch("approval_required_content", value)}
-          />
 
-          <PolicyToggle
-            title="Publishing approval required"
-            description="Keep publishing actions guarded unless an owner/admin explicitly approves them."
-            checked={aiPolicy.approval_required_publish}
-            onChange={(value) => patch("approval_required_publish", value)}
-          />
 
           <PolicyToggle
             title="Quiet hours"
-            description="Reserve room for future quiet-hour rules without inventing fake schedules in the UI."
+            description="Pause AI replies during selected hours when quiet hours are configured."
             checked={aiPolicy.quiet_hours_enabled}
             onChange={(value) => patch("quiet_hours_enabled", value)}
           />
@@ -572,7 +560,7 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
         icon={Plug}
         title="Connected channels"
         description="Manage the channels that bring customer messages into your inbox. Website Chat, Instagram, and Telegram are ready for launch."
-        tag={channels.length ? `${channels.length} records` : "No records"}
+        tag={channels.length ? `${channels.length} connected` : "Not connected"}
         tone={channels.length ? "success" : "warning"}
       >
         {channels.length ? (
@@ -603,13 +591,13 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
           </div>
         ) : (
           <div className="rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-[13px] font-medium leading-6 text-text-muted">
-            No channels are connected yet. Connect Website Chat, Instagram, or Telegram to start receiving customer messages.
+            No channels are connected yet. Connect Website Chat, Instagram, or Telegram to start receiving messages in Inbox.
           </div>
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">
           <Button type="button" onClick={() => navigate("/channels")}>
-            Open Channels
+            Manage channels
           </Button>
           <Button
             type="button"
@@ -617,7 +605,7 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
             rightIcon={<ExternalLink className="h-4 w-4" strokeWidth={2.05} />}
             onClick={() => navigate("/channels?channel=website")}
           >
-            Website lane
+            Website setup
           </Button>
         </div>
 
@@ -804,11 +792,11 @@ export default function Settings() {
       setWorkspacePayload(response);
       setAiPolicy(normalizeAiPolicy(response.aiPolicy));
       setDirty(false);
-      setNotice("AI policy saved to backend.");
+      setNotice("AI reply settings saved.");
     } catch (err) {
       setError(
         s(err?.payload?.message || err?.payload?.error || err?.message) ||
-          "AI policy could not be saved."
+          "AI reply settings could not be saved."
       );
     } finally {
       setSaving(false);
@@ -856,7 +844,7 @@ export default function Settings() {
               onClick={saveAiPolicy}
               leftIcon={!saving ? <Save className="h-4 w-4" strokeWidth={2.1} /> : undefined}
             >
-              Save AI policy
+              Save changes
             </Button>
           </div>
         }
@@ -873,8 +861,8 @@ export default function Settings() {
       {dirty && activeSection !== "assistant" ? (
         <InlineNotice
           tone="warning"
-          title="Unsaved AI policy changes"
-          description="Return to AI policy and save before leaving this control surface."
+          title="Unsaved AI reply changes"
+          description="Return to AI replies and save before leaving settings."
           compact
         />
       ) : null}
