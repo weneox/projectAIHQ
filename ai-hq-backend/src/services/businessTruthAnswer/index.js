@@ -133,13 +133,17 @@ export async function answerFromApprovedTruth({
   recentMessages = [],
   conversationContext = {},
   threadState = null,
+  classifyIntent = classifyApprovedTruthIntentWithModel,
+  detectRecovery = detectConversationRecoveryWithModel,
+  retrieveFacts = retrieveApprovedTruthFacts,
+  composeWithModel = composeRetrievedTruthAnswerWithModel,
 } = {}) {
   const baseFacts = resolveApprovedTruthFacts({
     runtimeGrounding,
     profile,
   });
 
-  const recoveryDetection = await detectConversationRecoveryWithModel({
+  const recoveryDetection = await detectRecovery({
     text,
     fallbackLanguage,
     recentMessages,
@@ -156,7 +160,7 @@ export async function answerFromApprovedTruth({
     });
   }
 
-  const classification = await classifyApprovedTruthIntentWithModel({
+  const classification = await classifyIntent({
     text,
     fallbackLanguage,
     recentMessages,
@@ -169,7 +173,7 @@ export async function answerFromApprovedTruth({
     return null;
   }
 
-  const retrieval = await retrieveApprovedTruthFacts({
+  const retrieval = await retrieveFacts({
     text,
     facts: baseFacts,
     runtimeGrounding,
@@ -181,7 +185,7 @@ export async function answerFromApprovedTruth({
     retrieval,
   };
 
-  let composed = await composeRetrievedTruthAnswerWithModel({
+  let composed = await composeWithModel({
     text,
     classification,
     facts,
