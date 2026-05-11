@@ -1,4 +1,9 @@
-import {
+﻿const fs = require("fs");
+const path = require("path");
+
+const file = path.join(process.cwd(), "ai-hq-frontend/src/components/layout/shellNavigation.js");
+
+const code = `import {
   BarChart3,
   BookOpenCheck,
   BriefcaseBusiness,
@@ -158,14 +163,14 @@ const ALL_SECTIONS = [
 ];
 
 function cleanPath(value = "") {
-  return String(value || "").split("?")[0].replace(/\/+$/g, "") || "/";
+  return String(value || "").split("?")[0].replace(/\\/+$/g, "") || "/";
 }
 
 function pathMatches(pathname = "", candidate = "") {
   const current = cleanPath(pathname);
   const target = cleanPath(candidate);
 
-  return current === target || current.startsWith(`${target}/`);
+  return current === target || current.startsWith(\`\${target}/\`);
 }
 
 function getActiveShellSection(pathname = "/") {
@@ -196,3 +201,7 @@ export {
   getActiveContextItem,
   getActiveShellSection,
 };
+`;
+
+fs.writeFileSync(file, code, "utf8");
+console.log("restored full product shell navigation");
