@@ -22,7 +22,6 @@ import {
 } from "../api/team.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
-import AppCompactActionButton from "../components/ui/AppCompactActionButton.jsx";
 import AppIconButton from "../components/ui/AppIconButton.jsx";
 import AppStatCard from "../components/ui/AppStatCard.jsx";
 import {
@@ -481,18 +480,27 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
 
       <div className="flex items-center justify-end gap-2 px-4">
         {canManage && !owner ? (
-          <AppCompactActionButton
+          <Button
+            type="button"
+            size="sm"
+            variant={active ? "danger" : "secondary"}
             loading={busy}
             disabled={!id || busy}
-            tone={active ? "danger" : "success"}
+            className="min-w-[74px]"
             onClick={() => onToggleStatus(user)}
           >
             {active ? "Disable" : "Activate"}
-          </AppCompactActionButton>
+          </Button>
         ) : (
-          <AppCompactActionButton disabled muted>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled
+            className="min-w-[74px]"
+          >
             Owner
-          </AppCompactActionButton>
+          </Button>
         )}
 
         <AppIconButton
