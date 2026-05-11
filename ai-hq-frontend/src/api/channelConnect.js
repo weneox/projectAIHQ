@@ -100,3 +100,18 @@ export async function getWebsiteGuidedSetupReview(params = {}) {
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/api/channels/webchat/guided-setup/review${suffix}`);
 }
+
+
+export async function approveWebsiteGuidedSetupReviewItem(candidateId, payload = {}) {
+  return apiPost(
+    `/api/channels/webchat/guided-setup/review/${encodeURIComponent(candidateId)}/approve`,
+    payload
+  );
+}
+
+export async function rejectWebsiteGuidedSetupReviewItem(candidateId, payload = {}) {
+  return apiPost(
+    `/api/channels/webchat/guided-setup/review/${encodeURIComponent(candidateId)}/reject`,
+    payload
+  );
+}

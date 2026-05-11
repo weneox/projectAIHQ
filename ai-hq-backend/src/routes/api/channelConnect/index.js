@@ -34,6 +34,8 @@ import {
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
   getWebsiteGuidedSetupReview,
+  approveWebsiteGuidedSetupReviewItem,
+  rejectWebsiteGuidedSetupReviewItem,
 } from "./website.js";
 
 const log = createLogger({
@@ -236,6 +238,46 @@ export function channelConnectRoutes({ db }) {
       );
     }
   });
+
+  r.post(
+    "/channels/webchat/guided-setup/review/:candidateId/approve",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await approveWebsiteGuidedSetupReviewItem({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to approve guided website review item",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/guided-setup/review/:candidateId/reject",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await rejectWebsiteGuidedSetupReviewItem({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to reject guided website review item",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
 
   r.get(
     "/channels/webchat/guided-setup/review",

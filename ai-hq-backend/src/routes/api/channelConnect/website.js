@@ -2189,3 +2189,156 @@ export async function getWebsiteGuidedSetupReview({ db, req } = {}) {
         },
   };
 }
+
+
+async function ensureWebsiteReviewCandidate({ db, req, candidateId = "" } = {}) {
+  const tenantKey = getReqTenantKey(req);
+  const tenant = await getTenantByKey(db, tenantKey);
+
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found.", 404, "tenant_not_found");
+  }
+
+  const knowledge = createTenantKnowledgeHelpers({ db });
+  const candidate = await knowledge.getCandidateById(candidateId);
+
+  if (!candidate?.id) {
+    throw createHttpError(
+      "Website review item not found.",
+      404,
+      "website_review_item_not_found"
+    );
+  }
+
+  if (s(candidate.tenant_id) !== s(tenant.id)) {
+    throw createHttpError(
+      "Website review item does not belong to this tenant.",
+      403,
+      "website_review_item_tenant_mismatch"
+    );
+  }
+
+  const queue = await knowledge.listReviewQueue({
+    tenantId: tenant.id,
+    tenantKey: tenant.tenant_key || tenant.tenantKey || tenantKey,
+    category: "business_info",
+    limit: 200,
+    offset: 0,
+  });
+
+  const visible = arr(queue).find((item) => s(item.id) === s(candidate.id));
+
+  if (!visible || !isWebsiteReviewCandidate(visible)) {
+    throw createHttpError(
+      "This review item is not a website business-info candidate.",
+      400,
+      "website_review_item_invalid_source"
+    );
+  }
+
+  return {
+    tenant,
+    knowledge,
+    candidate,
+    visible,
+  };
+}
+
+function getWebsiteReviewActor(req = {}) {
+  const user = obj(req?.user || req?.auth || {});
+  return {
+    reviewerId: s(
+      user.id ||
+        user.userId ||
+        user.identityId ||
+        req?.auth?.identityId ||
+        req?.auth?.userId ||
+        "website_guided_setup"
+    ),
+    reviewerName: s(
+      user.name ||
+        user.email ||
+        user.displayName ||
+        req?.auth?.email ||
+        "Website guided setup"
+    ),
+  };
+}
+
+export async function approveWebsiteGuidedSetupReviewItem({ db, req } = {}) {
+  const candidateId = s(req?.params?.candidateId || req?.body?.candidateId);
+
+  if (!candidateId) {
+    throw createHttpError(
+      "Website review item id is required.",
+      400,
+      "website_review_item_id_required"
+    );
+  }
+
+  const { knowledge, visible } = await ensureWebsiteReviewCandidate({
+    db,
+    req,
+    candidateId,
+  });
+
+  const actor = getWebsiteReviewActor(req);
+  const result = await knowledge.approveCandidate(candidateId, {
+    ...actor,
+    reason: s(
+      req?.body?.reason,
+      "Approved from guided Website Chat setup review."
+    ),
+    metadataJson: {
+      source: "website_guided_setup_review",
+      sourceType: "website",
+      category: "business_info",
+    },
+  });
+
+  return {
+    ok: true,
+    action: "approve",
+    item: toWebsiteReviewItem(visible),
+    result,
+  };
+}
+
+export async function rejectWebsiteGuidedSetupReviewItem({ db, req } = {}) {
+  const candidateId = s(req?.params?.candidateId || req?.body?.candidateId);
+
+  if (!candidateId) {
+    throw createHttpError(
+      "Website review item id is required.",
+      400,
+      "website_review_item_id_required"
+    );
+  }
+
+  const { knowledge, visible } = await ensureWebsiteReviewCandidate({
+    db,
+    req,
+    candidateId,
+  });
+
+  const actor = getWebsiteReviewActor(req);
+  const result = await knowledge.rejectCandidate(candidateId, {
+    ...actor,
+    reason: s(
+      req?.body?.reason,
+      "Rejected from guided Website Chat setup review."
+    ),
+    metadataJson: {
+      source: "website_guided_setup_review",
+      sourceType: "website",
+      category: "business_info",
+    },
+  });
+
+  return {
+    ok: true,
+    action: "reject",
+    item: toWebsiteReviewItem(visible),
+    result,
+  };
+}
