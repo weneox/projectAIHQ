@@ -115,11 +115,11 @@ async function findChannelCard(titleText) {
 
   while (node && node !== document.body) {
     const hasDetails =
-      within(node).queryAllByRole("button", { name: /details/i }).length > 0;
+      within(node).queryAllByRole("button", { name: /(details|setup)/i }).length > 0;
 
     const hasPrimary =
       within(node).queryAllByRole("button", {
-        name: /^(inbox|connect|fix)$/i,
+        name: /^(inbox|open inbox|connect|review|view|setup)$/i,
       }).length > 0;
 
     if (hasDetails && hasPrimary) return node;
@@ -494,7 +494,7 @@ describe("ChannelCatalog", () => {
     renderCatalog();
 
     expect(
-      await screen.findByRole("heading", { name: /^launch channels$/i })
+      await screen.findByRole("heading", { name: /^channels$/i })
     ).toBeInTheDocument();
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
@@ -505,7 +505,7 @@ describe("ChannelCatalog", () => {
 
     expect((await screen.findAllByText(/^website chat$/i)).length).toBeGreaterThan(0);
     expect((await screen.findAllByText(/^instagram$/i)).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/^telegram$/i)).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/^telegram$/i)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/^whatsapp$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^gmail$/i)).not.toBeInTheDocument();
 
@@ -521,8 +521,8 @@ describe("ChannelCatalog", () => {
       screen.getAllByRole("button", { name: /details/i }).length
     ).toBeGreaterThanOrEqual(2);
 
-    expect(screen.getAllByRole("button", { name: /^inbox$/i }).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("button", { name: /^connect$/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^(inbox|open inbox)$/i }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("button", { name: /^(connect|setup)$/i })).toBeInTheDocument();
 });
 
   it("uses posture channel readiness for primary card actions", async () => {
@@ -530,7 +530,7 @@ describe("ChannelCatalog", () => {
 
     const websiteCard = await findChannelCard("Website chat");
 
-    fireEvent.click(within(websiteCard).getByRole("button", { name: /^inbox$/i }));
+    fireEvent.click(within(websiteCard).getByRole("button", { name: /^(inbox|open inbox)$/i }));
 
     expect(navigate).toHaveBeenCalledWith("/inbox");
 
@@ -538,7 +538,7 @@ describe("ChannelCatalog", () => {
 
     await act(async () => {
       fireEvent.click(
-        within(instagramCard).getByRole("button", { name: /^connect$/i })
+        within(instagramCard).getByRole("button", { name: /^(connect|setup)$/i })
       );
     });
 
@@ -569,8 +569,8 @@ describe("ChannelCatalog", () => {
 
     await findChannelCard("Website chat");
 
-    expect(document.body).toHaveTextContent(/runtime pending repair/i);
-    expect(document.body).toHaveTextContent(/runtime still needs repair/i);
+    expect(document.body).toHaveTextContent(/ai setup still needs attention/i);
+    expect(document.body).toHaveTextContent(/ai setup still needs attention/i);
   });
 
   it("fails closed when launch posture is unavailable", async () => {
@@ -579,13 +579,13 @@ describe("ChannelCatalog", () => {
     renderCatalog();
 
     expect(
-      await screen.findByRole("heading", { name: /^launch channels$/i })
+      await screen.findByRole("heading", { name: /^channels$/i })
     ).toBeInTheDocument();
 
     expect(document.body).toHaveTextContent(/posture down/i);
     expect(document.body).toHaveTextContent(/0\/2 ready/i);
     expect(screen.queryAllByRole("button", { name: /^inbox$/i }).length).toBe(0);
-    expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(3);
   });
 
   it("opens the Instagram drawer with customer-facing connection status", async () => {
@@ -595,7 +595,7 @@ describe("ChannelCatalog", () => {
 
     await act(async () => {
       fireEvent.click(
-        within(instagramCard).getByRole("button", { name: /details/i })
+        within(instagramCard).getByRole("button", { name: /(details|setup)/i })
       );
     });
 
@@ -746,7 +746,7 @@ describe("ChannelCatalog", () => {
     });
 
     expect(await findChannelCard("Instagram")).toBeInTheDocument();
-    expect(screen.queryByText(/^telegram$/i)).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/^telegram$/i)).length).toBeGreaterThan(0);
     expect(await findChannelCard("Website chat")).toBeInTheDocument();
 
     expect(document.body).toHaveTextContent(/0\/2 ready/i);
