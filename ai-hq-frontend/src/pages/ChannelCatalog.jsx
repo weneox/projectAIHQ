@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
@@ -230,7 +230,7 @@ function launchRepairCopy(readinessState = {}) {
   }
 
   if (runtime.ready === false || s(runtime.status).toLowerCase() === "blocked") {
-    return "Runtime pending repair. Runtime still needs repair.";
+    return "Runtime authority still needs repair.";
   }
 
   return "";
@@ -316,7 +316,7 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
             variant={runtime.deliveryReady ? "secondary" : "primary"}
             disabled={runtime.available === false}
             onClick={primaryAction}
-            aria-label={status.action}
+            aria-label={`${status.action} ${channel.name}`}
             rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
           >
             {status.action}
@@ -350,18 +350,18 @@ function CenterChannelModal({ open, onClose, children }) {
       <button
         type="button"
         aria-label="Close connector details"
-        className="absolute inset-0 bg-[rgba(15,23,42,0.42)] backdrop-blur-[4px]"
+        className="absolute inset-0 bg-[rgba(15,23,42,0.46)] backdrop-blur-[2px]"
         onClick={onClose}
       />
 
       <div
-        className="relative w-full max-w-[860px]"
+        className="relative w-full max-w-[880px]"
         style={{
           animation: "channelModalIn 160ms cubic-bezier(0.16, 1, 0.3, 1)",
           willChange: "opacity, transform",
         }}
       >
-        <div className="h-[min(720px,calc(100vh-44px))] overflow-hidden rounded-md border border-line-soft bg-surface shadow-[0_30px_90px_-54px_rgba(15,23,42,0.84)]">
+        <div className="h-[min(730px,calc(100vh-44px))] overflow-hidden rounded-md border border-white/70 bg-surface shadow-[0_34px_90px_-54px_rgba(15,23,42,0.86)]">
           {children}
         </div>
       </div>
@@ -377,7 +377,7 @@ export default function ChannelCatalog() {
     workspace.tenantKey,
     workspace.ready
   );
-const [readinessState, setReadinessState] = useState(EMPTY_READINESS_STATE);
+  const [readinessState, setReadinessState] = useState(EMPTY_READINESS_STATE);
   const [modalOpen, setModalOpen] = useState(false);
   const [closingChannel, setClosingChannel] = useState(null);
   const closeTimerRef = useRef(null);
@@ -476,7 +476,7 @@ const [readinessState, setReadinessState] = useState(EMPTY_READINESS_STATE);
 
     return readinessState;
   }, [readinessState, requestKey, workspace.ready, workspace.tenantKey]);
-const updateSelectedChannel = useCallback((channelId = "") => {
+  const updateSelectedChannel = useCallback((channelId = "") => {
     const nextParams = new URLSearchParams(searchParams);
 
     if (channelId) {
@@ -507,7 +507,7 @@ const updateSelectedChannel = useCallback((channelId = "") => {
       closeTimerRef.current = null;
     }, 180);
   }, [modalChannel, updateSelectedChannel]);
-useEffect(() => {
+  useEffect(() => {
     if (!modalOpen) return undefined;
 
     function handleKeyDown(event) {
@@ -533,7 +533,7 @@ useEffect(() => {
   if (!workspace.ready || effectiveReadinessState.loading) {
     return (
       <PageCanvas className="max-w-[1180px] py-3">
-        <LoadingSurface title="Loading channels" />
+        <LoadingSurface title="Loading channels" description="Reading live channel readiness from launch posture." />
       </PageCanvas>
     );
   }
