@@ -15,7 +15,14 @@ import {
   X,
 } from "lucide-react";
 
-import { listLeads } from "../api/leads.js";
+import {
+  appendLeadNote,
+  listLeads,
+  updateLeadFollowup,
+  updateLeadOwner,
+  updateLeadStage,
+  updateLeadStatus,
+} from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppIconButton from "../components/ui/AppIconButton.jsx";
@@ -482,7 +489,7 @@ function LeadRow({ lead, selected, onOpenThread, onOpenDetail }) {
 
           {threadId ? (
             <AppIconButton
-              label="Open thread"
+              label="Open conversation"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenThread?.(threadId);
@@ -713,9 +720,9 @@ function LeadsTable({
               description={
                 activeFilterCount
                   ? "Adjust the active filters to bring sales opportunities back into view."
-                  : "No lead records exist yet. Connect Website Chat, Instagram, or Telegram, then send a real or test conversation through Inbox. Qualified conversations will appear here automatically when lead capture creates backend records."
+                  : "No leads yet. Connect Website Chat, Instagram, or Telegram, then handle a customer conversation in Inbox. Qualified opportunities will appear here automatically."
               }
-                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenChannels} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Connect launch channel</Button>)}
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenChannels} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Connect a channel</Button>)}
             />
           )}
         </div>
@@ -724,7 +731,95 @@ function LeadsTable({
   );
 }
 
-function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
+function LeadControlField({ label, children }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function LeadNativeSelect({ value, onChange, children, disabled = false }) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange?.(event.target.value)}
+      className="h-10 w-full rounded-md border border-line-soft bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {children}
+    </select>
+  );
+}
+
+function LeadNativeInput(props) {
+  return (
+    <input
+      {...props}
+      className="h-10 w-full rounded-md border border-line-soft bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors placeholder:text-text-subtle focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
+    />
+  );
+}
+
+function LeadNativeTextarea(props) {
+  return (
+    <textarea
+      {...props}
+      className="min-h-[92px] w-full resize-none rounded-md border border-line-soft bg-white px-3 py-2 text-[13px] font-semibold leading-5 text-text outline-none transition-colors placeholder:text-text-subtle focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
+    />
+  );
+}
+
+function normalizeLeadMutationResponse(payload = {}) {
+  if (payload?.lead && typeof payload.lead === "object") return payload.lead;
+  if (payload?.data?.lead && typeof payload.data.lead === "object") return payload.data.lead;
+  if (payload && typeof payload === "object") return payload;
+  return null;
+}
+
+function LeadDetailOverlay({
+  lead,
+  open,
+  onClose,
+  onOpenThread,
+  onLeadUpdated,
+}) {
+  const [saving, setSaving] = useState("");
+  const [error, setError] = useState("");
+
+  function handleLeadUpdated(updatedLead = {}) {
+    const updatedId = s(updatedLead.id || updatedLead.lead_id);
+    if (!updatedId) return;
+
+    setLeads((current) =>
+      arr(current).map((item) => {
+        const itemId = s(item.id || item.lead_id);
+        return itemId === updatedId ? { ...item, ...updatedLead } : item;
+      })
+    );
+  }
+  const [notice, setNotice] = useState("");
+  const [draftOwner, setDraftOwner] = useState("");
+  const [draftFollowUpAt, setDraftFollowUpAt] = useState("");
+  const [draftNextAction, setDraftNextAction] = useState("");
+  const [draftNote, setDraftNote] = useState("");
+
+  useEffect(() => {
+    if (!lead) return;
+
+    const owner = leadOwner(lead);
+    setDraftOwner(owner === "Unassigned" ? "" : owner);
+    setDraftFollowUpAt(s(lead.follow_up_at || lead.followUpAt).slice(0, 16));
+    setDraftNextAction(s(lead.next_action || lead.nextAction));
+    setDraftNote("");
+    setError("");
+    setNotice("");
+    setSaving("");
+  }, [lead]);
+
   if (!lead) {
     return (
       <SlidingDetailOverlay
@@ -737,13 +832,14 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
           <AppDetailEmpty
             icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
             title="Select a lead"
-            description="Choose a row to inspect sales opportunity details."
+            description="Choose a lead to review the opportunity and manage the next step."
           />
         </Card>
       </SlidingDetailOverlay>
     );
   }
 
+  const id = s(lead.id || lead.lead_id);
   const name = leadName(lead);
   const email = leadEmail(lead);
   const phone = leadPhone(lead);
@@ -753,12 +849,105 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
   const status = leadStatus(lead);
   const threadId = leadThreadId(lead);
 
+  async function runMutation(key, task, successMessage) {
+    if (!id || saving) return;
+
+    setSaving(key);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await task();
+      const updatedLead = normalizeLeadMutationResponse(response);
+
+      if (updatedLead?.id || updatedLead?.lead_id) {
+        onLeadUpdated?.(updatedLead);
+      }
+
+      setNotice(successMessage);
+    } catch (err) {
+      setError(
+        s(err?.payload?.message || err?.payload?.error || err?.message) ||
+          "Could not save changes."
+      );
+    } finally {
+      setSaving("");
+    }
+  }
+
+  function changeStage(nextStage) {
+    if (!nextStage || nextStage === stage) return;
+
+    runMutation(
+      "stage",
+      () =>
+        updateLeadStage(id, {
+          stage: nextStage,
+          reason: "Updated from Leads",
+        }),
+      "Stage updated."
+    );
+  }
+
+  function changeStatus(nextStatus) {
+    if (!nextStatus || nextStatus === status) return;
+
+    runMutation(
+      "status",
+      () =>
+        updateLeadStatus(id, {
+          status: nextStatus,
+          reason: "Updated from Leads",
+        }),
+      "Status updated."
+    );
+  }
+
+  function saveOwner() {
+    runMutation(
+      "owner",
+      () =>
+        updateLeadOwner(id, {
+          owner: draftOwner,
+        }),
+      draftOwner ? "Owner updated." : "Owner cleared."
+    );
+  }
+
+  function saveFollowup() {
+    runMutation(
+      "followup",
+      () =>
+        updateLeadFollowup(id, {
+          followUpAt: draftFollowUpAt,
+          nextAction: draftNextAction,
+        }),
+      "Next step saved."
+    );
+  }
+
+  function saveNote() {
+    const note = s(draftNote);
+    if (!note) return;
+
+    runMutation(
+      "note",
+      () =>
+        appendLeadNote(id, {
+          note,
+        }),
+      "Note added."
+    );
+
+    setDraftNote("");
+  }
+
   return (
     <SlidingDetailOverlay
       open={open}
       onClose={onClose}
       className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
-      panelWidthClassName="max-w-[560px]"
+      panelWidthClassName="max-w-[640px]"
     >
       <Card padded={false} clip className="h-full">
         <AppDetailHeader>
@@ -795,24 +984,153 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
         </AppDetailHeader>
 
         <AppDetailBody>
-          <AppInfoRow label="Source" value={titleize(source)} />
-          <AppInfoRow label="Company" value={leadCompany(lead) || "Not recorded"} />
-          <AppInfoRow label="Interest" value={s(lead.interest) || "Not recorded"} />
-          <AppInfoRow label="Value" value={formatMoney(leadValue(lead))} />
-          <AppInfoRow label="Owner" value={leadOwner(lead)} />
-          <AppInfoRow label="Created" value={formatDate(leadCreatedRaw(lead))} />
-          <AppInfoRow label="Updated" value={formatDate(leadUpdatedRaw(lead))} />
-          <AppInfoRow
-            label="Context"
-            value={
-              s(lead.latestMessageText) ||
-              s(lead.latest_message_text) ||
-              s(lead.lastMessageText) ||
-              s(lead.last_message_text) ||
-              s(lead.latest_message) ||
-              "No message preview is available yet."
-            }
-          />
+          {error ? (
+            <InlineNotice tone="danger" title="Could not save" description={error} compact />
+          ) : null}
+
+          {notice ? (
+            <InlineNotice tone="success" title="Saved" description={notice} compact />
+          ) : null}
+
+          <section className="rounded-md border border-line-soft bg-surface-subtle p-4">
+            <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Manage opportunity
+            </div>
+            <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+              Update the pipeline, owner, and next step without leaving the lead.
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <LeadControlField label="Stage">
+                <LeadNativeSelect
+                  value={stage}
+                  disabled={saving === "stage"}
+                  onChange={changeStage}
+                >
+                  {STAGE_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Status">
+                <LeadNativeSelect
+                  value={status}
+                  disabled={saving === "status"}
+                  onChange={changeStatus}
+                >
+                  {STATUS_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Owner">
+                <div className="flex gap-2">
+                  <LeadNativeInput
+                    value={draftOwner}
+                    disabled={saving === "owner"}
+                    placeholder="Assign owner"
+                    onChange={(event) => setDraftOwner(event.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    loading={saving === "owner"}
+                    onClick={saveOwner}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </LeadControlField>
+
+              <LeadControlField label="Follow-up">
+                <LeadNativeInput
+                  type="datetime-local"
+                  value={draftFollowUpAt}
+                  disabled={saving === "followup"}
+                  onChange={(event) => setDraftFollowUpAt(event.target.value)}
+                />
+              </LeadControlField>
+            </div>
+
+            <div className="mt-3">
+              <LeadControlField label="Next action">
+                <div className="flex gap-2">
+                  <LeadNativeInput
+                    value={draftNextAction}
+                    disabled={saving === "followup"}
+                    placeholder="Call back, send quote, schedule demo..."
+                    onChange={(event) => setDraftNextAction(event.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    loading={saving === "followup"}
+                    onClick={saveFollowup}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </LeadControlField>
+            </div>
+
+            <div className="mt-3">
+              <LeadControlField label="Add note">
+                <LeadNativeTextarea
+                  value={draftNote}
+                  disabled={saving === "note"}
+                  placeholder="Add context for the next follow-up..."
+                  onChange={(event) => setDraftNote(event.target.value)}
+                />
+              </LeadControlField>
+
+              <div className="mt-2 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!s(draftNote)}
+                  loading={saving === "note"}
+                  onClick={saveNote}
+                >
+                  Add note
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-md border border-line-soft bg-white p-4">
+            <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Lead details
+            </div>
+
+            <div className="mt-3 grid gap-1">
+              <AppInfoRow label="Source" value={titleize(source)} />
+              <AppInfoRow label="Company" value={leadCompany(lead) || "Not recorded"} />
+              <AppInfoRow label="Interest" value={s(lead.interest) || "Not recorded"} />
+              <AppInfoRow label="Value" value={formatMoney(leadValue(lead))} />
+              <AppInfoRow label="Owner" value={leadOwner(lead)} />
+              <AppInfoRow label="Next action" value={s(lead.next_action || lead.nextAction) || "Not set"} />
+              <AppInfoRow label="Follow-up" value={formatDate(lead.follow_up_at || lead.followUpAt)} />
+              <AppInfoRow label="Created" value={formatDate(leadCreatedRaw(lead))} />
+              <AppInfoRow label="Updated" value={formatDate(leadUpdatedRaw(lead))} />
+              <AppInfoRow
+                label="Conversation context"
+                value={
+                  s(lead.latestMessageText) ||
+                  s(lead.latest_message_text) ||
+                  s(lead.lastMessageText) ||
+                  s(lead.last_message_text) ||
+                  s(lead.latest_message) ||
+                  "No message preview is available yet."
+                }
+              />
+            </div>
+          </section>
 
           <div className="flex flex-wrap gap-2 pt-2">
             <Button
@@ -822,7 +1140,7 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
               onClick={() => threadId && onOpenThread(threadId)}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.15} />}
             >
-              Open thread
+              Open conversation
             </Button>
 
             {email ? (
@@ -854,7 +1172,6 @@ function LeadDetailOverlay({ lead, open, onClose, onOpenThread }) {
     </SlidingDetailOverlay>
   );
 }
-
 export default function Leads() {
   const navigate = useNavigate();
 
@@ -1117,6 +1434,7 @@ export default function Leads() {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         onOpenThread={openThread}
+        onLeadUpdated={handleLeadUpdated}
       />
     </PageCanvas>
   );
