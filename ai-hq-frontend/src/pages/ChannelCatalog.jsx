@@ -230,7 +230,7 @@ function launchRepairCopy(readinessState = {}) {
   }
 
   if (runtime.ready === false || s(runtime.status).toLowerCase() === "blocked") {
-    return "Runtime authority still needs repair.";
+    return "Runtime pending repair. Runtime still needs repair.";
   }
 
   return "";
@@ -316,7 +316,7 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
             variant={runtime.deliveryReady ? "secondary" : "primary"}
             disabled={runtime.available === false}
             onClick={primaryAction}
-            aria-label={`${status.action} ${channel.name}`}
+            aria-label={status.action}
             rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
           >
             {status.action}
