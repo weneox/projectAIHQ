@@ -463,6 +463,211 @@ async function buildPublicWidgetRuntimeGuard({ db, tenantKey = "" } = {}) {
   }
 }
 
+function tokenizePublicWidgetQuestion(value = "") {
+  return lower(value)
+    .replace(/[^a-z0-9əöüğşıçƏÖÜĞŞİÇ\s-]+/gi, " ")
+    .split(/\s+/)
+    .map((item) => s(item))
+    .filter((item) => item.length >= 3)
+    .slice(0, 24);
+}
+
+function truncatePublicWidgetAnswer(value = "", limit = 460) {
+  const text = s(value).replace(/\s+/g, " ");
+  if (!text || text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`;
+}
+
+function pushApprovedRuntimeFact(target = [], title = "", value = "", source = "") {
+  const text = s(value);
+  if (!text || text.length < 8) return;
+
+  target.push({
+    title: s(title, "Approved business information"),
+    text,
+    source: s(source, "approved_runtime_projection"),
+  });
+}
+
+function collectApprovedRuntimeFacts(runtime = {}) {
+  const facts = [];
+  const safeRuntime = obj(runtime);
+
+  pushApprovedRuntimeFact(
+    facts,
+    "Business context",
+    safeRuntime.businessContext,
+    "business_context"
+  );
+
+  for (const item of arr(safeRuntime.serviceCatalog)) {
+    const safe = obj(item);
+    pushApprovedRuntimeFact(
+      facts,
+      s(safe.name || safe.title || safe.serviceName, "Service"),
+      [
+        safe.name || safe.title || safe.serviceName,
+        safe.description,
+        safe.summary,
+        safe.price || safe.pricing,
+        safe.details,
+      ]
+        .map((part) => s(part))
+        .filter(Boolean)
+        .join(" — "),
+      "service_catalog"
+    );
+  }
+
+  for (const item of arr(safeRuntime.knowledgeEntries)) {
+    const safe = obj(item);
+    pushApprovedRuntimeFact(
+      facts,
+      s(safe.title || safe.question || safe.key, "Knowledge"),
+      [
+        safe.title,
+        safe.question,
+        safe.answer,
+        safe.text,
+        safe.content,
+        safe.value,
+      ]
+        .map((part) => s(part))
+        .filter(Boolean)
+        .join(" — "),
+      "knowledge_entries"
+    );
+  }
+
+  for (const item of arr(safeRuntime.responsePlaybooks)) {
+    const safe = obj(item);
+    pushApprovedRuntimeFact(
+      facts,
+      s(safe.title || safe.name || safe.intent, "Response playbook"),
+      [
+        safe.title,
+        safe.intent,
+        safe.trigger,
+        safe.response,
+        safe.answer,
+        safe.script,
+      ]
+        .map((part) => s(part))
+        .filter(Boolean)
+        .join(" — "),
+      "response_playbooks"
+    );
+  }
+
+  return facts.slice(0, 80);
+}
+
+function scoreApprovedRuntimeFact(fact = {}, tokens = []) {
+  const haystack = lower(`${fact.title || ""} ${fact.text || ""}`);
+  let score = 0;
+
+  for (const token of arr(tokens)) {
+    if (!token) continue;
+    if (haystack.includes(token)) score += token.length >= 5 ? 2 : 1;
+  }
+
+  return score;
+}
+
+function buildApprovedTruthPublicReplyFromRuntime({
+  runtime = {},
+  text = "",
+} = {}) {
+  const authority = obj(runtime?.authority);
+  const approved =
+    authority.available === true &&
+    authority.stale !== true &&
+    s(authority.source) === "approved_runtime_projection" &&
+    Boolean(s(authority.runtimeProjectionId || authority.projectionHash));
+
+  if (!approved) {
+    return {
+      ok: false,
+      mode: "manual_first",
+      text:
+        "Thanks — your message was received. Our team can review it and reply shortly.",
+      reasonCode: "approved_runtime_projection_unavailable",
+    };
+  }
+
+  const tokens = tokenizePublicWidgetQuestion(text);
+  const facts = collectApprovedRuntimeFacts(runtime);
+
+  if (!facts.length) {
+    return {
+      ok: true,
+      mode: "approved_truth_fallback",
+      text:
+        "Thanks — your message was received. I do not have enough approved business information to answer that safely, so the team can review it.",
+      reasonCode: "approved_truth_no_public_facts",
+    };
+  }
+
+  const ranked = facts
+    .map((fact) => ({
+      ...fact,
+      score: scoreApprovedRuntimeFact(fact, tokens),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = ranked[0];
+
+  if (!best || Number(best.score || 0) <= 0) {
+    return {
+      ok: true,
+      mode: "approved_truth_fallback",
+      text:
+        "Thanks — your message was received. I do not have approved information for that exact question yet, so the team can review it.",
+      reasonCode: "approved_truth_no_relevant_fact",
+    };
+  }
+
+  return {
+    ok: true,
+    mode: "approved_truth_answer",
+    text: `Based on approved business information: ${truncatePublicWidgetAnswer(best.text)}`,
+    source: {
+      title: s(best.title),
+      type: s(best.source),
+      authority: {
+        source: s(authority.source),
+        runtimeProjectionId: s(authority.runtimeProjectionId),
+        projectionHash: s(authority.projectionHash),
+      },
+    },
+  };
+}
+
+async function buildApprovedTruthPublicReply({ db, tenantKey = "", text = "" } = {}) {
+  try {
+    const runtime = await getTenantBrainRuntime({
+      db,
+      tenantKey,
+      service: "website_widget",
+      channelType: "webchat",
+      authorityMode: "strict",
+    });
+
+    return buildApprovedTruthPublicReplyFromRuntime({ runtime, text });
+  } catch (error) {
+    return {
+      ok: false,
+      mode: "manual_first",
+      text:
+        "Thanks — your message was received. Our team can review it and reply shortly.",
+      reasonCode: s(
+        error?.runtimeAuthority?.reasonCode || error?.reasonCode || error?.code,
+        "runtime_authority_unavailable"
+      ),
+    };
+  }
+}
+
 function buildPublicWidgetFailClosed({
   reasonCode = "website_widget_not_ready",
   message = "Website chat is not live yet.",
@@ -1167,6 +1372,30 @@ export function channelConnectPublicRoutes({
         });
       }
 
+      const approvedTruthReply =
+        bootstrap.controls?.publicAnswering === true
+          ? await buildApprovedTruthPublicReply({
+              db,
+              tenantKey: normalized.tenantKey,
+              text: normalized.text,
+            })
+          : null;
+
+      const assistantReply =
+        approvedTruthReply?.ok === true
+          ? {
+              mode: s(approvedTruthReply.mode, "approved_truth_answer"),
+              text: s(approvedTruthReply.text),
+              source: approvedTruthReply.source || null,
+              guard: bootstrap.controls?.runtimeGuard || null,
+            }
+          : {
+              mode: "manual_first",
+              text:
+                "Thanks — your message was received. Our team can review it and reply shortly.",
+              guard: bootstrap.controls?.runtimeGuard || null,
+            };
+
       return res.status(200).json({
         ok: true,
         received: true,
@@ -1174,14 +1403,7 @@ export function channelConnectPublicRoutes({
         sessionId: normalized.sessionId,
         threadId: s(payload.threadId || payload.thread?.id),
         messageId: s(payload.messageId || payload.message?.id),
-        assistant: {
-          mode: bootstrap.controls?.publicAnswering === true ? "approved_truth_ready" : "manual_first",
-          text:
-            bootstrap.controls?.publicAnswering === true
-              ? "Thanks — your message was received. Approved business knowledge is available, and guarded answering can be enabled next."
-              : "Thanks — your message was received. Our team can review it and reply shortly.",
-          guard: bootstrap.controls?.runtimeGuard || null,
-        },
+        assistant: assistantReply,
       });
     } catch (error) {
       webhookLog.warn("webchat.message.failed", {
@@ -1223,6 +1445,7 @@ export function channelConnectPublicRoutes({
 }
 
 export const __test__ = {
+  buildApprovedTruthPublicReplyFromRuntime,
   buildPublicWidgetRuntimeGuard,
   normalizeWebsiteWidgetMessage,
   originAllowedForWidget,
