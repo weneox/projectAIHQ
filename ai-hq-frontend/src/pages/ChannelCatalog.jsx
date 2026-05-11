@@ -178,7 +178,7 @@ function laneStatus(runtime = {}) {
     return {
       label: "Connected",
       tone: "success",
-      body: "This lane can receive customer conversations.",
+      body: "This channel can receive customer conversations.",
       action: "Inbox",
     };
   }
@@ -187,8 +187,8 @@ function laneStatus(runtime = {}) {
     return {
       label: "Review",
       tone: "warning",
-      body: "This lane is attached and needs a quick review.",
-      action: "Fix",
+      body: "This channel is connected but still needs review.",
+      action: "Review",
     };
   }
 
@@ -196,15 +196,15 @@ function laneStatus(runtime = {}) {
     return {
       label: "Unavailable",
       tone: "neutral",
-      body: "This lane is not available in this environment.",
-      action: "Details",
+      body: "This channel is not available for this workspace.",
+      action: "View",
     };
   }
 
   return {
     label: "Available",
     tone: "neutral",
-    body: "Choose this lane when you want to use it.",
+    body: "Connect this channel when you are ready to receive customer messages.",
     action: "Connect",
   };
 }
@@ -234,12 +234,142 @@ function launchRepairCopy(readinessState = {}) {
   }
 
   if (runtime.ready === false || s(runtime.status).toLowerCase() === "blocked") {
-    return "Runtime pending repair. Runtime still needs repair.";
+    return "AI setup still needs attention.";
   }
 
   return "";
 }
 
+function channelSetupName(channel = {}) {
+  const id = lower(channel.id);
+
+  if (id === "website") return "Website Chat";
+  if (id === "instagram") return "Instagram";
+  if (id === "telegram") return "Telegram";
+
+  return s(channel.name, "Channel");
+}
+
+function channelConnectStepLabel(channel = {}) {
+  const id = lower(channel.id);
+
+  if (id === "website") return "Install website widget";
+  if (id === "instagram") return "Connect Instagram account";
+  if (id === "telegram") return "Connect Telegram bot";
+
+  return "Connect channel";
+}
+
+function channelTestStepLabel(channel = {}) {
+  const id = lower(channel.id);
+
+  if (id === "website") return "Send website test message";
+  if (id === "instagram") return "Send Instagram test message";
+  if (id === "telegram") return "Send Telegram test message";
+
+  return "Send test message";
+}
+
+function setupStepsForChannel(channel = {}, runtime = {}) {
+  return [
+    {
+      id: "connect",
+      label: channelConnectStepLabel(channel),
+      done: runtime.connected === true || runtime.deliveryReady === true,
+    },
+    {
+      id: "verify",
+      label: "Verify connection",
+      done: runtime.deliveryReady === true,
+    },
+    {
+      id: "test",
+      label: channelTestStepLabel(channel),
+      done: runtime.deliveryReady === true,
+    },
+    {
+      id: "inbox",
+      label: "Open Inbox",
+      done: runtime.deliveryReady === true,
+    },
+  ];
+}
+
+function SetupStep({ step }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="min-w-0 truncate text-[12.5px] font-medium text-text-muted">
+        {step.label}
+      </span>
+
+      <span
+        className={cx(
+          "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em]",
+          step.done
+            ? "bg-success-soft text-success"
+            : "bg-surface-subtle text-text-subtle"
+        )}
+      >
+        {step.done ? "Done" : "Next"}
+      </span>
+    </div>
+  );
+}
+
+function ChannelSetupSummary({ channels, readinessState, onNavigate }) {
+  const readyCount = n(readinessState?.channelSummary?.readyCount);
+  const connectedCount = n(readinessState?.channelSummary?.connectedCount);
+  const totalCount = channels.length;
+  const hasReadyChannel = readyCount > 0;
+
+  return (
+    <Card padded="sm" className="bg-surface-subtle">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div>
+          <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {hasReadyChannel ? "A channel is ready for conversations." : "Connect your first channel."}
+          </div>
+
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            {hasReadyChannel
+              ? "Open Inbox to review new customer messages, reply manually, or use AI replies when setup is complete."
+              : "Start with Website Chat, Instagram, or Telegram. After setup, send a test message and confirm it appears in Inbox."}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <div className="rounded-md border border-line-soft bg-white px-4 py-3">
+            <div className="text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-lg)] text-text">
+              {readyCount}/{totalCount}
+            </div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Ready
+            </div>
+          </div>
+
+          <div className="rounded-md border border-line-soft bg-white px-4 py-3">
+            <div className="text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-lg)] text-text">
+              {connectedCount}
+            </div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Connected
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant={hasReadyChannel ? "primary" : "secondary"}
+            onClick={() => onNavigate(hasReadyChannel ? "/inbox" : "/channels?channel=website")}
+            rightIcon={<ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />}
+          >
+            {hasReadyChannel ? "Open inbox" : "Start setup"}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
   const status = laneStatus(runtime);
   const primaryAction = runtime.deliveryReady
@@ -288,19 +418,20 @@ function ChannelCard({ channel, runtime, onInspect, onNavigate }) {
           {s(runtime.summary) || channel.summary}
         </p>
 
-        <div className="mt-5 grid gap-2 border-t border-line-soft pt-4 text-[12.5px] font-medium text-text-muted">
-          <div className="flex items-center justify-between gap-3">
-            <span>Backend status</span>
-            <span className={cx("font-semibold", textClass(status.tone))}>
+                <div className="mt-5 border-t border-line-soft pt-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Setup path
+            </span>
+            <span className={cx("text-[12.5px] font-semibold", textClass(status.tone))}>
               {status.label}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <span>Delivery</span>
-            <span className={cx("font-semibold", runtime.deliveryReady ? "text-success" : "text-text-muted")}>
-              {runtime.deliveryReady ? "Ready" : "Not ready"}
-            </span>
+          <div className="grid gap-2">
+            {setupStepsForChannel(channel, runtime).map((step) => (
+              <SetupStep key={step.id} step={step} />
+            ))}
           </div>
         </div>
 
@@ -538,10 +669,11 @@ export default function ChannelCatalog() {
     return (
       <PageCanvas className="max-w-[1180px] py-3">
                 <PageHeader
-          title="Launch channels"
-          description="Connect Website Chat, Instagram, or Telegram for the v1 launch lane. WhatsApp and Gmail stay Phase 2 until their self-serve flows are launch-ready."
+          title="Channels"
+          description="Connect Website Chat, Instagram, or Telegram, test the setup, then manage customer conversations from Inbox."
         />
-<LoadingSurface title="Loading channels" description="Reading live channel readiness from launch posture." />
+
+        <LoadingSurface title="Loading channels" description="Loading connected channels and setup status." />
       </PageCanvas>
     );
   }
@@ -550,19 +682,20 @@ export default function ChannelCatalog() {
     <>
       <PageCanvas className="max-w-[1120px] space-y-4 py-3">
                 <PageHeader
-          title="Launch channels"
-          description="Connect Website Chat, Instagram, or Telegram for the v1 launch lane. WhatsApp and Gmail stay Phase 2 until their self-serve flows are launch-ready."
+          title="Channels"
+          description="Connect Website Chat, Instagram, or Telegram, test the setup, then manage customer conversations from Inbox."
         />
-{s(effectiveReadinessState.error) ? (
+
+        {s(effectiveReadinessState.error) ? (
           <InlineNotice
             tone="danger"
-            title="Channels unavailable"
+            title="Channels could not be loaded"
             description={effectiveReadinessState.error}
             compact
           />
         ) : null}
 
-        <h1 className="sr-only">Launch channels</h1>
+        <h1 className="sr-only">Channels</h1>
 
         <div className="sr-only">
           {n(effectiveReadinessState?.channelSummary?.readyCount)}/{channels.length} ready
@@ -573,6 +706,12 @@ export default function ChannelCatalog() {
         {launchRepairCopy(effectiveReadinessState) ? (
           <div className="sr-only">{launchRepairCopy(effectiveReadinessState)}</div>
         ) : null}
+
+        <ChannelSetupSummary
+          channels={channels}
+          readinessState={effectiveReadinessState}
+          onNavigate={navigate}
+        />
 
         <div className="grid gap-4 xl:gap-5 md:grid-cols-3">
           {channels.map((channel) => (
