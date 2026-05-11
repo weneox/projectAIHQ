@@ -25,6 +25,7 @@ import {
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
+  startWebsiteGuidedSetup,
 } from "../../api/channelConnect.js";
 import {
   buildWorkspaceScopedQueryKey,
@@ -1326,6 +1327,14 @@ export default function WebsiteWidgetDetailDrawer({
   onClose,
 }) {
   const queryClient = useQueryClient();
+
+  const guidedSetupStartMutation = useMutation({
+    mutationFn: (payload) => startWebsiteGuidedSetup(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      emitLaunchSliceRefresh();
+    },
+  });
   const workspace = useWorkspaceTenantKey({ enabled: open });
 
   const [activePanel, setActivePanel] = useState("overview");
@@ -2378,6 +2387,52 @@ export default function WebsiteWidgetDetailDrawer({
   if (activePanel === "verify") mainContent = renderVerifyPanel();
   if (activePanel === "install") mainContent = renderInstallPanel();
 
+  function normalizeGuidedSetupDomainInput(value = "") {
+    const raw = s(value).toLowerCase();
+    if (!raw) return "";
+
+    try {
+      const parsed = new URL(raw.match(/^https?:\/\//i) ? raw : `https://${raw}`);
+      return s(parsed.hostname).replace(/^www\./i, "");
+    } catch {
+      return raw
+        .replace(/^https?:\/\//i, "")
+        .replace(/^www\./i, "")
+        .split("/")[0]
+        .split("?")[0]
+        .split("#")[0]
+        .trim();
+    }
+  }
+
+  function getGuidedSetupDomainFromForm() {
+    const allowedDomains = parseList(widget.allowedDomains);
+    const allowedOrigins = parseList(widget.allowedOrigins);
+
+    return normalizeGuidedSetupDomainInput(
+      firstText(allowedDomains[0], allowedOrigins[0])
+    );
+  }
+
+  function startGuidedWebsiteSetupFromForm() {
+    const domain = getGuidedSetupDomainFromForm();
+
+    if (!domain) {
+      scrollFirstWebsiteSetupText(/settings|allowed domains|allowed origins|website domain/i);
+      return false;
+    }
+
+    guidedSetupStartMutation.mutate({
+      domain,
+      title: widget.title,
+      subtitle: widget.subtitle,
+      accentColor: widget.accentColor,
+      initialPrompts: parseList(widget.initialPrompts),
+    });
+
+    return true;
+  }
+
   function handleGuidedSetupAction(action = {}) {
     const next = obj(action);
     const actionName = s(next.action).toLowerCase();
@@ -2399,6 +2454,7 @@ export default function WebsiteWidgetDetailDrawer({
     }
 
     if (actionName === "verify_domain") {
+      if (startGuidedWebsiteSetupFromForm()) return;
       if (clickFirstWebsiteSetupButton(/verify|check domain|create verification|continue setup/i)) return;
       scrollFirstWebsiteSetupText(/verify|ownership|domain verification|trusted domain/i);
       return;
@@ -2517,12 +2573,6 @@ export default function WebsiteWidgetDetailDrawer({
             <>
             <GuidedWebsiteSetupCard
               guidedSetup={obj(statusQuery.data?.guidedSetup)}
-              busy={
-                checkVerificationMutation.isPending ||
-                developerHandoffMutation.isPending ||
-                gtmHandoffMutation.isPending ||
-                wordpressHandoffMutation.isPending
-              }
               onPrimaryAction={handleGuidedSetupAction}
             />
 

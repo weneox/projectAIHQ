@@ -82,3 +82,8 @@ export async function createWebsiteWidgetWordpressInstallHandoff(payload = {}) {
 export async function createWebsiteWidgetTestMessage(payload = {}) {
   return apiPost("/api/channels/webchat/test-message", payload);
 }
+
+
+export async function startWebsiteGuidedSetup(payload = {}) {
+  return apiPost("/api/channels/webchat/guided-setup/start", payload);
+}
