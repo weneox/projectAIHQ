@@ -239,17 +239,7 @@ function launchRepairCopy(readinessState = {}) {
 
   return "";
 }
-
-function channelSetupName(channel = {}) {
-  const id = lower(channel.id);
-
-  if (id === "website") return "Website Chat";
-  if (id === "instagram") return "Instagram";
-  if (id === "telegram") return "Telegram";
-
-  return s(channel.name, "Channel");
-}
-
+
 function channelConnectStepLabel(channel = {}) {
   const id = lower(channel.id);
 
