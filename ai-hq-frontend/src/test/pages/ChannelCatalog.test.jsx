@@ -584,7 +584,9 @@ describe("ChannelCatalog", () => {
 
     expect(document.body).toHaveTextContent(/posture down/i);
     expect(document.body).toHaveTextContent(/0\/3 ready/i);
-    expect(screen.queryAllByRole("button", { name: /^inbox$/i }).length).toBe(0);
+    expect(screen.queryAllByRole("button", { name: /^(inbox|open inbox)$/i }).length).toBe(0);
+    expect(screen.getByRole("button", { name: /^start setup$/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^view$/i }).length).toBeGreaterThanOrEqual(3);
     expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(3);
   });
 
