@@ -26,7 +26,8 @@
     "test:integration:db:inbox": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/inbox-operator-lane.integration.test.js",
     "test:integration:db:certification": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/postgres-certification.integration.test.js",
     "test:integration:db": "npm run test:integration:db:certification && npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox",
-    "source-sync:website:once": "node --import ../scripts/workspace-module-loader.mjs scripts/run-website-source-crawl-once.mjs"
+    "source-sync:website:once": "node --import ../scripts/workspace-module-loader.mjs scripts/run-website-source-crawl-once.mjs",
+    "source-sync:website:loop": "node scripts/run-website-source-crawl-loop.mjs"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
