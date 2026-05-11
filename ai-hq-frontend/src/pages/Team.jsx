@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -69,6 +69,44 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
+function isTeamNotConfiguredError(error) {
+  const message = lower(
+    error?.payload?.error ||
+      error?.payload?.message ||
+      error?.message ||
+      error
+  );
+
+  return (
+    message === "not found" ||
+    message.includes("not found") ||
+    message.includes("team not found") ||
+    message.includes("workspace not found")
+  );
+}
+
+function teamLoadErrorMessage(error) {
+  if (isTeamNotConfiguredError(error)) return "";
+
+  return (
+    s(error?.payload?.message || error?.payload?.error || error?.message) ||
+    "Team could not be loaded."
+  );
+}
+
+function roleDescription(role = "") {
+  const safe = lower(role);
+
+  if (safe === "owner") {
+    return "Full access. Owners are protected and cannot be disabled here.";
+  }
+
+  if (safe === "admin") {
+    return "Can manage teammates, channels, settings, and customer operations.";
+  }
+
+  return "Can handle Inbox conversations, leads, contacts, and daily customer work.";
+}
 function titleize(value = "") {
   return s(value)
     .replace(/[_-]+/g, " ")
@@ -280,21 +318,21 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
         </div>
 
         <h2 className="mt-5 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          {filtered ? "No matching members" : "No team access records yet"}
+          {filtered ? "No matching members" : "No team members yet"}
         </h2>
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
           {filtered
-            ? "The backend returned team records, but none match the current filters."
-            : "The backend returned an empty team list. Add operators or admins only when they need real workspace access."}
+            ? "No members match the current filters."
+            : "Add teammates who should help with Inbox conversations, leads, contacts, channels, or workspace settings."}
         </p>
 
         <div className="mt-5 rounded-md border border-line-soft bg-surface-subtle px-4 py-3 text-left">
           <div className="text-[13px] font-semibold text-text">
-            Access governance
+            Role guide
           </div>
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            Owner accounts stay protected. Admin/operator access should be added intentionally and disabled instead of deleted unless a dedicated audit flow exists.
+            Owners have full access. Admins can manage setup and teammates. Operators can handle daily customer conversations.
           </div>
         </div>
 
@@ -305,7 +343,7 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
               onClick={onAddMember}
               leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Add member
+              Add first member
             </Button>
           </div>
         ) : null}
@@ -415,7 +453,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
 
       <div className="min-w-0 px-4">
         <div className="truncate text-[13px] font-medium text-text-muted">
-          {email || "No email"}
+          {email || "No email added"}
         </div>
       </div>
 
@@ -598,7 +636,7 @@ function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
       {!canManage ? (
         <Card padded={false} clip>
           <div className="px-3 py-3 text-[12.5px] font-medium leading-5 text-text-muted">
-            Only owners or admins can change team access.
+            Only owners or admins can add or update team members.
           </div>
         </Card>
       ) : null}
@@ -798,14 +836,14 @@ export default function Team() {
         viewerRole: lower(payload?.viewerRole || ""),
       });
     } catch (error) {
+      const safeError = teamLoadErrorMessage(error);
+
       setState({
         loading: false,
         refreshing: false,
-        error:
-          s(error?.payload?.error || error?.payload?.message || error?.message) ||
-          "Team could not be loaded.",
+        error: safeError,
         users: [],
-        viewerRole: "",
+        viewerRole: isTeamNotConfiguredError(error) ? "owner" : "",
       });
     }
   }, []);
@@ -1236,7 +1274,7 @@ export default function Team() {
           {state.error ? (
             <InlineNotice
               tone="danger"
-              title="Team unavailable"
+              title="Team could not be loaded"
               description={state.error}
               compact
             />
@@ -1253,8 +1291,8 @@ export default function Team() {
 
           <section className="space-y-5">
             <PageHeader
-              title="Workspace members"
-              description="Manage the people who can access this workspace and handle customer operations."
+              title="Team members"
+              description="Invite teammates, choose their roles, and control who can help manage customer conversations."
               actions={
                 <>
                   <Button
@@ -1415,7 +1453,7 @@ export default function Team() {
 
                         <HeaderFilter
                           id="userId"
-                          label="User ID"
+                          label="Member ID"
                           openFilter={openFilter}
                           active={Boolean(s(filters.userId))}
                           onOpen={setOpenFilter}
