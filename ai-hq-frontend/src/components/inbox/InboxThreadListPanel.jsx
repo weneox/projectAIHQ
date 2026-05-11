@@ -1,4 +1,5 @@
-import {
+﻿import {
+  ArrowRight,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -467,6 +468,7 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
 function InboxAutopilotControl({
   automationControl = null,
   onToggleAutomation,
+  onOpenChannels,
   hidden = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -692,10 +694,10 @@ function EmptyState({ hasSearch, hasChannelFilter }) {
   );
 }
 
-function DisconnectedRailState() {
+function DisconnectedRailState({ onOpenChannels }) {
   return (
     <div className="flex h-full min-h-0 items-center justify-center px-6 py-10">
-      <div className="max-w-[270px] text-center">
+      <div className="max-w-[300px] text-center">
         <div className="mb-5 flex justify-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-line-soft bg-[linear-gradient(180deg,#FFFFFF_0%,#F4F7FB_100%)] shadow-[0_24px_50px_-42px_rgba(15,23,42,0.24)]">
             <Inbox className="h-8 w-8 text-text-subtle" strokeWidth={1.8} />
@@ -707,14 +709,22 @@ function DisconnectedRailState() {
         </div>
 
         <div className="mt-2 text-[12.5px] font-medium leading-6 text-text-muted">
-          Conversations will appear here after a launch channel is connected and
-          messages start coming in.
+          Connect Website Chat, Instagram, or Telegram, then send a test message.
+          New conversations will appear here automatically.
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenChannels}
+          className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-[14px] border border-[rgba(var(--color-brand),0.18)] bg-brand-soft px-4 text-[12.5px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-[rgba(var(--color-brand),0.12)]"
+        >
+          Connect launch channel
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.15} />
+        </button>
       </div>
     </div>
   );
 }
-
 export default function InboxThreadListPanel({
   threadList,
   selectedThreadId = "",
@@ -722,6 +732,7 @@ export default function InboxThreadListPanel({
   launchChannelConnected = true,
   automationControl = null,
   onToggleAutomation,
+  onOpenChannels,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const deferredSearch = useDeferredValue(localSearch);
@@ -945,7 +956,7 @@ export default function InboxThreadListPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          <DisconnectedRailState />
+          <DisconnectedRailState onOpenChannels={onOpenChannels} />
         </div>
       </section>
     );
