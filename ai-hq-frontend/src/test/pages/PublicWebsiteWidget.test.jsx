@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import PublicWebsiteWidget from "../../pages/PublicWebsiteWidget.jsx";
@@ -42,9 +42,10 @@ describe("PublicWebsiteWidget", () => {
             initialPrompts: ["Pricing", "Talk to sales"],
           },
           controls: {
-            manualFirst: true,
+            manualFirst: false,
             approvedTruthOnly: true,
-            publicAnswering: false,
+            publicAnswering: true,
+            approvedTruthReady: true,
             messageCaptureReady: true,
           },
         });
@@ -59,8 +60,12 @@ describe("PublicWebsiteWidget", () => {
           threadId: "thread_test",
           messageId: "message_test",
           assistant: {
-            mode: "manual_first",
-            text: "Thanks — your message was received. Our team can review it and reply shortly.",
+            mode: "approved_truth_answer",
+            text: "Based on approved business information: Pricing starts after a short business fit review.",
+            source: {
+              title: "Pricing",
+              type: "service_catalog",
+            },
           },
         });
       }
@@ -111,11 +116,14 @@ describe("PublicWebsiteWidget", () => {
     expect(await screen.findByText("Do you have pricing?")).toBeInTheDocument();
     expect(
       await screen.findByText(
-        "Thanks — your message was received. Our team can review it and reply shortly."
+        "Based on approved business information: Pricing starts after a short business fit review."
       )
     ).toBeInTheDocument();
 
     const [, messageCall] = global.fetch.mock.calls;
+    expect(await screen.findByText("Approved business info")).toBeInTheDocument();
+    expect(await screen.findByText("Source: Pricing")).toBeInTheDocument();
+
     expect(JSON.parse(messageCall[1].body)).toMatchObject({
       tenantKey: "acme",
       widgetId: "ww_test",

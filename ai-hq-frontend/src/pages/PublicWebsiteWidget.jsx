@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -91,6 +91,8 @@ function normalizeWidgetReply(payload = {}) {
           ? "Thanks — your message was received. Our team can review it and reply shortly."
           : "Website chat is temporarily unavailable."
       ),
+      source: obj(assistant.source, null),
+      guard: obj(assistant.guard, null),
     },
   };
 }
@@ -244,6 +246,9 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
           id: reply.messageId || "reply-" + Date.now(),
           role: reply.received ? "assistant" : "system",
           text: reply.assistant.text || reply.message,
+          mode: reply.assistant.mode,
+          source: reply.assistant.source,
+          guard: reply.assistant.guard,
         },
       ]);
     } catch (error) {
@@ -309,6 +314,22 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
               }
             >
               {message.text}
+
+              {message.role === "assistant" &&
+              message.mode === "approved_truth_answer" ? (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[0.10em] text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.1} />
+                  Approved business info
+                </div>
+              ) : null}
+
+              {message.role === "assistant" &&
+              message.mode === "approved_truth_answer" &&
+              s(message.source?.title) ? (
+                <div className="mt-1 text-[10.5px] font-medium leading-4 text-slate-400">
+                  Source: {s(message.source.title)}
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -317,7 +338,9 @@ function LiveWidgetShell({ payload, params = {}, brand = "Website" }) {
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.1} />
             <span>
-              Messages are captured safely. Public AI answers stay manual-first until approved runtime answering is enabled.
+              {payload.controls?.publicAnswering
+                ? "Public answers are limited to approved business information."
+                : "Messages are captured safely. Public AI answers stay manual-first until approved runtime answering is enabled."}
             </span>
           </div>
         </div>
