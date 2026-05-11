@@ -1143,6 +1143,10 @@ export function channelConnectPublicRoutes({
 }
 
 export const __test__ = {
+  normalizeWebsiteWidgetMessage,
+  originAllowedForWidget,
+  buildPublicWidgetFailClosed,
+  normalizeOriginHost,
   normalizeTelegramWebhookUpdate,
   safeSecretEquals,
   buildInternalIngestRequest,
