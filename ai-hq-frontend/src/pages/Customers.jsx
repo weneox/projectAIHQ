@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -637,7 +637,7 @@ function CustomerTable({
               description={
                 activeFilterCount
                   ? "Adjust the active filters to bring customer records back into view."
-                  : "The backend returned an empty customer list. Converted or customer-level records will appear here when real pipeline data exists."
+                  : "No customer records exist yet. Start from Inbox: connect Website Chat, Instagram, or Telegram, handle real conversations, and converted customer-level records will appear here when backend pipeline data exists."
               }
             />
           )}

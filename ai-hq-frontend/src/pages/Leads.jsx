@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -712,7 +712,7 @@ function LeadsTable({
               description={
                 activeFilterCount
                   ? "Adjust the active filters to bring sales opportunities back into view."
-                  : "The backend returned an empty lead list. New qualified conversations will appear here when lead capture creates real records."
+                  : "No lead records exist yet. Connect Website Chat, Instagram, or Telegram, then send a real or test conversation through Inbox. Qualified conversations will appear here automatically when lead capture creates backend records."
               }
             />
           )}
