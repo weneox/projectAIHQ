@@ -509,7 +509,7 @@ describe("ChannelCatalog", () => {
     expect(screen.queryByText(/^whatsapp$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^gmail$/i)).not.toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/2\/2 ready/i);
+    expect(document.body).toHaveTextContent(/2\/3 ready/i);
 
     await waitFor(() => {
       expect(screen.getAllByText(/^connected$/i).length).toBeGreaterThanOrEqual(
@@ -583,7 +583,7 @@ describe("ChannelCatalog", () => {
     ).toBeInTheDocument();
 
     expect(document.body).toHaveTextContent(/posture down/i);
-    expect(document.body).toHaveTextContent(/0\/2 ready/i);
+    expect(document.body).toHaveTextContent(/0\/3 ready/i);
     expect(screen.queryAllByRole("button", { name: /^inbox$/i }).length).toBe(0);
     expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(3);
   });
@@ -742,14 +742,14 @@ describe("ChannelCatalog", () => {
     });
 
     await waitFor(() => {
-      expect(document.body).toHaveTextContent(/0\/2 ready/i);
+      expect(document.body).toHaveTextContent(/0\/3 ready/i);
     });
 
     expect(await findChannelCard("Instagram")).toBeInTheDocument();
     expect((await screen.findAllByText(/^telegram$/i)).length).toBeGreaterThan(0);
     expect(await findChannelCard("Website chat")).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/0\/2 ready/i);
+    expect(document.body).toHaveTextContent(/0\/3 ready/i);
   });
 });
 
