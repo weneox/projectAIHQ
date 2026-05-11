@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowRight,
   Bot,
   CheckCircle2,
@@ -455,6 +455,118 @@ function MetricsRow({ home, onNavigate }) {
   );
 }
 
+
+function LaunchChecklistCard({ home, onNavigate }) {
+  const steps = [
+    {
+      id: "business-info",
+      label: "Business Info",
+      description: "Approve the facts the assistant can safely use.",
+      ready: businessInfoReady(home),
+      readyLabel: "Approved",
+      blockedLabel: "Needs review",
+      path: "/truth",
+      icon: ShieldCheck,
+    },
+    {
+      id: "runtime",
+      label: "Assistant runtime",
+      description: "Keep the live assistant aligned with approved Business Info.",
+      ready: assistantReady(home),
+      readyLabel: "Ready",
+      blockedLabel: "Safe mode",
+      path: "/truth",
+      icon: Bot,
+    },
+    {
+      id: "channels",
+      label: "Launch channels",
+      description: "Connect Website Chat, Instagram, or Telegram.",
+      ready: channelReady(home),
+      readyLabel: `${readyChannelCount(home)}/${availableChannelCount(home)} ready`,
+      blockedLabel: `${connectedChannelCount(home)} connected`,
+      path: "/channels",
+      icon: Globe2,
+    },
+    {
+      id: "inbox",
+      label: "Inbox operations",
+      description: "Confirm customer conversations and replies are available.",
+      ready: !inboxUnavailable(home),
+      readyLabel: "Available",
+      blockedLabel: "Check inbox",
+      path: "/inbox",
+      icon: Inbox,
+    },
+  ];
+
+  const completed = steps.filter((step) => step.ready).length;
+  const launchReady = completed === steps.length;
+
+  return (
+    <Card padded="md">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+        <div>
+          <StatusText tone={launchReady ? "success" : "warning"}>
+            {launchReady ? "Launch lane is ready" : "Finish launch setup"}
+          </StatusText>
+
+          <h2 className="mt-4 text-[28px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+            V1 launch checklist
+          </h2>
+
+          <p className="mt-2 max-w-[720px] text-[13.5px] font-medium leading-6 text-text-muted">
+            Keep the product focused: approved Business Info, one ready channel, working Inbox, and controlled AI replies.
+          </p>
+        </div>
+
+        <div className="border border-line-soft bg-surface-muted px-5 py-4">
+          <div className="text-[34px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+            {completed}/{steps.length}
+          </div>
+          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Steps ready
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((step) => {
+          const Icon = step.icon;
+          const tone = step.ready ? "success" : "warning";
+
+          return (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => onNavigate(step.path)}
+              className="group block h-full text-left"
+            >
+              <div className="flex h-full min-h-[154px] flex-col justify-between border border-line-soft bg-white px-4 py-4 transition-[transform,border-color,box-shadow] duration-base ease-premium group-hover:-translate-y-0.5 group-hover:border-line">
+                <div className="flex items-start justify-between gap-3">
+                  <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
+                  <span className={cx("h-1.5 w-1.5", toneDotClass(tone))} />
+                </div>
+
+                <div>
+                  <div className="text-[14px] font-semibold text-text">
+                    {step.label}
+                  </div>
+                  <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                    {step.description}
+                  </div>
+                  <div className={cx("mt-3 text-[12.5px] font-semibold", toneTextClass(tone))}>
+                    {step.ready ? step.readyLabel : step.blockedLabel}
+                  </div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
 function WorkPanel({ home, onNavigate }) {
   const waiting = waitingCount(home);
   const ready = workspaceReady(home);
@@ -674,6 +786,8 @@ export default function ProductHomePage() {
       <HeroSection hero={hero} home={home} onAction={goFromAction} />
 
       <MetricsRow home={home} onNavigate={go} />
+
+      <LaunchChecklistCard home={home} onNavigate={go} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <WorkPanel home={home} onNavigate={go} />
