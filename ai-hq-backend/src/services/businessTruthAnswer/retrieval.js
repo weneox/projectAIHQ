@@ -88,13 +88,16 @@ function pushCandidate(target, candidate = {}) {
     candidate.text || candidate.description || candidate.summary || candidate.value
   );
 
-  if (!title && !text) return;
+  // Do not index generic title-only placeholders such as "Business summary",
+  // "Phone", "Email", or "Pricing" when no approved value exists.
+  // Those pollute embedding retrieval and can outrank real approved facts.
+  if (!text) return;
 
   target.push({
     id: cleanText(candidate.id || candidate.key || title || text).slice(0, 180),
     type: cleanText(candidate.type || "fact"),
     title,
-    text: text || title,
+    text,
     source: cleanText(candidate.source || "approved_truth"),
   });
 }
