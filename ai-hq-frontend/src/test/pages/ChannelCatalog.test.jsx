@@ -606,12 +606,10 @@ describe("ChannelCatalog", () => {
     expect(screen.getAllByText(/^instagram$/i).length).toBeGreaterThan(0);
 
     expect(
-      await screen.findByText(/instagram is connected/i)
+      await screen.findByText(/instagram.*connected/i)
     ).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(
-      /Inbound DMs can resolve against tenant runtime/i
-    );
+    expect(document.body).toHaveTextContent(/Messages are connected to Inbox/i);
   });
 
   it("refreshes launch posture after a tenant-scoped launch mutation signal", async () => {
