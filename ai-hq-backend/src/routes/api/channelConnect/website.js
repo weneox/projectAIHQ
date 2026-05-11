@@ -357,6 +357,121 @@ function buildWebsiteInstallBaseBlockers(status = {}) {
   return blockers;
 }
 
+function buildWebsiteGuidedSetupState({
+  status = {},
+  domainVerification = null,
+  launchReadiness = null,
+} = {}) {
+  const verification = obj(domainVerification);
+  const launch = obj(launchReadiness);
+  const config = normalizeWidgetConfig(status.widgetConfig, {
+    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
+  });
+
+  const hasDomain =
+    Boolean(s(verification.domain || verification.candidateDomain)) ||
+    Boolean(s(status.websiteUrl)) ||
+    arr(config.allowedDomains).length > 0 ||
+    arr(config.allowedOrigins).length > 0;
+
+  const hasWidgetId = Boolean(s(config.publicWidgetId));
+  const widgetEnabled = config.enabled === true;
+  const verified =
+    verification.verified === true ||
+    s(verification.state).toLowerCase() === "verified";
+  const productionReady =
+    launch.productionLaunchAllowed === true ||
+    launch.productionReady === true ||
+    launch.productionInstallReady === true;
+
+  let currentStep = "domain";
+  if (hasDomain) currentStep = "ownership";
+  if (verified) currentStep = "scan";
+  if (verified && !productionReady) currentStep = "review";
+  if (productionReady) currentStep = "install";
+
+  function step(id, label, description, statusValue) {
+    return { id, label, description, status: statusValue };
+  }
+
+  const steps = [
+    step(
+      "domain",
+      "Add website domain",
+      "Enter the public website that should power this assistant.",
+      hasDomain ? "done" : "current"
+    ),
+    step(
+      "ownership",
+      "Verify ownership",
+      "Confirm this business controls the domain before public launch.",
+      !hasDomain ? "locked" : verified ? "done" : "current"
+    ),
+    step(
+      "scan",
+      "Prepare website AI",
+      "AIHQ prepares a safe website source and scans content for review.",
+      !verified ? "locked" : productionReady ? "done" : "running"
+    ),
+    step(
+      "review",
+      "Approve Business Info",
+      "Review what the assistant is allowed to say before it goes live.",
+      !verified ? "locked" : productionReady ? "done" : "current"
+    ),
+    step(
+      "install",
+      "Install widget",
+      "Use the recommended WordPress, GTM, or developer install path.",
+      productionReady ? "current" : "locked"
+    ),
+  ];
+
+  let headline = "Connect your website AI";
+  let message = "Add your domain and AIHQ will guide the rest.";
+  let primaryAction = { label: "Add domain", action: "edit_settings" };
+
+  if (hasDomain && !verified) {
+    headline = "Verify your website";
+    message =
+      "Verification protects the widget and unlocks the guided install flow.";
+    primaryAction = { label: "Verify domain", action: "verify_domain" };
+  } else if (verified && !productionReady) {
+    headline = "Your website AI is being prepared";
+    message =
+      "The domain is verified. Review Business Info before public launch.";
+    primaryAction = {
+      label: "Review Business Info",
+      action: "open_truth",
+      path: "/truth",
+    };
+  } else if (productionReady) {
+    headline = "Website Chat is ready to install";
+    message = "Choose the safest install package for this website.";
+    primaryAction = { label: "Prepare install", action: "prepare_install" };
+  } else if (hasWidgetId && widgetEnabled) {
+    headline = "Finish website setup";
+    message = "Complete verification to unlock public launch.";
+    primaryAction = { label: "Continue setup", action: "verify_domain" };
+  }
+
+  return {
+    mode: "guided",
+    headline,
+    message,
+    currentStep,
+    oneClickGoal:
+      "Domain verification prepares website knowledge, Business Info review, and install handoff from one guided flow.",
+    hasDomain,
+    hasWidgetId,
+    widgetEnabled,
+    verified,
+    productionReady,
+    steps,
+    primaryAction,
+  };
+}
+
 function buildWebsitePackageContract(packageType = "developer", contract = {}) {
   return {
     packageType: s(packageType, "developer").toLowerCase(),
@@ -1215,7 +1330,7 @@ function buildWebsiteWidgetStatusPayload(
     req,
     status,
     verificationSurface,
-    launchReadiness
+    launchReadiness,
   );
   const installPlanBase = buildWebsiteChatInstallPlan({
     websiteUrl: status.websiteUrl,
@@ -1296,7 +1411,13 @@ function buildWebsiteWidgetStatusPayload(
       message: s(launchReadiness.message),
       blockers,
     },
-  };
+  
+    guidedSetup: buildWebsiteGuidedSetupState({
+      status,
+      domainVerification,
+      launchReadiness,
+    }),
+};
 }
 
 async function loadWebsiteWidgetStatusPayload({
