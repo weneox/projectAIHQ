@@ -43,6 +43,55 @@ export function AppPageInput({
   );
 }
 
+
+export function AppPageSelect({
+  value,
+  onChange,
+  disabled = false,
+  children,
+  name = "",
+}) {
+  return (
+    <div className="team-soft-control flex h-11 items-center rounded-md bg-white px-3.5 transition-[background-color,box-shadow] duration-150 ease-premium">
+      <select
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        name={name || undefined}
+        className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[13.5px] font-semibold text-text outline-none ring-0 shadow-none disabled:cursor-not-allowed focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
+export function AppPageTextarea({
+  value,
+  onChange,
+  placeholder = "",
+  disabled = false,
+  name = "",
+  rows = 4,
+}) {
+  return (
+    <div className="team-soft-control rounded-md bg-white px-3.5 py-3 transition-[background-color,box-shadow] duration-150 ease-premium">
+      <textarea
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        name={name || undefined}
+        rows={rows}
+        autoComplete="new-password"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        className="min-h-[92px] w-full resize-none appearance-none border-0 bg-transparent p-0 text-[13.5px] font-semibold leading-5 text-text outline-none ring-0 shadow-none placeholder:text-text-subtle disabled:cursor-not-allowed focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none focus-visible:outline-none"
+      />
+    </div>
+  );
+}
 export function AppChoiceButton({ selected, disabled = false, children, onClick }) {
   return (
     <button

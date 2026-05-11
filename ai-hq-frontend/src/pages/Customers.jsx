@@ -20,6 +20,10 @@ import AppInfoRow from "../components/ui/AppInfoRow.jsx";
 import AppPaginationFooter from "../components/ui/AppPaginationFooter.jsx";
 import AppStatCard from "../components/ui/AppStatCard.jsx";
 import AppStatusText from "../components/ui/AppStatusText.jsx";
+import {
+  AppWorkspaceMain,
+  AppWorkspaceSplit,
+} from "../components/ui/AppWorkspace.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
 import AppDetailPane, {
   AppDetailBody,
@@ -496,7 +500,7 @@ function ContactTable({
           >
             <AppTableHeaderFilter
               id="customer"
-              label="Contact"
+              label="Name"
               openFilter={openFilter}
               active={Boolean(filters.customer)}
               onOpen={onOpenFilter}
@@ -518,7 +522,7 @@ function ContactTable({
 
             <AppTableHeaderFilter
               id="contact"
-              label="Contact"
+              label="Reach"
               openFilter={openFilter}
               active={Boolean(filters.contact)}
               onOpen={onOpenFilter}
@@ -835,9 +839,8 @@ function ContactWorkspace({
   onPageChange,
 }) {
   return (
-    <Card padded={false} className="overflow-visible">
-      <div className="grid min-h-[690px] items-stretch xl:grid-cols-[minmax(0,1fr)_390px]">
-        <div className="min-w-0">
+    <AppWorkspaceSplit>
+        <AppWorkspaceMain>
           <ContactTable
             customers={customers}
             selectedKey={selectedKey}
@@ -857,14 +860,13 @@ function ContactWorkspace({
             onOpenInbox={onOpenInbox}
             onPageChange={onPageChange}
           />
-        </div>
+        </AppWorkspaceMain>
 
         <ContactDetailPanel
           customer={selectedContact}
           onOpenThread={onOpenThread}
         />
-      </div>
-    </Card>
+    </AppWorkspaceSplit>
   );
 }
 

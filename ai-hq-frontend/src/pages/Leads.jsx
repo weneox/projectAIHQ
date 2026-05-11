@@ -33,6 +33,12 @@ import AppStatCard from "../components/ui/AppStatCard.jsx";
 import AppStatusText from "../components/ui/AppStatusText.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
 import {
+  AppPageField,
+  AppPageInput,
+  AppPageSelect,
+  AppPageTextarea,
+} from "../components/ui/AppPageField.jsx";
+import {
   AppDetailBody,
   AppDetailEmpty,
   AppDetailHeader,
@@ -425,7 +431,7 @@ function LeadIdentity({ lead }) {
           {name}
         </div>
         <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {company || s(lead.interest) || "Lead profile"}
+          {company || s(lead.interest) || "Opportunity"}
         </div>
       </div>
     </div>
@@ -551,14 +557,14 @@ function LeadsTable({
               <AppFilterSearchInput
                 value={filters.lead}
                 onChange={(value) => onPatchFilters({ lead: value })}
-                placeholder="Search lead"
+                placeholder="Search opportunities"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ lead: "" })}
                   disabled={!filters.lead}
                 >
-                  Clear lead filter
+                  Clear opportunity filter
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -573,7 +579,7 @@ function LeadsTable({
               <AppFilterSearchInput
                 value={filters.contact}
                 onChange={(value) => onPatchFilters({ contact: value })}
-                placeholder="Search contact"
+                placeholder="Search email, phone, or username"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
@@ -716,13 +722,23 @@ function LeadsTable({
           ) : (
             <AppTableEmptyState
               icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
-              title={activeFilterCount ? "No matching leads" : "No leads captured yet"}
+              title={activeFilterCount ? "No matching leads" : "No opportunities yet"}
               description={
                 activeFilterCount
                   ? "Adjust the active filters to bring sales opportunities back into view."
-                  : "No leads yet. Connect Website Chat, Instagram, or Telegram, then handle a customer conversation in Inbox. Qualified opportunities will appear here automatically."
+                  : "No opportunities yet. Connect a channel and qualify your first conversation in Inbox."
               }
-                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenChannels} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Connect a channel</Button>)}
+                          action={
+                activeFilterCount ? null : (
+                  <Button
+                    type="button"
+                    onClick={onOpenChannels}
+                    rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+                  >
+                    Connect a channel
+                  </Button>
+                )
+              }
             />
           )}
         </div>
@@ -732,47 +748,25 @@ function LeadsTable({
 }
 
 function LeadControlField({ label, children }) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
+  return <AppPageField label={label}>{children}</AppPageField>;
 }
-
 function LeadNativeSelect({ value, onChange, children, disabled = false }) {
   return (
-    <select
+    <AppPageSelect
       value={value}
       disabled={disabled}
       onChange={(event) => onChange?.(event.target.value)}
-      className="h-10 w-full rounded-md border border-line-soft bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
-    </select>
+    </AppPageSelect>
   );
 }
-
 function LeadNativeInput(props) {
-  return (
-    <input
-      {...props}
-      className="h-10 w-full rounded-md border border-line-soft bg-white px-3 text-[13px] font-semibold text-text outline-none transition-colors placeholder:text-text-subtle focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
-    />
-  );
+  return <AppPageInput {...props} />;
 }
-
 function LeadNativeTextarea(props) {
-  return (
-    <textarea
-      {...props}
-      className="min-h-[92px] w-full resize-none rounded-md border border-line-soft bg-white px-3 py-2 text-[13px] font-semibold leading-5 text-text outline-none transition-colors placeholder:text-text-subtle focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
-    />
-  );
+  return <AppPageTextarea {...props} />;
 }
-
 function normalizeLeadMutationResponse(payload = {}) {
   if (payload?.lead && typeof payload.lead === "object") return payload.lead;
   if (payload?.data?.lead && typeof payload.data.lead === "object") return payload.data.lead;
@@ -821,7 +815,7 @@ function LeadDetailOverlay({
           <AppDetailEmpty
             icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
             title="Select a lead"
-            description="Choose a lead to review the opportunity and manage the next step."
+            description="Choose an opportunity to manage stage, owner, follow-up, and notes."
           />
         </Card>
       </SlidingDetailOverlay>
@@ -983,10 +977,10 @@ function LeadDetailOverlay({
 
           <section className="rounded-md border border-line-soft bg-surface-subtle p-4">
             <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              Manage opportunity
+              Opportunity controls
             </div>
             <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-              Update the pipeline, owner, and next step without leaving the lead.
+              Update stage, owner, follow-up, and notes from one place.
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
