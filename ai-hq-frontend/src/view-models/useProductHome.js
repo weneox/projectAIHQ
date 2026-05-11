@@ -684,7 +684,7 @@ function buildInboxState({ posture, sourceStatus }) {
     return {
       status: "attention",
       statusLabel: "Needs attention",
-      tone: "warn",
+      tone: "warning",
       summary: `${pluralize(unreadCount, "unread message")} ${
         unreadCount === 1 ? "is" : "are"
       } waiting across ${pluralize(Math.max(openCount, 1), "open conversation")}.`,

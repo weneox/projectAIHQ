@@ -160,7 +160,7 @@ function aiOperating(home) {
 
 function toneTextClass(tone = "neutral") {
   if (tone === "success") return "text-success";
-  if (tone === "warning") return "text-warning";
+  if (tone === "warning" || tone === "warn") return "text-warning";
   if (tone === "danger") return "text-danger";
   if (tone === "brand" || tone === "info") return "text-brand";
 
@@ -169,7 +169,7 @@ function toneTextClass(tone = "neutral") {
 
 function toneDotClass(tone = "neutral") {
   if (tone === "success") return "bg-success";
-  if (tone === "warning") return "bg-warning";
+  if (tone === "warning" || tone === "warn") return "bg-warning";
   if (tone === "danger") return "bg-danger";
   if (tone === "brand" || tone === "info") return "bg-brand";
 
@@ -671,7 +671,7 @@ function KpiCard({
             "inline-flex h-9 w-9 items-center justify-center rounded-[14px] border",
             tone === "success"
               ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-              : tone === "warning"
+              : tone === "warning" || tone === "warn"
                 ? "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
                 : tone === "danger"
                   ? "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger"
@@ -730,7 +730,7 @@ function KpiGrid({ home, onNavigate }) {
         icon={Globe2}
         label="Connected channels"
         value={`${ready}/${available}`}
-        caption={`${connected} connected channel${connected == 1 ? "" : "s"}`}
+        caption={`${connected} connected channel${connected === 1 ? "" : "s"}`}
         tone={ready > 0 ? "success" : connected > 0 ? "warning" : "brand"}
         action={{ label: "View channels", path: "/channels" }}
         onNavigate={onNavigate}
@@ -760,7 +760,7 @@ function KpiGrid({ home, onNavigate }) {
         icon={Clock3}
         label="Response health"
         value={pending > 0 ? "Review" : unread > 0 ? "Active" : "Calm"}
-        caption={`${pending} pending outbound action${pending == 1 ? "" : "s"}`}
+        caption={`${pending} pending outbound action${pending === 1 ? "" : "s"}`}
         tone={pending > 0 || unread > 0 ? "warning" : "success"}
         action={{ label: "View reports", path: "/reports" }}
         onNavigate={onNavigate}
