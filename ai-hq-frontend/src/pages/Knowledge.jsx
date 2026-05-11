@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   BookOpenCheck,
@@ -215,11 +216,11 @@ function SourceStat({ label, value }) {
   );
 }
 
-function EmptyKnowledgeState() {
+function EmptyKnowledgeState({ onOpenWebsiteSetup, onOpenBusinessInfo }) {
   return (
     <Card padded={false} clip>
-      <div className="flex min-h-[420px] items-center justify-center px-6 py-12 text-center">
-        <div className="max-w-[560px]">
+      <div className="flex min-h-[440px] items-center justify-center px-6 py-12 text-center">
+        <div className="max-w-[600px]">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-md border border-line-soft bg-surface-subtle text-text-muted">
             <BookOpenCheck className="h-8 w-8" strokeWidth={1.9} />
           </div>
@@ -229,16 +230,34 @@ function EmptyKnowledgeState() {
           </h2>
 
           <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-            The backend returned an empty source list. No fake FAQ, policy, website, or upload cards are shown.
-            Add real sources through the source governance flow before allowing the assistant to answer from documents.
+            No fake FAQ, policy, website, or upload cards are shown. Start with Website setup to scan real public pages,
+            then approve the extracted facts in Business Info before the assistant can use them.
           </p>
+
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+            <Button
+              type="button"
+              onClick={onOpenWebsiteSetup}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Start Website setup
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onOpenBusinessInfo}
+            >
+              Open Business Info
+            </Button>
+          </div>
 
           <div className="mt-5 rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-left">
             <div className="text-[13px] font-semibold text-text">
               Professional rule
             </div>
             <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-              If a source does not exist in backend, the UI must not pretend it exists.
+              If a source does not exist in backend, the UI must not pretend it exists. Knowledge becomes usable only after real source sync and approval.
             </div>
           </div>
         </div>
@@ -246,7 +265,6 @@ function EmptyKnowledgeState() {
     </Card>
   );
 }
-
 function SourceCard({ source, selected = false, busy = false, onOpen, onSync }) {
   const Icon = source.icon;
 
@@ -524,6 +542,7 @@ function SummaryBar({ sources }) {
 }
 
 export default function Knowledge() {
+  const navigate = useNavigate();
   const [sources, setSources] = useState([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [dialogSourceId, setDialogSourceId] = useState("");
@@ -668,7 +687,10 @@ export default function Knowledge() {
           ))}
         </div>
       ) : (
-        <EmptyKnowledgeState />
+        <EmptyKnowledgeState
+          onOpenWebsiteSetup={() => navigate("/channels?channel=website")}
+          onOpenBusinessInfo={() => navigate("/truth?source=website&review=business_info")}
+        />
       )}
 
       <SourceDialog
