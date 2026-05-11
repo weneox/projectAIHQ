@@ -280,8 +280,10 @@ function GuidedWebsiteSetupCard({ guidedSetup = {}, busy = false, onPrimaryActio
   const setup = obj(guidedSetup);
   const steps = arr(setup.steps);
   const primaryAction = obj(setup.primaryAction);
-
-  if (!steps.length) return null;
+  const [domainDraft, setDomainDraft] = useState(
+    s(setup.domain || setup.websiteDomain || setup.origin || setup.websiteUrl)
+  );
+if (!steps.length) return null;
 
   return (
     <SectionCard
@@ -346,6 +348,26 @@ function GuidedWebsiteSetupCard({ guidedSetup = {}, busy = false, onPrimaryActio
           </div>
         </div>
 
+        {setup.hasDomain ? null : (
+          <div className="rounded-[18px] border border-line-soft bg-surface-subtle px-4 py-3">
+            <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Website domain
+            </label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_190px]">
+              <input
+                type="text"
+                value={domainDraft}
+                onChange={(event) => setDomainDraft(event.target.value)}
+                placeholder="example.com"
+                className="min-h-[42px] rounded-[14px] border border-line-soft bg-white px-3.5 text-[14px] font-semibold text-text outline-none transition-[border-color,box-shadow] duration-base ease-premium placeholder:text-text-subtle focus:border-[rgba(var(--color-brand),0.45)] focus:shadow-[0_0_0_4px_rgba(var(--color-brand),0.10)]"
+              />
+              <div className="flex items-center text-[12px] font-medium leading-5 text-text-muted">
+                Enter your website domain. AIHQ prepares verification, safe scan, review, and install from one flow.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
           <InlineNotice
             tone={setup.productionReady ? "success" : "info"}
@@ -360,7 +382,7 @@ function GuidedWebsiteSetupCard({ guidedSetup = {}, busy = false, onPrimaryActio
             type="button"
             fullWidth
             disabled={busy || !s(primaryAction.action)}
-            onClick={() => onPrimaryAction?.(primaryAction)}
+            onClick={() => onPrimaryAction?.({ ...primaryAction, domain: domainDraft })}
             rightIcon={<CheckCircle2 className="h-4 w-4" strokeWidth={2.1} />}
           >
             {busy ? "Working..." : s(primaryAction.label, "Continue setup")}
@@ -2414,6 +2436,20 @@ export default function WebsiteWidgetDetailDrawer({
     );
   }
 
+  function startGuidedWebsiteSetupFromAction(action = {}) {
+    const domain = normalizeGuidedSetupDomainInput(
+      action.domain || action.websiteDomain || action.websiteUrl || action.url
+    );
+
+    if (!domain) return false;
+
+    guidedSetupStartMutation.mutate({
+      domain,
+    });
+
+    return true;
+  }
+
   function startGuidedWebsiteSetupFromForm() {
     const domain = getGuidedSetupDomainFromForm();
 
@@ -2454,7 +2490,7 @@ export default function WebsiteWidgetDetailDrawer({
     }
 
     if (actionName === "verify_domain") {
-      if (startGuidedWebsiteSetupFromForm()) return;
+      if (startGuidedWebsiteSetupFromAction(next) || startGuidedWebsiteSetupFromForm()) return;
       if (clickFirstWebsiteSetupButton(/verify|check domain|create verification|continue setup/i)) return;
       scrollFirstWebsiteSetupText(/verify|ownership|domain verification|trusted domain/i);
       return;
