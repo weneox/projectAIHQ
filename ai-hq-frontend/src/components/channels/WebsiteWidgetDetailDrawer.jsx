@@ -26,6 +26,7 @@ import {
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
   startWebsiteGuidedSetup,
+  getWebsiteGuidedSetupReview,
 } from "../../api/channelConnect.js";
 import {
   buildWorkspaceScopedQueryKey,
@@ -276,10 +277,14 @@ function guidedStepLabel(status = "") {
   return "Pending";
 }
 
-function GuidedWebsiteSetupCard({ guidedSetup = {}, busy = false, onPrimaryAction }) {
+function GuidedWebsiteSetupCard({ guidedSetup = {}, guidedReview = {}, busy = false, onPrimaryAction }) {
   const setup = obj(guidedSetup);
   const steps = arr(setup.steps);
   const primaryAction = obj(setup.primaryAction);
+  const review = obj(guidedReview);
+  const reviewSummary = obj(review.summary);
+  const reviewItems = arr(review.items).slice(0, 3);
+  const reviewReady = review.reviewReady === true || reviewItems.length > 0;
   const [domainDraft, setDomainDraft] = useState(
     s(setup.domain || setup.websiteDomain || setup.origin || setup.websiteUrl)
   );
@@ -367,6 +372,63 @@ if (!steps.length) return null;
             </div>
           </div>
         )}
+
+        <div className="rounded-[18px] border border-line-soft bg-white px-4 py-3 shadow-[0_14px_42px_-38px_rgba(15,23,42,0.45)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Website scan review
+              </div>
+              <div className="mt-1 text-[14px] font-semibold text-text">
+                {reviewReady
+                  ? `${Number(reviewSummary.needsReview || reviewItems.length)} item${Number(reviewSummary.needsReview || reviewItems.length) === 1 ? "" : "s"} ready for review`
+                  : "Waiting for website scan"}
+              </div>
+              <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+                {reviewReady
+                  ? "Review and approve website facts before the assistant can use them publicly."
+                  : "After verification, AIHQ scans safe public pages and prepares review items here."}
+              </div>
+            </div>
+
+            <Badge tone={reviewReady ? "success" : "warning"} size="sm">
+              {reviewReady ? "Review ready" : "Scan pending"}
+            </Badge>
+          </div>
+
+          {reviewItems.length ? (
+            <div className="mt-3 grid gap-2">
+              {reviewItems.map((item) => (
+                <div
+                  key={s(item.id || item.candidateId || item.title)}
+                  className="rounded-[14px] border border-line-soft bg-surface-subtle px-3 py-2"
+                >
+                  <div className="truncate text-[13px] font-semibold text-text">
+                    {s(item.title, "Website information")}
+                  </div>
+                  <div className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-5 text-text-muted">
+                    {s(item.valueText, "Review extracted website information.")}
+                  </div>
+                </div>
+              ))}
+
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={() =>
+                  onPrimaryAction?.({
+                    action: "open_truth_review",
+                    path: "/truth?source=website&review=business_info",
+                  })
+                }
+                rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+              >
+                Review website information
+              </Button>
+            </div>
+          ) : null}
+        </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
           <InlineNotice
@@ -1350,10 +1412,17 @@ export default function WebsiteWidgetDetailDrawer({
 }) {
   const queryClient = useQueryClient();
 
+  const guidedSetupReviewQuery = useQuery({
+    queryKey: ["channels", "webchat", "guided-setup-review"],
+    queryFn: () => getWebsiteGuidedSetupReview({ limit: 8 }),
+    staleTime: 15000,
+  });
+
   const guidedSetupStartMutation = useMutation({
     mutationFn: (payload) => startWebsiteGuidedSetup(payload),
     onSuccess: () => {
       queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ["channels", "webchat", "guided-setup-review"] });
       emitLaunchSliceRefresh();
     },
   });
@@ -2609,7 +2678,8 @@ export default function WebsiteWidgetDetailDrawer({
             <>
             <GuidedWebsiteSetupCard
               guidedSetup={obj(statusQuery.data?.guidedSetup)}
-              onPrimaryAction={handleGuidedSetupAction}
+              
+              guidedReview={obj(guidedSetupReviewQuery.data)}onPrimaryAction={handleGuidedSetupAction}
             />
 
             <AccessHelperCard
