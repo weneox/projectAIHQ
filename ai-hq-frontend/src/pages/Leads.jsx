@@ -515,6 +515,7 @@ function LeadsTable({
   onClearFilters,
   activeFilterCount,
   onOpenThread,
+  onOpenChannels,
   onOpenDetail,
 }) {
   return (
@@ -714,6 +715,7 @@ function LeadsTable({
                   ? "Adjust the active filters to bring sales opportunities back into view."
                   : "No lead records exist yet. Connect Website Chat, Instagram, or Telegram, then send a real or test conversation through Inbox. Qualified conversations will appear here automatically when lead capture creates backend records."
               }
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenChannels} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Connect launch channel</Button>)}
             />
           )}
         </div>

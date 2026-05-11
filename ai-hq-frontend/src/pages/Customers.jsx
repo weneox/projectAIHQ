@@ -453,6 +453,7 @@ function CustomerTable({
   onPatchFilters,
   onClearFilters,
   onOpenDetail,
+  onOpenInbox,
   onPageChange,
 }) {
   return (
@@ -639,6 +640,7 @@ function CustomerTable({
                   ? "Adjust the active filters to bring customer records back into view."
                   : "No customer records exist yet. Start from Inbox: connect Website Chat, Instagram, or Telegram, handle real conversations, and converted customer-level records will appear here when backend pipeline data exists."
               }
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open inbox to create customers</Button>)}
             />
           )}
         </div>
@@ -810,6 +812,7 @@ function CustomerWorkspace({
   onPatchFilters,
   onClearFilters,
   onOpenDetail,
+  onOpenInbox,
   onOpenThread,
   onPageChange,
 }) {
@@ -833,6 +836,7 @@ function CustomerWorkspace({
             onPatchFilters={onPatchFilters}
             onClearFilters={onClearFilters}
             onOpenDetail={onOpenDetail}
+            onOpenInbox={onOpenInbox}
             onPageChange={onPageChange}
           />
         </div>
