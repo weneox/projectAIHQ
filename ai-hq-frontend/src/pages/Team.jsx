@@ -133,12 +133,12 @@ function updatedLabel(user = {}) {
 
 function displayUserId(value = "") {
   const raw = s(value);
-  if (!raw) return "â€”";
+  if (!raw) return "—";
 
   const cleaned = raw;
   if (cleaned.length <= 18) return cleaned;
 
-  return `â€¦${cleaned.slice(-14)}`;
+  return `…${cleaned.slice(-14)}`;
 }
 
 
@@ -273,21 +273,30 @@ function RoleText({ role = "" }) {
 
 function EmptyState({ onAddMember, canManage, filtered = false }) {
   return (
-    <div className="flex min-h-[340px] items-center justify-center px-6 py-12 text-center">
-      <div className="max-w-[520px]">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-subtle text-text-muted">
-          <Users className="h-5 w-5" strokeWidth={1.9} />
+    <div className="flex min-h-[360px] items-center justify-center px-6 py-12 text-center">
+      <div className="max-w-[560px]">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-line-soft bg-[linear-gradient(180deg,#FFFFFF_0%,#F6F8FB_100%)] text-text-muted shadow-[0_22px_48px_-38px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(255,255,255,0.94)]">
+          <Users className="h-8 w-8" strokeWidth={1.9} />
         </div>
 
-        <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          {filtered ? "No matching members" : "No team members yet"}
+        <h2 className="mt-5 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+          {filtered ? "No matching members" : "No team access records yet"}
         </h2>
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
           {filtered
-            ? "Adjust the active filters to bring members back into view."
-            : "Start by adding operators or admins who should help manage workspace activity."}
+            ? "The backend returned team records, but none match the current filters."
+            : "The backend returned an empty team list. Add operators or admins only when they need real workspace access."}
         </p>
+
+        <div className="mt-5 rounded-md border border-line-soft bg-surface-subtle px-4 py-3 text-left">
+          <div className="text-[13px] font-semibold text-text">
+            Access governance
+          </div>
+          <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+            Owner accounts stay protected. Admin/operator access should be added intentionally and disabled instead of deleted unless a dedicated audit flow exists.
+          </div>
+        </div>
 
         {canManage && !filtered ? (
           <div className="mt-5 flex justify-center">
@@ -428,7 +437,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
       </div>
 
       <div className="px-4 text-[12.5px] font-medium text-text-subtle">
-        {updated || "â€”"}
+        {updated || "—"}
       </div>
 
       <div className="flex items-center justify-end gap-2 px-4">
@@ -700,7 +709,7 @@ function CenterModal({ open, title, description, children, onClose }) {
       <button
         type="button"
         aria-label="Close panel"
-        className="absolute inset-0 bg-[rgba(15,23,42,0.38)]"
+        className="absolute inset-0 bg-[rgba(15,23,42,0.46)] backdrop-blur-[2px]"
         onClick={onClose}
       />
 
@@ -714,7 +723,7 @@ function CenterModal({ open, title, description, children, onClose }) {
         <Card
           padded={false}
           clip
-          className="max-h-[calc(100vh-48px)] overflow-hidden shadow-[0_26px_70px_-46px_rgba(15,23,42,0.74)]"
+          className="max-h-[calc(100vh-48px)] overflow-hidden border border-white/70 shadow-[0_34px_90px_-54px_rgba(15,23,42,0.86)]"
         >
           <div className="flex max-h-[calc(100vh-48px)] flex-col">
             <div className="border-b border-line-soft px-5 py-4">
