@@ -765,7 +765,7 @@ function FreeIcon({ icon: Icon, tone = "neutral", className }) {
   );
 }
 
-function EmptyLine({ children = "Nothing approved yet." }) {
+function EmptyLine({ children = "No approved business info yet." }) {
   return (
     <div className="py-2 text-[13px] font-medium leading-6 text-text-subtle">
       {children}
@@ -779,7 +779,10 @@ function InfoHint({ text: message = "", align = "right" }) {
 
   return (
     <span className="group relative inline-flex shrink-0">
-      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[7px] border border-line bg-surface text-[11px] font-semibold leading-none text-text-subtle transition-colors duration-base ease-premium hover:border-line-strong hover:text-text">
+      <span
+        aria-label="Field provenance"
+        className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[7px] border border-line bg-surface text-[11px] font-semibold leading-none text-text-subtle transition-colors duration-base ease-premium hover:border-line-strong hover:text-text"
+      >
         i
       </span>
 
@@ -916,7 +919,7 @@ function RecordRow({
               multiline && "whitespace-pre-wrap"
             )}
           >
-            {approvedValue || "Nothing approved yet."}
+            {approvedValue || "No approved business info yet."}
           </div>
         )}
       </div>
@@ -984,7 +987,9 @@ function RecordCard({ title, subtitle = "", rows = [], tone = "neutral", onEdit 
 
 function TabButton({ active = false, onClick, children }) {
   return (
-    <button type="button" onClick={onClick}
+    <button
+      type="button"
+      onClick={onClick}
       className={cx(
         "relative inline-flex h-9 items-center px-2.5 text-[12.5px] font-semibold tracking-[var(--tracking-tight-sm)]",
         "transition-colors duration-base ease-premium",
@@ -2830,7 +2835,7 @@ const contractModel = useMemo(
   if (state.loading) {
     return (
       <PageCanvas>
-        <LoadingSurface title="Loading truth" />
+        <LoadingSurface title="Loading truth" description="Reading approved Business Info, review workbench, and runtime trust state." />
       </PageCanvas>
     );
   }
