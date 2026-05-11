@@ -259,7 +259,7 @@ function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
         </h2>
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-          The backend returned real empty data for the selected {rangeLabel(range)} range.
+          There is no activity for the selected {rangeLabel(range)} range.
           Connect Website Chat, Instagram, or Telegram and send a test conversation to start filling this dashboard.
         </p>
 
@@ -371,8 +371,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: CircleAlert,
       tone: "warning",
-      title: "Some report slices are degraded",
-      description: `${degraded.length} backend slice(s) could not be read. The dashboard is still showing the available real data.`,
+      title: "Some report sections are unavailable",
+      description: `${degraded.length} section(s) could not be loaded. The dashboard is still showing what is available.`,
     });
   }
 
@@ -408,8 +408,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Database,
       tone: "brand",
-      title: "Waiting for operational data",
-      description: "No fake insight is shown. Reports will become useful after real inbox, lead, and usage records exist.",
+      title: "Waiting for activity",
+      description: "Reports will become useful after conversations, leads, and AI replies start coming in.",
     });
   }
 
@@ -437,10 +437,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
 
           <div className="min-w-0">
             <div className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-              Real performance overview
+              Performance overview
             </div>
             <div className="mt-1 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
-              Backend-backed reporting from inbox messages, tenant usage, leads, channel breakdown, and current inbox state.
+              Track conversations, AI replies, leads, channels, and usage in one place.
             </div>
           </div>
         </div>
@@ -459,7 +459,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
         <div className="border-b border-line-soft px-5 py-4">
           <InlineNotice
             tone="warning"
-            title="Some report slices are degraded"
+            title="Some report sections are unavailable"
             description={degraded.join(", ")}
             compact
           />
@@ -524,7 +524,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   Activity trend
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Real daily activity for inbound messages, outbound messages, and leads.
+                  Daily activity for inbound messages, outbound replies, and leads.
                 </div>
               </div>
 
@@ -611,7 +611,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   Operator insights
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Derived from real backend reporting, not demo copy.
+                  Highlights based on your workspace activity.
                 </div>
               </div>
 
@@ -634,7 +634,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   Lead stages
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Real lead-stage distribution for the selected range.
+                  Lead-stage distribution for the selected range.
                 </div>
               </div>
 
@@ -655,7 +655,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   Current inbox state
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Real current counters from backend.
+                  Current inbox counters.
                 </div>
               </div>
 
@@ -736,7 +736,7 @@ export default function Reports() {
       <PageCanvas>
         <LoadingSurface
           title="Loading reports"
-          description="Reading real report slices from backend."
+          description="Loading your reports."
           rows={5}
         />
       </PageCanvas>
@@ -747,7 +747,7 @@ export default function Reports() {
     <PageCanvas>
       <PageHeader
         title="Reports"
-        description="Backend-backed performance reporting for conversations, leads, channels, and usage."
+        description="Performance reporting for conversations, leads, channels, AI replies, and usage."
         actions={
           <Button
             type="button"
@@ -790,7 +790,7 @@ export default function Reports() {
         <InlineNotice
           tone="warning"
           title="No report payload"
-          description="The API request completed but did not return a usable report payload."
+          description="Reports are unavailable right now. Refresh the page or try again later."
         />
       ) : null}
     </PageCanvas>

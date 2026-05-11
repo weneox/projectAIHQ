@@ -254,10 +254,10 @@ function EmptyKnowledgeState({ onOpenWebsiteSetup, onOpenBusinessInfo }) {
 
           <div className="mt-5 rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-left">
             <div className="text-[13px] font-semibold text-text">
-              Professional rule
+              How AI knowledge works
             </div>
             <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-              If a source does not exist in backend, the UI must not pretend it exists. Knowledge becomes usable only after real source sync and approval.
+              The AI should only use information you have connected, reviewed, and approved. Knowledge becomes usable only after real source sync and approval.
             </div>
           </div>
         </div>
@@ -385,12 +385,12 @@ function DetailJsonBlock({ title, value }) {
 
         <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-text-subtle">
           <LockKeyhole className="h-3.5 w-3.5" strokeWidth={2.1} />
-          Read-only
+          Details
         </div>
       </div>
 
       <pre className="mt-3 max-h-[240px] overflow-auto rounded-md bg-surface-subtle p-3 text-[12px] leading-5 text-text-muted">
-        {hasValue ? JSON.stringify(payload, null, 2) : "No structured metadata exposed."}
+        {hasValue ? JSON.stringify(payload, null, 2) : "No additional details available."}
       </pre>
     </div>
   );
@@ -411,7 +411,7 @@ function SourceDialog({ source, open, busy = false, onClose, onSync }) {
 
           <div className="min-w-0">
             <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-              Real backend source
+              Knowledge source
             </div>
 
             <h2 className="mt-2 text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
@@ -419,7 +419,7 @@ function SourceDialog({ source, open, busy = false, onClose, onSync }) {
             </h2>
 
             <p className="mt-2 max-w-[580px] text-[13.5px] font-medium leading-6 text-text-muted">
-              This record comes from /api/settings/sources. No local demo source data is injected.
+              Review the source details, sync status, and indexed content before using it for AI replies.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -518,7 +518,7 @@ function SummaryBar({ sources }) {
             Assistant answer sources
           </div>
           <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
-            Backend-backed source registry. Existing sources can be reviewed and synced; non-existing sources are not invented.
+            Sources your AI can use after review and approval.
           </div>
         </div>
 
@@ -625,7 +625,7 @@ export default function Knowledge() {
       <PageCanvas>
         <LoadingSurface
           title="Loading knowledge sources"
-          description="Reading real source registry from backend."
+          description="Loading your knowledge sources."
           rows={5}
         />
       </PageCanvas>
@@ -636,7 +636,7 @@ export default function Knowledge() {
     <PageCanvas>
       <PageHeader
         title="Knowledge library"
-        description="Real source governance for assistant knowledge. No demo cards, no fake chunks, no fake policy sources."
+        description="Connect and review the information your AI can use when answering customers."
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -654,10 +654,10 @@ export default function Knowledge() {
               type="button"
               size="md"
               variant="secondary"
-              disabled
+              onClick={() => navigate("/channels?channel=website")}
               leftIcon={<ShieldCheck className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Add source via connector
+              Add from website
             </Button>
           </div>
         }

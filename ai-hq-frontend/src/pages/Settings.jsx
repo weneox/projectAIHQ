@@ -61,13 +61,13 @@ const SECTIONS = [
     id: "workspace",
     label: "Workspace",
     icon: Settings2,
-    description: "Real tenant identity, governed profile, and workspace ownership.",
+    description: "Company profile, brand details, and workspace basics.",
   },
   {
     id: "assistant",
     label: "AI policy",
     icon: Bot,
-    description: "Live automation rules that are saved to backend policy.",
+    description: "Control when AI can reply and when a human should review.",
   },
   {
     id: "operational",
@@ -79,7 +79,7 @@ const SECTIONS = [
     id: "channels",
     label: "Channels",
     icon: Plug,
-    description: "Connected channel records and launch-lane direction.",
+    description: "Website Chat, Instagram, and Telegram setup.",
   },
   {
     id: "security",
@@ -89,6 +89,15 @@ const SECTIONS = [
   },
 ];
 
+const CUSTOMER_VISIBLE_SETTINGS_SECTIONS = new Set([
+  "workspace",
+  "assistant",
+  "channels",
+]);
+
+function isCustomerVisibleSettingsSection(section = {}) {
+  return CUSTOMER_VISIBLE_SETTINGS_SECTIONS.has(section.id);
+}
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
@@ -175,7 +184,7 @@ function SectionNav({ activeSection, onChange }) {
       </div>
 
       <div className="grid gap-1">
-        {SECTIONS.map((section) => {
+        {SECTIONS.filter(isCustomerVisibleSettingsSection).map((section) => {
           const Icon = section.icon;
           const active = activeSection === section.id;
 
@@ -275,9 +284,9 @@ function WorkspaceContent({ payload, navigate }) {
     <div className="grid gap-4">
       <SurfaceCard
         icon={Globe2}
-        title="Workspace identity"
-        description="This is real tenant/profile data from the backend. Identity fields are governed through setup and Business Info review."
-        tag={governance.directWorkspaceWritesBlocked ? "Governed" : "Editable"}
+        title="Company profile"
+        description="These details describe your business and help the AI answer customers correctly."
+        tag={governance.directWorkspaceWritesBlocked ? "Protected" : "Editable"}
         tone={governance.directWorkspaceWritesBlocked ? "warning" : "success"}
       >
         <div className="grid gap-3 md:grid-cols-2">
@@ -295,10 +304,10 @@ function WorkspaceContent({ payload, navigate }) {
 
         <div className="mt-4 rounded-md border border-warning/20 bg-warning-soft px-4 py-3">
           <div className="text-[13px] font-semibold text-text">
-            Business identity is protected.
+            Company profile is protected.
           </div>
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            Company profile, public claims, tone, and service facts should move through Setup and Business Info approval instead of direct Settings edits.
+            Company details, service information, public claims, and tone should be reviewed in Business Info before the AI uses them.
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -352,9 +361,9 @@ function AssistantPolicyContent({ aiPolicy, onPatch }) {
     <div className="grid gap-4">
       <SurfaceCard
         icon={Bot}
-        title="Live AI policy"
-        description="These controls are backed by tenant_ai_policies and save through /settings/workspace."
-        tag="Real save"
+        title="AI replies"
+        description="Choose how the AI should behave when customers message your business."
+        tag="Saved"
         tone="success"
       >
         <div className="grid gap-3">
@@ -561,8 +570,8 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
     <div className="grid gap-4">
       <SurfaceCard
         icon={Plug}
-        title="Channel records"
-        description="Settings should not duplicate the connector flow. Website Chat, Instagram, and Telegram are the v1 launch channels; WhatsApp and Gmail remain Phase 2."
+        title="Connected channels"
+        description="Manage the channels that bring customer messages into your inbox. Website Chat, Instagram, and Telegram are ready for launch."
         tag={channels.length ? `${channels.length} records` : "No records"}
         tone={channels.length ? "success" : "warning"}
       >
@@ -594,7 +603,7 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
           </div>
         ) : (
           <div className="rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-[13px] font-medium leading-6 text-text-muted">
-            No persisted channel record is visible yet. Use Channels to connect Website Chat, Instagram, or Telegram for the v1 launch lane.
+            No channels are connected yet. Connect Website Chat, Instagram, or Telegram to start receiving customer messages.
           </div>
         )}
 
@@ -614,10 +623,10 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
 
         <div className="mt-4 rounded-md border border-line-soft bg-surface-subtle px-4 py-3">
           <div className="text-[13px] font-semibold text-text">
-            Meta operational summary
+            Instagram setup summary
           </div>
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            Missing fields: {arr(operationalChannels?.meta?.missingFields).join(", ") || "None reported"}
+            Missing setup items: {arr(operationalChannels?.meta?.missingFields).join(", ") || "None reported"}
           </div>
         </div>
       </SurfaceCard>
@@ -721,7 +730,7 @@ export default function Settings() {
   const [notice, setNotice] = useState("");
 
   const activeMeta = useMemo(() => {
-    return SECTIONS.find((section) => section.id === activeSection) || SECTIONS[0];
+    return SECTIONS.filter(isCustomerVisibleSettingsSection).find((section) => section.id === activeSection) || SECTIONS[0];
   }, [activeSection]);
 
   const load = useCallback(async ({ silent = false } = {}) => {
@@ -811,7 +820,7 @@ export default function Settings() {
       <PageCanvas>
         <LoadingSurface
           title="Loading settings"
-          description="Reading real workspace policy, governance, and operational posture."
+          description="Loading your workspace settings."
           rows={5}
         />
       </PageCanvas>
@@ -825,7 +834,7 @@ export default function Settings() {
     <PageCanvas>
       <PageHeader
         title="Settings"
-        description="Real workspace settings, governed identity, AI policy, and operational posture."
+        description="Manage your company profile, AI replies, and connected channels."
         actions={
           <div className="flex items-center gap-2">
             <Button
