@@ -588,7 +588,7 @@ describe("ChannelCatalog", () => {
     expect(screen.getAllByText(/^unavailable$/i).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("opens the Instagram modal with live tenant status", async () => {
+  it("opens the Instagram drawer with customer-facing connection status", async () => {
     renderCatalog();
 
     const instagramCard = await findChannelCard("Instagram");
