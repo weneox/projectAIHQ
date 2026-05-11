@@ -582,8 +582,10 @@ describe("ChannelCatalog", () => {
       await screen.findByRole("heading", { name: /^channels$/i })
     ).toBeInTheDocument();
 
-    expect(document.body).toHaveTextContent(/posture down/i);
-    expect(document.body).toHaveTextContent(/0\/3 ready/i);
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent(/posture down/i);
+      expect(document.body).toHaveTextContent(/0\/3 ready/i);
+    });
     expect(screen.queryAllByRole("button", { name: /^(inbox|open inbox)$/i }).length).toBe(0);
     expect(screen.getByRole("button", { name: /^start setup$/i })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^view$/i }).length).toBeGreaterThanOrEqual(3);
