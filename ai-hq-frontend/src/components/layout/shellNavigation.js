@@ -1,4 +1,4 @@
-import {
+﻿import {
   BarChart3,
   BookOpenCheck,
   BriefcaseBusiness,
@@ -67,14 +67,14 @@ const PRIMARY_SECTIONS = [
   },
   {
     id: "customers",
-    label: "Customers",
+    label: "Contacts",
     icon: UserRound,
     to: "/customers",
     paths: ["/customers"],
     contextGroups: [
       {
         title: "Navigation",
-        items: [{ label: "Customers", to: "/customers" }],
+        items: [{ label: "Contacts", to: "/customers" }],
       },
     ],
   },

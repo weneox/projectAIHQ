@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { listCustomers } from "../api/leads.js";
+import { listContacts } from "../api/leads.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppIdentityMark from "../components/ui/AppIdentityMark.jsx";
@@ -125,7 +125,7 @@ function customerName(customer = {}) {
       customer.username ||
       customer.email ||
       customer.phone ||
-      "Unknown customer"
+      "Unknown contact"
   );
 }
 
@@ -182,6 +182,18 @@ function customerStatus(customer = {}) {
   );
 }
 
+function customerOpportunityCount(customer = {}) {
+  return n(
+    customer.opportunities ??
+      customer.opportunity_count ??
+      customer.opportunityCount ??
+      customer.lead_count ??
+      customer.leadCount ??
+      arr(customer.lead_ids || customer.leadIds).length ??
+      1,
+    1
+  );
+}
 function customerValue(customer = {}) {
   return n(
     customer.value_azn ??
@@ -357,7 +369,7 @@ function customerComparator(sortValue = "newest") {
   };
 }
 
-function matchesCustomerText(customer = {}, query = "") {
+function matchesContactText(customer = {}, query = "") {
   const q = lower(query);
   if (!q) return true;
 
@@ -375,7 +387,7 @@ function matchesCustomerText(customer = {}, query = "") {
   ).includes(q);
 }
 
-function CustomerIdentity({ customer }) {
+function ContactIdentity({ customer }) {
   const name = customerName(customer);
 
   return (
@@ -386,14 +398,14 @@ function CustomerIdentity({ customer }) {
           {name}
         </div>
         <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {s(customer.interest) || "Customer profile"}
+          {s(customer.interest) || "Contact profile"}
         </div>
       </div>
     </div>
   );
 }
 
-function CustomerRow({ customer, selected, onOpenDetail }) {
+function ContactRow({ customer, selected, onOpenDetail }) {
   const source = customerSource(customer);
   const stage = customerStage(customer);
   const status = customerStatus(customer);
@@ -407,7 +419,7 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
       className="!min-h-[66px]"
     >
       <AppTableCell>
-        <CustomerIdentity customer={customer} />
+        <ContactIdentity customer={customer} />
       </AppTableCell>
 
       <AppTableCell>
@@ -437,7 +449,7 @@ function CustomerRow({ customer, selected, onOpenDetail }) {
   );
 }
 
-function CustomerTable({
+function ContactTable({
   customers,
   selectedKey,
   filters,
@@ -459,8 +471,8 @@ function CustomerTable({
   return (
     <div className="flex h-full min-h-[690px] min-w-0 flex-col">
       <AppTableToolbar
-        title="Customer records"
-        description="Profiles, source quality, pipeline state, and next actions."
+        title="Contacts"
+        description="People from Website Chat, Instagram, Telegram, and other connected channels."
         filters={
           activeFilterCount ? (
             <Button
@@ -484,7 +496,7 @@ function CustomerTable({
           >
             <AppTableHeaderFilter
               id="customer"
-              label="Customer"
+              label="Contact"
               openFilter={openFilter}
               active={Boolean(filters.customer)}
               onOpen={onOpenFilter}
@@ -492,14 +504,14 @@ function CustomerTable({
               <AppFilterSearchInput
                 value={filters.customer}
                 onChange={(value) => onPatchFilters({ customer: value })}
-                placeholder="Search customer"
+                placeholder="Search contacts"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ customer: "" })}
                   disabled={!filters.customer}
                 >
-                  Clear customer filter
+                  Clear contact filter
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -623,7 +635,7 @@ function CustomerTable({
               const key = customerKey(customer, index);
 
               return (
-                <CustomerRow
+                <ContactRow
                   key={key}
                   customer={customer}
                   selected={selectedKey === key}
@@ -634,13 +646,13 @@ function CustomerTable({
           ) : (
             <AppTableEmptyState
               icon={<Users className="h-5 w-5" strokeWidth={1.9} />}
-              title={activeFilterCount ? "No matching customers" : "No customer records yet"}
+              title={activeFilterCount ? "No matching contacts" : "No contacts yet"}
               description={
                 activeFilterCount
-                  ? "Adjust the active filters to bring customer records back into view."
-                  : "No customer records exist yet. Start from Inbox: connect Website Chat, Instagram, or Telegram, handle real conversations, and converted customer-level records will appear here when backend pipeline data exists."
+                  ? "Adjust the active filters to bring contacts back into view."
+                  : "No contacts exist yet. Connect Website Chat, Instagram, or Telegram, then handle a conversation in Inbox. Contacts will appear here automatically."
               }
-                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open inbox to create customers</Button>)}
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open inbox</Button>)}
             />
           )}
         </div>
@@ -661,14 +673,14 @@ function CustomerTable({
   );
 }
 
-function CustomerDetailPanel({ customer, onOpenThread }) {
+function ContactDetailPanel({ customer, onOpenThread }) {
   if (!customer) {
     return (
       <AppDetailPane className="flex h-full min-h-[690px] flex-col">
         <AppDetailEmpty
           icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
-          title="Select a customer"
-          description="Choose a customer row to inspect contact details, source quality, and next action."
+          title="Select a contact"
+          description="Choose a contact to review details, latest context, and related opportunity information."
         />
       </AppDetailPane>
     );
@@ -700,7 +712,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
               {name}
             </div>
             <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-              {s(customer.interest) || "Customer profile"}
+              {s(customer.interest) || "Contact profile"}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -726,7 +738,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
             onClick={() => threadId && onOpenThread(threadId)}
             leftIcon={<MessageCircle className="h-4 w-4" strokeWidth={2.1} />}
           >
-            Open thread
+            Open conversation
           </Button>
 
           <div className="grid grid-cols-2 gap-2">
@@ -763,7 +775,13 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
         <AppInfoRow label="Source" value={titleize(source)} />
         <AppInfoRow label="Stage" value={titleize(stage)} />
         <AppInfoRow label="Status" value={titleize(status)} />
-        <AppInfoRow label="Value" value={formatMoney(customerValue(customer))} />
+        <AppInfoRow
+          label="Opportunities"
+          value={`${customerOpportunityCount(customer)} related ${
+            customerOpportunityCount(customer) === 1 ? "opportunity" : "opportunities"
+          }`}
+        />
+        <AppInfoRow label="Total value" value={formatMoney(customerValue(customer))} />
         <AppInfoRow
           label="Owner"
           value={s(customer.owner || customer.assigned_to) || "Unassigned"}
@@ -785,7 +803,7 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
               onClick={() => onOpenThread(threadId)}
               className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand"
             >
-              Open in thread
+              Open conversation
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
             </button>
           ) : null}
@@ -795,9 +813,9 @@ function CustomerDetailPanel({ customer, onOpenThread }) {
   );
 }
 
-function CustomerWorkspace({
+function ContactWorkspace({
   customers,
-  selectedCustomer,
+  selectedContact,
   selectedKey,
   filters,
   openFilter,
@@ -820,7 +838,7 @@ function CustomerWorkspace({
     <Card padded={false} className="overflow-visible">
       <div className="grid min-h-[690px] items-stretch xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="min-w-0">
-          <CustomerTable
+          <ContactTable
             customers={customers}
             selectedKey={selectedKey}
             filters={filters}
@@ -841,8 +859,8 @@ function CustomerWorkspace({
           />
         </div>
 
-        <CustomerDetailPanel
-          customer={selectedCustomer}
+        <ContactDetailPanel
+          customer={selectedContact}
           onOpenThread={onOpenThread}
         />
       </div>
@@ -850,10 +868,10 @@ function CustomerWorkspace({
   );
 }
 
-export default function Customers() {
+export default function Contacts() {
   const navigate = useNavigate();
 
-  const [customers, setCustomers] = useState([]);
+  const [customers, setContacts] = useState([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [openFilter, setOpenFilter] = useState("");
   const [filters, setFilters] = useState(() => createDefaultFilters());
@@ -862,7 +880,7 @@ export default function Customers() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadCustomers = useCallback(async ({ silent = false } = {}) => {
+  const loadContacts = useCallback(async ({ silent = false } = {}) => {
     if (silent) {
       setRefreshing(true);
     } else {
@@ -872,15 +890,15 @@ export default function Customers() {
     setError("");
 
     try {
-      const response = await listCustomers({ limit: 200 });
-      const nextCustomers = normalizeResponse(response);
-      setCustomers(nextCustomers);
+      const response = await listContacts({ limit: 200 });
+      const nextContacts = normalizeResponse(response);
+      setContacts(nextContacts);
     } catch (err) {
       setError(
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
-          "Customers could not be loaded."
+          "Contacts could not be loaded."
       );
-      setCustomers([]);
+      setContacts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -888,8 +906,8 @@ export default function Customers() {
   }, []);
 
   useEffect(() => {
-    void loadCustomers();
-  }, [loadCustomers]);
+    void loadContacts();
+  }, [loadContacts]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -897,14 +915,14 @@ export default function Customers() {
 
   const activeFilterCount = countActiveFilters(filters);
 
-  const filteredCustomers = useMemo(() => {
+  const filteredContacts = useMemo(() => {
     const sourceValues = normalizeAppFilterList(filters.sources);
     const stageValues = normalizeAppFilterList(filters.stages);
     const statusValues = normalizeAppFilterList(filters.statuses);
 
     return arr(customers)
       .filter((customer) => {
-        if (filters.customer && !matchesCustomerText(customer, filters.customer)) {
+        if (filters.customer && !matchesContactText(customer, filters.customer)) {
           return false;
         }
 
@@ -982,22 +1000,22 @@ export default function Customers() {
     [customers]
   );
 
-  const totalItems = filteredCustomers.length;
+  const totalItems = filteredContacts.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
-  const visibleCustomers = filteredCustomers.slice(
+  const visibleContacts = filteredContacts.slice(
     pageStart,
     pageStart + PAGE_SIZE
   );
 
-  const selectedCustomer = useMemo(() => {
+  const selectedContact = useMemo(() => {
     return (
-      filteredCustomers.find(
+      filteredContacts.find(
         (customer, index) => customerKey(customer, index) === selectedKey
       ) || null
     );
-  }, [filteredCustomers, selectedKey]);
+  }, [filteredContacts, selectedKey]);
 
   function patchFilters(next = {}) {
     setFilters((current) => ({ ...current, ...next }));
@@ -1021,8 +1039,8 @@ export default function Customers() {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading customers"
-          description="Preparing customer records, pipeline state, and contact context."
+          title="Loading contacts"
+          description="Loading contacts, conversation context, and opportunity details."
           rows={5}
         />
       </PageCanvas>
@@ -1032,15 +1050,15 @@ export default function Customers() {
   return (
     <PageCanvas>
       <PageHeader
-        title="Customer intelligence"
-        description="Track who is interested, where they came from, what stage they are in, and which conversation needs action."
+        title="Contacts"
+        description="Manage the people messaging your business, review their latest context, and open the right conversation quickly."
         actions={
           <>
             <Button
               type="button"
               variant="secondary"
               loading={refreshing}
-              onClick={() => loadCustomers({ silent: true })}
+              onClick={() => loadContacts({ silent: true })}
               leftIcon={
                 !refreshing ? (
                   <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
@@ -1064,7 +1082,7 @@ export default function Customers() {
       {error ? (
         <InlineNotice
           tone="danger"
-          title="Customers unavailable"
+          title="Contacts unavailable"
           description={error}
           compact
         />
@@ -1085,9 +1103,9 @@ export default function Customers() {
         />
       </div>
 
-      <CustomerWorkspace
-        customers={visibleCustomers}
-        selectedCustomer={selectedCustomer}
+      <ContactWorkspace
+        customers={visibleContacts}
+        selectedContact={selectedContact}
         selectedKey={selectedKey}
         filters={filters}
         openFilter={openFilter}
