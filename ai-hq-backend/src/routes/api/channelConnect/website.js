@@ -1940,8 +1940,8 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
 
 
 
-export async function checkWebsiteDomainVerification({ db, req } = {}) {
-  const result = await checkWebsiteDomainVerificationBase({ db, req });
+export async function checkWebsiteDomainVerification({ db, req, resolveTxtFn } = {}) {
+  const result = await checkWebsiteDomainVerificationBase({ db, req, resolveTxtFn });
 
   try {
     const websiteSourceProvisioning = await provisionVerifiedWebsiteSource({

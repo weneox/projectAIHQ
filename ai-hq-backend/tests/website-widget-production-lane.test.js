@@ -312,6 +312,20 @@ test(
       assert.equal(s(verifiedPayload.state).toLowerCase(), "verified");
       assert.equal(s(verifiedPayload.domain), publicDomain);
 
+      assert.equal(verifiedPayload.websiteSourceProvisioning?.ok, true);
+      assert.equal(
+        s(verifiedPayload.websiteSourceProvisioning?.source?.source_type),
+        "website"
+      );
+      assert.equal(
+        s(verifiedPayload.websiteSourceProvisioning?.source?.sync_status),
+        "queued"
+      );
+      assert.equal(
+        s(verifiedPayload.websiteSourceProvisioning?.run?.run_type),
+        "crawl"
+      );
+
       const statusPayload = await getWebsiteWidgetStatus({
         db: client,
         req: authReq,
