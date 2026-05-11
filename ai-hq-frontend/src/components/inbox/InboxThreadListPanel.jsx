@@ -468,7 +468,6 @@ function SearchSurface({ open, value, inputRef, onChange, onClose }) {
 function InboxAutopilotControl({
   automationControl = null,
   onToggleAutomation,
-  onOpenChannels,
   hidden = false,
 }) {
   const [open, setOpen] = useState(false);
