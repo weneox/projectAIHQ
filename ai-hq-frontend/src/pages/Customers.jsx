@@ -398,7 +398,7 @@ function ContactIdentity({ customer }) {
           {name}
         </div>
         <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {s(customer.interest) || "Contact profile"}
+          {s(customer.interest) || "Customer contact"}
         </div>
       </div>
     </div>
@@ -472,7 +472,7 @@ function ContactTable({
     <div className="flex h-full min-h-[690px] min-w-0 flex-col">
       <AppTableToolbar
         title="Contacts"
-        description="People from Website Chat, Instagram, Telegram, and other connected channels."
+        description="People who message your business across connected channels."
         filters={
           activeFilterCount ? (
             <Button
@@ -504,14 +504,14 @@ function ContactTable({
               <AppFilterSearchInput
                 value={filters.customer}
                 onChange={(value) => onPatchFilters({ customer: value })}
-                placeholder="Search contacts"
+                placeholder="Search names"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ customer: "" })}
                   disabled={!filters.customer}
                 >
-                  Clear contact filter
+                  Clear name filter
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -526,14 +526,14 @@ function ContactTable({
               <AppFilterSearchInput
                 value={filters.contact}
                 onChange={(value) => onPatchFilters({ contact: value })}
-                placeholder="Search contact"
+                placeholder="Search email, phone, or username"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ contact: "" })}
                   disabled={!filters.contact}
                 >
-                  Clear contact filter
+                  Clear name filter
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -650,9 +650,9 @@ function ContactTable({
               description={
                 activeFilterCount
                   ? "Adjust the active filters to bring contacts back into view."
-                  : "No contacts exist yet. Connect Website Chat, Instagram, or Telegram, then handle a conversation in Inbox. Contacts will appear here automatically."
+                  : "No contacts yet. Connect a channel and handle your first conversation in Inbox."
               }
-                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open inbox</Button>)}
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open Inbox</Button>)}
             />
           )}
         </div>
@@ -680,7 +680,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
         <AppDetailEmpty
           icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
           title="Select a contact"
-          description="Choose a contact to review details, latest context, and related opportunity information."
+          description="Choose a contact to see their latest context and open the conversation."
         />
       </AppDetailPane>
     );
@@ -699,7 +699,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
     s(customer.lastMessageText) ||
     s(customer.last_message_text) ||
     s(customer.latest_message) ||
-    "No message preview is available yet.";
+    "No conversation preview yet.";
 
   return (
     <AppDetailPane className="flex h-full min-h-[690px] flex-col">
@@ -712,7 +712,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
               {name}
             </div>
             <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-              {s(customer.interest) || "Contact profile"}
+              {s(customer.interest) || "Customer contact"}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -776,12 +776,12 @@ function ContactDetailPanel({ customer, onOpenThread }) {
         <AppInfoRow label="Stage" value={titleize(stage)} />
         <AppInfoRow label="Status" value={titleize(status)} />
         <AppInfoRow
-          label="Opportunities"
+          label="Related opportunities"
           value={`${customerOpportunityCount(customer)} related ${
             customerOpportunityCount(customer) === 1 ? "opportunity" : "opportunities"
           }`}
         />
-        <AppInfoRow label="Total value" value={formatMoney(customerValue(customer))} />
+        <AppInfoRow label="Pipeline value" value={formatMoney(customerValue(customer))} />
         <AppInfoRow
           label="Owner"
           value={s(customer.owner || customer.assigned_to) || "Unassigned"}
@@ -791,7 +791,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
 
         <Card padded="sm" className="mt-auto bg-surface-subtle">
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-            Latest context
+            Latest conversation
           </div>
           <div className="mt-2 text-[13px] font-medium leading-6 text-text">
             {latest}
@@ -1040,7 +1040,7 @@ export default function Contacts() {
       <PageCanvas>
         <LoadingSurface
           title="Loading contacts"
-          description="Loading contacts, conversation context, and opportunity details."
+          description="Loading contacts and conversation context."
           rows={5}
         />
       </PageCanvas>
@@ -1051,7 +1051,7 @@ export default function Contacts() {
     <PageCanvas>
       <PageHeader
         title="Contacts"
-        description="Manage the people messaging your business, review their latest context, and open the right conversation quickly."
+        description="See every contact, their latest context, and the conversation they came from."
         actions={
           <>
             <Button
