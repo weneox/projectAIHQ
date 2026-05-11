@@ -19,7 +19,7 @@
     "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
     "build": "npm run validate:env && npm run lint",
-    "test": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/*.test.js",
+    "test": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/*.test.js && npm run test:public-webchat",
     "test:setup-review": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/setup-review-session.test.js",
     "test:integration:db:ops": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/operational-channel-integration.test.js",
     "test:integration:db:website": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/website-widget-production-lane.test.js",
@@ -27,7 +27,8 @@
     "test:integration:db:certification": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/postgres-certification.integration.test.js",
     "test:integration:db": "npm run test:integration:db:certification && npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox",
     "source-sync:website:once": "node --import ../scripts/workspace-module-loader.mjs scripts/run-website-source-crawl-once.mjs",
-    "source-sync:website:loop": "node scripts/run-website-source-crawl-loop.mjs"
+    "source-sync:website:loop": "node scripts/run-website-source-crawl-loop.mjs",
+    "test:public-webchat": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/public-webchat-widget.contract.test.js"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
