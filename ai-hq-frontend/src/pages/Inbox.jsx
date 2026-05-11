@@ -175,9 +175,9 @@ function buildReadinessStateFromPosture({
     overall: unavailable
       ? {
           ...EMPTY_READINESS_STATE.overall,
-          title: "Launch readiness unavailable",
+          title: "Setup status unavailable",
           message:
-            "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
+            "Inbox cannot confirm setup status right now, so AI replies stay paused.",
         }
       : obj(payload.overall),
     channelSummary: {
@@ -203,7 +203,7 @@ async function loadInboxLaunchReadinessState(tenantKey = "") {
     return buildReadinessStateFromPosture({
       tenantKey,
       error:
-        s(error?.message) || "Launch readiness could not be loaded.",
+        s(error?.message) || "Setup status could not be loaded.",
     });
   }
 }
@@ -239,11 +239,11 @@ function _buildLaunchReadinessNotice({
   if (postureError || status === "unavailable") {
     return {
       tone: "warning",
-      title: "Launch readiness unavailable",
+      title: "Setup status unavailable",
       description:
         postureError ||
         s(overall.message) ||
-        "Inbox cannot confirm launch readiness right now, so live replies stay guarded.",
+        "Inbox cannot confirm setup status right now, so AI replies stay paused.",
       action,
     };
   }
@@ -253,9 +253,9 @@ function _buildLaunchReadinessNotice({
   if (hasDeliveryReadyLaunchChannel && !truthReady) {
     return {
       tone: "warning",
-      title: "Business Info approval required",
+      title: "Business Info needs review",
       description:
-        "A channel is live, but approved business info is not ready yet. Approve Business Info before trusting live AI replies.",
+        "A channel is connected, but Business Info still needs review before AI can safely reply to customers.",
       action,
     };
   }
@@ -263,20 +263,20 @@ function _buildLaunchReadinessNotice({
   if (hasDeliveryReadyLaunchChannel && !runtimeReady) {
     return {
       tone: "warning",
-      title: "Runtime repair required",
+      title: "AI setup needs attention",
       description:
         s(readinessState.runtime?.message) ||
-        "A channel is live, but runtime is not ready yet. Repair runtime before trusting live AI replies.",
+        "A channel is connected, but AI replies are not ready yet. Review setup before turning them on.",
       action,
     };
   }
 
   return {
     tone: status === "degraded" ? "warning" : "info",
-    title: s(overall.title) || "Launch setup required",
+    title: s(overall.title) || "Finish setup",
     description:
       s(overall.message) ||
-      "Finish launch setup before relying on live inbox replies.",
+      "Finish setup before turning on AI replies for customer conversations.",
     action,
   };
 }
@@ -307,13 +307,13 @@ function resolveInboxPolicyControl(trustView = null) {
   );
 
   const labelMap = {
-    autonomy_enabled: "Autonomy enabled",
-    operator_only_mode: "Operator only",
-    human_review_required: "Human review",
-    handoff_preferred: "Handoff preferred",
-    handoff_required: "Handoff required",
-    blocked_until_repair: "Blocked until repair",
-    emergency_stop: "Emergency stop",
+    autonomy_enabled: "AI replies on",
+    operator_only_mode: "Human only",
+    human_review_required: "Needs human review",
+    handoff_preferred: "Prefer human takeover",
+    handoff_required: "Human takeover required",
+    blocked_until_repair: "Paused until fixed",
+    emergency_stop: "Emergency pause",
   };
 
   return {
@@ -588,11 +588,11 @@ export default function Inbox() {
         surface: "inbox",
         controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
         policyReason: nextEnabled
-          ? "Inbox AI Autopilot enabled from inbox global control"
-          : "Inbox AI Autopilot disabled from inbox global control",
+          ? "AI replies enabled from Inbox"
+          : "AI replies disabled from Inbox",
         operatorNote: nextEnabled
-          ? "Inbox automatic AI replies enabled globally"
-          : "Inbox automatic AI replies disabled globally",
+          ? "AI replies enabled for inbox conversations"
+          : "AI replies disabled for inbox conversations",
       });
 
       await loadOperationalState();
@@ -606,7 +606,7 @@ export default function Inbox() {
       setAutomationMutation({
         saving: false,
         error:
-          s(error?.message) || "Failed to update inbox AI Autopilot.",
+          s(error?.message) || "Could not update AI replies.",
         success: "",
       });
     }
@@ -798,10 +798,10 @@ export default function Inbox() {
         inboxAutomationControl.enabled !== true,
       disabledReason:
         inboxAutomationControl.enabled !== true
-          ? "Inbox AI Autopilot is globally disabled."
+          ? "AI replies are turned off for the inbox."
           : selectedThreadAiEnabled
-            ? "AI can reply in this conversation."
-            : "Operator mode. AI will not reply in this conversation.",
+            ? "AI replies are on for this conversation."
+            : "Human-only mode. AI will not reply in this conversation.",
       statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
       scopeLabel: "Conversation AI",
     }),
@@ -844,7 +844,7 @@ export default function Inbox() {
   if (inboxInitializing) {
     return (
       <div className="h-full min-h-0 w-full bg-white">
-        <LoadingSurface title="Loading inbox" description="Reading conversations, launch posture, and automation policy." />
+        <LoadingSurface title="Loading inbox" description="Loading conversations and AI reply settings." />
       </div>
     );
   }

@@ -526,7 +526,7 @@ function InboxAutopilotControl({
         disabled={disabled}
         role="switch"
         aria-checked={enabled}
-        aria-label={enabled ? "Turn off inbox AI" : "Turn on inbox AI"}
+        aria-label={enabled ? "Turn off AI replies" : "Turn on AI replies"}
         title={enabled ? "AI ON" : "AI OFF"}
         className={cx(
           "relative inline-flex h-[30px] w-[66px] shrink-0 items-center rounded-full border",
@@ -581,12 +581,12 @@ function InboxAutopilotControl({
 
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold tracking-[-0.01em] text-text">
-                Inbox AI Autopilot
+                AI replies
               </div>
               <div className="mt-1 text-[12px] font-medium leading-5 text-text-muted">
                 {enabled
-                  ? "BÃ¼tÃ¼n inbox Ã¼zrÉ™ avtomatik AI cavablarÄ± aktivdir. AyrÄ± sÃ¶hbÉ™tlÉ™ri ayrÄ±ca dayandÄ±rmaq olar."
-                  : "Inbox Ã¼zrÉ™ AI cavablarÄ± sÃ¶ndÃ¼rÃ¼lÃ¼b. HeÃ§ bir sÃ¶hbÉ™tdÉ™ avtomatik cavab getmÉ™yÉ™cÉ™k."}
+                  ? "AI can reply automatically across inbox conversations. You can still turn AI off for individual conversations."
+                  : "AI replies are turned off for the inbox. No conversation will receive an automatic AI reply."}
               </div>
             </div>
           </div>
@@ -611,11 +611,11 @@ function InboxAutopilotControl({
             )}
           >
             <Power className="h-[14px] w-[14px]" strokeWidth={2.25} />
-            <span>{enabled ? "Turn off inbox AI" : "Turn on inbox AI"}</span>
+            <span>{enabled ? "Turn off AI replies" : "Turn on AI replies"}</span>
           </button>
 
           <div className="mt-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Global Â· {statusLabel}
+            All conversations · {statusLabel}
           </div>
         </div>
       </div>
@@ -687,7 +687,7 @@ function EmptyState({ hasSearch, hasChannelFilter }) {
         <div className="mt-2 text-[12.5px] font-medium leading-6 text-text-muted">
           {hasSearch || hasChannelFilter
             ? "Try another channel or keyword."
-            : "New conversations will appear here."}
+            : "Connect Website Chat, Instagram, or Telegram, then send a test message. New conversations will appear here."}
         </div>
       </div>
     </div>
@@ -697,7 +697,7 @@ function EmptyState({ hasSearch, hasChannelFilter }) {
 function DisconnectedRailState({ onOpenChannels }) {
   return (
     <div className="flex h-full min-h-0 items-center justify-center px-6 py-10">
-      <div className="max-w-[300px] text-center">
+      <div className="max-w-[310px] text-center">
         <div className="mb-5 flex justify-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-line-soft bg-[linear-gradient(180deg,#FFFFFF_0%,#F4F7FB_100%)] shadow-[0_24px_50px_-42px_rgba(15,23,42,0.24)]">
             <Inbox className="h-8 w-8 text-text-subtle" strokeWidth={1.8} />
@@ -705,12 +705,12 @@ function DisconnectedRailState({ onOpenChannels }) {
         </div>
 
         <div className="text-[15px] font-semibold text-text">
-          No live conversations yet
+          No conversations yet
         </div>
 
         <div className="mt-2 text-[12.5px] font-medium leading-6 text-text-muted">
           Connect Website Chat, Instagram, or Telegram, then send a test message.
-          New conversations will appear here automatically.
+          Customer conversations will appear here automatically.
         </div>
 
         <button
@@ -718,7 +718,7 @@ function DisconnectedRailState({ onOpenChannels }) {
           onClick={onOpenChannels}
           className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-[14px] border border-[rgba(var(--color-brand),0.18)] bg-brand-soft px-4 text-[12.5px] font-semibold text-brand transition-colors duration-base ease-premium hover:bg-[rgba(var(--color-brand),0.12)]"
         >
-          Connect launch channel
+          Connect a channel
           <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.15} />
         </button>
       </div>
