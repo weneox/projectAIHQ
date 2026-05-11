@@ -21,6 +21,14 @@ vi.mock("../lib/appSession.js", () => ({
   peekAppAuthContext: peekAppAuthContextMock,
 }));
 
+vi.mock("../lib/appEntry.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    isLocalWorkspaceEntryEnabled: () => false,
+  };
+});
+
 vi.mock("../components/layout/Shell.jsx", () => ({
   default: function ShellMock() {
     return (
@@ -121,7 +129,7 @@ describe("App shell smoke", () => {
   });
 
   it.each([
-    ["/login", "Home Page"],
+    ["/login", "Login Page"],
     ["/admin/login", "App Entry Redirect"],
     ["/select-workspace", "Select Workspace Page"],
     ["/welcome", "Home Page"],
@@ -133,5 +141,4 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 });
-
 
