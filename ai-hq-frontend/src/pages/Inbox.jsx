@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getLaunchPosture } from "../api/launch.js";
@@ -395,7 +395,10 @@ export default function Inbox() {
   const [typingState, setTypingState] = useState({});
 
   const requestedThreadId = String(
-    location.state?.selectedThreadId || searchParams.get("threadId") || ""
+    location.state?.selectedThreadId ||
+      searchParams.get("threadId") ||
+      searchParams.get("thread") ||
+      ""
   ).trim();
 
   useEffect(() => {
@@ -692,10 +695,13 @@ export default function Inbox() {
 
     setSearchParams(
       (prev) => {
-        if (prev.get("threadId") === requestedThreadId) return prev;
+        if (prev.get("threadId") === requestedThreadId && !prev.has("thread")) {
+          return prev;
+        }
 
         const next = new URLSearchParams(prev);
         next.set("threadId", requestedThreadId);
+        next.delete("thread");
         return next;
       },
       { replace: true }
@@ -797,7 +803,7 @@ export default function Inbox() {
             ? "AI can reply in this conversation."
             : "Operator mode. AI will not reply in this conversation.",
       statusLabel: selectedThreadAiEnabled ? "AI ON" : "AI OFF",
-      scopeLabel: "Bu sÃ¶hbÉ™tdÉ™ AI",
+      scopeLabel: "Conversation AI",
     }),
     [
       inboxAutomationControl.enabled,
@@ -836,7 +842,7 @@ export default function Inbox() {
   if (inboxInitializing) {
     return (
       <div className="h-full min-h-0 w-full bg-white">
-        <LoadingSurface title="Loading inbox" />
+        <LoadingSurface title="Loading inbox" description="Reading conversations, launch posture, and automation policy." />
       </div>
     );
   }
