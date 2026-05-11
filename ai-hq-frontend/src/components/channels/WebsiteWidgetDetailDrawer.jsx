@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -252,6 +252,109 @@ function buildPosture({
     next: "Review setup",
     icon: ShieldAlert,
   };
+}
+
+function guidedStepTone(status = "") {
+  const value = s(status).toLowerCase();
+
+  if (value === "done") return "success";
+  if (value === "current" || value === "running") return "brand";
+  if (value === "locked") return "neutral";
+
+  return "warning";
+}
+
+function guidedStepLabel(status = "") {
+  const value = s(status).toLowerCase();
+
+  if (value === "done") return "Done";
+  if (value === "running") return "Preparing";
+  if (value === "current") return "Next";
+  if (value === "locked") return "Locked";
+
+  return "Pending";
+}
+
+function GuidedWebsiteSetupCard({ guidedSetup = {} }) {
+  const setup = obj(guidedSetup);
+  const steps = arr(setup.steps);
+
+  if (!steps.length) return null;
+
+  return (
+    <SectionCard
+      eyebrow="Guided setup"
+      title={s(setup.headline, "Connect your website AI")}
+      description={s(
+        setup.message,
+        "Add your domain and AIHQ will guide verification, website preparation, review, and install."
+      )}
+      tone={setup.productionReady ? "success" : setup.verified ? "brand" : "warning"}
+    >
+      <div className="space-y-4">
+        <div className="rounded-[20px] border border-line-soft bg-white px-4 py-4 shadow-[0_18px_48px_-44px_rgba(15,23,42,0.45)]">
+          <div className="grid gap-3 md:grid-cols-5">
+            {steps.map((step, index) => {
+              const status = s(step.status, "pending");
+              const tone = guidedStepTone(status);
+              const done = status === "done";
+              const active = status === "current" || status === "running";
+
+              return (
+                <div
+                  key={s(step.id, step.label)}
+                  className={cx(
+                    "rounded-[16px] border px-3 py-3 transition-[background-color,border-color,box-shadow] duration-base ease-premium",
+                    active
+                      ? "border-[rgba(var(--color-brand),0.34)] bg-brand-soft shadow-[var(--shadow-inset-top)]"
+                      : done
+                        ? "border-success/20 bg-success/5"
+                        : "border-line-soft bg-surface-subtle"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cx(
+                        "inline-flex h-7 w-7 items-center justify-center rounded-[10px] border text-[12px] font-semibold",
+                        done
+                          ? "border-success/25 bg-success text-white"
+                          : active
+                            ? "border-[rgba(var(--color-brand),0.32)] bg-brand text-white"
+                            : "border-line bg-white text-text-muted"
+                      )}
+                    >
+                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : index + 1}
+                    </span>
+
+                    <Badge tone={tone} size="sm">
+                      {guidedStepLabel(status)}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
+                    {s(step.label)}
+                  </div>
+
+                  <div className="mt-1 line-clamp-3 text-[11.5px] font-medium leading-5 text-text-muted">
+                    {s(step.description)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <InlineNotice
+          tone={setup.productionReady ? "success" : "info"}
+          compact
+          description={s(
+            setup.oneClickGoal,
+            "One guided flow prepares website knowledge, Business Info review, and the safest install handoff."
+          )}
+        />
+      </div>
+    </SectionCard>
+  );
 }
 
 const WEBSITE_ACCESS_OPTIONS = [
@@ -2341,6 +2444,8 @@ export default function WebsiteWidgetDetailDrawer({
               description="Checking current website chat status."
             />
           ) : null}          {activePanel === "overview" && !statusQuery.isLoading ? (
+            <GuidedWebsiteSetupCard guidedSetup={obj(statusQuery.data?.guidedSetup)} />
+
             <AccessHelperCard
               value={selectedWebsiteAccessHints}
               onChange={setWebsiteAccessHints}
