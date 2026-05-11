@@ -28,7 +28,7 @@ import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
 import {
   AppToggleControl as ToggleControl,
-} from "../components/ui/AppFormControls.jsx";
+} from "../components/ui/AppPageField.jsx";
 import {
   InlineNotice,
   LoadingSurface,
