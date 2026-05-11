@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
@@ -482,8 +482,8 @@ function OperationalContent({ payload, error }) {
       <div className="grid gap-4 xl:grid-cols-2">
         <SurfaceCard
           icon={Sparkles}
-          title="Voice surface"
-          description="Voice readiness from persisted tenant voice settings."
+          title="Voice surface (Phase 2)"
+          description="Voice readiness is visible for operators, but Voice is outside the v1 launch promise until onboarding, testing, and operational evidence are complete."
           tag={titleize(voice?.operational?.status || voice?.operational?.reasonCode || "unknown")}
           tone={voice?.operational?.ready ? "success" : "warning"}
         >
@@ -499,8 +499,8 @@ function OperationalContent({ payload, error }) {
 
         <SurfaceCard
           icon={Plug}
-          title="Meta surface"
-          description="Meta channel and required provider-secret coverage."
+          title="Instagram / Meta surface"
+          description="Instagram is part of the v1 launch lane. This panel shows Meta channel readiness and required provider-secret coverage."
           tag={meta?.operational?.ready ? "Ready" : "Review"}
           tone={meta?.operational?.ready ? "success" : "warning"}
         >
@@ -562,7 +562,7 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
       <SurfaceCard
         icon={Plug}
         title="Channel records"
-        description="Settings should not duplicate the connector flow. It should show real channel posture and route operators to Channels for connection work."
+        description="Settings should not duplicate the connector flow. Website Chat, Instagram, and Telegram are the v1 launch channels; WhatsApp and Gmail remain Phase 2."
         tag={channels.length ? `${channels.length} records` : "No records"}
         tone={channels.length ? "success" : "warning"}
       >
@@ -594,7 +594,7 @@ function ChannelsContent({ workspacePayload, operationalPayload, navigate }) {
           </div>
         ) : (
           <div className="rounded-md border border-warning/20 bg-warning-soft px-4 py-3 text-[13px] font-medium leading-6 text-text-muted">
-            No persisted channel record is visible yet. Use Channels to connect Website, Instagram, or Telegram.
+            No persisted channel record is visible yet. Use Channels to connect Website Chat, Instagram, or Telegram for the v1 launch lane.
           </div>
         )}
 
