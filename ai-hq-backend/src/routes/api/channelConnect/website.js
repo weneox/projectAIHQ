@@ -1,4 +1,5 @@
-﻿import crypto from "crypto";
+import crypto from "crypto";
+import { createTenantSourcesHelpers } from "../../../db/helpers/tenantSources.js";
 import { dbUpsertTenantChannel } from "../../../db/helpers/settings.js";
 import {
   dbGetLatestTenantDomainVerification,
@@ -31,7 +32,8 @@ import {
 import {
   findOrCreateThreadForIngest,
   insertInboundMessage,
-} from "../inbox/internal/persistence.js";import { auditSafe, getTenantByKey } from "./repository.js";
+} from "../inbox/internal/persistence.js";
+import { auditSafe, getTenantByKey } from "./repository.js";
 import { getReqActor, getReqTenantKey, s } from "./utils.js";
 
 function obj(value) {
@@ -76,6 +78,135 @@ function buildWebsiteDomainCandidates(status = {}) {
   }
 
   return uniq(candidates);
+}
+
+
+function pickActorId(req = {}) {
+  const actor = obj(getReqActor(req));
+
+  return s(
+    actor.id ||
+      actor.actorId ||
+      actor.userId ||
+      req?.auth?.identityId ||
+      req?.auth?.userId ||
+      req?.user?.id ||
+      "system"
+  );
+}
+
+function buildVerifiedWebsiteSourceInput({ tenant = {}, domain = "", req = {} } = {}) {
+  const normalizedDomain = s(domain).toLowerCase();
+  const now = new Date().toISOString();
+  const actorId = pickActorId(req);
+
+  return {
+    tenantId: s(tenant.id),
+    tenantKey: s(tenant.tenant_key || tenant.tenantKey),
+    sourceType: "website",
+    sourceKey: `website:${normalizedDomain}`,
+    displayName: `Website: ${normalizedDomain}`,
+    status: "connected",
+    authStatus: "not_required",
+    syncStatus: "queued",
+    connectionMode: "crawler",
+    accessScope: "public",
+    sourceUrl: `https://${normalizedDomain}/`,
+    isEnabled: true,
+    isPrimary: true,
+    lastConnectedAt: now,
+    permissionsJson: {
+      verifiedDomain: normalizedDomain,
+      verificationMethod: WEBSITE_DOMAIN_VERIFICATION_METHOD,
+      verificationScope: WEBSITE_DOMAIN_VERIFICATION_SCOPE,
+      crawlAllowed: true,
+    },
+    settingsJson: {
+      crawler: {
+        enabled: true,
+        seedUrl: `https://${normalizedDomain}/`,
+        allowedDomains: [normalizedDomain],
+        maxPages: 40,
+        includeSitemap: true,
+        includeRobots: true,
+        preferredPaths: [
+          "/",
+          "/about",
+          "/services",
+          "/pricing",
+          "/faq",
+          "/contact",
+          "/privacy",
+          "/terms",
+        ],
+      },
+    },
+    metadataJson: {
+      provisionedBy: "website_domain_verification",
+      verifiedDomain: normalizedDomain,
+      verifiedAt: now,
+      requestId: s(req?.requestId),
+      correlationId: s(req?.correlationId),
+    },
+    createdBy: actorId,
+    updatedBy: actorId,
+  };
+}
+
+async function provisionVerifiedWebsiteSource({ db, req, result = {} } = {}) {
+  const verification = obj(result.domainVerification || result.verification);
+  const verified =
+    verification.verified === true ||
+    s(verification.state).toLowerCase() === "verified";
+  const domain = s(verification.domain || verification.candidateDomain).toLowerCase();
+
+  if (!verified || !domain || !db?.query) {
+    return {
+      ok: false,
+      skipped: true,
+      reasonCode: verified
+        ? "website_verified_domain_missing"
+        : "website_domain_not_verified",
+    };
+  }
+
+  const tenantKey = getReqTenantKey(req);
+  const tenant = await getTenantByKey(db, tenantKey);
+
+  if (!tenant?.id) {
+    return {
+      ok: false,
+      skipped: true,
+      reasonCode: "tenant_not_found",
+    };
+  }
+
+  const sources = createTenantSourcesHelpers({ db });
+  const actorId = pickActorId(req);
+  const source = await sources.upsertSource(
+    buildVerifiedWebsiteSourceInput({ tenant, domain, req })
+  );
+
+  const sync = await sources.beginSourceSync({
+    sourceId: source.id,
+    requestedBy: actorId,
+    runnerKey: "website.domain_verification",
+    runType: "crawl",
+    triggerType: "source_change",
+    metadataJson: {
+      workerTaskType: "tenant_source_sync",
+      sourceType: "website",
+      verifiedDomain: domain,
+      requestId: s(req?.requestId),
+      correlationId: s(req?.correlationId),
+    },
+  });
+
+  return {
+    ok: true,
+    source,
+    run: sync?.run || null,
+  };
 }
 
 function resolveWebsiteDomainSelection(rawDomain = "", status = {}, options = {}) {
@@ -1453,7 +1584,7 @@ export async function createWebsiteDomainVerificationChallenge({ db, req }) {
   });
 }
 
-export async function checkWebsiteDomainVerification({
+async function checkWebsiteDomainVerificationBase({
   db,
   req,
   resolveTxtFn,
@@ -1807,3 +1938,35 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
 
 
 
+
+
+export async function checkWebsiteDomainVerification({ db, req } = {}) {
+  const result = await checkWebsiteDomainVerificationBase({ db, req });
+
+  try {
+    const websiteSourceProvisioning = await provisionVerifiedWebsiteSource({
+      db,
+      req,
+      result,
+    });
+
+    return {
+      ...result,
+      websiteSourceProvisioning,
+    };
+  } catch (error) {
+    req?.log?.error?.("website.domain_verification.source_provisioning_failed", error, {
+      reasonCode: s(error?.reasonCode || error?.message),
+    });
+
+    return {
+      ...result,
+      websiteSourceProvisioning: {
+        ok: false,
+        skipped: false,
+        reasonCode: "website_source_provisioning_failed",
+        message: s(error?.message || "Website source provisioning failed."),
+      },
+    };
+  }
+}
