@@ -790,17 +790,6 @@ function LeadDetailOverlay({
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
 
-  function handleLeadUpdated(updatedLead = {}) {
-    const updatedId = s(updatedLead.id || updatedLead.lead_id);
-    if (!updatedId) return;
-
-    setLeads((current) =>
-      arr(current).map((item) => {
-        const itemId = s(item.id || item.lead_id);
-        return itemId === updatedId ? { ...item, ...updatedLead } : item;
-      })
-    );
-  }
   const [notice, setNotice] = useState("");
   const [draftOwner, setDraftOwner] = useState("");
   const [draftFollowUpAt, setDraftFollowUpAt] = useState("");
@@ -1184,6 +1173,17 @@ export default function Leads() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  function handleLeadUpdated(updatedLead = {}) {
+    const updatedId = s(updatedLead.id || updatedLead.lead_id);
+    if (!updatedId) return;
+
+    setLeads((current) =>
+      arr(current).map((item) => {
+        const itemId = s(item.id || item.lead_id);
+        return itemId === updatedId ? { ...item, ...updatedLead } : item;
+      })
+    );
+  }
 
   const loadLeads = useCallback(async ({ silent = false } = {}) => {
     if (silent) {

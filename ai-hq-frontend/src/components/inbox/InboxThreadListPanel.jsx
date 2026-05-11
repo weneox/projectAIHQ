@@ -732,7 +732,7 @@ export default function InboxThreadListPanel({
   launchChannelConnected = true,
   automationControl = null,
   onToggleAutomation,
-  onOpenChannels,
+  _onOpenChannels,
 }) {
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const deferredSearch = useDeferredValue(localSearch);
@@ -956,7 +956,7 @@ export default function InboxThreadListPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          <DisconnectedRailState onOpenChannels={onOpenChannels} />
+          <DisconnectedRailState onOpenChannels={_onOpenChannels} />
         </div>
       </section>
     );

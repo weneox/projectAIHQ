@@ -285,7 +285,6 @@ function MemberIdentityBadge({ role = "" }) {
 function StatusText({ tone = "neutral", children }) {
   return (
     <span
-      title={roleDescription(role)}
       className={cx(
         "inline-flex min-w-[82px] items-center gap-2 text-[12.5px] font-semibold",
         toneText(tone)
