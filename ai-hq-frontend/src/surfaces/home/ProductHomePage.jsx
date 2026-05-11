@@ -2,13 +2,9 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
-  CircleAlert,
-  Clock3,
   Globe2,
   Inbox,
   MessageCircle,
-  PlugZap,
-  RadioTower,
   ShieldCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,10 +20,7 @@ import {
   PageCanvas,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../../lib/cx.js";
-import {
-  normalizeNavigationAction,
-  s,
-} from "../../lib/appUi.js";
+import { normalizeNavigationAction, s } from "../../lib/appUi.js";
 import useProductHome from "../../view-models/useProductHome.js";
 
 const CHANNEL_ICON_BY_PROVIDER = {
@@ -49,10 +42,6 @@ function n(value, fallback = 0) {
 
 function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
-}
-
-function pluralize(count, noun) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function unreadCount(home) {
@@ -82,8 +71,10 @@ function retryingOutboundCount(home) {
   return n(home?.inboxState?.counts?.retryingOutboundCount);
 }
 
-function outboundAttentionCount(home) {
+function waitingCount(home) {
   return (
+    unreadCount(home) +
+    handoffCount(home) +
     pendingOutboundCount(home) +
     failedOutboundCount(home) +
     retryingOutboundCount(home)
@@ -96,7 +87,6 @@ function providerStates(home) {
 
 function availableChannelCount(home) {
   const states = providerStates(home);
-
   if (states.length) {
     return states.filter((item) => item?.available !== false).length;
   }
@@ -130,16 +120,12 @@ function connectedChannelCount(home) {
   return n(home?.launchChannel?.connectedCount);
 }
 
-function truthApproved(home) {
+function businessInfoReady(home) {
   return home?.truthRuntime?.truthReady === true;
 }
 
-function runtimeReady(home) {
+function assistantReady(home) {
   return home?.truthRuntime?.ready === true;
-}
-
-function businessReady(home) {
-  return truthApproved(home) && runtimeReady(home);
 }
 
 function channelReady(home) {
@@ -150,30 +136,8 @@ function inboxUnavailable(home) {
   return lower(home?.inboxState?.status) === "unavailable";
 }
 
-function inboxReadyForData(home) {
-  return !inboxUnavailable(home);
-}
-
-function aiOperating(home) {
-  return businessReady(home) && channelReady(home) && inboxReadyForData(home);
-}
-
-function toneTextClass(tone = "neutral") {
-  if (tone === "success") return "text-success";
-  if (tone === "warning" || tone === "warn") return "text-warning";
-  if (tone === "danger") return "text-danger";
-  if (tone === "brand" || tone === "info") return "text-brand";
-
-  return "text-text-muted";
-}
-
-function toneDotClass(tone = "neutral") {
-  if (tone === "success") return "bg-success";
-  if (tone === "warning" || tone === "warn") return "bg-warning";
-  if (tone === "danger") return "bg-danger";
-  if (tone === "brand" || tone === "info") return "bg-brand";
-
-  return "bg-[rgb(var(--color-text-soft))]";
+function workspaceReady(home) {
+  return businessInfoReady(home) && assistantReady(home) && channelReady(home);
 }
 
 function providerLabel(provider = "") {
@@ -210,302 +174,6 @@ function providerIcon(provider = "") {
   return CHANNEL_ICON_BY_PROVIDER[lower(provider)] || websiteIcon;
 }
 
-function StatusText({ tone = "neutral", children }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
-      <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(tone))} />
-      <span className={toneTextClass(tone)}>{children}</span>
-    </span>
-  );
-}
-
-function FreeIcon({ icon: Icon, tone = "neutral", className }) {
-  return (
-    <Icon
-      className={cx(
-        "h-[21px] w-[21px] shrink-0",
-        toneTextClass(tone),
-        className
-      )}
-      strokeWidth={2.05}
-    />
-  );
-}
-
-function ChannelImageIcon({ provider, className }) {
-  return (
-    <img
-      src={providerIcon(provider)}
-      alt=""
-      aria-hidden="true"
-      draggable="false"
-      className={cx("h-[22px] w-[22px] shrink-0 object-contain", className)}
-    />
-  );
-}
-
-function buildHero(home) {
-  const unread = unreadCount(home);
-  const pending = outboundAttentionCount(home);
-  const readyChannels = readyChannelCount(home);
-
-  if (unread > 0) {
-    return {
-      tone: "warning",
-      title: `${unread} ${unread === 1 ? "message" : "messages"} waiting`,
-      summary: "Customer work is active. Open the inbox and handle the queue.",
-      primary: { label: "Open inbox", path: "/inbox" },
-      secondary: { label: "Channels", path: "/channels" },
-    };
-  }
-
-  if (pending > 0) {
-    return {
-      tone: "warning",
-      title: `${pending} ${pending === 1 ? "reply" : "replies"} need review`,
-      summary: "Some outbound replies may need retry or delivery check.",
-      primary: { label: "Review replies", path: "/inbox" },
-      secondary: { label: "Channels", path: "/channels" },
-    };
-  }
-
-  if (!truthApproved(home)) {
-    return {
-      tone: "warning",
-      title: "Business info first",
-      summary: "Add the facts AI can safely use with customers.",
-      primary:
-        normalizeNavigationAction(home?.assistant?.primaryAction) || {
-          label: "Review setup",
-          path: "/truth",
-        },
-      secondary: { label: "Channels", path: "/channels" },
-    };
-  }
-
-  if (!runtimeReady(home)) {
-    return {
-      tone: "warning",
-      title: "Runtime needs review",
-      summary: "Business info exists. The live AI layer still needs attention.",
-      primary: { label: "Open business info", path: "/truth" },
-      secondary: { label: "Inbox", path: "/inbox" },
-    };
-  }
-
-  if (!channelReady(home)) {
-    return {
-      tone: "warning",
-      title: "Connect one channel",
-      summary: "Website, Instagram, or Telegram can become the first live surface.",
-      primary: { label: "Open channels", path: "/channels" },
-      secondary: { label: "Business info", path: "/truth" },
-    };
-  }
-
-  if (inboxUnavailable(home)) {
-    return {
-      tone: "danger",
-      title: "Inbox status unavailable",
-      summary: "Setup is ready, but customer activity could not be checked.",
-      primary: { label: "Open inbox", path: "/inbox" },
-      secondary: { label: "Channels", path: "/channels" },
-    };
-  }
-
-  return {
-    tone: "success",
-    title: "Workspace is calm",
-    summary: `${pluralize(readyChannels, "channel")} live. No urgent customer work.`,
-    primary: { label: "Open inbox", path: "/inbox" },
-    secondary: { label: "Channels", path: "/channels" },
-  };
-}
-
-function buildBusinessTile(home) {
-  if (businessReady(home)) {
-    return {
-      id: "business",
-      tone: "success",
-      icon: ShieldCheck,
-      title: "Business info",
-      value: "Ready",
-      path: "/truth",
-      mode: "data",
-    };
-  }
-
-  if (truthApproved(home)) {
-    return {
-      id: "business",
-      tone: "warning",
-      icon: CircleAlert,
-      title: "Business info",
-      value: "Review",
-      path: "/truth",
-      mode: "guide",
-    };
-  }
-
-  return {
-    id: "business",
-    tone: "warning",
-    icon: ShieldCheck,
-    title: "Business info",
-    value: "Add",
-    path: "/truth",
-    mode: "guide",
-  };
-}
-
-function buildChannelTile(home) {
-  const ready = readyChannelCount(home);
-  const connected = connectedChannelCount(home);
-  const total = availableChannelCount(home);
-
-  if (ready > 0) {
-    return {
-      id: "channels",
-      tone: "success",
-      icon: RadioTower,
-      title: "Channels",
-      value: `${ready}/${total} live`,
-      path: "/channels",
-      mode: "data",
-    };
-  }
-
-  if (connected > 0) {
-    return {
-      id: "channels",
-      tone: "warning",
-      icon: PlugZap,
-      title: "Channels",
-      value: "Review",
-      path: "/channels",
-      mode: "guide",
-    };
-  }
-
-  return {
-    id: "channels",
-    tone: "warning",
-    icon: PlugZap,
-    title: "Channels",
-    value: "Connect",
-    path: "/channels",
-    mode: "guide",
-  };
-}
-
-function buildInboxTile(home) {
-  const unread = unreadCount(home);
-  const pending = outboundAttentionCount(home);
-
-  if (unread > 0) {
-    return {
-      id: "inbox",
-      tone: "warning",
-      icon: MessageCircle,
-      title: "Inbox",
-      value: String(unread),
-      path: "/inbox",
-      mode: "data",
-    };
-  }
-
-  if (pending > 0) {
-    return {
-      id: "inbox",
-      tone: "warning",
-      icon: Clock3,
-      title: "Inbox",
-      value: String(pending),
-      path: "/inbox",
-      mode: "data",
-    };
-  }
-
-  if (!businessReady(home) || !channelReady(home)) {
-    return {
-      id: "inbox",
-      tone: "warning",
-      icon: Inbox,
-      title: "Inbox",
-      value: "Next",
-      path: "/inbox",
-      mode: "guide",
-    };
-  }
-
-  if (inboxUnavailable(home)) {
-    return {
-      id: "inbox",
-      tone: "danger",
-      icon: Inbox,
-      title: "Inbox",
-      value: "Check",
-      path: "/inbox",
-      mode: "guide",
-    };
-  }
-
-  return {
-    id: "inbox",
-    tone: "success",
-    icon: Inbox,
-    title: "Inbox",
-    value: "Clear",
-    path: "/inbox",
-    mode: "data",
-  };
-}
-
-function buildAiTile(home) {
-  if (aiOperating(home)) {
-    return {
-      id: "ai",
-      tone: "success",
-      icon: Bot,
-      title: "AI status",
-      value: "Operating",
-      path: "/truth",
-      mode: "data",
-    };
-  }
-
-  if (businessReady(home) && !channelReady(home)) {
-    return {
-      id: "ai",
-      tone: "warning",
-      icon: Bot,
-      title: "AI status",
-      value: "Waiting",
-      path: "/channels",
-      mode: "guide",
-    };
-  }
-
-  return {
-    id: "ai",
-    tone: "warning",
-    icon: Bot,
-    title: "AI status",
-    value: "Guarded",
-    path: "/truth",
-    mode: "guide",
-  };
-}
-
-function buildTiles(home) {
-  return [
-    buildBusinessTile(home),
-    buildChannelTile(home),
-    buildInboxTile(home),
-    buildAiTile(home),
-  ];
-}
-
 function normalizeChannels(home) {
   const states = providerStates(home);
 
@@ -519,14 +187,8 @@ function normalizeChannels(home) {
         id: provider || item?.id || item?.channelLabel || "channel",
         provider,
         label: item?.channelLabel || providerLabel(provider),
-        value: ready ? "Live" : connected ? "Review" : "Off",
+        status: ready ? "Live" : connected ? "Review" : "Off",
         tone: ready ? "success" : connected ? "warning" : "neutral",
-        account:
-          s(item?.accountDisplayName) ||
-          s(item?.accountHandle) ||
-          s(item?.account?.displayName) ||
-          s(item?.account?.handle) ||
-          (ready ? "Ready for delivery" : "Open to configure"),
         path: providerPath(provider),
       };
     });
@@ -536,313 +198,353 @@ function normalizeChannels(home) {
     id: provider,
     provider,
     label: providerLabel(provider),
-    value: "Off",
+    status: "Off",
     tone: "neutral",
-    account: "Open to configure",
     path: providerPath(provider),
   }));
 }
 
-function MiniTrend({ tone = "brand" }) {
-  const strokeClass =
-    tone === "success"
-      ? "stroke-success"
-      : tone === "warning"
-        ? "stroke-warning"
-        : tone === "danger"
-          ? "stroke-danger"
-          : "stroke-brand";
+function toneTextClass(tone = "neutral") {
+  if (tone === "success") return "text-success";
+  if (tone === "warning") return "text-warning";
+  if (tone === "danger") return "text-danger";
+  if (tone === "brand") return "text-brand";
+  return "text-text-muted";
+}
 
+function toneDotClass(tone = "neutral") {
+  if (tone === "success") return "bg-success";
+  if (tone === "warning") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  if (tone === "brand") return "bg-brand";
+  return "bg-[rgb(var(--color-text-soft))]";
+}
+
+function buildHero(home) {
+  const waiting = waitingCount(home);
+
+  if (waiting > 0) {
+    return {
+      tone: "warning",
+      title: "Customer work is waiting",
+      detail: "Open the inbox and clear the queue.",
+      primary: { label: "Open inbox", path: "/inbox" },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (!businessInfoReady(home)) {
+    return {
+      tone: "warning",
+      title: "Business Info needs attention",
+      detail: "Add the facts your assistant can safely use.",
+      primary:
+        normalizeNavigationAction(home?.assistant?.primaryAction) || {
+          label: "Open Business Info",
+          path: "/truth",
+        },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  if (!channelReady(home)) {
+    return {
+      tone: "warning",
+      title: "Connect a channel",
+      detail: "Bring Website, Instagram, or Telegram into the inbox.",
+      primary: { label: "Open channels", path: "/channels" },
+      secondary: { label: "Business Info", path: "/truth" },
+    };
+  }
+
+  if (inboxUnavailable(home)) {
+    return {
+      tone: "danger",
+      title: "Inbox needs a check",
+      detail: "Your setup is ready, but inbox status could not be loaded.",
+      primary: { label: "Open inbox", path: "/inbox" },
+      secondary: { label: "Channels", path: "/channels" },
+    };
+  }
+
+  return {
+    tone: "success",
+    title: "Workspace is calm",
+    detail: "No urgent customer work is waiting.",
+    primary: { label: "Open inbox", path: "/inbox" },
+    secondary: { label: "Channels", path: "/channels" },
+  };
+}
+
+function StatusText({ tone = "neutral", children }) {
   return (
-    <svg viewBox="0 0 128 40" aria-hidden="true" className="h-10 w-28">
-      <path
-        d="M4 30 C18 24, 25 24, 36 26 C48 29, 52 17, 64 18 C77 19, 80 10, 92 12 C105 15, 108 24, 124 15"
-        fill="none"
-        className={strokeClass}
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </svg>
+    <span className="inline-flex items-center gap-2 text-[13px] font-semibold">
+      <span className={cx("h-1.5 w-1.5", toneDotClass(tone))} />
+      <span className={toneTextClass(tone)}>{children}</span>
+    </span>
   );
 }
 
-function CommandHero({ hero, home, onAction }) {
-  const truthReadyFlag = truthApproved(home);
-  const runtimeReadyFlag = runtimeReady(home);
-  const channelsReady = readyChannelCount(home);
-  const channelsTotal = availableChannelCount(home);
-
+function ChannelLogo({ provider }) {
   return (
-    <section className="space-y-4">
-      <div className="inline-flex h-8 items-center rounded-full border border-line-soft bg-white px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand shadow-[var(--shadow-inset-top)]">
-        Home
-      </div>
-
-      <div className="max-w-[920px]">
-        <h1 className="font-display text-[36px] font-semibold leading-[1.02] tracking-[var(--tracking-tight-xl)] text-text md:text-[50px]">
-          Your business operating system
-        </h1>
-
-        <p className="mt-3 max-w-[760px] text-[15px] font-medium leading-7 tracking-[var(--tracking-tight-sm)] text-text-muted">
-          Manage conversations, channels, Business Info, knowledge, and AI guardrails from one operational command center.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          size="md"
-          className="min-w-[148px] justify-center"
-          onClick={() => onAction(hero.primary)}
-        >
-          {hero.primary.label}
-          <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
-        </Button>
-
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className="min-w-[128px] justify-center"
-          onClick={() => onAction({ label: "Open inbox", path: "/inbox" })}
-        >
-          Open inbox
-        </Button>
-
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className="min-w-[148px] justify-center"
-          onClick={() => onAction({ label: "Connect channels", path: "/channels" })}
-        >
-          Connect channels
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className={cx(
-          "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[12px] font-semibold shadow-[var(--shadow-inset-top)]",
-          hero.tone === "success"
-            ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-            : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
-        )}>
-          {hero.tone === "success" ? (
-            <CheckCircle2 className="h-4 w-4" strokeWidth={2.1} />
-          ) : (
-            <CircleAlert className="h-4 w-4" strokeWidth={2.1} />
-          )}
-          {hero.title}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", channelsReady > 0 ? "bg-success" : "bg-warning")} />
-          Channels {channelsReady}/{channelsTotal}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", truthReadyFlag ? "bg-success" : "bg-warning")} />
-          Business Info {truthReadyFlag ? "approved" : "pending"}
-        </span>
-
-        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line-soft bg-white px-3.5 text-[12px] font-semibold text-text-muted shadow-[var(--shadow-inset-top)]">
-          <span className={cx("h-1.5 w-1.5 rounded-full", runtimeReadyFlag ? "bg-success" : "bg-warning")} />
-          Runtime {runtimeReadyFlag ? "ready" : "guarded"}
-        </span>
-      </div>
-    </section>
+    <img
+      src={providerIcon(provider)}
+      alt=""
+      aria-hidden="true"
+      draggable="false"
+      className="h-6 w-6 shrink-0 object-contain"
+    />
   );
 }
 
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  caption,
-  tone = "brand",
-  action,
-  onNavigate,
-}) {
+function HeroSection({ hero, home, onAction }) {
   return (
-    <Card padded="sm" className="min-h-[126px]">
-      <div className="flex h-full flex-col justify-between gap-4">
-        <div className="flex items-start justify-between gap-3">
-          <span className={cx(
-            "inline-flex h-9 w-9 items-center justify-center rounded-[14px] border",
-            tone === "success"
-              ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-              : tone === "warning" || tone === "warn"
-                ? "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
-                : tone === "danger"
-                  ? "border-[rgba(var(--color-danger),0.2)] bg-danger-soft text-danger"
-                  : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
-          )}>
-            <Icon className="h-4.5 w-4.5" strokeWidth={2.1} />
-          </span>
+    <Card padded="md" className="overflow-hidden">
+      <div className="grid gap-8 px-2 py-2 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
+        <div className="min-w-0">
+          <StatusText tone={hero.tone}>{hero.title}</StatusText>
 
-          <MiniTrend tone={tone} />
+          <h1 className="mt-5 max-w-[760px] font-display text-[42px] font-semibold leading-[0.98] tracking-[var(--tracking-tight-xl)] text-text md:text-[58px]">
+            Run the business from one place.
+          </h1>
+
+          <p className="mt-5 max-w-[680px] text-[15px] font-medium leading-7 text-text-muted">
+            Messages, channels, customer work, and assistant control in one clean workspace.
+          </p>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Button
+              type="button"
+              size="md"
+              onClick={() => onAction(hero.primary)}
+            >
+              {hero.primary.label}
+              <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.1} />
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => onAction(hero.secondary)}
+            >
+              {hero.secondary.label}
+            </Button>
+          </div>
         </div>
 
-        <div>
-          <div className="text-[13px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-            {label}
-          </div>
+        <div className="border border-line-soft bg-surface-muted px-5 py-5">
+          <p className="text-[13.5px] font-medium leading-6 text-text-muted">
+            {hero.detail}
+          </p>
 
-          <div className="mt-1.5 text-[24px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-            {value}
-          </div>
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+                {waitingCount(home)}
+              </div>
+              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Waiting
+              </div>
+            </div>
 
-          <div className="mt-1 text-[12px] font-medium text-text-muted">
-            {caption}
-          </div>
+            <div>
+              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+                {readyChannelCount(home)}/{availableChannelCount(home)}
+              </div>
+              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Channels
+              </div>
+            </div>
 
-          {action ? (
-            <button
-              type="button"
-              onClick={() => onNavigate(action.path)}
-              className="mt-2.5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand transition-colors hover:text-brand-strong"
-            >
-              {action.label}
-              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
-            </button>
-          ) : null}
+            <div>
+              <div className="text-[28px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+                {workspaceReady(home) ? "On" : "Safe"}
+              </div>
+              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Assistant
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </Card>
   );
 }
 
-function KpiGrid({ home, onNavigate }) {
-  const ready = readyChannelCount(home);
-  const available = availableChannelCount(home);
-  const connected = connectedChannelCount(home);
-  const open = openConversationCount(home);
+function MetricCard({ icon: Icon, label, value, note, tone = "neutral", onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group block w-full text-left"
+    >
+      <Card
+        padded="sm"
+        className="h-full transition-[transform,box-shadow] duration-base ease-premium group-hover:-translate-y-0.5"
+      >
+        <div className="flex min-h-[128px] flex-col justify-between">
+          <div className="flex items-start justify-between gap-4">
+            <Icon className={cx("h-5 w-5", toneTextClass(tone))} strokeWidth={2.05} />
+            <span className={cx("mt-1 h-1.5 w-1.5", toneDotClass(tone))} />
+          </div>
+
+          <div>
+            <div className="text-[13px] font-semibold text-text-muted">
+              {label}
+            </div>
+
+            <div className="mt-2 text-[30px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+              {value}
+            </div>
+
+            <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
+              {note}
+            </div>
+          </div>
+        </div>
+      </Card>
+    </button>
+  );
+}
+
+function MetricsRow({ home, onNavigate }) {
   const unread = unreadCount(home);
-  const pending = outboundAttentionCount(home);
-  const handoff = handoffCount(home);
-  const truthReadyFlag = truthApproved(home);
-  const runtimeFlag = runtimeReady(home);
-  const operating = aiOperating(home);
+  const liveChannels = readyChannelCount(home);
+  const totalChannels = availableChannelCount(home);
+  const ready = workspaceReady(home);
 
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <KpiCard
-        icon={Globe2}
-        label="Connected channels"
-        value={`${ready}/${available}`}
-        caption={`${connected} connected channel${connected === 1 ? "" : "s"}`}
-        tone={ready > 0 ? "success" : connected > 0 ? "warning" : "brand"}
-        action={{ label: "View channels", path: "/channels" }}
-        onNavigate={onNavigate}
-      />
-
-      <KpiCard
+      <MetricCard
         icon={MessageCircle}
-        label="Open conversations"
-        value={open}
-        caption={`${unread} unread · ${handoff} handoff`}
-        tone={unread > 0 || pending > 0 ? "warning" : "brand"}
-        action={{ label: "Open inbox", path: "/inbox" }}
-        onNavigate={onNavigate}
+        label="Conversations"
+        value={openConversationCount(home)}
+        note={unread > 0 ? `${unread} unread` : "No unread messages"}
+        tone={unread > 0 ? "warning" : "success"}
+        onClick={() => onNavigate("/inbox")}
       />
 
-      <KpiCard
+      <MetricCard
+        icon={Globe2}
+        label="Channels"
+        value={`${liveChannels}/${totalChannels}`}
+        note={`${connectedChannelCount(home)} connected`}
+        tone={liveChannels > 0 ? "success" : "warning"}
+        onClick={() => onNavigate("/channels")}
+      />
+
+      <MetricCard
         icon={ShieldCheck}
-        label="AI coverage"
-        value={operating ? "Live" : truthReadyFlag && runtimeFlag ? "Ready" : "Guarded"}
-        caption={truthReadyFlag ? "Business Info approved" : "Business Info required"}
-        tone={operating ? "success" : "warning"}
-        action={{ label: "View guardrails", path: "/truth" }}
-        onNavigate={onNavigate}
+        label="Business Info"
+        value={businessInfoReady(home) ? "Ready" : "Open"}
+        note={businessInfoReady(home) ? "Approved facts available" : "Review details"}
+        tone={businessInfoReady(home) ? "success" : "warning"}
+        onClick={() => onNavigate("/truth")}
       />
 
-      <KpiCard
-        icon={Clock3}
-        label="Response health"
-        value={pending > 0 ? "Review" : unread > 0 ? "Active" : "Calm"}
-        caption={`${pending} pending outbound action${pending === 1 ? "" : "s"}`}
-        tone={pending > 0 || unread > 0 ? "warning" : "success"}
-        action={{ label: "View reports", path: "/reports" }}
-        onNavigate={onNavigate}
+      <MetricCard
+        icon={Bot}
+        label="Assistant"
+        value={ready ? "On" : "Safe"}
+        note={ready ? "Ready to help" : "Waiting for setup"}
+        tone={ready ? "success" : "warning"}
+        onClick={() => onNavigate(ready ? "/inbox" : "/truth")}
       />
     </div>
   );
 }
 
-function NextBestActionsPanel({ tiles, onNavigate }) {
-  const completed = tiles.filter((item) => item.mode === "data").length;
+function WorkPanel({ home, onNavigate }) {
+  const waiting = waitingCount(home);
+  const ready = workspaceReady(home);
 
   return (
-    <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+    <Card padded="md" className="h-full">
+      <div className="flex h-full flex-col justify-between gap-8">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Next best actions
+          <div className="flex items-center justify-between gap-5">
+            <div>
+              <h2 className="text-[26px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+                {waiting > 0 ? "Handle customer work" : ready ? "All clear" : "Finish setup"}
+              </h2>
+
+              <p className="mt-3 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+                {waiting > 0
+                  ? "Messages or replies need attention."
+                  : ready
+                    ? "No urgent work is waiting."
+                    : "Complete Business Info and connect one channel."}
+              </p>
+            </div>
+
+            {waiting > 0 ? (
+              <Inbox className="h-6 w-6 text-warning" strokeWidth={2.1} />
+            ) : ready ? (
+              <CheckCircle2 className="h-6 w-6 text-success" strokeWidth={2.1} />
+            ) : (
+              <Inbox className="h-6 w-6 text-brand" strokeWidth={2.1} />
+            )}
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Launch checklist
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <Button type="button" fullWidth onClick={() => onNavigate("/inbox")}>
+              Inbox
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              onClick={() => onNavigate("/channels")}
+            >
+              Channels
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              onClick={() => onNavigate("/truth")}
+            >
+              Business Info
+            </Button>
           </div>
         </div>
 
-        <span className="text-[12px] font-semibold text-text-muted">
-          {completed}/{tiles.length} completed
-        </span>
-      </div>
-
-      <div className="divide-y divide-line-soft">
-        {tiles.map((item) => {
-          const Icon = item.icon;
-          const completedItem = item.mode === "data";
-
-          return (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => onNavigate(item.path)}
-              className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
-            >
-              <span className={cx(
-                "inline-flex h-9 w-9 items-center justify-center rounded-[14px] border",
-                completedItem
-                  ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-                  : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
-              )}>
-                {completedItem ? (
-                  <CheckCircle2 className="h-4.5 w-4.5" strokeWidth={2.1} />
-                ) : (
-                  <Icon className="h-4.5 w-4.5" strokeWidth={2.1} />
-                )}
-              </span>
-
-              <span className="min-w-0">
-                <span className="block truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-                  {item.title}
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
-                  {completedItem ? "Ready for the launch lane" : `Next step: ${item.value}`}
-                </span>
-              </span>
-
-              <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" strokeWidth={2.1} />
-            </button>
-          );
-        })}
+        <div className="grid grid-cols-4 border border-line-soft bg-surface-muted">
+          {[
+            ["Unread", unreadCount(home)],
+            ["Open", openConversationCount(home)],
+            ["Handoff", handoffCount(home)],
+            ["Waiting", waiting],
+          ].map(([label, value]) => (
+            <div key={label} className="border-r border-line-soft px-4 py-4 last:border-r-0">
+              <div className="text-[22px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
+                {value}
+              </div>
+              <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                {label}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </Card>
   );
 }
 
-function ChannelPanel({ items, onNavigate }) {
+function ChannelsPanel({ channels, onNavigate }) {
   return (
-    <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+    <Card padded={false} clip className="h-full">
+      <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Live channel status
-          </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Omnichannel surfaces
-          </div>
+          <h2 className="text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Channels
+          </h2>
+          <p className="mt-1 text-[12.5px] font-medium text-text-muted">
+            Website, Instagram, Telegram.
+          </p>
         </div>
 
         <button
@@ -855,34 +557,26 @@ function ChannelPanel({ items, onNavigate }) {
       </div>
 
       <div className="divide-y divide-line-soft">
-        {items.slice(0, 4).map((item) => (
+        {channels.slice(0, 4).map((channel) => (
           <button
+            key={channel.id}
             type="button"
-            key={item.id}
-            onClick={() => onNavigate(item.path)}
-            className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-premium hover:bg-surface-subtle"
+            onClick={() => onNavigate(channel.path)}
+            className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-subtle"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line-soft bg-white">
-              <ChannelImageIcon provider={item.provider} className="h-[20px] w-[20px]" />
-            </span>
+            <ChannelLogo provider={channel.provider} />
 
-            <span className="min-w-0">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-                  {item.label}
-                </span>
-                <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(item.tone))} />
-                <span className={cx("text-[12px] font-semibold", toneTextClass(item.tone))}>
-                  {item.value}
-                </span>
-              </span>
+            <div className="min-w-0">
+              <div className="truncate text-[14px] font-semibold text-text">
+                {channel.label}
+              </div>
 
-              <span className="mt-0.5 block truncate text-[12px] font-medium text-text-muted">
-                {item.account}
-              </span>
-            </span>
+              <div className={cx("mt-1 text-[12.5px] font-semibold", toneTextClass(channel.tone))}>
+                {channel.status}
+              </div>
+            </div>
 
-            <ArrowRight className="h-4 w-4 text-text-subtle transition-colors group-hover:text-text" strokeWidth={2.1} />
+            <ArrowRight className="h-4 w-4 text-text-subtle" strokeWidth={2.1} />
           </button>
         ))}
       </div>
@@ -890,339 +584,60 @@ function ChannelPanel({ items, onNavigate }) {
   );
 }
 
-function InboxPulsePanel({ home, onNavigate }) {
+function BusinessPanel({ home, onNavigate }) {
   const rows = [
     {
-      id: "unread",
-      label: "Unread messages",
-      value: unreadCount(home),
-      tone: unreadCount(home) > 0 ? "warning" : "success",
-      detail: "Customer messages waiting",
+      label: "Business Info",
+      value: businessInfoReady(home) ? "Ready" : "Review",
+      tone: businessInfoReady(home) ? "success" : "warning",
+      path: "/truth",
     },
     {
-      id: "open",
-      label: "Open conversations",
-      value: openConversationCount(home),
-      tone: openConversationCount(home) > 0 ? "brand" : "success",
-      detail: "Active threads across channels",
+      label: "Knowledge",
+      value: "Open",
+      tone: "neutral",
+      path: "/knowledge",
     },
     {
-      id: "handoff",
-      label: "Human handoff",
-      value: handoffCount(home),
-      tone: handoffCount(home) > 0 ? "warning" : "success",
-      detail: "Operator-owned conversations",
-    },
-    {
-      id: "pending",
-      label: "Outbound review",
-      value: outboundAttentionCount(home),
-      tone: outboundAttentionCount(home) > 0 ? "warning" : "success",
-      detail: "Pending/retry outbound actions",
+      label: "Assistant",
+      value: assistantReady(home) ? "Ready" : "Safe",
+      tone: assistantReady(home) ? "success" : "warning",
+      path: "/truth",
     },
   ];
 
   return (
-    <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
+    <Card padded={false} clip className="h-full">
+      <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Inbox pulse
-          </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Conversation activity
-          </div>
+          <h2 className="text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            Business control
+          </h2>
+          <p className="mt-1 text-[12.5px] font-medium text-text-muted">
+            What the assistant can use.
+          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onNavigate("/inbox")}
-          className="text-[12.5px] font-semibold text-brand"
-        >
-          Open inbox
-        </button>
+        <ShieldCheck className="h-5 w-5 text-text-subtle" strokeWidth={2.1} />
       </div>
 
       <div className="divide-y divide-line-soft">
-        {rows.map((item) => (
-          <div
-            key={item.id}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5"
+        {rows.map((row) => (
+          <button
+            key={row.label}
+            type="button"
+            onClick={() => onNavigate(row.path)}
+            className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-subtle"
           >
-            <div className="min-w-0">
-              <div className="truncate text-[13.5px] font-semibold tracking-[var(--tracking-tight-sm)] text-text">
-                {item.label}
-              </div>
-              <div className="mt-0.5 truncate text-[12px] font-medium text-text-muted">
-                {item.detail}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className={cx("h-1.5 w-1.5 rounded-full", toneDotClass(item.tone))} />
-              <span className="text-[18px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                {item.value}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function BusinessKnowledgePanel({ home, onNavigate }) {
-  const truthReady = truthApproved(home);
-  const runtime = runtimeReady(home);
-
-  return (
-    <Card padded="md">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Business Truth / Knowledge
-          </div>
-          <div className="mt-2 text-[30px] font-semibold leading-none tracking-[var(--tracking-tight-xl)] text-text">
-            {truthReady ? "Approved" : "Pending"}
-          </div>
-          <div className="mt-2 text-[12.5px] font-medium leading-5 text-text-muted">
-            {truthReady
-              ? "AI can use approved business facts."
-              : "Approve business facts before AI can safely answer customers."}
-          </div>
-        </div>
-
-        <span className={cx(
-          "inline-flex h-11 w-11 items-center justify-center rounded-[16px] border",
-          truthReady
-            ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-            : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
-        )}>
-          <ShieldCheck className="h-5 w-5" strokeWidth={2.1} />
-        </span>
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <div className="rounded-[14px] border border-line-soft bg-surface px-3 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-            Business Info
-          </div>
-          <div className="mt-1 text-[13px] font-semibold text-text">
-            {truthReady ? "Ready" : "Needs approval"}
-          </div>
-        </div>
-
-        <div className="rounded-[14px] border border-line-soft bg-surface px-3 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-            Runtime
-          </div>
-          <div className="mt-1 text-[13px] font-semibold text-text">
-            {runtime ? "Ready" : "Guarded"}
-          </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onNavigate("/truth")}
-        className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-brand"
-      >
-        Review Business Info
-        <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
-      </button>
-    </Card>
-  );
-}
-
-function AiRuntimePanel({ home, onNavigate }) {
-  const operating = aiOperating(home);
-  const truthReady = truthApproved(home);
-  const runtime = runtimeReady(home);
-
-  const rows = [
-    ["AI guard status", operating ? "Active" : "Guarded", operating ? "success" : "warning"],
-    ["Approval flow", truthReady ? "Enabled" : "Required", truthReady ? "success" : "warning"],
-    ["Fallback behavior", runtime ? "Ask then handoff" : "Blocked until ready", runtime ? "brand" : "warning"],
-    ["Human handoff", "Available", "success"],
-  ];
-
-  return (
-    <Card padded="md">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            AI runtime / Automation
-          </div>
-          <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            {operating ? "Automation operating" : "Manual-first control"}
-          </div>
-        </div>
-
-        <span className={cx(
-          "inline-flex h-11 w-11 items-center justify-center rounded-[16px] border",
-          operating
-            ? "border-[rgba(var(--color-success),0.2)] bg-success-soft text-success"
-            : "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning"
-        )}>
-          <Bot className="h-5 w-5" strokeWidth={2.1} />
-        </span>
-      </div>
-
-      <div className="mt-4 space-y-2.5">
-        {rows.map(([label, value, tone]) => (
-          <div key={label} className="flex items-center justify-between gap-3">
-            <span className="text-[13px] font-medium text-text-muted">{label}</span>
-            <span className={cx("text-[12.5px] font-semibold", toneTextClass(tone))}>
-              {value}
+            <span className="truncate text-[14px] font-semibold text-text">
+              {row.label}
             </span>
-          </div>
+
+            <span className={cx("text-[12.5px] font-semibold", toneTextClass(row.tone))}>
+              {row.value}
+            </span>
+          </button>
         ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onNavigate("/settings")}
-        className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-brand"
-      >
-        View settings
-        <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
-      </button>
-    </Card>
-  );
-}
-
-function PerformanceOverviewPanel({ home, onNavigate }) {
-  const conversations = openConversationCount(home);
-  const unread = unreadCount(home);
-  const pending = outboundAttentionCount(home);
-  const ready = readyChannelCount(home);
-
-  return (
-    <Card padded="md">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Performance overview
-          </div>
-          <div className="mt-2 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Operational pressure
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onNavigate("/reports")}
-          className="text-[12.5px] font-semibold text-brand"
-        >
-          Reports
-        </button>
-      </div>
-
-      <div className="mt-4 grid grid-cols-4 gap-2">
-        {[
-          ["Open", conversations],
-          ["Unread", unread],
-          ["Pending", pending],
-          ["Live", ready],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-[14px] border border-line-soft bg-surface px-3 py-3">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              {label}
-            </div>
-            <div className="mt-1 text-[18px] font-semibold text-text">
-              {value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-[16px] border border-line-soft bg-white px-3 py-3">
-        <MiniTrend tone={pending > 0 || unread > 0 ? "warning" : "brand"} />
-      </div>
-    </Card>
-  );
-}
-
-function OmnichannelFlowPanel({ home, onNavigate }) {
-  const steps = [
-    {
-      icon: Globe2,
-      title: "Customer channels",
-      detail: `${readyChannelCount(home)}/${availableChannelCount(home)} live surfaces`,
-      path: "/channels",
-      tone: channelReady(home) ? "success" : "warning",
-    },
-    {
-      icon: Inbox,
-      title: "Shared inbox",
-      detail: `${openConversationCount(home)} open conversations`,
-      path: "/inbox",
-      tone: openConversationCount(home) > 0 ? "brand" : "success",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Business Info guard",
-      detail: truthApproved(home) ? "Approved facts available" : "Approval required",
-      path: "/truth",
-      tone: truthApproved(home) ? "success" : "warning",
-    },
-    {
-      icon: Bot,
-      title: "Manual-first AI",
-      detail: aiOperating(home) ? "Automation operating" : "Safe replies stay guarded",
-      path: "/settings",
-      tone: aiOperating(home) ? "success" : "warning",
-    },
-  ];
-
-  return (
-    <Card padded={false} clip>
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-4 py-3.5">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Flowchart
-          </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-            Omnichannel runtime flow
-          </div>
-        </div>
-
-        <span className="inline-flex h-8 items-center gap-2 rounded-full border border-line-soft bg-surface px-3 text-[12px] font-semibold text-text-muted">
-          <span className={cx("h-1.5 w-1.5 rounded-full", aiOperating(home) ? "bg-success" : "bg-warning")} />
-          {aiOperating(home) ? "Operating" : "Guarded mode"}
-        </span>
-      </div>
-
-      <div className="grid gap-3 px-4 py-4 lg:grid-cols-4">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-
-          return (
-            <button
-              type="button"
-              key={step.title}
-              onClick={() => onNavigate(step.path)}
-              className="group relative rounded-[18px] border border-line-soft bg-white px-4 py-4 text-left transition-all duration-base ease-premium hover:-translate-y-0.5 hover:border-[rgba(var(--color-brand),0.28)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-[15px] border border-line-soft bg-surface">
-                  <Icon className={cx("h-5 w-5", toneTextClass(step.tone))} strokeWidth={2.1} />
-                </span>
-
-                {index < steps.length - 1 ? (
-                  <ArrowRight className="hidden h-5 w-5 text-text-subtle lg:block" strokeWidth={2.1} />
-                ) : null}
-              </div>
-
-              <div className="mt-4 text-[14px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-                {step.title}
-              </div>
-              <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-                {step.detail}
-              </div>
-            </button>
-          );
-        })}
       </div>
     </Card>
   );
@@ -1252,28 +667,20 @@ export default function ProductHomePage() {
   if (home.loading) return <ProductHomeLoadingSurface />;
 
   const hero = buildHero(home);
-  const tiles = buildTiles(home);
   const channels = normalizeChannels(home);
 
   return (
-    <PageCanvas className="space-y-4 pt-3 md:space-y-4 md:pt-4">
-      <CommandHero hero={hero} home={home} onAction={goFromAction} />
+    <PageCanvas className="space-y-4 pt-4">
+      <HeroSection hero={hero} home={home} onAction={goFromAction} />
 
-      <KpiGrid home={home} onNavigate={go} />
+      <MetricsRow home={home} onNavigate={go} />
 
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_350px_380px]">
-        <NextBestActionsPanel tiles={tiles} onNavigate={go} />
-        <ChannelPanel items={channels} onNavigate={go} />
-        <InboxPulsePanel home={home} onNavigate={go} />
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <WorkPanel home={home} onNavigate={go} />
+        <ChannelsPanel channels={channels} onNavigate={go} />
       </div>
 
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_400px]">
-        <BusinessKnowledgePanel home={home} onNavigate={go} />
-        <AiRuntimePanel home={home} onNavigate={go} />
-        <PerformanceOverviewPanel home={home} onNavigate={go} />
-      </div>
-
-      <OmnichannelFlowPanel home={home} onNavigate={go} />
+      <BusinessPanel home={home} onNavigate={go} />
     </PageCanvas>
   );
 }
