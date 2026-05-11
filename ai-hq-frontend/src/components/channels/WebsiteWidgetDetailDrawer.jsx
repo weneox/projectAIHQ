@@ -28,6 +28,8 @@ import {
   saveWebsiteWidgetConfig,
   startWebsiteGuidedSetup,
   getWebsiteGuidedSetupReview,
+  approveWebsiteGuidedSetupReviewItem,
+  rejectWebsiteGuidedSetupReviewItem,
 } from "../../api/channelConnect.js";
 import {
   buildWorkspaceScopedQueryKey,
@@ -278,7 +280,7 @@ function guidedStepLabel(status = "") {
   return "Pending";
 }
 
-function GuidedWebsiteSetupCard({ guidedSetup = {}, guidedReview = {}, busy = false, onPrimaryAction }) {
+function GuidedWebsiteSetupCard({ guidedSetup = {}, guidedReview = {}, busy = false, reviewBusyId = "", onPrimaryAction, onReviewAction }) {
   const setup = obj(guidedSetup);
   const steps = arr(setup.steps);
   const primaryAction = obj(setup.primaryAction);
@@ -409,6 +411,28 @@ if (!steps.length) return null;
                   </div>
                   <div className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-5 text-text-muted">
                     {s(item.valueText, "Review extracted website information.")}
+                  </div>
+
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      fullWidth
+                      disabled={Boolean(reviewBusyId)}
+                      onClick={() => onReviewAction?.("reject", item)}
+                    >
+                      Reject
+                    </Button>
+
+                    <Button
+                      type="button"
+                      fullWidth
+                      disabled={Boolean(reviewBusyId)}
+                      onClick={() => onReviewAction?.("approve", item)}
+                      rightIcon={<CheckCircle2 className="h-4 w-4" strokeWidth={2.1} />}
+                    >
+                      {reviewBusyId === s(item.candidateId || item.id) ? "Saving..." : "Approve"}
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -1412,6 +1436,30 @@ export default function WebsiteWidgetDetailDrawer({
   onClose,
 }) {
   const queryClient = useQueryClient();
+
+  const guidedReviewApproveMutation = useMutation({
+    mutationFn: ({ candidateId }) =>
+      approveWebsiteGuidedSetupReviewItem(candidateId, {
+        reason: "Approved from Website Chat guided setup.",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["channels", "webchat", "guided-setup-review"] });
+      queryClient.invalidateQueries({ queryKey: ["truth"] });
+      emitLaunchSliceRefresh();
+    },
+  });
+
+  const guidedReviewRejectMutation = useMutation({
+    mutationFn: ({ candidateId }) =>
+      rejectWebsiteGuidedSetupReviewItem(candidateId, {
+        reason: "Rejected from Website Chat guided setup.",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["channels", "webchat", "guided-setup-review"] });
+      queryClient.invalidateQueries({ queryKey: ["truth"] });
+      emitLaunchSliceRefresh();
+    },
+  });
 
   const guidedSetupReviewQuery = useQuery({
     queryKey: ["channels", "webchat", "guided-setup-review"],
@@ -2539,6 +2587,21 @@ export default function WebsiteWidgetDetailDrawer({
     return true;
   }
 
+  function handleGuidedReviewAction(action = "", item = {}) {
+    const candidateId = s(item.candidateId || item.id);
+
+    if (!candidateId) return;
+
+    if (action === "approve") {
+      guidedReviewApproveMutation.mutate({ candidateId });
+      return;
+    }
+
+    if (action === "reject") {
+      guidedReviewRejectMutation.mutate({ candidateId });
+    }
+  }
+
   function handleGuidedSetupAction(action = {}) {
     const next = obj(action);
     const actionName = s(next.action).toLowerCase();
@@ -2681,6 +2744,12 @@ export default function WebsiteWidgetDetailDrawer({
               guidedSetup={obj(statusQuery.data?.guidedSetup)}
               
               guidedReview={obj(guidedSetupReviewQuery.data)}onPrimaryAction={handleGuidedSetupAction}
+              reviewBusyId={
+                guidedReviewApproveMutation.variables?.candidateId ||
+                guidedReviewRejectMutation.variables?.candidateId ||
+                ""
+              }
+              onReviewAction={handleGuidedReviewAction}
             />
 
             <AccessHelperCard
