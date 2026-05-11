@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
@@ -53,7 +53,7 @@ function lower(value, fallback = "") {
 
 function launchChannels() {
   return CHANNELS.filter((channel) =>
-    ["website", "instagram"].includes(channel.id)
+    ["website", "instagram", "telegram"].includes(channel.id)
   );
 }
 
@@ -591,3 +591,4 @@ export default function ChannelCatalog() {
     </>
   );
 }
+
