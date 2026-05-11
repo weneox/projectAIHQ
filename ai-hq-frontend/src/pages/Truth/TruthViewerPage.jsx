@@ -743,6 +743,116 @@ function buildSourceRows(data = {}) {
   };
 }
 
+function WebsiteReviewFocusNotice() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+
+  const source = lower(params.get("source"));
+  const review = lower(params.get("review"));
+  const shouldShow =
+    source === "website" ||
+    review === "business_info" ||
+    review === "website";
+
+  if (!shouldShow) return null;
+
+  function jumpToReviewQueue() {
+    if (typeof document === "undefined") return;
+
+    const direct =
+      document.getElementById("truth-review-workbench") ||
+      document.getElementById("business-info-review") ||
+      document.getElementById("review-workbench");
+
+    if (direct?.scrollIntoView) {
+      direct.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    const nodes = Array.from(document.querySelectorAll("section, article, div"));
+    const target = nodes.find((node) => {
+      const textValue = lower(node.textContent);
+      return (
+        textValue.includes("review workbench") ||
+        textValue.includes("review queue") ||
+        textValue.includes("pending review") ||
+        textValue.includes("business info")
+      );
+    });
+
+    target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
+  return (
+    <Card padded={false} clip>
+      <div className="border-b border-line-soft bg-brand-soft px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
+              Website AI review
+            </div>
+            <div className="mt-1 text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+              Review scanned website information before the assistant uses it.
+            </div>
+            <div className="mt-1 max-w-3xl text-[13px] font-medium leading-6 text-text-muted">
+              AIHQ can extract public website facts, but they stay review-first. Approve only the information you trust, then publish to update runtime answers.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={jumpToReviewQueue}
+              rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              Jump to review
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => navigate("/channels")}
+            >
+              Back to Website setup
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 px-4 py-3 md:grid-cols-3">
+        <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Source
+          </div>
+          <div className="mt-1 text-[13.5px] font-semibold text-text">
+            Verified website scan
+          </div>
+        </div>
+
+        <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Safety
+          </div>
+          <div className="mt-1 text-[13.5px] font-semibold text-text">
+            Review-first approval
+          </div>
+        </div>
+
+        <div className="rounded-[16px] border border-line-soft bg-surface-subtle px-3 py-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Runtime
+          </div>
+          <div className="mt-1 text-[13.5px] font-semibold text-text">
+            Publish after approval
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function StatusText({ tone = "neutral", children }) {
   return (
     <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold">
@@ -2835,6 +2945,7 @@ const contractModel = useMemo(
   if (state.loading) {
     return (
       <PageCanvas>
+      <WebsiteReviewFocusNotice />
         <LoadingSurface title="Loading truth" description="Reading approved Business Info, review workbench, and runtime trust state." />
       </PageCanvas>
     );
