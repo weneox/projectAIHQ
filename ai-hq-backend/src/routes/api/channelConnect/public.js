@@ -880,6 +880,134 @@ export function createTelegramWebhookHandler({
   };
 }
 
+function buildWebsiteWidgetSessionId(req = {}) {
+  const explicit = s(req.body?.sessionId || req.body?.session_id);
+  if (explicit) return explicit.slice(0, 120);
+
+  const raw = [
+    s(req.body?.widgetId || req.query?.widgetId),
+    s(req.body?.origin || req.query?.origin || getPublicWidgetOrigin(req)),
+    s(req.get?.("user-agent")),
+    s(req.ip),
+  ].join("|");
+
+  return `web:${crypto.createHash("sha256").update(raw).digest("hex").slice(0, 24)}`;
+}
+
+function buildWebsiteWidgetMessageId({ sessionId = "", text = "" } = {}) {
+  const raw = [sessionId, text, Date.now(), crypto.randomUUID()].join("|");
+  return `website:${crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32)}`;
+}
+
+function normalizeWebsiteWidgetMessage(req = {}) {
+  const text = s(req.body?.text || req.body?.message || req.body?.messageText);
+
+  if (!text) {
+    return {
+      ok: false,
+      reasonCode: "website_widget_message_text_required",
+      response: { ok: false, error: "Message text is required." },
+    };
+  }
+
+  if (text.length > 2000) {
+    return {
+      ok: false,
+      reasonCode: "website_widget_message_too_long",
+      response: { ok: false, error: "Message is too long." },
+    };
+  }
+
+  const tenantKey = lower(req.body?.tenantKey || req.query?.tenantKey || req.body?.workspace || req.query?.workspace);
+  const widgetId = s(req.body?.widgetId || req.query?.widgetId || req.body?.id || req.query?.id);
+  const origin = s(req.body?.origin || req.query?.origin || getPublicWidgetOrigin(req));
+  const sessionId = buildWebsiteWidgetSessionId(req);
+  const externalUserId = `website-user:${sessionId}`;
+  const externalThreadId = `website-thread:${tenantKey}:${widgetId}:${sessionId}`;
+  const externalMessageId = buildWebsiteWidgetMessageId({ sessionId, text });
+
+  return {
+    ok: true,
+    tenantKey,
+    widgetId,
+    origin,
+    sessionId,
+    text,
+    ingest: {
+      tenantKey,
+      channel: "website",
+      source: "website",
+      provider: "website",
+      platform: "website",
+      externalThreadId,
+      externalUserId,
+      externalUsername: null,
+      customerName: "Website visitor",
+      externalMessageId,
+      text,
+      timestamp: Date.now(),
+      raw: {
+        widgetId,
+        origin,
+        sessionId,
+        text,
+      },
+      customerContext: {
+        fullName: "Website visitor",
+        channel: "website",
+        website: {
+          sessionId,
+          origin,
+          widgetId,
+        },
+      },
+      formData: {},
+      leadContext: {
+        source: "website_widget",
+        origin,
+      },
+      conversationContext: {
+        website: {
+          sessionId,
+          origin,
+          widgetId,
+        },
+      },
+      tenantContext: {
+        widget: {
+          widgetId,
+          origin,
+          publicSurface: true,
+        },
+      },
+      meta: {
+        source: "website",
+        provider: "website",
+        platform: "website",
+        channel: "website",
+        origin,
+        widgetId,
+        sessionId,
+      },
+    },
+  };
+}
+
+function buildWebsiteWidgetIngestRequest(req = {}, normalized = {}) {
+  return {
+    originalUrl: req.originalUrl,
+    url: req.url,
+    path: req.path,
+    method: "POST",
+    headers: {
+      "x-tenant-key": normalized.tenantKey,
+      "x-internal-token": "website-widget-public",
+      "x-channel-provider": "website",
+    },
+    body: normalized.ingest,
+  };
+}
+
 export function channelConnectPublicRoutes({
   db,
   wsHub,
@@ -899,6 +1027,96 @@ export function channelConnectPublicRoutes({
         error: s(error?.message || error),
         reasonCode: s(error?.reasonCode),
       });
+
+  router.post("/channels/webchat/message", async (req, res) => {
+    try {
+      const normalized = normalizeWebsiteWidgetMessage(req);
+
+      if (!normalized.ok) {
+        return res.status(400).json({
+          ...normalized.response,
+          reasonCode: normalized.reasonCode,
+        });
+      }
+
+      const bootstrap = await getPublicWebsiteWidgetBootstrap({
+        db,
+        req: {
+          ...req,
+          query: {
+            ...obj(req.query),
+            tenantKey: normalized.tenantKey,
+            widgetId: normalized.widgetId,
+            origin: normalized.origin,
+          },
+        },
+      });
+
+      if (bootstrap.live !== true || bootstrap.controls?.messageCaptureReady !== true) {
+        return res.status(200).json({
+          ok: false,
+          received: false,
+          live: false,
+          reasonCode: s(bootstrap.reasonCode, "website_widget_not_ready"),
+          message: s(
+            bootstrap.message,
+            "Website chat is not ready to receive messages yet."
+          ),
+        });
+      }
+
+      const validation = validateIngestRequest(normalized.ingest);
+      if (!validation.ok) {
+        return res.status(400).json(validation.response);
+      }
+
+      const captureRes = createCaptureRes();
+
+      await inboxIngestHandler(
+        buildWebsiteWidgetIngestRequest(req, normalized),
+        captureRes
+      );
+
+      const payload = captureRes.body || {};
+
+      if (payload.ok !== true) {
+        return res.status(503).json({
+          ok: false,
+          received: false,
+          reasonCode: s(payload.reasonCode, "website_widget_ingest_failed"),
+          error: s(payload.error, "Failed to receive website message."),
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        received: true,
+        live: true,
+        sessionId: normalized.sessionId,
+        threadId: s(payload.threadId || payload.thread?.id),
+        messageId: s(payload.messageId || payload.message?.id),
+        assistant: {
+          mode: bootstrap.controls?.publicAnswering === true ? "answering" : "manual_first",
+          text:
+            bootstrap.controls?.publicAnswering === true
+              ? "Thanks — your message was received."
+              : "Thanks — your message was received. Our team can review it and reply shortly.",
+        },
+      });
+    } catch (error) {
+      webhookLog.warn("webchat.message.failed", {
+        error: s(error?.message || error),
+        reasonCode: s(error?.reasonCode),
+      });
+
+      return res.status(200).json({
+        ok: false,
+        received: false,
+        reasonCode: s(error?.reasonCode, "website_widget_message_failed"),
+        message: "Website chat is temporarily unavailable.",
+      });
+    }
+  });
 
       return res.status(200).json(
         buildPublicWidgetFailClosed({
