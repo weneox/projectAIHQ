@@ -1,18 +1,20 @@
-﻿import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
-  CircleDot,
+  CircleAlert,
+  DatabaseZap,
   Globe2,
-  KeyRound,
+  Inbox,
   MessageSquare,
+  RefreshCw,
   Rocket,
-  ShieldAlert,
   ShieldCheck,
-  Users,
+  Sparkles,
 } from "lucide-react";
 
+import { getLaunchPosture } from "../api/launch.js";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import AppTag from "../components/ui/AppTag.jsx";
@@ -22,171 +24,15 @@ import AppModal, {
   AppModalFooter,
   AppModalHeader,
 } from "../components/ui/AppModal.jsx";
-import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+  PageHeader,
+} from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 
-const LAUNCH_STAGES = [
-  {
-    id: "foundation",
-    number: "1",
-    title: "Foundation",
-    subtitle: "Workspace identity, access, and basic security.",
-    description:
-      "Start with the basic workspace setup. This stage is about making sure the workspace has a clear identity and the right people have access.",
-    icon: Globe2,
-    status: "ready",
-    action: "Open settings",
-    path: "/settings",
-    checks: [
-      {
-        title: "Workspace profile",
-        description: "Name, public identity, and support contact are configured.",
-        status: "ready",
-        icon: Globe2,
-      },
-      {
-        title: "Email verification",
-        description: "Primary operator email is verified.",
-        status: "ready",
-        icon: KeyRound,
-      },
-      {
-        title: "Team access",
-        description: "Owner, admin, and operator roles are assigned correctly.",
-        status: "ready",
-        icon: Users,
-      },
-    ],
-  },
-  {
-    id: "channels",
-    number: "2",
-    title: "Channels",
-    subtitle: "Connect the places where customers message you.",
-    description:
-      "Choose which channels you want to use. This does not need to block launch; you can start with one channel and add more later.",
-    icon: MessageSquare,
-    status: "review",
-    action: "Open channels",
-    path: "/channels",
-    checks: [
-      {
-        title: "Website chat",
-        description: "Website visitor messages can enter the workspace.",
-        status: "ready",
-        icon: MessageSquare,
-      },
-      {
-        title: "Social inboxes",
-        description: "Instagram, Telegram, or other social channels can be connected.",
-        status: "review",
-        icon: CircleDot,
-      },
-      {
-        title: "Routing",
-        description: "Incoming messages can be routed into the inbox.",
-        status: "review",
-        icon: ShieldAlert,
-      },
-    ],
-  },
-  {
-    id: "customer-ops",
-    number: "3",
-    title: "Customer operations",
-    subtitle: "Turn conversations into customers, leads, and actions.",
-    description:
-      "This stage is about operational flow. Customers, leads, handoff actions, and conversation context should feel usable before you rely on the workspace daily.",
-    icon: CircleDot,
-    status: "review",
-    action: "Open customers",
-    path: "/customers",
-    checks: [
-      {
-        title: "Lead capture",
-        description: "Qualified conversations can create lead records.",
-        status: "ready",
-        icon: CheckCircle2,
-      },
-      {
-        title: "Customer records",
-        description: "Customer profiles are visible and actionable.",
-        status: "ready",
-        icon: Users,
-      },
-      {
-        title: "Human handoff",
-        description: "Operators can open threads, email, or call from context.",
-        status: "review",
-        icon: MessageSquare,
-      },
-    ],
-  },
-  {
-    id: "assistant",
-    number: "4",
-    title: "Assistant",
-    subtitle: "Prepare knowledge, answer boundaries, and review flow.",
-    description:
-      "The assistant does not need to be perfect on day one. The important thing is that it knows what it can answer, what it should not answer, and when a human should step in.",
-    icon: ShieldCheck,
-    status: "review",
-    action: "Open knowledge",
-    path: "/knowledge",
-    checks: [
-      {
-        title: "Knowledge sources",
-        description: "Trusted answer sources are connected and indexed.",
-        status: "review",
-        icon: ShieldCheck,
-      },
-      {
-        title: "Answer boundaries",
-        description: "Unsafe or uncertain answers are handled carefully.",
-        status: "review",
-        icon: ShieldAlert,
-      },
-      {
-        title: "Operator review",
-        description: "Sensitive flows can be reviewed before customer impact.",
-        status: "ready",
-        icon: CheckCircle2,
-      },
-    ],
-  },
-  {
-    id: "launch",
-    number: "5",
-    title: "Launch",
-    subtitle: "Final confidence check before real usage.",
-    description:
-      "This is a final confidence step, not a wall. Use it to review production readiness and decide what is good enough to start with.",
-    icon: Rocket,
-    status: "blocked",
-    action: "Open launch check",
-    path: "/truth",
-    checks: [
-      {
-        title: "Release identity",
-        description: "The deployed release matches the expected build.",
-        status: "review",
-        icon: ShieldCheck,
-      },
-      {
-        title: "Smoke check",
-        description: "Health, routing, and readiness checks are reviewed.",
-        status: "blocked",
-        icon: Rocket,
-      },
-      {
-        title: "Go-live note",
-        description: "Known limitations are clear before launch.",
-        status: "review",
-        icon: ShieldAlert,
-      },
-    ],
-  },
-];
+const CHANNEL_ORDER = ["website", "instagram", "telegram"];
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -196,14 +42,63 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 function titleize(value = "") {
   return s(value || "unknown")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatWhen(value = "") {
+  const raw = s(value);
+  if (!raw) return "Not available";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeStatus(value = "") {
+  const safe = lower(value);
+
+  if (["ready", "active", "connected", "ok", "complete"].includes(safe)) {
+    return "ready";
+  }
+
+  if (["attention", "review", "degraded", "testing_only", "queued", "pending"].includes(safe)) {
+    return "review";
+  }
+
+  if (["blocked", "unavailable", "failed", "error", "needs_connection", "connected_blocked"].includes(safe)) {
+    return "blocked";
+  }
+
+  return safe || "unknown";
+}
+
 function statusTone(status = "") {
-  const safe = lower(status);
+  const safe = normalizeStatus(status);
 
   if (safe === "ready") return "success";
   if (safe === "review") return "warning";
@@ -213,26 +108,247 @@ function statusTone(status = "") {
 }
 
 function statusLabel(status = "") {
-  const safe = lower(status);
+  const safe = normalizeStatus(status);
 
   if (safe === "review") return "Needs review";
   return titleize(safe);
 }
 
 function stageStatus(stage = {}) {
-  const checks = Array.isArray(stage.checks) ? stage.checks : [];
+  const checks = arr(stage.checks);
 
-  if (checks.some((check) => lower(check.status) === "blocked")) return "blocked";
-  if (checks.some((check) => lower(check.status) === "review")) return "review";
+  if (checks.some((check) => normalizeStatus(check.status) === "blocked")) {
+    return "blocked";
+  }
 
-  return "ready";
+  if (checks.some((check) => normalizeStatus(check.status) === "review")) {
+    return "review";
+  }
+
+  if (checks.length && checks.every((check) => normalizeStatus(check.status) === "ready")) {
+    return "ready";
+  }
+
+  return normalizeStatus(stage.status || "unknown");
 }
 
 function stageSummary(stage = {}) {
-  const checks = Array.isArray(stage.checks) ? stage.checks : [];
-  const ready = checks.filter((check) => lower(check.status) === "ready").length;
+  const checks = arr(stage.checks);
+  const ready = checks.filter((check) => normalizeStatus(check.status) === "ready").length;
 
-  return `${ready}/${checks.length} ready`;
+  return checks.length ? `${ready}/${checks.length} ready` : statusLabel(stageStatus(stage));
+}
+
+function pickBlockers(payload = {}, surface = "") {
+  return arr(payload.blockers).filter((blocker) => {
+    if (!surface) return true;
+    return lower(blocker.surface) === lower(surface);
+  });
+}
+
+function buildCheck({ title, description, status, icon, reasonCode = "", message = "" }) {
+  return {
+    title,
+    description,
+    status: normalizeStatus(status),
+    icon,
+    reasonCode,
+    message,
+  };
+}
+
+function channelLabel(id = "") {
+  if (id === "website") return "Website chat";
+  if (id === "instagram") return "Instagram DM";
+  if (id === "telegram") return "Telegram bot";
+  return titleize(id);
+}
+
+function buildStages(payload = {}) {
+  const overall = obj(payload.overall);
+  const truth = obj(payload.truth);
+  const runtime = obj(payload.runtime);
+  const inbox = obj(payload.inbox);
+  const channels = obj(payload.channels);
+  const channelSummary = obj(payload.channelSummary);
+  const blockers = arr(payload.blockers);
+
+  const channelChecks = CHANNEL_ORDER.map((id) => {
+    const channel = obj(channels[id]);
+    const status = channel.deliveryReady
+      ? "ready"
+      : channel.connected
+        ? "review"
+        : "blocked";
+
+    return buildCheck({
+      title: channel.label || channelLabel(id),
+      description:
+        channel.readiness?.message ||
+        channel.message ||
+        channel.reasonCode ||
+        "Channel posture was returned by backend.",
+      status,
+      icon: MessageSquare,
+      reasonCode: channel.reasonCode,
+      message: channel.readiness?.message || channel.message,
+    });
+  });
+
+  const inboxAvailable = inbox.available === true;
+  const inboxPressure =
+    n(inbox.unreadCount) +
+    n(inbox.openCount) +
+    n(inbox.handoffCount) +
+    n(inbox.pendingOutboundCount) +
+    n(inbox.failedOutboundCount) +
+    n(inbox.retryingOutboundCount);
+
+  return [
+    {
+      id: "truth",
+      number: "1",
+      title: "Business Info",
+      subtitle: truth.ready
+        ? "Approved business info is available."
+        : "Business info approval is required.",
+      description:
+        truth.message ||
+        "Launch depends on approved business facts, profile, and customer-facing truth.",
+      icon: ShieldCheck,
+      status: truth.status,
+      action: { label: "Open Business Info", path: "/truth" },
+      blockers: pickBlockers(payload, "truth"),
+      checks: [
+        buildCheck({
+          title: "Approved truth",
+          description: truth.message || "Approved business information must exist.",
+          status: truth.ready ? "ready" : truth.status || "blocked",
+          icon: ShieldCheck,
+          reasonCode: truth.reasonCode,
+          message: truth.message,
+        }),
+        buildCheck({
+          title: "Latest version",
+          description: truth.latestVersionId
+            ? `Version ${truth.latestVersionId}`
+            : "No approved version id is exposed.",
+          status: truth.latestVersionId ? "ready" : "review",
+          icon: CheckCircle2,
+        }),
+      ],
+    },
+    {
+      id: "runtime",
+      number: "2",
+      title: "Runtime authority",
+      subtitle: runtime.ready
+        ? "Runtime authority is ready."
+        : "Runtime authority is not ready.",
+      description:
+        runtime.message ||
+        "Approved runtime authority must be available before live automation can be trusted.",
+      icon: DatabaseZap,
+      status: runtime.status,
+      action: { label: "Open setup review", path: "/home?assistant=setup" },
+      blockers: pickBlockers(payload, "runtime"),
+      checks: [
+        buildCheck({
+          title: "Runtime authority",
+          description: runtime.message || "Runtime authority status is provided by backend.",
+          status: runtime.ready ? "ready" : runtime.status || "blocked",
+          icon: DatabaseZap,
+          reasonCode: runtime.reasonCode,
+          message: runtime.message,
+        }),
+      ],
+    },
+    {
+      id: "channels",
+      number: "3",
+      title: "Launch channels",
+      subtitle:
+        channelSummary.readyCount > 0
+          ? `${channelSummary.readyCount} delivery-ready channel(s).`
+          : "No launch channel is delivery-ready.",
+      description:
+        "Website chat, Instagram DM, or Telegram private bot chat must be delivery-ready before launch.",
+      icon: Globe2,
+      status: channelSummary.readyCount > 0 ? "ready" : "blocked",
+      action: { label: "Open Channels", path: "/channels" },
+      blockers: blockers.filter((blocker) =>
+        ["channels", "website", "instagram", "telegram"].includes(lower(blocker.surface))
+      ),
+      checks: channelChecks,
+    },
+    {
+      id: "inbox",
+      number: "4",
+      title: "Inbox pressure",
+      subtitle: inboxAvailable
+        ? inboxPressure > 0
+          ? "Inbox is available and needs attention."
+          : "Inbox is available."
+        : "Inbox posture is unavailable.",
+      description:
+        "Launch should know whether unread, open, handoff, or failed outbound work is waiting.",
+      icon: Inbox,
+      status: inboxAvailable ? (inboxPressure > 0 ? "review" : "ready") : "blocked",
+      action: { label: "Open Inbox", path: "/inbox" },
+      blockers: pickBlockers(payload, "inbox"),
+      checks: [
+        buildCheck({
+          title: "Inbox available",
+          description: inboxAvailable
+            ? "Inbox pressure summary is available."
+            : "Inbox pressure summary could not be loaded.",
+          status: inboxAvailable ? "ready" : "blocked",
+          icon: Inbox,
+        }),
+        buildCheck({
+          title: "Unread messages",
+          description: `${n(inbox.unreadCount)} unread · ${n(inbox.openCount)} open · ${n(inbox.handoffCount)} handoff`,
+          status: n(inbox.unreadCount) > 0 ? "review" : "ready",
+          icon: MessageSquare,
+        }),
+        buildCheck({
+          title: "Outbound health",
+          description: `${n(inbox.pendingOutboundCount)} pending · ${n(inbox.failedOutboundCount)} failed · ${n(inbox.retryingOutboundCount)} retrying`,
+          status: n(inbox.failedOutboundCount) > 0 ? "blocked" : "ready",
+          icon: CircleAlert,
+        }),
+      ],
+    },
+    {
+      id: "overall",
+      number: "5",
+      title: "Go-live decision",
+      subtitle: overall.title || "Launch posture decision.",
+      description:
+        overall.message ||
+        "The final decision is calculated from business info, runtime authority, channels, and inbox posture.",
+      icon: Rocket,
+      status: overall.status,
+      action: overall.primaryAction || { label: "Open Inbox", path: "/inbox" },
+      blockers,
+      checks: [
+        buildCheck({
+          title: "Launch ready",
+          description: overall.message || "Backend calculated the final launch posture.",
+          status: overall.launchReady ? "ready" : overall.status || "blocked",
+          icon: Rocket,
+        }),
+        buildCheck({
+          title: "Repair actions",
+          description: arr(payload.repairActions).length
+            ? `${arr(payload.repairActions).length} repair action(s) available.`
+            : "No repair actions are required.",
+          status: arr(payload.repairActions).length ? "review" : "ready",
+          icon: Sparkles,
+        }),
+      ],
+    },
+  ];
 }
 
 function StageDots({ checks = [] }) {
@@ -243,9 +359,9 @@ function StageDots({ checks = [] }) {
           key={check.title}
           className={cx(
             "h-2.5 w-2.5 rounded-full border",
-            lower(check.status) === "ready"
+            normalizeStatus(check.status) === "ready"
               ? "border-success bg-success"
-              : lower(check.status) === "blocked"
+              : normalizeStatus(check.status) === "blocked"
                 ? "border-danger bg-danger"
                 : "border-warning bg-warning"
           )}
@@ -325,10 +441,7 @@ function Connector({ ready = false }) {
           {Array.from({ length: 5 }, (_, index) => (
             <span
               key={`connector-${index}`}
-              className={cx(
-                "h-1.5 w-1.5 rounded-full",
-                ready ? "bg-success" : "bg-line"
-              )}
+              className={cx("h-1.5 w-1.5 rounded-full", ready ? "bg-success" : "bg-line")}
             />
           ))}
         </div>
@@ -340,7 +453,7 @@ function Connector({ ready = false }) {
 
 function CheckRow({ check }) {
   const Icon = check.icon || CheckCircle2;
-  const status = lower(check.status);
+  const status = normalizeStatus(check.status);
 
   return (
     <div className="grid gap-3 rounded-md border border-line-soft bg-white p-4 md:grid-cols-[42px_minmax(0,1fr)_124px] md:items-center">
@@ -364,6 +477,11 @@ function CheckRow({ check }) {
         <div className="mt-0.5 text-[12.5px] font-medium leading-5 text-text-muted">
           {check.description}
         </div>
+        {check.reasonCode ? (
+          <div className="mt-1 text-[11.5px] font-semibold text-text-subtle">
+            {check.reasonCode}
+          </div>
+        ) : null}
       </div>
 
       <div className="md:text-right">
@@ -371,6 +489,32 @@ function CheckRow({ check }) {
           {statusLabel(check.status)}
         </AppTag>
       </div>
+    </div>
+  );
+}
+
+function BlockerRow({ blocker, onAction }) {
+  const action = obj(blocker.nextAction);
+
+  return (
+    <div className="rounded-md border border-danger/20 bg-danger-soft px-4 py-3">
+      <div className="text-[13px] font-semibold text-text">
+        {blocker.title || titleize(blocker.reasonCode)}
+      </div>
+      <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
+        {blocker.message || blocker.reasonCode}
+      </div>
+
+      {action.path ? (
+        <button
+          type="button"
+          onClick={() => onAction(action.path)}
+          className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-brand"
+        >
+          {action.label || "Open repair action"}
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.1} />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -383,8 +527,14 @@ function StageDialog({ stage, onClose }) {
   const Icon = stage.icon || Rocket;
   const status = stageStatus(stage);
 
+  function go(path = "") {
+    if (!path) return;
+    navigate(path);
+    onClose();
+  }
+
   return (
-    <AppModal open={Boolean(stage)} onClose={onClose} maxWidth="max-w-[720px]">
+    <AppModal open={Boolean(stage)} onClose={onClose} maxWidth="max-w-[760px]">
       <AppModalHeader>
         <div className="flex min-w-0 items-start gap-5">
           <div
@@ -404,7 +554,7 @@ function StageDialog({ stage, onClose }) {
             <div className="flex flex-wrap items-center gap-2">
               <Icon className="h-6 w-6 text-text" strokeWidth={1.9} />
               <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
-                Launch stage
+                Live launch posture
               </div>
             </div>
 
@@ -412,7 +562,7 @@ function StageDialog({ stage, onClose }) {
               {stage.title}
             </h2>
 
-            <p className="mt-2 max-w-[560px] text-[13.5px] font-medium leading-6 text-text-muted">
+            <p className="mt-2 max-w-[580px] text-[13.5px] font-medium leading-6 text-text-muted">
               {stage.description}
             </p>
 
@@ -432,6 +582,21 @@ function StageDialog({ stage, onClose }) {
         {stage.checks.map((check) => (
           <CheckRow key={check.title} check={check} />
         ))}
+
+        {arr(stage.blockers).length ? (
+          <div className="mt-2 grid gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Backend blockers
+            </div>
+            {arr(stage.blockers).map((blocker, index) => (
+              <BlockerRow
+                key={blocker.id || blocker.reasonCode || index}
+                blocker={blocker}
+                onAction={go}
+              />
+            ))}
+          </div>
+        ) : null}
       </AppModalBody>
 
       <AppModalFooter className="bg-white">
@@ -443,84 +608,160 @@ function StageDialog({ stage, onClose }) {
           type="button"
           size="md"
           variant={status === "blocked" ? "primary" : "secondary"}
-          onClick={() => navigate(stage.path)}
+          onClick={() => go(stage.action?.path)}
           rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
         >
-          {stage.action}
+          {stage.action?.label || "Open"}
         </Button>
       </AppModalFooter>
     </AppModal>
   );
 }
 
+function SummaryCard({ payload, stages }) {
+  const overall = obj(payload.overall);
+  const ready = stages.filter((stage) => stageStatus(stage) === "ready").length;
+  const review = stages.filter((stage) => stageStatus(stage) === "review").length;
+  const blocked = stages.filter((stage) => stageStatus(stage) === "blocked").length;
+
+  return (
+    <Card padded={false} clip>
+      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
+        <div>
+          <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+            {overall.title || "Launch posture"}
+          </div>
+          <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
+            {overall.message || "Live readiness calculated by backend launch posture."}
+          </div>
+          <div className="mt-2 text-[12px] font-semibold text-text-subtle">
+            Generated: {formatWhen(payload.generatedAt)}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <AppTag tone={statusTone(overall.status)} dot>
+            {statusLabel(overall.status)}
+          </AppTag>
+          <AppTag tone="success" dot>
+            {ready} ready
+          </AppTag>
+          <AppTag tone="warning" dot>
+            {review} review
+          </AppTag>
+          <AppTag tone="danger" dot>
+            {blocked} blocked
+          </AppTag>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function LaunchChecklist() {
+  const [payload, setPayload] = useState(null);
   const [selectedStage, setSelectedStage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
 
-  const summary = useMemo(() => {
-    const statuses = LAUNCH_STAGES.map((stage) => stageStatus(stage));
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-    return {
-      ready: statuses.filter((status) => status === "ready").length,
-      review: statuses.filter((status) => status === "review").length,
-      blocked: statuses.filter((status) => status === "blocked").length,
-      total: statuses.length,
-    };
+    setError("");
+
+    try {
+      const next = await getLaunchPosture();
+      setPayload(next || null);
+    } catch (err) {
+      setPayload(null);
+      setError(
+        s(err?.payload?.error || err?.payload?.reason || err?.payload?.message || err?.message) ||
+          "Launch posture could not be loaded."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const stages = useMemo(() => buildStages(payload || {}), [payload]);
+
+  if (loading) {
+    return (
+      <PageCanvas>
+        <LoadingSurface
+          title="Loading launch posture"
+          description="Reading live launch readiness from backend."
+          rows={5}
+        />
+      </PageCanvas>
+    );
+  }
 
   return (
     <PageCanvas>
       <PageHeader
-        title="Launch guide"
-        description="A simple path for preparing the workspace. Open any stage to review the details when you need them."
+        title="Launch command"
+        description="Backend-backed launch readiness for Business Info, runtime authority, channels, and inbox posture."
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            loading={refreshing}
+            onClick={() => load({ silent: true })}
+            leftIcon={!refreshing ? <RefreshCw className="h-4 w-4" strokeWidth={2.1} /> : undefined}
+          >
+            Refresh
+          </Button>
+        }
       />
 
-      <Card padded={false} clip>
-        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
-          <div>
-            <div className="text-[17px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              Launch stages
-            </div>
-            <div className="mt-1 text-[13.5px] font-medium leading-6 text-text-muted">
-              Use this as a guide, not a blocker. You can prepare stages gradually and come back later.
-            </div>
+      {error ? (
+        <InlineNotice tone="danger" title="Launch posture unavailable" description={error} />
+      ) : null}
+
+      {payload ? (
+        <>
+          <SummaryCard payload={payload} stages={stages} />
+
+          <div className="grid w-full gap-0">
+            {stages.map((stage, index) => {
+              const status = stageStatus(stage);
+              const isLast = index === stages.length - 1;
+
+              return (
+                <div key={stage.id}>
+                  <StageNode
+                    stage={stage}
+                    active={selectedStage?.id === stage.id}
+                    onOpen={setSelectedStage}
+                  />
+
+                  {!isLast ? <Connector ready={status === "ready"} /> : null}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <AppTag tone="success" dot>
-              {summary.ready} ready
-            </AppTag>
-            <AppTag tone="warning" dot>
-              {summary.review} review
-            </AppTag>
-            <AppTag tone="danger" dot>
-              {summary.blocked} blocked
-            </AppTag>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid w-full gap-0">
-        {LAUNCH_STAGES.map((stage, index) => {
-          const status = stageStatus(stage);
-          const isLast = index === LAUNCH_STAGES.length - 1;
-
-          return (
-            <div key={stage.id}>
-              <StageNode
-                stage={stage}
-                active={selectedStage?.id === stage.id}
-                onOpen={setSelectedStage}
-              />
-
-              {!isLast ? <Connector ready={status === "ready"} /> : null}
-            </div>
-          );
-        })}
-      </div>
-
-      <StageDialog stage={selectedStage} onClose={() => setSelectedStage(null)} />
+          <StageDialog stage={selectedStage} onClose={() => setSelectedStage(null)} />
+        </>
+      ) : !error ? (
+        <InlineNotice
+          tone="warning"
+          title="No launch payload"
+          description="The launch posture request completed but did not return a usable payload."
+        />
+      ) : null}
     </PageCanvas>
   );
 }
-
-
