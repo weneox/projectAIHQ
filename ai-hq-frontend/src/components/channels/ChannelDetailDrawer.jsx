@@ -27,7 +27,6 @@ import {
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
-import { getChannelStatusMeta } from "./channelCatalogModel.js";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
 import Card from "../ui/Card.jsx";
