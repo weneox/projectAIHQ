@@ -12,7 +12,6 @@ import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
 import Login from "./pages/Login.jsx";
 import Inbox from "./pages/Inbox.jsx";
 import ProductHomePage from "./surfaces/home/ProductHomePage.jsx";
-import Welcome from "./pages/Welcome.jsx";
 import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
 import ChannelCatalog from "./pages/ChannelCatalog.jsx";
 import LaunchChecklist from "./pages/LaunchChecklist.jsx";
@@ -220,7 +219,7 @@ export default function App() {
             element={<Navigate to="/home?assistant=setup" replace />}
           />
 
-          <Route path="welcome" element={<Welcome />} />
+          <Route path="welcome" element={<Navigate to="/home" replace />} />
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
