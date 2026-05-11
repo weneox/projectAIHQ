@@ -358,13 +358,13 @@ function CenterChannelModal({ open, onClose, children }) {
       />
 
       <div
-        className="relative w-full max-w-[880px]"
+        className="relative w-full max-w-[720px]"
         style={{
           animation: "channelModalIn 160ms cubic-bezier(0.16, 1, 0.3, 1)",
           willChange: "opacity, transform",
         }}
       >
-        <div className="h-[min(730px,calc(100vh-44px))] overflow-hidden rounded-md border border-white/70 bg-surface shadow-[0_34px_90px_-54px_rgba(15,23,42,0.86)]">
+        <div className="h-[min(560px,calc(100vh-120px))] overflow-hidden rounded-md border border-white/70 bg-surface shadow-[0_34px_90px_-54px_rgba(15,23,42,0.86)]">
           {children}
         </div>
       </div>

@@ -1,4 +1,9 @@
-import { useState } from "react";
+﻿const fs = require("fs");
+const path = require("path");
+
+const file = path.join(process.cwd(), "ai-hq-frontend/src/components/channels/ChannelDetailDrawer.jsx");
+
+const code = `import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Inbox, KeyRound, RefreshCw, Send, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -85,7 +90,7 @@ function accountHandle(status = "") {
     s(status?.botUsername);
 
   if (!handle) return "";
-  return handle.startsWith("@") ? handle : `@${handle}`;
+  return handle.startsWith("@") ? handle : \`@\${handle}\`;
 }
 
 function stateLabel(status = {}) {
@@ -271,7 +276,7 @@ function ConnectionCard({ channel, status, loading, onRefresh }) {
           <StatusDot tone={tone}>{stateLabel(status)}</StatusDot>
 
           <h2 className="mt-3 truncate text-[24px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
-            {connected ? `${channel?.name} is connected` : `Connect ${channel?.name}`}
+            {connected ? \`\${channel?.name} is connected\` : \`Connect \${channel?.name}\`}
           </h2>
 
           <p className="mt-2 text-[13px] font-medium leading-6 text-text-muted">
@@ -748,3 +753,7 @@ export default function ChannelDetailDrawer(props) {
 
   return <StandardChannelDetailDrawer {...props} />;
 }
+`;
+
+fs.writeFileSync(file, code, "utf8");
+console.log("rewrote ChannelDetailDrawer cleanly");
