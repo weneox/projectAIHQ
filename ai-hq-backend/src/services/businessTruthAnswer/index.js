@@ -9,6 +9,28 @@ import { composeRetrievedTruthAnswerWithModel } from "./modelComposer.js";
 import { validateApprovedTruthAnswer } from "./validator.js";
 import { arr, normalizeIsoLanguage, s } from "./normalize.js";
 
+const SAFE_DIRECT_APPROVED_TRUTH_INTENTS = new Set([
+  "smalltalk.greeting",
+  "smalltalk.gratitude",
+  "clarify.unclear",
+  "support.request",
+  "handoff.request",
+]);
+
+function isSafeDirectApprovedTruthIntent(classification = {}) {
+  const intents = arr(classification.intents);
+  const primaryIntent = s(classification.primaryIntent);
+  const candidates = intents.length ? intents : [primaryIntent];
+
+  return candidates.some((intent) =>
+    SAFE_DIRECT_APPROVED_TRUTH_INTENTS.has(s(intent))
+  );
+}
+
+function retrievalHasGrounding(retrieval = {}) {
+  return retrieval?.ok === true && arr(retrieval.matches).length > 0;
+}
+
 function buildAnswerPayload({
   classification = {},
   composed = {},
@@ -164,6 +186,17 @@ export async function answerFromApprovedTruth({
     classification,
     facts,
   });
+
+  if (!composed && isSafeDirectApprovedTruthIntent(classification)) {
+    composed = composeApprovedTruthAnswer({
+      classification,
+      facts,
+    });
+  }
+
+  if (!composed && !retrievalHasGrounding(retrieval)) {
+    return null;
+  }
 
   if (!composed) {
     composed = composeApprovedTruthAnswer({
