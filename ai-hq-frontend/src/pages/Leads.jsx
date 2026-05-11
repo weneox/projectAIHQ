@@ -321,7 +321,14 @@ function priorityTone(priority = "") {
   return "brand";
 }
 
-function sourceTone() {
+function sourceTone(source = "") {
+  const safe = lower(source);
+
+  if (["website", "website chat"].includes(safe)) return "brand";
+  if (["instagram", "facebook", "telegram", "whatsapp"].includes(safe)) return "info";
+  if (safe === "email") return "neutral";
+  if (safe === "manual") return "warning";
+
   return "neutral";
 }
 
@@ -701,8 +708,12 @@ function LeadsTable({
           ) : (
             <AppTableEmptyState
               icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
-              title="No matching leads"
-              description="Adjust the active filters to bring sales opportunities back into view."
+              title={activeFilterCount ? "No matching leads" : "No leads captured yet"}
+              description={
+                activeFilterCount
+                  ? "Adjust the active filters to bring sales opportunities back into view."
+                  : "The backend returned an empty lead list. New qualified conversations will appear here when lead capture creates real records."
+              }
             />
           )}
         </div>

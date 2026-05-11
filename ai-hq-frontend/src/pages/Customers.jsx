@@ -633,8 +633,12 @@ function CustomerTable({
           ) : (
             <AppTableEmptyState
               icon={<Users className="h-5 w-5" strokeWidth={1.9} />}
-              title="No matching customers"
-              description="Adjust the active filters to bring customer records back into view."
+              title={activeFilterCount ? "No matching customers" : "No customer records yet"}
+              description={
+                activeFilterCount
+                  ? "Adjust the active filters to bring customer records back into view."
+                  : "The backend returned an empty customer list. Converted or customer-level records will appear here when real pipeline data exists."
+              }
             />
           )}
         </div>
