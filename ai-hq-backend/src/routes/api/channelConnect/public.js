@@ -13,6 +13,8 @@ import {
   getTelegramSecrets,
   getTenantByKey,
 } from "./repository.js";
+import { getWebsiteWidgetStatus } from "./website.js";
+import { normalizeWidgetConfig, resolveWidgetEnabled } from "../websiteWidget/config.js";
 import {
   TELEGRAM_BOT_TOKEN_SECRET_KEY,
   TELEGRAM_WEBHOOK_ROUTE_TOKEN_SECRET_KEY,
@@ -343,6 +345,155 @@ function createCaptureRes() {
     json(payload) {
       this.body = payload;
       return this;
+    },
+  };
+}
+
+function getPublicWidgetOrigin(req = {}) {
+  return s(
+    req.get?.("origin") ||
+      req.get?.("referer") ||
+      req.query?.origin ||
+      req.body?.origin ||
+      ""
+  );
+}
+
+function normalizeOriginHost(value = "") {
+  const raw = s(value).toLowerCase();
+  if (!raw) return "";
+
+  try {
+    return s(new URL(raw).hostname).replace(/^www\./i, "");
+  } catch {
+    return raw
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split("/")[0]
+      .split("?")[0]
+      .split("#")[0]
+      .trim();
+  }
+}
+
+function originAllowedForWidget(origin = "", config = {}) {
+  const host = normalizeOriginHost(origin);
+  if (!host) return false;
+
+  const allowedDomains = Array.isArray(config.allowedDomains)
+    ? config.allowedDomains.map(normalizeOriginHost).filter(Boolean)
+    : [];
+
+  const allowedOrigins = Array.isArray(config.allowedOrigins)
+    ? config.allowedOrigins.map(normalizeOriginHost).filter(Boolean)
+    : [];
+
+  return [...allowedDomains, ...allowedOrigins].some((item) => item === host);
+}
+
+function buildPublicWidgetFailClosed({
+  reasonCode = "website_widget_not_ready",
+  message = "Website chat is not live yet.",
+  status = 200,
+} = {}) {
+  return {
+    ok: false,
+    live: false,
+    status,
+    reasonCode,
+    message,
+    assistant: {
+      title: "Website chat",
+      subtitle: "This widget is guarded until setup is complete.",
+      statusLabel: "Setup required",
+    },
+  };
+}
+
+async function getPublicWebsiteWidgetBootstrap({ db, req } = {}) {
+  const tenantKey = lower(req?.query?.tenantKey || req?.query?.workspace || req?.query?.tenant);
+  const widgetId = s(req?.query?.widgetId || req?.query?.id || req?.query?.w);
+  const origin = getPublicWidgetOrigin(req);
+
+  if (!tenantKey || !widgetId) {
+    return buildPublicWidgetFailClosed({
+      reasonCode: "website_widget_bootstrap_missing_identity",
+      message: "Widget identity is missing.",
+    });
+  }
+
+  const status = await getWebsiteWidgetStatus({
+    db,
+    req: {
+      ...req,
+      headers: {
+        ...obj(req?.headers),
+        "x-tenant-key": tenantKey,
+      },
+      query: {
+        ...obj(req?.query),
+        tenantKey,
+      },
+    },
+  });
+
+  const config = normalizeWidgetConfig(status.widgetConfig, {
+    defaultEnabled: false,
+  });
+
+  if (s(config.publicWidgetId) !== widgetId) {
+    return buildPublicWidgetFailClosed({
+      reasonCode: "website_widget_id_mismatch",
+      message: "This widget install ID is not valid for the selected workspace.",
+    });
+  }
+
+  if (config.enabled !== true || resolveWidgetEnabled(status) !== true) {
+    return buildPublicWidgetFailClosed({
+      reasonCode: "website_widget_disabled",
+      message: "Website chat is currently disabled.",
+    });
+  }
+
+  const launch = obj(status.launchReadiness);
+  if (launch.productionLaunchAllowed !== true && launch.productionReady !== true) {
+    return buildPublicWidgetFailClosed({
+      reasonCode: s(launch.reasonCode, "website_widget_not_production_ready"),
+      message: s(
+        launch.message,
+        "Website chat is guarded until domain verification and runtime readiness are complete."
+      ),
+    });
+  }
+
+  if (!originAllowedForWidget(origin, config)) {
+    return buildPublicWidgetFailClosed({
+      reasonCode: "website_widget_origin_not_allowed",
+      message: "This website origin is not allowed to load the widget.",
+    });
+  }
+
+  return {
+    ok: true,
+    live: true,
+    reasonCode: "",
+    tenantKey,
+    widgetId,
+    origin,
+    assistant: {
+      title: s(config.title, "Website chat"),
+      subtitle: s(config.subtitle, "Ask a question and our team will help you."),
+      accentColor: s(config.accentColor, "#0f172a"),
+      statusLabel: "Live",
+      initialPrompts: Array.isArray(config.initialPrompts)
+        ? config.initialPrompts.slice(0, 4)
+        : [],
+    },
+    controls: {
+      manualFirst: true,
+      approvedTruthOnly: true,
+      publicAnswering: false,
+      messageCaptureReady: true,
     },
   };
 }
@@ -738,6 +889,25 @@ export function channelConnectPublicRoutes({
   applyHandoff,
 } = {}) {
   const router = express.Router();
+
+  router.get("/channels/webchat/bootstrap", async (req, res) => {
+    try {
+      const payload = await getPublicWebsiteWidgetBootstrap({ db, req });
+      return res.status(payload.status || 200).json(payload);
+    } catch (error) {
+      webhookLog.warn("webchat.bootstrap.failed", {
+        error: s(error?.message || error),
+        reasonCode: s(error?.reasonCode),
+      });
+
+      return res.status(200).json(
+        buildPublicWidgetFailClosed({
+          reasonCode: s(error?.reasonCode, "website_widget_bootstrap_failed"),
+          message: "Website chat is temporarily unavailable.",
+        })
+      );
+    }
+  });
 
   router.post(
     "/channels/telegram/webhook/:tenantKey/:routeToken",
