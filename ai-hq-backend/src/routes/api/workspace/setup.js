@@ -1,5 +1,5 @@
 // src/routes/api/workspace/setup.js
-// FINAL v3.2 — workspace setup routes with unified source + manual analyze
+// FINAL v3.2 - workspace setup routes with unified source + manual analyze
 // fixes:
 // - keep source import flow as-is
 // - add manual/voice-ready unified analyze endpoint
@@ -12,8 +12,8 @@ import {
   importGoogleMapsSource,
   importSourceBundle,
   importSource,
-} from "../../../services/workspace/import.js";
-import { runSetupIntakeAnalyze } from "../../../services/workspace/intakeAnalyze.js";
+  runSetupIntakeAnalyze,
+} from "../../../platform/sourceSync/index.js";
 import { pickWorkspaceActor } from "./shared.js";
 import {
   getCurrentSetupReview,
