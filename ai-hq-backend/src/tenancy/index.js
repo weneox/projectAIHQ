@@ -1,10 +1,19 @@
-import { cfg } from "../config.js";
+﻿import { cfg } from "../config.js";
 import {
   getAuthTenantKey,
   getAuthTenantId,
   getRequestedTenantKey,
   getRequestedTenantId,
 } from "../utils/auth.js";
+
+export {
+  resolveTenantContext,
+  resolveTenantContextDefault,
+  getTenantContext,
+  attachTenantContext,
+  createRequireTenantContext,
+  createRequireTenantContextDefault,
+} from "../platform/tenancy/index.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
