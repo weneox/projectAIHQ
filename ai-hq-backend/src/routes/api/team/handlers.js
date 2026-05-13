@@ -28,6 +28,14 @@ import {
 } from "./repository.js";
 import { hashUserPassword } from "../../../utils/adminAuth.js";
 
+function isOwnerUser(user = {}) {
+  return cleanLower(user?.role || "") === "owner";
+}
+
+function isActiveOwnerStatus(status = "") {
+  return ["active", "enabled"].includes(cleanLower(status || "active"));
+}
+
 export function createTeamHandlers({ db }) {
   async function getTeam(req, res) {
     try {
@@ -116,6 +124,10 @@ export function createTeamHandlers({ db }) {
         return bad(res, "user_email is required");
       }
 
+      if (input.role === "owner") {
+        return bad(res, "Owner seats are created through workspace ownership flows");
+      }
+
       const existing = await getTenantUserByEmail(db, tenant.id, input.user_email);
       if (existing?.id) {
         return bad(res, "User already exists for this tenant", {
@@ -170,6 +182,16 @@ export function createTeamHandlers({ db }) {
 
       const input = buildUserInput(merged);
 
+      if (isOwnerUser(current)) {
+        if (input.role !== "owner") {
+          return bad(res, "Owner role cannot be changed from Team");
+        }
+
+        if (!isActiveOwnerStatus(input.status)) {
+          return bad(res, "Owner access cannot be disabled from Team");
+        }
+      }
+
       if (input.user_email && input.user_email !== cleanLower(current.user_email)) {
         const existingByEmail = await getTenantUserByEmail(db, tenant.id, input.user_email);
         if (existingByEmail?.id && existingByEmail.id !== current.id) {
@@ -216,6 +238,15 @@ export function createTeamHandlers({ db }) {
       const status = cleanLower(req.body?.status || "");
       if (!status) {
         return bad(res, "status is required");
+      }
+
+      const current = await getTenantUserById(db, tenant.id, userId);
+      if (!current?.id) {
+        return res.status(404).json({ ok: false, error: "User not found" });
+      }
+
+      if (isOwnerUser(current) && !isActiveOwnerStatus(status)) {
+        return bad(res, "Owner access cannot be disabled from Team");
       }
 
       const user = await setTenantUserStatus(db, tenant.id, userId, status);
@@ -306,6 +337,10 @@ export function createTeamHandlers({ db }) {
       const current = await getTenantUserById(db, tenant.id, userId);
       if (!current?.id) {
         return res.status(404).json({ ok: false, error: "User not found" });
+      }
+
+      if (isOwnerUser(current)) {
+        return bad(res, "Owner users cannot be deleted from Team");
       }
 
       const deleted = await deleteTenantUser(db, tenant.id, userId);

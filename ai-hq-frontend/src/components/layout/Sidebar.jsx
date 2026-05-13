@@ -5,9 +5,7 @@ import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import { cx } from "../../lib/cx.js";
 import {
-  PRIMARY_SECTIONS,
-  SECONDARY_SECTIONS,
-  UTILITY_SECTIONS,
+  NAVIGATION_GROUPS,
 } from "./shellNavigation.js";
 
 const SIDEBAR_WIDTH = 190;
@@ -20,12 +18,6 @@ const SHELL_CHROME_SURFACE =
 
 const SIDEBAR_EDGE_SHADOW =
   "inset -1px 0 0 rgba(15,23,42,0.082), inset -2px 0 0 rgba(255,255,255,0.74), 14px 0 34px -32px rgba(15,23,42,0.32)";
-
-const NAV_ITEMS = [
-  ...PRIMARY_SECTIONS,
-  ...SECONDARY_SECTIONS,
-  ...UTILITY_SECTIONS,
-];
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
@@ -158,6 +150,41 @@ function SidebarItem({ item, shellStats = {}, onNavigate, collapsed = false }) {
   );
 }
 
+function SidebarGroup({
+  group,
+  groupIndex = 0,
+  shellStats = {},
+  onNavigate,
+  collapsed = false,
+}) {
+  const items = Array.isArray(group?.items) ? group.items : [];
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-1" aria-label={group.label}>
+      {collapsed ? (
+        groupIndex > 0 ? (
+          <div className="mx-[18px] my-2 h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.13),rgba(15,23,42,0))]" />
+        ) : null
+      ) : (
+        <div className="px-[17px] pb-1 pt-2 text-[10px] font-semibold uppercase tracking-normal text-text-subtle/75">
+          {group.label}
+        </div>
+      )}
+
+      {items.map((item) => (
+        <SidebarItem
+          key={item.id}
+          item={item}
+          shellStats={shellStats}
+          onNavigate={onNavigate}
+          collapsed={collapsed}
+        />
+      ))}
+    </div>
+  );
+}
+
 function CollapseControl({ collapsed = false, onToggle }) {
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
 
@@ -232,11 +259,12 @@ function SidebarContent({
       )}
 
       <div className="sidebar-scroll flex-1 overflow-y-auto px-0 pb-4 pt-0">
-        <div className="space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <SidebarItem
-              key={item.id}
-              item={item}
+        <div className={cx("space-y-3", collapsed && "space-y-2")}>
+          {NAVIGATION_GROUPS.map((group, index) => (
+            <SidebarGroup
+              key={group.id}
+              group={group}
+              groupIndex={index}
               shellStats={shellStats}
               onNavigate={onNavigate}
               collapsed={collapsed}

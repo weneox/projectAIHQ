@@ -110,8 +110,12 @@ describe("resolveAuthenticatedLanding", () => {
         "/truth",
         "/inbox",
         "/channels",
+        "/customers",
+        "/leads",
         "/knowledge",
         "/reports",
+        "/team",
+        "/launch",
         "/settings",
       ]);
 

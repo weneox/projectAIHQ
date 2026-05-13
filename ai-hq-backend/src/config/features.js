@@ -93,7 +93,7 @@ export function getFeatureFlags() {
       ws: providers.ws.enabled,
       auditLog: true,
       agents: !v1LaunchSurface,
-      team: !v1LaunchSurface,
+      team: true,
       tenants: true,
       settings: true,
       notifications: !v1LaunchSurface,
@@ -102,7 +102,7 @@ export function getFeatureFlags() {
 
     inbox: {
       inbox: true,
-      leads: !v1LaunchSurface,
+      leads: true,
       comments: !v1LaunchSurface,
       metaConnect: providers.meta.oauth,
       metaDm: providers.meta.gateway || providers.meta.pageAccess,

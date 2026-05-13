@@ -16,10 +16,9 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /^ana səhifə$/i })).toHaveAttribute(
-      "href",
-      "/home"
-    );
+    expect(
+      screen.getByRole("link", { name: /^müştəri mərkəzi$/i })
+    ).toHaveAttribute("href", "/home");
     expect(screen.getByRole("link", { name: /gələnlər 3/i })).toHaveAttribute(
       "href",
       "/inbox"
@@ -31,21 +30,29 @@ describe("Sidebar", () => {
     expect(
       screen.getByRole("link", { name: /^məlumatlar$/i })
     ).toHaveAttribute("href", "/truth");
+    expect(screen.getByText("Əməliyyat")).toBeInTheDocument();
+    expect(screen.getByText("CRM")).toBeInTheDocument();
+    expect(screen.getByText("Analitika")).toBeInTheDocument();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^müştərilər$/i })).toHaveAttribute(
       "href",
       "/customers"
     );
-    expect(screen.getByRole("link", { name: /^fürsətlər$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /fürsətlər 5/i })).toHaveAttribute(
       "href",
       "/leads"
+    );
+    expect(screen.getByRole("link", { name: /^hesabat$/i })).toHaveAttribute(
+      "href",
+      "/reports"
     );
     expect(screen.getByRole("link", { name: /^baza$/i })).toHaveAttribute(
       "href",
       "/knowledge"
     );
-    expect(screen.getByRole("link", { name: /^hesabat$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^canlı yoxlama$/i })).toHaveAttribute(
       "href",
-      "/reports"
+      "/launch"
     );
     expect(screen.getByRole("link", { name: /^komanda$/i })).toHaveAttribute(
       "href",
@@ -63,8 +70,9 @@ describe("Sidebar", () => {
       "/truth",
       "/customers",
       "/leads",
-      "/knowledge",
       "/reports",
+      "/knowledge",
+      "/launch",
       "/team",
       "/settings",
     ];
@@ -79,7 +87,6 @@ describe("Sidebar", () => {
       "/comments",
       "/voice",
       "/workspace",
-      "/launch",
       "/publish",
       "/proposals",
       "/executions",

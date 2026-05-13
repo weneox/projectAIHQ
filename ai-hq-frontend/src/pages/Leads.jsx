@@ -6,6 +6,7 @@ import {
   Flame,
   Mail,
   Phone,
+  Plus,
   RefreshCw,
   Search,
   Target,
@@ -17,6 +18,7 @@ import {
 
 import {
   appendLeadNote,
+  createLead,
   listLeads,
   updateLeadFollowup,
   updateLeadOwner,
@@ -82,18 +84,16 @@ const TABLE_GRID_STYLE = {
 
 const STAGE_PRIORITY = [
   "new",
+  "contacted",
   "qualified",
-  "discovery",
-  "demo requested",
   "proposal",
-  "negotiation",
   "won",
   "lost",
 ];
 
-const STATUS_PRIORITY = ["open", "active", "waiting", "converted", "closed", "lost"];
+const STATUS_PRIORITY = ["open", "closed", "archived", "spam"];
 
-const PRIORITY_PRIORITY = ["urgent", "high", "medium", "low"];
+const PRIORITY_PRIORITY = ["urgent", "high", "normal", "low"];
 
 const SOURCE_PRIORITY = [
   "website",
@@ -201,33 +201,33 @@ function leadSource(lead = {}) {
 
 function leadStage(lead = {}) {
   return lower(
-    lead.displayStage ||
+    lead.stage ||
+      lead.pipeline_stage ||
+      lead.displayStage ||
       lead.display_stage ||
       lead.stageLabel ||
-      lead.stage ||
-      lead.pipeline_stage ||
       "new"
   );
 }
 
 function leadStatus(lead = {}) {
   return lower(
-    lead.displayStatus ||
+    lead.status ||
+      lead.displayStatus ||
       lead.display_status ||
       lead.statusLabel ||
-      lead.status ||
       "open"
   );
 }
 
 function leadPriority(lead = {}) {
   return lower(
-    lead.displayPriority ||
+    lead.priority ||
+      lead.displayPriority ||
       lead.display_priority ||
       lead.priorityLabel ||
-      lead.priority ||
       lead.urgency ||
-      "medium"
+      "normal"
   );
 }
 
@@ -309,9 +309,9 @@ function initialsFromName(value = "") {
 function stageTone(stage = "") {
   const safe = lower(stage);
 
-  if (["won", "converted", "customer"].includes(safe)) return "success";
-  if (["proposal", "negotiation", "demo requested"].includes(safe)) return "brand";
-  if (["qualified", "discovery"].includes(safe)) return "info";
+  if (safe === "won") return "success";
+  if (safe === "proposal") return "brand";
+  if (["qualified", "contacted"].includes(safe)) return "info";
   if (["lost", "closed_lost"].includes(safe)) return "danger";
   return "neutral";
 }
@@ -319,9 +319,9 @@ function stageTone(stage = "") {
 function statusTone(status = "") {
   const safe = lower(status);
 
-  if (["won", "converted", "active", "resolved"].includes(safe)) return "success";
-  if (["pending", "waiting", "invited"].includes(safe)) return "warning";
-  if (["lost", "closed", "disabled", "blocked"].includes(safe)) return "danger";
+  if (safe === "open") return "success";
+  if (safe === "archived") return "warning";
+  if (["closed", "spam"].includes(safe)) return "danger";
   return "brand";
 }
 
@@ -774,6 +774,258 @@ function normalizeLeadMutationResponse(payload = {}) {
   return null;
 }
 
+function createLeadDraft() {
+  return {
+    fullName: "",
+    email: "",
+    phone: "",
+    company: "",
+    source: "manual",
+    interest: "",
+    stage: "new",
+    status: "open",
+    priority: "normal",
+    valueAzn: "",
+    owner: "",
+    notes: "",
+  };
+}
+
+function CreateLeadOverlay({ open, onClose, onCreated }) {
+  const [draft, setDraft] = useState(() => createLeadDraft());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(createLeadDraft());
+    setSaving(false);
+    setError("");
+  }, [open]);
+
+  function patchDraft(patch = {}) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  async function saveLead() {
+    if (saving) return;
+
+    const fullName = s(draft.fullName);
+    const email = s(draft.email);
+    const phone = s(draft.phone);
+
+    if (!fullName && !email && !phone) {
+      setError("Name, email, or phone is required.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const response = await createLead({
+        fullName,
+        email,
+        phone,
+        company: s(draft.company),
+        source: s(draft.source, "manual"),
+        interest: s(draft.interest),
+        stage: s(draft.stage, "new"),
+        status: s(draft.status, "open"),
+        priority: s(draft.priority, "normal"),
+        valueAzn: n(draft.valueAzn),
+        owner: s(draft.owner),
+        notes: s(draft.notes),
+      });
+
+      if (response?.ok === false) {
+        throw new Error(s(response.error || response.message) || "Lead could not be created.");
+      }
+
+      const nextLead = normalizeLeadMutationResponse(response);
+      onCreated?.(nextLead || { ...draft, full_name: fullName, value_azn: n(draft.valueAzn) });
+      onClose?.();
+    } catch (err) {
+      setError(
+        s(err?.payload?.message || err?.payload?.error || err?.message) ||
+          "Lead could not be created."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SlidingDetailOverlay
+      open={open}
+      onClose={onClose}
+      className="!fixed !inset-auto !left-[calc(var(--shell-sidebar-w)+24px)] !right-6 !top-[calc(var(--shell-top-offset)+88px)] !bottom-6"
+      panelWidthClassName="max-w-[640px]"
+    >
+      <Card padded={false} clip className="h-full">
+        <AppDetailHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+                New lead
+              </div>
+              <div className="mt-1 text-[13px] font-medium text-text-muted">
+                Add a manual opportunity directly into the CRM pipeline.
+              </div>
+            </div>
+
+            <AppIconButton label="Close create lead" onClick={onClose}>
+              <X className="h-3.5 w-3.5" strokeWidth={2.15} />
+            </AppIconButton>
+          </div>
+        </AppDetailHeader>
+
+        <AppDetailBody>
+          {error ? (
+            <InlineNotice tone="danger" title="Could not create lead" description={error} compact />
+          ) : null}
+
+          <section className="rounded-md border border-line-soft bg-surface-subtle p-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <LeadControlField label="Name">
+                <LeadNativeInput
+                  value={draft.fullName}
+                  placeholder="Customer or company contact"
+                  onChange={(event) => patchDraft({ fullName: event.target.value })}
+                />
+              </LeadControlField>
+
+              <LeadControlField label="Company">
+                <LeadNativeInput
+                  value={draft.company}
+                  placeholder="Company"
+                  onChange={(event) => patchDraft({ company: event.target.value })}
+                />
+              </LeadControlField>
+
+              <LeadControlField label="Email">
+                <LeadNativeInput
+                  type="email"
+                  value={draft.email}
+                  placeholder="name@example.com"
+                  onChange={(event) => patchDraft({ email: event.target.value })}
+                />
+              </LeadControlField>
+
+              <LeadControlField label="Phone">
+                <LeadNativeInput
+                  value={draft.phone}
+                  placeholder="+994..."
+                  onChange={(event) => patchDraft({ phone: event.target.value })}
+                />
+              </LeadControlField>
+
+              <LeadControlField label="Source">
+                <LeadNativeSelect
+                  value={draft.source}
+                  onChange={(value) => patchDraft({ source: value })}
+                >
+                  {SOURCE_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Priority">
+                <LeadNativeSelect
+                  value={draft.priority}
+                  onChange={(value) => patchDraft({ priority: value })}
+                >
+                  {PRIORITY_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Stage">
+                <LeadNativeSelect
+                  value={draft.stage}
+                  onChange={(value) => patchDraft({ stage: value })}
+                >
+                  {STAGE_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Status">
+                <LeadNativeSelect
+                  value={draft.status}
+                  onChange={(value) => patchDraft({ status: value })}
+                >
+                  {STATUS_PRIORITY.map((item) => (
+                    <option key={item} value={item}>
+                      {titleize(item)}
+                    </option>
+                  ))}
+                </LeadNativeSelect>
+              </LeadControlField>
+
+              <LeadControlField label="Owner">
+                <LeadNativeInput
+                  value={draft.owner}
+                  placeholder="Operator or team member"
+                  onChange={(event) => patchDraft({ owner: event.target.value })}
+                />
+              </LeadControlField>
+
+              <LeadControlField label="Value">
+                <LeadNativeInput
+                  type="number"
+                  min="0"
+                  value={draft.valueAzn}
+                  placeholder="0"
+                  onChange={(event) => patchDraft({ valueAzn: event.target.value })}
+                />
+              </LeadControlField>
+            </div>
+
+            <div className="mt-3">
+              <LeadControlField label="Interest">
+                <LeadNativeInput
+                  value={draft.interest}
+                  placeholder="What the customer is asking for"
+                  onChange={(event) => patchDraft({ interest: event.target.value })}
+                />
+              </LeadControlField>
+            </div>
+
+            <div className="mt-3">
+              <LeadControlField label="Notes">
+                <LeadNativeTextarea
+                  value={draft.notes}
+                  placeholder="Context, budget, next step, or qualification notes"
+                  onChange={(event) => patchDraft({ notes: event.target.value })}
+                />
+              </LeadControlField>
+            </div>
+          </section>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="button" loading={saving} onClick={saveLead}>
+              Create lead
+            </Button>
+          </div>
+        </AppDetailBody>
+      </Card>
+    </SlidingDetailOverlay>
+  );
+}
+
 function LeadDetailOverlay({
   lead,
   open,
@@ -1161,6 +1413,7 @@ export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [openFilter, setOpenFilter] = useState("");
   const [filters, setFilters] = useState(() => createDefaultFilters());
   const [page, setPage] = useState(1);
@@ -1177,6 +1430,13 @@ export default function Leads() {
         return itemId === updatedId ? { ...item, ...updatedLead } : item;
       })
     );
+  }
+
+  function handleLeadCreated(createdLead = {}) {
+    const key = leadKey(createdLead, 0);
+    setLeads((current) => [createdLead, ...arr(current)]);
+    setSelectedKey(key);
+    setDetailOpen(true);
   }
 
   const loadLeads = useCallback(async ({ silent = false } = {}) => {
@@ -1259,13 +1519,10 @@ export default function Leads() {
       ["urgent", "high"].includes(leadPriority(lead))
     ).length;
     const qualified = arr(leads).filter((lead) =>
-      ["qualified", "demo requested", "proposal", "negotiation"].includes(
-        leadStage(lead)
-      )
+      ["contacted", "qualified", "proposal"].includes(leadStage(lead))
     ).length;
     const won = arr(leads).filter((lead) =>
-      ["won", "converted"].includes(leadStage(lead)) ||
-      ["won", "converted"].includes(leadStatus(lead))
+      leadStage(lead) === "won" || leadStatus(lead) === "closed"
     ).length;
 
     return { total, hot, qualified, won };
@@ -1365,6 +1622,15 @@ export default function Leads() {
 
             <Button
               type="button"
+              variant="secondary"
+              onClick={() => setCreateOpen(true)}
+              leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
+            >
+              New lead
+            </Button>
+
+            <Button
+              type="button"
               onClick={() => navigate("/inbox")}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
             >
@@ -1408,6 +1674,7 @@ export default function Leads() {
         onClearFilters={clearFilters}
         activeFilterCount={activeFilterCount}
         onOpenThread={openThread}
+        onOpenChannels={() => navigate("/channels")}
         onOpenDetail={openDetail}
       />
 
@@ -1429,6 +1696,12 @@ export default function Leads() {
         onClose={() => setDetailOpen(false)}
         onOpenThread={openThread}
         onLeadUpdated={handleLeadUpdated}
+      />
+
+      <CreateLeadOverlay
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleLeadCreated}
       />
     </PageCanvas>
   );

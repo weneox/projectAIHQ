@@ -5,6 +5,7 @@
   Inbox,
   LayoutDashboard,
   PlugZap,
+  Rocket,
   Settings,
   Users,
   UserRound,
@@ -14,14 +15,14 @@
 const PRIMARY_SECTIONS = [
   {
     id: "home",
-    label: "Ana səhifə",
+    label: "Müştəri mərkəzi",
     icon: LayoutDashboard,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
       {
         title: "Naviqasiya",
-        items: [{ label: "Ana səhifə", to: "/home" }],
+        items: [{ label: "Müştəri mərkəzi", to: "/home" }],
       },
     ],
   },
@@ -65,6 +66,9 @@ const PRIMARY_SECTIONS = [
       },
     ],
   },
+];
+
+const CRM_SECTIONS = [
   {
     id: "customers",
     label: "Müştərilər",
@@ -83,6 +87,7 @@ const PRIMARY_SECTIONS = [
     label: "Fürsətlər",
     icon: Target,
     to: "/leads",
+    badgeKey: "leadsOpen",
     paths: ["/leads"],
     contextGroups: [
       {
@@ -94,19 +99,6 @@ const PRIMARY_SECTIONS = [
 ];
 
 const SECONDARY_SECTIONS = [
-  {
-    id: "knowledge",
-    label: "Baza",
-    icon: BookOpenCheck,
-    to: "/knowledge",
-    paths: ["/knowledge"],
-    contextGroups: [
-      {
-        title: "Naviqasiya",
-        items: [{ label: "Baza", to: "/knowledge" }],
-      },
-    ],
-  },
   {
     id: "reports",
     label: "Hesabat",
@@ -121,6 +113,35 @@ const SECONDARY_SECTIONS = [
     ],
   },
   {
+    id: "knowledge",
+    label: "Baza",
+    icon: BookOpenCheck,
+    to: "/knowledge",
+    paths: ["/knowledge"],
+    contextGroups: [
+      {
+        title: "Naviqasiya",
+        items: [{ label: "Baza", to: "/knowledge" }],
+      },
+    ],
+  },
+  {
+    id: "launch",
+    label: "Canlı yoxlama",
+    icon: Rocket,
+    to: "/launch",
+    paths: ["/launch"],
+    contextGroups: [
+      {
+        title: "Naviqasiya",
+        items: [{ label: "Canlı yoxlama", to: "/launch" }],
+      },
+    ],
+  },
+];
+
+const UTILITY_SECTIONS = [
+  {
     id: "team",
     label: "Komanda",
     icon: Users,
@@ -133,9 +154,6 @@ const SECONDARY_SECTIONS = [
       },
     ],
   },
-];
-
-const UTILITY_SECTIONS = [
   {
     id: "settings",
     label: "Ayarlar",
@@ -153,8 +171,32 @@ const UTILITY_SECTIONS = [
 
 const ALL_SECTIONS = [
   ...PRIMARY_SECTIONS,
+  ...CRM_SECTIONS,
   ...SECONDARY_SECTIONS,
   ...UTILITY_SECTIONS,
+];
+
+const NAVIGATION_GROUPS = [
+  {
+    id: "operations",
+    label: "Əməliyyat",
+    items: PRIMARY_SECTIONS,
+  },
+  {
+    id: "crm",
+    label: "CRM",
+    items: CRM_SECTIONS,
+  },
+  {
+    id: "intelligence",
+    label: "Analitika",
+    items: SECONDARY_SECTIONS,
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    items: UTILITY_SECTIONS,
+  },
 ];
 
 function cleanPath(value = "") {
@@ -190,6 +232,8 @@ function getActiveContextItem(section, pathname = "/") {
 
 export {
   ALL_SECTIONS,
+  CRM_SECTIONS,
+  NAVIGATION_GROUPS,
   PRIMARY_SECTIONS,
   SECONDARY_SECTIONS,
   UTILITY_SECTIONS,

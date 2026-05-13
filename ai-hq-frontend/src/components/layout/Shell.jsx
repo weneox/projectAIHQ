@@ -564,9 +564,11 @@ export default function Shell() {
 
     if (statsRequestRef.current) return statsRequestRef.current;
 
-    const request = fetchShellResource("/api/inbox/threads")
-      .then((inboxRes) => {
-        const leadsRes = { ok: true, data: { leads: [] } };
+    const request = Promise.all([
+      fetchShellResource("/api/inbox/threads"),
+      fetchShellResource("/api/leads"),
+    ])
+      .then(([inboxRes, leadsRes]) => {
         const nextStats = buildShellStatsFromResponses(inboxRes, leadsRes);
         const nextMessage = String(nextStats.message || "");
 

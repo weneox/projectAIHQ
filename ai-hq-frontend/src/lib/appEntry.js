@@ -63,7 +63,6 @@ export const WORKSPACE_SELECTION_ROUTE = "/select-workspace";
 
 const LEGACY_PRODUCT_HOME_ROUTES = Object.freeze([
   "/workspace",
-  "/leads",
   "/comments",
   "/voice",
   "/publish",
@@ -208,8 +207,12 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/truth",
   "/inbox",
   "/channels",
+  "/customers",
+  "/leads",
   "/knowledge",
   "/reports",
+  "/team",
+  "/launch",
   "/settings",
 ]);
 

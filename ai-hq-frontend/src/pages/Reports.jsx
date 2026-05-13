@@ -1,8 +1,9 @@
-ï»¿import {
-  ArrowRight, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Activity,
+  ArrowRight,
   BarChart3,
   CircleAlert,
   Clock3,
@@ -13,7 +14,10 @@ import {
   Send,
   Sparkles,
   Target,
-  TrendingUp,
+  Timer,
+  UserRound,
+  Users,
+  Wallet,
 } from "lucide-react";
 import {
   Area,
@@ -81,13 +85,32 @@ function formatNumber(value = 0) {
   }).format(n(value));
 }
 
+function formatCurrency(value = 0) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "AZN",
+    maximumFractionDigits: 0,
+  }).format(n(value));
+}
+
 function formatPercent(value = 0) {
   return `${Math.round(n(value))}%`;
 }
 
+function formatDuration(seconds = 0) {
+  const total = Math.max(0, Math.round(n(seconds)));
+
+  if (total < 60) return `${total}s`;
+  if (total < 3600) return `${Math.round(total / 60)}m`;
+
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.round((total % 3600) / 60);
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
 function formatDateLabel(value = "") {
   const raw = s(value);
-  if (!raw) return "â€”";
+  if (!raw) return "—";
 
   const date = new Date(`${raw}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return raw;
@@ -111,9 +134,19 @@ function summarizeReport(payload = {}) {
   const aiReplies = n(summary.aiReplies);
   const openThreads = n(summary.openThreads);
   const unreadMessages = n(summary.unreadMessages);
+  const customers = n(summary.customers);
+  const activeLeads = n(summary.activeLeads);
+  const wonLeads = n(summary.wonLeads);
+  const pipelineValueAzn = n(summary.pipelineValueAzn);
+  const followupsDue = n(summary.followupsDue);
+  const activeTeamMembers = n(summary.activeTeamMembers);
+  const avgFirstResponseSeconds = n(summary.avgFirstResponseSeconds);
+  const waitingFirstResponse = n(summary.waitingFirstResponse);
 
   const conversion =
     messagesIn > 0 ? Math.round((leads / Math.max(messagesIn, 1)) * 100) : 0;
+  const customerConversion =
+    leads > 0 ? Math.round((customers / Math.max(leads, 1)) * 100) : 0;
   const automationShare =
     messagesOut > 0 ? Math.round((aiReplies / Math.max(messagesOut, 1)) * 100) : 0;
 
@@ -125,7 +158,16 @@ function summarizeReport(payload = {}) {
     aiReplies,
     openThreads,
     unreadMessages,
+    customers,
+    activeLeads,
+    wonLeads,
+    pipelineValueAzn,
+    followupsDue,
+    activeTeamMembers,
+    avgFirstResponseSeconds,
+    waitingFirstResponse,
     conversion,
+    customerConversion,
     automationShare,
   };
 }
@@ -176,12 +218,78 @@ function normalizeLeadStages(payload = {}) {
     .sort((a, b) => b.count - a.count);
 }
 
+function normalizeLeadOwners(payload = {}) {
+  return arr(payload.leadOwners)
+    .map((row) => ({
+      id: lower(row.owner || "unassigned"),
+      owner: s(row.owner, "unassigned"),
+      total: n(row.total),
+      open: n(row.open),
+      won: n(row.won),
+      lost: n(row.lost),
+      pipelineValueAzn: n(row.pipelineValueAzn),
+      followupsDue: n(row.followupsDue),
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function normalizeCustomerSummary(payload = {}) {
+  const customers = obj(payload.customers);
+
+  return {
+    totalLeads: n(customers.totalLeads),
+    customers: n(customers.customers),
+    wonLeads: n(customers.wonLeads),
+    activeLeads: n(customers.activeLeads),
+    pipelineValueAzn: n(customers.pipelineValueAzn),
+    followupsDue: n(customers.followupsDue),
+  };
+}
+
+function normalizeTeamReport(payload = {}) {
+  const team = obj(payload.team);
+  const summary = obj(team.summary);
+
+  return {
+    summary: {
+      totalMembers: n(summary.totalMembers),
+      activeMembers: n(summary.activeMembers),
+      admins: n(summary.admins),
+      owners: n(summary.owners),
+      operators: n(summary.operators),
+    },
+    members: arr(team.members).map((member) => ({
+      id: s(member.id || member.email || member.name),
+      name: s(member.name, "Team member"),
+      email: s(member.email),
+      role: titleize(member.role || "operator"),
+      status: titleize(member.status || "invited"),
+      openThreads: n(member.openThreads),
+      handoffs: n(member.handoffs),
+      ownedLeads: n(member.ownedLeads),
+      wonLeads: n(member.wonLeads),
+    })),
+  };
+}
+
+function normalizeInboxSla(payload = {}) {
+  const inboxSla = obj(payload.inboxSla);
+
+  return {
+    conversations: n(inboxSla.conversations),
+    waitingFirstResponse: n(inboxSla.waitingFirstResponse),
+    avgFirstResponseSeconds: n(inboxSla.avgFirstResponseSeconds),
+  };
+}
+
 function hasActivity(summary = {}) {
   return (
     n(summary.messagesIn) > 0 ||
     n(summary.messagesOut) > 0 ||
     n(summary.aiReplies) > 0 ||
     n(summary.leads) > 0 ||
+    n(summary.customers) > 0 ||
+    n(summary.activeTeamMembers) > 0 ||
     n(summary.openThreads) > 0 ||
     n(summary.unreadMessages) > 0
   );
@@ -192,10 +300,10 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
     <div className="min-h-[132px] border-b border-line-soft px-5 py-4 md:border-r xl:border-b-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          <div className="text-[11px] font-semibold uppercase tracking-normal text-text-subtle">
             {label}
           </div>
-          <div className="mt-2 text-[27px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+          <div className="mt-2 text-[27px] font-semibold tracking-normal text-text">
             {value}
           </div>
         </div>
@@ -228,7 +336,7 @@ function ChartTooltip({ active, payload, label }) {
 
   return (
     <div className="rounded-md border border-line bg-white px-3 py-2 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.55)]">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+      <div className="text-[11px] font-semibold uppercase tracking-normal text-text-subtle">
         {label}
       </div>
 
@@ -254,7 +362,7 @@ function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
           <Database className="h-6 w-6" strokeWidth={1.9} />
         </div>
 
-        <h2 className="mt-5 text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+        <h2 className="mt-5 text-[20px] font-semibold tracking-normal text-text">
           No report activity yet
         </h2>
 
@@ -308,7 +416,7 @@ function ChannelRow({ channel, maxTotal }) {
             {channel.label}
           </div>
           <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
-            {formatNumber(channel.messagesIn)} in Â· {formatNumber(channel.messagesOut)} out Â· {formatNumber(channel.aiReplies)} AI
+            {formatNumber(channel.messagesIn)} in · {formatNumber(channel.messagesOut)} out · {formatNumber(channel.aiReplies)} AI
           </div>
         </div>
       </div>
@@ -339,6 +447,94 @@ function LeadStageRow({ stage, maxCount }) {
 
       <div className="md:text-right text-[13px] font-semibold text-text-muted">
         {formatNumber(stage.count)}
+      </div>
+    </div>
+  );
+}
+
+function MiniReportStat({ label, value, helper, icon: Icon = Activity, tone = "neutral" }) {
+  return (
+    <div className="min-w-0 rounded-md border border-line-soft bg-surface-subtle p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-normal text-text-subtle">
+            {label}
+          </div>
+          <div className="mt-2 truncate text-[22px] font-semibold text-text">
+            {value}
+          </div>
+        </div>
+
+        <Icon
+          className={cx(
+            "h-5 w-5 shrink-0",
+            tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-brand"
+          )}
+          strokeWidth={2.05}
+        />
+      </div>
+
+      {helper ? (
+        <div className="mt-2 text-[12px] font-medium leading-5 text-text-muted">
+          {helper}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LeadOwnerRow({ owner, maxTotal }) {
+  const width = maxTotal ? Math.max(5, Math.round((owner.total / maxTotal) * 100)) : 0;
+
+  return (
+    <div className="grid gap-3 border-b border-line-soft px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_145px] md:items-center">
+      <div className="min-w-0">
+        <div className="truncate text-[13.5px] font-semibold text-text">
+          {owner.owner}
+        </div>
+        <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
+          {formatNumber(owner.open)} open · {formatNumber(owner.won)} won · {formatNumber(owner.followupsDue)} due
+        </div>
+      </div>
+
+      <div className="h-2 rounded-full bg-surface-subtle">
+        <div className="h-full rounded-full bg-brand" style={{ width: `${width}%` }} />
+      </div>
+
+      <div className="md:text-right">
+        <div className="text-[13px] font-semibold text-text">
+          {formatNumber(owner.total)}
+        </div>
+        <div className="text-[12px] font-medium text-text-muted">
+          {formatCurrency(owner.pipelineValueAzn)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamMemberRow({ member }) {
+  return (
+    <div className="border-b border-line-soft px-5 py-4 last:border-b-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[13.5px] font-semibold text-text">
+            {member.name}
+          </div>
+          <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
+            {member.email || "No email"}
+          </div>
+        </div>
+
+        <AppTag tone={member.status.toLowerCase() === "active" ? "success" : "neutral"}>
+          {member.role}
+        </AppTag>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-[12px] font-semibold text-text-muted">
+        <div>{formatNumber(member.openThreads)} threads</div>
+        <div>{formatNumber(member.ownedLeads)} leads</div>
+        <div>{formatNumber(member.wonLeads)} won</div>
       </div>
     </div>
   );
@@ -385,6 +581,15 @@ function buildInsights({ summary, channels, degraded }) {
     });
   }
 
+  if (summary.waitingFirstResponse > 0) {
+    insights.push({
+      icon: Timer,
+      tone: "warning",
+      title: "First response queue",
+      description: `${formatNumber(summary.waitingFirstResponse)} conversation(s) are still waiting for the first outbound reply.`,
+    });
+  }
+
   if (summary.leads > 0 && summary.messagesIn > 0) {
     insights.push({
       icon: Target,
@@ -401,6 +606,15 @@ function buildInsights({ summary, channels, degraded }) {
       tone: "brand",
       title: "Strongest channel",
       description: `${topChannel.label} has the highest message volume in the selected range.`,
+    });
+  }
+
+  if (summary.activeTeamMembers > 0) {
+    insights.push({
+      icon: Users,
+      tone: "success",
+      title: "Team surface is live",
+      description: `${formatNumber(summary.activeTeamMembers)} active team member(s) are included in the report contract.`,
     });
   }
 
@@ -421,10 +635,15 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
   const series = useMemo(() => normalizeSeries(payload), [payload]);
   const channels = useMemo(() => normalizeChannels(payload), [payload]);
   const leadStages = useMemo(() => normalizeLeadStages(payload), [payload]);
+  const leadOwners = useMemo(() => normalizeLeadOwners(payload), [payload]);
+  const customerSummary = useMemo(() => normalizeCustomerSummary(payload), [payload]);
+  const teamReport = useMemo(() => normalizeTeamReport(payload), [payload]);
+  const inboxSla = useMemo(() => normalizeInboxSla(payload), [payload]);
   const degraded = arr(payload?.degraded);
   const active = hasActivity(summary);
   const maxChannelTotal = Math.max(...channels.map((channel) => channel.total), 1);
   const maxLeadStage = Math.max(...leadStages.map((stage) => stage.count), 1);
+  const maxLeadOwnerTotal = Math.max(...leadOwners.map((owner) => owner.total), 1);
   const insights = buildInsights({ summary, channels, degraded });
 
   return (
@@ -436,7 +655,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
           </div>
 
           <div className="min-w-0">
-            <div className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
+            <div className="text-[20px] font-semibold tracking-normal text-text">
               Performance overview
             </div>
             <div className="mt-1 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
@@ -502,10 +721,11 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
           tone={summary.unreadMessages > 0 ? "warning" : "neutral"}
         />
         <MetricCard
-          icon={Activity}
-          label="Usage"
-          value={formatNumber(summary.apiCalls)}
-          helper={`${formatNumber(summary.aiUnits)} AI units Â· ${formatNumber(summary.webhookEvents)} webhooks.`}
+          icon={UserRound}
+          label="Customers"
+          value={formatNumber(summary.customers)}
+          helper={`${formatCurrency(summary.pipelineValueAzn)} pipeline · ${formatNumber(summary.wonLeads)} won.`}
+          tone="success"
         />
       </div>
 
@@ -520,7 +740,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
           <div className="border-t border-line-soft px-5 py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
                   Activity trend
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
@@ -582,7 +802,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
           <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_390px]">
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
-                <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
                   Channel breakdown
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
@@ -607,7 +827,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
 
             <section>
               <div className="border-b border-line-soft px-5 py-4">
-                <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
                   Operator insights
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
@@ -630,7 +850,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
           <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_390px]">
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
-                <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
                   Lead stages
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
@@ -651,7 +871,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
 
             <section>
               <div className="border-b border-line-soft px-5 py-4">
-                <div className="text-[16px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
                   Current inbox state
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
@@ -660,33 +880,157 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
               </div>
 
               <div className="grid gap-3 px-5 py-5">
-                <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Open threads
-                  </div>
-                  <div className="mt-2 text-[22px] font-semibold text-text">
-                    {formatNumber(summary.openThreads)}
-                  </div>
-                </div>
+                <MiniReportStat
+                  icon={Inbox}
+                  label="Open threads"
+                  value={formatNumber(summary.openThreads)}
+                />
+                <MiniReportStat
+                  icon={CircleAlert}
+                  label="Unread messages"
+                  value={formatNumber(summary.unreadMessages)}
+                  tone={summary.unreadMessages > 0 ? "warning" : "neutral"}
+                />
+                <MiniReportStat
+                  icon={ArrowRight}
+                  label="Handoffs"
+                  value={formatNumber(summary.handoffs)}
+                />
+              </div>
+            </section>
+          </div>
 
-                <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Unread messages
-                  </div>
-                  <div className="mt-2 text-[22px] font-semibold text-text">
-                    {formatNumber(summary.unreadMessages)}
-                  </div>
+          <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_390px]">
+            <section className="xl:border-r xl:border-line-soft">
+              <div className="border-b border-line-soft px-5 py-4">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
+                  Customer and pipeline report
                 </div>
-
-                <div className="rounded-md border border-line-soft bg-surface-subtle p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Handoffs
-                  </div>
-                  <div className="mt-2 text-[22px] font-semibold text-text">
-                    {formatNumber(summary.handoffs)}
-                  </div>
+                <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                  Customer conversion, active opportunities, won leads, and due follow-ups.
                 </div>
               </div>
+
+              <div className="grid gap-3 px-5 py-5 md:grid-cols-2">
+                <MiniReportStat
+                  icon={UserRound}
+                  label="Customers"
+                  value={formatNumber(customerSummary.customers)}
+                  helper={`${formatPercent(summary.customerConversion)} lead-to-customer signal.`}
+                  tone="success"
+                />
+                <MiniReportStat
+                  icon={Wallet}
+                  label="Pipeline"
+                  value={formatCurrency(customerSummary.pipelineValueAzn)}
+                  helper={`${formatNumber(customerSummary.activeLeads)} active lead(s).`}
+                />
+                <MiniReportStat
+                  icon={Target}
+                  label="Won leads"
+                  value={formatNumber(customerSummary.wonLeads)}
+                  helper={`${formatNumber(customerSummary.totalLeads)} total lead records.`}
+                  tone="success"
+                />
+                <MiniReportStat
+                  icon={Clock3}
+                  label="Follow-ups due"
+                  value={formatNumber(customerSummary.followupsDue)}
+                  helper="Open leads with due follow-up dates."
+                  tone={customerSummary.followupsDue > 0 ? "warning" : "neutral"}
+                />
+              </div>
+            </section>
+
+            <section>
+              <div className="border-b border-line-soft px-5 py-4">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
+                  Inbox response health
+                </div>
+                <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                  First response speed and conversations waiting for a reply.
+                </div>
+              </div>
+
+              <div className="grid gap-3 px-5 py-5">
+                <MiniReportStat
+                  icon={Timer}
+                  label="Avg first response"
+                  value={formatDuration(inboxSla.avgFirstResponseSeconds)}
+                  helper={`${formatNumber(inboxSla.conversations)} measured conversation(s).`}
+                />
+                <MiniReportStat
+                  icon={CircleAlert}
+                  label="Waiting first response"
+                  value={formatNumber(inboxSla.waitingFirstResponse)}
+                  helper="Inbound conversations without outbound reply."
+                  tone={inboxSla.waitingFirstResponse > 0 ? "warning" : "success"}
+                />
+              </div>
+            </section>
+          </div>
+
+          <div className="grid border-t border-line-soft xl:grid-cols-[minmax(0,1fr)_390px]">
+            <section className="xl:border-r xl:border-line-soft">
+              <div className="border-b border-line-soft px-5 py-4">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
+                  Lead ownership
+                </div>
+                <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                  Pipeline and follow-up load by owner.
+                </div>
+              </div>
+
+              {leadOwners.length ? (
+                leadOwners.map((owner) => (
+                  <LeadOwnerRow
+                    key={owner.id}
+                    owner={owner}
+                    maxTotal={maxLeadOwnerTotal}
+                  />
+                ))
+              ) : (
+                <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
+                  No lead owner data is available for this range.
+                </div>
+              )}
+            </section>
+
+            <section>
+              <div className="border-b border-line-soft px-5 py-4">
+                <div className="text-[16px] font-semibold tracking-normal text-text">
+                  Team report
+                </div>
+                <div className="mt-1 text-[12.5px] font-medium text-text-muted">
+                  Roles, active members, assigned threads, and owned leads.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 border-b border-line-soft px-5 py-5">
+                <MiniReportStat
+                  icon={Users}
+                  label="Active"
+                  value={formatNumber(teamReport.summary.activeMembers)}
+                  helper={`${formatNumber(teamReport.summary.totalMembers)} total member(s).`}
+                  tone="success"
+                />
+                <MiniReportStat
+                  icon={Users}
+                  label="Operators"
+                  value={formatNumber(teamReport.summary.operators)}
+                  helper={`${formatNumber(teamReport.summary.admins)} admin · ${formatNumber(teamReport.summary.owners)} owner.`}
+                />
+              </div>
+
+              {teamReport.members.length ? (
+                teamReport.members.map((member) => (
+                  <TeamMemberRow key={member.id} member={member} />
+                ))
+              ) : (
+                <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
+                  No team members are available for this report.
+                </div>
+              )}
             </section>
           </div>
         </>

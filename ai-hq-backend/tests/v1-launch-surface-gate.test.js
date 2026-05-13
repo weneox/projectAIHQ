@@ -158,9 +158,9 @@ test("v1 production feature flags freeze non-launch optional surfaces", async ()
 
     assert.equal(flags.core.adminPanel, false);
     assert.equal(flags.core.agents, false);
-    assert.equal(flags.core.team, false);
+    assert.equal(flags.core.team, true);
     assert.equal(flags.core.notifications, false);
-    assert.equal(flags.inbox.leads, false);
+    assert.equal(flags.inbox.leads, true);
     assert.equal(flags.inbox.comments, false);
     assert.equal(flags.channels.telegram, false);
     assert.equal(flags.channels.push, false);
@@ -193,8 +193,6 @@ test("v1 production router returns frozen 404 for non-launch backend surfaces", 
     });
 
     const frozenRoutes = [
-      ["get", "/leads"],
-      ["post", "/leads/ingest"],
       ["get", "/comments"],
       ["post", "/comments/ingest"],
       ["get", "/voice/overview"],
@@ -207,8 +205,6 @@ test("v1 production router returns frozen 404 for non-launch backend surfaces", 
       ["post", "/chat"],
       ["post", "/debate"],
       ["get", "/notifications"],
-      ["get", "/team"],
-      ["get", "/settings/team"],
       ["get", "/agents"],
       ["get", "/settings/agents"],
       ["get", "/channels/telegram/status"],
@@ -243,11 +239,15 @@ test("v1 production router keeps launch surfaces mounted", async () => {
     const webchat = await invokeRouter(router, "get", "/channels/webchat/status");
     const meta = await invokeRouter(router, "get", "/channels/meta/status");
     const setup = await invokeRouter(router, "get", "/setup/truth/current");
+    const leads = await invokeRouter(router, "get", "/leads");
+    const team = await invokeRouter(router, "get", "/team");
 
     assert.equal(root.res.statusCode, 200);
     assert.notEqual(inbox.res.body?.code, "surface_frozen");
     assert.notEqual(webchat.res.body?.code, "surface_frozen");
     assert.notEqual(meta.res.body?.code, "surface_frozen");
     assert.notEqual(setup.res.body?.code, "surface_frozen");
+    assert.notEqual(leads.res.body?.code, "surface_frozen");
+    assert.notEqual(team.res.body?.code, "surface_frozen");
   });
 });

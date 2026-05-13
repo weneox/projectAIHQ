@@ -81,13 +81,13 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Müştəri mesajları bir yerdə." })
+      screen.getByRole("heading", { name: "Müştəri mərkəzi" })
     ).toBeInTheDocument();
-    expect(screen.getByText("Məlumat lazımdır")).toBeInTheDocument();
-    expect(screen.getByText("Başlama siyahısı")).toBeInTheDocument();
+    expect(screen.getByText("Məlumat açılmalıdır")).toBeInTheDocument();
+    expect(screen.getByText("İş sırası")).toBeInTheDocument();
     expect(screen.queryByText(/runtime|tenant|backend|workspace/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /məlumatları tamamla/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /məlumatları aç/i })[0]);
 
     expect(navigate).toHaveBeenCalledWith("/home?assistant=setup");
   });
@@ -100,10 +100,10 @@ describe("ProductHomePage", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Müştəri mesajları bir yerdə." })
+      screen.getByRole("heading", { name: "Müştəri mərkəzi" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /məlumatları tamamla/i })
+      screen.getAllByRole("button", { name: /məlumatları aç/i })[0]
     ).toBeInTheDocument();
   });
 
@@ -126,7 +126,7 @@ describe("ProductHomePage", () => {
 
     expect(screen.getByText("Kanal qoşulmayıb")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^kanal qoş$/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^kanal qoş$/i })[0]);
 
     expect(navigate).toHaveBeenCalledWith("/channels");
   });
@@ -171,8 +171,8 @@ describe("ProductHomePage", () => {
     );
 
     expect(screen.getAllByText("Cavab gözləyir").length).toBeGreaterThan(0);
-    expect(screen.getByText("24 oxunmamış")).toBeInTheDocument();
-    expect(screen.getByText("Cavab əsası")).toBeInTheDocument();
+    expect(screen.getByText("24")).toBeInTheDocument();
+    expect(screen.getByText("Mesaj mənbələri")).toBeInTheDocument();
     expect(screen.queryByText(/runtime|tenant|backend|workspace/i)).not.toBeInTheDocument();
   });
 });

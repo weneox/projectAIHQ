@@ -861,7 +861,6 @@ test("v1 launch journey smoke covers auth, setup, truth, widget, inbox reply, he
       dbDisabled: true,
     });
     const frozenRoutes = [
-      ["get", "/leads"],
       ["get", "/comments"],
       ["post", "/chat"],
       ["get", "/proposals"],
@@ -875,6 +874,14 @@ test("v1 launch journey smoke covers auth, setup, truth, widget, inbox reply, he
       const result = await invokeRouter(fullApi, method, path);
       assert.equal(result.res.statusCode, 404, path);
       assert.equal(result.res.body?.code, "surface_frozen", path);
+    }
+
+    for (const [method, path] of [
+      ["get", "/leads"],
+      ["get", "/team"],
+    ]) {
+      const result = await invokeRouter(fullApi, method, path);
+      assert.notEqual(result.res.body?.code, "surface_frozen", path);
     }
   });
 });

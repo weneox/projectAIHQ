@@ -123,6 +123,10 @@ export function reportsRoutes({ db }) {
         timeseries: buildDateSeries(days),
         channels: [],
         leadStages: [],
+        leadOwners: [],
+        customers: {},
+        team: { members: [], summary: {} },
+        inboxSla: {},
         current: {},
       });
     }
@@ -273,11 +277,181 @@ export function reportsRoutes({ db }) {
         "current_inbox_state_unavailable"
       );
 
+      const leadOwnerRows = await safeQuery(
+        db,
+        `
+        select
+          coalesce(nullif(btrim(owner), ''), 'unassigned') as owner,
+          count(*)::int as total,
+          count(*) filter (where lower(coalesce(status, 'open')) = 'open')::int as open,
+          count(*) filter (where lower(coalesce(stage, 'new')) = 'won')::int as won,
+          count(*) filter (where lower(coalesce(stage, 'new')) = 'lost')::int as lost,
+          coalesce(sum(coalesce(value_azn, 0)), 0)::numeric as pipeline_value_azn,
+          count(*) filter (
+            where follow_up_at is not null
+              and follow_up_at <= now()
+              and lower(coalesce(status, 'open')) = 'open'
+          )::int as followups_due
+        from leads
+        where tenant_key = $1::text
+          and created_at >= now() - ($2::int * interval '1 day')
+        group by coalesce(nullif(btrim(owner), ''), 'unassigned')
+        order by total desc, owner asc
+        limit 12
+        `,
+        [tenantKey, days],
+        degraded,
+        "lead_owner_breakdown_unavailable"
+      );
+
+      const customerRows = await safeQuery(
+        db,
+        `
+        select
+          count(*)::int as total_leads,
+          count(distinct coalesce(
+            nullif(lower(btrim(email)), ''),
+            nullif(lower(btrim(phone)), ''),
+            nullif(lower(btrim(username)), ''),
+            nullif(inbox_thread_id::text, ''),
+            nullif(concat_ws(':', nullif(lower(btrim(full_name)), ''), nullif(lower(btrim(source)), '')), ''),
+            id::text
+          ))::int as customers,
+          count(*) filter (where lower(coalesce(stage, 'new')) = 'won')::int as won_leads,
+          count(*) filter (where lower(coalesce(status, 'open')) = 'open')::int as active_leads,
+          coalesce(sum(coalesce(value_azn, 0)), 0)::numeric as pipeline_value_azn,
+          count(*) filter (
+            where follow_up_at is not null
+              and follow_up_at <= now()
+              and lower(coalesce(status, 'open')) = 'open'
+          )::int as followups_due
+        from leads
+        where tenant_key = $1::text
+          and created_at >= now() - ($2::int * interval '1 day')
+        `,
+        [tenantKey, days],
+        degraded,
+        "customer_summary_unavailable"
+      );
+
+      const teamRows = await safeQuery(
+        db,
+        `
+        select
+          u.id::text as id,
+          coalesce(nullif(btrim(u.full_name), ''), nullif(btrim(u.user_email), ''), 'Team member') as name,
+          coalesce(nullif(btrim(u.user_email), ''), '') as email,
+          lower(coalesce(u.role, 'operator')) as role,
+          lower(coalesce(u.status, 'invited')) as status,
+          coalesce(u.last_seen_at, u.last_login_at, u.updated_at, u.created_at)::text as last_seen_at,
+          coalesce(thread_stats.open_threads, 0)::int as open_threads,
+          coalesce(thread_stats.handoffs, 0)::int as handoffs,
+          coalesce(lead_stats.owned_leads, 0)::int as owned_leads,
+          coalesce(lead_stats.won_leads, 0)::int as won_leads
+        from tenant_users u
+        join tenants tenant
+          on tenant.id = u.tenant_id
+          and lower(tenant.tenant_key) = lower($1::text)
+        left join lateral (
+          select
+            count(*) filter (where lower(coalesce(status, 'open')) = 'open')::int as open_threads,
+            count(*) filter (where coalesce(handoff_active, false) = true)::int as handoffs
+          from inbox_threads
+          where tenant_key = $1::text
+            and lower(nullif(btrim(assigned_to), '')) in (
+              lower(nullif(btrim(u.user_email), '')),
+              lower(nullif(btrim(u.full_name), '')),
+              lower(u.id::text)
+            )
+        ) thread_stats on true
+        left join lateral (
+          select
+            count(*)::int as owned_leads,
+            count(*) filter (where lower(coalesce(stage, 'new')) = 'won')::int as won_leads
+          from leads
+          where tenant_key = $1::text
+            and created_at >= now() - ($2::int * interval '1 day')
+            and lower(nullif(btrim(owner), '')) in (
+              lower(nullif(btrim(u.user_email), '')),
+              lower(nullif(btrim(u.full_name), '')),
+              lower(u.id::text)
+            )
+        ) lead_stats on true
+        order by
+          case lower(coalesce(u.role, 'operator'))
+            when 'owner' then 1
+            when 'admin' then 2
+            when 'operator' then 3
+            else 4
+          end,
+          lower(coalesce(u.status, 'invited')) asc,
+          name asc
+        limit 20
+        `,
+        [tenantKey, days],
+        degraded,
+        "team_report_unavailable"
+      );
+
+      const inboxSlaRows = await safeQuery(
+        db,
+        `
+        with first_inbound as (
+          select
+            thread_id,
+            min(coalesce(sent_at, created_at)) as first_inbound_at
+          from inbox_messages
+          where tenant_key = $1::text
+            and lower(coalesce(direction, '')) = 'inbound'
+            and coalesce(sent_at, created_at) >= now() - ($2::int * interval '1 day')
+          group by thread_id
+        ),
+        first_outbound as (
+          select
+            thread_id,
+            min(coalesce(sent_at, created_at)) as first_outbound_at
+          from inbox_messages
+          where tenant_key = $1::text
+            and lower(coalesce(direction, '')) = 'outbound'
+          group by thread_id
+        )
+        select
+          count(*)::int as conversations,
+          count(*) filter (where o.first_outbound_at is null)::int as waiting_first_response,
+          coalesce(avg(extract(epoch from (o.first_outbound_at - i.first_inbound_at))) filter (
+            where o.first_outbound_at is not null
+              and o.first_outbound_at >= i.first_inbound_at
+          ), 0) as avg_first_response_seconds
+        from first_inbound i
+        left join first_outbound o on o.thread_id = i.thread_id
+        `,
+        [tenantKey, days],
+        degraded,
+        "inbox_response_report_unavailable"
+      );
+
       const current = currentRows[0] || {
         open_threads: 0,
         unread_messages: 0,
         handoffs: 0,
       };
+      const customerSummary = customerRows[0] || {
+        total_leads: 0,
+        customers: 0,
+        won_leads: 0,
+        active_leads: 0,
+        pipeline_value_azn: 0,
+        followups_due: 0,
+      };
+      const inboxSla = inboxSlaRows[0] || {
+        conversations: 0,
+        waiting_first_response: 0,
+        avg_first_response_seconds: 0,
+      };
+
+      const activeTeamMembers = teamRows.filter(
+        (row) => lower(row.status) === "active"
+      ).length;
 
       const summary = {
         apiCalls: sumSeries(series, "apiCalls"),
@@ -290,6 +464,14 @@ export function reportsRoutes({ db }) {
         openThreads: n(current.open_threads),
         unreadMessages: n(current.unread_messages),
         handoffs: n(current.handoffs),
+        customers: n(customerSummary.customers),
+        activeLeads: n(customerSummary.active_leads),
+        wonLeads: n(customerSummary.won_leads),
+        pipelineValueAzn: n(customerSummary.pipeline_value_azn),
+        followupsDue: n(customerSummary.followups_due),
+        activeTeamMembers,
+        avgFirstResponseSeconds: n(inboxSla.avg_first_response_seconds),
+        waitingFirstResponse: n(inboxSla.waiting_first_response),
       };
 
       return okJson(res, {
@@ -310,6 +492,49 @@ export function reportsRoutes({ db }) {
           stage: s(row.stage, "new"),
           count: n(row.count),
         })),
+        leadOwners: leadOwnerRows.map((row) => ({
+          owner: s(row.owner, "unassigned"),
+          total: n(row.total),
+          open: n(row.open),
+          won: n(row.won),
+          lost: n(row.lost),
+          pipelineValueAzn: n(row.pipeline_value_azn),
+          followupsDue: n(row.followups_due),
+        })),
+        customers: {
+          totalLeads: n(customerSummary.total_leads),
+          customers: n(customerSummary.customers),
+          wonLeads: n(customerSummary.won_leads),
+          activeLeads: n(customerSummary.active_leads),
+          pipelineValueAzn: n(customerSummary.pipeline_value_azn),
+          followupsDue: n(customerSummary.followups_due),
+        },
+        team: {
+          summary: {
+            totalMembers: teamRows.length,
+            activeMembers: activeTeamMembers,
+            admins: teamRows.filter((row) => lower(row.role) === "admin").length,
+            owners: teamRows.filter((row) => lower(row.role) === "owner").length,
+            operators: teamRows.filter((row) => lower(row.role) === "operator").length,
+          },
+          members: teamRows.map((row) => ({
+            id: s(row.id),
+            name: s(row.name, "Team member"),
+            email: s(row.email),
+            role: s(row.role, "operator"),
+            status: s(row.status, "invited"),
+            lastSeenAt: s(row.last_seen_at),
+            openThreads: n(row.open_threads),
+            handoffs: n(row.handoffs),
+            ownedLeads: n(row.owned_leads),
+            wonLeads: n(row.won_leads),
+          })),
+        },
+        inboxSla: {
+          conversations: n(inboxSla.conversations),
+          waitingFirstResponse: n(inboxSla.waiting_first_response),
+          avgFirstResponseSeconds: n(inboxSla.avg_first_response_seconds),
+        },
         current: {
           openThreads: n(current.open_threads),
           unreadMessages: n(current.unread_messages),

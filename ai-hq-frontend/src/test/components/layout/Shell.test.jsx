@@ -27,6 +27,10 @@ vi.mock("../../../api/client.js", () => ({
   apiGet: (...args) => apiGet(...args),
 }));
 
+vi.mock("../../../lib/appEntry.js", () => ({
+  isLocalWorkspaceEntryEnabled: () => false,
+}));
+
 vi.mock("../../../components/layout/Sidebar.jsx", () => ({
   default: function SidebarMock({
     shellStats = {},
