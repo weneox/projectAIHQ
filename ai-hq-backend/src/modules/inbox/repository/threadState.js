@@ -1,5 +1,5 @@
-import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { getTenantContext } from "../../../../db/tenantContext.js";
+import { isDbReady, isUuid } from "../../../utils/http.js";
+import { getTenantContext } from "../../../db/tenantContext.js";
 import { s } from "../shared.js";
 import { normalizeInboxThreadState, normalizeJsonObject } from "./shared.js";
 

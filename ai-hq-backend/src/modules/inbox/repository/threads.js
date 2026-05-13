@@ -1,6 +1,6 @@
-import { resolveTenantKey } from "../../../../tenancy/index.js";
-import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { getTenantContext } from "../../../../db/tenantContext.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
+import { isDbReady, isUuid } from "../../../utils/http.js";
+import { getTenantContext } from "../../../db/tenantContext.js";
 import { normalizeThread } from "../shared.js";
 import { getOutboundAttemptsSummary } from "./outboundAttempts.js";
 

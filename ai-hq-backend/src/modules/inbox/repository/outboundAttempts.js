@@ -1,6 +1,6 @@
-import { resolveTenantKey } from "../../../../tenancy/index.js";
-import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { recordOutboundFinality } from "../../../../observability/runtimeSignals.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
+import { isDbReady, isUuid } from "../../../utils/http.js";
+import { recordOutboundFinality } from "../../../observability/runtimeSignals.js";
 import { toAttempt } from "./shared.js";
 import { buildOutboundAttemptCorrelation, s } from "../shared.js";
 

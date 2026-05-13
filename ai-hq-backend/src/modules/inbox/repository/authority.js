@@ -1,9 +1,9 @@
-import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { resolveTenantKey } from "../../../../tenancy/index.js";
+import { isDbReady, isUuid } from "../../../utils/http.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
-} from "../../../../services/businessBrain/getTenantBrainRuntime.js";
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { s } from "../shared.js";
 import {
   lowerSlug,

@@ -1,6 +1,6 @@
-import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { resolveTenantKey } from "../../../../tenancy/index.js";
-import { getTenantContext } from "../../../../db/tenantContext.js";
+import { isDbReady, isUuid } from "../../../utils/http.js";
+import { resolveTenantKey } from "../../../tenancy/index.js";
+import { getTenantContext } from "../../../db/tenantContext.js";
 import { normalizeMessage } from "../shared.js";
 
 function s(v, d = "") {

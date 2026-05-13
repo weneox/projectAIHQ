@@ -1,1 +1,1 @@
-export * from "./repository/index.js";
+export * from "../../../modules/inbox/repository/index.js";
