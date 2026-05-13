@@ -146,53 +146,57 @@ function resolveShellMode(pathname = "") {
 
 async function fetchShellResource(path) {
   try {
-    return { ok: true, data: await apiGet(path) };
-  } catch {
+    return { ok: true, data: await apiGet(path), status: 200, message: "" };
+  } catch (error) {
+    const status = Number(error?.status || error?.payload?.status || 0);
+    const message =
+      s(error?.payload?.reason || error?.payload?.error || error?.message) ||
+      "Melumatlar muveqqeti acilmir.";
+
     return {
       ok: false,
-      status: 0,
-      message: "Məlumatlar müvəqqəti açılmır.",
+      data: null,
+      status,
+      message,
+      accessDenied: status === 401 || status === 403,
     };
   }
 }
 
 function buildShellStatsFromResponses(inboxRes, leadsRes) {
-  const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
-
-  if (failedResponse) {
-    return {
-      inboxUnread: null,
-      inboxOpen: null,
-      leadsOpen: null,
-      dbDisabled: false,
-      availability: "unavailable",
-      message:
-        failedResponse.message || "Məlumatlar müvəqqəti açılmır.",
-    };
-  }
-
-  const inboxData = inboxRes?.data;
-  const leadsData = leadsRes?.data;
+  const inboxData = inboxRes?.ok ? inboxRes?.data : null;
+  const leadsData = leadsRes?.ok ? leadsRes?.data : null;
 
   const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
   const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
 
-  const inboxUnread = threads.reduce(
-    (sum, thread) => sum + Number(thread?.unread_count || 0),
-    0
+  const inboxUnread = inboxRes?.ok
+    ? threads.reduce((sum, thread) => sum + Number(thread?.unread_count || 0), 0)
+    : null;
+
+  const inboxOpen = inboxRes?.ok ? threads.length : null;
+
+  const leadsOpen = leadsRes?.ok
+    ? leads.filter(
+        (lead) => String(lead?.status || "open").toLowerCase() === "open"
+      ).length
+    : null;
+
+  const blockingFailure = [inboxRes, leadsRes].find(
+    (entry) => entry && !entry.ok && !entry.accessDenied
   );
 
-  const leadsOpen = leads.filter(
-    (lead) => String(lead?.status || "open").toLowerCase() === "open"
-  ).length;
+  const anyReady = Boolean(inboxRes?.ok || leadsRes?.ok);
 
   return {
     inboxUnread,
-    inboxOpen: threads.length,
+    inboxOpen,
     leadsOpen,
     dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
-    availability: "ready",
-    message: "",
+    availability: blockingFailure ? "unavailable" : anyReady ? "ready" : "limited",
+    message: blockingFailure
+      ? blockingFailure.message || "Melumatlar muveqqeti acilmir."
+      : "",
   };
 }
 

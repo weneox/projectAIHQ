@@ -17,6 +17,10 @@ import {
   buildTenantContextFromRequest,
   setTenantContext,
 } from "../../db/tenantContext.js";
+import {
+  requireOperatorSurfaceAccess,
+  requireTenantPermission,
+} from "../../utils/auth.js";
 import { isDbReady, serviceUnavailableJson } from "../../utils/http.js";
 import { hasFeature } from "../../config/features.js";
 import { shouldEnableDebugRoutes } from "../../utils/securitySurface.js";
@@ -64,6 +68,10 @@ function normalizePath(req) {
   return noQuery.replace(/^\/api(?:\/v1)?/, "") || "/";
 }
 
+function isReadOnlyMethod(req) {
+  const method = s(req?.method).toUpperCase();
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
+}
 function isInternalBypassPath(req) {
   const path = normalizePath(req);
 
@@ -442,6 +450,60 @@ function mountFrozenWhenDisabled(router, featurePath, paths, surface = featurePa
   return false;
 }
 
+
+function requireOperationalSurfaceWriteAccess(req, res, next) {
+  if (isReadOnlyMethod(req)) {
+    return next();
+  }
+
+  const path = normalizePath(req);
+
+  if (
+    path === "/settings/voice" ||
+    path === "/voice/settings" ||
+    path.startsWith("/voice/")
+  ) {
+    return requireOperatorSurfaceAccess(req, res, next, {
+      reason: "voice operator access required",
+    });
+  }
+
+  if (
+    path === "/inbox/threads" ||
+    path.startsWith("/inbox/threads/") ||
+    path.startsWith("/inbox/outbound/")
+  ) {
+    const action = path.includes("/handoff/") ? "handoff" : "write";
+
+    return requireTenantPermission(req, res, next, {
+      resource: "inbox",
+      action,
+      reason:
+        action === "handoff"
+          ? "inbox handoff access required"
+          : "inbox write access required",
+    });
+  }
+
+  if (path === "/leads" || path.startsWith("/leads/")) {
+    return requireTenantPermission(req, res, next, {
+      resource: "leads",
+      action: "write",
+      reason: "leads write access required",
+    });
+  }
+
+  if (path === "/comments" || path.startsWith("/comments/")) {
+    return requireTenantPermission(req, res, next, {
+      resource: "comments",
+      action: "write",
+      reason: "comments write access required",
+    });
+  }
+
+  return next();
+}
+
 export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   const r = express.Router();
 
@@ -581,6 +643,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use(enforceAuthenticatedTenantContextMiddleware);
   r.use(requireVerifiedEmailForSensitiveActions);
   r.use(createRequireOperationalDbMiddleware({ db }));
+  r.use(requireOperationalSurfaceWriteAccess);
   r.use(createTenantUsageAndQuotaMiddleware({ db }));
 
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
@@ -678,6 +741,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
 export const __test__ = {
   createFrozenSurfaceMiddleware,
   createRequireOperationalDbMiddleware,
+  requireOperationalSurfaceWriteAccess,
   enforceAuthenticatedTenantContextMiddleware,
   enforceServerControlledIdentityMiddleware,
   requireUserSessionMiddleware,

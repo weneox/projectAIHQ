@@ -44,15 +44,16 @@ export async function exportTenantCsvBundle(tenantKey) {
 
 export async function downloadTenantZip(tenantKey) {
   const k = normKey(tenantKey);
-  const base =
-    String(import.meta.env.VITE_API_BASE || "").trim().replace(/\/+$/, "") || "";
+  const base = String(import.meta.env.VITE_API_BASE || "").trim().replace(/\/+$/, "");
+  const url = base
+    ? `${base}/api/tenants/${k}/export/zip`
+    : `/api/tenants/${k}/export/zip`;
 
-  if (!base) {
-    throw new Error("VITE_API_BASE is not set");
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+
+  if (!opened) {
+    throw new Error("Tenant ZIP export popup was blocked");
   }
-
-  const url = `${base}/api/tenants/${k}/export/zip`;
-  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 // --------------------------------------------------
