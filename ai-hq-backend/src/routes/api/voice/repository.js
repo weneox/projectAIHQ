@@ -1,4 +1,4 @@
-import {
+﻿import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
   listVoiceCalls,
@@ -16,6 +16,7 @@ import {
   createVoiceCallSession,
 } from "../../../db/helpers/voice.js";
 import { s } from "./shared.js";
+import { resolveTenantContext } from "../../../platform/tenancy/index.js";
 
 export {
   getTenantVoiceSettings,
@@ -85,6 +86,18 @@ async function buildTenantSelectSql(db) {
 }
 
 export async function resolveTenantScope(req, db) {
+  const ctx = await resolveTenantContext(req, {
+    db,
+    allowFallback: false,
+    allowDefaultTenant: false,
+  });
+
+  if (ctx?.tenantId || ctx?.tenantKey) {
+    return {
+      tenantId: s(ctx.tenantId),
+      tenantKey: s(ctx.tenantKey),
+    };
+  }
   const tenantId =
     s(req.user?.tenantId) ||
     s(req.user?.tenant_id) ||
@@ -191,3 +204,4 @@ export async function findTenantByKeyOrPhone(
 
   return null;
 }
+
