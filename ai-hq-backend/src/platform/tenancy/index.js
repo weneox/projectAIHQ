@@ -10,3 +10,7 @@ export {
   createRequireTenantContext,
   default as createRequireTenantContextDefault,
 } from "./requireTenantContext.js";
+export {
+  resolveTenantKeyCompat,
+  getAttachedTenantKey,
+} from "./resolveTenantKeyCompat.js";
