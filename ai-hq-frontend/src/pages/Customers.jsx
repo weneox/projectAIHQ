@@ -66,14 +66,14 @@ const TABLE_GRID_STYLE = {
 
 const STAGE_PRIORITY = [
   "new",
+  "contacted",
   "qualified",
-  "demo requested",
   "proposal",
   "won",
   "lost",
 ];
 
-const STATUS_PRIORITY = ["open", "active", "converted", "closed", "lost"];
+const STATUS_PRIORITY = ["open", "closed", "archived", "spam"];
 
 const SOURCE_PRIORITY = [
   "website",
@@ -82,7 +82,41 @@ const SOURCE_PRIORITY = [
   "facebook",
   "telegram",
   "email",
+  "whatsapp",
+  "manual",
+  "direct",
 ];
+
+const STAGE_LABELS = {
+  new: "Yeni",
+  contacted: "Əlaqə saxlanıb",
+  qualified: "Dəyərləndirilib",
+  proposal: "Təklif",
+  won: "Qazanılıb",
+  lost: "İtirilib",
+};
+
+const STATUS_LABELS = {
+  open: "Açıq",
+  active: "Aktiv",
+  converted: "Müştəriyə çevrilib",
+  closed: "Bağlı",
+  archived: "Arxiv",
+  spam: "Spam",
+  lost: "İtirilib",
+};
+
+const SOURCE_LABELS = {
+  website: "Vebsayt",
+  "website chat": "Veb çat",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  telegram: "Telegram",
+  email: "Email",
+  whatsapp: "WhatsApp",
+  manual: "Əl ilə",
+  direct: "Birbaşa",
+};
 
 
 function s(value, fallback = "") {
@@ -108,6 +142,23 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function labelFor(map, value = "") {
+  const key = lower(value);
+  return map[key] || titleize(value);
+}
+
+function stageLabel(value = "") {
+  return labelFor(STAGE_LABELS, value);
+}
+
+function statusLabel(value = "") {
+  return labelFor(STATUS_LABELS, value);
+}
+
+function sourceLabel(value = "") {
+  return labelFor(SOURCE_LABELS, value);
+}
+
 
 function normalizeResponse(payload) {
   if (Array.isArray(payload)) return payload;
@@ -129,7 +180,7 @@ function customerName(customer = {}) {
       customer.username ||
       customer.email ||
       customer.phone ||
-      "Unknown contact"
+      "Naməlum müştəri"
   );
 }
 
@@ -323,7 +374,7 @@ function statusTone(status = "") {
   return "brand";
 }
 
-function uniqueOptions(values = [], priority = []) {
+function uniqueOptions(values = [], priority = [], labeler = titleize) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
   const unique = [
     ...new Set(values.map((value) => lower(value)).filter(Boolean)),
@@ -338,7 +389,7 @@ function uniqueOptions(values = [], priority = []) {
 
       return titleize(a).localeCompare(titleize(b));
     })
-    .map((value) => ({ value, label: titleize(value) }));
+    .map((value) => ({ value, label: labeler(value) }));
 }
 
 function createDefaultFilters() {
@@ -381,9 +432,9 @@ function matchesContactText(customer = {}, query = "") {
     [
       customerName(customer),
       customerContact(customer),
-      titleize(customerSource(customer)),
-      titleize(customerStage(customer)),
-      titleize(customerStatus(customer)),
+      sourceLabel(customerSource(customer)),
+      stageLabel(customerStage(customer)),
+      statusLabel(customerStatus(customer)),
       customer.interest,
       customer.owner,
       customer.assigned_to,
@@ -402,7 +453,7 @@ function ContactIdentity({ customer }) {
           {name}
         </div>
         <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {s(customer.interest) || "Customer contact"}
+          {s(customer.interest) || "Müştəri kontaktı"}
         </div>
       </div>
     </div>
@@ -428,21 +479,21 @@ function ContactRow({ customer, selected, onOpenDetail }) {
 
       <AppTableCell>
         <AppTableText muted>
-          {customerContact(customer) || "No contact details"}
+          {customerContact(customer) || "Əlaqə məlumatı yoxdur"}
         </AppTableText>
       </AppTableCell>
 
       <AppTableCell>
-        <AppTag tone={sourceTone(source)}>{titleize(source)}</AppTag>
+        <AppTag tone={sourceTone(source)}>{sourceLabel(source)}</AppTag>
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={stageTone(stage)}>{titleize(stage)}</AppStatusText>
+        <AppStatusText tone={stageTone(stage)}>{stageLabel(stage)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
         <AppStatusText tone={statusTone(status)}>
-          {titleize(status)}
+          {statusLabel(status)}
         </AppStatusText>
       </AppTableCell>
 
@@ -475,8 +526,8 @@ function ContactTable({
   return (
     <div className="flex h-full min-h-[690px] min-w-0 flex-col">
       <AppTableToolbar
-        title="Contacts"
-        description="People who message your business across connected channels."
+        title="Müştəri siyahısı"
+        description="Qoşulan kanallardan biznesinizə yazan bütün kontaktlar."
         filters={
           activeFilterCount ? (
             <Button
@@ -485,7 +536,7 @@ function ContactTable({
               size="sm"
               onClick={onClearFilters}
             >
-              Clear filters
+              Filtrləri təmizlə
             </Button>
           ) : null
         }
@@ -500,7 +551,7 @@ function ContactTable({
           >
             <AppTableHeaderFilter
               id="customer"
-              label="Name"
+              label="Ad"
               openFilter={openFilter}
               active={Boolean(filters.customer)}
               onOpen={onOpenFilter}
@@ -508,21 +559,21 @@ function ContactTable({
               <AppFilterSearchInput
                 value={filters.customer}
                 onChange={(value) => onPatchFilters({ customer: value })}
-                placeholder="Search names"
+                placeholder="Ad axtar"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ customer: "" })}
                   disabled={!filters.customer}
                 >
-                  Clear name filter
+                  Ad filtrini təmizlə
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
 
             <AppTableHeaderFilter
               id="contact"
-              label="Reach"
+              label="Əlaqə"
               openFilter={openFilter}
               active={Boolean(filters.contact)}
               onOpen={onOpenFilter}
@@ -530,21 +581,21 @@ function ContactTable({
               <AppFilterSearchInput
                 value={filters.contact}
                 onChange={(value) => onPatchFilters({ contact: value })}
-                placeholder="Search email, phone, or username"
+                placeholder="Email, telefon və ya istifadəçi adı axtar"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ contact: "" })}
                   disabled={!filters.contact}
                 >
-                  Clear name filter
+                  Əlaqə filtrini təmizlə
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
 
             <AppTableHeaderFilter
               id="source"
-              label="Source"
+              label="Mənbə"
               openFilter={openFilter}
               active={normalizeAppFilterList(filters.sources).length > 0}
               onOpen={onOpenFilter}
@@ -552,7 +603,7 @@ function ContactTable({
               <AppMultiSelectMenu
                 options={sourceOptions}
                 selectedValues={filters.sources}
-                allLabel="All sources"
+                allLabel="Bütün mənbələr"
                 onClear={() => onPatchFilters({ sources: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -564,7 +615,7 @@ function ContactTable({
 
             <AppTableHeaderFilter
               id="stage"
-              label="Stage"
+              label="Mərhələ"
               openFilter={openFilter}
               active={normalizeAppFilterList(filters.stages).length > 0}
               onOpen={onOpenFilter}
@@ -572,7 +623,7 @@ function ContactTable({
               <AppMultiSelectMenu
                 options={stageOptions}
                 selectedValues={filters.stages}
-                allLabel="All stages"
+                allLabel="Bütün mərhələlər"
                 onClear={() => onPatchFilters({ stages: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -592,7 +643,7 @@ function ContactTable({
               <AppMultiSelectMenu
                 options={statusOptions}
                 selectedValues={filters.statuses}
-                allLabel="All statuses"
+                allLabel="Bütün statuslar"
                 onClear={() => onPatchFilters({ statuses: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -604,7 +655,7 @@ function ContactTable({
 
             <AppTableHeaderFilter
               id="updated"
-              label="Updated"
+              label="Yenilənmə"
               openFilter={openFilter}
               active={filters.updatedSort === "oldest"}
               onOpen={onOpenFilter}
@@ -614,21 +665,21 @@ function ContactTable({
                   selected={filters.updatedSort === "newest"}
                   onClick={() => onPatchFilters({ updatedSort: "newest" })}
                 >
-                  Newest first
+                  Ən yenilər əvvəl
                 </AppFilterOption>
 
                 <AppFilterOption
                   selected={filters.updatedSort === "oldest"}
                   onClick={() => onPatchFilters({ updatedSort: "oldest" })}
                 >
-                  Oldest first
+                  Ən köhnələr əvvəl
                 </AppFilterOption>
 
                 <AppFilterAction
                   onClick={() => onPatchFilters({ updatedSort: "newest" })}
                   disabled={filters.updatedSort === "newest"}
                 >
-                  Reset sort
+                  Sıralamanı sıfırla
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
@@ -650,13 +701,13 @@ function ContactTable({
           ) : (
             <AppTableEmptyState
               icon={<Users className="h-5 w-5" strokeWidth={1.9} />}
-              title={activeFilterCount ? "No matching contacts" : "No contacts yet"}
+              title={activeFilterCount ? "Uyğun müştəri tapılmadı" : "Hələ müştəri yoxdur"}
               description={
                 activeFilterCount
-                  ? "Adjust the active filters to bring contacts back into view."
-                  : "No contacts yet. Connect a channel and handle your first conversation in Inbox."
+                  ? "Müştəriləri yenidən görmək üçün aktiv filtrləri dəyişin."
+                  : "Hələ müştəri yoxdur. Kanal qoşun və ilk söhbəti Gələnlərdə idarə edin."
               }
-                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Open Inbox</Button>)}
+                          action={activeFilterCount ? null : (<Button type="button" onClick={onOpenInbox} rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}>Gələnləri aç</Button>)}
             />
           )}
         </div>
@@ -683,8 +734,8 @@ function ContactDetailPanel({ customer, onOpenThread }) {
       <AppDetailPane className="flex h-full min-h-[690px] flex-col">
         <AppDetailEmpty
           icon={<UserRound className="h-5 w-5" strokeWidth={1.9} />}
-          title="Select a contact"
-          description="Choose a contact to see their latest context and open the conversation."
+          title="Müştəri seçin"
+          description="Son konteksti görmək və söhbəti açmaq üçün müştəri seçin."
         />
       </AppDetailPane>
     );
@@ -703,7 +754,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
     s(customer.lastMessageText) ||
     s(customer.last_message_text) ||
     s(customer.latest_message) ||
-    "No conversation preview yet.";
+    "Hələ söhbət önizləməsi yoxdur.";
 
   return (
     <AppDetailPane className="flex h-full min-h-[690px] flex-col">
@@ -716,16 +767,16 @@ function ContactDetailPanel({ customer, onOpenThread }) {
               {name}
             </div>
             <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-              {s(customer.interest) || "Customer contact"}
+              {s(customer.interest) || "Müştəri kontaktı"}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <AppTag tone={sourceTone(source)}>{titleize(source)}</AppTag>
+              <AppTag tone={sourceTone(source)}>{sourceLabel(source)}</AppTag>
               <AppTag tone={stageTone(stage)} dot>
-                {titleize(stage)}
+                {stageLabel(stage)}
               </AppTag>
               <AppTag tone={statusTone(status)} dot>
-                {titleize(status)}
+                {statusLabel(status)}
               </AppTag>
             </div>
           </div>
@@ -742,7 +793,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
             onClick={() => threadId && onOpenThread(threadId)}
             leftIcon={<MessageCircle className="h-4 w-4" strokeWidth={2.1} />}
           >
-            Open conversation
+            Söhbəti aç
           </Button>
 
           <div className="grid grid-cols-2 gap-2">
@@ -767,35 +818,33 @@ function ContactDetailPanel({ customer, onOpenThread }) {
               disabled={!phone}
               leftIcon={<Phone className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Call
+              Zəng et
             </Button>
           </div>
         </div>
 
         <AppInfoRow
-          label="Contact"
-          value={customerContact(customer) || "Not recorded"}
+          label="Əlaqə"
+          value={customerContact(customer) || "Yazılmayıb"}
         />
-        <AppInfoRow label="Source" value={titleize(source)} />
-        <AppInfoRow label="Stage" value={titleize(stage)} />
-        <AppInfoRow label="Status" value={titleize(status)} />
+        <AppInfoRow label="Mənbə" value={sourceLabel(source)} />
+        <AppInfoRow label="Mərhələ" value={stageLabel(stage)} />
+        <AppInfoRow label="Status" value={statusLabel(status)} />
         <AppInfoRow
-          label="Related opportunities"
-          value={`${customerOpportunityCount(customer)} related ${
-            customerOpportunityCount(customer) === 1 ? "opportunity" : "opportunities"
-          }`}
+          label="Bağlı fürsətlər"
+          value={`${customerOpportunityCount(customer)} fürsət`}
         />
-        <AppInfoRow label="Pipeline value" value={formatMoney(customerValue(customer))} />
+        <AppInfoRow label="Pipeline dəyəri" value={formatMoney(customerValue(customer))} />
         <AppInfoRow
-          label="Owner"
-          value={s(customer.owner || customer.assigned_to) || "Unassigned"}
+          label="Sahib"
+          value={s(customer.owner || customer.assigned_to) || "Təyin edilməyib"}
         />
-        <AppInfoRow label="Created" value={formatDate(customerCreatedRaw(customer))} />
-        <AppInfoRow label="Updated" value={formatDate(customerUpdatedRaw(customer))} />
+        <AppInfoRow label="Yaradılıb" value={formatDate(customerCreatedRaw(customer))} />
+        <AppInfoRow label="Yenilənib" value={formatDate(customerUpdatedRaw(customer))} />
 
         <Card padded="sm" className="mt-auto bg-surface-subtle">
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-            Latest conversation
+            Son söhbət
           </div>
           <div className="mt-2 text-[13px] font-medium leading-6 text-text">
             {latest}
@@ -807,7 +856,7 @@ function ContactDetailPanel({ customer, onOpenThread }) {
               onClick={() => onOpenThread(threadId)}
               className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand"
             >
-              Open conversation
+              Söhbəti aç
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
             </button>
           ) : null}
@@ -898,7 +947,7 @@ export default function Contacts() {
     } catch (err) {
       setError(
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
-          "Contacts could not be loaded."
+          "Müştərilər yüklənə bilmədi."
       );
       setContacts([]);
     } finally {
@@ -979,7 +1028,8 @@ export default function Contacts() {
     () =>
       uniqueOptions(
         arr(customers).map((customer) => customerSource(customer)),
-        SOURCE_PRIORITY
+        SOURCE_PRIORITY,
+        sourceLabel
       ),
     [customers]
   );
@@ -988,7 +1038,8 @@ export default function Contacts() {
     () =>
       uniqueOptions(
         arr(customers).map((customer) => customerStage(customer)),
-        STAGE_PRIORITY
+        STAGE_PRIORITY,
+        stageLabel
       ),
     [customers]
   );
@@ -997,7 +1048,8 @@ export default function Contacts() {
     () =>
       uniqueOptions(
         arr(customers).map((customer) => customerStatus(customer)),
-        STATUS_PRIORITY
+        STATUS_PRIORITY,
+        statusLabel
       ),
     [customers]
   );
@@ -1041,8 +1093,8 @@ export default function Contacts() {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading contacts"
-          description="Loading contacts and conversation context."
+          title="Müştərilər yüklənir"
+          description="Kontaktlar və söhbət konteksti hazırlanır."
           rows={5}
         />
       </PageCanvas>
@@ -1052,8 +1104,8 @@ export default function Contacts() {
   return (
     <PageCanvas>
       <PageHeader
-        title="Contacts"
-        description="See every contact, their latest context, and the conversation they came from."
+        title="Müştərilər"
+        description="Hər müştərini, son kontekstini və gəldiyi söhbəti bir yerdə görün."
         actions={
           <>
             <Button
@@ -1067,7 +1119,7 @@ export default function Contacts() {
                 ) : undefined
               }
             >
-              Refresh
+              Yenilə
             </Button>
 
             <Button
@@ -1075,7 +1127,7 @@ export default function Contacts() {
               onClick={() => navigate("/inbox")}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Open inbox
+              Gələnləri aç
             </Button>
           </>
         }
@@ -1084,23 +1136,23 @@ export default function Contacts() {
       {error ? (
         <InlineNotice
           tone="danger"
-          title="Contacts unavailable"
+          title="Müştərilər açılmır"
           description={error}
           compact
         />
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={Users} label="Directory records" value={stats.total} />
+        <AppStatCard icon={Users} label="Müştəri qeydləri" value={stats.total} />
         <AppStatCard
           icon={CheckCircle2}
-          label="Engaged contacts"
+          label="Aktiv maraq"
           value={stats.engaged}
         />
-        <AppStatCard icon={Trophy} label="Won accounts" value={stats.won} />
+        <AppStatCard icon={Trophy} label="Qazanılmış hesablar" value={stats.won} />
         <AppStatCard
           icon={MessageCircle}
-          label="Pipeline value"
+          label="Pipeline dəyəri"
           value={formatMoney(stats.value)}
         />
       </div>

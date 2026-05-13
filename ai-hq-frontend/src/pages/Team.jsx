@@ -89,7 +89,7 @@ function teamLoadErrorMessage(error) {
 
   return (
     s(error?.payload?.message || error?.payload?.error || error?.message) ||
-    "Team could not be loaded."
+    "Komanda yüklənə bilmədi."
   );
 }
 
@@ -97,19 +97,35 @@ function roleDescription(role = "") {
   const safe = lower(role);
 
   if (safe === "owner") {
-    return "Full access. Owners are protected and cannot be disabled here.";
+    return "Tam giriş. Sahib hesabları qorunur və buradan deaktiv edilə bilməz.";
   }
 
   if (safe === "admin") {
-    return "Can manage teammates, channels, settings, and customer operations.";
+    return "Komandanı, kanalları, ayarları və müştəri əməliyyatlarını idarə edə bilər.";
   }
 
-  return "Can handle Inbox conversations, leads, contacts, and daily customer work.";
+  return "Gələnlər, fürsətlər, müştərilər və gündəlik müştəri işlərini idarə edə bilər.";
 }
 function titleize(value = "") {
   return s(value)
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function roleLabel(value = "") {
+  const safe = lower(value);
+  if (safe === "owner") return "Sahib";
+  if (safe === "admin") return "Admin";
+  if (safe === "operator") return "Operator";
+  return titleize(value);
+}
+
+function statusLabel(value = "") {
+  const safe = lower(value);
+  if (["active", "enabled"].includes(safe)) return "Aktiv";
+  if (["invited", "pending"].includes(safe)) return "Dəvət edilib";
+  if (["disabled", "blocked", "inactive"].includes(safe)) return "Deaktiv";
+  return titleize(value);
 }
 
 function formatWhen(value = "") {
@@ -141,7 +157,7 @@ function userName(user = {}) {
       user.name ||
       user.display_name ||
       userEmail(user) ||
-      "Team member"
+      "Komanda üzvü"
   );
 }
 
@@ -165,7 +181,7 @@ function updatedTimestamp(user = {}) {
 }
 
 function updatedLabel(user = {}) {
-  return formatWhen(userUpdatedRaw(user)) || "Unknown";
+  return formatWhen(userUpdatedRaw(user)) || "Naməlum";
 }
 
 function displayUserId(value = "") {
@@ -221,7 +237,7 @@ function toggleListValue(values = [], value = "") {
   return toggleTeamFilterListValue(values, value);
 }
 
-function uniqueOptions(values = [], priority = []) {
+function uniqueOptions(values = [], priority = [], labeler = titleize) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
   const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
 
@@ -234,7 +250,7 @@ function uniqueOptions(values = [], priority = []) {
 
       return titleize(a).localeCompare(titleize(b));
     })
-    .map((value) => ({ value, label: titleize(value) }));
+    .map((value) => ({ value, label: labeler(value) }));
 }
 
 function countActiveFilters(filters = {}) {
@@ -304,7 +320,7 @@ function RoleText({ role = "" }) {
         toneText(toneForRole(role))
       )}
     >
-      {titleize(role)}
+      {roleLabel(role)}
     </span>
   );
 }
@@ -318,21 +334,21 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
         </div>
 
         <h2 className="mt-5 text-[22px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-          {filtered ? "No matching members" : "No team members yet"}
+          {filtered ? "Uyğun üzv tapılmadı" : "Hələ komanda üzvü yoxdur"}
         </h2>
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
           {filtered
-            ? "No members match the current filters."
-            : "Add teammates who should help with Inbox conversations, leads, contacts, channels, or workspace settings."}
+            ? "Cari filtrlərə uyğun üzv yoxdur."
+            : "Gələnlər, fürsətlər, müştərilər, kanallar və workspace ayarlarında kömək edəcək komanda üzvlərini əlavə edin."}
         </p>
 
         <div className="mt-5 rounded-md border border-line-soft bg-surface-subtle px-4 py-3 text-left">
           <div className="text-[13px] font-semibold text-text">
-            Role guide
+            Rol bələdçisi
           </div>
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            Owners have full access. Admins can manage setup and teammates. Operators can handle daily customer conversations.
+            Sahiblərdə tam giriş var. Adminlər qurulumu və komanda üzvlərini idarə edir. Operatorlar gündəlik müştəri söhbətlərini aparır.
           </div>
         </div>
 
@@ -343,7 +359,7 @@ function EmptyState({ onAddMember, canManage, filtered = false }) {
               onClick={onAddMember}
               leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Add first member
+              İlk üzvü əlavə et
             </Button>
           </div>
         ) : null}
@@ -389,7 +405,7 @@ function UpdatedMenu({
   return (
     <FilterMenuShell>
       <FilterAction onClick={onClear} disabled={!selected.length && !sortValue}>
-        Clear updated filter
+        Yenilənmə filtrini təmizlə
       </FilterAction>
 
       <div className="my-1 h-px bg-line-soft" />
@@ -398,13 +414,13 @@ function UpdatedMenu({
         selected={sortValue === "newest"}
         onClick={() => onSetSort(sortValue === "newest" ? "" : "newest")}
       >
-        Newest first
+        Ən yenilər əvvəl
       </FilterOption>
       <FilterOption
         selected={sortValue === "oldest"}
         onClick={() => onSetSort(sortValue === "oldest" ? "" : "oldest")}
       >
-        Oldest first
+        Ən köhnələr əvvəl
       </FilterOption>
 
       {arr(options).length ? <div className="my-1 h-px bg-line-soft" /> : null}
@@ -453,7 +469,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
 
       <div className="min-w-0 px-4">
         <div className="truncate text-[13px] font-medium text-text-muted">
-          {email || "No email added"}
+          {email || "Email əlavə edilməyib"}
         </div>
       </div>
 
@@ -462,7 +478,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
       </div>
 
       <div className="min-w-0 px-4">
-        <StatusText tone={toneForStatus(status)}>{titleize(status)}</StatusText>
+        <StatusText tone={toneForStatus(status)}>{statusLabel(status)}</StatusText>
       </div>
 
       <div className="min-w-0 px-4">
@@ -489,7 +505,7 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
             className="min-w-[74px]"
             onClick={() => onToggleStatus(user)}
           >
-            {active ? "Disable" : "Activate"}
+            {active ? "Deaktiv et" : "Aktiv et"}
           </Button>
         ) : (
           <Button
@@ -499,14 +515,14 @@ function TeamRow({ user, busyId, canManage, onToggleStatus, onEdit }) {
             disabled
             className="min-w-[74px]"
           >
-            Owner
+            Sahib
           </Button>
         )}
 
         <AppIconButton
           disabled={!canManage || !id}
           onClick={() => onEdit(user)}
-          label="Edit member"
+          label="Üzvü redaktə et"
         >
           <Pencil className="h-3.5 w-3.5" strokeWidth={2.1} />
         </AppIconButton>
@@ -534,10 +550,10 @@ function PaginationFooter({
       )}
     >
       <div className="text-[12px] font-medium text-text-muted">
-        Showing <span className="font-semibold text-text">{from}</span>-
-        <span className="font-semibold text-text">{to}</span> of{" "}
+        Göstərilir <span className="font-semibold text-text">{from}</span>-
+        <span className="font-semibold text-text">{to}</span> /{" "}
         <span className="font-semibold text-text">{totalItems}</span>
-        {filtered ? <span className="text-text-subtle"> filtered</span> : null}
+        {filtered ? <span className="text-text-subtle"> filtrli</span> : null}
       </div>
 
       <div className="flex items-center gap-2">
@@ -547,7 +563,7 @@ function PaginationFooter({
           onClick={() => onPageChange(currentPage - 1)}
           className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
         >
-          Previous
+          Əvvəlki
         </button>
 
         <div className="inline-flex h-8 min-w-[54px] items-center justify-center rounded-md border border-line-soft bg-surface-subtle px-2 text-[12px] font-semibold text-text-muted">
@@ -560,7 +576,7 @@ function PaginationFooter({
           onClick={() => onPageChange(currentPage + 1)}
           className="inline-flex h-8 items-center justify-center rounded-md border border-line bg-white px-3 text-[12px] font-semibold text-text transition-colors duration-base ease-premium hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-45"
         >
-          Next
+          Növbəti
         </button>
       </div>
     </div>
@@ -599,7 +615,7 @@ function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
         />
       </FieldInput>
 
-      <FieldInput label="Name">
+      <FieldInput label="Ad">
         <SoftInput
           value={invite.fullName}
           onChange={(event) =>
@@ -608,7 +624,7 @@ function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
               fullName: event.target.value,
             }))
           }
-          placeholder="Optional"
+          placeholder="İstəyə bağlı"
           disabled={!canManage}
           autoComplete="new-password"
           name="team_invite_display_entry"
@@ -616,7 +632,7 @@ function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
       </FieldInput>
 
       <ChoiceGroup
-        label="Role"
+        label="Rol"
         value={invite.role}
         disabled={!canManage}
         options={[
@@ -638,14 +654,14 @@ function AddMemberForm({ canManage, invite, setInvite, busy, onSubmit }) {
             !busy ? <Plus className="h-4 w-4" strokeWidth={2.1} /> : undefined
           }
         >
-          Add member
+          Üzv əlavə et
         </Button>
       </div>
 
       {!canManage ? (
         <Card padded={false} clip>
           <div className="px-3 py-3 text-[12.5px] font-medium leading-5 text-text-muted">
-            Only owners or admins can add or update team members.
+            Komanda üzvlərini yalnız sahib və adminlər əlavə edə və yeniləyə bilər.
           </div>
         </Card>
       ) : null}
@@ -658,7 +674,7 @@ function EditMemberForm({ canManage, edit, setEdit, busy, onSubmit }) {
 
   return (
     <form onSubmit={onSubmit} autoComplete="off" className="grid gap-5">
-      <FieldInput label="Name">
+      <FieldInput label="Ad">
         <SoftInput
           value={edit.fullName}
           onChange={(event) =>
@@ -667,7 +683,7 @@ function EditMemberForm({ canManage, edit, setEdit, busy, onSubmit }) {
               fullName: event.target.value,
             }))
           }
-          placeholder="Full name"
+          placeholder="Tam ad"
           disabled={!canManage}
           autoComplete="new-password"
           name="team_edit_display_entry"
@@ -691,11 +707,11 @@ function EditMemberForm({ canManage, edit, setEdit, busy, onSubmit }) {
       </FieldInput>
 
       <ChoiceGroup
-        label="Role"
+        label="Rol"
         value={edit.role}
         disabled={!canManage || owner}
         options={[
-          { value: "owner", label: "Owner" },
+          { value: "owner", label: "Sahib" },
           { value: "admin", label: "Admin" },
           { value: "operator", label: "Operator" },
         ]}
@@ -712,9 +728,9 @@ function EditMemberForm({ canManage, edit, setEdit, busy, onSubmit }) {
         value={edit.status}
         disabled={!canManage || owner}
         options={[
-          { value: "active", label: "Active" },
-          { value: "invited", label: "Invited" },
-          { value: "disabled", label: "Disabled" },
+          { value: "active", label: "Aktiv" },
+          { value: "invited", label: "Dəvət edilib" },
+          { value: "disabled", label: "Deaktiv" },
         ]}
         onChange={(value) =>
           setEdit((current) => ({
@@ -726,7 +742,7 @@ function EditMemberForm({ canManage, edit, setEdit, busy, onSubmit }) {
 
       <div className="pt-1">
         <Button type="submit" fullWidth disabled={!canManage} loading={busy}>
-          Save changes
+          Dəyişiklikləri saxla
         </Button>
       </div>
     </form>
@@ -938,11 +954,13 @@ export default function Team() {
     return {
       roles: uniqueOptions(
         users.map((user) => userRole(user)),
-        ["owner", "admin", "operator"]
+        ["owner", "admin", "operator"],
+        roleLabel
       ),
       statuses: uniqueOptions(
         users.map((user) => userStatus(user)),
-        ["active", "invited", "disabled"]
+        ["active", "invited", "disabled"],
+        statusLabel
       ),
       updatedDates: updatedDateValues
         .sort((a, b) => a.localeCompare(b))
@@ -1069,8 +1087,8 @@ export default function Team() {
     if (!email) {
       setNotice({
         tone: "danger",
-        title: "Email required",
-        description: "Enter an email before adding a team member.",
+        title: "Email lazımdır",
+        description: "Komanda üzvü əlavə etməzdən əvvəl email daxil edin.",
       });
       return;
     }
@@ -1088,8 +1106,8 @@ export default function Team() {
 
       setNotice({
         tone: "success",
-        title: "Team member added",
-        description: "The workspace access list was updated.",
+        title: "Komanda üzvü əlavə edildi",
+        description: "Workspace giriş siyahısı yeniləndi.",
       });
 
       setInvite({
@@ -1103,10 +1121,10 @@ export default function Team() {
     } catch (error) {
       setNotice({
         tone: "danger",
-        title: "Could not add member",
+        title: "Üzv əlavə edilə bilmədi",
         description:
           s(error?.payload?.error || error?.payload?.message || error?.message) ||
-          "Check permissions and try again.",
+          "İcazələri yoxlayın və yenidən cəhd edin.",
       });
     } finally {
       setBusyId("");
@@ -1132,16 +1150,16 @@ export default function Team() {
 
       setNotice({
         tone: "success",
-        title: "Team member updated",
-        description: `Status changed to ${nextStatus}.`,
+        title: "Komanda üzvü yeniləndi",
+        description: `Status ${statusLabel(nextStatus)} olaraq dəyişdi.`,
       });
     } catch (error) {
       setNotice({
         tone: "danger",
-        title: "Could not update member",
+        title: "Üzv yenilənə bilmədi",
         description:
           s(error?.payload?.error || error?.payload?.message || error?.message) ||
-          "Check permissions and try again.",
+          "İcazələri yoxlayın və yenidən cəhd edin.",
       });
     } finally {
       setBusyId("");
@@ -1160,8 +1178,8 @@ export default function Team() {
     if (!id) {
       setNotice({
         tone: "danger",
-        title: "Member not selected",
-        description: "Select a team member before saving changes.",
+        title: "Üzv seçilməyib",
+        description: "Dəyişiklikləri saxlamazdan əvvəl komanda üzvü seçin.",
       });
       return;
     }
@@ -1169,8 +1187,8 @@ export default function Team() {
     if (!email) {
       setNotice({
         tone: "danger",
-        title: "Email required",
-        description: "Team member email is required.",
+        title: "Email lazımdır",
+        description: "Komanda üzvünün emaili lazımdır.",
       });
       return;
     }
@@ -1188,8 +1206,8 @@ export default function Team() {
 
       setNotice({
         tone: "success",
-        title: "Member updated",
-        description: "Team member changes were saved.",
+        title: "Üzv yeniləndi",
+        description: "Komanda üzvü dəyişiklikləri saxlanıldı.",
       });
 
       setEditingUser(null);
@@ -1197,10 +1215,10 @@ export default function Team() {
     } catch (error) {
       setNotice({
         tone: "danger",
-        title: "Update failed",
+        title: "Yeniləmə alınmadı",
         description:
           s(error?.payload?.error || error?.payload?.message || error?.message) ||
-          "Team member could not be updated.",
+          "Komanda üzvü yenilənə bilmədi.",
       });
     } finally {
       setBusyId("");
@@ -1210,7 +1228,7 @@ export default function Team() {
   if (state.loading) {
     return (
       <PageCanvas>
-        <LoadingSurface title="Loading team" />
+        <LoadingSurface title="Komanda yüklənir" />
       </PageCanvas>
     );
   }
@@ -1283,7 +1301,7 @@ export default function Team() {
           {state.error ? (
             <InlineNotice
               tone="danger"
-              title="Team could not be loaded"
+              title="Komanda yüklənə bilmədi"
               description={state.error}
               compact
             />
@@ -1300,8 +1318,8 @@ export default function Team() {
 
           <section className="space-y-5">
             <PageHeader
-              title="Team members"
-              description="Invite teammates, choose their roles, and control who can help manage customer conversations."
+              title="Komanda üzvləri"
+              description="Komanda üzvlərini dəvət edin, rollarını seçin və müştəri söhbətlərini kimin idarə edəcəyini nəzarətdə saxlayın."
               actions={
                 <>
                   <Button
@@ -1310,7 +1328,7 @@ export default function Team() {
                     disabled={!canManage}
                     leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
                   >
-                    Add member
+                    Üzv əlavə et
                   </Button>
 
                   <Button
@@ -1324,7 +1342,7 @@ export default function Team() {
                       ) : undefined
                     }
                   >
-                    Refresh
+                    Yenilə
                   </Button>
                 </>
               }
@@ -1333,26 +1351,26 @@ export default function Team() {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <AppStatCard
                 icon={<Users className="h-[30px] w-[30px]" strokeWidth={1.85} />}
-                label="Total members"
+                label="Bütün üzvlər"
                 value={stats.total}
               />
               <AppStatCard
                 icon={
                   <UserCheck className="h-[30px] w-[30px]" strokeWidth={1.85} />
                 }
-                label="Active members"
+                label="Aktiv üzvlər"
                 value={stats.active}
               />
               <AppStatCard
                 icon={
                   <MailPlus className="h-[30px] w-[30px]" strokeWidth={1.85} />
                 }
-                label="Invited members"
+                label="Dəvət edilənlər"
                 value={stats.invited}
               />
               <AppStatCard
                 icon={<UserX className="h-[30px] w-[30px]" strokeWidth={1.85} />}
-                label="Disabled members"
+                label="Deaktiv üzvlər"
                 value={stats.disabled}
               />
             </div>
@@ -1372,7 +1390,7 @@ export default function Team() {
                       >
                         <HeaderFilter
                           id="member"
-                          label="Member"
+                          label="Üzv"
                           openFilter={openFilter}
                           active={Boolean(s(filters.member))}
                           onOpen={setOpenFilter}
@@ -1385,7 +1403,7 @@ export default function Team() {
                                 member: value,
                               }))
                             }
-                            placeholder="Search member"
+                            placeholder="Üzv axtar"
                           />
                         </HeaderFilter>
 
@@ -1404,19 +1422,19 @@ export default function Team() {
                                 email: value,
                               }))
                             }
-                            placeholder="Search email"
+                            placeholder="Email axtar"
                           />
                         </HeaderFilter>
 
                         <HeaderFilter
                           id="role"
-                          label="Role"
+                          label="Rol"
                           openFilter={openFilter}
                           active={normalizeList(filters.roles).length > 0}
                           onOpen={setOpenFilter}
                         >
                           <MultiSelectMenu
-                            allLabel="All roles"
+                            allLabel="Bütün rollar"
                             options={filterOptions.roles}
                             selectedValues={filters.roles}
                             onToggle={(value) =>
@@ -1442,7 +1460,7 @@ export default function Team() {
                           onOpen={setOpenFilter}
                         >
                           <MultiSelectMenu
-                            allLabel="All statuses"
+                            allLabel="Bütün statuslar"
                             options={filterOptions.statuses}
                             selectedValues={filters.statuses}
                             onToggle={(value) =>
@@ -1462,7 +1480,7 @@ export default function Team() {
 
                         <HeaderFilter
                           id="userId"
-                          label="Member ID"
+                          label="Üzv ID"
                           openFilter={openFilter}
                           active={Boolean(s(filters.userId))}
                           onOpen={setOpenFilter}
@@ -1475,13 +1493,13 @@ export default function Team() {
                                 userId: value,
                               }))
                             }
-                            placeholder="Search ID"
+                            placeholder="ID axtar"
                           />
                         </HeaderFilter>
 
                         <HeaderFilter
                           id="updated"
-                          label="Updated"
+                          label="Yenilənmə"
                           openFilter={openFilter}
                           active={
                             normalizeList(filters.updatedDates).length > 0 ||
@@ -1526,10 +1544,10 @@ export default function Team() {
                               onClick={clearFilters}
                               className="inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand transition-colors duration-base ease-premium hover:bg-brand/5"
                             >
-                              Clear {activeFilterCount}
+                              Təmizlə {activeFilterCount}
                             </button>
                           ) : (
-                            <span className="px-2 text-right">Actions</span>
+                            <span className="px-2 text-right">Əməliyyat</span>
                           )}
                         </div>
                       </div>
@@ -1585,8 +1603,8 @@ export default function Team() {
 
         <CenterModal
           open={showAddMember}
-          title="Add member"
-          description="Invite someone to access this workspace and help manage operations."
+          title="Üzv əlavə et"
+          description="Bu workspace-ə giriş vermək və əməliyyatlarda kömək etmək üçün komanda üzvü dəvət edin."
           onClose={() => setShowAddMember(false)}
         >
           <AddMemberForm
@@ -1600,8 +1618,8 @@ export default function Team() {
 
         <CenterModal
           open={Boolean(editingUser)}
-          title="Edit member"
-          description="Update member details, role, and current access status."
+          title="Üzvü redaktə et"
+          description="Üzv məlumatlarını, rolunu və cari giriş statusunu yeniləyin."
           onClose={() => setEditingUser(null)}
         >
           <EditMemberForm

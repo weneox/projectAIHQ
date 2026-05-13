@@ -238,7 +238,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Giriş məhduddur"
-                description="Bu bölmə yalnız təsdiqli məlumatları idarə edən komanda üzvləri üçündür."
+                description="Bu bölmə yalnız təsdiqli biznes məlumatlarını idarə edən komanda üzvləri üçündür."
               >
                 <TruthViewerPage />
               </OperatorRouteGuard>

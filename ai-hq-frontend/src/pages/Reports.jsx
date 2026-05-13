@@ -79,6 +79,22 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function roleLabel(value = "") {
+  const key = lower(value);
+  if (key === "owner") return "Sahib";
+  if (key === "admin") return "Admin";
+  if (key === "operator") return "Operator";
+  return titleize(value);
+}
+
+function statusLabel(value = "") {
+  const key = lower(value);
+  if (key === "active") return "Aktiv";
+  if (key === "invited") return "Dəvət edilib";
+  if (key === "disabled") return "Deaktiv";
+  return titleize(value);
+}
+
 function formatNumber(value = 0) {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 0,
@@ -110,7 +126,7 @@ function formatDuration(seconds = 0) {
 
 function formatDateLabel(value = "") {
   const raw = s(value);
-  if (!raw) return "�";
+  if (!raw) return "—";
 
   const date = new Date(`${raw}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return raw;
@@ -222,7 +238,7 @@ function normalizeLeadOwners(payload = {}) {
   return arr(payload.leadOwners)
     .map((row) => ({
       id: lower(row.owner || "unassigned"),
-      owner: s(row.owner, "unassigned"),
+      owner: s(row.owner, "Təyin edilməyib"),
       total: n(row.total),
       open: n(row.open),
       won: n(row.won),
@@ -260,10 +276,11 @@ function normalizeTeamReport(payload = {}) {
     },
     members: arr(team.members).map((member) => ({
       id: s(member.id || member.email || member.name),
-      name: s(member.name, "Team member"),
+      name: s(member.name, "Komanda üzvü"),
       email: s(member.email),
-      role: titleize(member.role || "operator"),
-      status: titleize(member.status || "invited"),
+      statusKey: lower(member.status || "invited"),
+      role: roleLabel(member.role || "operator"),
+      status: statusLabel(member.status || "invited"),
       openThreads: n(member.openThreads),
       handoffs: n(member.handoffs),
       ownedLeads: n(member.ownedLeads),
@@ -363,12 +380,12 @@ function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
         </div>
 
         <h2 className="mt-5 text-[20px] font-semibold tracking-normal text-text">
-          No report activity yet
+          Hələ hesabat aktivliyi yoxdur
         </h2>
 
         <p className="mt-2 text-[13.5px] font-medium leading-6 text-text-muted">
-          There is no activity for the selected {rangeLabel(range)} range.
-          Connect Website Chat, Instagram, or Telegram and send a test conversation to start filling this dashboard.
+          Seçilən {rangeLabel(range)} aralığı üçün aktivlik yoxdur.
+          Bu dashboard-u doldurmaq üçün Website Chat, Instagram və ya Telegram qoşub test söhbəti göndərin.
         </p>
 
         <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
@@ -377,7 +394,7 @@ function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
             onClick={onOpenChannels}
             rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
           >
-            Connect launch channel
+            Kanal qoş
           </Button>
 
           <Button
@@ -385,16 +402,16 @@ function EmptyAnalyticsState({ range, onOpenChannels, onOpenInbox }) {
             variant="secondary"
             onClick={onOpenInbox}
           >
-            Open inbox
+            Gələnləri aç
           </Button>
         </div>
 
         <div className="mt-5 rounded-md border border-line-soft bg-surface-subtle px-4 py-3 text-left">
           <div className="text-[13px] font-semibold text-text">
-            What creates report data?
+            Hesabat datası necə yaranır?
           </div>
           <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-            Website, Instagram, or Telegram messages, outbound replies, AI replies, leads, webhooks, and usage records.
+            Website, Instagram və ya Telegram mesajları, göndərilən cavablar, AI cavabları, fürsətlər, webhook-lar və istifadə qeydləri.
           </div>
         </div>
       </div>
@@ -416,7 +433,7 @@ function ChannelRow({ channel, maxTotal }) {
             {channel.label}
           </div>
           <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
-            {formatNumber(channel.messagesIn)} in � {formatNumber(channel.messagesOut)} out � {formatNumber(channel.aiReplies)} AI
+            {formatNumber(channel.messagesIn)} gələn · {formatNumber(channel.messagesOut)} gedən · {formatNumber(channel.aiReplies)} AI
           </div>
         </div>
       </div>
@@ -493,7 +510,7 @@ function LeadOwnerRow({ owner, maxTotal }) {
           {owner.owner}
         </div>
         <div className="mt-0.5 text-[12.5px] font-medium text-text-muted">
-          {formatNumber(owner.open)} open � {formatNumber(owner.won)} won � {formatNumber(owner.followupsDue)} due
+          {formatNumber(owner.open)} açıq · {formatNumber(owner.won)} qazanılıb · {formatNumber(owner.followupsDue)} vaxtı çatıb
         </div>
       </div>
 
@@ -522,19 +539,19 @@ function TeamMemberRow({ member }) {
             {member.name}
           </div>
           <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-            {member.email || "No email"}
+            {member.email || "Email yoxdur"}
           </div>
         </div>
 
-        <AppTag tone={member.status.toLowerCase() === "active" ? "success" : "neutral"}>
+        <AppTag tone={member.statusKey === "active" ? "success" : "neutral"}>
           {member.role}
         </AppTag>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-[12px] font-semibold text-text-muted">
-        <div>{formatNumber(member.openThreads)} threads</div>
-        <div>{formatNumber(member.ownedLeads)} leads</div>
-        <div>{formatNumber(member.wonLeads)} won</div>
+        <div>{formatNumber(member.openThreads)} söhbət</div>
+        <div>{formatNumber(member.ownedLeads)} fürsət</div>
+        <div>{formatNumber(member.wonLeads)} qazanılıb</div>
       </div>
     </div>
   );
@@ -567,8 +584,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: CircleAlert,
       tone: "warning",
-      title: "Some report sections are unavailable",
-      description: `${degraded.length} section(s) could not be loaded. The dashboard is still showing what is available.`,
+      title: "Bəzi hesabat bölmələri açılmır",
+      description: `${degraded.length} bölmə yüklənə bilmədi. Dashboard mövcud olan datanı göstərir.`,
     });
   }
 
@@ -576,8 +593,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Inbox,
       tone: "warning",
-      title: "Unread pressure exists",
-      description: `${formatNumber(summary.unreadMessages)} unread message(s) are visible in the current inbox state.`,
+      title: "Oxunmamış yük var",
+      description: `Cari inbox vəziyyətində ${formatNumber(summary.unreadMessages)} oxunmamış mesaj görünür.`,
     });
   }
 
@@ -585,8 +602,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Timer,
       tone: "warning",
-      title: "First response queue",
-      description: `${formatNumber(summary.waitingFirstResponse)} conversation(s) are still waiting for the first outbound reply.`,
+      title: "İlk cavab növbəsi",
+      description: `${formatNumber(summary.waitingFirstResponse)} söhbət hələ ilk gedən cavabı gözləyir.`,
     });
   }
 
@@ -594,8 +611,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Target,
       tone: "success",
-      title: "Lead conversion signal",
-      description: `${formatPercent(summary.conversion)} of inbound message volume became lead activity in this range.`,
+      title: "Fürsətə çevrilmə siqnalı",
+      description: `Bu aralıqda gələn mesaj həcminin ${formatPercent(summary.conversion)} hissəsi fürsət aktivliyinə çevrilib.`,
     });
   }
 
@@ -604,8 +621,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: MessageSquare,
       tone: "brand",
-      title: "Strongest channel",
-      description: `${topChannel.label} has the highest message volume in the selected range.`,
+      title: "Ən güclü kanal",
+      description: `Seçilən aralıqda ən çox mesaj həcmi ${topChannel.label} kanalındadır.`,
     });
   }
 
@@ -613,8 +630,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Users,
       tone: "success",
-      title: "Team surface is live",
-      description: `${formatNumber(summary.activeTeamMembers)} active team member(s) are included in the report contract.`,
+      title: "Komanda hesabatı canlıdır",
+      description: `${formatNumber(summary.activeTeamMembers)} aktiv komanda üzvü hesabat müqaviləsinə daxildir.`,
     });
   }
 
@@ -622,8 +639,8 @@ function buildInsights({ summary, channels, degraded }) {
     insights.push({
       icon: Database,
       tone: "brand",
-      title: "Waiting for activity",
-      description: "Reports will become useful after conversations, leads, and AI replies start coming in.",
+      title: "Aktivlik gözlənilir",
+      description: "Söhbətlər, fürsətlər və AI cavabları gəlməyə başladıqdan sonra hesabatlar dolacaq.",
     });
   }
 
@@ -656,20 +673,20 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
 
           <div className="min-w-0">
             <div className="text-[20px] font-semibold tracking-normal text-text">
-              Performance overview
+              Performans icmalı
             </div>
             <div className="mt-1 max-w-[760px] text-[13.5px] font-medium leading-6 text-text-muted">
-              Track conversations, AI replies, leads, channels, and usage in one place.
+              Söhbətləri, AI cavablarını, fürsətləri, kanalları və istifadəni bir yerdə izləyin.
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 xl:justify-end">
           <AppTag tone={active ? "success" : "neutral"} dot>
-            {active ? "Live data" : "No activity"}
+            {active ? "Canlı data" : "Aktivlik yoxdur"}
           </AppTag>
           <AppTag tone={degraded.length ? "warning" : "success"} dot>
-            {degraded.length ? "Partial" : "Complete"}
+            {degraded.length ? "Qismən" : "Tam"}
           </AppTag>
         </div>
       </div>
@@ -678,7 +695,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
         <div className="border-b border-line-soft px-5 py-4">
           <InlineNotice
             tone="warning"
-            title="Some report sections are unavailable"
+            title="Bəzi hesabat bölmələri açılmır"
             description={degraded.join(", ")}
             compact
           />
@@ -688,43 +705,43 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
       <div className="grid bg-white md:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           icon={MessageSquare}
-          label="Messages in"
+          label="Gələn mesajlar"
           value={formatNumber(summary.messagesIn)}
-          helper="Inbound customer messages."
+          helper="Müştərilərdən gələn mesajlar."
           tone="brand"
         />
         <MetricCard
           icon={Send}
-          label="Messages out"
+          label="Gedən mesajlar"
           value={formatNumber(summary.messagesOut)}
-          helper="Outbound replies sent."
+          helper="Göndərilən cavablar."
         />
         <MetricCard
           icon={Sparkles}
-          label="AI replies"
+          label="AI cavabları"
           value={formatNumber(summary.aiReplies)}
-          helper={`${formatPercent(summary.automationShare)} of outbound volume.`}
+          helper={`Gedən cavab həcminin ${formatPercent(summary.automationShare)} hissəsi.`}
           tone="brand"
         />
         <MetricCard
           icon={Target}
-          label="Leads"
+          label="Fürsətlər"
           value={formatNumber(summary.leads)}
-          helper={`${formatPercent(summary.conversion)} inbound-to-lead signal.`}
+          helper={`${formatPercent(summary.conversion)} gələn mesajdan fürsətə siqnal.`}
           tone="success"
         />
         <MetricCard
           icon={Inbox}
-          label="Open threads"
+          label="Açıq söhbətlər"
           value={formatNumber(summary.openThreads)}
-          helper={`${formatNumber(summary.unreadMessages)} unread message(s).`}
+          helper={`${formatNumber(summary.unreadMessages)} oxunmamış mesaj.`}
           tone={summary.unreadMessages > 0 ? "warning" : "neutral"}
         />
         <MetricCard
           icon={UserRound}
-          label="Customers"
+          label="Müştərilər"
           value={formatNumber(summary.customers)}
-          helper={`${formatCurrency(summary.pipelineValueAzn)} pipeline � ${formatNumber(summary.wonLeads)} won.`}
+          helper={`${formatCurrency(summary.pipelineValueAzn)} pipeline · ${formatNumber(summary.wonLeads)} qazanılıb.`}
           tone="success"
         />
       </div>
@@ -741,10 +758,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Activity trend
+                  Aktivlik trendi
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Daily activity for inbound messages, outbound replies, and leads.
+                  Gələn mesajlar, göndərilən cavablar və fürsətlər üzrə günlük aktivlik.
                 </div>
               </div>
 
@@ -773,7 +790,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   <Area
                     type="monotone"
                     dataKey="messagesIn"
-                    name="Inbound"
+                    name="Gələn"
                     stroke="rgb(var(--color-brand))"
                     strokeWidth={2}
                     fill="url(#reportMessagesFill)"
@@ -781,7 +798,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   <Area
                     type="monotone"
                     dataKey="messagesOut"
-                    name="Outbound"
+                    name="Gedən"
                     stroke="rgb(var(--color-warning))"
                     strokeWidth={2}
                     fill="transparent"
@@ -789,7 +806,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                   <Area
                     type="monotone"
                     dataKey="leads"
-                    name="Leads"
+                    name="Fürsətlər"
                     stroke="rgb(var(--color-success))"
                     strokeWidth={2}
                     fill="transparent"
@@ -803,10 +820,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Channel breakdown
+                  Kanal bölgüsü
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Message volume and AI participation by channel.
+                  Kanallara görə mesaj həcmi və AI iştirakı.
                 </div>
               </div>
 
@@ -820,7 +837,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                 ))
               ) : (
                 <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
-                  No channel breakdown is available for this range.
+                  Bu aralıq üçün kanal bölgüsü yoxdur.
                 </div>
               )}
             </section>
@@ -828,10 +845,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section>
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Operator insights
+                  Operator icmalları
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Highlights based on your workspace activity.
+                  Workspace aktivliyinizə əsaslanan əsas siqnallar.
                 </div>
               </div>
 
@@ -851,10 +868,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Lead stages
+                  Fürsət mərhələləri
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Lead-stage distribution for the selected range.
+                  Seçilən aralıq üzrə fürsət mərhələlərinin bölgüsü.
                 </div>
               </div>
 
@@ -864,7 +881,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                 ))
               ) : (
                 <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
-                  No lead stage data is available yet.
+                  Hələ fürsət mərhələsi datası yoxdur.
                 </div>
               )}
             </section>
@@ -872,28 +889,28 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section>
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Current inbox state
+                  Cari inbox vəziyyəti
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Current inbox counters.
+                  Cari inbox göstəriciləri.
                 </div>
               </div>
 
               <div className="grid gap-3 px-5 py-5">
                 <MiniReportStat
                   icon={Inbox}
-                  label="Open threads"
+                  label="Açıq söhbətlər"
                   value={formatNumber(summary.openThreads)}
                 />
                 <MiniReportStat
                   icon={CircleAlert}
-                  label="Unread messages"
+                  label="Oxunmamış mesajlar"
                   value={formatNumber(summary.unreadMessages)}
                   tone={summary.unreadMessages > 0 ? "warning" : "neutral"}
                 />
                 <MiniReportStat
                   icon={ArrowRight}
-                  label="Handoffs"
+                  label="Handoff"
                   value={formatNumber(summary.handoffs)}
                 />
               </div>
@@ -904,39 +921,39 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Customer and pipeline report
+                  Müştəri və pipeline hesabatı
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Customer conversion, active opportunities, won leads, and due follow-ups.
+                  Müştəriyə çevrilmə, aktiv fürsətlər, qazanılmış lead-lər və vaxtı çatmış follow-up-lar.
                 </div>
               </div>
 
               <div className="grid gap-3 px-5 py-5 md:grid-cols-2">
                 <MiniReportStat
                   icon={UserRound}
-                  label="Customers"
+                  label="Müştərilər"
                   value={formatNumber(customerSummary.customers)}
-                  helper={`${formatPercent(summary.customerConversion)} lead-to-customer signal.`}
+                  helper={`${formatPercent(summary.customerConversion)} lead-dən müştəriyə siqnal.`}
                   tone="success"
                 />
                 <MiniReportStat
                   icon={Wallet}
                   label="Pipeline"
                   value={formatCurrency(customerSummary.pipelineValueAzn)}
-                  helper={`${formatNumber(customerSummary.activeLeads)} active lead(s).`}
+                  helper={`${formatNumber(customerSummary.activeLeads)} aktiv fürsət.`}
                 />
                 <MiniReportStat
                   icon={Target}
-                  label="Won leads"
+                  label="Qazanılmış fürsətlər"
                   value={formatNumber(customerSummary.wonLeads)}
-                  helper={`${formatNumber(customerSummary.totalLeads)} total lead records.`}
+                  helper={`${formatNumber(customerSummary.totalLeads)} ümumi fürsət qeydi.`}
                   tone="success"
                 />
                 <MiniReportStat
                   icon={Clock3}
-                  label="Follow-ups due"
+                  label="Vaxtı çatmış təqiblər"
                   value={formatNumber(customerSummary.followupsDue)}
-                  helper="Open leads with due follow-up dates."
+                  helper="Follow-up vaxtı çatmış açıq fürsətlər."
                   tone={customerSummary.followupsDue > 0 ? "warning" : "neutral"}
                 />
               </div>
@@ -945,25 +962,25 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section>
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Inbox response health
+                  Inbox cavab sağlamlığı
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  First response speed and conversations waiting for a reply.
+                  İlk cavab sürəti və cavab gözləyən söhbətlər.
                 </div>
               </div>
 
               <div className="grid gap-3 px-5 py-5">
                 <MiniReportStat
                   icon={Timer}
-                  label="Avg first response"
+                  label="Orta ilk cavab"
                   value={formatDuration(inboxSla.avgFirstResponseSeconds)}
-                  helper={`${formatNumber(inboxSla.conversations)} measured conversation(s).`}
+                  helper={`${formatNumber(inboxSla.conversations)} ölçülmüş söhbət.`}
                 />
                 <MiniReportStat
                   icon={CircleAlert}
-                  label="Waiting first response"
+                  label="İlk cavabı gözləyir"
                   value={formatNumber(inboxSla.waitingFirstResponse)}
-                  helper="Inbound conversations without outbound reply."
+                  helper="Gedən cavabı olmayan gələn söhbətlər."
                   tone={inboxSla.waitingFirstResponse > 0 ? "warning" : "success"}
                 />
               </div>
@@ -974,10 +991,10 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section className="xl:border-r xl:border-line-soft">
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Lead ownership
+                  Fürsət sahibliyi
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Pipeline and follow-up load by owner.
+                  Sahiblərə görə pipeline və təqib yükü.
                 </div>
               </div>
 
@@ -991,7 +1008,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                 ))
               ) : (
                 <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
-                  No lead owner data is available for this range.
+                  Bu aralıq üçün sahiblik datası yoxdur.
                 </div>
               )}
             </section>
@@ -999,26 +1016,26 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
             <section>
               <div className="border-b border-line-soft px-5 py-4">
                 <div className="text-[16px] font-semibold tracking-normal text-text">
-                  Team report
+                  Komanda hesabatı
                 </div>
                 <div className="mt-1 text-[12.5px] font-medium text-text-muted">
-                  Roles, active members, assigned threads, and owned leads.
+                  Rollar, aktiv üzvlər, təyin edilmiş söhbətlər və sahib olunan fürsətlər.
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 border-b border-line-soft px-5 py-5">
                 <MiniReportStat
                   icon={Users}
-                  label="Active"
+                  label="Aktiv"
                   value={formatNumber(teamReport.summary.activeMembers)}
-                  helper={`${formatNumber(teamReport.summary.totalMembers)} total member(s).`}
+                  helper={`${formatNumber(teamReport.summary.totalMembers)} ümumi üzv.`}
                   tone="success"
                 />
                 <MiniReportStat
                   icon={Users}
-                  label="Operators"
+                  label="Operatorlar"
                   value={formatNumber(teamReport.summary.operators)}
-                  helper={`${formatNumber(teamReport.summary.admins)} admin � ${formatNumber(teamReport.summary.owners)} owner.`}
+                  helper={`${formatNumber(teamReport.summary.admins)} admin · ${formatNumber(teamReport.summary.owners)} sahib.`}
                 />
               </div>
 
@@ -1028,7 +1045,7 @@ function ReportsSurface({ payload, range, onOpenChannels, onOpenInbox }) {
                 ))
               ) : (
                 <div className="px-5 py-5 text-[13px] font-medium text-text-muted">
-                  No team members are available for this report.
+                  Bu hesabat üçün komanda üzvü yoxdur.
                 </div>
               )}
             </section>
@@ -1063,7 +1080,7 @@ export default function Reports() {
       setPayload(null);
       setError(
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
-          "Reports could not be loaded."
+          "Hesabatlar yüklənə bilmədi."
       );
     } finally {
       setLoading(false);
@@ -1079,8 +1096,8 @@ export default function Reports() {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading reports"
-          description="Loading your reports."
+          title="Hesabatlar yüklənir"
+          description="Performans hesabatları hazırlanır."
           rows={5}
         />
       </PageCanvas>
@@ -1090,8 +1107,8 @@ export default function Reports() {
   return (
     <PageCanvas>
       <PageHeader
-        title="Reports"
-        description="Performance reporting for conversations, leads, channels, AI replies, and usage."
+        title="Hesabatlar"
+        description="Söhbətlər, fürsətlər, kanallar, AI cavabları və istifadə üçün performans hesabatı."
         actions={
           <Button
             type="button"
@@ -1105,7 +1122,7 @@ export default function Reports() {
               ) : undefined
             }
           >
-            Refresh
+            Yenilə
           </Button>
         }
       />
@@ -1113,14 +1130,14 @@ export default function Reports() {
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 text-[12.5px] font-semibold text-text-muted">
           <Clock3 className="h-4 w-4" strokeWidth={2.05} />
-          Selected range
+          Seçilən aralıq
         </div>
 
         <AppSegmentedControl value={range} options={PERIODS} onChange={setRange} />
       </div>
 
       {error ? (
-        <InlineNotice tone="danger" title="Reports unavailable" description={error} />
+        <InlineNotice tone="danger" title="Hesabatlar açılmır" description={error} />
       ) : null}
 
       {payload ? (
@@ -1133,8 +1150,8 @@ export default function Reports() {
       ) : !error ? (
         <InlineNotice
           tone="warning"
-          title="No report payload"
-          description="Reports are unavailable right now. Refresh the page or try again later."
+          title="Hesabat datası yoxdur"
+          description="Hesabatlar indi açılmır. Yeniləyin və ya bir az sonra təkrar yoxlayın."
         />
       ) : null}
     </PageCanvas>

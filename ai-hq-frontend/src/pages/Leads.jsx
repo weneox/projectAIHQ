@@ -105,6 +105,41 @@ const SOURCE_PRIORITY = [
   "manual",
 ];
 
+const STAGE_LABELS = {
+  new: "Yeni",
+  contacted: "Əlaqə saxlanıb",
+  qualified: "Dəyərləndirilib",
+  proposal: "Təklif",
+  won: "Qazanılıb",
+  lost: "İtirilib",
+};
+
+const STATUS_LABELS = {
+  open: "Açıq",
+  closed: "Bağlı",
+  archived: "Arxiv",
+  spam: "Spam",
+};
+
+const PRIORITY_LABELS = {
+  urgent: "Təcili",
+  high: "Yüksək",
+  normal: "Normal",
+  low: "Aşağı",
+};
+
+const SOURCE_LABELS = {
+  website: "Vebsayt",
+  "website chat": "Veb çat",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  telegram: "Telegram",
+  email: "Email",
+  whatsapp: "WhatsApp",
+  manual: "Əl ilə",
+  direct: "Birbaşa",
+};
+
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -127,6 +162,27 @@ function titleize(value = "") {
   return s(value || "unknown")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function labelFor(map, value = "") {
+  const key = lower(value);
+  return map[key] || titleize(value);
+}
+
+function stageLabel(value = "") {
+  return labelFor(STAGE_LABELS, value);
+}
+
+function statusLabel(value = "") {
+  return labelFor(STATUS_LABELS, value);
+}
+
+function priorityLabel(value = "") {
+  return labelFor(PRIORITY_LABELS, value);
+}
+
+function sourceLabel(value = "") {
+  return labelFor(SOURCE_LABELS, value);
 }
 
 
@@ -166,7 +222,7 @@ function leadName(lead = {}) {
       lead.username ||
       lead.email ||
       lead.phone ||
-      "Unknown lead"
+      "Naməlum fürsət"
   );
 }
 
@@ -250,7 +306,7 @@ function leadOwner(lead = {}) {
       lead.assigned_to ||
       lead.assignee ||
       lead.operator ||
-      "Unassigned"
+      "Təyin edilməyib"
   );
 }
 
@@ -354,10 +410,10 @@ function matchesText(lead = {}, query = "") {
       leadName(lead),
       leadCompany(lead),
       leadContact(lead),
-      titleize(leadSource(lead)),
-      titleize(leadStage(lead)),
-      titleize(leadStatus(lead)),
-      titleize(leadPriority(lead)),
+      sourceLabel(leadSource(lead)),
+      stageLabel(leadStage(lead)),
+      statusLabel(leadStatus(lead)),
+      priorityLabel(leadPriority(lead)),
       leadOwner(lead),
       lead.interest,
       lead.latestMessageText,
@@ -369,7 +425,7 @@ function matchesText(lead = {}, query = "") {
   ).includes(q);
 }
 
-function uniqueOptions(values = [], priority = []) {
+function uniqueOptions(values = [], priority = [], labeler = titleize) {
   const priorityMap = new Map(priority.map((item, index) => [item, index]));
   const unique = [...new Set(values.map((value) => lower(value)).filter(Boolean))];
 
@@ -382,7 +438,7 @@ function uniqueOptions(values = [], priority = []) {
 
       return titleize(a).localeCompare(titleize(b));
     })
-    .map((value) => ({ value, label: titleize(value) }));
+    .map((value) => ({ value, label: labeler(value) }));
 }
 
 function createDefaultFilters() {
@@ -431,7 +487,7 @@ function LeadIdentity({ lead }) {
           {name}
         </div>
         <div className="mt-0.5 truncate text-[12.5px] font-medium text-text-muted">
-          {company || s(lead.interest) || "Opportunity"}
+          {company || s(lead.interest) || "Fürsət"}
         </div>
       </div>
     </div>
@@ -458,23 +514,23 @@ function LeadRow({ lead, selected, onOpenThread, onOpenDetail }) {
       </AppTableCell>
 
       <AppTableCell>
-        <AppTableText muted>{leadContact(lead) || "No contact details"}</AppTableText>
+        <AppTableText muted>{leadContact(lead) || "Əlaqə məlumatı yoxdur"}</AppTableText>
       </AppTableCell>
 
       <AppTableCell>
-        <AppTag tone={sourceTone(source)}>{titleize(source)}</AppTag>
+        <AppTag tone={sourceTone(source)}>{sourceLabel(source)}</AppTag>
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={stageTone(stage)}>{titleize(stage)}</AppStatusText>
+        <AppStatusText tone={stageTone(stage)}>{stageLabel(stage)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={priorityTone(priority)}>{titleize(priority)}</AppStatusText>
+        <AppStatusText tone={priorityTone(priority)}>{priorityLabel(priority)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
-        <AppStatusText tone={statusTone(status)}>{titleize(status)}</AppStatusText>
+        <AppStatusText tone={statusTone(status)}>{statusLabel(status)}</AppStatusText>
       </AppTableCell>
 
       <AppTableCell>
@@ -484,7 +540,7 @@ function LeadRow({ lead, selected, onOpenThread, onOpenDetail }) {
       <AppTableCell align="right">
         <div className="flex items-center justify-end gap-2">
           <AppIconButton
-            label="View lead"
+            label="Fürsətə bax"
             onClick={(event) => {
               event.stopPropagation();
               onOpenDetail?.();
@@ -495,7 +551,7 @@ function LeadRow({ lead, selected, onOpenThread, onOpenDetail }) {
 
           {threadId ? (
             <AppIconButton
-              label="Open conversation"
+              label="Söhbəti aç"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenThread?.(threadId);
@@ -504,7 +560,7 @@ function LeadRow({ lead, selected, onOpenThread, onOpenDetail }) {
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.1} />
             </AppIconButton>
           ) : (
-            <AppIconButton disabled label="No thread">
+            <AppIconButton disabled label="Söhbət yoxdur">
               —
             </AppIconButton>
           )}
@@ -534,11 +590,11 @@ function LeadsTable({
   return (
     <AppTableCard>
       <AppTableToolbar
-        title="Pipeline"
+        title="Fürsət pipeline-i"
         filters={
           activeFilterCount ? (
             <Button type="button" variant="secondary" size="sm" onClick={onClearFilters}>
-              Clear filters
+              Filtrləri təmizlə
             </Button>
           ) : null
         }
@@ -549,7 +605,7 @@ function LeadsTable({
           <AppTableHeaderRow minWidthClass="w-full" gridStyle={TABLE_GRID_STYLE}>
             <AppTableHeaderFilter
               id="lead"
-              label="Lead"
+              label="Fürsət"
               openFilter={openFilter}
               active={Boolean(filters.lead)}
               onOpen={onOpenFilter}
@@ -557,21 +613,21 @@ function LeadsTable({
               <AppFilterSearchInput
                 value={filters.lead}
                 onChange={(value) => onPatchFilters({ lead: value })}
-                placeholder="Search opportunities"
+                placeholder="Fürsət axtar"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ lead: "" })}
                   disabled={!filters.lead}
                 >
-                  Clear opportunity filter
+                  Fürsət filtrini təmizlə
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
 
             <AppTableHeaderFilter
               id="contact"
-              label="Contact"
+              label="Əlaqə"
               openFilter={openFilter}
               active={Boolean(filters.contact)}
               onOpen={onOpenFilter}
@@ -579,21 +635,21 @@ function LeadsTable({
               <AppFilterSearchInput
                 value={filters.contact}
                 onChange={(value) => onPatchFilters({ contact: value })}
-                placeholder="Search email, phone, or username"
+                placeholder="Email, telefon və ya istifadəçi adı axtar"
               />
               <AppFilterMenuShell>
                 <AppFilterAction
                   onClick={() => onPatchFilters({ contact: "" })}
                   disabled={!filters.contact}
                 >
-                  Clear contact filter
+                  Əlaqə filtrini təmizlə
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
 
             <AppTableHeaderFilter
               id="source"
-              label="Source"
+              label="Mənbə"
               openFilter={openFilter}
               active={normalizeAppFilterList(filters.sources).length > 0}
               onOpen={onOpenFilter}
@@ -601,7 +657,7 @@ function LeadsTable({
               <AppMultiSelectMenu
                 options={sourceOptions}
                 selectedValues={filters.sources}
-                allLabel="All sources"
+                allLabel="Bütün mənbələr"
                 onClear={() => onPatchFilters({ sources: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -613,7 +669,7 @@ function LeadsTable({
 
             <AppTableHeaderFilter
               id="stage"
-              label="Stage"
+              label="Mərhələ"
               openFilter={openFilter}
               active={normalizeAppFilterList(filters.stages).length > 0}
               onOpen={onOpenFilter}
@@ -621,7 +677,7 @@ function LeadsTable({
               <AppMultiSelectMenu
                 options={stageOptions}
                 selectedValues={filters.stages}
-                allLabel="All stages"
+                allLabel="Bütün mərhələlər"
                 onClear={() => onPatchFilters({ stages: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -633,7 +689,7 @@ function LeadsTable({
 
             <AppTableHeaderFilter
               id="priority"
-              label="Priority"
+              label="Prioritet"
               openFilter={openFilter}
               active={normalizeAppFilterList(filters.priorities).length > 0}
               onOpen={onOpenFilter}
@@ -641,7 +697,7 @@ function LeadsTable({
               <AppMultiSelectMenu
                 options={priorityOptions}
                 selectedValues={filters.priorities}
-                allLabel="All priorities"
+                allLabel="Bütün prioritetlər"
                 onClear={() => onPatchFilters({ priorities: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -661,7 +717,7 @@ function LeadsTable({
               <AppMultiSelectMenu
                 options={statusOptions}
                 selectedValues={filters.statuses}
-                allLabel="All statuses"
+                allLabel="Bütün statuslar"
                 onClear={() => onPatchFilters({ statuses: [] })}
                 onToggle={(value) =>
                   onPatchFilters({
@@ -673,7 +729,7 @@ function LeadsTable({
 
             <AppTableHeaderFilter
               id="updated"
-              label="Updated"
+              label="Yenilənmə"
               openFilter={openFilter}
               active={filters.updatedSort === "oldest"}
               onOpen={onOpenFilter}
@@ -683,26 +739,26 @@ function LeadsTable({
                   selected={filters.updatedSort === "newest"}
                   onClick={() => onPatchFilters({ updatedSort: "newest" })}
                 >
-                  Newest first
+                  Ən yenilər əvvəl
                 </AppFilterOption>
 
                 <AppFilterOption
                   selected={filters.updatedSort === "oldest"}
                   onClick={() => onPatchFilters({ updatedSort: "oldest" })}
                 >
-                  Oldest first
+                  Ən köhnələr əvvəl
                 </AppFilterOption>
 
                 <AppFilterAction
                   onClick={() => onPatchFilters({ updatedSort: "newest" })}
                   disabled={filters.updatedSort === "newest"}
                 >
-                  Reset sort
+                  Sıralamanı sıfırla
                 </AppFilterAction>
               </AppFilterMenuShell>
             </AppTableHeaderFilter>
 
-            <AppTableHeaderCell align="right">Actions</AppTableHeaderCell>
+            <AppTableHeaderCell align="right">Əməliyyat</AppTableHeaderCell>
           </AppTableHeaderRow>
 
           {leads.length ? (
@@ -722,11 +778,11 @@ function LeadsTable({
           ) : (
             <AppTableEmptyState
               icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
-              title={activeFilterCount ? "No matching leads" : "No opportunities yet"}
+              title={activeFilterCount ? "Uyğun fürsət tapılmadı" : "Hələ fürsət yoxdur"}
               description={
                 activeFilterCount
-                  ? "Adjust the active filters to bring sales opportunities back into view."
-                  : "No opportunities yet. Connect a channel and qualify your first conversation in Inbox."
+                  ? "Satış fürsətlərini yenidən görmək üçün aktiv filtrləri dəyişin."
+                  : "Hələ fürsət yoxdur. Kanal qoşun və ilk söhbəti Gələnlərdə dəyərləndirin."
               }
                           action={
                 activeFilterCount ? null : (
@@ -735,7 +791,7 @@ function LeadsTable({
                     onClick={onOpenChannels}
                     rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
                   >
-                    Connect a channel
+                    Kanal qoş
                   </Button>
                 )
               }
@@ -815,7 +871,7 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
     const phone = s(draft.phone);
 
     if (!fullName && !email && !phone) {
-      setError("Name, email, or phone is required.");
+      setError("Ad, email və ya telefon daxil edilməlidir.");
       return;
     }
 
@@ -839,7 +895,7 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
       });
 
       if (response?.ok === false) {
-        throw new Error(s(response.error || response.message) || "Lead could not be created.");
+        throw new Error(s(response.error || response.message) || "Fürsət yaradıla bilmədi.");
       }
 
       const nextLead = normalizeLeadMutationResponse(response);
@@ -848,7 +904,7 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
     } catch (err) {
       setError(
         s(err?.payload?.message || err?.payload?.error || err?.message) ||
-          "Lead could not be created."
+          "Fürsət yaradıla bilmədi."
       );
     } finally {
       setSaving(false);
@@ -867,14 +923,14 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-[20px] font-semibold tracking-[var(--tracking-tight-lg)] text-text">
-                New lead
+                Yeni fürsət
               </div>
               <div className="mt-1 text-[13px] font-medium text-text-muted">
-                Add a manual opportunity directly into the CRM pipeline.
+                Telefon, referans və ya offline satış fürsətini birbaşa CRM pipeline-a əlavə edin.
               </div>
             </div>
 
-            <AppIconButton label="Close create lead" onClick={onClose}>
+            <AppIconButton label="Yeni fürsət pəncərəsini bağla" onClick={onClose}>
               <X className="h-3.5 w-3.5" strokeWidth={2.15} />
             </AppIconButton>
           </div>
@@ -882,23 +938,23 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
 
         <AppDetailBody>
           {error ? (
-            <InlineNotice tone="danger" title="Could not create lead" description={error} compact />
+            <InlineNotice tone="danger" title="Fürsət yaradıla bilmədi" description={error} compact />
           ) : null}
 
           <section className="rounded-md border border-line-soft bg-surface-subtle p-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <LeadControlField label="Name">
+              <LeadControlField label="Ad">
                 <LeadNativeInput
                   value={draft.fullName}
-                  placeholder="Customer or company contact"
+                  placeholder="Müştəri və ya şirkət kontaktı"
                   onChange={(event) => patchDraft({ fullName: event.target.value })}
                 />
               </LeadControlField>
 
-              <LeadControlField label="Company">
+              <LeadControlField label="Şirkət">
                 <LeadNativeInput
                   value={draft.company}
-                  placeholder="Company"
+                  placeholder="Şirkət"
                   onChange={(event) => patchDraft({ company: event.target.value })}
                 />
               </LeadControlField>
@@ -912,7 +968,7 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
                 />
               </LeadControlField>
 
-              <LeadControlField label="Phone">
+              <LeadControlField label="Telefon">
                 <LeadNativeInput
                   value={draft.phone}
                   placeholder="+994..."
@@ -920,40 +976,40 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
                 />
               </LeadControlField>
 
-              <LeadControlField label="Source">
+              <LeadControlField label="Mənbə">
                 <LeadNativeSelect
                   value={draft.source}
                   onChange={(value) => patchDraft({ source: value })}
                 >
                   {SOURCE_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {sourceLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
               </LeadControlField>
 
-              <LeadControlField label="Priority">
+              <LeadControlField label="Prioritet">
                 <LeadNativeSelect
                   value={draft.priority}
                   onChange={(value) => patchDraft({ priority: value })}
                 >
                   {PRIORITY_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {priorityLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
               </LeadControlField>
 
-              <LeadControlField label="Stage">
+              <LeadControlField label="Mərhələ">
                 <LeadNativeSelect
                   value={draft.stage}
                   onChange={(value) => patchDraft({ stage: value })}
                 >
                   {STAGE_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {stageLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
@@ -966,21 +1022,21 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
                 >
                   {STATUS_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {statusLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
               </LeadControlField>
 
-              <LeadControlField label="Owner">
+              <LeadControlField label="Sahib">
                 <LeadNativeInput
                   value={draft.owner}
-                  placeholder="Operator or team member"
+                  placeholder="Operator və ya komanda üzvü"
                   onChange={(event) => patchDraft({ owner: event.target.value })}
                 />
               </LeadControlField>
 
-              <LeadControlField label="Value">
+              <LeadControlField label="Dəyər">
                 <LeadNativeInput
                   type="number"
                   min="0"
@@ -992,20 +1048,20 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
             </div>
 
             <div className="mt-3">
-              <LeadControlField label="Interest">
+              <LeadControlField label="Maraq">
                 <LeadNativeInput
                   value={draft.interest}
-                  placeholder="What the customer is asking for"
+                  placeholder="Müştərinin istədiyi məhsul və ya xidmət"
                   onChange={(event) => patchDraft({ interest: event.target.value })}
                 />
               </LeadControlField>
             </div>
 
             <div className="mt-3">
-              <LeadControlField label="Notes">
+              <LeadControlField label="Qeydlər">
                 <LeadNativeTextarea
                   value={draft.notes}
-                  placeholder="Context, budget, next step, or qualification notes"
+                  placeholder="Kontekst, büdcə, növbəti addım və ya kvalifikasiya qeydləri"
                   onChange={(event) => patchDraft({ notes: event.target.value })}
                 />
               </LeadControlField>
@@ -1014,10 +1070,10 @@ function CreateLeadOverlay({ open, onClose, onCreated }) {
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
+              Ləğv et
             </Button>
             <Button type="button" loading={saving} onClick={saveLead}>
-              Create lead
+              Fürsət yarat
             </Button>
           </div>
         </AppDetailBody>
@@ -1046,7 +1102,7 @@ function LeadDetailOverlay({
     if (!lead) return;
 
     const owner = leadOwner(lead);
-    setDraftOwner(owner === "Unassigned" ? "" : owner);
+    setDraftOwner(owner === "Təyin edilməyib" ? "" : owner);
     setDraftFollowUpAt(s(lead.follow_up_at || lead.followUpAt).slice(0, 16));
     setDraftNextAction(s(lead.next_action || lead.nextAction));
     setDraftNote("");
@@ -1066,8 +1122,8 @@ function LeadDetailOverlay({
         <Card padded={false} clip className="h-full">
           <AppDetailEmpty
             icon={<Target className="h-5 w-5" strokeWidth={1.9} />}
-            title="Select a lead"
-            description="Choose an opportunity to manage stage, owner, follow-up, and notes."
+            title="Fürsət seçin"
+            description="Mərhələ, sahib, follow-up və qeydləri idarə etmək üçün fürsət seçin."
           />
         </Card>
       </SlidingDetailOverlay>
@@ -1103,7 +1159,7 @@ function LeadDetailOverlay({
     } catch (err) {
       setError(
         s(err?.payload?.message || err?.payload?.error || err?.message) ||
-          "Could not save changes."
+          "Dəyişikliklər saxlanıla bilmədi."
       );
     } finally {
       setSaving("");
@@ -1118,9 +1174,9 @@ function LeadDetailOverlay({
       () =>
         updateLeadStage(id, {
           stage: nextStage,
-          reason: "Updated from Leads",
+          reason: "Fürsətlər səhifəsindən yeniləndi",
         }),
-      "Stage updated."
+      "Mərhələ yeniləndi."
     );
   }
 
@@ -1132,9 +1188,9 @@ function LeadDetailOverlay({
       () =>
         updateLeadStatus(id, {
           status: nextStatus,
-          reason: "Updated from Leads",
+          reason: "Fürsətlər səhifəsindən yeniləndi",
         }),
-      "Status updated."
+      "Status yeniləndi."
     );
   }
 
@@ -1145,7 +1201,7 @@ function LeadDetailOverlay({
         updateLeadOwner(id, {
           owner: draftOwner,
         }),
-      draftOwner ? "Owner updated." : "Owner cleared."
+      draftOwner ? "Sahib yeniləndi." : "Sahib silindi."
     );
   }
 
@@ -1157,7 +1213,7 @@ function LeadDetailOverlay({
           followUpAt: draftFollowUpAt,
           nextAction: draftNextAction,
         }),
-      "Next step saved."
+      "Növbəti addım saxlanıldı."
     );
   }
 
@@ -1171,7 +1227,7 @@ function LeadDetailOverlay({
         appendLeadNote(id, {
           note,
         }),
-      "Note added."
+      "Qeyd əlavə edildi."
     );
 
     setDraftNote("");
@@ -1195,24 +1251,24 @@ function LeadDetailOverlay({
                   {name}
                 </div>
                 <div className="mt-1 truncate text-[13px] font-medium text-text-muted">
-                  {leadContact(lead) || "No contact details"}
+                  {leadContact(lead) || "Əlaqə məlumatı yoxdur"}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <AppTag tone={stageTone(stage)} dot>
-                    {titleize(stage)}
+                    {stageLabel(stage)}
                   </AppTag>
                   <AppTag tone={priorityTone(priority)} dot>
-                    {titleize(priority)}
+                    {priorityLabel(priority)}
                   </AppTag>
                   <AppTag tone={statusTone(status)} dot>
-                    {titleize(status)}
+                    {statusLabel(status)}
                   </AppTag>
                 </div>
               </div>
             </div>
 
-            <AppIconButton label="Close details" onClick={onClose}>
+            <AppIconButton label="Detalları bağla" onClick={onClose}>
               <X className="h-3.5 w-3.5" strokeWidth={2.15} />
             </AppIconButton>
           </div>
@@ -1220,23 +1276,23 @@ function LeadDetailOverlay({
 
         <AppDetailBody>
           {error ? (
-            <InlineNotice tone="danger" title="Could not save" description={error} compact />
+            <InlineNotice tone="danger" title="Saxlanıla bilmədi" description={error} compact />
           ) : null}
 
           {notice ? (
-            <InlineNotice tone="success" title="Saved" description={notice} compact />
+            <InlineNotice tone="success" title="Saxlandı" description={notice} compact />
           ) : null}
 
           <section className="rounded-md border border-line-soft bg-surface-subtle p-4">
             <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              Opportunity controls
+              Fürsət idarəetməsi
             </div>
             <div className="mt-1 text-[12.5px] font-medium leading-5 text-text-muted">
-              Update stage, owner, follow-up, and notes from one place.
+              Mərhələni, sahibi, follow-up tarixini və qeydləri bir yerdən yeniləyin.
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <LeadControlField label="Stage">
+              <LeadControlField label="Mərhələ">
                 <LeadNativeSelect
                   value={stage}
                   disabled={saving === "stage"}
@@ -1244,7 +1300,7 @@ function LeadDetailOverlay({
                 >
                   {STAGE_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {stageLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
@@ -1258,18 +1314,18 @@ function LeadDetailOverlay({
                 >
                   {STATUS_PRIORITY.map((item) => (
                     <option key={item} value={item}>
-                      {titleize(item)}
+                      {statusLabel(item)}
                     </option>
                   ))}
                 </LeadNativeSelect>
               </LeadControlField>
 
-              <LeadControlField label="Owner">
+              <LeadControlField label="Sahib">
                 <div className="flex gap-2">
                   <LeadNativeInput
                     value={draftOwner}
                     disabled={saving === "owner"}
-                    placeholder="Assign owner"
+                    placeholder="Sahib təyin et"
                     onChange={(event) => setDraftOwner(event.target.value)}
                   />
                   <Button
@@ -1278,12 +1334,12 @@ function LeadDetailOverlay({
                     loading={saving === "owner"}
                     onClick={saveOwner}
                   >
-                    Save
+                    Saxla
                   </Button>
                 </div>
               </LeadControlField>
 
-              <LeadControlField label="Follow-up">
+              <LeadControlField label="Təqib">
                 <LeadNativeInput
                   type="datetime-local"
                   value={draftFollowUpAt}
@@ -1294,12 +1350,12 @@ function LeadDetailOverlay({
             </div>
 
             <div className="mt-3">
-              <LeadControlField label="Next action">
+              <LeadControlField label="Növbəti addım">
                 <div className="flex gap-2">
                   <LeadNativeInput
                     value={draftNextAction}
                     disabled={saving === "followup"}
-                    placeholder="Call back, send quote, schedule demo..."
+                    placeholder="Zəng et, təklif göndər, demo planla..."
                     onChange={(event) => setDraftNextAction(event.target.value)}
                   />
                   <Button
@@ -1308,18 +1364,18 @@ function LeadDetailOverlay({
                     loading={saving === "followup"}
                     onClick={saveFollowup}
                   >
-                    Save
+                    Saxla
                   </Button>
                 </div>
               </LeadControlField>
             </div>
 
             <div className="mt-3">
-              <LeadControlField label="Add note">
+              <LeadControlField label="Qeyd əlavə et">
                 <LeadNativeTextarea
                   value={draftNote}
                   disabled={saving === "note"}
-                  placeholder="Add context for the next follow-up..."
+                  placeholder="Növbəti follow-up üçün kontekst əlavə edin..."
                   onChange={(event) => setDraftNote(event.target.value)}
                 />
               </LeadControlField>
@@ -1332,7 +1388,7 @@ function LeadDetailOverlay({
                   loading={saving === "note"}
                   onClick={saveNote}
                 >
-                  Add note
+                  Qeyd əlavə et
                 </Button>
               </div>
             </div>
@@ -1340,28 +1396,28 @@ function LeadDetailOverlay({
 
           <section className="rounded-md border border-line-soft bg-white p-4">
             <div className="text-[15px] font-semibold tracking-[var(--tracking-tight-md)] text-text">
-              Lead details
+              Fürsət detalları
             </div>
 
             <div className="mt-3 grid gap-1">
-              <AppInfoRow label="Source" value={titleize(source)} />
-              <AppInfoRow label="Company" value={leadCompany(lead) || "Not recorded"} />
-              <AppInfoRow label="Interest" value={s(lead.interest) || "Not recorded"} />
-              <AppInfoRow label="Value" value={formatMoney(leadValue(lead))} />
-              <AppInfoRow label="Owner" value={leadOwner(lead)} />
-              <AppInfoRow label="Next action" value={s(lead.next_action || lead.nextAction) || "Not set"} />
-              <AppInfoRow label="Follow-up" value={formatDate(lead.follow_up_at || lead.followUpAt)} />
-              <AppInfoRow label="Created" value={formatDate(leadCreatedRaw(lead))} />
-              <AppInfoRow label="Updated" value={formatDate(leadUpdatedRaw(lead))} />
+              <AppInfoRow label="Mənbə" value={sourceLabel(source)} />
+              <AppInfoRow label="Şirkət" value={leadCompany(lead) || "Yazılmayıb"} />
+              <AppInfoRow label="Maraq" value={s(lead.interest) || "Yazılmayıb"} />
+              <AppInfoRow label="Dəyər" value={formatMoney(leadValue(lead))} />
+              <AppInfoRow label="Sahib" value={leadOwner(lead)} />
+              <AppInfoRow label="Növbəti addım" value={s(lead.next_action || lead.nextAction) || "Təyin edilməyib"} />
+              <AppInfoRow label="Təqib" value={formatDate(lead.follow_up_at || lead.followUpAt)} />
+              <AppInfoRow label="Yaradılıb" value={formatDate(leadCreatedRaw(lead))} />
+              <AppInfoRow label="Yenilənib" value={formatDate(leadUpdatedRaw(lead))} />
               <AppInfoRow
-                label="Conversation context"
+                label="Söhbət konteksti"
                 value={
                   s(lead.latestMessageText) ||
                   s(lead.latest_message_text) ||
                   s(lead.lastMessageText) ||
                   s(lead.last_message_text) ||
                   s(lead.latest_message) ||
-                  "No message preview is available yet."
+                  "Hələ mesaj önizləməsi yoxdur."
                 }
               />
             </div>
@@ -1375,7 +1431,7 @@ function LeadDetailOverlay({
               onClick={() => threadId && onOpenThread(threadId)}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.15} />}
             >
-              Open conversation
+              Söhbəti aç
             </Button>
 
             {email ? (
@@ -1398,7 +1454,7 @@ function LeadDetailOverlay({
                 size="md"
                 leftIcon={<Phone className="h-4 w-4" strokeWidth={2.1} />}
               >
-                Call
+                Zəng et
               </Button>
             ) : null}
           </div>
@@ -1455,7 +1511,7 @@ export default function Leads() {
     } catch (err) {
       setError(
         s(err?.payload?.error || err?.payload?.message || err?.message) ||
-          "Leads could not be loaded."
+          "Fürsətlər yüklənə bilmədi."
       );
       setLeads([]);
     } finally {
@@ -1529,12 +1585,22 @@ export default function Leads() {
   }, [leads]);
 
   const sourceOptions = useMemo(
-    () => uniqueOptions(arr(leads).map((lead) => leadSource(lead)), SOURCE_PRIORITY),
+    () =>
+      uniqueOptions(
+        arr(leads).map((lead) => leadSource(lead)),
+        SOURCE_PRIORITY,
+        sourceLabel
+      ),
     [leads]
   );
 
   const stageOptions = useMemo(
-    () => uniqueOptions(arr(leads).map((lead) => leadStage(lead)), STAGE_PRIORITY),
+    () =>
+      uniqueOptions(
+        arr(leads).map((lead) => leadStage(lead)),
+        STAGE_PRIORITY,
+        stageLabel
+      ),
     [leads]
   );
 
@@ -1542,7 +1608,8 @@ export default function Leads() {
     () =>
       uniqueOptions(
         arr(leads).map((lead) => leadPriority(lead)),
-        PRIORITY_PRIORITY
+        PRIORITY_PRIORITY,
+        priorityLabel
       ),
     [leads]
   );
@@ -1551,7 +1618,8 @@ export default function Leads() {
     () =>
       uniqueOptions(
         arr(leads).map((lead) => leadStatus(lead)),
-        STATUS_PRIORITY
+        STATUS_PRIORITY,
+        statusLabel
       ),
     [leads]
   );
@@ -1591,8 +1659,8 @@ export default function Leads() {
     return (
       <PageCanvas>
         <LoadingSurface
-          title="Loading leads"
-          description="Preparing the sales pipeline and lead context."
+          title="Fürsətlər yüklənir"
+          description="Satış pipeline-ı və lead konteksti hazırlanır."
           rows={5}
         />
       </PageCanvas>
@@ -1602,8 +1670,8 @@ export default function Leads() {
   return (
     <PageCanvas>
       <PageHeader
-        title="Lead pipeline"
-        description="Track active opportunities, source quality, priority, and the conversations that need follow-up."
+        title="Fürsət pipeline-i"
+        description="Aktiv fürsətləri, mənbə keyfiyyətini, prioriteti və follow-up gözləyən söhbətləri izləyin."
         actions={
           <>
             <Button
@@ -1617,7 +1685,7 @@ export default function Leads() {
                 ) : undefined
               }
             >
-              Refresh
+              Yenilə
             </Button>
 
             <Button
@@ -1626,7 +1694,7 @@ export default function Leads() {
               onClick={() => setCreateOpen(true)}
               leftIcon={<Plus className="h-4 w-4" strokeWidth={2.1} />}
             >
-              New lead
+              Əl ilə fürsət
             </Button>
 
             <Button
@@ -1634,7 +1702,7 @@ export default function Leads() {
               onClick={() => navigate("/inbox")}
               rightIcon={<ArrowRight className="h-4 w-4" strokeWidth={2.1} />}
             >
-              Open inbox
+              Gələnləri aç
             </Button>
           </>
         }
@@ -1643,21 +1711,21 @@ export default function Leads() {
       {error ? (
         <InlineNotice
           tone="danger"
-          title="Leads unavailable"
+          title="Fürsətlər açılmır"
           description={error}
           compact
         />
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AppStatCard icon={Target} label="Total leads" value={stats.total} />
-        <AppStatCard icon={Flame} label="Hot priority" value={stats.hot} />
+        <AppStatCard icon={Target} label="Bütün fürsətlər" value={stats.total} />
+        <AppStatCard icon={Flame} label="Yüksək prioritet" value={stats.hot} />
         <AppStatCard
           icon={TrendingUp}
-          label="Qualified"
+          label="Dəyərləndirilib"
           value={stats.qualified}
         />
-        <AppStatCard icon={Users} label="Won / converted" value={stats.won} />
+        <AppStatCard icon={Users} label="Qazanılıb" value={stats.won} />
       </div>
 
       <LeadsTable

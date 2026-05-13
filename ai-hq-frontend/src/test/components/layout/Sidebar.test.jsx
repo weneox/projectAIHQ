@@ -28,7 +28,7 @@ describe("Sidebar", () => {
       "/channels"
     );
     expect(
-      screen.getByRole("link", { name: /^məlumatlar$/i })
+      screen.getByRole("link", { name: /^biznes profili$/i })
     ).toHaveAttribute("href", "/truth");
     expect(screen.getByText("Əməliyyat")).toBeInTheDocument();
     expect(screen.getByText("CRM")).toBeInTheDocument();
@@ -42,11 +42,11 @@ describe("Sidebar", () => {
       "href",
       "/leads"
     );
-    expect(screen.getByRole("link", { name: /^hesabat$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^hesabatlar$/i })).toHaveAttribute(
       "href",
       "/reports"
     );
-    expect(screen.getByRole("link", { name: /^baza$/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^bilik bazası$/i })).toHaveAttribute(
       "href",
       "/knowledge"
     );

@@ -262,7 +262,7 @@ describe("product sidebar routes", () => {
     renderRoute(<Customers />, "/customers");
 
     expect(
-      await screen.findByRole("heading", { name: /^contacts$/i })
+      await screen.findByRole("heading", { name: /^müştərilər$/i })
     ).toBeInTheDocument();
     expect(await screen.findByText("Ada Customer")).toBeInTheDocument();
     expect(listContacts).toHaveBeenCalledWith({ limit: 200 });
@@ -272,7 +272,7 @@ describe("product sidebar routes", () => {
     renderRoute(<Leads />, "/leads");
 
     expect(
-      await screen.findByRole("heading", { name: /^lead pipeline$/i })
+      await screen.findByRole("heading", { name: /^fürsət pipeline-i$/i })
     ).toBeInTheDocument();
     expect(await screen.findByText("Niko Lead")).toBeInTheDocument();
     expect(listLeads).toHaveBeenCalledWith({ limit: 200 });
@@ -282,9 +282,9 @@ describe("product sidebar routes", () => {
     renderRoute(<Reports />, "/reports");
 
     expect(
-      await screen.findByRole("heading", { name: /^reports$/i })
+      await screen.findByRole("heading", { name: /^hesabatlar$/i })
     ).toBeInTheDocument();
-    expect(await screen.findByText(/performance overview/i)).toBeInTheDocument();
+    expect(await screen.findByText(/performans icmalı/i)).toBeInTheDocument();
     expect(await screen.findByText(/^website$/i)).toBeInTheDocument();
     expect(getReportsOverview).toHaveBeenCalledWith({ range: "7d" });
   });
@@ -315,7 +315,7 @@ describe("product sidebar routes", () => {
     renderRoute(<Team />, "/team");
 
     expect(
-      await screen.findByRole("heading", { name: /^team members$/i })
+      await screen.findByRole("heading", { name: /^komanda üzvləri$/i })
     ).toBeInTheDocument();
     expect(await screen.findByText("Owner User")).toBeInTheDocument();
     await waitFor(() => expect(getTeam).toHaveBeenCalled());

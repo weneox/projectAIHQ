@@ -55,14 +55,14 @@ const PRIMARY_SECTIONS = [
   },
   {
     id: "business-info",
-    label: "Məlumatlar",
+    label: "Biznes profili",
     icon: BriefcaseBusiness,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
       {
         title: "Naviqasiya",
-        items: [{ label: "Məlumatlar", to: "/truth" }],
+        items: [{ label: "Biznes profili", to: "/truth" }],
       },
     ],
   },
@@ -101,27 +101,27 @@ const CRM_SECTIONS = [
 const SECONDARY_SECTIONS = [
   {
     id: "reports",
-    label: "Hesabat",
+    label: "Hesabatlar",
     icon: BarChart3,
     to: "/reports",
     paths: ["/reports"],
     contextGroups: [
       {
         title: "Naviqasiya",
-        items: [{ label: "Hesabat", to: "/reports" }],
+        items: [{ label: "Hesabatlar", to: "/reports" }],
       },
     ],
   },
   {
     id: "knowledge",
-    label: "Baza",
+    label: "Bilik bazası",
     icon: BookOpenCheck,
     to: "/knowledge",
     paths: ["/knowledge"],
     contextGroups: [
       {
         title: "Naviqasiya",
-        items: [{ label: "Baza", to: "/knowledge" }],
+        items: [{ label: "Bilik bazası", to: "/knowledge" }],
       },
     ],
   },
