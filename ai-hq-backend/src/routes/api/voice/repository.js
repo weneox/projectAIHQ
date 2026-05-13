@@ -1,4 +1,4 @@
-﻿import {
+import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
   listVoiceCalls,
@@ -87,12 +87,12 @@ async function buildTenantSelectSql(db) {
 
 export async function resolveTenantScope(req, db) {
   const ctx = await resolveTenantContext(req, {
-    db,
+    db: null,
     allowFallback: false,
     allowDefaultTenant: false,
   });
 
-  if (ctx?.tenantId || ctx?.tenantKey) {
+  if (ctx?.tenantId || req?.tenantContext?.tenantKey) {
     return {
       tenantId: s(ctx.tenantId),
       tenantKey: s(ctx.tenantKey),
