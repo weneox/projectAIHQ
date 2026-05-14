@@ -35,7 +35,7 @@ Voice should not be extracted into a separate backend yet. First we need route-f
 4. Extract route-free tenant lookup/data helpers to `src/modules/voice/repository.js`. Done in `refactor/voice-route-free-repository`.
 5. Extract `upsertCallAndSession` to `src/modules/voice/mutations.js`. Done in `refactor/voice-call-session-mutations`.
 6. Extract `buildVoiceConfigFromProjectedRuntime` to `src/modules/voice/config.js`. Done in `refactor/voice-runtime-config-builder`.
-7. Extract transaction/event/realtime runtime helpers to `src/modules/voice/runtime.js`.
+7. Extract transaction/event/realtime runtime helpers to `src/modules/voice/runtime.js`. Done in `refactor/voice-runtime-helpers`.
 8. Only later consider `voice-backend` extraction.
 
 ## Non-goals

@@ -11,7 +11,7 @@ import {
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
   runVoiceMutationTransaction,
-} from "../routes/api/voice/utils.js";
+} from "../modules/voice/runtime.js";
 import {
   s,
   b,
