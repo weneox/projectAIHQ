@@ -47,6 +47,8 @@ function lower(v, d = "") {
 export function inboxHandlers({ db, wsHub }) {
   const r = express.Router();
 
+  r.use(inboxOutboundOperatorRoutes({ db, wsHub }));
+
   r.get("/inbox/threads", async (req, res) => {
     const tenantKey = getScopedTenantKey(req);
     const status = lower(req.query?.status);
@@ -346,8 +348,6 @@ export function inboxHandlers({ db, wsHub }) {
       });
     }
   });
-
-  r.use(inboxOutboundOperatorRoutes({ db, wsHub }));
 
   r.post("/inbox/threads", async (req, res) => {
     const tenantId = getScopedTenantId(req);
