@@ -16,7 +16,7 @@ import {
   createVoiceCallSession,
 } from "../../../db/helpers/voice.js";
 import { s } from "./shared.js";
-import { findTenantByKeyOrPhone as findTenantByKeyOrPhoneRouteFree } from "../../../modules/voice/repository.js";
+import { findTenantByKeyOrPhone as findTenantByKeyOrPhoneRouteFree } from "../../../modules/voice/index.js";
 import { resolveTenantContext } from "../../../platform/tenancy/index.js";
 
 export {

@@ -3,7 +3,7 @@ import {
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
   runVoiceMutationTransaction,
-} from "../../../modules/voice/runtime.js";
+} from "../../../modules/voice/index.js";
 import {
   resolveTenantScope,
   getVoiceCallById,
