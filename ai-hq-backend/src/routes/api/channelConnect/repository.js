@@ -15,6 +15,10 @@ const INSTAGRAM_CHANNEL = "instagram";
 const TELEGRAM_CHANNEL = "telegram";
 
 export { getTenantByKey } from "../../../platform/tenancy/repository.js";
+export {
+  getPrimaryTelegramChannel,
+  getTelegramSecrets,
+} from "../../../platform/channels/telegramRepository.js";
 
 async function saveProviderSecretValue(
   db,
@@ -159,10 +163,6 @@ export async function deleteTelegramSecretKeys(
   );
 }
 
-export async function getTelegramSecrets(db, tenantId) {
-  return getProviderSecrets(db, tenantId, TELEGRAM_PROVIDER);
-}
-
 export async function upsertInstagramChannel(db, tenantId, payload) {
   return upsertChannel(db, tenantId, INSTAGRAM_CHANNEL, payload);
 }
@@ -173,10 +173,6 @@ export async function upsertTelegramChannel(db, tenantId, payload) {
 
 export async function getPrimaryInstagramChannel(db, tenantId) {
   return getPrimaryChannel(db, tenantId, INSTAGRAM_CHANNEL);
-}
-
-export async function getPrimaryTelegramChannel(db, tenantId) {
-  return getPrimaryChannel(db, tenantId, TELEGRAM_CHANNEL);
 }
 
 export async function markInstagramDisconnected(

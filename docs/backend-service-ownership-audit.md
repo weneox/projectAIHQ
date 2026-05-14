@@ -56,7 +56,7 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 | `ai-hq-backend/src/services/sourceSync/**`, `src/services/sourceFusion/**` | Crawlers, extraction, source sync orchestration, source fusion and synthesis. | module | P2 | Candidate for future source-sync runtime. Keep shared until source-sync boundary is defined. | No |
 | `ai-hq-backend/src/services/contentBehaviorRuntime.js`, `src/services/media/**`, `src/services/togetherImage.js` | Content, image, video, media execution providers. | module | P2 | Candidate for future content runtime. Keep provider clients in services until module boundary exists. | No |
 | `ai-hq-backend/src/routes/api/websiteWidget/**` plus website-widget-facing service calls | Website widget public runtime surface and install/config logic. | module or route adapter | P2 | Treat route files as adapters. Runtime logic that is not HTTP-specific can later move to a website widget module or inbox runtime extension. | No |
-| `ai-hq-backend/src/services/channelDelivery.js`, `metaGatewayClient.js` | Channel outbound delivery and Meta gateway calls. | module or infrastructure | P1 | Delivery orchestration likely belongs with runtime modules; provider HTTP clients may remain infrastructure. First remove route-layer imports. | No |
+| `ai-hq-backend/src/services/channelDelivery.js`, `metaGatewayClient.js` | Channel outbound delivery and Meta gateway calls. | module or infrastructure | P1 | Delivery orchestration likely belongs with runtime modules; provider HTTP clients may remain infrastructure. Telegram delivery config now uses a route-free platform channel helper. | No |
 
 ### 3. Infrastructure / Shared Utilities
 
@@ -79,7 +79,7 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 | --- | --- | --- | --- | --- | --- |
 | `ai-hq-backend/src/services/durableExecutionService.js` | Durable execution dispatcher that also imports comment route repository/state/shared helpers and a comment ingest handler. | infrastructure with module adapters | P1 | Extract comment route data/helper dependencies behind a comment module or service-level adapter. Keep durable execution as infrastructure orchestration. | No |
 | `ai-hq-backend/src/services/voiceInternalRuntime.js` | Voice runtime processing that imports voice route config, mutations, repository, utils, and shared helpers. | module | P1 | Create a route-free voice data/config boundary before any voice runtime extraction. | No |
-| `ai-hq-backend/src/services/channelDelivery.js` | Channel outbound delivery that imports channel-connect route repository and Telegram route helpers. | module or infrastructure | P1 | Move channel-connect data/provider helpers out of routes into platform/channel or provider-service helpers. | No |
+| `ai-hq-backend/src/services/channelDelivery.js` | Channel outbound delivery using route-free platform channel helpers for Telegram delivery config. | module or infrastructure | P1 | Continue evaluating ownership with future runtime boundaries; keep service-to-route imports out. | No |
 | `ai-hq-backend/src/services/auth/selfServiceWorkspace.js` | Self-service workspace creation that imports team route repository and tenant route key utilities. | platform | P1 | Move team repository and tenant-key utilities behind platform/db helper boundaries, then update the service. | No |
 | `ai-hq-backend/src/services/auth/canonicalUserAccess.js` | Canonical user access service that imports admin route DB timeout helper. | platform | P2 | Move `queryDbWithTimeout` to infrastructure/db utility and update route and service callers. | No |
 | `ai-hq-backend/src/services/launch/posture.js` | Launch posture assembler that imports channel-connect route status functions and workspace route shared helper. | platform | P2 | Move route status readers into platform/channel or service helpers; keep launch posture platform-owned. | No |
@@ -102,7 +102,6 @@ risks because route files should be HTTP adapters.
 | --- | --- | --- | --- | --- | --- |
 | `src/services/auth/canonicalUserAccess.js` | `routes/api/adminAuth/utils.js` | platform | P2 | Move shared DB timeout helper to `src/db` or `src/utils`. | No |
 | `src/services/auth/selfServiceWorkspace.js` | `routes/api/team/repository.js`, `routes/api/tenants/utils.js` | platform | P1 | Move team repository and tenant key normalization to platform/db helpers. | No |
-| `src/services/channelDelivery.js` | `routes/api/channelConnect/repository.js`, `routes/api/channelConnect/telegram.js` | module or infrastructure | P1 | Create route-free channel delivery/provider helpers. | No |
 | `src/services/durableExecutionService.js` | `routes/api/comments/repository.js`, `routes/api/comments/state.js`, `routes/api/comments/handlers/shared.js`, `routes/api/comments/handlers/ingest.js` | infrastructure with comment module adapter | P1 | Establish comment/inbox runtime boundary before touching durable execution orchestration. | No |
 | `src/services/launch/posture.js` | `routes/api/channelConnect/meta.js`, `telegram.js`, `website.js`, `routes/api/workspace/shared.js` | platform | P2 | Move status readers and workspace actor helper behind platform/service helpers. | No |
 | `src/services/voiceInternalRuntime.js` | `routes/api/voice/config.js`, `mutations.js`, `repository.js`, `utils.js`, `shared.js` | module | P1 | Create voice module/data boundary before future voice runtime extraction. | No |
@@ -137,7 +136,7 @@ risks because route files should be HTTP adapters.
 3. Tackle high-risk route dependencies by domain:
    - voice route helpers used by `voiceInternalRuntime`
    - comments route helpers used by `durableExecutionService`
-   - channel-connect route helpers used by `channelDelivery` and launch posture
+   - channel-connect route helpers used by launch posture
    - team/tenant route helpers used by auth workspace services
 4. Do not move `src/db` or `src/utils` wholesale. They are shared
    infrastructure and should remain stable.

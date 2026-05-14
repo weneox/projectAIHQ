@@ -25,6 +25,9 @@ import {
   setTelegramWebhook,
 } from "../../../utils/telegram.js";
 import {
+  TELEGRAM_BOT_TOKEN_SECRET_KEY,
+} from "../../../platform/channels/telegramRepository.js";
+import {
   auditSafe,
   deleteTelegramSecretKeys,
   getPrimaryTelegramChannel,
@@ -42,7 +45,9 @@ import {
   s,
 } from "./utils.js";
 
-export const TELEGRAM_BOT_TOKEN_SECRET_KEY = "bot_token";
+export {
+  TELEGRAM_BOT_TOKEN_SECRET_KEY,
+} from "../../../platform/channels/telegramRepository.js";
 export const TELEGRAM_WEBHOOK_ROUTE_TOKEN_SECRET_KEY = "webhook_route_token";
 export const TELEGRAM_WEBHOOK_SECRET_TOKEN_SECRET_KEY = "webhook_secret_token";
 export const TELEGRAM_ALLOWED_UPDATES = Object.freeze(["message"]);
