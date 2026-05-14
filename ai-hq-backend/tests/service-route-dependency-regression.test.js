@@ -55,7 +55,7 @@ function isRouteLayerImport(source) {
   );
 }
 
-test("backend services do not add new route-layer imports", () => {
+test("backend services do not import route-layer files", () => {
   const files = listJsFiles(servicesRoot);
   assert.ok(files.length > 0, "expected service files to scan");
 
