@@ -3,7 +3,6 @@ import {
   dbListTenantUsers,
   dbGetTenantUserById,
   dbGetTenantUserByEmail,
-  dbCreateTenantUser,
   dbUpdateTenantUser,
   dbSetTenantUserStatus,
   dbDeleteTenantUser,
@@ -23,6 +22,7 @@ import {
   syncCanonicalIdentityAndMembership,
   withTransaction,
 } from "../../../services/auth/canonicalUserAccess.js";
+import { createTenantUser as createRouteFreeTenantUser } from "../../../services/auth/tenantUsers.js";
 
 function cleanString(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -77,11 +77,7 @@ export async function getTenantUserByEmail(db, tenantId, email) {
 }
 
 export async function createTenantUser(db, tenantId, input) {
-  return withTransaction(db, async (tx) => {
-    const user = await dbCreateTenantUser(tx, tenantId, input);
-    await syncCanonicalIdentityAndMembership(tx, tenantId, user);
-    return user;
-  });
+  return createRouteFreeTenantUser(db, tenantId, input);
 }
 
 export async function updateTenantUser(db, tenantId, userId, input) {
