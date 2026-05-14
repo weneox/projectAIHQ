@@ -19,6 +19,9 @@ import {
   pickBoolean,
   pickArray,
   lower,
+  buildTranscriptFingerprint,
+  isDuplicateTranscriptFrame,
+  buildTranscriptLine,
 } from "../modules/voice/internal/index.js";
 
 import {
@@ -41,20 +44,6 @@ const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
 
 function isTerminalSessionStatus(status = "") {
   return TERMINAL_SESSION_STATUSES.has(lower(status));
-}
-
-function buildTranscriptFingerprint(input = {}) {
-  return [s(input.ts), lower(input.role || "customer"), s(input.text)].join("|");
-}
-
-function isDuplicateTranscriptFrame(items = [], nextItem = {}) {
-  if (!Array.isArray(items) || !items.length) return false;
-  const nextFingerprint = buildTranscriptFingerprint(nextItem);
-  return items.some((item) => buildTranscriptFingerprint(item) === nextFingerprint);
-}
-
-function buildTranscriptLine(role = "", text = "") {
-  return `[${s(role)}] ${s(text)}`;
 }
 
 function buildSessionStateConflict({
