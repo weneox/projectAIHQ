@@ -1,10 +1,8 @@
 import {
   getPrimaryTelegramChannel,
   getTelegramSecrets,
-} from "../routes/api/channelConnect/repository.js";
-import {
   TELEGRAM_BOT_TOKEN_SECRET_KEY,
-} from "../routes/api/channelConnect/telegram.js";
+} from "../platform/channels/telegramRepository.js";
 import { sendOutboundViaMetaGateway } from "./metaGatewayClient.js";
 import {
   sendTelegramChatAction,
