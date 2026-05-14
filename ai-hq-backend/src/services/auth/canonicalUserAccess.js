@@ -14,7 +14,7 @@ import {
   runWithSystemDbContext,
   runWithTenantContext,
 } from "../../db/tenantContext.js";
-import { queryDbWithTimeout } from "../../routes/api/adminAuth/utils.js";
+import { queryDbWithTimeout } from "../../db/queryWithTimeout.js";
 
 function cleanString(value, fallback = "") {
   return String(value ?? fallback).trim();
