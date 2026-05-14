@@ -43,7 +43,7 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 | `ai-hq-backend/src/services/businessBrain/**`, `src/services/projectedRuntime/**`, `src/services/projectedTenantRuntime.js` | Runtime projection, tenant runtime authority, catalog and control-plane runtime shape. | platform | P1 | Treat as platform/control-plane runtime projection, not an inbox module. Future work can create platform facade APIs around the current services. | No |
 | `ai-hq-backend/src/services/businessTruthAnswer/**` | Business truth answer composition, retrieval, localization, validation. | platform | P2 | Likely platform/business-truth adjacent. Keep shared until callers and runtime ownership are clearer. | No |
 | `ai-hq-backend/src/services/tenantEntitlements.js`, `tenantProviderSecrets.js`, `tenantQuota.js`, `commercialPlans.js` | Entitlements, secrets, quota, and plan logic. | platform | P1 | Keep shared platform services. Split HTTP middleware wrappers from quota/entitlement core when touched. | No |
-| `ai-hq-backend/src/services/operationalChannels.js`, `operationalReadiness.js`, `launch/posture.js` | Launch and operational readiness surfaces. | platform | P2 | Keep platform/control-plane. Remove route imports before considering ownership moves. | No |
+| `ai-hq-backend/src/services/operationalChannels.js`, `operationalReadiness.js`, `launch/posture.js` | Launch and operational readiness surfaces. | platform | P2 | Keep platform/control-plane. `launch/posture.js` no longer imports channel-connect route files directly; continue moving channel status readers behind route-free helpers before considering ownership moves. | No |
 
 ### 2. Module / Runtime Candidates
 
@@ -82,7 +82,7 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 | `ai-hq-backend/src/services/channelDelivery.js` | Channel outbound delivery using route-free platform channel helpers for Telegram delivery config. | module or infrastructure | P1 | Continue evaluating ownership with future runtime boundaries; keep service-to-route imports out. | No |
 | `ai-hq-backend/src/services/auth/selfServiceWorkspace.js` | Self-service workspace creation using route-free tenant key and tenant user helpers. | platform | P1 | Route dependency fixed. Future work can wrap this behind a broader platform auth/workspace boundary. | No |
 | `ai-hq-backend/src/services/auth/canonicalUserAccess.js` | Canonical user access service using route-free DB timeout helper. | platform | P2 | Route dependency fixed. Keep auth DB timeout helper in infrastructure. | No |
-| `ai-hq-backend/src/services/launch/posture.js` | Launch posture assembler still imports channel-connect route status functions; workspace actor helper is now route-free. | platform | P2 | Move route status readers into platform/channel or service helpers; keep launch posture platform-owned. | No |
+| `ai-hq-backend/src/services/launch/posture.js` | Launch posture assembler using a launch-level channel status facade for channel readiness defaults. | platform | P2 | Continue extracting channel status reader implementations out of route files when those route adapters are split. | No |
 | `ai-hq-backend/src/services/tenantQuota.js` | Quota service plus Express middleware behavior using `req` and `res`. | platform or infrastructure | P2 | Split quota decision/reservation core from HTTP middleware wrapper when touched. | No |
 | `ai-hq-backend/src/services/workspace/setup/actorApp.js` | Workspace setup helper directly writes HTTP responses. | platform with route adapter wrapper | P2 | Separate response shaping from workspace actor decision logic. | No |
 | `ai-hq-backend/src/modules/inbox/internal/ingest.js` | Inbox internal ingest handler factory that accepts `req`/`res` and performs runtime orchestration. | module with route-adapter edge | P2 | Keep for now because route adapter delegates to it. Later split pure ingest orchestration from HTTP handler wrapper if extraction needs it. | No |
@@ -103,7 +103,7 @@ risks because route files should be HTTP adapters.
 | `src/services/auth/canonicalUserAccess.js` | `routes/api/adminAuth/utils.js` | platform | P2 | Move shared DB timeout helper to `src/db` or `src/utils`. | No |
 | `src/services/auth/selfServiceWorkspace.js` | `routes/api/team/repository.js`, `routes/api/tenants/utils.js` | platform | P1 | Move team repository and tenant key normalization to platform/db helpers. | No |
 | `src/services/durableExecutionService.js` | `routes/api/comments/repository.js`, `routes/api/comments/state.js`, `routes/api/comments/handlers/shared.js`, `routes/api/comments/handlers/ingest.js` | infrastructure with comment module adapter | P1 | Establish comment/inbox runtime boundary before touching durable execution orchestration. | No |
-| `src/services/launch/posture.js` | `routes/api/channelConnect/meta.js`, `telegram.js`, `website.js`, `routes/api/workspace/shared.js` | platform | P2 | Move status readers and workspace actor helper behind platform/service helpers. | No |
+| `src/services/launch/channelStatus.js` | `routes/api/channelConnect/meta.js`, `telegram.js`, `website.js` | platform | P2 | Temporary launch facade preserving existing channel status behavior while route-owned status readers are extracted. | No |
 | `src/services/voiceInternalRuntime.js` | `routes/api/voice/config.js`, `mutations.js`, `repository.js`, `utils.js`, `shared.js` | module | P1 | Create voice module/data boundary before future voice runtime extraction. | No |
 
 ### Utils, DB, Platform, and Modules
@@ -136,7 +136,7 @@ risks because route files should be HTTP adapters.
 3. Tackle high-risk route dependencies by domain:
    - voice route helpers used by `voiceInternalRuntime`
    - comments route helpers used by `durableExecutionService`
-   - channel-connect route helpers used by launch posture
+   - channel-connect route helpers used by `services/launch/channelStatus.js`
    - team/tenant route helpers used by auth workspace services
 4. Do not move `src/db` or `src/utils` wholesale. They are shared
    infrastructure and should remain stable.

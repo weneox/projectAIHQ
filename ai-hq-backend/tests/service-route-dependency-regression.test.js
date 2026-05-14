@@ -9,6 +9,7 @@ const backendRoot = path.resolve(testDir, "..");
 
 const guardedServiceFiles = [
   "src/services/channelDelivery.js",
+  "src/services/launch/posture.js",
   "src/services/auth/selfServiceWorkspace.js",
   "src/services/auth/canonicalUserAccess.js",
   "src/services/voiceInternalRuntime.js",
