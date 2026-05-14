@@ -29,7 +29,6 @@ import {
   normalizeSettingsInput,
   getScopedCallOrFail,
   getScopedSessionOrFail,
-  findSessionByCallId,
   auditSafe,
 } from "./utils.js";
 import {
@@ -38,12 +37,12 @@ import {
 import {
   isMissingSchemaError,
   getSessionCallId,
-  sessionMatchesCall,
   applyOperatorVoiceMutation,
   readVoiceCallDetails,
   readVoiceCallEvents,
   listVoiceCallSessionsForCall,
   toggleTenantVoiceSettings,
+  resolveVoiceCallSessionForOperator,
 } from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
@@ -490,28 +489,21 @@ export function voiceRoutes({
       const actor = getActor(req);
       const callId = s(req.params?.id);
       const providedSessionId = s(req.body?.sessionId);
-
-      const call = await getScopedCallOrFail({ db, scope, callId, res });
-      if (!call) return;
-
-      let session = null;
-
-      if (providedSessionId) {
-        session = await getScopedSessionOrFail({
-          db,
-          scope,
-          sessionId: providedSessionId,
+      const lookup = await resolveVoiceCallSessionForOperator({
+        db,
+        scope,
+        callId,
+        sessionId: providedSessionId,
+      });
+      if (!lookup.ok) {
+        return fail(
           res,
-        });
-      } else {
-        session = await findSessionByCallId(db, scope.tenantId, callId);
-        if (!session) return fail(res, 404, "voice_session_not_found");
+          lookup.statusCode || 500,
+          lookup.error || "voice_session_not_found"
+        );
       }
 
-      if (!session) return;
-      if (!sessionMatchesCall(session, call.id)) {
-        return fail(res, 404, "voice_session_not_found");
-      }
+      const { call, session } = lookup;
 
       const joinMode = s(req.body?.joinMode || req.body?.mode, "live").toLowerCase();
       const operatorName = s(req.body?.operatorName || actor);
@@ -627,28 +619,21 @@ export function voiceRoutes({
       const actor = getActor(req);
       const callId = s(req.params?.id);
       const providedSessionId = s(req.body?.sessionId);
-
-      const call = await getScopedCallOrFail({ db, scope, callId, res });
-      if (!call) return;
-
-      let session = null;
-
-      if (providedSessionId) {
-        session = await getScopedSessionOrFail({
-          db,
-          scope,
-          sessionId: providedSessionId,
+      const lookup = await resolveVoiceCallSessionForOperator({
+        db,
+        scope,
+        callId,
+        sessionId: providedSessionId,
+      });
+      if (!lookup.ok) {
+        return fail(
           res,
-        });
-      } else {
-        session = await findSessionByCallId(db, scope.tenantId, callId);
-        if (!session) return fail(res, 404, "voice_session_not_found");
+          lookup.statusCode || 500,
+          lookup.error || "voice_session_not_found"
+        );
       }
 
-      if (!session) return;
-      if (!sessionMatchesCall(session, call.id)) {
-        return fail(res, 404, "voice_session_not_found");
-      }
+      const { call, session } = lookup;
 
       const timestamp = new Date().toISOString();
       const result = await applyOperatorVoiceMutation({
