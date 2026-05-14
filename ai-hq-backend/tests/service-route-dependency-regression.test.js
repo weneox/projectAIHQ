@@ -11,10 +11,6 @@ const servicesRoot = path.join(backendRoot, "src", "services");
 // Known remaining service -> route debts.
 // Keep this list small and remove entries as each dependency is fixed.
 const allowedRouteLayerImports = new Set([
-  "src/services/durableExecutionService.js -> ../routes/api/comments/repository.js",
-  "src/services/durableExecutionService.js -> ../routes/api/comments/state.js",
-  "src/services/durableExecutionService.js -> ../routes/api/comments/handlers/shared.js",
-  "src/services/durableExecutionService.js -> ../routes/api/comments/handlers/ingest.js",
 ]);
 
 function listJsFiles(dir) {
