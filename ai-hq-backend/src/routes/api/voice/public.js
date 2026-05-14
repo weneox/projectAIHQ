@@ -43,6 +43,9 @@ import {
   isMissingSchemaError,
   getSessionCallId,
   sessionMatchesCall,
+  isTerminalSessionStatus,
+  buildSessionStateConflict,
+  lower,
 } from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
@@ -84,16 +87,6 @@ function recordVoiceRouteFailure({
   });
 }
 
-const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
-
-function lower(v, d = "") {
-  return s(v, d).toLowerCase();
-}
-
-function isTerminalSessionStatus(status = "") {
-  return TERMINAL_SESSION_STATUSES.has(lower(status));
-}
-
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
@@ -106,31 +99,6 @@ async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
   }
 
   return getScopedCallOrFail({ db, scope, callId, res });
-}
-
-function buildSessionStateConflict({
-  currentStatus = "",
-  requestedStatus = "",
-  eventType = "",
-} = {}) {
-  const current = lower(currentStatus);
-  const requested = lower(requestedStatus);
-
-  return {
-    ok: false,
-    statusCode: 409,
-    error: "voice_session_state_conflict",
-    mutationOutcome: "rejected",
-    details: {
-      reasonCode:
-        requested && requested !== current
-          ? "terminal_state_regression"
-          : "terminal_state_conflict",
-      currentStatus: current,
-      requestedStatus: requested,
-      eventType: s(eventType),
-    },
-  };
 }
 
 async function applyOperatorVoiceMutation({
