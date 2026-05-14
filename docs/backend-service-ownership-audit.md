@@ -94,15 +94,24 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 
 ### Services Importing Routes
 
-These are the current service-to-route dependencies found in `src/services`.
-They do not currently violate the module boundary guard, but they are ownership
-risks because route files should be HTTP adapters.
+Current status: no active `src/services -> src/routes` imports are allowed.
 
-| Current path | Route-layer dependency | Recommended owner | Priority | Recommended future action | Move now |
-| --- | --- | --- | --- | --- | --- |
-| `src/services/auth/canonicalUserAccess.js` | `routes/api/adminAuth/utils.js` | platform | P2 | Move shared DB timeout helper to `src/db` or `src/utils`. | No |
-| `src/services/auth/selfServiceWorkspace.js` | `routes/api/team/repository.js`, `routes/api/tenants/utils.js` | platform | P1 | Move team repository and tenant key normalization to platform/db helpers. | No |
-| `src/services/voiceInternalRuntime.js` | `routes/api/voice/config.js`, `mutations.js`, `repository.js`, `utils.js`, `shared.js` | module | P1 | Create voice module/data boundary before future voice runtime extraction. | No |
+This is enforced by:
+
+```bash
+node --import ./scripts/workspace-module-loader.mjs --test --test-concurrency=1 ./ai-hq-backend/tests/service-route-dependency-regression.test.js
+```
+
+Completed cleanup areas:
+
+| Area | Status |
+| --- | --- |
+| `channelDelivery.js` | Route dependency removed. |
+| `services/auth/selfServiceWorkspace.js` | Route dependency removed. |
+| `services/auth/canonicalUserAccess.js` | Route dependency removed. |
+| `voiceInternalRuntime.js` | Route dependency removed behind `src/modules/voice`. |
+| `services/launch/posture.js` and `services/launch/channelStatus.js` | Route dependency removed behind route-free channel status readers. |
+| `durableExecutionService.js` comments dependencies | Route dependency removed behind `src/modules/comments`. |
 
 ### Utils, DB, Platform, and Modules
 
@@ -126,18 +135,15 @@ risks because route files should be HTTP adapters.
 
 ## Recommended Sequence
 
-1. Keep the current boundary guard unchanged: it protects the most important
-   rule, namely platform/modules must not depend on routes.
-2. Add a future service-layer import guard only after deciding whether all
-   `src/services -> src/routes` imports should be blocked or whether a temporary
-   allowlist is needed.
-3. Tackle high-risk route dependencies by domain:
-   - voice route helpers used by `voiceInternalRuntime`
-   - team/tenant route helpers used by auth workspace services
-4. Do not move `src/db` or `src/utils` wholesale. They are shared
-   infrastructure and should remain stable.
-5. Do not extract services yet. Move only small route-free helpers behind
-   platform/module boundaries as each domain is hardened.
+1. Keep `lint:boundaries` strict for platform/module route violations.
+2. Keep the service route dependency regression guard strict.
+3. Do not reintroduce service-to-route imports.
+4. Continue future work by domain boundary:
+   - website widget module boundary
+   - inbox brain / inbox policy module boundary
+   - source sync module boundary
+   - voice runtime extraction readiness
+5. Do not extract separate services yet. Keep route adapters stable and prove the modular boundaries inside the monolith first.
 
 ## Verification Commands
 
