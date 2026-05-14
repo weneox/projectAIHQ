@@ -22,6 +22,10 @@ export function getScopedTenantId(req) {
   return isUuid(tenantId) ? tenantId : "";
 }
 
+export function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
 export function emitOperatorThreadEvent(wsHub, req, type, payload = {}) {
   try {
     emitRealtimeEvent(wsHub, {
