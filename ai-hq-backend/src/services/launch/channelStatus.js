@@ -1,5 +1,5 @@
-export { getMetaStatus } from "../../routes/api/channelConnect/meta.js";
-export { getTelegramStatus } from "../../routes/api/channelConnect/telegram.js";
+export { getMetaStatus } from "./channelStatusReaders.js";
+export { getTelegramStatus } from "./channelStatusReaders.js";
 export {
   getWebsiteWidgetStatus,
-} from "../../routes/api/channelConnect/website.js";
+} from "./channelStatusReaders.js";
