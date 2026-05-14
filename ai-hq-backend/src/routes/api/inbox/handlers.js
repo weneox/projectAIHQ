@@ -20,8 +20,8 @@ import {
   toInt,
   truthy,
   withMessageOutboundAttemptCorrelation,
-} from "./shared.js";
-import { persistOutboundMessage } from "./internal/execution.js";
+} from "../../../modules/inbox/shared.js";
+import { persistOutboundMessage } from "../../../modules/inbox/internal/execution.js";
 
 import {
   getOutboundAttemptById,
@@ -33,7 +33,7 @@ import {
   markOutboundAttemptDead,
   refreshThread,
   scheduleOutboundRetry,
-} from "./repository.js";
+} from "../../../modules/inbox/repository.js";
 
 function normalizeObj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};

@@ -2,8 +2,8 @@ import express from "express";
 import { createInternalTokenGuard } from "../../../../utils/auth.js";
 import { requireWebhookIngestionRateLimit } from "../../../../utils/rateLimit.js";
 import { getTenantBrainRuntime } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
-import { createInboxIngestHandler } from "./ingest.js";
-import { createInboxOutboundHandler } from "./outbound.js";
+import { createInboxIngestHandler } from "../../../../modules/inbox/internal/ingest.js";
+import { createInboxOutboundHandler } from "../../../../modules/inbox/internal/outbound.js";
 
 export function inboxInternalRoutes({
   db,

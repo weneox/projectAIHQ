@@ -13,8 +13,8 @@ import {
   resolveTelegramAvatarForThread,
   resolveTelegramTenantIdForThread,
 } from "../../../modules/inbox/avatar.js";
-import { getThreadById } from "./repository.js";
-import { resolveThreadAvatarState, s } from "./shared.js";
+import { getThreadById } from "../../../modules/inbox/repository.js";
+import { resolveThreadAvatarState, s } from "../../../modules/inbox/shared.js";
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
