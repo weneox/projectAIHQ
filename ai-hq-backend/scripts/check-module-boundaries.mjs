@@ -14,10 +14,6 @@ const scanRoots = [
 
 const TEMPORARY_ALLOWLIST = new Map([
   [
-    "platform/channels/index.js -> routes/api/tenants/repository.js",
-    "TODO: move tenant channel resolution behind a platform-safe data helper.",
-  ],
-  [
     "modules/inbox/avatar.js -> routes/api/channelConnect/repository.js",
     "TODO: move channel connect repository access behind a module-safe helper.",
   ],

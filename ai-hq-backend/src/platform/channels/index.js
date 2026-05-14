@@ -7,7 +7,7 @@
  * Current source of truth:
  * - tenant_channels
  * - db/helpers/settings.js
- * - routes/api/tenants/repository.js for channel resolution
+ * - platform/channels/repository.js for channel resolution
  *
  * Future modules:
  * - inbox uses instagram/facebook/whatsapp channels
@@ -23,7 +23,7 @@ export {
 
 export {
   dbResolveTenantChannel,
-} from "../../routes/api/tenants/repository.js";
+} from "./repository.js";
 
 export async function listTenantChannels(db, tenantId) {
   return dbListTenantChannels(db, tenantId);
