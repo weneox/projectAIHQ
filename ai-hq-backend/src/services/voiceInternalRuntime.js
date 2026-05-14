@@ -10,6 +10,9 @@ import {
   isObj,
   normalizePhone,
   normalizeTranscriptItem,
+  buildVoiceInternalErrorResult,
+  buildVoiceInternalOkResult,
+  buildVoiceInternalPayloadResult,
 } from "../modules/voice/internal/index.js";
 
 import {
@@ -89,8 +92,7 @@ function buildSessionStateConflict({
 } = {}) {
   const requested = lower(requestedStatus);
   const current = lower(currentStatus);
-  return {
-    ok: false,
+  return buildVoiceInternalErrorResult({
     statusCode: 409,
     error: "voice_session_state_conflict",
     details: {
@@ -103,7 +105,7 @@ function buildSessionStateConflict({
       eventType: s(eventType || "session_state_updated"),
       strict: true,
     },
-  };
+  });
 }
 
 async function appendVoiceConflictEvent({
@@ -932,11 +934,7 @@ export async function processVoiceTenantConfig({
     },
   };
 
-  return {
-    ok: true,
-    statusCode: 200,
-    payload,
-  };
+  return buildVoiceInternalOkResult(payload);
 }
 
 export async function processVoiceSessionUpsert({
@@ -982,17 +980,13 @@ export async function processVoiceSessionUpsert({
     mutationOutcome: "applied",
   });
 
-  return {
+  return buildVoiceInternalOkResult({
     ok: true,
-    statusCode: 200,
-    payload: {
-      ok: true,
-      call: committed.call,
-      session: committed.session,
-      event: committed.event,
-      appliedGuards: committed.appliedGuards,
-    },
-  };
+    call: committed.call,
+    session: committed.session,
+    event: committed.event,
+    appliedGuards: committed.appliedGuards,
+  });
 }
 
 export async function processVoiceTranscript({
@@ -1011,11 +1005,10 @@ export async function processVoiceTranscript({
       providerCallSid
     );
     if (!session) {
-      return {
-        ok: false,
+      return buildVoiceInternalErrorResult({
         statusCode: 404,
         error: "voice_session_not_found",
-      };
+      });
     }
 
     const transcriptLive = Array.isArray(session.transcriptLive)
@@ -1049,23 +1042,23 @@ export async function processVoiceTranscript({
           })
         : null;
 
-      return {
-        ok: true,
-        statusCode: 200,
-        payload: {
+      return buildVoiceInternalOkResult(
+        {
           ok: true,
           call,
           session,
           event,
           appliedGuards: ["duplicate_transcript_ignored"],
         },
-        __voiceRealtime: {
-          call,
-          session,
-          event,
-          mutationOutcome: "ignored",
-        },
-      };
+        {
+          __voiceRealtime: {
+            call,
+            session,
+            event,
+            mutationOutcome: "ignored",
+          },
+        }
+      );
     }
 
     transcriptLive.push(nextItem);
@@ -1111,22 +1104,22 @@ export async function processVoiceTranscript({
       });
     }
 
-    return {
-      ok: true,
-      statusCode: 200,
-      payload: {
+    return buildVoiceInternalOkResult(
+      {
         ok: true,
         call: updatedCall,
         session: updatedSession,
         event,
       },
-      __voiceRealtime: {
-        call: updatedCall,
-        session: updatedSession,
-        event,
-        mutationOutcome: "applied",
-      },
-    };
+      {
+        __voiceRealtime: {
+          call: updatedCall,
+          session: updatedSession,
+          event,
+          mutationOutcome: "applied",
+        },
+      }
+    );
   });
 
   if (!committed?.ok) {
@@ -1139,11 +1132,7 @@ export async function processVoiceTranscript({
     ...obj(committed.__voiceRealtime),
   });
 
-  return {
-    ok: committed.ok,
-    statusCode: committed.statusCode,
-    payload: committed.payload,
-  };
+  return buildVoiceInternalPayloadResult(committed);
 }
 
 export async function processVoiceSessionState({
@@ -1160,11 +1149,10 @@ export async function processVoiceSessionState({
       providerCallSid
     );
     if (!session) {
-      return {
-        ok: false,
+      return buildVoiceInternalErrorResult({
         statusCode: 404,
         error: "voice_session_not_found",
-      };
+      });
     }
 
     const requestedStatus = s(body?.status);
@@ -1284,23 +1272,23 @@ export async function processVoiceSessionState({
       });
     }
 
-    return {
-      ok: true,
-      statusCode: 200,
-      payload: {
+    return buildVoiceInternalOkResult(
+      {
         ok: true,
         call: updatedCall,
         session: updatedSession,
         event,
         appliedGuards: [],
       },
-      __voiceRealtime: {
-        call: updatedCall,
-        session: updatedSession,
-        event,
-        mutationOutcome: "applied",
-      },
-    };
+      {
+        __voiceRealtime: {
+          call: updatedCall,
+          session: updatedSession,
+          event,
+          mutationOutcome: "applied",
+        },
+      }
+    );
   });
 
   if (!committed?.ok) {
@@ -1320,11 +1308,7 @@ export async function processVoiceSessionState({
     ...obj(committed.__voiceRealtime),
   });
 
-  return {
-    ok: committed.ok,
-    statusCode: committed.statusCode,
-    payload: committed.payload,
-  };
+  return buildVoiceInternalPayloadResult(committed);
 }
 
 export async function processVoiceOperatorJoin({
@@ -1341,11 +1325,10 @@ export async function processVoiceOperatorJoin({
       providerCallSid
     );
     if (!session) {
-      return {
-        ok: false,
+      return buildVoiceInternalErrorResult({
         statusCode: 404,
         error: "voice_session_not_found",
-      };
+      });
     }
 
     if (isTerminalSessionStatus(session.status)) {
@@ -1432,22 +1415,22 @@ export async function processVoiceOperatorJoin({
       });
     }
 
-    return {
-      ok: true,
-      statusCode: 200,
-      payload: {
+    return buildVoiceInternalOkResult(
+      {
         ok: true,
         call: updatedCall,
         session: updatedSession,
         event,
       },
-      __voiceRealtime: {
-        call: updatedCall,
-        session: updatedSession,
-        event,
-        mutationOutcome: "applied",
-      },
-    };
+      {
+        __voiceRealtime: {
+          call: updatedCall,
+          session: updatedSession,
+          event,
+          mutationOutcome: "applied",
+        },
+      }
+    );
   });
 
   if (!committed?.ok) {
@@ -1467,20 +1450,12 @@ export async function processVoiceOperatorJoin({
     ...obj(committed.__voiceRealtime),
   });
 
-  return {
-    ok: committed.ok,
-    statusCode: committed.statusCode,
-    payload: committed.payload,
-  };
+  return buildVoiceInternalPayloadResult(committed);
 }
 
 export async function processVoiceReportPing() {
-  return {
+  return buildVoiceInternalOkResult({
     ok: true,
-    statusCode: 200,
-    payload: {
-      ok: true,
-      accepted: true,
-    },
-  };
+    accepted: true,
+  });
 }
