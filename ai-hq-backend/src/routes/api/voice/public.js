@@ -11,7 +11,6 @@ import {
 import {
   s,
   n,
-  b,
   ok,
   fail,
   getActor,
@@ -44,6 +43,7 @@ import {
   readVoiceCallDetails,
   readVoiceCallEvents,
   listVoiceCallSessionsForCall,
+  toggleTenantVoiceSettings,
 } from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
@@ -203,12 +203,10 @@ export function voiceRoutes({
       if (!scope) return;
 
       const actor = getActor(req);
-      const current = await getTenantVoiceSettings(db, scope.tenantId);
-      const enabled = b(req.body?.enabled, !current?.enabled);
-
-      const settings = await upsertTenantVoiceSettings(db, scope.tenantId, {
-        ...(current || {}),
-        enabled,
+      const { enabled, settings } = await toggleTenantVoiceSettings({
+        db,
+        tenantId: scope.tenantId,
+        enabled: req.body?.enabled,
       });
 
       await auditSafe(audit, {
