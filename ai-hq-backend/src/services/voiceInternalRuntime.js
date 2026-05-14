@@ -18,7 +18,7 @@ import {
   isObj,
   normalizePhone,
   normalizeTranscriptItem,
-} from "../routes/api/voice/shared.js";
+} from "../modules/voice/shared.js";
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
