@@ -12,7 +12,7 @@ import {
   createOutboundAttempt,
   markOutboundAttemptSending,
   expireStaleOutboundReservations,
-} from "../src/routes/api/inbox/repository/outboundAttempts.js";
+} from "../src/modules/inbox/repository/outboundAttempts.js";
 import {
   reserveTenantUsageQuota,
   commitTenantUsageReservation,

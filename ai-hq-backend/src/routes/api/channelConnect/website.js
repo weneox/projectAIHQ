@@ -33,7 +33,7 @@ import {
 import {
   findOrCreateThreadForIngest,
   insertInboundMessage,
-} from "../inbox/internal/persistence.js";
+} from "../../../modules/inbox/internal/persistence.js";
 import { auditSafe, getTenantByKey } from "./repository.js";
 import { getReqActor, getReqTenantKey, s } from "./utils.js";
 

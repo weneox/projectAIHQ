@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
-import { persistOutboundMessage } from "../src/routes/api/inbox/internal/execution.js";
+import { persistOutboundMessage } from "../src/modules/inbox/internal/execution.js";
 import { createWebsiteWidgetHandlers } from "../src/routes/api/websiteWidget/index.js";
 import {
   issueWebsiteWidgetBootstrapToken,

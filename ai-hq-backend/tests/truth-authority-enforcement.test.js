@@ -19,7 +19,7 @@ import { inboxInternalRoutes } from "../src/routes/api/inbox/internal.js";
 import {
   getTenantByKey as getInboxTenantByKey,
   getTenantInboxBrainContext,
-} from "../src/routes/api/inbox/repository.js";
+} from "../src/modules/inbox/repository/index.js";
 import { getTenantByKey as getCommentTenantByKey } from "../src/routes/api/comments/repository.js";
 import { buildOperationalChannels } from "../src/services/operationalChannels.js";
 import {
