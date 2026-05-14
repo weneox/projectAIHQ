@@ -34,3 +34,8 @@ export function buildSessionStateConflict({
     },
   };
 }
+
+
+export function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
