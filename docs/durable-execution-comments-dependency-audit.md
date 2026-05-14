@@ -26,7 +26,7 @@ These are currently allowlisted in `service-route-dependency-regression.test.js`
 
 ## Recommended staged sequence
 
-1. Extract comment state helpers to `src/modules/comments/state.js`.
+1. Extract comment state helpers to `src/modules/comments/state.js`. Done in `refactor/comments-state-helpers`.
 2. Update `durableExecutionService.js` to import state helpers from module.
 3. Extract comments repository facade to `src/modules/comments/repository.js`.
 4. Update `durableExecutionService.js` repository imports.
