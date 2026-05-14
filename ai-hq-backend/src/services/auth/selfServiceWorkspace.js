@@ -7,8 +7,8 @@ import {
 import { dbGetAuthIdentityByEmail, dbUpdateAuthIdentity } from "../../db/helpers/authIdentities.js";
 import { dbGetAuthIdentityMembership } from "../../db/helpers/authIdentityMemberships.js";
 import { runWithTenantContext } from "../../db/tenantContext.js";
-import { createTenantUser as createCanonicalTenantUser } from "../../routes/api/team/repository.js";
-import { isReservedTenantKey, slugTenantKey, validTenantKey } from "../../routes/api/tenants/utils.js";
+import { createTenantUser as createCanonicalTenantUser } from "./tenantUsers.js";
+import { isReservedTenantKey, slugTenantKey, validTenantKey } from "../../platform/tenancy/tenantKey.js";
 import { withTransaction } from "./canonicalUserAccess.js";
 
 function s(value, fallback = "") {

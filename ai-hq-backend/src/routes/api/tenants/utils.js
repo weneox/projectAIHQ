@@ -1,25 +1,11 @@
 import { dbAudit } from "../../../db/helpers/audit.js";
+export {
+  RESERVED_TENANT_KEYS,
+  isReservedTenantKey,
+  slugTenantKey,
+  validTenantKey,
+} from "../../../platform/tenancy/tenantKey.js";
 
-export const RESERVED_TENANT_KEYS = new Set([
-  "www",
-  "api",
-  "hq",
-  "mail",
-  "docs",
-  "status",
-  "admin",
-  "app",
-  "cdn",
-  "assets",
-  "blog",
-  "help",
-  "support",
-  "auth",
-  "m",
-  "dev",
-  "staging",
-  "demo",
-]);
 
 export function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
@@ -78,25 +64,6 @@ export function asJsonObj(v, fallback = {}) {
 
 export function asJsonArr(v, fallback = []) {
   return Array.isArray(v) ? v : fallback;
-}
-
-export function slugTenantKey(v) {
-  const raw = cleanLower(v);
-  if (!raw) return "";
-
-  return raw
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 63);
-}
-
-export function validTenantKey(v) {
-  return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(String(v || ""));
-}
-
-export function isReservedTenantKey(v) {
-  return RESERVED_TENANT_KEYS.has(cleanLower(v));
 }
 
 export function safeEmail(v) {
