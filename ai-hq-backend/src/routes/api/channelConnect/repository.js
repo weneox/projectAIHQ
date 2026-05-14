@@ -1,5 +1,4 @@
 import {
-  dbGetTenantByKey,
   dbUpsertTenantChannel,
 } from "../../../db/helpers/settings.js";
 import {
@@ -15,9 +14,7 @@ const TELEGRAM_PROVIDER = "telegram";
 const INSTAGRAM_CHANNEL = "instagram";
 const TELEGRAM_CHANNEL = "telegram";
 
-export async function getTenantByKey(db, tenantKey) {
-  return dbGetTenantByKey(db, tenantKey);
-}
+export { getTenantByKey } from "../../../platform/tenancy/repository.js";
 
 async function saveProviderSecretValue(
   db,

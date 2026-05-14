@@ -12,12 +12,7 @@ const scanRoots = [
   path.join(srcRoot, "modules"),
 ];
 
-const TEMPORARY_ALLOWLIST = new Map([
-  [
-    "modules/inbox/avatar.js -> routes/api/channelConnect/repository.js",
-    "TODO: move channel connect repository access behind a module-safe helper.",
-  ],
-]);
+const TEMPORARY_ALLOWLIST = new Map();
 
 function toPosix(value) {
   return value.split(path.sep).join("/");
