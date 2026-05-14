@@ -30,7 +30,7 @@ These are currently allowlisted in `service-route-dependency-regression.test.js`
 2. Update `durableExecutionService.js` to import state helpers from module.
 3. Extract comments repository facade to `src/modules/comments/repository.js`. Done in `refactor/comments-repository-facade`.
 4. Update `durableExecutionService.js` repository imports.
-5. Extract reply raw builders and realtime helper to `src/modules/comments/shared.js`.
+5. Extract reply raw builders and realtime helper to `src/modules/comments/shared.js`. Done in `refactor/comments-reply-shared-helpers`.
 6. Update `durableExecutionService.js` shared imports.
 7. Extract `processCommentWebhookJob` to `src/modules/comments/ingestJob.js`.
 8. Remove all durableExecutionService comments route allowlist entries.
