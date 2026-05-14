@@ -11,3 +11,4 @@ export * from "./response.js";
 export * from "./primitives.js";
 export * from "./transcript.js";
 export * from "./sessionState.js";
+export * from "./projection.js";
