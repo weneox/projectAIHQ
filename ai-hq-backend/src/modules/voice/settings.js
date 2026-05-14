@@ -87,3 +87,21 @@ export async function saveTenantVoiceSettings({
 
   return settings;
 }
+
+export async function toggleTenantVoiceSettings({
+  db,
+  tenantId,
+  enabled: requestedEnabled,
+} = {}) {
+  const current = await getTenantVoiceSettings(db, tenantId);
+  const enabled = b(requestedEnabled, !current?.enabled);
+  const settings = await upsertTenantVoiceSettings(db, tenantId, {
+    ...(current || {}),
+    enabled,
+  });
+
+  return {
+    enabled,
+    settings,
+  };
+}
