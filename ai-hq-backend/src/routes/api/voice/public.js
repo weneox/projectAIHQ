@@ -1,5 +1,6 @@
 import express from "express";
-import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
+import {
+  requireOperatorSurfaceAccess } from "../../../utils/auth.js";
 import { createLogger } from "../../../utils/logger.js";
 import { recordRuntimeSignal } from "../../../observability/runtimeSignals.js";
 import {
@@ -11,7 +12,7 @@ import {
   getActor,
   isLiveVoiceStatus,
   sameTenant,
-} from "./shared.js";
+  } from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -24,7 +25,7 @@ import {
   updateVoiceCall,
   updateVoiceCallSession,
   resolveTenantScope,
-} from "./repository.js";
+  } from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
@@ -35,10 +36,9 @@ import {
   runVoiceMutationTransaction,
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
-} from "./utils.js";
+  } from "./utils.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { buildVoiceReplayPayload } from "../../../services/voiceReplayTrace.js";
-import { buildVoiceEventInspect } from "../../../services/operatorReplayInspect.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
@@ -52,6 +52,9 @@ import {
   buildEmptyVoiceOverview,
   readVoiceOverview,
   listTenantVoiceCalls,
+  readVoiceCallDetails,
+  readVoiceCallEvents,
+  listVoiceCallSessionsForCall,
 } from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
@@ -383,15 +386,7 @@ export function voiceRoutes({
       });
       if (!call) return;
 
-      const events = (await listVoiceCallEvents(db, call.id)).map((event) => ({
-        ...event,
-        inspect: buildVoiceEventInspect(event),
-      }));
-      return ok(res, {
-        call,
-        events,
-        inspect: events.at(-1)?.inspect || null,
-      });
+      return ok(res, await readVoiceCallDetails({ db, call }));
     } catch (err) {
       logger.error("voice.calls.get.failed", err, {
         callId: s(req.params?.id),
@@ -430,14 +425,7 @@ export function voiceRoutes({
       });
       if (!call) return;
 
-      const events = (await listVoiceCallEvents(db, call.id)).map((event) => ({
-        ...event,
-        inspect: buildVoiceEventInspect(event),
-      }));
-      return ok(res, {
-        events,
-        inspect: events.at(-1)?.inspect || null,
-      });
+      return ok(res, await readVoiceCallEvents({ db, call }));
     } catch (err) {
       logger.error("voice.calls.events.failed", err, {
         callId: s(req.params?.id),
@@ -476,20 +464,12 @@ export function voiceRoutes({
       });
       if (!call) return;
 
-      const allSessions = await listVoiceCallSessions(db, {
+      const sessions = await listVoiceCallSessionsForCall({
+        db,
         tenantId: scope.tenantId,
-        status: s(req.query?.status),
-        limit: Math.max(1, Math.min(200, n(req.query?.limit, 100))),
-      });
-
-      const callId = s(call.id);
-      const sessions = allSessions.filter((x) => {
-        return (
-          s(x?.callId) === callId ||
-          s(x?.call_id) === callId ||
-          s(x?.voiceCallId) === callId ||
-          s(x?.voice_call_id) === callId
-        );
+        call,
+        status: req.query?.status,
+        limit: req.query?.limit,
       });
 
       return ok(res, { sessions });
