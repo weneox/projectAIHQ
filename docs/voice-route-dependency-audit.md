@@ -29,7 +29,7 @@ Voice should not be extracted into a separate backend yet. First we need route-f
 
 ## Recommended staged sequence
 
-1. Extract pure voice helpers to `src/modules/voice/shared.js`.
+1. Extract pure voice helpers to `src/modules/voice/shared.js`. Done in `refactor/voice-shared-pure-helpers`.
 2. Keep `routes/api/voice/shared.js` as route adapter compatibility layer.
 3. Update `voiceInternalRuntime.js` to import pure helpers from `modules/voice/shared.js`.
 4. Extract route-free tenant lookup/data helpers to `src/modules/voice/repository.js`.
