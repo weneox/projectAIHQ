@@ -4,7 +4,7 @@ import {
   getVoiceCallSessionByProviderCallSid,
   updateVoiceCallSession,
 } from "../db/helpers/voice.js";
-import { buildVoiceConfigFromProjectedRuntime } from "../routes/api/voice/config.js";
+import { buildVoiceConfigFromProjectedRuntime } from "../modules/voice/config.js";
 import { upsertCallAndSession } from "../modules/voice/mutations.js";
 import { findTenantByKeyOrPhone } from "../modules/voice/repository.js";
 import {
