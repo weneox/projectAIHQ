@@ -13,6 +13,8 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 The next source of truth for ownership decisions is
 [Platform Core Contract](./platform-core-contract.md), with product/runtime
 ownership covered by [Product Module Boundaries](./product-module-boundaries.md).
+Future voice ownership decisions should also follow
+[Voice Module Contract](./voice-module-contract.md).
 Production readiness docs remain launch gates and release evidence, not
 architecture contracts.
 
@@ -59,7 +61,7 @@ architecture contracts.
 | `ai-hq-backend/src/modules/inbox/**` | Inbox repository, mutations, avatar logic, operator helpers, internal ingest/outbound/runtime helpers. | module | P0 | Keep as the inbox/conversation module boundary. Continue using route adapters for HTTP registration. | No |
 | `ai-hq-backend/src/services/inboxBrain/**`, `src/services/inboxPolicy.js` | Inbox reply behavior, prompts, conversation engine, handoff and policy logic. | module | P1 | Candidate to move behind `src/modules/inbox` or future conversation runtime after route/service imports are clean. | No |
 | `ai-hq-backend/src/services/commentBrain/**`, `src/services/commentBrain.js` | Comment reply/runtime logic. | module | P2 | Candidate for future inbox/comments runtime. Comments route dependencies are now isolated behind `src/modules/comments`. | No |
-| `ai-hq-backend/src/services/voiceInternalRuntime.js`, `voiceReplayTrace.js` | Voice runtime state processing and replay trace. | module | P1 | Candidate for future voice runtime. Voice route dependencies are now isolated behind `src/modules/voice`; next work is readiness for future extraction. | No |
+| `ai-hq-backend/src/services/voiceInternalRuntime.js`, `voiceReplayTrace.js` | Voice runtime state processing and replay trace. | module | P1 | Candidate for future voice runtime. Voice route dependencies are now isolated behind `src/modules/voice`; future ownership decisions should follow `docs/voice-module-contract.md`. | No |
 | `ai-hq-backend/src/services/sourceSync/**`, `src/services/sourceFusion/**` | Crawlers, extraction, source sync orchestration, source fusion and synthesis. | module | P2 | Candidate for future source-sync runtime. Keep shared until source-sync boundary is defined. | No |
 | `ai-hq-backend/src/services/contentBehaviorRuntime.js`, `src/services/media/**`, `src/services/togetherImage.js` | Content, image, video, media execution providers. | module | P2 | Candidate for future content runtime. Keep provider clients in services until module boundary exists. | No |
 | `ai-hq-backend/src/routes/api/websiteWidget/**` plus website-widget-facing service calls | Website widget public runtime surface and install/config logic. | module or route adapter | P2 | Treat route files as adapters. Runtime logic that is not HTTP-specific can later move to a website widget module or inbox runtime extension. | No |
@@ -85,7 +87,7 @@ architecture contracts.
 | Current path | Current responsibility | Recommended owner | Priority | Recommended future action | Move now |
 | --- | --- | --- | --- | --- | --- |
 | `ai-hq-backend/src/services/durableExecutionService.js` | Durable execution dispatcher using route-free comment module adapters for comment reply and webhook processing. | infrastructure with module adapters | P1 | Keep durable execution as infrastructure orchestration; keep new comment worker dependencies behind `src/modules/comments`. | No |
-| `ai-hq-backend/src/services/voiceInternalRuntime.js` | Voice runtime processing that now uses route-free voice module/config helpers. | module | P1 | Prepare a voice module readiness contract before any voice runtime extraction. | No |
+| `ai-hq-backend/src/services/voiceInternalRuntime.js` | Voice runtime processing that now uses route-free voice module/config helpers. | module | P1 | Follow `docs/voice-module-contract.md`; split into smaller route-free voice module orchestration files before any voice runtime extraction. | No |
 | `ai-hq-backend/src/services/channelDelivery.js` | Channel outbound delivery using route-free platform channel helpers for Telegram delivery config. | module or infrastructure | P1 | Continue evaluating ownership with future runtime boundaries; keep service-to-route imports out. | No |
 | `ai-hq-backend/src/services/auth/selfServiceWorkspace.js` | Self-service workspace creation using route-free tenant key and tenant user helpers. | platform | P1 | Route dependency fixed. Future work can wrap this behind a broader platform auth/workspace boundary. | No |
 | `ai-hq-backend/src/services/auth/canonicalUserAccess.js` | Canonical user access service using route-free DB timeout helper. | platform | P2 | Route dependency fixed. Keep auth DB timeout helper in infrastructure. | No |
