@@ -25,7 +25,7 @@ export function toArray(v) {
 }
 
 export function normalizePhone(v) {
-  return s(v).replace(/[^\\d+]/g, "");
+  return s(v).replace(/[^\d+]/g, "");
 }
 
 export function isLiveVoiceStatus(v) {
