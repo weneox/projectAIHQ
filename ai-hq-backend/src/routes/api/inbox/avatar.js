@@ -9,12 +9,13 @@ import {
 import { getTelegramSecrets } from "../channelConnect/repository.js";
 import { TELEGRAM_BOT_TOKEN_SECRET_KEY } from "../channelConnect/telegram.js";
 import {
+  getThreadById,
   persistTelegramAvatarMeta,
   resolveTelegramAvatarForThread,
+  resolveThreadAvatarState,
   resolveTelegramTenantIdForThread,
-} from "../../../modules/inbox/avatar.js";
-import { getThreadById } from "../../../modules/inbox/repository.js";
-import { resolveThreadAvatarState, s } from "../../../modules/inbox/shared.js";
+  s,
+} from "../../../modules/inbox/index.js";
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};

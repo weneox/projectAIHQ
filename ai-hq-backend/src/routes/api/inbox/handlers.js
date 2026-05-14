@@ -11,37 +11,32 @@ import { getTenantContext } from "../../../platform/tenancy/index.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 
 import {
-  clamp,
-  isRenderableConversationMessage,
-  normalizeMessage,
-  normalizeThread,
-  pickConversationPreviewText,
-  s,
-  toInt,
-  truthy,
-  withMessageOutboundAttemptCorrelation,
-} from "../../../modules/inbox/shared.js";
-import {
   THREAD_LIST_IDENTITY_LATERAL,
   buildHandoffMeta,
   buildRenderablePreviewLateralSql,
-  isControlMessageType,
-  normalizeInboxMessageType,
-  normalizeThreadStatus,
-} from "../../../modules/inbox/operatorHelpers.js";
-import { persistOutboundMessage } from "../../../modules/inbox/internal/execution.js";
-
-import {
+  clamp,
   getOutboundAttemptById,
   getOutboundAttemptsSummary,
   getThreadById,
+  isControlMessageType,
+  isRenderableConversationMessage,
   listFailedOutboundAttempts,
   listOutboundAttemptCorrelationsByMessageIds,
   listOutboundAttemptsByThread,
   markOutboundAttemptDead,
+  normalizeInboxMessageType,
+  normalizeMessage,
+  normalizeThread,
+  normalizeThreadStatus,
+  pickConversationPreviewText,
   refreshThread,
+  s,
   scheduleOutboundRetry,
-} from "../../../modules/inbox/repository.js";
+  toInt,
+  truthy,
+  withMessageOutboundAttemptCorrelation,
+} from "../../../modules/inbox/index.js";
+import { persistOutboundMessage } from "../../../modules/inbox/internal/index.js";
 
 function normalizeObj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
