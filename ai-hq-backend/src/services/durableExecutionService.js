@@ -33,7 +33,7 @@ import {
 import {
   mergeClassificationForReply,
   mergeClassificationForReplyPending,
-} from "../routes/api/comments/state.js";
+} from "../modules/comments/state.js";
 import {
   buildReplyPendingRaw,
   buildReplyRaw,
