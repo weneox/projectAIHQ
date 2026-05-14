@@ -1,24 +1,24 @@
 import {
-  getVoiceCallByProviderSid,
-  updateVoiceCall,
-  getVoiceCallSessionByProviderCallSid,
-  updateVoiceCallSession,
-} from "../db/helpers/voice.js";
-import { buildVoiceConfigFromProjectedRuntime } from "../modules/voice/config.js";
-import { upsertCallAndSession } from "../modules/voice/mutations.js";
-import { findTenantByKeyOrPhone } from "../modules/voice/repository.js";
-import {
+  buildVoiceConfigFromProjectedRuntime,
+  upsertCallAndSession,
+  findTenantByKeyOrPhone,
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
   runVoiceMutationTransaction,
-} from "../modules/voice/runtime.js";
-import {
   s,
   b,
   isObj,
   normalizePhone,
   normalizeTranscriptItem,
-} from "../modules/voice/shared.js";
+} from "../modules/voice/internal/index.js";
+
+import {
+  getVoiceCallByProviderSid,
+  updateVoiceCall,
+  getVoiceCallSessionByProviderCallSid,
+  updateVoiceCallSession,
+} from "../db/helpers/voice.js";
+
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
