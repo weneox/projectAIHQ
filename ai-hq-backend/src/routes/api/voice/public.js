@@ -1,8 +1,13 @@
 import express from "express";
 import {
-  requireOperatorSurfaceAccess } from "../../../utils/auth.js";
-import { createLogger } from "../../../utils/logger.js";
-import { recordRuntimeSignal } from "../../../observability/runtimeSignals.js";
+  requireOperatorSurfaceAccess,
+} from "../../../utils/auth.js";
+import {
+  createLogger,
+} from "../../../utils/logger.js";
+import {
+  recordRuntimeSignal,
+} from "../../../observability/runtimeSignals.js";
 import {
   s,
   n,
@@ -11,21 +16,15 @@ import {
   fail,
   getActor,
   isLiveVoiceStatus,
-  sameTenant,
-  } from "./shared.js";
+} from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
   listVoiceCalls,
-  listVoiceCallEvents,
   getVoiceDailyUsage,
   listVoiceCallSessions,
-  getVoiceCallById,
-  getVoiceCallSessionById,
-  updateVoiceCall,
-  updateVoiceCallSession,
   resolveTenantScope,
-  } from "./repository.js";
+} from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
@@ -33,25 +32,15 @@ import {
   getScopedSessionOrFail,
   findSessionByCallId,
   auditSafe,
-  runVoiceMutationTransaction,
-  appendVoiceEventStrict,
-  emitVoiceMutationRealtime,
-  } from "./utils.js";
-import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
-import { buildVoiceReplayPayload } from "../../../services/voiceReplayTrace.js";
+} from "./utils.js";
+import {
+  getTenantBrainRuntime,
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
   sessionMatchesCall,
-  isTerminalSessionStatus,
-  buildSessionStateConflict,
-  lower,
   applyOperatorVoiceMutation,
-  readTenantVoiceSettings,
-  saveTenantVoiceSettings,
-  buildEmptyVoiceOverview,
-  readVoiceOverview,
-  listTenantVoiceCalls,
   readVoiceCallDetails,
   readVoiceCallEvents,
   listVoiceCallSessionsForCall,
