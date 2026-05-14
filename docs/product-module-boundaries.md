@@ -64,6 +64,9 @@ Product modules should not own:
 Those belong to platform core. See
 [Platform Core Contract](./platform-core-contract.md).
 
+Voice ownership has an additional contract. See
+[Voice Module Contract](./voice-module-contract.md).
+
 ## Route Boundary
 
 Routes must remain stable HTTP adapters.
@@ -101,6 +104,9 @@ Future extraction targets may include:
 Extraction must happen only after module boundaries are stable inside the
 monolith. Route paths, API contracts, and platform foundations should remain
 stable through extraction.
+
+Voice extraction readiness should follow the
+[Voice Module Contract](./voice-module-contract.md) before any service split.
 
 ## Non-Goals
 
