@@ -7,6 +7,11 @@ separated behind explicit in-repo boundaries.
 The goal is not to extract services yet. Folder names, backend names, and route
 surfaces should stay stable until the module boundaries are proven.
 
+Related architecture contracts:
+
+- [Platform Core Contract](./platform-core-contract.md)
+- [Product Module Boundaries](./product-module-boundaries.md)
+
 ## Current Backend Shape
 
 - `ai-hq-backend/src/platform` is the shared platform and control-plane
@@ -99,6 +104,10 @@ Current rule of thumb:
 - Modules own reusable domain/runtime logic.
 - Platform owns shared control-plane logic.
 - Services may orchestrate infrastructure/runtime flows, but must not depend on route files.
+
+Ownership decisions should now use the platform core and product module
+contracts as the source of truth. Production readiness docs remain launch gates,
+not architecture contracts.
 
 ## Future Extraction Targets
 
