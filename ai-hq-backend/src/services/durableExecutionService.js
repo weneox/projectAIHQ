@@ -29,7 +29,7 @@ import {
 import {
   getCommentById,
   updateCommentState,
-} from "../routes/api/comments/repository.js";
+} from "../modules/comments/repository.js";
 import {
   mergeClassificationForReply,
   mergeClassificationForReplyPending,
