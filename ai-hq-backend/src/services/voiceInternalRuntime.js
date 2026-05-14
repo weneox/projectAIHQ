@@ -13,6 +13,12 @@ import {
   buildVoiceInternalErrorResult,
   buildVoiceInternalOkResult,
   buildVoiceInternalPayloadResult,
+  obj,
+  arr,
+  firstNonEmpty,
+  pickBoolean,
+  pickArray,
+  lower,
 } from "../modules/voice/internal/index.js";
 
 import {
@@ -31,41 +37,7 @@ import { buildOperationalChannels } from "./operationalChannels.js";
 import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
 import { buildVoiceReplayPayload } from "./voiceReplayTrace.js";
 
-function obj(v) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
-}
-
-function arr(v) {
-  return Array.isArray(v) ? v : [];
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    const normalized = s(value);
-    if (normalized) return normalized;
-  }
-  return "";
-}
-
-function pickBoolean(...values) {
-  for (const value of values) {
-    if (typeof value === "boolean") return value;
-  }
-  return false;
-}
-
-function pickArray(...values) {
-  for (const value of values) {
-    if (Array.isArray(value)) return value;
-  }
-  return [];
-}
-
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
-
-function lower(v) {
-  return s(v).toLowerCase();
-}
 
 function isTerminalSessionStatus(status = "") {
   return TERMINAL_SESSION_STATUSES.has(lower(status));
