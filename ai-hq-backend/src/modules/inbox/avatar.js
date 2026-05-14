@@ -3,7 +3,7 @@ import {
   getTelegramFile,
   resolveTelegramUserAvatar,
 } from "../../utils/telegram.js";
-import { getTenantByKey } from "../../routes/api/channelConnect/repository.js";
+import { getTenantByKey } from "../../platform/tenancy/repository.js";
 import { resolveThreadAvatarState, s } from "./shared.js";
 
 function obj(v) {
