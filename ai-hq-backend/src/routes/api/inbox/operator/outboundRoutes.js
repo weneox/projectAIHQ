@@ -18,9 +18,7 @@ import {
   getScopedTenantKey,
 } from "./routeHelpers.js";
 
-export function inboxOutboundOperatorRoutes({ db, wsHub }) {
-  const r = express.Router();
-
+export function registerInboxOutboundOperatorRoutes(r, { db, wsHub }) {
   r.get("/inbox/outbound/summary", async (req, res) => {
     const tenantKey = getScopedTenantKey(req);
 
@@ -223,4 +221,9 @@ export function inboxOutboundOperatorRoutes({ db, wsHub }) {
   });
 
   return r;
+}
+
+export function inboxOutboundOperatorRoutes({ db, wsHub }) {
+  const r = express.Router();
+  return registerInboxOutboundOperatorRoutes(r, { db, wsHub });
 }

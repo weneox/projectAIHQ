@@ -5,7 +5,7 @@ import express from "express";
 import { okJson, isDbReady, isUuid } from "../../../utils/http.js";
 import { requireInboxManualReplyRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
-import { inboxOutboundOperatorRoutes } from "./operator/outboundRoutes.js";
+import { registerInboxOutboundOperatorRoutes } from "./operator/outboundRoutes.js";
 import {
   auditSafe,
   emitOperatorThreadEvent,
@@ -47,7 +47,7 @@ function lower(v, d = "") {
 export function inboxHandlers({ db, wsHub }) {
   const r = express.Router();
 
-  r.use(inboxOutboundOperatorRoutes({ db, wsHub }));
+  registerInboxOutboundOperatorRoutes(r, { db, wsHub });
 
   r.get("/inbox/threads", async (req, res) => {
     const tenantKey = getScopedTenantKey(req);
