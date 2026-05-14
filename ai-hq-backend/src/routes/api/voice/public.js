@@ -39,6 +39,11 @@ import {
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { buildVoiceReplayPayload } from "../../../services/voiceReplayTrace.js";
 import { buildVoiceEventInspect } from "../../../services/operatorReplayInspect.js";
+import {
+  isMissingSchemaError,
+  getSessionCallId,
+  sessionMatchesCall,
+} from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -79,21 +84,6 @@ function recordVoiceRouteFailure({
   });
 }
 
-function isMissingSchemaError(error) {
-  const code = s(error?.code).toUpperCase();
-  const message = s(error?.message).toLowerCase();
-
-  if (code === "42P01" || code === "42703") {
-    return true;
-  }
-
-  return (
-    message.includes("does not exist") ||
-    message.includes("undefined column") ||
-    message.includes("undefined table")
-  );
-}
-
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
 
 function lower(v, d = "") {
@@ -106,19 +96,6 @@ function isTerminalSessionStatus(status = "") {
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
-}
-
-function getSessionCallId(session = {}) {
-  return s(
-    session?.voiceCallId ||
-      session?.voice_call_id ||
-      session?.callId ||
-      session?.call_id
-  );
-}
-
-function sessionMatchesCall(session = {}, callId = "") {
-  return s(getSessionCallId(session)) === s(callId);
 }
 
 async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
