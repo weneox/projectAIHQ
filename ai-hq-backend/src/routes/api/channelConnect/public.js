@@ -7,7 +7,7 @@ import { isDbReady } from "../../../utils/http.js";
 import { createLogger } from "../../../utils/logger.js";
 import { resolveTelegramUserAvatar } from "../../../utils/telegram.js";
 import { createInboxIngestHandler } from "../inbox/internal.js";
-import { validateIngestRequest } from "../inbox/internal/request.js";
+import { validateIngestRequest } from "../../../modules/inbox/internal/request.js";
 import {
   getPrimaryTelegramChannel,
   getTelegramSecrets,

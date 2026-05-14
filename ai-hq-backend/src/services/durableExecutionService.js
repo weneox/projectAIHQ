@@ -20,7 +20,7 @@ import {
   markOutboundAttemptSent,
   updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
-} from "../routes/api/inbox/repository.js";
+} from "../modules/inbox/repository/index.js";
 import {
   markExternalSideEffectFailed,
   markExternalSideEffectSent,

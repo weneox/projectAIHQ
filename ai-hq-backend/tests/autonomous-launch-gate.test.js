@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   resolveTenantAutonomyMode,
   __test__,
-} from "../src/routes/api/inbox/internal/autonomyGates.js";
+} from "../src/modules/inbox/internal/autonomyGates.js";
 
 test("autonomous launch gate blocks auto mode when approval is missing", async () => {
   const result = await resolveTenantAutonomyMode({

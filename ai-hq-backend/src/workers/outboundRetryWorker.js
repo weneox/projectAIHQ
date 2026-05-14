@@ -2,13 +2,17 @@ import { cfg } from "../config.js";
 import { enqueueChannelOutboundExecution } from "../services/durableExecutionService.js";
 import {
   getMessageById,
+  updateOutboundMessageDeliveryFailure,
+} from "../modules/inbox/repository/messages.js";
+import {
   getThreadById,
+} from "../modules/inbox/repository/threads.js";
+import {
   listRetryableOutboundAttempts,
   expireStaleOutboundReservations,
   markOutboundAttemptFailed,
   scheduleOutboundRetry,
-  updateOutboundMessageDeliveryFailure,
-} from "../routes/api/inbox/repository.js";
+} from "../modules/inbox/repository/outboundAttempts.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";

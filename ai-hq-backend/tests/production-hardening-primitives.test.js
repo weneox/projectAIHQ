@@ -20,7 +20,7 @@ import { createStructuredLogEntry } from "../src/utils/logger.js";
 import {
   expireStaleOutboundReservations,
   listRetryableOutboundAttempts,
-} from "../src/routes/api/inbox/repository/outboundAttempts.js";
+} from "../src/modules/inbox/repository/outboundAttempts.js";
 import {
   reconcileExpiredExternalSideEffectReservations,
 } from "../src/db/helpers/externalIdempotency.js";

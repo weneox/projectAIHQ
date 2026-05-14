@@ -1,4 +1,4 @@
-// src/routes/api/inbox/mutations.js
+// src/modules/inbox/mutations.js
 // FINAL v1.1 — inbox mutation layer
 // canonical tenant-aware lead + handoff persistence
 

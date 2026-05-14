@@ -21,24 +21,24 @@ import { createLogger } from "../../../utils/logger.js";
 import { recordWebhookIngestionFailure } from "../../../observability/runtimeSignals.js";
 import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
-import { applyHandoffActions, persistLeadActions } from "../inbox/mutations.js";
+import { applyHandoffActions, persistLeadActions } from "../../../modules/inbox/mutations.js";
 import {
   findExistingInboundMessage,
   getInboxThreadState,
   getThreadById,
   upsertInboxThreadState,
-} from "../inbox/repository.js";
-import { normalizeMessage, normalizeThread, s } from "../inbox/shared.js";
+} from "../../../modules/inbox/repository/index.js";
+import { normalizeMessage, normalizeThread, s } from "../../../modules/inbox/shared.js";
 import {
   findOrCreateThreadForIngest,
   insertInboundMessage,
   loadRecentMessages,
-} from "../inbox/internal/persistence.js";
-import { queueExecutionActions } from "../inbox/internal/execution.js";
-import { emitIngestRealtime } from "../inbox/internal/responses.js";
-import { loadStrictInboxRuntime } from "../inbox/internal/runtime.js";
-import { rollbackAndRelease } from "../inbox/internal/shared.js";
-import { buildThreadStateForDecision } from "../inbox/internal/threadState.js";
+} from "../../../modules/inbox/internal/persistence.js";
+import { queueExecutionActions } from "../../../modules/inbox/internal/execution.js";
+import { emitIngestRealtime } from "../../../modules/inbox/internal/responses.js";
+import { loadStrictInboxRuntime } from "../../../modules/inbox/internal/runtime.js";
+import { rollbackAndRelease } from "../../../modules/inbox/internal/shared.js";
+import { buildThreadStateForDecision } from "../../../modules/inbox/internal/threadState.js";
 import {
   buildInstallContext,
   buildWidgetShell,

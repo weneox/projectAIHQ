@@ -11,8 +11,8 @@ import {
   upsertInboxThreadState,
   updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
-} from "../src/routes/api/inbox/repository.js";
-import { withMessageOutboundAttemptCorrelation } from "../src/routes/api/inbox/shared.js";
+} from "../src/modules/inbox/repository/index.js";
+import { withMessageOutboundAttemptCorrelation } from "../src/modules/inbox/shared.js";
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 
 test("inbox tenant resolution requests strict runtime authority and returns authoritative tenant only", async () => {

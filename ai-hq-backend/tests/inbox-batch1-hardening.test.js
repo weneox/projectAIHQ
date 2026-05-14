@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { inboxRoutes } from "../src/routes/api/inbox/index.js";
 import { inboxHandlers } from "../src/routes/api/inbox/handlers.js";
-import { parseIngestRequest } from "../src/routes/api/inbox/internal/request.js";
+import { parseIngestRequest } from "../src/modules/inbox/internal/request.js";
 import { resolveInboxRuntime } from "../src/services/inboxBrain/runtime.js";
 
 function createMockRes(onFinish) {

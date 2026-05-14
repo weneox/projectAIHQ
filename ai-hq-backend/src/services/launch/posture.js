@@ -3,7 +3,7 @@ import { getTelegramStatus } from "../../routes/api/channelConnect/telegram.js";
 import { getWebsiteWidgetStatus } from "../../routes/api/channelConnect/website.js";
 import {
   getInboxPressureSummary,
-} from "../../routes/api/inbox/repository/index.js";
+} from "../../modules/inbox/repository/index.js";
 import { pickWorkspaceActor } from "../../routes/api/workspace/shared.js";
 import {
   getTenantBrainRuntime,
