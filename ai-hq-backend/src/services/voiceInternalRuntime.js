@@ -6,7 +6,7 @@ import {
 } from "../db/helpers/voice.js";
 import { buildVoiceConfigFromProjectedRuntime } from "../routes/api/voice/config.js";
 import { upsertCallAndSession } from "../routes/api/voice/mutations.js";
-import { findTenantByKeyOrPhone } from "../routes/api/voice/repository.js";
+import { findTenantByKeyOrPhone } from "../modules/voice/repository.js";
 import {
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
