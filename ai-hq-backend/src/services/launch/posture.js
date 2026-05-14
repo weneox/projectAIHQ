@@ -1,6 +1,8 @@
-import { getMetaStatus } from "../../routes/api/channelConnect/meta.js";
-import { getTelegramStatus } from "../../routes/api/channelConnect/telegram.js";
-import { getWebsiteWidgetStatus } from "../../routes/api/channelConnect/website.js";
+import {
+  getMetaStatus,
+  getTelegramStatus,
+  getWebsiteWidgetStatus,
+} from "./channelStatus.js";
 import {
   getInboxPressureSummary,
 } from "../../modules/inbox/repository/index.js";
