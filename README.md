@@ -50,9 +50,11 @@ Do not enable autonomous replies for a tenant unless:
 
 ## Recommended PR order
 
-1. Documentation and CI foundation.
-2. Production config hardening.
-3. Channel webhook hardening.
-4. Autonomous-mode launch gate.
-5. Upload/static asset audit.
-6. Runtime observability and alerting.
+1. Backend boundary complete.
+2. Platform core contract.
+3. Product module contracts.
+4. Voice module readiness.
+5. Production readiness gates and release evidence.
+
+Production readiness docs are still required launch gates. They are not the
+architecture contracts for platform or product module ownership.
