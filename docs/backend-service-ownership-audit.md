@@ -77,7 +77,7 @@ risks, and keep extraction decisions staged behind stable module boundaries.
 
 | Current path | Current responsibility | Recommended owner | Priority | Recommended future action | Move now |
 | --- | --- | --- | --- | --- | --- |
-| `ai-hq-backend/src/services/durableExecutionService.js` | Durable execution dispatcher that also imports comment route repository/state/shared helpers and a comment ingest handler. | infrastructure with module adapters | P1 | Extract comment route data/helper dependencies behind a comment module or service-level adapter. Keep durable execution as infrastructure orchestration. | No |
+| `ai-hq-backend/src/services/durableExecutionService.js` | Durable execution dispatcher using route-free comment module adapters for comment reply and webhook processing. | infrastructure with module adapters | P1 | Keep durable execution as infrastructure orchestration; keep new comment worker dependencies behind `src/modules/comments`. | No |
 | `ai-hq-backend/src/services/voiceInternalRuntime.js` | Voice runtime processing that imports voice route config, mutations, repository, utils, and shared helpers. | module | P1 | Create a route-free voice data/config boundary before any voice runtime extraction. | No |
 | `ai-hq-backend/src/services/channelDelivery.js` | Channel outbound delivery using route-free platform channel helpers for Telegram delivery config. | module or infrastructure | P1 | Continue evaluating ownership with future runtime boundaries; keep service-to-route imports out. | No |
 | `ai-hq-backend/src/services/auth/selfServiceWorkspace.js` | Self-service workspace creation using route-free tenant key and tenant user helpers. | platform | P1 | Route dependency fixed. Future work can wrap this behind a broader platform auth/workspace boundary. | No |
@@ -102,7 +102,6 @@ risks because route files should be HTTP adapters.
 | --- | --- | --- | --- | --- | --- |
 | `src/services/auth/canonicalUserAccess.js` | `routes/api/adminAuth/utils.js` | platform | P2 | Move shared DB timeout helper to `src/db` or `src/utils`. | No |
 | `src/services/auth/selfServiceWorkspace.js` | `routes/api/team/repository.js`, `routes/api/tenants/utils.js` | platform | P1 | Move team repository and tenant key normalization to platform/db helpers. | No |
-| `src/services/durableExecutionService.js` | `routes/api/comments/repository.js`, `routes/api/comments/state.js`, `routes/api/comments/handlers/shared.js`, `routes/api/comments/handlers/ingest.js` | infrastructure with comment module adapter | P1 | Establish comment/inbox runtime boundary before touching durable execution orchestration. | No |
 | `src/services/voiceInternalRuntime.js` | `routes/api/voice/config.js`, `mutations.js`, `repository.js`, `utils.js`, `shared.js` | module | P1 | Create voice module/data boundary before future voice runtime extraction. | No |
 
 ### Utils, DB, Platform, and Modules
@@ -134,7 +133,6 @@ risks because route files should be HTTP adapters.
    allowlist is needed.
 3. Tackle high-risk route dependencies by domain:
    - voice route helpers used by `voiceInternalRuntime`
-   - comments route helpers used by `durableExecutionService`
    - team/tenant route helpers used by auth workspace services
 4. Do not move `src/db` or `src/utils` wholesale. They are shared
    infrastructure and should remain stable.

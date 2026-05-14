@@ -39,7 +39,7 @@ import {
   buildReplyRaw,
   emitCommentUpdatedRealtime,
 } from "../modules/comments/shared.js";
-import { processCommentWebhookJob } from "../routes/api/comments/handlers/ingest.js";
+import { processCommentWebhookJob } from "../modules/comments/ingestJob.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";

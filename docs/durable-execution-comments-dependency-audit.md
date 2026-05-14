@@ -6,23 +6,19 @@ Docs-only audit. No runtime, route, DB/schema, or frontend changes.
 
 ## Current problem
 
-`ai-hq-backend/src/services/durableExecutionService.js` still imports comments route-layer files:
+`ai-hq-backend/src/services/durableExecutionService.js` no longer imports comments route-layer files.
 
-- `routes/api/comments/repository.js`
-- `routes/api/comments/state.js`
-- `routes/api/comments/handlers/shared.js`
-- `routes/api/comments/handlers/ingest.js`
-
-These are currently allowlisted in `service-route-dependency-regression.test.js` as known debt.
+The comments route dependency allowlist entries have been removed from
+`service-route-dependency-regression.test.js`.
 
 ## Classification
 
 | Dependency | Used by durable execution | Type | Future owner | Priority |
 | --- | --- | --- | --- | --- |
-| `routes/api/comments/repository.js` | `getCommentById`, `updateCommentState` | route compatibility repository export | `src/modules/comments/repository.js` | P1 |
-| `routes/api/comments/state.js` | `mergeClassificationForReply`, `mergeClassificationForReplyPending` | pure/domain state helpers | `src/modules/comments/state.js` | P1 |
-| `routes/api/comments/handlers/shared.js` | `buildReplyRaw`, `buildReplyPendingRaw`, `emitCommentUpdatedRealtime` | mixed raw builders + realtime + route helpers | `src/modules/comments/shared.js` | P1 |
-| `routes/api/comments/handlers/ingest.js` | `processCommentWebhookJob` | worker orchestration mixed with HTTP handler | `src/modules/comments/ingestJob.js` | P1 |
+| `routes/api/comments/repository.js` | `getCommentById`, `updateCommentState` | route compatibility repository export | `src/modules/comments/repository.js` | Done |
+| `routes/api/comments/state.js` | `mergeClassificationForReply`, `mergeClassificationForReplyPending` | pure/domain state helpers | `src/modules/comments/state.js` | Done |
+| `routes/api/comments/handlers/shared.js` | `buildReplyRaw`, `buildReplyPendingRaw`, `emitCommentUpdatedRealtime` | mixed raw builders + realtime + route helpers | `src/modules/comments/shared.js` | Done |
+| `routes/api/comments/handlers/ingest.js` | `processCommentWebhookJob` | worker orchestration mixed with HTTP handler | `src/modules/comments/ingestJob.js` | Done |
 
 ## Recommended staged sequence
 
@@ -32,8 +28,8 @@ These are currently allowlisted in `service-route-dependency-regression.test.js`
 4. Update `durableExecutionService.js` repository imports.
 5. Extract reply raw builders and realtime helper to `src/modules/comments/shared.js`. Done in `refactor/comments-reply-shared-helpers`.
 6. Update `durableExecutionService.js` shared imports.
-7. Extract `processCommentWebhookJob` to `src/modules/comments/ingestJob.js`.
-8. Remove all durableExecutionService comments route allowlist entries.
+7. Extract `processCommentWebhookJob` to `src/modules/comments/ingestJob.js`. Done in `refactor/comments-ingest-job-module`.
+8. Remove all durableExecutionService comments route allowlist entries. Done in `refactor/comments-ingest-job-module`.
 
 ## Non-goals
 
