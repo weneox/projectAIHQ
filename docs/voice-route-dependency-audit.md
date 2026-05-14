@@ -33,7 +33,7 @@ Voice should not be extracted into a separate backend yet. First we need route-f
 2. Keep `routes/api/voice/shared.js` as route adapter compatibility layer.
 3. Update `voiceInternalRuntime.js` to import pure helpers from `modules/voice/shared.js`.
 4. Extract route-free tenant lookup/data helpers to `src/modules/voice/repository.js`. Done in `refactor/voice-route-free-repository`.
-5. Extract `upsertCallAndSession` to `src/modules/voice/mutations.js`.
+5. Extract `upsertCallAndSession` to `src/modules/voice/mutations.js`. Done in `refactor/voice-call-session-mutations`.
 6. Extract `buildVoiceConfigFromProjectedRuntime` to `src/modules/voice/config.js`.
 7. Extract transaction/event/realtime runtime helpers to `src/modules/voice/runtime.js`.
 8. Only later consider `voice-backend` extraction.

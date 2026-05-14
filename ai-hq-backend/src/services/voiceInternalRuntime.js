@@ -5,7 +5,7 @@ import {
   updateVoiceCallSession,
 } from "../db/helpers/voice.js";
 import { buildVoiceConfigFromProjectedRuntime } from "../routes/api/voice/config.js";
-import { upsertCallAndSession } from "../routes/api/voice/mutations.js";
+import { upsertCallAndSession } from "../modules/voice/mutations.js";
 import { findTenantByKeyOrPhone } from "../modules/voice/repository.js";
 import {
   appendVoiceEventStrict,
