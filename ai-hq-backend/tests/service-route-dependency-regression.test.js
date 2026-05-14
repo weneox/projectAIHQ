@@ -15,9 +15,6 @@ const allowedRouteLayerImports = new Set([
   "src/services/durableExecutionService.js -> ../routes/api/comments/state.js",
   "src/services/durableExecutionService.js -> ../routes/api/comments/handlers/shared.js",
   "src/services/durableExecutionService.js -> ../routes/api/comments/handlers/ingest.js",
-  "src/services/launch/channelStatus.js -> ../../routes/api/channelConnect/meta.js",
-  "src/services/launch/channelStatus.js -> ../../routes/api/channelConnect/telegram.js",
-  "src/services/launch/channelStatus.js -> ../../routes/api/channelConnect/website.js",
 ]);
 
 function listJsFiles(dir) {
