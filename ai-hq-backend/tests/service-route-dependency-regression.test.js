@@ -2,19 +2,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const root = process.cwd();
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const backendRoot = path.resolve(testDir, "..");
 
 const guardedServiceFiles = [
-  "ai-hq-backend/src/services/channelDelivery.js",
-  "ai-hq-backend/src/services/auth/selfServiceWorkspace.js",
-  "ai-hq-backend/src/services/auth/canonicalUserAccess.js",
-  "ai-hq-backend/src/services/voiceInternalRuntime.js",
+  "src/services/channelDelivery.js",
+  "src/services/auth/selfServiceWorkspace.js",
+  "src/services/auth/canonicalUserAccess.js",
+  "src/services/voiceInternalRuntime.js",
 ];
 
 test("fixed backend services do not import route-layer files", () => {
   for (const relativePath of guardedServiceFiles) {
-    const fullPath = path.join(root, relativePath);
+    const fullPath = path.join(backendRoot, relativePath);
     const content = fs.readFileSync(fullPath, "utf8");
 
     assert.equal(

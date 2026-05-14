@@ -4,7 +4,7 @@ import { getWebsiteWidgetStatus } from "../../routes/api/channelConnect/website.
 import {
   getInboxPressureSummary,
 } from "../../modules/inbox/repository/index.js";
-import { pickWorkspaceActor } from "../../routes/api/workspace/shared.js";
+import { pickWorkspaceActor } from "../../platform/workspace/requestActor.js";
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
