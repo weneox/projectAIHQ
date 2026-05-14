@@ -9,3 +9,4 @@ export {
 export * from "./shared.js";
 export * from "./publicRead.js";
 export * from "./operatorState.js";
+export { applyOperatorVoiceMutation } from "./operatorMutation.js";
