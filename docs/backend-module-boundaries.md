@@ -69,6 +69,37 @@ now live behind `src/modules/inbox` boundaries:
 The route files under `src/routes/api/inbox` should remain HTTP adapters that
 delegate into module code.
 
+
+## 2026-05-14 Boundary Checkpoint
+
+The backend modular-monolith boundary pass is now complete for the current phase.
+
+Completed boundaries:
+
+- `src/modules/inbox/**` contains the inbox module boundary.
+- `src/modules/comments/**` contains route-free comments helpers used by durable execution:
+  - repository
+  - state
+  - shared reply/runtime helpers
+  - lead helper
+  - ingest job
+- `src/modules/voice/**` contains route-free voice runtime/config/mutation helpers used by voice runtime services.
+- `src/services/launch/**` uses route-free channel status readers.
+- `src/services/**/*.js` must not import `src/routes/**`.
+
+Active guards:
+
+- `npm --prefix "./ai-hq-backend" run lint:boundaries` blocks platform/module route violations.
+- `ai-hq-backend/tests/service-route-dependency-regression.test.js` blocks service-layer route imports.
+- `ai-hq-backend/tests/inbox-operator-route-registration.test.js` protects direct inbox operator route registration.
+
+Current rule of thumb:
+
+- Routes are HTTP adapters.
+- Modules own reusable domain/runtime logic.
+- Platform owns shared control-plane logic.
+- Services may orchestrate infrastructure/runtime flows, but must not depend on route files.
+
 ## Future Extraction Targets
 
 Future runtime extraction may happen after the module boundaries are stable.
