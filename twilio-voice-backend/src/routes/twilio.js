@@ -17,6 +17,11 @@ import {
   toWsUrl,
 } from "../services/twiml.js";
 import {
+  getDepartmentEntry,
+  getRequestedDepartment,
+  resolveDepartmentForTransfer,
+} from "../services/transferRouting.js";
+import {
   contactUnavailableReply,
   pickLang,
   makeI18n,
@@ -230,77 +235,6 @@ function detectPreferredLang(req, tenantConfig) {
   ).toLowerCase();
 }
 
-function getOperatorRouting(tenantConfig = null) {
-  const routing = isObj(tenantConfig?.operatorRouting) ? tenantConfig.operatorRouting : {};
-  const departments = isObj(routing.departments) ? routing.departments : {};
-
-  return {
-    mode: s(
-      routing.mode ||
-        tenantConfig?.voiceProfile?.transferMode ||
-        tenantConfig?.operator?.mode,
-      "manual"
-    ).toLowerCase(),
-    defaultDepartment: s(routing.defaultDepartment).toLowerCase(),
-    departments,
-  };
-}
-
-function getDepartmentEntry(tenantConfig, departmentKey) {
-  const routing = getOperatorRouting(tenantConfig);
-  const key = s(departmentKey).toLowerCase();
-  if (!key) return null;
-
-  const item = routing.departments?.[key];
-  return isObj(item) ? item : null;
-}
-
-function resolveDepartmentForTransfer(tenantConfig, requestedDepartment = "") {
-  const routing = getOperatorRouting(tenantConfig);
-  const requested = s(requestedDepartment).toLowerCase();
-
-  if (requested) {
-    const item = getDepartmentEntry(tenantConfig, requested);
-    if (item && String(item.enabled ?? "true").trim() !== "false" && s(item.phone)) {
-      return requested;
-    }
-
-    const fb = s(item?.fallbackDepartment).toLowerCase();
-    if (fb) {
-      const fbItem = getDepartmentEntry(tenantConfig, fb);
-      if (fbItem && String(fbItem.enabled ?? "true").trim() !== "false" && s(fbItem.phone)) {
-        return fb;
-      }
-    }
-  }
-
-  const def = s(routing.defaultDepartment).toLowerCase();
-  if (def) {
-    const defItem = getDepartmentEntry(tenantConfig, def);
-    if (defItem && String(defItem.enabled ?? "true").trim() !== "false" && s(defItem.phone)) {
-      return def;
-    }
-  }
-
-  for (const [key, value] of Object.entries(routing.departments || {})) {
-    if (!isObj(value)) continue;
-    if (String(value.enabled ?? "true").trim() === "false") continue;
-    if (s(value.phone)) return s(key).toLowerCase();
-  }
-
-  return "";
-}
-
-function getRequestedDepartment(req) {
-  return s(
-    req.body?.department ||
-      req.body?.Department ||
-      req.query?.department ||
-      req.query?.Department ||
-      req.body?.targetDepartment ||
-      req.query?.targetDepartment
-  ).toLowerCase();
-}
 
 function buildDepartmentTransferAck(lang, tenantConfig, departmentKey = "") {
   const dept = getDepartmentEntry(tenantConfig, departmentKey);
