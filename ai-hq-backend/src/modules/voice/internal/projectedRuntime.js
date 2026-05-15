@@ -1,3 +1,6 @@
+import { buildProjectedTenantRuntime } from "../../../services/projectedTenantRuntime.js";
+import { createRuntimeAuthorityError } from "../../../services/businessBrain/runtimeAuthority.js";
+import { isRuntimeAuthorityError } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { firstNonEmpty, obj, pickArray, pickBoolean } from "./primitives.js";
 
 export function normalizeProjectedRuntimeForVoice(projectedRuntime = null, tenant = null) {
@@ -84,6 +87,61 @@ export function normalizeProjectedRuntimeForVoice(projectedRuntime = null, tenan
       tenant_key: resolvedTenantKey,
     },
   };
+}
+
+
+
+
+export function buildVoiceProjectedRuntime({
+  runtime = null,
+  tenant = null,
+  operationalChannels = {},
+  tenantKey = "",
+  toNumber = "",
+} = {}) {
+  try {
+    return buildProjectedTenantRuntime({
+      runtime,
+      tenantRow: tenant,
+      operationalChannels,
+    });
+  } catch (primaryError) {
+    if (isRuntimeAuthorityError(primaryError)) {
+      throw primaryError;
+    }
+
+    const authority = obj(runtime?.authority);
+    const approvedAuthorityAvailable =
+      authority.available === true &&
+      s(authority.source) === "approved_runtime_projection";
+
+    if (!approvedAuthorityAvailable) {
+      throw primaryError;
+    }
+
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantId: firstNonEmpty(
+        authority.tenantId,
+        tenant?.id,
+        tenant?.tenant_id
+      ),
+      tenantKey: firstNonEmpty(
+        authority.tenantKey,
+        tenant?.tenant_key,
+        tenantKey
+      ),
+      runtimeProjection: obj(
+        runtime?.raw?.projection ||
+          runtime?.raw?.runtimeProjection ||
+          runtime?.raw?.currentProjection
+      ),
+      reasonCode: "runtime_projection_invalid",
+      reason: "runtime_projection_invalid",
+      message:
+        "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
+    });
+  }
 }
 
 
