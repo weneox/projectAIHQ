@@ -17,3 +17,4 @@ export * from "./tenant.js";
 export * from "./projectedRuntime.js";
 export * from "./tenantHydration.js";
 export * from "./tenantContext.js";
+export * from "./tenantConfig.js";
