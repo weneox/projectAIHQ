@@ -18,6 +18,7 @@ import LaunchChecklist from "./pages/LaunchChecklist.jsx";
 import Settings from "./pages/Settings.jsx";
 import Customers from "./pages/Customers.jsx";
 import Leads from "./pages/Leads.jsx";
+import VoiceLab from "./pages/VoiceLab.jsx";
 import Reports from "./pages/Reports.jsx";
 import Knowledge from "./pages/Knowledge.jsx";
 import Team from "./pages/Team.jsx";
@@ -227,6 +228,7 @@ export default function App() {
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
+          <Route path="voice-lab" element={<VoiceLab />} />
           <Route path="reports" element={<Reports />} />
           <Route path="channels" element={<ChannelCatalog />} />
           <Route path="knowledge" element={<Knowledge />} />
