@@ -21,6 +21,10 @@ function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
 const baseLogger = createStructuredLogger({
   service: "voice-gateway-backend",
   component: "tenant-config",
