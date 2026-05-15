@@ -13,3 +13,4 @@ export * from "./transcript.js";
 export * from "./sessionState.js";
 export * from "./projection.js";
 export * from "./authority.js";
+export * from "./tenant.js";
