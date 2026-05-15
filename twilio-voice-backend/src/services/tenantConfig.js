@@ -42,7 +42,7 @@ function buildVoiceConfigFromContracts(projectedRuntime, operationalChannels) {
     voiceChannels.find((channel) => s(channel?.id) === s(operationalVoice.activeChannelId)) ||
     voiceChannels[0] ||
     null;
-const defaultLanguage = lower(
+  const defaultLanguage = lower(
     voiceProfile.defaultLanguage || tenant.mainLanguage || cfg.DEFAULT_LANGUAGE || "en"
   );
 
