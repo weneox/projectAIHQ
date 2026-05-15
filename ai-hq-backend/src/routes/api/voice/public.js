@@ -46,6 +46,14 @@ import {
   processVoiceTenantConfig,
 } from "../../../modules/voice/index.js";
 
+import {
+  createVoiceChannelConnection,
+  buildVoiceSettingsInputWithChannels,
+  confirmVoiceChannelVerification,
+  listVoiceChannelsFromSettings,
+  startVoiceChannelRoutingTest,
+  startVoiceChannelVerification,
+} from "../../../modules/voice/channelConnection.js";
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
   component: "voice-public-routes",
@@ -97,6 +105,172 @@ async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
   }
 
   return getScopedCallOrFail({ db, scope, callId, res });
+}
+
+async function loadVoiceSettingsForChannelApi(req, res, { db, dbDisabled }) {
+  if (dbDisabled || !db) {
+    fail(res, 503, "db_unavailable");
+    return null;
+  }
+
+  const scope = await requireTenantScope(req, res, db);
+  if (!scope) return null;
+
+  const settings = await getTenantVoiceSettings(db, scope.tenantId);
+
+  return {
+    scope,
+    settings: settings || {},
+  };
+}
+
+async function persistVoiceChannelsForScope({ db, scope, settings, channels }) {
+  const nextSettings = buildVoiceSettingsInputWithChannels(settings || {}, channels);
+  const saved = await upsertTenantVoiceSettings(db, scope.tenantId, nextSettings);
+
+  return {
+    settings: saved,
+    channels: listVoiceChannelsFromSettings(saved || nextSettings),
+  };
+}
+
+async function handleVoiceChannelsList(req, res, { db, dbDisabled }) {
+  const logger = getRouteLogger(req, "voice.channels.list");
+  try {
+    const loaded = await loadVoiceSettingsForChannelApi(req, res, { db, dbDisabled });
+    if (!loaded) return;
+
+    return ok(res, {
+      channels: listVoiceChannelsFromSettings(loaded.settings),
+      settings: loaded.settings,
+    });
+  } catch (err) {
+    logger.error("voice.channels.list.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.channels.list",
+      reasonCode: "voice_channels_list_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_channels_list_failed");
+  }
+}
+
+async function handleVoiceChannelsCreate(req, res, { db, dbDisabled, audit }) {
+  const logger = getRouteLogger(req, "voice.channels.create");
+  try {
+    const loaded = await loadVoiceSettingsForChannelApi(req, res, { db, dbDisabled });
+    if (!loaded) return;
+
+    const created = createVoiceChannelConnection(loaded.settings, req.body || {});
+    const persisted = await persistVoiceChannelsForScope({
+      db,
+      scope: loaded.scope,
+      settings: loaded.settings,
+      channels: created.channels,
+    });
+
+    await auditSafe(audit, {
+      tenantId: loaded.scope.tenantId,
+      tenantKey: loaded.scope.tenantKey,
+      actor: getActor(req),
+      action: "voice.channel.created",
+      objectType: "tenant_voice_channel",
+      objectId: created.channel.id,
+      meta: {
+        provider: created.channel.provider,
+        externalNumber: created.channel.externalNumber,
+        activationMode: created.channel.activationMode,
+      },
+    });
+
+    return ok(res, {
+      channel: created.channel,
+      channels: persisted.channels,
+      settings: persisted.settings,
+    });
+  } catch (err) {
+    const code = s(err?.code || err?.message);
+    if (code === "voice_channel_already_exists") {
+      return fail(res, 409, "voice_channel_already_exists");
+    }
+
+    logger.error("voice.channels.create.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.channels.create",
+      reasonCode: "voice_channel_create_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_channel_create_failed");
+  }
+}
+
+async function handleVoiceChannelMutation(req, res, { db, dbDisabled, audit, action }) {
+  const logger = getRouteLogger(req, `voice.channels.${action}`);
+  try {
+    const loaded = await loadVoiceSettingsForChannelApi(req, res, { db, dbDisabled });
+    if (!loaded) return;
+
+    const channelId = s(req.params?.channelId);
+    let result = null;
+
+    if (action === "verify_start") {
+      result = startVoiceChannelVerification(loaded.settings, channelId, req.body || {});
+    } else if (action === "verify_confirm") {
+      result = confirmVoiceChannelVerification(loaded.settings, channelId, req.body || {});
+    } else if (action === "routing_test") {
+      result = startVoiceChannelRoutingTest(loaded.settings, channelId, req.body || {});
+    } else {
+      return fail(res, 400, "voice_channel_action_unknown");
+    }
+
+    const persisted = await persistVoiceChannelsForScope({
+      db,
+      scope: loaded.scope,
+      settings: loaded.settings,
+      channels: result.channels,
+    });
+
+    await auditSafe(audit, {
+      tenantId: loaded.scope.tenantId,
+      tenantKey: loaded.scope.tenantKey,
+      actor: getActor(req),
+      action: `voice.channel.${action}`,
+      objectType: "tenant_voice_channel",
+      objectId: result.channel.id,
+      meta: {
+        provider: result.channel.provider,
+        externalNumber: result.channel.externalNumber,
+        connectionStatus: result.channel.connectionStatus,
+        connectionNextAction: result.channel.connectionNextAction,
+      },
+    });
+
+    return ok(res, {
+      channel: result.channel,
+      channels: persisted.channels,
+      settings: persisted.settings,
+      stub: true,
+    });
+  } catch (err) {
+    const code = s(err?.code || err?.message);
+    if (code === "voice_channel_not_found") {
+      return fail(res, 404, "voice_channel_not_found");
+    }
+    if (code === "voice_channel_verification_not_confirmed") {
+      return fail(res, 409, "voice_channel_verification_not_confirmed");
+    }
+
+    logger.error("voice.channels.mutation.failed", err);
+    recordVoiceRouteFailure({
+      route: `voice.channels.${action}`,
+      reasonCode: "voice_channel_mutation_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_channel_mutation_failed");
+  }
 }
 
 async function handleSettingsGet(req, res, { db, dbDisabled }) {
@@ -166,8 +340,6 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
     return fail(res, 500, "voice_settings_save_failed");
   }
 }
-
-
 
 const DEFAULT_VOICE_LAB_INSTRUCTIONS =
   "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
@@ -349,6 +521,41 @@ export function voiceRoutes({
 
   r.post("/voice/settings", requireOperatorSurfaceAccess, (req, res) =>
     handleSettingsPost(req, res, { db, dbDisabled, audit })
+  );
+
+  r.get("/voice/channels", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceChannelsList(req, res, { db, dbDisabled })
+  );
+
+  r.post("/voice/channels", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceChannelsCreate(req, res, { db, dbDisabled, audit })
+  );
+
+  r.post("/voice/channels/:channelId/verify/start", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceChannelMutation(req, res, {
+      db,
+      dbDisabled,
+      audit,
+      action: "verify_start",
+    })
+  );
+
+  r.post("/voice/channels/:channelId/verify/confirm", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceChannelMutation(req, res, {
+      db,
+      dbDisabled,
+      audit,
+      action: "verify_confirm",
+    })
+  );
+
+  r.post("/voice/channels/:channelId/routing/test", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceChannelMutation(req, res, {
+      db,
+      dbDisabled,
+      audit,
+      action: "routing_test",
+    })
   );
 
   r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
