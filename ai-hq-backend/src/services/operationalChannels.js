@@ -88,6 +88,133 @@ function normalizeDepartmentMap(input = {}) {
   return out;
 }
 
+
+function normalizeVoiceProvider(value = "") {
+  const provider = lower(value || "twilio");
+  if (provider === "browser") return "browser_lab";
+  if (provider === "browserlab") return "browser_lab";
+  return provider || "twilio";
+}
+
+function normalizeVoiceChannelId(value = "") {
+  return s(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9:+._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 96);
+}
+
+function buildVoiceChannelId({ provider = "", externalNumber = "", routeKey = "", index = 0 } = {}) {
+  const safeProvider = normalizeVoiceProvider(provider);
+  const safeNumber = normalizeVoiceChannelId(externalNumber);
+  const safeRoute = normalizeVoiceChannelId(routeKey);
+  return normalizeVoiceChannelId(
+    `${safeProvider}:${safeNumber || safeRoute || `channel_${index + 1}`}`
+  );
+}
+
+function isVoiceProviderAdapterReady(provider = "") {
+  return normalizeVoiceProvider(provider) === "twilio";
+}
+
+function normalizeVoiceChannel(input = {}, fallback = {}) {
+  const item = obj(input);
+  const fallbackItem = obj(fallback);
+  const provider = normalizeVoiceProvider(
+    item.provider || item.voiceProvider || item.voice_provider || fallbackItem.provider
+  );
+  const routeKey = lower(
+    item.routeKey ||
+      item.route_key ||
+      item.intentRoute ||
+      item.intent_route ||
+      fallbackItem.routeKey ||
+      "default"
+  );
+  const externalNumber = firstNonEmpty(
+    item.externalNumber,
+    item.external_number,
+    item.number,
+    item.phoneNumber,
+    item.phone_number,
+    item.twilioPhoneNumber,
+    item.twilio_phone_number,
+    fallbackItem.externalNumber
+  );
+  const enabled =
+    typeof item.enabled === "boolean"
+      ? item.enabled
+      : typeof fallbackItem.enabled === "boolean"
+        ? fallbackItem.enabled
+        : false;
+  const adapterReady = isVoiceProviderAdapterReady(provider);
+  const requiresNumber = provider !== "browser_lab";
+  const configured = requiresNumber ? !!externalNumber : enabled;
+  let reasonCode = "";
+
+  if (!enabled) {
+    reasonCode = "voice_channel_disabled";
+  } else if (!configured) {
+    reasonCode = "voice_channel_number_missing";
+  } else if (!adapterReady) {
+    reasonCode = "voice_provider_adapter_pending";
+  }
+
+  const providerConfig = obj(
+    item.providerConfig ||
+      item.provider_config ||
+      item[provider] ||
+      fallbackItem.providerConfig
+  );
+
+  return {
+    id:
+      normalizeVoiceChannelId(item.id || item.channelId || item.channel_id) ||
+      buildVoiceChannelId({
+        provider,
+        externalNumber,
+        routeKey,
+        index: Number(fallbackItem.index || 0),
+      }),
+    provider,
+    label: s(item.label || item.displayName || item.display_name || fallbackItem.label),
+    externalNumber: s(externalNumber),
+    routeKey,
+    enabled,
+    ready: enabled && configured && adapterReady,
+    reasonCode,
+    defaultLanguage: lower(
+      item.defaultLanguage || item.default_language || fallbackItem.defaultLanguage || "en"
+    ),
+    supportedLanguages: arr(
+      item.supportedLanguages ||
+        item.supported_languages ||
+        fallbackItem.supportedLanguages
+    )
+      .map((entry) => lower(entry))
+      .filter(Boolean),
+    providerConfig,
+    operatorRouting: obj(
+      item.operatorRouting || item.operator_routing || fallbackItem.operatorRouting
+    ),
+    voiceProfileOverride: obj(
+      item.voiceProfileOverride ||
+        item.voice_profile_override ||
+        item.profile ||
+        fallbackItem.voiceProfileOverride
+    ),
+    meta: obj(item.meta),
+    source: s(item.source || fallbackItem.source || "tenant_voice_settings"),
+    updatedAt: s(item.updatedAt || item.updated_at || fallbackItem.updatedAt),
+  };
+}
+
+function normalizeVoiceChannels(rawChannels = [], fallback = {}) {
+  return arr(rawChannels)
+    .map((item, index) => normalizeVoiceChannel(item, { ...fallback, index }))
+    .filter((item) => item.id);
+}
+
 function normalizeVoiceSettingsRow(settings = null) {
   const value = obj(settings);
   const meta = obj(value.meta || value.meta_json);
@@ -141,6 +268,14 @@ function normalizeVoiceSettingsRow(settings = null) {
     twilioConfig,
     meta,
     routing,
+    voiceChannels: pickArray(
+      value.voiceChannels,
+      value.voice_channels,
+      value.channels,
+      meta.voiceChannels,
+      meta.voice_channels,
+      meta.channels
+    ),
     updatedAt: firstNonEmpty(value.updatedAt, value.updated_at),
   };
 }
@@ -176,6 +311,12 @@ function buildMissingVoiceOperational(reasonCode = "voice_settings_missing") {
       phoneNumber: "",
       phoneSid: "",
     },
+    channels: [],
+    defaultChannelId: "",
+    activeChannelId: "",
+    channelCount: 0,
+    readyChannelCount: 0,
+    providers: [],
     callback: {
       enabled: false,
       mode: "",
@@ -200,16 +341,97 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
   const twilioConfig = obj(normalized.twilioConfig);
 
   const enabled = bool(normalized.enabled, false);
-  const phoneNumber = s(normalized.twilioPhoneNumber);
-  const provider = lower(normalized.provider || "twilio");
+  const legacyPhoneNumber = s(normalized.twilioPhoneNumber);
+  const configuredProvider = normalizeVoiceProvider(normalized.provider || "twilio");
+  const defaultOperatorRouting = {
+    mode: lower(
+      routing.mode ||
+        meta.transferMode ||
+        meta.transfer_mode ||
+        normalized.transferStrategy ||
+        "handoff"
+    ),
+    defaultDepartment: lower(
+      routing.defaultDepartment || routing.default_department || ""
+    ),
+    departments: normalizeDepartmentMap(routing.departments),
+  };
+
+  const defaultChannel = normalizeVoiceChannel(
+    {},
+    {
+      provider: configuredProvider,
+      externalNumber: legacyPhoneNumber,
+      routeKey: "default",
+      enabled,
+      label: s(normalized.displayName || tenantRow.company_name || "Primary voice line"),
+      defaultLanguage: lower(
+        normalized.defaultLanguage || tenantRow.default_language || "en"
+      ),
+      supportedLanguages: normalized.supportedLanguages,
+      providerConfig: configuredProvider === "twilio" ? twilioConfig : {},
+      operatorRouting: defaultOperatorRouting,
+      source: "tenant_voice_settings",
+      updatedAt: normalized.updatedAt,
+    }
+  );
+
+  const configuredChannels = normalizeVoiceChannels(normalized.voiceChannels, {
+    enabled,
+    defaultLanguage: lower(
+      normalized.defaultLanguage || tenantRow.default_language || "en"
+    ),
+    supportedLanguages: normalized.supportedLanguages,
+    operatorRouting: defaultOperatorRouting,
+    updatedAt: normalized.updatedAt,
+  });
+
+  const hasLegacyChannel =
+    legacyPhoneNumber &&
+    configuredChannels.some(
+      (channel) =>
+        channel.provider === configuredProvider &&
+        s(channel.externalNumber) === legacyPhoneNumber
+    );
+
+  const channels = [
+    ...(legacyPhoneNumber && !hasLegacyChannel ? [defaultChannel] : []),
+    ...configuredChannels,
+  ];
+
+  if (!channels.length) {
+    channels.push(defaultChannel);
+  }
+
+  const readyChannels = channels.filter((channel) => channel.ready);
+  const primaryChannel =
+    readyChannels[0] ||
+    channels.find((channel) => channel.enabled) ||
+    channels[0] ||
+    null;
+  const provider = normalizeVoiceProvider(primaryChannel?.provider || configuredProvider);
+  const phoneNumber = s(primaryChannel?.externalNumber || legacyPhoneNumber);
   let reasonCode = "";
 
   if (!enabled) {
     reasonCode = "voice_disabled";
-  } else if (!phoneNumber) {
-    reasonCode = "voice_phone_number_missing";
-  } else if (provider !== "twilio") {
-    reasonCode = "voice_provider_unsupported";
+  } else if (readyChannels.length === 0) {
+    const hasAdapterPending = channels.some(
+      (channel) => channel.enabled && channel.reasonCode === "voice_provider_adapter_pending"
+    );
+    const hasNumberMissing = channels.some(
+      (channel) => channel.enabled && channel.reasonCode === "voice_channel_number_missing"
+    );
+
+    if (hasAdapterPending && configuredProvider !== "twilio") {
+      reasonCode = "voice_provider_unsupported";
+    } else if (hasAdapterPending) {
+      reasonCode = "voice_provider_adapter_pending";
+    } else if (hasNumberMissing || !phoneNumber) {
+      reasonCode = "voice_phone_number_missing";
+    } else {
+      reasonCode = "voice_channel_not_ready";
+    }
   }
 
   return {
@@ -217,6 +439,12 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
     ready: !reasonCode,
     reasonCode,
     provider,
+    channels,
+    defaultChannelId: s(primaryChannel?.id),
+    activeChannelId: s(primaryChannel?.id),
+    channelCount: channels.length,
+    readyChannelCount: readyChannels.length,
+    providers: [...new Set(channels.map((channel) => channel.provider).filter(Boolean))],
     mode: lower(normalized.mode || "assistant"),
     displayName: s(normalized.displayName || tenantRow.company_name),
     defaultLanguage: lower(
@@ -237,19 +465,7 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
       label: s(normalized.operatorLabel || "operator"),
       mode: lower(meta.operatorMode || meta.operator_mode || "manual"),
     },
-    operatorRouting: {
-      mode: lower(
-        routing.mode ||
-          meta.transferMode ||
-          meta.transfer_mode ||
-          normalized.transferStrategy ||
-          "handoff"
-      ),
-      defaultDepartment: lower(
-        routing.defaultDepartment || routing.default_department || ""
-      ),
-      departments: normalizeDepartmentMap(routing.departments),
-    },
+    operatorRouting: defaultOperatorRouting,
     realtime: {
       model: s(meta.realtimeModel || meta.model || "gpt-4o-realtime-preview"),
       voice: s(meta.realtimeVoice || meta.voice || "alloy"),
@@ -258,6 +474,7 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
     telephony: {
       phoneNumber,
       phoneSid: s(normalized.twilioPhoneSid),
+      channelId: s(primaryChannel?.id),
     },
     callback: {
       enabled: bool(normalized.callbackEnabled, true),
