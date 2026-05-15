@@ -110,10 +110,30 @@ function normalizeMetaOperational(input = {}) {
   };
 }
 
+function normalizeVoiceChannelConnectionStatus(value = "") {
+  const raw = lower(value);
+  if (
+    [
+      "disabled",
+      "number_required",
+      "verify_number",
+      "provider_pending",
+      "connect_routing",
+      "live",
+      "failed",
+    ].includes(raw)
+  ) {
+    return raw;
+  }
+  return "";
+}
 
 function normalizeVoiceChannelOperational(input = {}) {
   const item = obj(input);
   const provider = lower(item.provider || "twilio");
+  const verification = obj(item.verification);
+  const routing = obj(item.routing);
+  const connection = obj(item.connection);
 
   return {
     id: s(item.id || item.channelId || item.channel_id || ""),
@@ -131,6 +151,53 @@ function normalizeVoiceChannelOperational(input = {}) {
     enabled: bool(item.enabled, false),
     ready: bool(item.ready, false),
     reasonCode: s(item.reasonCode || item.reason_code || ""),
+    ownershipStatus: lower(
+      item.ownershipStatus ||
+        item.ownership_status ||
+        verification.status ||
+        verification.ownershipStatus ||
+        verification.ownership_status ||
+        "unverified"
+    ),
+    routingStatus: lower(
+      item.routingStatus || item.routing_status || routing.status || "not_connected"
+    ),
+    activationMode: lower(
+      item.activationMode || item.activation_mode || routing.activationMode || routing.activation_mode || ""
+    ),
+    verificationMethod: lower(
+      item.verificationMethod || item.verification_method || verification.method || ""
+    ),
+    connectionStatus: normalizeVoiceChannelConnectionStatus(
+      item.connectionStatus || item.connection_status || connection.status
+    ),
+    connectionNextAction: s(
+      item.connectionNextAction || item.connection_next_action || connection.nextAction || connection.next_action || ""
+    ),
+    connectionReady: bool(
+      item.connectionReady ?? item.connection_ready ?? connection.connected,
+      false
+    ),
+    verification: {
+      status: lower(verification.status || item.ownershipStatus || item.ownership_status || ""),
+      method: lower(verification.method || item.verificationMethod || item.verification_method || ""),
+      verified: bool(verification.verified, false),
+    },
+    routing: {
+      status: lower(routing.status || item.routingStatus || item.routing_status || ""),
+      activationMode: lower(routing.activationMode || routing.activation_mode || item.activationMode || item.activation_mode || ""),
+      lastTestCallAt: s(routing.lastTestCallAt || routing.last_test_call_at || item.lastTestCallAt || item.last_test_call_at || ""),
+      lastInboundSeenAt: s(routing.lastInboundSeenAt || routing.last_inbound_seen_at || item.lastInboundSeenAt || item.last_inbound_seen_at || ""),
+      failureReason: s(routing.failureReason || routing.failure_reason || item.failureReason || item.failure_reason || ""),
+      live: bool(routing.live, false),
+    },
+    connection: {
+      status: normalizeVoiceChannelConnectionStatus(connection.status || item.connectionStatus || item.connection_status),
+      nextAction: s(connection.nextAction || connection.next_action || item.connectionNextAction || item.connection_next_action || ""),
+      verified: bool(connection.verified, false),
+      live: bool(connection.live, false),
+      connected: bool(connection.connected, false),
+    },
     defaultLanguage: lower(item.defaultLanguage || item.default_language || "en"),
     supportedLanguages: arr(item.supportedLanguages || item.supported_languages)
       .map((entry) => lower(entry))
