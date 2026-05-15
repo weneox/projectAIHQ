@@ -13,6 +13,7 @@ import {
   createVoiceLabEvaluation,
   createVoiceLabSession,
   listVoiceLabEvaluations,
+  listVoiceLabScenarios,
 } from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
@@ -239,6 +240,7 @@ export default function VoiceLab() {
   const [useTenantRuntime, setUseTenantRuntime] = useState(true);
   const [runtimeMeta, setRuntimeMeta] = useState(null);
   const [scenarioId, setScenarioId] = useState("restaurant_order");
+  const [scenarios, setScenarios] = useState(VOICE_LAB_SCENARIOS);
   const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
   const [evaluationHistory, setEvaluationHistory] = useState([]);
   const [savingEvaluation, setSavingEvaluation] = useState(false);
@@ -251,13 +253,28 @@ export default function VoiceLab() {
 
   const scenario = useMemo(
     () =>
-      VOICE_LAB_SCENARIOS.find((item) => item.id === scenarioId) ||
+      scenarios.find((item) => item.id === scenarioId) ||
+      scenarios[0] ||
       VOICE_LAB_SCENARIOS[0],
-    [scenarioId]
+    [scenarioId, scenarios]
   );
 
   const averageScore = scoreAverage(evaluation);
   const readyLabel = readinessLabel(averageScore, evaluation);
+
+  async function loadScenarios() {
+    try {
+      const nextScenarios = await listVoiceLabScenarios();
+      if (Array.isArray(nextScenarios) && nextScenarios.length) {
+        setScenarios(nextScenarios);
+        if (!nextScenarios.some((item) => item.id === scenarioId)) {
+          setScenarioId(nextScenarios[0].id);
+        }
+      }
+    } catch {
+      setScenarios(VOICE_LAB_SCENARIOS);
+    }
+  }
 
   async function loadEvaluationHistory() {
     try {
@@ -374,23 +391,11 @@ export default function VoiceLab() {
 
       setStatus("creating_session");
 
-      const scenarioInstructions = [
-        instructions,
-        `Test scenario: ${scenario.title}.`,
-        scenario.goal,
-        scenario.prompt,
-        `Caller roleplay script: ${scenario.callerScript}`,
-        `Expected outcome: ${scenario.expectedOutcome}`,
-        `Red flags to avoid: ${(scenario.redFlags || []).join("; ")}`,
-        "Evaluation priority: natural speech, short answers, one question at a time, no invented facts.",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
       const session = await createVoiceLabSession({
         model,
         voice,
-        instructions: scenarioInstructions,
+        instructions,
+        scenarioId: scenario.id,
         useTenantRuntime,
         provider: "browser_lab",
         toNumber: "browser_lab",
@@ -488,6 +493,7 @@ export default function VoiceLab() {
   }
 
   useEffect(() => {
+    loadScenarios();
     loadEvaluationHistory();
 
     return () => {
@@ -571,7 +577,7 @@ export default function VoiceLab() {
                   onChange={(event) => setScenarioId(event.target.value)}
                   disabled={isLive || isBusy}
                 >
-                  {VOICE_LAB_SCENARIOS.map((item) => (
+                  {scenarios.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.title}
                     </option>

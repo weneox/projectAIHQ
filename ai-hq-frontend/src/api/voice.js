@@ -149,3 +149,8 @@ export async function listVoiceLabEvaluations(params = {}) {
 export async function createVoiceLabEvaluation(body = {}) {
   return apiPost("/api/voice/lab/evaluations", body);
 }
+
+export async function listVoiceLabScenarios(params = {}) {
+  const j = await apiGet(`/api/voice/lab/scenarios${qs(params)}`);
+  return normalizeList(j, "scenarios");
+}
