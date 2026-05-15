@@ -110,18 +110,66 @@ function normalizeMetaOperational(input = {}) {
   };
 }
 
+
+function normalizeVoiceChannelOperational(input = {}) {
+  const item = obj(input);
+  const provider = lower(item.provider || "twilio");
+
+  return {
+    id: s(item.id || item.channelId || item.channel_id || ""),
+    provider,
+    label: s(item.label || item.displayName || item.display_name || ""),
+    externalNumber: s(
+      item.externalNumber ||
+        item.external_number ||
+        item.number ||
+        item.phoneNumber ||
+        item.phone_number ||
+        ""
+    ),
+    routeKey: lower(item.routeKey || item.route_key || "default"),
+    enabled: bool(item.enabled, false),
+    ready: bool(item.ready, false),
+    reasonCode: s(item.reasonCode || item.reason_code || ""),
+    defaultLanguage: lower(item.defaultLanguage || item.default_language || "en"),
+    supportedLanguages: arr(item.supportedLanguages || item.supported_languages)
+      .map((entry) => lower(entry))
+      .filter(Boolean),
+    providerConfig: obj(item.providerConfig || item.provider_config),
+    operatorRouting: obj(item.operatorRouting || item.operator_routing),
+    voiceProfileOverride: obj(
+      item.voiceProfileOverride || item.voice_profile_override
+    ),
+    meta: obj(item.meta),
+    source: s(item.source || ""),
+    updatedAt: s(item.updatedAt || item.updated_at || ""),
+  };
+}
+
 function normalizeVoiceOperational(input = {}) {
   const item = obj(input);
   const operator = obj(item.operator);
   const routing = obj(item.operatorRouting || item.operator_routing);
   const realtime = obj(item.realtime);
   const telephony = obj(item.telephony);
+  const channels = arr(item.channels || item.voiceChannels || item.voice_channels)
+    .map((entry) => normalizeVoiceChannelOperational(entry))
+    .filter((entry) => entry.id || entry.externalNumber || entry.provider);
 
   return {
     available: bool(item.available, false),
     ready: bool(item.ready, false),
     reasonCode: s(item.reasonCode || item.reason_code || ""),
     provider: lower(item.provider || "twilio"),
+    channels,
+    defaultChannelId: s(item.defaultChannelId || item.default_channel_id || ""),
+    activeChannelId: s(item.activeChannelId || item.active_channel_id || ""),
+    channelCount: num(item.channelCount || item.channel_count, channels.length),
+    readyChannelCount: num(
+      item.readyChannelCount || item.ready_channel_count,
+      channels.filter((channel) => channel.ready).length
+    ),
+    providers: arr(item.providers).map((entry) => lower(entry)).filter(Boolean),
     mode: lower(item.mode || "assistant"),
     displayName: s(item.displayName || item.display_name || ""),
     defaultLanguage: lower(item.defaultLanguage || item.default_language || "en"),
@@ -154,6 +202,7 @@ function normalizeVoiceOperational(input = {}) {
       phoneSid: s(
         telephony.phoneSid || telephony.phone_sid || telephony.twilioPhoneSid
       ),
+      channelId: s(telephony.channelId || telephony.channel_id || ""),
     },
     callback: obj(item.callback),
     transfer: obj(item.transfer),

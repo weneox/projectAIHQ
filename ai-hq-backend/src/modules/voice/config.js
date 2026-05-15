@@ -175,7 +175,8 @@ export function buildVoiceConfigFromProjectedRuntime(
   const operator = obj(operationalVoice.operator);
   const operatorRouting = obj(operationalVoice.operatorRouting);
   const realtime = obj(operationalVoice.realtime);
-  const voiceProfile = obj(voice.profile);
+    const voiceChannels = arr(operationalVoice.channels);
+const voiceProfile = obj(voice.profile);
   const behaviorConfig = buildVoiceBehaviorConfig(runtime);
 
   const resolvedTenantKey = lower(
@@ -220,7 +221,10 @@ export function buildVoiceConfigFromProjectedRuntime(
       }),
     },
     projectedRuntime: runtime,
-    match: {
+
+    voiceChannels,
+    activeVoiceChannelId: s(operationalVoice.activeChannelId || operationalVoice.active_channel_id),
+    defaultVoiceChannelId: s(operationalVoice.defaultChannelId || operationalVoice.default_channel_id),match: {
       tenantKey: s(tenantKey),
       toNumber: s(toNumber),
     },
