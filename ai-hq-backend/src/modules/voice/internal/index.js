@@ -12,3 +12,4 @@ export * from "./primitives.js";
 export * from "./transcript.js";
 export * from "./sessionState.js";
 export * from "./projection.js";
+export * from "./authority.js";
