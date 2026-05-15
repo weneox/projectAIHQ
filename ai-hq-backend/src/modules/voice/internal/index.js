@@ -15,3 +15,4 @@ export * from "./projection.js";
 export * from "./authority.js";
 export * from "./tenant.js";
 export * from "./projectedRuntime.js";
+export * from "./tenantHydration.js";
