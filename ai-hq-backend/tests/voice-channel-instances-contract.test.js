@@ -196,3 +196,68 @@ test("voice config resolves active channel by provider and toNumber", async () =
   assert.equal(sipConfig.match.provider, "sip");
   assert.equal(sipConfig.match.voiceChannelId, "sip-local-reception");
 });
+
+test("voice channel contract carries number connection lifecycle", async () => {
+  const operationalChannels = await buildOperationalChannels({
+    tenantRow: {
+      company_name: "Restaurant A",
+      default_language: "az",
+    },
+    voiceSettings: {
+      enabled: true,
+      provider: "twilio",
+      twilioPhoneNumber: "+15551234567",
+      meta: {
+        voiceChannels: [
+          {
+            id: "restaurant-main-sip",
+            provider: "sip",
+            label: "Restaurant main line",
+            externalNumber: "+994501112233",
+            enabled: true,
+            routeKey: "orders",
+            activationMode: "sip_trunk",
+            ownershipStatus: "verified",
+            verificationMethod: "voice_code",
+            routingStatus: "test_pending",
+            routing: {
+              lastTestCallAt: "2026-05-15T18:00:00.000Z",
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  const channel = operationalChannels.voice.channels.find(
+    (entry) => entry.id === "restaurant-main-sip"
+  );
+
+  assert.equal(channel.activationMode, "sip_trunk");
+  assert.equal(channel.ownershipStatus, "verified");
+  assert.equal(channel.verificationMethod, "voice_code");
+  assert.equal(channel.routingStatus, "test_pending");
+  assert.equal(channel.connectionStatus, "provider_pending");
+  assert.equal(channel.connectionNextAction, "connect_provider");
+  assert.equal(channel.connectionReady, false);
+  assert.equal(channel.verification.verified, true);
+  assert.equal(channel.routing.lastTestCallAt, "2026-05-15T18:00:00.000Z");
+
+  const checked = validateVoiceOperationalResponse({
+    ok: true,
+    operationalChannels,
+  });
+
+  assert.equal(checked.ok, true);
+
+  const checkedChannel = checked.value.operationalChannels.voice.channels.find(
+    (entry) => entry.id === "restaurant-main-sip"
+  );
+
+  assert.equal(checkedChannel.activationMode, "sip_trunk");
+  assert.equal(checkedChannel.ownershipStatus, "verified");
+  assert.equal(checkedChannel.routingStatus, "test_pending");
+  assert.equal(checkedChannel.connectionStatus, "provider_pending");
+  assert.equal(checkedChannel.verification.method, "voice_code");
+  assert.equal(checkedChannel.routing.lastTestCallAt, "2026-05-15T18:00:00.000Z");
+});

@@ -88,7 +88,6 @@ function normalizeDepartmentMap(input = {}) {
   return out;
 }
 
-
 function normalizeVoiceProvider(value = "") {
   const provider = lower(value || "twilio");
   if (provider === "browser") return "browser_lab";
@@ -115,6 +114,118 @@ function buildVoiceChannelId({ provider = "", externalNumber = "", routeKey = ""
 
 function isVoiceProviderAdapterReady(provider = "") {
   return normalizeVoiceProvider(provider) === "twilio";
+}
+
+function normalizeVoiceActivationMode(value = "", provider = "") {
+  const raw = lower(value);
+  if (
+    [
+      "sip_trunk",
+      "call_forwarding",
+      "hosted_number",
+      "ported_number",
+      "twilio_number",
+      "browser_lab",
+      "manual",
+    ].includes(raw)
+  ) {
+    return raw;
+  }
+
+  const normalizedProvider = normalizeVoiceProvider(provider);
+  if (normalizedProvider === "sip") return "sip_trunk";
+  if (normalizedProvider === "twilio") return "twilio_number";
+  if (normalizedProvider === "browser_lab") return "browser_lab";
+  return "manual";
+}
+
+function normalizeVoiceOwnershipStatus(value = "", legacyVerified = false) {
+  const raw = lower(value);
+  if (["unverified", "pending", "verified", "failed", "manual_review"].includes(raw)) {
+    return raw;
+  }
+  return legacyVerified ? "verified" : "unverified";
+}
+
+function normalizeVoiceRoutingStatus(value = "", legacyLive = false) {
+  const raw = lower(value);
+  if (
+    [
+      "not_connected",
+      "instructions_pending",
+      "test_pending",
+      "testing",
+      "live",
+      "failed",
+      "paused",
+    ].includes(raw)
+  ) {
+    return raw;
+  }
+  return legacyLive ? "live" : "not_connected";
+}
+
+function normalizeVoiceVerificationMethod(value = "", legacyVerified = false) {
+  const raw = lower(value);
+  if (
+    [
+      "sms_code",
+      "voice_code",
+      "test_call",
+      "provider_document",
+      "manual_admin",
+      "system_import",
+    ].includes(raw)
+  ) {
+    return raw;
+  }
+  return legacyVerified ? "system_import" : "";
+}
+
+function buildVoiceNumberConnectionState({
+  enabled = false,
+  adapterReady = false,
+  configured = false,
+  ownershipStatus = "",
+  routingStatus = "",
+  failureReason = "",
+} = {}) {
+  const verified = ownershipStatus === "verified";
+  const live = routingStatus === "live";
+  let status = "disabled";
+  let nextAction = "enable_channel";
+
+  if (enabled) {
+    if (!configured) {
+      status = "number_required";
+      nextAction = "add_number";
+    } else if (!verified) {
+      status = "verify_number";
+      nextAction = "verify_ownership";
+    } else if (!adapterReady) {
+      status = "provider_pending";
+      nextAction = "connect_provider";
+    } else if (!live) {
+      status = "connect_routing";
+      nextAction = "test_call_routing";
+    } else {
+      status = "live";
+      nextAction = "";
+    }
+  }
+
+  if (failureReason) {
+    status = "failed";
+    nextAction = "review_connection";
+  }
+
+  return {
+    status,
+    nextAction,
+    verified,
+    live,
+    connected: enabled && configured && verified && adapterReady && live && !failureReason,
+  };
 }
 
 function normalizeVoiceChannel(input = {}, fallback = {}) {
@@ -167,6 +278,64 @@ function normalizeVoiceChannel(input = {}, fallback = {}) {
       fallbackItem.providerConfig
   );
 
+  const legacyReadyChannel =
+    s(fallbackItem.source || "tenant_voice_settings") === "tenant_voice_settings" &&
+    provider === "twilio" &&
+    !!externalNumber;
+  const activationMode = normalizeVoiceActivationMode(
+    item.activationMode || item.activation_mode || fallbackItem.activationMode,
+    provider
+  );
+  const ownershipStatus = normalizeVoiceOwnershipStatus(
+    item.ownershipStatus ||
+      item.ownership_status ||
+      obj(item.verification).ownershipStatus ||
+      obj(item.verification).ownership_status ||
+      obj(item.verification).status ||
+      fallbackItem.ownershipStatus,
+    legacyReadyChannel
+  );
+  const routingStatus = normalizeVoiceRoutingStatus(
+    item.routingStatus ||
+      item.routing_status ||
+      obj(item.routing).status ||
+      fallbackItem.routingStatus,
+    legacyReadyChannel && adapterReady
+  );
+  const verificationMethod = normalizeVoiceVerificationMethod(
+    item.verificationMethod ||
+      item.verification_method ||
+      obj(item.verification).method ||
+      fallbackItem.verificationMethod,
+    ownershipStatus === "verified"
+  );
+  const lastTestCallAt = s(
+    item.lastTestCallAt ||
+      item.last_test_call_at ||
+      obj(item.routing).lastTestCallAt ||
+      obj(item.routing).last_test_call_at
+  );
+  const lastInboundSeenAt = s(
+    item.lastInboundSeenAt ||
+      item.last_inbound_seen_at ||
+      obj(item.routing).lastInboundSeenAt ||
+      obj(item.routing).last_inbound_seen_at
+  );
+  const failureReason = s(
+    item.failureReason ||
+      item.failure_reason ||
+      obj(item.routing).failureReason ||
+      obj(item.routing).failure_reason
+  );
+  const connection = buildVoiceNumberConnectionState({
+    enabled,
+    adapterReady,
+    configured,
+    ownershipStatus,
+    routingStatus,
+    failureReason,
+  });
+
   return {
     id:
       normalizeVoiceChannelId(item.id || item.channelId || item.channel_id) ||
@@ -183,6 +352,27 @@ function normalizeVoiceChannel(input = {}, fallback = {}) {
     enabled,
     ready: enabled && configured && adapterReady,
     reasonCode,
+    ownershipStatus,
+    routingStatus,
+    activationMode,
+    verificationMethod,
+    connectionStatus: connection.status,
+    connectionNextAction: connection.nextAction,
+    connectionReady: connection.connected,
+    verification: {
+      status: ownershipStatus,
+      method: verificationMethod,
+      verified: connection.verified,
+    },
+    routing: {
+      status: routingStatus,
+      activationMode,
+      lastTestCallAt,
+      lastInboundSeenAt,
+      failureReason,
+      live: connection.live,
+    },
+    connection,
     defaultLanguage: lower(
       item.defaultLanguage || item.default_language || fallbackItem.defaultLanguage || "en"
     ),
