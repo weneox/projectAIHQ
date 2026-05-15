@@ -42,7 +42,10 @@ import {
   updateVoiceCallSession,
 } from "../db/helpers/voice.js";
 
-import { getTenantBrainRuntime } from "./businessBrain/getTenantBrainRuntime.js";
+import {
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "./businessBrain/getTenantBrainRuntime.js";
 import { buildOperationalChannels } from "./operationalChannels.js";
 import { buildVoiceReplayPayload } from "./voiceReplayTrace.js";
 
