@@ -413,7 +413,7 @@ test("boot readiness fails closed when AI HQ readiness contract is malformed", a
 
 test("health route response exposes direct structured readiness", () => {
   const handler = createHealthHandler({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     bootReadiness: {
       checkedAt: "2026-03-26T00:00:00.000Z",
       enforced: true,
@@ -437,7 +437,7 @@ test("health route response exposes direct structured readiness", () => {
   handler({}, res);
 
   assert.equal(res.statusCode, 503);
-  assert.equal(res.body.service, "twilio-voice-backend");
+  assert.equal(res.body.service, "voice-gateway-backend");
   assert.equal(res.body.readiness.status, "blocked");
   assert.equal(res.body.readiness.checkedAt, "2026-03-26T00:00:00.000Z");
   assert.equal(res.body.readiness.enforced, true);
@@ -488,7 +488,7 @@ test("voice AI HQ client forwards request and correlation headers", async () => 
   assert.equal(out.ok, true);
   assert.equal(seenHeaders["x-request-id"], "req-voice-1");
   assert.equal(seenHeaders["x-correlation-id"], "corr-voice-1");
-  assert.equal(seenHeaders["x-internal-service"], "twilio-voice-backend");
+  assert.equal(seenHeaders["x-internal-service"], "voice-gateway-backend");
   assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.executions.voice-sync");
 });
 
@@ -506,7 +506,7 @@ test("voice runtime signals response exposes readiness and runtime counters", ()
   });
 
   const response = buildRuntimeSignalsResponse({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     bootReadiness: {
       status: "ok",
       checkedAt: "2026-03-26T00:00:00.000Z",
@@ -514,7 +514,7 @@ test("voice runtime signals response exposes readiness and runtime counters", ()
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.body.service, "twilio-voice-backend");
+  assert.equal(response.body.service, "voice-gateway-backend");
   assert.equal(response.body.readiness.status, "ok");
   assert.equal(typeof response.body.runtime.checkedAt, "string");
   assert.deepEqual(response.body.runtime.metrics, getRuntimeMetricsSnapshot());
@@ -551,7 +551,7 @@ test("voice durable incident client posts sanitized incident payload to AI HQ", 
   });
 
   const result = await client.recordIncident({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     area: "voice_sync",
     severity: "warn",
     code: "voice_sync_request_failed",
@@ -569,7 +569,7 @@ test("voice durable incident client posts sanitized incident payload to AI HQ", 
   assert.equal(seenUrl, "https://aihq.example.test/api/internal/runtime-signals/incidents");
   assert.equal(seenHeaders["x-request-id"], "req-voice-3");
   assert.equal(seenHeaders["x-correlation-id"], "corr-voice-3");
-  assert.equal(seenHeaders["x-internal-service"], "twilio-voice-backend");
+  assert.equal(seenHeaders["x-internal-service"], "voice-gateway-backend");
   assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.runtime-signals.incidents");
   assert.equal(seenBody.tenantKey, "acme");
   assert.equal(seenBody.code, "voice_sync_request_failed");

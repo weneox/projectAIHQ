@@ -94,7 +94,7 @@ export function createAihqVoiceClient({
   const root = s(baseUrl).replace(/\/+$/, "");
   const token = s(internalToken);
   const logger = createStructuredLogger({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     component: "aihq-voice-client",
   });
 

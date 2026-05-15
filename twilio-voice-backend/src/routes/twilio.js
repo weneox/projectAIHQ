@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import crypto from "crypto";
 import twilio from "twilio";
 import { cfg } from "../config.js";
@@ -400,7 +400,7 @@ function buildFallbackUnavailableReply(lang) {
 }
 
 const routeLogger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   component: "twilio-routes",
 });
 const fallbackRateLimitBuckets = new Map();

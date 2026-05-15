@@ -7,7 +7,7 @@ function s(v, d = "") {
 }
 
 const logger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   component: "voice-reporting",
 });
 

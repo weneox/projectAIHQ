@@ -197,17 +197,17 @@ export function getConfigIssues() {
 
 export function printConfigReport(logger = console) {
   return printValidationReport({
-    workspace: "twilio-voice-backend",
+    workspace: "voice-gateway-backend",
     issues: getConfigIssues(),
     logger,
-    okMessage: "[validate:env] twilio-voice-backend OK",
+    okMessage: "[validate:env] voice-gateway-backend OK",
   });
 }
 
 export function assertConfigValid(logger = console) {
   const report = printConfigReport(logger);
   if (!report.ok) {
-    throw new Error(formatValidationFailure("twilio-voice-backend", report));
+    throw new Error(formatValidationFailure("voice-gateway-backend", report));
   }
   return report;
 }
