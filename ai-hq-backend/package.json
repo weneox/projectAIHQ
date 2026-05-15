@@ -29,7 +29,8 @@
     "test:integration:db": "npm run test:integration:db:certification && npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox",
     "source-sync:website:once": "node --import ../scripts/workspace-module-loader.mjs scripts/run-website-source-crawl-once.mjs",
     "source-sync:website:loop": "node scripts/run-website-source-crawl-loop.mjs",
-    "test:public-webchat": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/public-webchat-widget.contract.test.js"
+    "test:public-webchat": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/public-webchat-widget.contract.test.js",
+    "test:voice:runtime": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/voice-internal-runtime-facade.test.js tests/voice-internal-runtime-hardening.test.js tests/voice-mutation-hardening.test.js tests/truth-authority-enforcement.test.js"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
