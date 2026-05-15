@@ -29,6 +29,57 @@ function uniqueStrings(values = []) {
   return [...new Set(arr(values).map((entry) => s(entry)).filter(Boolean))];
 }
 
+
+function normalizeVoiceProvider(value = "") {
+  const provider = lower(value || "twilio");
+  if (provider === "browser" || provider === "browserlab") return "browser_lab";
+  return provider || "twilio";
+}
+
+function normalizeVoiceNumber(value = "") {
+  return s(value).replace(/[^0-9]/g, "");
+}
+
+function voiceChannelNumber(channel = {}) {
+  return normalizeVoiceNumber(
+    channel.externalNumber ||
+      channel.external_number ||
+      channel.phoneNumber ||
+      channel.phone_number ||
+      channel.number
+  );
+}
+
+function resolveVoiceChannel({
+  channels = [],
+  provider = "",
+  toNumber = "",
+  fallbackChannelId = "",
+} = {}) {
+  const list = arr(channels);
+  if (!list.length) return null;
+
+  const requestedProvider = normalizeVoiceProvider(provider || "twilio");
+  const requestedNumber = normalizeVoiceNumber(toNumber);
+  const fallbackId = s(fallbackChannelId);
+
+  const sameProvider = (channel) =>
+    !requestedProvider || normalizeVoiceProvider(channel?.provider) === requestedProvider;
+  const sameNumber = (channel) =>
+    requestedNumber && voiceChannelNumber(channel) === requestedNumber;
+
+  return (
+    list.find((channel) => sameProvider(channel) && sameNumber(channel)) ||
+    list.find((channel) => sameNumber(channel)) ||
+    list.find((channel) => fallbackId && s(channel?.id) === fallbackId) ||
+    list.find((channel) => sameProvider(channel) && channel?.ready === true) ||
+    list.find((channel) => sameProvider(channel)) ||
+    list.find((channel) => channel?.ready === true) ||
+    list[0] ||
+    null
+  );
+}
+
 function appendInstructionLine(lines, value) {
   const normalized = s(value);
   if (normalized) lines.push(normalized);
@@ -164,7 +215,7 @@ function buildVoiceRealtimeInstructions({
 
 export function buildVoiceConfigFromProjectedRuntime(
   projectedRuntime,
-  { tenantKey, toNumber } = {}
+  { tenantKey, toNumber, provider = "twilio" } = {}
 ) {
   const runtime = obj(projectedRuntime);
   const authority = obj(runtime.authority);
@@ -175,8 +226,15 @@ export function buildVoiceConfigFromProjectedRuntime(
   const operator = obj(operationalVoice.operator);
   const operatorRouting = obj(operationalVoice.operatorRouting);
   const realtime = obj(operationalVoice.realtime);
-    const voiceChannels = arr(operationalVoice.channels);
-const voiceProfile = obj(voice.profile);
+  const voiceChannels = arr(operationalVoice.channels);
+  const activeVoiceChannel = resolveVoiceChannel({
+    channels: voiceChannels,
+    provider,
+    toNumber,
+    fallbackChannelId:
+      operationalVoice.activeChannelId || operationalVoice.active_channel_id,
+  });
+  const voiceProfile = obj(voice.profile);
   const behaviorConfig = buildVoiceBehaviorConfig(runtime);
 
   const resolvedTenantKey = lower(
@@ -223,8 +281,18 @@ const voiceProfile = obj(voice.profile);
     projectedRuntime: runtime,
 
     voiceChannels,
-    activeVoiceChannelId: s(operationalVoice.activeChannelId || operationalVoice.active_channel_id),
-    defaultVoiceChannelId: s(operationalVoice.defaultChannelId || operationalVoice.default_channel_id),match: {
+    activeVoiceChannel,
+    activeVoiceChannelId: s(
+      activeVoiceChannel?.id ||
+        operationalVoice.activeChannelId ||
+        operationalVoice.active_channel_id
+    ),
+    defaultVoiceChannelId: s(
+      operationalVoice.defaultChannelId || operationalVoice.default_channel_id
+    ),
+    match: {
+      provider: normalizeVoiceProvider(provider || activeVoiceChannel?.provider),
+      voiceChannelId: s(activeVoiceChannel?.id),
       tenantKey: s(tenantKey),
       toNumber: s(toNumber),
     },

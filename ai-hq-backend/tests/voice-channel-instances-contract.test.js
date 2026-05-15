@@ -124,3 +124,75 @@ test("voice operational contract exposes multiple provider channel instances", a
   assert.equal(voiceConfig.voiceChannels.length, 2);
   assert.equal(voiceConfig.activeVoiceChannelId, twilioChannel.id);
 });
+
+test("voice config resolves active channel by provider and toNumber", async () => {
+  const operationalChannels = await buildOperationalChannels({
+    tenantRow: {
+      company_name: "Clinic A",
+      default_language: "az",
+    },
+    voiceSettings: {
+      enabled: true,
+      provider: "twilio",
+      twilioPhoneNumber: "+15551234567",
+      meta: {
+        voiceChannels: [
+          {
+            id: "sip-local-reception",
+            provider: "sip",
+            label: "Local reception",
+            externalNumber: "+994501112233",
+            routeKey: "reception",
+            enabled: true,
+            defaultLanguage: "az",
+          },
+        ],
+      },
+    },
+  });
+
+  const checked = validateVoiceOperationalResponse({
+    ok: true,
+    operationalChannels,
+  });
+
+  assert.equal(checked.ok, true);
+
+  const sipConfig = buildVoiceConfigFromProjectedRuntime(
+    {
+      tenant: {
+        tenantId: "tenant-1",
+        tenantKey: "clinic-a",
+        companyName: "Clinic A",
+        mainLanguage: "az",
+      },
+      authority: {
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "clinic-a",
+        runtimeProjectionId: "projection-1",
+      },
+      channels: {
+        voice: {
+          profile: {
+            defaultLanguage: "az",
+          },
+        },
+      },
+      operational: {
+        voice: checked.value.operationalChannels.voice,
+      },
+    },
+    {
+      tenantKey: "clinic-a",
+      provider: "sip",
+      toNumber: "+994501112233",
+    }
+  );
+
+  assert.equal(sipConfig.activeVoiceChannelId, "sip-local-reception");
+  assert.equal(sipConfig.activeVoiceChannel.id, "sip-local-reception");
+  assert.equal(sipConfig.match.provider, "sip");
+  assert.equal(sipConfig.match.voiceChannelId, "sip-local-reception");
+});
