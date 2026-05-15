@@ -212,6 +212,7 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/knowledge",
   "/reports",
   "/voice-lab",
+  "/voice-channels",
   "/team",
   "/launch",
   "/settings",

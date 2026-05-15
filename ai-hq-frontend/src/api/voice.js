@@ -103,3 +103,40 @@ export async function endVoiceCall(callId, body = {}) {
 export async function createVoiceLabSession(body = {}) {
   return apiPost("/api/voice/lab/session", body);
 }
+
+export async function listVoiceChannels(params = {}) {
+  const j = await apiGet(`/api/voice/channels${qs(params)}`);
+  return {
+    channels: normalizeList(j, "channels"),
+    settings: unwrapObject(j, "settings"),
+    raw: j,
+  };
+}
+
+export async function createVoiceChannel(body = {}) {
+  return apiPost("/api/voice/channels", body);
+}
+
+export async function startVoiceChannelVerification(channelId, body = {}) {
+  if (!channelId) throw new Error("channelId is required");
+  return apiPost(
+    `/api/voice/channels/${encodeURIComponent(channelId)}/verify/start`,
+    body
+  );
+}
+
+export async function confirmVoiceChannelVerification(channelId, body = {}) {
+  if (!channelId) throw new Error("channelId is required");
+  return apiPost(
+    `/api/voice/channels/${encodeURIComponent(channelId)}/verify/confirm`,
+    body
+  );
+}
+
+export async function testVoiceChannelRouting(channelId, body = {}) {
+  if (!channelId) throw new Error("channelId is required");
+  return apiPost(
+    `/api/voice/channels/${encodeURIComponent(channelId)}/routing/test`,
+    body
+  );
+}

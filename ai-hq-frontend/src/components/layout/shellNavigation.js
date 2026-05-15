@@ -101,6 +101,22 @@ const CRM_SECTIONS = [
 
 const SECONDARY_SECTIONS = [
   {
+    id: "voice-channels",
+    label: "Səs kanalları",
+    icon: Radio,
+    to: "/voice-channels",
+    paths: ["/voice-channels"],
+    contextGroups: [
+      {
+        title: "Naviqasiya",
+        items: [
+          { label: "Səs kanalları", to: "/voice-channels" },
+          { label: "Voice Lab", to: "/voice-lab" },
+        ],
+      },
+    ],
+  },
+  {
     id: "voice-lab",
     label: "Voice Lab",
     icon: Radio,
@@ -109,7 +125,10 @@ const SECONDARY_SECTIONS = [
     contextGroups: [
       {
         title: "Naviqasiya",
-        items: [{ label: "Voice Lab", to: "/voice-lab" }],
+        items: [
+          { label: "Voice Lab", to: "/voice-lab" },
+          { label: "Səs kanalları", to: "/voice-channels" },
+        ],
       },
     ],
   },
