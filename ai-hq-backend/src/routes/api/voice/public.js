@@ -58,6 +58,12 @@ import {
   appendVoiceLabEvaluation,
   listVoiceLabEvaluationsFromSettings,
 } from "../../../modules/voice/labEvaluation.js";
+import {
+  buildVoiceLabScenarioInstructions,
+  getVoiceLabScenario,
+  listVoiceLabScenarios,
+  normalizeVoiceLabScenarioId,
+} from "../../../modules/voice/labScenarios.js";
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
   component: "voice-public-routes",
@@ -277,6 +283,12 @@ async function handleVoiceChannelMutation(req, res, { db, dbDisabled, audit, act
   }
 }
 
+async function handleVoiceLabScenariosList(req, res) {
+  return ok(res, {
+    scenarios: listVoiceLabScenarios(),
+  });
+}
+
 async function handleVoiceLabEvaluationsList(req, res, { db, dbDisabled }) {
   const logger = getRouteLogger(req, "voice.lab.evaluations.list");
   try {
@@ -337,6 +349,11 @@ async function handleVoiceLabEvaluationCreate(req, res, { db, dbDisabled, audit 
       evaluations: listVoiceLabEvaluationsFromSettings(saved || result.settingsInput),
     });
   } catch (err) {
+    const code = s(err?.code || err?.message);
+    if (code === "voice_lab_scenario_unknown") {
+      return fail(res, 400, "voice_lab_scenario_unknown");
+    }
+
     logger.error("voice.lab.evaluations.create.failed", err);
     recordVoiceRouteFailure({
       route: "voice.lab.evaluations.create",
@@ -518,9 +535,19 @@ async function handleVoiceLabSession(req, res) {
 
     const model = pickVoiceLabModel(req.body?.model);
     const voice = pickVoiceLabVoice(req.body?.voice);
-    const instructions =
+    const scenarioId = normalizeVoiceLabScenarioId(req.body?.scenarioId || "restaurant_order");
+    const scenario = getVoiceLabScenario(scenarioId);
+    if (!scenario) {
+      return fail(res, 400, "voice_lab_scenario_unknown");
+    }
+
+    const baseInstructions =
       cleanVoiceLabText(req.body?.instructions) ||
       "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
+    const instructions = buildVoiceLabScenarioInstructions({
+      baseInstructions,
+      scenarioId,
+    });
 
     const upstream = await fetch("https://api.openai.com/v1/realtime/sessions", {
       method: "POST",
@@ -558,6 +585,7 @@ async function handleVoiceLabSession(req, res) {
     return ok(res, {
       model,
       voice,
+      scenario,
       session: payload,
       clientSecret: payload?.client_secret?.value || "",
     });
@@ -632,6 +660,8 @@ export function voiceRoutes({
       action: "routing_test",
     })
   );
+
+  r.get("/voice/lab/scenarios", requireOperatorSurfaceAccess, handleVoiceLabScenariosList);
 
   r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
     handleVoiceLabSession(req, res, { db, dbDisabled, getRuntime })

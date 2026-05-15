@@ -1,3 +1,9 @@
+import {
+  getVoiceLabScenario,
+  normalizeVoiceLabScenarioId,
+  requireVoiceLabScenario,
+} from "./labScenarios.js";
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
@@ -50,11 +56,16 @@ export function normalizeVoiceLabEvaluation(input = {}) {
   const evaluation = obj(input.evaluation || input);
   const score = averageScore(evaluation);
   const language = s(evaluation.language || input.language || "unknown").toLowerCase();
+  const requestedScenarioId = normalizeVoiceLabScenarioId(
+    input.scenarioId || input.scenario_id || "restaurant_order"
+  );
+  const scenario = requireVoiceLabScenario(requestedScenarioId);
 
   return {
     id: s(input.id) || `lab_eval_${Date.now()}`,
-    scenarioId: s(input.scenarioId || input.scenario_id || "custom"),
-    scenarioTitle: s(input.scenarioTitle || input.scenario_title || "Custom scenario"),
+    scenarioId: scenario.id,
+    scenarioTitle: scenario.title,
+    businessType: scenario.businessType,
     model: s(input.model),
     voice: s(input.voice),
     runtimeApplied: input.runtimeApplied === true,

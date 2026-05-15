@@ -41,7 +41,7 @@ test("voice lab evaluation appends latest first and caps history", () => {
   };
 
   const result = appendVoiceLabEvaluation(settings, {
-    scenarioId: "clinic_booking",
+    scenarioId: "appointment_booking",
     evaluation: {
       language: "good",
       naturalness: 4,
@@ -53,6 +53,6 @@ test("voice lab evaluation appends latest first and caps history", () => {
   });
 
   assert.equal(result.evaluations.length, 20);
-  assert.equal(result.evaluations[0].scenarioId, "clinic_booking");
+  assert.equal(result.evaluations[0].scenarioId, "appointment_booking");
   assert.equal(listVoiceLabEvaluationsFromSettings(result.settingsInput).length, 20);
 });
