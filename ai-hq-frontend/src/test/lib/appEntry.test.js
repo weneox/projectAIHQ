@@ -115,6 +115,7 @@ describe("resolveAuthenticatedLanding", () => {
         "/knowledge",
         "/reports",
         "/voice-lab",
+        "/voice-channels",
         "/team",
         "/launch",
         "/settings",
