@@ -140,3 +140,12 @@ export async function testVoiceChannelRouting(channelId, body = {}) {
     body
   );
 }
+
+export async function listVoiceLabEvaluations(params = {}) {
+  const j = await apiGet(`/api/voice/lab/evaluations${qs(params)}`);
+  return normalizeList(j, "evaluations");
+}
+
+export async function createVoiceLabEvaluation(body = {}) {
+  return apiPost("/api/voice/lab/evaluations", body);
+}
