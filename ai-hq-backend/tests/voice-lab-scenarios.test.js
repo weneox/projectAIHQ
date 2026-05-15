@@ -66,3 +66,9 @@ test("voice lab unknown scenario fails closed", () => {
   assert.equal(getVoiceLabScenario("missing"), null);
   assert.throws(() => requireVoiceLabScenario("missing"), /voice_lab_scenario_unknown/);
 });
+
+test("voice lab scenario aliases keep legacy ids compatible", () => {
+  assert.equal(getVoiceLabScenario("clinic_booking")?.id, "appointment_booking");
+  assert.equal(getVoiceLabScenario("restaurant")?.id, "restaurant_order");
+  assert.equal(getVoiceLabScenario("support")?.id, "support_complaint");
+});

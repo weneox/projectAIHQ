@@ -153,8 +153,24 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
   },
 ]);
 
+const VOICE_LAB_SCENARIO_ALIASES = Object.freeze({
+  clinic_booking: "appointment_booking",
+  clinic: "appointment_booking",
+  booking: "appointment_booking",
+  restaurant: "restaurant_order",
+  faq: "business_faq",
+  complaint: "support_complaint",
+  support: "support_complaint",
+  sales: "sales_lead",
+  emergency: "emergency_out_of_scope",
+});
+
 export function normalizeVoiceLabScenarioId(value = "") {
-  return s(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "_").replace(/^_+|_+$/g, "");
+  const id = s(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_:-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return VOICE_LAB_SCENARIO_ALIASES[id] || id;
 }
 
 export function listVoiceLabScenarios() {

@@ -267,9 +267,11 @@ export default function VoiceLab() {
       const nextScenarios = await listVoiceLabScenarios();
       if (Array.isArray(nextScenarios) && nextScenarios.length) {
         setScenarios(nextScenarios);
-        if (!nextScenarios.some((item) => item.id === scenarioId)) {
-          setScenarioId(nextScenarios[0].id);
-        }
+        setScenarioId((current) =>
+          nextScenarios.some((item) => item.id === current)
+            ? current
+            : nextScenarios[0].id
+        );
       }
     } catch {
       setScenarios(VOICE_LAB_SCENARIOS);
