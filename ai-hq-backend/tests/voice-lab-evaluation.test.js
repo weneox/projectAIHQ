@@ -13,6 +13,7 @@ test("voice lab evaluation normalizes readiness and score", () => {
     scenarioTitle: "Restaurant order",
     model: "gpt-4o-realtime-preview",
     voice: "alloy",
+    runtimeApplied: true,
     evaluation: {
       language: "good",
       naturalness: 5,
@@ -26,6 +27,8 @@ test("voice lab evaluation normalizes readiness and score", () => {
 
   assert.equal(evaluation.averageScore, 4.6);
   assert.equal(evaluation.readiness, "ready_for_pilot");
+  assert.equal(evaluation.report.gate, "ready_for_pilot");
+  assert.equal(evaluation.report.blockerCount, 0);
   assert.equal(evaluation.scenarioId, "restaurant_order");
 });
 
@@ -55,4 +58,24 @@ test("voice lab evaluation appends latest first and caps history", () => {
   assert.equal(result.evaluations.length, 20);
   assert.equal(result.evaluations[0].scenarioId, "appointment_booking");
   assert.equal(listVoiceLabEvaluationsFromSettings(result.settingsInput).length, 20);
+});
+
+test("voice lab evaluation blocks real rollout without tenant runtime", () => {
+  const evaluation = normalizeVoiceLabEvaluation({
+    scenarioId: "business_faq",
+    runtimeApplied: false,
+    evaluation: {
+      language: "good",
+      naturalness: 5,
+      brevity: 5,
+      taskCompletion: 5,
+      truthfulness: 5,
+      handoffSense: 5,
+    },
+  });
+
+  assert.equal(evaluation.averageScore, 5);
+  assert.equal(evaluation.readiness, "not_ready");
+  assert.equal(evaluation.report.gate, "not_ready");
+  assert.ok(evaluation.report.blockers.some((item) => item.includes("Tenant runtime")));
 });

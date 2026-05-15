@@ -231,6 +231,78 @@ function readinessLabel(score, evaluation = DEFAULT_EVALUATION) {
   return "Not ready";
 }
 
+function buildLocalReadinessReport({ score, evaluation, runtimeMeta }) {
+  const blockers = [];
+  const nextActions = [];
+  const runtimeKnown = Boolean(runtimeMeta);
+
+  if (!runtimeKnown) {
+    blockers.push("Run a full Browser Lab session before deciding.");
+    nextActions.push("Start voice test, complete the scenario, then score the result.");
+  } else if (runtimeMeta.runtimeApplied !== true) {
+    blockers.push("Tenant runtime was not applied.");
+    nextActions.push("Fix voice settings/business truth so the lab uses tenant runtime.");
+  }
+
+  if (evaluation.language !== "good") {
+    blockers.push("Language quality is not confirmed as good.");
+    nextActions.push("Repeat the test and verify the target language by ear.");
+  }
+
+  if (Number(evaluation.naturalness) < 4) {
+    blockers.push("Natural speech is below pilot quality.");
+    nextActions.push("Tune voice, tone and opening behavior.");
+  }
+
+  if (Number(evaluation.brevity) < 4) {
+    blockers.push("Answers are too long for a phone call.");
+    nextActions.push("Tighten short-answer and one-question-at-a-time rules.");
+  }
+
+  if (Number(evaluation.taskCompletion) < 4) {
+    blockers.push("Task completion is weak.");
+    nextActions.push("Improve slot collection and confirmation.");
+  }
+
+  if (Number(evaluation.truthfulness) < 4) {
+    blockers.push("Hallucination/truthfulness risk is too high.");
+    nextActions.push("Strengthen approved-truth grounding and missing-fact handoff.");
+  }
+
+  if (Number(evaluation.handoffSense) < 4) {
+    blockers.push("Handoff behavior is weak.");
+    nextActions.push("Tune handoff triggers and operator escalation wording.");
+  }
+
+  const ready =
+    runtimeKnown &&
+    runtimeMeta.runtimeApplied === true &&
+    evaluation.language === "good" &&
+    score >= 4.4 &&
+    blockers.length === 0;
+
+  const needsTuning = !ready && score >= 3.8 && blockers.length <= 3;
+
+  if (!nextActions.length) {
+    nextActions.push("Run one more different scenario before real number rollout.");
+    nextActions.push("If it passes too, move to controlled pilot.");
+  }
+
+  return {
+    title: ready
+      ? "Ready for controlled pilot"
+      : needsTuning
+        ? "Needs tuning before pilot"
+        : "Not ready for real number",
+    tone: ready ? "success" : "warning",
+    summary: ready
+      ? "Bu nəticə bir kontrollu real-number pilot üçün kifayət qədər güclüdür."
+      : "SIP və real nömrəyə keçməzdən əvvəl aşağıdakı blokları düzəlt.",
+    blockers,
+    nextActions,
+  };
+}
+
 export default function VoiceLab() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -261,6 +333,15 @@ export default function VoiceLab() {
 
   const averageScore = scoreAverage(evaluation);
   const readyLabel = readinessLabel(averageScore, evaluation);
+  const readinessReport = useMemo(
+    () =>
+      buildLocalReadinessReport({
+        score: averageScore,
+        evaluation,
+        runtimeMeta,
+      }),
+    [averageScore, evaluation, runtimeMeta]
+  );
 
   async function loadScenarios() {
     try {
@@ -793,6 +874,50 @@ export default function VoiceLab() {
           <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
+                <ShieldCheck className="h-5 w-5 text-text" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-text">Pilot readiness report</h2>
+                <p className="text-xs text-text-muted">SIP və real nömrəyə keçid qərarı.</p>
+              </div>
+            </div>
+
+            <InlineNotice
+              tone={readinessReport.tone}
+              title={readinessReport.title}
+              description={readinessReport.summary}
+            />
+
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  Blockers
+                </div>
+                <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
+                  {readinessReport.blockers.length ? (
+                    readinessReport.blockers.map((item) => <li key={item}>• {item}</li>)
+                  ) : (
+                    <li>• No blockers from the current scorecard.</li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  Next actions
+                </div>
+                <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
+                  {readinessReport.nextActions.map((item) => (
+                    <li key={item}>• {item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
                 <ClipboardCheck className="h-5 w-5 text-text" />
               </div>
               <div>
@@ -810,7 +935,7 @@ export default function VoiceLab() {
                       <div className="text-xs font-semibold text-text-muted">{item.averageScore}/5</div>
                     </div>
                     <div className="mt-1 text-xs text-text-muted">
-                      {s(item.readiness).replace(/_/g, " ")}
+                      {s(item.report?.title || item.readiness).replace(/_/g, " ")}
                     </div>
                   </div>
                 ))
