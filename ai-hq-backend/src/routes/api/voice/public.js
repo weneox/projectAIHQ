@@ -54,6 +54,10 @@ import {
   startVoiceChannelRoutingTest,
   startVoiceChannelVerification,
 } from "../../../modules/voice/channelConnection.js";
+import {
+  appendVoiceLabEvaluation,
+  listVoiceLabEvaluationsFromSettings,
+} from "../../../modules/voice/labEvaluation.js";
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
   component: "voice-public-routes",
@@ -270,6 +274,77 @@ async function handleVoiceChannelMutation(req, res, { db, dbDisabled, audit, act
       req,
     });
     return fail(res, 500, "voice_channel_mutation_failed");
+  }
+}
+
+async function handleVoiceLabEvaluationsList(req, res, { db, dbDisabled }) {
+  const logger = getRouteLogger(req, "voice.lab.evaluations.list");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const settings = await getTenantVoiceSettings(db, scope.tenantId);
+
+    return ok(res, {
+      evaluations: listVoiceLabEvaluationsFromSettings(settings || {}),
+    });
+  } catch (err) {
+    logger.error("voice.lab.evaluations.list.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.lab.evaluations.list",
+      reasonCode: "voice_lab_evaluations_list_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_lab_evaluations_list_failed");
+  }
+}
+
+async function handleVoiceLabEvaluationCreate(req, res, { db, dbDisabled, audit }) {
+  const logger = getRouteLogger(req, "voice.lab.evaluations.create");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const settings = (await getTenantVoiceSettings(db, scope.tenantId)) || {};
+    const result = appendVoiceLabEvaluation(settings, req.body || {});
+    const saved = await upsertTenantVoiceSettings(db, scope.tenantId, result.settingsInput);
+
+    await auditSafe(audit, {
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      actor: getActor(req),
+      action: "voice.lab.evaluation.created",
+      objectType: "voice_lab_evaluation",
+      objectId: result.evaluation.id,
+      meta: {
+        scenarioId: result.evaluation.scenarioId,
+        averageScore: result.evaluation.averageScore,
+        readiness: result.evaluation.readiness,
+      },
+    });
+
+    return ok(res, {
+      evaluation: result.evaluation,
+      evaluations: listVoiceLabEvaluationsFromSettings(saved || result.settingsInput),
+    });
+  } catch (err) {
+    logger.error("voice.lab.evaluations.create.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.lab.evaluations.create",
+      reasonCode: "voice_lab_evaluation_create_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_lab_evaluation_create_failed");
   }
 }
 
@@ -560,6 +635,14 @@ export function voiceRoutes({
 
   r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
     handleVoiceLabSession(req, res, { db, dbDisabled, getRuntime })
+  );
+
+  r.get("/voice/lab/evaluations", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceLabEvaluationsList(req, res, { db, dbDisabled })
+  );
+
+  r.post("/voice/lab/evaluations", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceLabEvaluationCreate(req, res, { db, dbDisabled, audit })
   );
 
   r.post("/voice/toggle", requireOperatorSurfaceAccess, async (req, res) => {

@@ -9,7 +9,11 @@ import {
   Wand2,
 } from "lucide-react";
 
-import { createVoiceLabSession } from "../api/voice.js";
+import {
+  createVoiceLabEvaluation,
+  createVoiceLabSession,
+  listVoiceLabEvaluations,
+} from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -131,6 +135,8 @@ export default function VoiceLab() {
   const [runtimeMeta, setRuntimeMeta] = useState(null);
   const [scenarioId, setScenarioId] = useState("restaurant_order");
   const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
+  const [evaluationHistory, setEvaluationHistory] = useState([]);
+  const [savingEvaluation, setSavingEvaluation] = useState(false);
   const [events, setEvents] = useState([]);
 
   const pcRef = useRef(null);
@@ -147,6 +153,42 @@ export default function VoiceLab() {
 
   const averageScore = scoreAverage(evaluation);
   const readyLabel = readinessLabel(averageScore, evaluation);
+
+  async function loadEvaluationHistory() {
+    try {
+      const history = await listVoiceLabEvaluations();
+      setEvaluationHistory(Array.isArray(history) ? history : []);
+    } catch {
+      setEvaluationHistory([]);
+    }
+  }
+
+  async function saveEvaluation() {
+    setError("");
+    setSavingEvaluation(true);
+
+    try {
+      const result = await createVoiceLabEvaluation({
+        scenarioId: scenario.id,
+        scenarioTitle: scenario.title,
+        model,
+        voice,
+        runtimeApplied: runtimeMeta?.runtimeApplied === true,
+        tenantKey: s(runtimeMeta?.tenantKey),
+        evaluation,
+      });
+
+      if (Array.isArray(result?.evaluations)) {
+        setEvaluationHistory(result.evaluations);
+      } else {
+        await loadEvaluationHistory();
+      }
+    } catch (err) {
+      setError(s(err?.message || err, "Evaluation save alınmadı."));
+    } finally {
+      setSavingEvaluation(false);
+    }
+  }
 
   function addEvent(event) {
     setEvents((current) => [normalizeLogEvent(event), ...current].slice(0, 12));
@@ -328,6 +370,8 @@ export default function VoiceLab() {
   }
 
   useEffect(() => {
+    loadEvaluationHistory();
+
     return () => {
       stopLab();
     };
@@ -583,9 +627,46 @@ export default function VoiceLab() {
                 />
               </label>
 
-              <Button variant="secondary" className="w-full" onClick={resetEvaluation}>
-                Reset scorecard
-              </Button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button loading={savingEvaluation} onClick={saveEvaluation}>
+                  Save evaluation
+                </Button>
+                <Button variant="secondary" onClick={resetEvaluation}>
+                  Reset scorecard
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
+                <ClipboardCheck className="h-5 w-5 text-text" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-text">Evaluation history</h2>
+                <p className="text-xs text-text-muted">Son saxlanmış lab nəticələri.</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {evaluationHistory.length ? (
+                evaluationHistory.slice(0, 5).map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold text-text">{s(item.scenarioTitle, item.scenarioId)}</div>
+                      <div className="text-xs font-semibold text-text-muted">{item.averageScore}/5</div>
+                    </div>
+                    <div className="mt-1 text-xs text-text-muted">
+                      {s(item.readiness).replace(/_/g, " ")}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
+                  Hələ saxlanmış evaluation yoxdur.
+                </div>
+              )}
             </div>
           </section>
 
