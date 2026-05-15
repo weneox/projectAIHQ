@@ -32,6 +32,7 @@ import {
   normalizedRuntimeTenantId,
   buildStableTenantScope,
   normalizeProjectedRuntimeForVoice,
+  buildVoiceProjectedRuntime,
 } from "../modules/voice/internal/index.js";
 
 import {
@@ -45,9 +46,7 @@ import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
 } from "./businessBrain/getTenantBrainRuntime.js";
-import { createRuntimeAuthorityError } from "./businessBrain/runtimeAuthority.js";
 import { buildOperationalChannels } from "./operationalChannels.js";
-import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
 import { buildVoiceReplayPayload } from "./voiceReplayTrace.js";
 
 async function appendVoiceConflictEvent({
@@ -86,58 +85,6 @@ async function appendVoiceConflictEvent({
     event,
     mutationOutcome,
   };
-}
-
-function buildVoiceProjectedRuntime({
-  runtime = null,
-  tenant = null,
-  operationalChannels = {},
-  tenantKey = "",
-  toNumber = "",
-} = {}) {
-  try {
-    return buildProjectedTenantRuntime({
-      runtime,
-      tenantRow: tenant,
-      operationalChannels,
-    });
-  } catch (primaryError) {
-    if (isRuntimeAuthorityError(primaryError)) {
-      throw primaryError;
-    }
-
-    const authority = obj(runtime?.authority);
-    const approvedAuthorityAvailable =
-      authority.available === true &&
-      s(authority.source) === "approved_runtime_projection";
-
-    if (!approvedAuthorityAvailable) {
-      throw primaryError;
-    }
-
-    throw createRuntimeAuthorityError({
-      mode: "strict",
-      tenantId: firstNonEmpty(
-        authority.tenantId,
-        tenant?.id,
-        tenant?.tenant_id
-      ),
-      tenantKey: firstNonEmpty(
-        authority.tenantKey,
-        tenant?.tenant_key,
-        tenantKey
-      ),
-      runtimeProjection: obj(
-        runtime?.raw?.projection ||
-          runtime?.raw?.runtimeProjection ||
-          runtime?.raw?.currentProjection
-      ),
-      reasonCode: "runtime_projection_invalid",
-      reason: "runtime_projection_invalid",
-      message:
-        "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
-    });
-  }
 }
 
 async function loadTenantRowDirect(db, { tenantId = "", tenantKey = "" } = {}) {
