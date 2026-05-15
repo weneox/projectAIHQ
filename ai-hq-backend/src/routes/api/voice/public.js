@@ -59,7 +59,9 @@ import {
   listVoiceLabEvaluationsFromSettings,
 } from "../../../modules/voice/labEvaluation.js";
 import {
-  buildVoiceLabScenarioInstructions,
+  buildVoiceLabConversationInstructions,
+} from "../../../modules/voice/conversationComposer.js";
+import {
   getVoiceLabScenario,
   listVoiceLabScenarios,
   normalizeVoiceLabScenarioId,
@@ -521,7 +523,11 @@ function pickVoiceLabVoice(value = "") {
     : "alloy";
 }
 
-async function handleVoiceLabSession(req, res) {
+async function handleVoiceLabSession(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+) {
   const logger = getRouteLogger(req, "voice.lab.session");
   try {
     const apiKey = s(process.env.OPENAI_API_KEY);
@@ -533,20 +539,44 @@ async function handleVoiceLabSession(req, res) {
       return fail(res, 503, "fetch_unavailable");
     }
 
-    const model = pickVoiceLabModel(req.body?.model);
-    const voice = pickVoiceLabVoice(req.body?.voice);
+    let model = pickVoiceLabModel(req.body?.model);
+    let voice = pickVoiceLabVoice(req.body?.voice);
     const scenarioId = normalizeVoiceLabScenarioId(req.body?.scenarioId || "restaurant_order");
     const scenario = getVoiceLabScenario(scenarioId);
     if (!scenario) {
       return fail(res, 400, "voice_lab_scenario_unknown");
     }
 
+    const runtimeResolution = await resolveVoiceLabRuntimeConfig(req, res, {
+      db,
+      dbDisabled,
+      getRuntime,
+      logger,
+    });
+    if (runtimeResolution?.handled) return;
+
+    const runtimeApplied = runtimeResolution?.ok === true;
+    const runtimeConfig = runtimeApplied ? obj(runtimeResolution.config) : {};
+    const runtimeRealtime = obj(runtimeConfig.realtime);
+
+    if (!s(req.body?.model) && s(runtimeRealtime.model)) {
+      model = pickVoiceLabModel(runtimeRealtime.model);
+    }
+    if (!s(req.body?.voice) && s(runtimeRealtime.voice)) {
+      voice = pickVoiceLabVoice(runtimeRealtime.voice);
+    }
+
     const baseInstructions =
       cleanVoiceLabText(req.body?.instructions) ||
-      "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
-    const instructions = buildVoiceLabScenarioInstructions({
+      cleanVoiceLabText(runtimeRealtime.instructions) ||
+      DEFAULT_VOICE_LAB_INSTRUCTIONS;
+
+    const instructions = buildVoiceLabConversationInstructions({
       baseInstructions,
+      scenario,
       scenarioId,
+      runtimeConfig,
+      runtimeApplied,
     });
 
     const upstream = await fetch("https://api.openai.com/v1/realtime/sessions", {
@@ -586,6 +616,10 @@ async function handleVoiceLabSession(req, res) {
       model,
       voice,
       scenario,
+      runtimeApplied,
+      runtimeReasonCode: runtimeApplied ? "" : s(runtimeResolution?.reasonCode),
+      activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
+      match: runtimeApplied ? obj(runtimeConfig.match) : null,
       session: payload,
       clientSecret: payload?.client_secret?.value || "",
     });
