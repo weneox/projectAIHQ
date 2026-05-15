@@ -14,3 +14,4 @@ export * from "./settings.js";
 export * from "./overview.js";
 export * from "./callRead.js";
 export * from "./sessionLookup.js";
+export { processVoiceTenantConfig } from "./internal/tenantConfig.js";

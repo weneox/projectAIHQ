@@ -45,7 +45,9 @@ export default function VoiceLab() {
   const [model, setModel] = useState("gpt-4o-realtime-preview");
   const [voice, setVoice] = useState("alloy");
   const [instructions, setInstructions] = useState(DEFAULT_INSTRUCTIONS);
-  const [events, setEvents] = useState([]);
+    const [useTenantRuntime, setUseTenantRuntime] = useState(true);
+  const [runtimeMeta, setRuntimeMeta] = useState(null);
+const [events, setEvents] = useState([]);
 
   const pcRef = useRef(null);
   const dcRef = useRef(null);
@@ -108,7 +110,59 @@ export default function VoiceLab() {
         model,
         voice,
         instructions,
+        useTenantRuntime,
+        provider: "browser_lab",
+        toNumber: "browser_lab",
       });
+
+      setRuntimeMeta({
+
+
+        runtimeApplied: session?.runtimeApplied === true,
+
+
+        reasonCode: s(session?.runtimeReasonCode),
+
+
+        tenantKey: s(session?.tenantKey),
+
+
+        activeVoiceChannel: session?.activeVoiceChannel || null,
+
+
+        match: session?.match || null,
+
+
+      });
+
+
+
+      const sessionModel = s(session?.model, model);
+
+
+      const sessionVoice = s(session?.voice, voice);
+
+
+
+      if (sessionModel && sessionModel !== model) {
+
+
+        setModel(sessionModel);
+
+
+      }
+
+
+
+      if (sessionVoice && sessionVoice !== voice) {
+
+
+        setVoice(sessionVoice);
+
+
+      }
+
+
 
       const clientSecret = readRealtimeClientSecret(session);
       if (!clientSecret) {
@@ -156,7 +210,7 @@ export default function VoiceLab() {
       await pc.setLocalDescription(offer);
 
       const sdpResponse = await fetch(
-        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`,
+        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(sessionModel)}`,
         {
           method: "POST",
           body: offer.sdp,
@@ -219,6 +273,21 @@ export default function VoiceLab() {
         title="Test qaydası"
         description="Qulaqlıq tax, sakit otaqda danış, assistant sözünü kəsəndə dayanırmı, qısa cavab verirmi və dili düzgün tuturmu yoxla."
       />
+      {runtimeMeta ? (
+        <InlineNotice
+          tone={runtimeMeta.runtimeApplied ? "info" : "warning"}
+          title={runtimeMeta.runtimeApplied ? "Tenant runtime applied" : "Manual fallback mode"}
+          description={
+            runtimeMeta.runtimeApplied
+              ? "Voice Lab tenant config ilə başladı. Channel: " +
+                s(runtimeMeta.activeVoiceChannel?.id, "default") +
+                "."
+              : "Tenant runtime tətbiq olunmadı: " +
+                s(runtimeMeta.reasonCode, "manual fallback") +
+                "."
+          }
+        />
+      ) : null}
 
       {error ? (
         <InlineNotice tone="danger" title="Voice Lab error" description={error} />
@@ -238,7 +307,25 @@ export default function VoiceLab() {
 
           <audio ref={remoteAudioRef} autoPlay />
 
-          <div className="grid gap-3 md:grid-cols-2">
+
+          <label className="mb-4 flex items-start gap-3 rounded-2xl border border-line-soft bg-surface-subtle p-3 text-sm text-text">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={useTenantRuntime}
+              onChange={(event) => setUseTenantRuntime(event.target.checked)}
+              disabled={isLive || isBusy}
+            />
+            <span>
+              <span className="block font-semibold">Use tenant voice runtime</span>
+              <span className="block text-xs leading-5 text-text-muted">
+                Enabled olanda lab tenant voice config/prompt/channel metadata istifadə edir,
+                alınmasa manual prompt-a fallback edir.
+              </span>
+            </span>
+          </label>
+
+<div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
                 Model
@@ -272,7 +359,7 @@ export default function VoiceLab() {
 
           <label className="mt-4 block space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Test prompt
+              {useTenantRuntime ? "Fallback / override prompt" : "Test prompt"}
             </span>
             <textarea
               className="min-h-[180px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-3 text-sm leading-6 text-text outline-none focus:border-text"
