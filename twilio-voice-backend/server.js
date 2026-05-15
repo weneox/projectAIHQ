@@ -37,7 +37,7 @@ const allowedOrigins = Array.from(
 const app = express();
 const server = http.createServer(app);
 const logger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   env: cfg.APP_ENV,
 });
 const WebSocketServer =
@@ -118,7 +118,7 @@ const runtimeIncidentClient = createAihqRuntimeIncidentClient({
 configureRuntimeSignalPersistence((incident) =>
   runtimeIncidentClient.recordIncident({
     ...incident,
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
   })
 );
 
@@ -134,7 +134,7 @@ logger.info("voice.boot_readiness.checked", {
 app.get(
   "/health",
   createHealthHandler({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     bootReadiness,
   })
 );
@@ -142,7 +142,7 @@ app.get(
 app.get(
   "/runtime-signals",
   createRuntimeSignalsHandler({
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     bootReadiness,
   })
 );
@@ -159,7 +159,7 @@ app.use((req, res, next) => {
   return res.status(503).json({
     ok: false,
     error: "service_intentionally_unavailable",
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     bootReadiness,
   });
 });

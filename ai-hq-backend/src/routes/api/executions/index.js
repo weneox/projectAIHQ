@@ -19,11 +19,11 @@ import {
 export function executionsRoutes({ db, wsHub }) {
   const r = express.Router();
   const requireTwilioVoiceSync = createInternalTokenGuard({
-    allowedServices: ["twilio-voice-backend"],
+    allowedServices: ["twilio-voice-backend", "voice-gateway-backend"],
     allowedAudiences: ["aihq-backend.executions.voice-sync"],
   });
   const requireRuntimeIncidentSignal = createInternalTokenGuard({
-    allowedServices: ["meta-bot-backend", "twilio-voice-backend"],
+    allowedServices: ["meta-bot-backend", "twilio-voice-backend", "voice-gateway-backend"],
     allowedAudiences: ["aihq-backend.runtime-signals.incidents"],
   });
 

@@ -24,7 +24,7 @@ function buildSharedReadiness(bootReadiness = {}) {
 }
 
 export function buildHealthResponse({
-  service = "twilio-voice-backend",
+  service = "voice-gateway-backend",
   bootReadiness = {},
 } = {}) {
   const readiness = buildSharedReadiness(bootReadiness);
@@ -49,7 +49,7 @@ export function createHealthHandler(options = {}) {
 }
 
 export function buildRuntimeSignalsResponse({
-  service = "twilio-voice-backend",
+  service = "voice-gateway-backend",
   bootReadiness = {},
 } = {}) {
   return {

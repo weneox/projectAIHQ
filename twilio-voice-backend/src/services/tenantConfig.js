@@ -22,7 +22,7 @@ function obj(v) {
 }
 
 const baseLogger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   component: "tenant-config",
 });
 

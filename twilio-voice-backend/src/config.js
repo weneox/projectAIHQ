@@ -70,7 +70,7 @@ export const cfg = {
     s(process.env.AIHQ_INTERNAL_TOKEN),
   AIHQ_INTERNAL_SERVICE: s(
     process.env.AIHQ_INTERNAL_SERVICE,
-    "twilio-voice-backend"
+    "voice-gateway-backend"
   ),
   REQUIRE_OPERATIONAL_READINESS_ON_BOOT: prodDefaultBool(
     process.env.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,

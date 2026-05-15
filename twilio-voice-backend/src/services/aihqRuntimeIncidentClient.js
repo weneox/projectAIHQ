@@ -23,13 +23,13 @@ async function safeReadJson(res) {
 }
 
 const logger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   component: "aihq-runtime-incident-client",
 });
 
 function normalizeIncident(incident = {}) {
   return {
-    service: s(incident.service || "twilio-voice-backend"),
+    service: s(incident.service || "voice-gateway-backend"),
     area: s(incident.area || incident.category || "runtime"),
     severity: s(incident.severity || incident.level || "warn").toLowerCase(),
     code: s(incident.code || "runtime_signal"),

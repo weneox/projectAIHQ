@@ -34,7 +34,7 @@ function writeResult(res, result) {
 export function voiceInternalRoutes({ db, wsHub = null }) {
   const r = express.Router();
   const requireTwilioVoiceInternal = createVoiceInternalTokenGuard({
-    allowedServices: ["twilio-voice-backend"],
+    allowedServices: ["twilio-voice-backend", "voice-gateway-backend"],
     allowedAudiences: ["aihq-backend.voice.internal"],
   });
 

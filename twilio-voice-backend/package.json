@@ -1,5 +1,5 @@
-﻿{
-  "name": "twilio-voice-backend",
+{
+  "name": "voice-gateway-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",

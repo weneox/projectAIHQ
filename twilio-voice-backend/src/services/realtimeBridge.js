@@ -21,7 +21,7 @@ import { s, sendTwilioMedia, getBridgeEnv } from "./bridge/shared.js";
 import { incrementRuntimeMetric, recordRuntimeSignal } from "./runtimeObservability.js";
 
 const logger = createStructuredLogger({
-  service: "twilio-voice-backend",
+  service: "voice-gateway-backend",
   component: "realtime-bridge",
 });
 

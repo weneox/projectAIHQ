@@ -6,7 +6,7 @@ export function healthRoutes({ db }) {
   const r = express.Router();
   const { getApiRoot, getWebsiteLane } = createHealthHandlers({ db });
   const requireSidecarHealth = createInternalTokenGuard({
-    allowedServices: ["meta-bot-backend", "twilio-voice-backend"],
+    allowedServices: ["meta-bot-backend", "twilio-voice-backend", "voice-gateway-backend"],
     allowedAudiences: ["aihq-backend.health"],
   });
   const requireWebsiteLaneHealth = createInternalTokenGuard({

@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    service: "twilio-voice-backend",
+    service: "voice-gateway-backend",
     env: cfg.APP_ENV,
     port: cfg.PORT,
   });
@@ -32,5 +32,5 @@ app.get("/health", (_req, res) => {
 app.use("/", twilioRouter());
 
 server.listen(cfg.PORT, () => {
-  console.log(`[twilio-voice-backend] listening on :${cfg.PORT}`);
+  console.log(`[voice-gateway-backend] listening on :${cfg.PORT}`);
 });
