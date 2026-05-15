@@ -1,4 +1,4 @@
-﻿import {
+import {
   BarChart3,
   BookOpenCheck,
   BriefcaseBusiness,
@@ -6,6 +6,7 @@
   LayoutDashboard,
   PlugZap,
   Rocket,
+  Radio,
   Settings,
   Users,
   UserRound,
@@ -99,6 +100,19 @@ const CRM_SECTIONS = [
 ];
 
 const SECONDARY_SECTIONS = [
+  {
+    id: "voice-lab",
+    label: "Voice Lab",
+    icon: Radio,
+    to: "/voice-lab",
+    paths: ["/voice-lab"],
+    contextGroups: [
+      {
+        title: "Naviqasiya",
+        items: [{ label: "Voice Lab", to: "/voice-lab" }],
+      },
+    ],
+  },
   {
     id: "reports",
     label: "Hesabatlar",

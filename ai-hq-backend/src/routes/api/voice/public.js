@@ -166,6 +166,94 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
   }
 }
 
+
+function cleanVoiceLabText(value = "", max = 2400) {
+  return s(value).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
+}
+
+function pickVoiceLabModel(value = "") {
+  const raw = s(value, "gpt-4o-realtime-preview").toLowerCase();
+  if (raw.startsWith("gpt-4o-realtime")) return raw;
+  if (raw.startsWith("gpt-realtime")) return raw;
+  return "gpt-4o-realtime-preview";
+}
+
+function pickVoiceLabVoice(value = "") {
+  const raw = s(value, "alloy").toLowerCase();
+  return ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"].includes(raw)
+    ? raw
+    : "alloy";
+}
+
+async function handleVoiceLabSession(req, res) {
+  const logger = getRouteLogger(req, "voice.lab.session");
+  try {
+    const apiKey = s(process.env.OPENAI_API_KEY);
+    if (!apiKey) {
+      return fail(res, 503, "openai_api_key_missing");
+    }
+
+    if (typeof fetch !== "function") {
+      return fail(res, 503, "fetch_unavailable");
+    }
+
+    const model = pickVoiceLabModel(req.body?.model);
+    const voice = pickVoiceLabVoice(req.body?.voice);
+    const instructions =
+      cleanVoiceLabText(req.body?.instructions) ||
+      "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
+
+    const upstream = await fetch("https://api.openai.com/v1/realtime/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        voice,
+        instructions,
+        modalities: ["audio", "text"],
+      }),
+    });
+
+    const text = await upstream.text().catch(() => "");
+    let payload = {};
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      payload = { raw: text };
+    }
+
+    if (!upstream.ok) {
+      logger.warn("voice.lab.session.upstream_failed", {
+        status: upstream.status,
+        error: s(payload?.error?.message || payload?.error || payload?.raw).slice(0, 240),
+      });
+      return fail(res, upstream.status || 502, "voice_lab_session_failed", {
+        status: upstream.status,
+        message: s(payload?.error?.message || payload?.error || "OpenAI realtime session failed"),
+      });
+    }
+
+    return ok(res, {
+      model,
+      voice,
+      session: payload,
+      clientSecret: payload?.client_secret?.value || "",
+    });
+  } catch (err) {
+    logger.error("voice.lab.session.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.lab.session",
+      reasonCode: "voice_lab_session_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_lab_session_failed");
+  }
+}
+
 export function voiceRoutes({
   db,
   dbDisabled = false,
@@ -190,6 +278,8 @@ export function voiceRoutes({
   r.post("/voice/settings", requireOperatorSurfaceAccess, (req, res) =>
     handleSettingsPost(req, res, { db, dbDisabled, audit })
   );
+
+  r.post("/voice/lab/session", requireOperatorSurfaceAccess, handleVoiceLabSession);
 
   r.post("/voice/toggle", requireOperatorSurfaceAccess, async (req, res) => {
     const logger = getRouteLogger(req, "voice.toggle");
