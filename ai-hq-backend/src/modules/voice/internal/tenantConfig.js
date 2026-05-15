@@ -23,7 +23,8 @@ import {
 export async function processVoiceTenantConfig({
   db,
   tenantKey,
-  toNumber,
+  toNumber,  provider = "twilio",
+
   getRuntime = getTenantBrainRuntime,
 }) {
   const context = await resolveVoiceTenantContext({
@@ -153,6 +154,7 @@ export async function processVoiceTenantConfig({
     buildVoiceConfigFromProjectedRuntime(stableProjectedRuntime, {
       tenantKey: resolvedTenantKey,
       toNumber,
+      provider,
     })
   );
 

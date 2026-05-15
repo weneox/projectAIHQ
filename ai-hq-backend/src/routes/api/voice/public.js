@@ -43,6 +43,7 @@ import {
   listVoiceCallSessionsForCall,
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
+  processVoiceTenantConfig,
 } from "../../../modules/voice/index.js";
 
 const fallbackLogger = createLogger({
@@ -167,6 +168,77 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
 }
 
 
+
+const DEFAULT_VOICE_LAB_INSTRUCTIONS =
+  "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
+
+function readVoiceLabConfigPayload(result = {}) {
+  return obj(result?.payload || result?.config || result?.data || {});
+}
+
+function compactVoiceChannel(channel = {}) {
+  const item = obj(channel);
+  return {
+    id: s(item.id || item.channelId || item.channel_id),
+    provider: s(item.provider),
+    label: s(item.label),
+    externalNumber: s(item.externalNumber || item.external_number),
+    routeKey: s(item.routeKey || item.route_key),
+    ready: item.ready === true,
+    reasonCode: s(item.reasonCode || item.reason_code),
+  };
+}
+
+async function resolveVoiceLabRuntimeConfig(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime, logger }
+) {
+  if (req.body?.useTenantRuntime === false) {
+    return { ok: false, reasonCode: "voice_lab_manual_mode" };
+  }
+
+  if (dbDisabled || !db) {
+    return { ok: false, reasonCode: "voice_lab_db_unavailable" };
+  }
+
+  const scope = await requireTenantScope(req, res, db);
+  if (!scope) {
+    return { ok: false, handled: true, reasonCode: "tenant_required" };
+  }
+
+  try {
+    const result = await processVoiceTenantConfig({
+      db,
+      tenantKey: scope.tenantKey,
+      toNumber: s(req.body?.toNumber || "browser_lab"),
+      provider: "browser_lab",
+      getRuntime,
+    });
+
+    if (result?.ok !== true) {
+      const reasonCode = s(
+        result?.error || result?.details?.reasonCode || "voice_lab_runtime_unavailable"
+      );
+      logger?.warn?.("voice.lab.runtime_unavailable", {
+        reasonCode,
+        statusCode: Number(result?.statusCode || 0),
+      });
+      return { ok: false, reasonCode };
+    }
+
+    return {
+      ok: true,
+      config: readVoiceLabConfigPayload(result),
+    };
+  } catch (err) {
+    logger?.warn?.("voice.lab.runtime_resolution_failed", {
+      error: s(err?.message || err),
+    });
+    return { ok: false, reasonCode: "voice_lab_runtime_resolution_failed" };
+  }
+}
+
 function cleanVoiceLabText(value = "", max = 2400) {
   return s(value).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
 }
@@ -279,7 +351,9 @@ export function voiceRoutes({
     handleSettingsPost(req, res, { db, dbDisabled, audit })
   );
 
-  r.post("/voice/lab/session", requireOperatorSurfaceAccess, handleVoiceLabSession);
+  r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceLabSession(req, res, { db, dbDisabled, getRuntime })
+  );
 
   r.post("/voice/toggle", requireOperatorSurfaceAccess, async (req, res) => {
     const logger = getRouteLogger(req, "voice.toggle");
