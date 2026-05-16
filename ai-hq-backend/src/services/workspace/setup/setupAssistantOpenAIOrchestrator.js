@@ -362,7 +362,7 @@ const REASONER_SCHEMA = {
   properties: {
     action: {
       type: "string",
-      enum: ["direct_answer", "correction", "off_topic", "unclear"],
+      enum: ["direct_answer", "correction", "business_brief", "off_topic", "unclear"],
     },
     targetStep: { type: "string" },
     reason: { type: "string" },
@@ -1880,10 +1880,16 @@ async function callOpenAIPolisher({
 
 function buildReasonerSystemPrompt(locale = "az-AZ") {
   return [
-    "You are a reasoning layer for a business setup assistant.",
+    "You are the intelligence layer for an AI business setup assistant.",
     `Output locale is ${locale}.`,
-    "Your job is to understand whether the latest user message answered the current step or corrected another step.",
-    "Do not invent facts.",
+    "Your job is not to match keywords. Your job is to understand the business from the latest user message and current setup state.",
+    "The user may write in any language and may describe the whole business in 1-3 sentences.",
+    "Extract every explicit business fact you can: identity, description, services, contact routes, hours, pricing posture, handoff/risk rules, website URL, and assistant behavior guidance.",
+    "If the message is a rich business brief, set action to business_brief.",
+    "If it answers the current setup question, set action to direct_answer.",
+    "If it corrects an earlier fact, set action to correction and targetStep to the corrected area.",
+    "If you are not sure, leave fields empty and set action to unclear.",
+    "Never invent facts. Do not infer exact prices, hours, addresses, availability, medical/legal claims, or guarantees unless explicitly stated.",
     "Return strict JSON only.",
   ].join(" ");
 }
@@ -1896,14 +1902,37 @@ function buildReasonerUserPrompt({
   latestMessage = "",
 } = {}) {
   return [
-    "Current setup state:",
+    "Analyze this setup turn as a business brain extractor, not as a keyword parser.",
     JSON.stringify(
       {
         locale,
         currentStep,
         currentQuestion: obj(question),
-        preview: obj(preview),
+        currentPreview: obj(preview),
         latestUserMessage: s(latestMessage),
+        extractionRules: {
+          websiteIsOptional: true,
+          googleMapsDisabledForV1: true,
+          manualBriefAllowed: true,
+          maxCriticalMissingQuestionsLater: 5,
+          doNotInventUnknownBusinessFacts: true,
+          emptyStringMeansNotProvided: true,
+        },
+        outputMeaning: {
+          companyName: "explicit business or brand name only",
+          description: "what the business is or does",
+          services: "explicit services/products/offerings",
+          contacts: "explicit phone, WhatsApp, email, social, or contact links",
+          hours: "explicit working hours only",
+          pricingPosture: "explicit pricing logic, not invented exact pricing",
+          humanHandoff: "explicit or safety-critical human handoff/risk rules",
+          websiteUrl: "explicit website URL only",
+          pricingBehavior: "how assistant should answer pricing if explicit",
+          locationBehavior: "how assistant should answer location if explicit",
+          bookingBehavior: "how assistant should route bookings if explicit",
+          contactBehavior: "which contact channel to prefer if explicit",
+          handoffBehavior: "how to hand off to a person if explicit",
+        },
       },
       null,
       2
@@ -2153,6 +2182,81 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
   }
 
+  let openaiBusinessBrainAttempted = false;
+
+  if (
+    runtime.forceFallback !== true &&
+    forceFallback !== true &&
+    hasOpenAISetupAssistant()
+  ) {
+    openaiBusinessBrainAttempted = true;
+
+    try {
+      const preview = buildCurrentPreview(draft, review);
+      const reasoned = await callOpenAIReasoner({
+        locale,
+        currentStep,
+        question: currentQuestion,
+        preview,
+        latestMessage: safeMessage,
+        model: runtime.model,
+        timeoutMs: runtime.timeoutMs,
+        maxOutputTokens: runtime.maxOutputTokens,
+      });
+
+      const action = s(reasoned.action).toLowerCase();
+      const targetStep = normalizeQuestionKey(
+        s(reasoned.targetStep || currentStep)
+      );
+      const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
+
+      if (
+        ["direct_answer", "correction", "business_brief"].includes(action) &&
+        hasAcceptedPatchSignal(reasonedPatch)
+      ) {
+        const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
+        const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
+          mergedDraft,
+          review,
+          sources,
+          locale,
+          runtime,
+        });
+
+        if (action === "correction" && targetStep) {
+          return buildCorrectionTurn({
+            locale,
+            currentStep,
+            targetStep,
+            draft,
+            review,
+            sources,
+            latestMessage: safeMessage,
+            correctionPatch: reasonedPatch,
+            model: runtime.model,
+            provider: "openai_business_brain",
+            polishedDraftOverride,
+          });
+        }
+
+        return buildDirectAnswerTurn({
+          locale,
+          currentStep,
+          draft,
+          review,
+          sources,
+          latestMessage: safeMessage,
+          acceptedPatch: reasonedPatch,
+          model: runtime.model,
+          provider: "openai_business_brain",
+          polishedDraftOverride,
+        });
+      }
+    } catch {
+      // Keep deterministic setup fallback available if the LLM brain is unavailable.
+    }
+  }
+
   const correctionTarget = detectCorrectionTargetStep(safeMessage, currentStep);
   if (correctionTarget && correctionTarget !== currentStep) {
     const correctionText = stripCorrectionPrefix(safeMessage);
@@ -2223,6 +2327,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
   }
 
   if (
+    openaiBusinessBrainAttempted !== true &&
     runtime.forceFallback !== true &&
     forceFallback !== true &&
     hasOpenAISetupAssistant()
@@ -2247,7 +2352,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
 
       if (
-        (action === "direct_answer" || action === "correction") &&
+        ["direct_answer", "correction", "business_brief"].includes(action) &&
         hasAcceptedPatchSignal(reasonedPatch)
       ) {
         const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
