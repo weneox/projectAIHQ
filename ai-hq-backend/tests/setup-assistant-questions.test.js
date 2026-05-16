@@ -1,7 +1,8 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  SECTION_ORDER,
   __test__ as questionsTest,
   getNextQuestion,
   isQuestionSatisfied,
@@ -11,7 +12,7 @@ import {
   buildDraft,
 } from "./setup-assistant-test-helpers.js";
 
-test("business steps stay ahead of behavior even when behavior becomes relevant", () => {
+test("business steps stay ordered and behavior steps are no longer part of setup interview", () => {
   const draft = buildDraft({
     businessProfile: {
       description: "Dental clinic in Baku",
@@ -27,12 +28,17 @@ test("business steps stay ahead of behavior even when behavior becomes relevant"
     },
   });
 
+  assert.deepEqual(SECTION_ORDER, [
+    "company",
+    "description",
+    "services",
+    "contacts",
+    "hours",
+    "pricing",
+    "handoff",
+  ]);
   assert.equal(
     questionsTest.isBehaviorStepRelevant("pricing_behavior", draft),
-    true
-  );
-  assert.equal(
-    questionsTest.isBehaviorStepRelevant("location_behavior", draft),
     false
   );
   assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }).key, "company");
@@ -46,33 +52,8 @@ test("getNextQuestion stops after business steps are complete", () => {
   assert.equal(next, null);
 });
 
-test("satisfied behavior steps are skipped and irrelevant behavior is auto-satisfied", () => {
-  const draft = buildCompleteBusinessDraft({
-    assistantBehaviorDraft: {
-      greetingPolicy: {
-        mode: "brief_professional",
-      },
-      closingPolicy: {
-        mode: "brief_invite",
-      },
-      tonePolicy: {
-        mode: "direct_clear",
-        messageLength: "concise",
-      },
-      pricingPolicy: {
-        mode: "ask_service_first",
-        askServiceFirst: true,
-      },
-      contactPolicy: {
-        mode: "call_first",
-        preferredChannel: "phone",
-      },
-      handoffPolicy: {
-        mode: "direct_handoff",
-        requiresReason: false,
-      },
-    },
-  });
+test("legacy behavior steps are treated as satisfied compatibility no-ops", () => {
+  const draft = buildCompleteBusinessDraft();
 
   assert.equal(isQuestionSatisfied("greeting_behavior", draft), true);
   assert.equal(isQuestionSatisfied("closing_behavior", draft), true);
