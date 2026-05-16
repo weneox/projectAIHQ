@@ -21,8 +21,6 @@ import {
   mergeSetupAssistantDraft,
   normalizeSetupAssistantDraftPatchBody,
   parseProfileAnswer,
-  patchFromAnswer,
-  resolveIntentOnlyPatch,
 } from "./setupAssistantApp/patching.js";
 import { getNextQuestion } from "./setupAssistantApp/questions.js";
 import { buildSetupAssistantSeedFromReview } from "./setupAssistantApp/seed.js";
@@ -59,8 +57,6 @@ export const __test__ = {
   getNextQuestion,
   mergeSetupAssistantDraft,
   normalizeSetupAssistantDraftPatchBody,
-  patchFromAnswer,
   parseProfileAnswer,
   readSetupAssistantView,
-  resolveIntentOnlyPatch,
 };

@@ -1,4 +1,4 @@
-import { arr, compactDraftObject, mergeDraftState, obj, s } from "../draftShared.js";
+﻿import { arr, compactDraftObject, mergeDraftState, obj, s } from "../draftShared.js";
 import {
   parseHoursNote,
   parsePricingNote,
@@ -6,22 +6,11 @@ import {
   sanitizeStructuredHours,
 } from "../setupAssistantParser.js";
 import { normalizeStoredSetupAssistantPayload } from "./sessionPayload.js";
-import { INTENT_ONLY_RESPONSES, normalizeQuestionKey } from "./questions.js";
+import { normalizeQuestionKey } from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
-  buildUrlCandidate,
   inferContactType,
   normalizeBehaviorPolicyKey,
-  normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
-  normalizeClosingBehaviorMode as importedNormalizeClosingBehaviorMode,
-  normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
-  normalizeEmpathyLevelMode as importedNormalizeEmpathyLevelMode,
-  normalizeGreetingBehaviorMode as importedNormalizeGreetingBehaviorMode,
-  normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
-  normalizeMessageLengthMode as importedNormalizeMessageLengthMode,
-  normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
-  normalizeToneBehaviorMode as importedNormalizeToneBehaviorMode,
   normalizeWebsiteUrl,
   nowIso,
   splitAnswerList,
@@ -33,85 +22,14 @@ import {
   mergeSourceMetadata,
   sanitizeAssistantBehaviorDraft,
   sanitizeAssistantState,
-  sanitizeBookingPolicy,
   sanitizeBusinessProfile,
-  sanitizeClosingPolicy,
-  sanitizeContactPolicy,
   sanitizeContacts,
-  sanitizeGreetingPolicy,
-  sanitizeHandoffPolicy,
   sanitizeHandoffRules,
-  sanitizeLocationPolicy,
-  sanitizePlatformDefaults,
-  sanitizePricingPolicy,
   sanitizePricingPosture,
   sanitizeProgress,
   sanitizeServices,
   sanitizeSourceMetadata,
-  sanitizeTenantOverrides,
-  sanitizeTonePolicy,
 } from "./sanitize.js";
-
-const normalizePricingBehaviorModeSafe =
-  typeof importedNormalizePricingBehaviorMode === "function"
-    ? importedNormalizePricingBehaviorMode
-    : () => "";
-
-const normalizeLocationBehaviorModeSafe =
-  typeof importedNormalizeLocationBehaviorMode === "function"
-    ? importedNormalizeLocationBehaviorMode
-    : () => "";
-
-const normalizeBookingBehaviorModeSafe =
-  typeof importedNormalizeBookingBehaviorMode === "function"
-    ? importedNormalizeBookingBehaviorMode
-    : () => "";
-
-const normalizeContactBehaviorModeSafe =
-  typeof importedNormalizeContactBehaviorMode === "function"
-    ? importedNormalizeContactBehaviorMode
-    : () => "";
-
-const normalizeHandoffBehaviorModeSafe =
-  typeof importedNormalizeHandoffBehaviorMode === "function"
-    ? importedNormalizeHandoffBehaviorMode
-    : () => "";
-
-const normalizeGreetingBehaviorModeSafe =
-  typeof importedNormalizeGreetingBehaviorMode === "function"
-    ? importedNormalizeGreetingBehaviorMode
-    : () => "";
-
-const normalizeClosingBehaviorModeSafe =
-  typeof importedNormalizeClosingBehaviorMode === "function"
-    ? importedNormalizeClosingBehaviorMode
-    : () => "";
-
-const normalizeToneBehaviorModeSafe =
-  typeof importedNormalizeToneBehaviorMode === "function"
-    ? importedNormalizeToneBehaviorMode
-    : () => "";
-
-const normalizeMessageLengthModeSafe =
-  typeof importedNormalizeMessageLengthMode === "function"
-    ? importedNormalizeMessageLengthMode
-    : () => "";
-
-const normalizeEmpathyLevelModeSafe =
-  typeof importedNormalizeEmpathyLevelMode === "function"
-    ? importedNormalizeEmpathyLevelMode
-    : () => "";
-
-const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
-const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
-const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
-const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
-const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
-const normalizeGreetingBehaviorMode = normalizeGreetingBehaviorModeSafe;
-const normalizeClosingBehaviorMode = normalizeClosingBehaviorModeSafe;
-const normalizeToneBehaviorMode = normalizeToneBehaviorModeSafe;
-const normalizeMessageLengthMode = normalizeMessageLengthModeSafe;
-const normalizeEmpathyLevelMode = normalizeEmpathyLevelModeSafe;
 
 function normalizeStep(value = "") {
   const raw = s(value).toLowerCase();
@@ -149,50 +67,36 @@ function behaviorPolicyKeyFromStep(step = "") {
   return "";
 }
 
-function resolveDraftLocale(current = {}, seed = {}) {
-  const currentDraft = normalizeStoredSetupAssistantPayload(current, seed);
-  return s(arr(currentDraft.languages)[0] || "az-AZ");
+function pickAliasedField(source = {}, aliases = []) {
+  for (const key of aliases) {
+    if (Object.prototype.hasOwnProperty.call(obj(source), key)) {
+      return {
+        provided: true,
+        value: source[key],
+      };
+    }
+  }
+
+  return {
+    provided: false,
+    value: undefined,
+  };
 }
 
-function buildContactsFromAnswer(answer = "") {
-  const items = splitAnswerList(answer, 12).map((item, index) => ({
-    type: inferContactType(item),
-    label: index === 0 ? "Primary" : `Contact ${index + 1}`,
-    value: item,
-    preferred: index === 0,
-    visibility: "public",
-  }));
+function resolvePatchRoot(body = {}) {
+  const draft = obj(body.draft);
+  if (Object.keys(draft).length) return draft;
 
-  return sanitizeContacts(items);
-}
+  const setup = obj(body.setup);
+  if (Object.keys(setup).length) return setup;
 
-function buildHandoffFromAnswer(answer = "") {
-  const text = s(answer);
-  if (!text) return {};
-
-  return sanitizeHandoffRules({
-    enabled: true,
-    summary: text,
-    triggers: splitAnswerList(text, 24),
-  });
+  return obj(body);
 }
 
 function extractWebsiteCandidate(text = "") {
   const candidate = buildRecognizedSourceCandidate(text);
   if (!candidate || candidate.type !== "website") return "";
   return candidate.value;
-}
-
-function extractAnyUrlCandidate(text = "") {
-  const sourceCandidate = buildRecognizedSourceCandidate(text);
-  if (sourceCandidate?.value) return sourceCandidate.value;
-
-  for (const part of splitAnswerList(text, 16)) {
-    const candidate = buildUrlCandidate(part);
-    if (candidate) return normalizeWebsiteUrl(candidate);
-  }
-
-  return "";
 }
 
 function stripRecognizedSourceFromText(text = "") {
@@ -256,14 +160,7 @@ export function parseProfileAnswer(answer = "", current = {}) {
   }
 
   if (!profile.companyName && !profile.description) {
-    const words = single.split(/\s+/).filter(Boolean);
-
-    if (words.length <= 6 && !/[.!?]/.test(single)) {
-      out.companyName = single;
-    } else {
-      out.description = single;
-    }
-
+    out.description = single;
     return compactDraftObject(out);
   }
 
@@ -276,164 +173,31 @@ export function parseProfileAnswer(answer = "", current = {}) {
   return compactDraftObject(out);
 }
 
-function buildAllDayHoursPatch() {
-  return sanitizeStructuredHours(
-    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map(
-      (day) => ({
-        day,
-        enabled: true,
-        closed: false,
-        allDay: true,
-        appointmentOnly: false,
-        openTime: "",
-        closeTime: "",
-        notes: "",
-      })
-    )
-  );
+function buildContactsFromAnswer(answer = "") {
+  const items = splitAnswerList(answer, 12).map((item, index) => ({
+    type: inferContactType(item),
+    label: index === 0 ? "Primary" : `Contact ${index + 1}`,
+    value: item,
+    preferred: index === 0,
+    visibility: "public",
+  }));
+
+  return sanitizeContacts(items);
 }
 
-function buildAppointmentOnlyHoursPatch() {
-  return sanitizeStructuredHours(
-    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map(
-      (day) => ({
-        day,
-        enabled: false,
-        closed: false,
-        allDay: false,
-        appointmentOnly: true,
-        openTime: "",
-        closeTime: "",
-        notes: "Appointment only",
-      })
-    )
-  );
-}
+function buildHandoffFromAnswer(answer = "") {
+  const text = s(answer);
+  if (!text) return {};
 
-function buildStepIntentPatch(step = "") {
-  const safeStep = normalizeStep(step);
-  if (!safeStep) return {};
-
-  return compactDraftObject({
-    progress: {
-      currentQuestionKey: safeStep,
-      updatedAt: nowIso(),
-    },
-    assistantState: {
-      activeSection: safeStep,
-      activeBehaviorPolicy: isBehaviorStep(safeStep)
-        ? behaviorPolicyKeyFromStep(safeStep)
-        : "",
-    },
+  return sanitizeHandoffRules({
+    enabled: true,
+    summary: text,
+    triggers: splitAnswerList(text, 24),
   });
 }
 
-export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
-  void current;
-
-  const safeStep = normalizeStep(step);
-  const normalizedAnswer = s(answer).toLowerCase();
-  const intent = INTENT_ONLY_RESPONSES[normalizedAnswer];
-
-  if (!intent) return {};
-
-  if (intent === "__skip__") {
-    return compactDraftObject({
-      progress: {
-        skippedQuestions: [safeStep || "services"],
-        lastAnsweredStep: safeStep || "services",
-        currentQuestionKey: safeStep || "services",
-        updatedAt: nowIso(),
-      },
-      assistantState: {
-        activeSection: safeStep || "services",
-        activeBehaviorPolicy: isBehaviorStep(safeStep)
-          ? behaviorPolicyKeyFromStep(safeStep)
-          : "",
-      },
-    });
-  }
-
-  if (intent === "__continue__") {
-    return buildStepIntentPatch(safeStep || "company");
-  }
-
-  if (intent === "__always_open__") {
-    return compactDraftObject({
-      hours: buildAllDayHoursPatch(),
-      assistantState: {
-        activeSection: "hours",
-        lastUpdatedSection: "hours",
-      },
-      progress: {
-        lastAnsweredStep: "hours",
-        currentQuestionKey: "hours",
-        updatedAt: nowIso(),
-      },
-    });
-  }
-
-  if (intent === "__appointment_only__") {
-    return compactDraftObject({
-      hours: buildAppointmentOnlyHoursPatch(),
-      assistantState: {
-        activeSection: "hours",
-        lastUpdatedSection: "hours",
-      },
-      progress: {
-        lastAnsweredStep: "hours",
-        currentQuestionKey: "hours",
-        updatedAt: nowIso(),
-      },
-    });
-  }
-
-  if (intent === "__quote_required__") {
-    return compactDraftObject({
-      pricingPosture: sanitizePricingPosture({
-        pricingMode: "quote_required",
-        publicSummary: "Exact pricing requires a quote.",
-        requiresOperatorForExactQuote: true,
-        allowPublicPriceReplies: false,
-      }),
-      assistantState: {
-        activeSection: "pricing",
-        lastUpdatedSection: "pricing",
-      },
-      progress: {
-        lastAnsweredStep: "pricing",
-        currentQuestionKey: "pricing",
-        updatedAt: nowIso(),
-      },
-    });
-  }
-
-  return {};
-}
-
-function pickAliasedField(source = {}, aliases = []) {
-  for (const key of aliases) {
-    if (Object.prototype.hasOwnProperty.call(obj(source), key)) {
-      return {
-        provided: true,
-        value: source[key],
-      };
-    }
-  }
-
-  return {
-    provided: false,
-    value: undefined,
-  };
-}
-
 function normalizeDirectPatchBody(body = {}) {
-  const root = obj(body?.draft)
-    ? obj(body.draft)
-    : obj(body?.setup)
-      ? obj(body.setup)
-      : obj(body);
-
+  const root = resolvePatchRoot(body);
   const out = {};
 
   const businessProfile = pickAliasedField(root, [
@@ -505,51 +269,29 @@ function normalizeDirectPatchBody(body = {}) {
     );
   }
 
-  const platformDefaults = pickAliasedField(root, [
-    "platformDefaults",
-    "platform_defaults",
-  ]);
-  const tenantOverrides = pickAliasedField(root, [
-    "tenantOverrides",
-    "tenant_overrides",
-  ]);
-  const greetingPolicy = pickAliasedField(root, ["greetingPolicy", "greeting_policy"]);
-  const closingPolicy = pickAliasedField(root, ["closingPolicy", "closing_policy"]);
-  const tonePolicy = pickAliasedField(root, ["tonePolicy", "tone_policy"]);
-  const pricingPolicy = pickAliasedField(root, ["pricingPolicy", "pricing_policy"]);
-  const locationPolicy = pickAliasedField(root, ["locationPolicy", "location_policy"]);
-  const bookingPolicy = pickAliasedField(root, ["bookingPolicy", "booking_policy"]);
-  const contactPolicy = pickAliasedField(root, ["contactPolicy", "contact_policy"]);
-  const handoffPolicy = pickAliasedField(root, ["handoffPolicy", "handoff_policy"]);
+  const behaviorPatch = {};
+  for (const [targetKey, aliases] of Object.entries({
+    platformDefaults: ["platformDefaults", "platform_defaults"],
+    tenantOverrides: ["tenantOverrides", "tenant_overrides"],
+    greetingPolicy: ["greetingPolicy", "greeting_policy"],
+    closingPolicy: ["closingPolicy", "closing_policy"],
+    tonePolicy: ["tonePolicy", "tone_policy"],
+    pricingPolicy: ["pricingPolicy", "pricing_policy"],
+    locationPolicy: ["locationPolicy", "location_policy"],
+    bookingPolicy: ["bookingPolicy", "booking_policy"],
+    contactPolicy: ["contactPolicy", "contact_policy"],
+    handoffPolicy: ["handoffPolicy", "handoff_policy"],
+  })) {
+    const picked = pickAliasedField(root, aliases);
+    if (picked.provided) {
+      behaviorPatch[targetKey] = obj(picked.value);
+    }
+  }
 
-  if (
-    platformDefaults.provided ||
-    tenantOverrides.provided ||
-    greetingPolicy.provided ||
-    closingPolicy.provided ||
-    tonePolicy.provided ||
-    pricingPolicy.provided ||
-    locationPolicy.provided ||
-    bookingPolicy.provided ||
-    contactPolicy.provided ||
-    handoffPolicy.provided
-  ) {
+  if (Object.keys(behaviorPatch).length) {
     out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft({
-      ...(obj(out.assistantBehaviorDraft) || {}),
-      platformDefaults: platformDefaults.provided
-        ? obj(platformDefaults.value)
-        : undefined,
-      tenantOverrides: tenantOverrides.provided
-        ? obj(tenantOverrides.value)
-        : undefined,
-      greetingPolicy: greetingPolicy.provided ? obj(greetingPolicy.value) : undefined,
-      closingPolicy: closingPolicy.provided ? obj(closingPolicy.value) : undefined,
-      tonePolicy: tonePolicy.provided ? obj(tonePolicy.value) : undefined,
-      pricingPolicy: pricingPolicy.provided ? obj(pricingPolicy.value) : undefined,
-      locationPolicy: locationPolicy.provided ? obj(locationPolicy.value) : undefined,
-      bookingPolicy: bookingPolicy.provided ? obj(bookingPolicy.value) : undefined,
-      contactPolicy: contactPolicy.provided ? obj(contactPolicy.value) : undefined,
-      handoffPolicy: handoffPolicy.provided ? obj(handoffPolicy.value) : undefined,
+      ...obj(out.assistantBehaviorDraft),
+      ...behaviorPatch,
     });
   }
 
@@ -588,598 +330,8 @@ export function isMessageSkip(body = {}) {
   return body?.skip === true || s(body?.intent).toLowerCase() === "skip";
 }
 
-function buildSourceCandidateFromAnswer(answer = "") {
-  const text = s(answer);
-  if (!text) return null;
-
-  if (/^@[\w.]{1,30}$/i.test(text)) {
-    return {
-      type: "instagram",
-      value: `https://instagram.com/${text.replace(/^@/, "")}`,
-      raw: text,
-    };
-  }
-
-  return buildRecognizedSourceCandidate(text);
-}
-
-function buildPricingBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.pricingPolicy);
-
-  const explicitMode =
-    normalizePricingBehaviorMode(text) ||
-    (/xidmət|service/.test(lower) && /soruş|ask/.test(lower)
-      ? "ask_service_first"
-      : "") ||
-    (/link first|birbaşa.*(səhifə|page|link)|pricing page/i.test(lower)
-      ? "link_first"
-      : "") ||
-    (/(cavab|answer).*(link|page|səhifə)|qısa.*(link|page|səhifə)/i.test(lower)
-      ? "answer_then_link"
-      : "") ||
-    (/(quote|sorğu|request|detal|details)/i.test(lower)
-      ? "quote_first"
-      : "") ||
-    (/(burada|here|yalnız cavab|just answer|text only)/i.test(lower)
-      ? "answer_first"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "answer_then_link");
-  const targetUrl = extractAnyUrlCandidate(text);
-
-  return {
-    assistantBehaviorDraft: {
-      pricingPolicy: sanitizePricingPolicy({
-        ...currentPolicy,
-        mode,
-        publicAnswerAllowed:
-          mode === "quote_first" ? false : currentPolicy.publicAnswerAllowed,
-        redirectEnabled:
-          ["answer_then_link", "link_first"].includes(mode) || Boolean(targetUrl),
-        shouldSummarizeBeforeRedirect:
-          mode === "answer_then_link"
-            ? true
-            : mode === "link_first"
-              ? false
-              : currentPolicy.shouldSummarizeBeforeRedirect,
-        askServiceFirst: mode === "ask_service_first",
-        preferredTargetType: "pricing_page",
-        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note: targetUrl || explicitMode ? "" : text,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...obj(currentBehavior.tenantOverrides),
-        enabled: true,
-      }),
-    },
-  };
-}
-
-function buildLocationBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.locationPolicy);
-
-  const explicitMode =
-    normalizeLocationBehaviorMode(text) ||
-    (/birbaşa.*(xəritə|map)|map first/i.test(lower)
-      ? "map_first"
-      : "") ||
-    (/(ünvan|address|text).*(xəritə|map)|text.*map/i.test(lower)
-      ? "text_then_map"
-      : "") ||
-    (/(yalnız mətn|text only|only address|only text)/i.test(lower)
-      ? "text_only"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "text_then_map");
-  const targetUrl = extractAnyUrlCandidate(text);
-
-  return {
-    assistantBehaviorDraft: {
-      locationPolicy: sanitizeLocationPolicy({
-        ...currentPolicy,
-        mode,
-        redirectEnabled:
-          ["map_first", "text_then_map"].includes(mode) || Boolean(targetUrl),
-        shouldSummarizeBeforeRedirect: mode === "text_then_map",
-        preferredTargetType: "map",
-        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note: targetUrl || explicitMode ? "" : text,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...obj(currentBehavior.tenantOverrides),
-        enabled: true,
-      }),
-    },
-  };
-}
-
-function buildBookingBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.bookingPolicy);
-
-  const explicitMode =
-    normalizeBookingBehaviorMode(text) ||
-    (/whatsapp|wa\.me/i.test(lower) ? "route_whatsapp" : "") ||
-    (/instagram|dm/i.test(lower) ? "route_instagram" : "") ||
-    (/website|site|booking page|reservation page|appointment page/i.test(lower)
-      ? "route_website"
-      : "") ||
-    (/əvvəl|first|topla|collect|məlumat|details/i.test(lower)
-      ? "collect_then_route"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "best_available");
-  const targetUrl = extractAnyUrlCandidate(text);
-
-  return {
-    assistantBehaviorDraft: {
-      bookingPolicy: sanitizeBookingPolicy({
-        ...currentPolicy,
-        mode,
-        redirectEnabled: mode !== "collect_then_route" || Boolean(targetUrl),
-        collectLeadFirst: mode === "collect_then_route",
-        preferredTargetType: "booking",
-        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note: targetUrl || explicitMode ? "" : text,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...obj(currentBehavior.tenantOverrides),
-        enabled: true,
-      }),
-    },
-  };
-}
-
-function buildContactBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.contactPolicy);
-
-  const explicitMode =
-    normalizeContactBehaviorMode(text) ||
-    (/whatsapp|wa\.me/i.test(lower) ? "whatsapp_first" : "") ||
-    (/zəng|call|phone/i.test(lower) ? "call_first" : "") ||
-    (/email|mail/i.test(lower) ? "email_first" : "") ||
-    (/link|instagram|telegram|facebook|site|website/i.test(lower)
-      ? "link_first"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "best_available");
-  const targetUrl = extractAnyUrlCandidate(text);
-
-  let preferredChannel = s(currentPolicy.preferredChannel);
-  if (mode === "whatsapp_first") preferredChannel = "whatsapp";
-  if (mode === "call_first") preferredChannel = "phone";
-  if (mode === "email_first") preferredChannel = "email";
-  if (mode === "link_first" && !preferredChannel) preferredChannel = "link";
-
-  return {
-    assistantBehaviorDraft: {
-      contactPolicy: sanitizeContactPolicy({
-        ...currentPolicy,
-        mode,
-        preferredChannel,
-        preferredTargetType: "contact",
-        preferredTargetUrl: targetUrl || currentPolicy.preferredTargetUrl,
-        note: targetUrl || explicitMode ? "" : text,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...obj(currentBehavior.tenantOverrides),
-        enabled: true,
-      }),
-    },
-  };
-}
-
-function buildHandoffBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.handoffPolicy);
-
-  const explicitMode =
-    normalizeHandoffBehaviorMode(text) ||
-    (/birbaşa|direct/i.test(lower) ? "direct_handoff" : "") ||
-    (/səbəb|reason|niyə|why|clarify|explain/i.test(lower)
-      ? "ask_then_handoff"
-      : "") ||
-    (/kontekst|context|uyğun halda|case by case/i.test(lower)
-      ? "contextual_handoff"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "contextual_handoff");
-
-  return {
-    assistantBehaviorDraft: {
-      handoffPolicy: sanitizeHandoffPolicy({
-        ...currentPolicy,
-        mode,
-        requiresReason: mode === "ask_then_handoff",
-        note: explicitMode ? "" : text,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...obj(currentBehavior.tenantOverrides),
-        enabled: true,
-      }),
-    },
-  };
-}
-
-function buildGreetingBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.greetingPolicy);
-  const currentOverrides = obj(currentBehavior.tenantOverrides);
-  const currentDefaults = obj(currentBehavior.platformDefaults);
-
-  const explicitMode =
-    normalizeGreetingBehaviorMode(text) ||
-    (/premium|concierge/i.test(lower) ? "premium_concierge" : "") ||
-    (/brief|qısa/i.test(lower) ? "brief_professional" : "") ||
-    (/friendly|səmimi|local/i.test(lower) ? "friendly_local" : "") ||
-    (/warm|isti|professional|peşəkar/i.test(lower)
-      ? "warm_professional"
-      : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "warm_professional");
-
-  const looksLikeCustomLine =
-    text.length >= 8 &&
-    !explicitMode &&
-    !/(professional|premium|brief|friendly|warm|qısa|isti|səmimi)/i.test(text);
-
-  return {
-    assistantBehaviorDraft: {
-      platformDefaults: sanitizePlatformDefaults({
-        ...currentDefaults,
-        greetingMode: mode,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...currentOverrides,
-        enabled: true,
-        greetingOverrideActive: looksLikeCustomLine || Boolean(explicitMode),
-      }),
-      greetingPolicy: sanitizeGreetingPolicy({
-        ...currentPolicy,
-        mode,
-        openingLine: looksLikeCustomLine ? text : currentPolicy.openingLine,
-        note: looksLikeCustomLine || explicitMode ? "" : text,
-      }),
-    },
-  };
-}
-
-function buildClosingBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.closingPolicy);
-  const currentOverrides = obj(currentBehavior.tenantOverrides);
-  const currentDefaults = obj(currentBehavior.platformDefaults);
-
-  const explicitMode =
-    normalizeClosingBehaviorMode(text) ||
-    (/premium/i.test(lower) ? "premium_invite" : "") ||
-    (/brief|qısa/i.test(lower) ? "brief_invite" : "") ||
-    (/soft|yumşaq/i.test(lower) ? "soft_close" : "") ||
-    (/warm|isti|invite|dəvət/i.test(lower) ? "warm_invite" : "");
-
-  const mode = explicitMode || s(currentPolicy.mode || "warm_invite");
-
-  const looksLikeCustomLine =
-    text.length >= 8 &&
-    !explicitMode &&
-    !/(brief|premium|soft|warm|invite|qısa|isti|dəvət)/i.test(text);
-
-  return {
-    assistantBehaviorDraft: {
-      platformDefaults: sanitizePlatformDefaults({
-        ...currentDefaults,
-        closingMode: mode,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...currentOverrides,
-        enabled: true,
-        closingOverrideActive: looksLikeCustomLine || Boolean(explicitMode),
-      }),
-      closingPolicy: sanitizeClosingPolicy({
-        ...currentPolicy,
-        mode,
-        closingLine: looksLikeCustomLine ? text : currentPolicy.closingLine,
-        note: looksLikeCustomLine || explicitMode ? "" : text,
-      }),
-    },
-  };
-}
-
-function buildToneBehaviorPatch(answer = "", current = {}) {
-  const text = s(answer);
-  const lower = text.toLowerCase();
-  const currentBehavior = obj(current.assistantBehaviorDraft);
-  const currentPolicy = obj(currentBehavior.tonePolicy);
-  const currentOverrides = obj(currentBehavior.tenantOverrides);
-  const currentDefaults = obj(currentBehavior.platformDefaults);
-
-  const explicitMode =
-    normalizeToneBehaviorMode(text) ||
-    (/premium|polished/i.test(lower) ? "premium_polished" : "") ||
-    (/warm|human|isti|insani/i.test(lower) ? "warm_human" : "") ||
-    (/direct|clear|düz|qısa/i.test(lower) ? "direct_clear" : "") ||
-    (/professional|reassuring|arxayın|peşəkar/i.test(lower)
-      ? "professional_reassuring"
-      : "");
-
-  const messageLength =
-    normalizeMessageLengthMode(text) ||
-    (/detailed|ətraflı|izahlı/i.test(lower)
-      ? "detailed"
-      : /concise|brief|short|qısa/i.test(lower)
-        ? "concise"
-        : "balanced");
-
-  const empathyLevel =
-    normalizeEmpathyLevelMode(text) ||
-    (/high empathy|çox empati|very empathetic/i.test(lower)
-      ? "high"
-      : /light empathy|minimal empathy|az empati/i.test(lower)
-        ? "light"
-        : "balanced");
-
-  const mode = explicitMode || s(currentPolicy.mode || "professional_reassuring");
-
-  return {
-    assistantBehaviorDraft: {
-      platformDefaults: sanitizePlatformDefaults({
-        ...currentDefaults,
-        toneMode: mode,
-        messageLength,
-        empathyLevel,
-      }),
-      tenantOverrides: sanitizeTenantOverrides({
-        ...currentOverrides,
-        enabled: true,
-        toneOverrideActive: Boolean(explicitMode || messageLength || empathyLevel),
-      }),
-      tonePolicy: sanitizeTonePolicy({
-        ...currentPolicy,
-        mode,
-        messageLength,
-        empathyLevel,
-        shouldStayConcise: messageLength === "concise",
-        shouldAvoidOverexplaining: messageLength !== "detailed",
-        shouldSoundPremium: mode === "premium_polished",
-        shouldSoundLocalFriendly: mode === "warm_human",
-        note: explicitMode ? "" : text,
-      }),
-    },
-  };
-}
-
-function buildBehaviorAnswerPatch(step = "", answer = "", current = {}) {
-  const safeStep = normalizeStep(step);
-
-  if (safeStep === "greeting_behavior") {
-    return buildGreetingBehaviorPatch(answer, current);
-  }
-  if (safeStep === "closing_behavior") {
-    return buildClosingBehaviorPatch(answer, current);
-  }
-  if (safeStep === "tone_behavior") {
-    return buildToneBehaviorPatch(answer, current);
-  }
-  if (safeStep === "pricing_behavior") {
-    return buildPricingBehaviorPatch(answer, current);
-  }
-  if (safeStep === "location_behavior") {
-    return buildLocationBehaviorPatch(answer, current);
-  }
-  if (safeStep === "booking_behavior") {
-    return buildBookingBehaviorPatch(answer, current);
-  }
-  if (safeStep === "contact_behavior") {
-    return buildContactBehaviorPatch(answer, current);
-  }
-  if (safeStep === "handoff_behavior") {
-    return buildHandoffBehaviorPatch(answer, current);
-  }
-
-  return {};
-}
-
-export function patchFromAnswer(step = "", answer = "", current = {}) {
-  const key = normalizeStep(step);
-  const text = s(answer);
-  const currentDraft = obj(current);
-
-  if (!key || !text) return {};
-
-  if (isBehaviorStep(key)) {
-    const behaviorPatch = buildBehaviorAnswerPatch(key, text, currentDraft);
-    return compactDraftObject({
-      ...behaviorPatch,
-      assistantState: {
-        activeSection: key,
-        activeBehaviorPolicy: behaviorPolicyKeyFromStep(key),
-        lastUpdatedSection: key,
-      },
-    });
-  }
-
-  const sourceCandidate = buildSourceCandidateFromAnswer(text);
-  const sourceMetadataPatch = sourceCandidate
-    ? buildAssistantSourceMetadataPatch(
-        sourceCandidate.type,
-        sourceCandidate.value,
-        currentDraft.sourceMetadata
-      )
-    : {};
-
-  switch (key) {
-    case "profile":
-      return compactDraftObject({
-        businessProfile: parseProfileAnswer(text, currentDraft),
-        sourceMetadata: sourceMetadataPatch,
-        assistantState: {
-          lastUpdatedSection: "company",
-          activeSection: "company",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "company": {
-      const parsedProfile = parseProfileAnswer(text, currentDraft);
-      return compactDraftObject({
-        businessProfile: {
-          ...obj(parsedProfile),
-          companyName: s(obj(parsedProfile).companyName || text),
-        },
-        sourceMetadata: sourceMetadataPatch,
-        assistantState: {
-          lastUpdatedSection: "company",
-          activeSection: "company",
-          activeBehaviorPolicy: "",
-        },
-      });
-    }
-
-    case "description":
-      return compactDraftObject({
-        businessProfile: {
-          description: text,
-        },
-        assistantState: {
-          lastUpdatedSection: "description",
-          activeSection: "description",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "services":
-      return compactDraftObject({
-        services: parseServicesNote(text, currentDraft.services),
-        assistantState: {
-          lastParsedServicesNote: text,
-          lastUpdatedSection: "services",
-          activeSection: "services",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "contacts":
-      return compactDraftObject({
-        contacts: buildContactsFromAnswer(text),
-        sourceMetadata:
-          sourceCandidate?.type && sourceCandidate?.type !== "website"
-            ? sourceMetadataPatch
-            : {},
-        assistantState: {
-          lastUpdatedSection: "contacts",
-          activeSection: "contacts",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "hours":
-      return compactDraftObject({
-        hours: parseHoursNote(text, currentDraft.hours),
-        assistantState: {
-          lastParsedHoursNote: text,
-          lastUpdatedSection: "hours",
-          activeSection: "hours",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "pricing":
-      return compactDraftObject({
-        pricingPosture: parsePricingNote(
-          text,
-          currentDraft.pricingPosture,
-          currentDraft.services
-        ),
-        assistantState: {
-          lastParsedPricingNote: text,
-          lastUpdatedSection: "pricing",
-          activeSection: "pricing",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    case "handoff":
-      return compactDraftObject({
-        handoffRules: buildHandoffFromAnswer(text),
-        assistantState: {
-          lastUpdatedSection: "handoff",
-          activeSection: "handoff",
-          activeBehaviorPolicy: "",
-        },
-      });
-
-    default:
-      return compactDraftObject({
-        sourceMetadata: sourceMetadataPatch,
-      });
-  }
-}
-
-function normalizeAnswerPatchBody(body = {}, current = {}) {
-  const rawStep = s(body.step || body.questionKey || body.field).toLowerCase();
-  const answer = s(body.answer || body.message || body.text || body.value);
-  const step = normalizeStep(rawStep);
-
-  if (isMessageSkip(body)) {
-    if (!step) return {};
-    return {
-      progress: {
-        skippedQuestions: [step],
-        lastAnsweredStep: step,
-        currentQuestionKey: step,
-        updatedAt: nowIso(),
-      },
-      assistantState: {
-        activeSection: step,
-        activeBehaviorPolicy: isBehaviorStep(step)
-          ? behaviorPolicyKeyFromStep(step)
-          : "",
-      },
-    };
-  }
-
-  const intentOnlyPatch = resolveIntentOnlyPatch(step, answer, current);
-  if (Object.keys(intentOnlyPatch).length > 0) {
-    return intentOnlyPatch;
-  }
-
-  const answerPatch = patchFromAnswer(step, answer, current);
-  if (!Object.keys(answerPatch).length) return {};
-
-  const activeSection =
-    s(obj(answerPatch.assistantState).activeSection) || step || "company";
-
-  return compactDraftObject({
-    ...answerPatch,
-    progress: {
-      lastAnsweredStep: step,
-      currentQuestionKey: activeSection,
-      updatedAt: nowIso(),
-    },
-  });
-}
-
-export function normalizeSetupAssistantDraftPatchBody(body = {}, current = {}) {
-  const directPatch = normalizeDirectPatchBody(body);
-  const answerPatch = normalizeAnswerPatchBody(body, current);
-  return mergeDraftState(directPatch, answerPatch);
+export function normalizeSetupAssistantDraftPatchBody(body = {}) {
+  return normalizeDirectPatchBody(body);
 }
 
 function mergeSkippedQuestions(existing = [], incoming = []) {
@@ -1297,7 +449,6 @@ function buildServicePatchFromAcceptedValues(values = [], currentServices = []) 
   );
 
   if (!nextValues.length) return [];
-
   return parseServicesNote(nextValues.join("; "), currentServices);
 }
 
@@ -1309,7 +460,6 @@ function buildContactPatchFromAcceptedValues(values = [], currentContacts = []) 
   );
 
   if (!nextValues.length) return [];
-
   return buildContactsFromAnswer(nextValues.join("; "));
 }
 
@@ -1352,33 +502,26 @@ function resolveNextStepFromTurn(turn = {}, currentDraft = {}) {
 
 function sanitizeAcceptedBehaviorPatch(acceptedPatch = {}) {
   const source = obj(acceptedPatch);
+  const nested = obj(source.assistantBehaviorDraft);
 
-  return sanitizeAssistantBehaviorDraft({
-    assistantBehaviorDraft:
-      obj(source.assistantBehaviorDraft).platformDefaults ||
-      obj(source.assistantBehaviorDraft).tenantOverrides ||
-      obj(source.assistantBehaviorDraft).greetingPolicy ||
-      obj(source.assistantBehaviorDraft).closingPolicy ||
-      obj(source.assistantBehaviorDraft).tonePolicy ||
-      obj(source.assistantBehaviorDraft).pricingPolicy ||
-      obj(source.assistantBehaviorDraft).locationPolicy ||
-      obj(source.assistantBehaviorDraft).bookingPolicy ||
-      obj(source.assistantBehaviorDraft).contactPolicy ||
-      obj(source.assistantBehaviorDraft).handoffPolicy
-        ? obj(source.assistantBehaviorDraft)
-        : {
-            platformDefaults: obj(source.platformDefaults || source.platform_defaults),
-            tenantOverrides: obj(source.tenantOverrides || source.tenant_overrides),
-            greetingPolicy: obj(source.greetingPolicy || source.greeting_policy),
-            closingPolicy: obj(source.closingPolicy || source.closing_policy),
-            tonePolicy: obj(source.tonePolicy || source.tone_policy),
-            pricingPolicy: obj(source.pricingPolicy || source.pricing_policy),
-            locationPolicy: obj(source.locationPolicy || source.location_policy),
-            bookingPolicy: obj(source.bookingPolicy || source.booking_policy),
-            contactPolicy: obj(source.contactPolicy || source.contact_policy),
-            handoffPolicy: obj(source.handoffPolicy || source.handoff_policy),
-          },
-  });
+  if (Object.keys(nested).length) {
+    return sanitizeAssistantBehaviorDraft(nested);
+  }
+
+  return sanitizeAssistantBehaviorDraft(
+    compactDraftObject({
+      platformDefaults: obj(source.platformDefaults || source.platform_defaults),
+      tenantOverrides: obj(source.tenantOverrides || source.tenant_overrides),
+      greetingPolicy: obj(source.greetingPolicy || source.greeting_policy),
+      closingPolicy: obj(source.closingPolicy || source.closing_policy),
+      tonePolicy: obj(source.tonePolicy || source.tone_policy),
+      pricingPolicy: obj(source.pricingPolicy || source.pricing_policy),
+      locationPolicy: obj(source.locationPolicy || source.location_policy),
+      bookingPolicy: obj(source.bookingPolicy || source.booking_policy),
+      contactPolicy: obj(source.contactPolicy || source.contact_policy),
+      handoffPolicy: obj(source.handoffPolicy || source.handoff_policy),
+    })
+  );
 }
 
 export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {}) {
