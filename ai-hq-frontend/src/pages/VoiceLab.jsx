@@ -414,7 +414,7 @@ export default function VoiceLab() {
 
   useEffect(() => {
     setCapturedSlots(buildEmptyCapturedSlots(scenario));
-  }, [scenario.id]);
+  }, [scenario]);
 
   return (
     <PageCanvas>
