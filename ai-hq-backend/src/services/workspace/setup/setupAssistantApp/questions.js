@@ -103,18 +103,9 @@ const BUSINESS_STEP_ORDER = [
   "handoff",
 ];
 
-const BEHAVIOR_STEP_ORDER = [
-  "greeting_behavior",
-  "closing_behavior",
-  "tone_behavior",
-  "pricing_behavior",
-  "location_behavior",
-  "booking_behavior",
-  "contact_behavior",
-  "handoff_behavior",
-];
+const BEHAVIOR_STEP_ORDER = [];
 
-export const SECTION_ORDER = [...BUSINESS_STEP_ORDER, ...BEHAVIOR_STEP_ORDER];
+export const SECTION_ORDER = [...BUSINESS_STEP_ORDER];
 
 const COPY = {
   "az-AZ": {
@@ -221,7 +212,7 @@ const COPY = {
     },
     phrases: {
       readyForApproval:
-        "Əla. Business truth və conversation policy kifayət qədər doludur. İndi review edib launch-a hazır vəziyyətə keçirə bilərik.",
+        "Əla. Business truth kifayət qədər doludur. İndi review edib launch-a hazır vəziyyətə keçirə bilərik.",
       companyCaptured: "Qeyd etdim: biznesin adı {value}.",
       descriptionCaptured: "Qeyd etdim: {value}.",
       servicesCaptured: "Qeyd etdim: əsas xidmətlərə {value} daxildir.",
@@ -388,7 +379,7 @@ const COPY = {
     },
     phrases: {
       readyForApproval:
-        "Great. The business truth and conversation policy are complete enough. We can review and prepare launch next.",
+        "Great. The business truth is complete enough. We can review and prepare launch next.",
       companyCaptured: "Got it: the business name is {value}.",
       descriptionCaptured: "Got it: {value}.",
       servicesCaptured: "Got it: the core services include {value}.",
