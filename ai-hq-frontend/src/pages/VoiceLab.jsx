@@ -701,6 +701,42 @@ export default function VoiceLab() {
                 </div>
               </div>
 
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-line-soft bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                    Required capture
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
+                    {(scenario.requiredSlots || []).map((slot) => (
+                      <li key={slot.key}>• {slot.label || slot.key}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-2xl border border-line-soft bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                    Optional capture
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
+                    {(scenario.optionalSlots || []).length ? (
+                      (scenario.optionalSlots || []).map((slot) => (
+                        <li key={slot.key}>• {slot.label || slot.key}</li>
+                      ))
+                    ) : (
+                      <li>• None</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-line-soft bg-white p-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  Action target
+                </div>
+                <p className="mt-2 text-sm leading-6 text-text-muted">
+                  {s(scenario.actionTarget, "capture_summary")} · {s(scenario.handoffPolicy, "handoff_when_needed")}
+                </p>
+              </div>
+
               <div className="mt-3 rounded-2xl border border-line-soft bg-white p-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
                   Red flags
