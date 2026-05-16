@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -43,7 +43,7 @@ function createSourceRichDraft() {
   });
 }
 
-test("source signals discover behavior targets and produce sensible behavior suggestions", () => {
+test("source signals discover evidence targets without producing behavior suggestions", () => {
   const draft = createSourceRichDraft();
   const sources = [
     {
@@ -92,20 +92,12 @@ test("source signals discover behavior targets and produce sensible behavior sug
   assert.equal(signals.contactTargetCandidates[0].url, "https://acme.az/email");
 
   assert.equal(
-    signals.suggestedAssistantBehaviorDraft.pricingPolicy.preferredTargetUrl,
-    "https://acme.az/pricing"
-  );
-  assert.equal(
-    signals.suggestedAssistantBehaviorDraft.locationPolicy.preferredTargetUrl,
-    "https://maps.google.com/?q=Acme"
-  );
-  assert.equal(
-    signals.suggestedAssistantBehaviorDraft.contactPolicy.mode,
-    "whatsapp_first"
+    Object.prototype.hasOwnProperty.call(signals, "suggestedAssistantBehaviorDraft"),
+    false
   );
 });
 
-test("draft state stays grounded while contradictions and known-state helpers remain useful", () => {
+test("draft state stays grounded without carrying behavior-brain suggestions", () => {
   const draft = createSourceRichDraft();
   const signals = buildSetupSourceSignals({
     draft,
@@ -145,8 +137,8 @@ test("draft state stays grounded while contradictions and known-state helpers re
   assert.equal(draftState.businessName, "Acme Clinic");
   assert.equal(draftState.locationTargetUrl, "https://maps.google.com/?q=Acme");
   assert.equal(
-    draftState.suggestedAssistantBehaviorDraft.pricingPolicy.preferredTargetUrl,
-    "https://acme.az/pricing"
+    Object.prototype.hasOwnProperty.call(draftState, "suggestedAssistantBehaviorDraft"),
+    false
   );
 
   const contradictions = detectSetupSignalContradictions({
