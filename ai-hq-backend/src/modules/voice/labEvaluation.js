@@ -48,12 +48,85 @@ function readinessLabel(score = 0, language = "") {
   return "not_ready";
 }
 
+function scenarioSlots(scenario = {}) {
+  return [...arr(scenario.requiredSlots), ...arr(scenario.optionalSlots)];
+}
+
+function normalizeCapturedSlots(input = {}, scenario = {}) {
+  const raw = obj(input.capturedSlots || input.captured_slots || obj(input.evaluation).capturedSlots);
+  const known = scenarioSlots(scenario);
+  const next = {};
+
+  for (const slot of known) {
+    const key = s(slot.key);
+    if (!key) continue;
+
+    const value = raw[key];
+    if (typeof value === "boolean") {
+      next[key] = value;
+    } else {
+      next[key] = s(value).slice(0, 800);
+    }
+  }
+
+  for (const [key, value] of Object.entries(raw)) {
+    const safeKey = s(key).replace(/[^a-zA-Z0-9_.:-]+/g, "_").slice(0, 80);
+    if (!safeKey || Object.prototype.hasOwnProperty.call(next, safeKey)) continue;
+    next[safeKey] = typeof value === "boolean" ? value : s(value).slice(0, 800);
+  }
+
+  return next;
+}
+
+function isCapturedValuePresent(value) {
+  if (typeof value === "boolean") return value === true;
+  return Boolean(s(value));
+}
+
+function missingRequiredSlots(capturedSlots = {}, scenario = {}) {
+  return arr(scenario.requiredSlots)
+    .filter((slot) => {
+      const key = s(slot.key);
+      return key && !isCapturedValuePresent(capturedSlots[key]);
+    })
+    .map((slot) => ({
+      key: s(slot.key),
+      label: s(slot.label || slot.key),
+    }));
+}
+
+function buildCaptureSummary({ capturedSlots = {}, scenario = {} } = {}) {
+  const missing = missingRequiredSlots(capturedSlots, scenario);
+  const required = arr(scenario.requiredSlots).map((slot) => ({
+    key: s(slot.key),
+    label: s(slot.label || slot.key),
+    captured: isCapturedValuePresent(capturedSlots[s(slot.key)]),
+  }));
+
+  const optional = arr(scenario.optionalSlots).map((slot) => ({
+    key: s(slot.key),
+    label: s(slot.label || slot.key),
+    captured: isCapturedValuePresent(capturedSlots[s(slot.key)]),
+  }));
+
+  return {
+    complete: missing.length === 0,
+    missingRequired: missing,
+    missingRequiredCount: missing.length,
+    required,
+    optional,
+    actionTarget: s(scenario.actionTarget),
+    handoffPolicy: s(scenario.handoffPolicy),
+  };
+}
+
 function buildReadinessReport({
   evaluation = {},
   score = 0,
   language = "",
   input = {},
   scenario = {},
+  capturedSlots = {},
 } = {}) {
   const runtimeApplied = input.runtimeApplied === true;
   const blockers = [];
@@ -64,6 +137,14 @@ function buildReadinessReport({
   const taskCompletion = clampScore(evaluation.taskCompletion);
   const truthfulness = clampScore(evaluation.truthfulness);
   const handoffSense = clampScore(evaluation.handoffSense);
+  const captureMissing = missingRequiredSlots(capturedSlots, scenario);
+
+  if (captureMissing.length) {
+    blockers.push(
+      `Required captured fields are missing: ${captureMissing.map((slot) => slot.label).join(", ")}.`
+    );
+    nextActions.push("Repeat the call or fill the captured summary before saving the evaluation.");
+  }
 
   if (s(language).toLowerCase() !== "good") {
     blockers.push("Language quality is not confirmed as good.");
@@ -142,6 +223,8 @@ function buildReadinessReport({
       taskCompletion,
       truthfulness,
       handoffSense,
+      captureComplete: captureMissing.length === 0,
+      missingRequiredSlots: captureMissing,
     },
   };
 }
@@ -158,12 +241,18 @@ export function normalizeVoiceLabEvaluation(input = {}) {
     input.scenarioId || input.scenario_id || "restaurant_order"
   );
   const scenario = requireVoiceLabScenario(requestedScenarioId);
+  const capturedSlots = normalizeCapturedSlots(input, scenario);
+  const captureSummary = buildCaptureSummary({
+    capturedSlots,
+    scenario,
+  });
   const report = buildReadinessReport({
     evaluation,
     score,
     language,
     input,
     scenario,
+    capturedSlots,
   });
 
   return {
@@ -184,6 +273,8 @@ export function normalizeVoiceLabEvaluation(input = {}) {
     averageScore: score,
     readiness: report.gate,
     report,
+    capturedSlots,
+    captureSummary,
     notes: s(evaluation.notes || input.notes).slice(0, 2000),
     createdAt: s(input.createdAt || input.created_at) || nowIso(),
   };
