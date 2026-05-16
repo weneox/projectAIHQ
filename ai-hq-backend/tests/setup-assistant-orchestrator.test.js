@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import { cfg } from "../src/config.js";
@@ -50,11 +50,6 @@ function reasonerPayload(overrides = {}) {
     pricingPosture: "",
     humanHandoff: "",
     websiteUrl: "",
-    pricingBehavior: "",
-    locationBehavior: "",
-    bookingBehavior: "",
-    contactBehavior: "",
-    handoffBehavior: "",
     ...overrides,
   };
 }
@@ -180,7 +175,7 @@ test("contact-step answers carry contacts without fake cross-step behavior chatt
   });
 
   assert.ok(result.acceptedPatch.contacts.some((item) => /\+994551112233/.test(item)));
-  assert.deepEqual(result.acceptedPatch.assistantBehaviorDraft || {}, {});
+  assert.equal(Object.prototype.hasOwnProperty.call(result.acceptedPatch, "assistantBehaviorDraft"), false);
   assert.equal(result.readyForApproval, true);
   assert.equal(result.nextQuestion, null);
   assert.doesNotMatch(
@@ -352,15 +347,7 @@ test("polished draft override path replaces the hidden preview when the polisher
               hours: ["Mon-Fri 09:00-18:00"],
               pricingPosture: "Pricing depends on the service.",
               humanHandoff: "Escalate urgent or complaint cases.",
-              pricingBehavior: "Ask service first.",
-              locationBehavior: "Address + map.",
-              bookingBehavior: "Route to WhatsApp.",
-              contactBehavior: "WhatsApp first.",
-              handoffBehavior: "Contextual handoff.",
               languages: ["en"],
-              tone: "professional",
-              greetingStyle: "warm",
-              afterHoursBehavior: "take a message",
             },
           };
         }
@@ -401,6 +388,6 @@ test("polished draft override path replaces the hidden preview when the polisher
     "Professional dental clinic focused on implants."
   );
   assert.deepEqual(result.draft.coreServices, ["Consultation", "Implants"]);
-  assert.equal(result.draft.pricingBehavior, "Ask service first.");
+  assert.equal(Object.prototype.hasOwnProperty.call(result.draft, "pricingBehavior"), false);
   assert.equal(result.sourceSignals.primarySourceUrl, "https://acme.az");
 });

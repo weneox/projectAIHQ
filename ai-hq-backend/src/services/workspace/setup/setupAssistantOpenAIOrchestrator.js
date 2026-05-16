@@ -22,7 +22,6 @@ import {
   inferContactType,
   normalizeWebsiteUrl,
 } from "./setupAssistantApp/shared.js";
-import { mergeAssistantBehaviorDraft } from "./setupAssistantApp/sanitize.js";
 
 let cachedClient = null;
 
@@ -41,11 +40,6 @@ const REASONER_SCHEMA = {
     "pricingPosture",
     "humanHandoff",
     "websiteUrl",
-    "pricingBehavior",
-    "locationBehavior",
-    "bookingBehavior",
-    "contactBehavior",
-    "handoffBehavior",
   ],
   properties: {
     action: {
@@ -62,11 +56,6 @@ const REASONER_SCHEMA = {
     pricingPosture: { type: "string" },
     humanHandoff: { type: "string" },
     websiteUrl: { type: "string" },
-    pricingBehavior: { type: "string" },
-    locationBehavior: { type: "string" },
-    bookingBehavior: { type: "string" },
-    contactBehavior: { type: "string" },
-    handoffBehavior: { type: "string" },
   },
 };
 
@@ -82,15 +71,7 @@ const POLISHER_SCHEMA = {
     "hours",
     "pricingPosture",
     "humanHandoff",
-    "pricingBehavior",
-    "locationBehavior",
-    "bookingBehavior",
-    "contactBehavior",
-    "handoffBehavior",
     "languages",
-    "tone",
-    "greetingStyle",
-    "afterHoursBehavior",
   ],
   properties: {
     businessName: { type: "string" },
@@ -101,21 +82,9 @@ const POLISHER_SCHEMA = {
     hours: { type: "array", items: { type: "string" } },
     pricingPosture: { type: "string" },
     humanHandoff: { type: "string" },
-    pricingBehavior: { type: "string" },
-    locationBehavior: { type: "string" },
-    bookingBehavior: { type: "string" },
-    contactBehavior: { type: "string" },
-    handoffBehavior: { type: "string" },
     languages: { type: "array", items: { type: "string" } },
-    tone: { type: "string" },
-    greetingStyle: { type: "string" },
-    afterHoursBehavior: { type: "string" },
   },
 };
-
-function isBehaviorStep(step = "") {
-  return /_behavior$/.test(normalizeQuestionKey(step));
-}
 
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
@@ -278,58 +247,6 @@ function buildHoursLines(hours = []) {
     .slice(0, 16);
 }
 
-function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
-  const safePolicy = obj(policy);
-
-  if (policyKey === "pricing") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "location") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "booking") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "contact") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredChannel),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "handoff") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.requiresReason === true ? "requires reason" : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return "";
-}
-
 function buildCurrentPreview(draft = {}, review = null) {
   const safeDraft = obj(draft);
   const reviewRoot = obj(review);
@@ -359,10 +276,6 @@ function buildCurrentPreview(draft = {}, review = null) {
       arr(obj(safeDraft.handoffRules).triggers).join(", ")
   );
 
-  const behaviorDraft = mergeAssistantBehaviorDraft(
-    obj(reviewDraft.assistantBehaviorDraft),
-    obj(safeDraft.assistantBehaviorDraft)
-  );
 
   return compactDraftObject({
     businessName: s(businessProfile.companyName),
@@ -374,29 +287,6 @@ function buildCurrentPreview(draft = {}, review = null) {
     pricingPosture,
     humanHandoff: handoff,
     languages: uniqueStrings(arr(safeDraft.languages), 8),
-    tone: s(safeDraft.tone),
-    greetingStyle: s(safeDraft.greetingStyle),
-    afterHoursBehavior: s(safeDraft.afterHoursBehavior),
-    pricingBehavior: summarizeBehaviorPolicy(
-      "pricing",
-      behaviorDraft.pricingPolicy
-    ),
-    locationBehavior: summarizeBehaviorPolicy(
-      "location",
-      behaviorDraft.locationPolicy
-    ),
-    bookingBehavior: summarizeBehaviorPolicy(
-      "booking",
-      behaviorDraft.bookingPolicy
-    ),
-    contactBehavior: summarizeBehaviorPolicy(
-      "contact",
-      behaviorDraft.contactPolicy
-    ),
-    handoffBehavior: summarizeBehaviorPolicy(
-      "handoff",
-      behaviorDraft.handoffPolicy
-    ),
   });
 }
 
@@ -556,21 +446,7 @@ function buildEmptyAcceptedPatch() {
     hours: [],
     pricingPosture: "",
     humanHandoff: "",
-    aiBehavior: {},
-    assistantBehaviorDraft: {},
   };
-}
-
-function hasAcceptedBehaviorPatchSignal(value = {}) {
-  const behavior = obj(value);
-
-  return [
-    "pricingPolicy",
-    "locationPolicy",
-    "bookingPolicy",
-    "contactPolicy",
-    "handoffPolicy",
-  ].some((key) => Object.keys(obj(behavior[key])).length > 0);
 }
 
 function hasAcceptedPatchSignal(value = {}) {
@@ -582,24 +458,13 @@ function hasAcceptedPatchSignal(value = {}) {
       arr(patch.contacts).length ||
       arr(patch.hours).length ||
       s(patch.pricingPosture) ||
-      s(patch.humanHandoff) ||
-      Object.keys(obj(patch.aiBehavior)).length ||
-      hasAcceptedBehaviorPatchSignal(obj(patch.assistantBehaviorDraft))
+      s(patch.humanHandoff)
   );
 }
 
 function mergeAcceptedPatches(base = {}, extra = {}) {
   const left = obj(base);
   const right = obj(extra);
-  const leftBehavior = obj(left.assistantBehaviorDraft);
-  const rightBehavior = obj(right.assistantBehaviorDraft);
-
-  const mergeBehaviorPolicyPatch = (a = {}, b = {}) =>
-    compactDraftObject({
-      ...obj(a),
-      ...obj(b),
-    });
-
   return compactDraftObject({
     identity: compactDraftObject({
       ...obj(left.identity),
@@ -619,32 +484,6 @@ function mergeAcceptedPatches(base = {}, extra = {}) {
     ),
     pricingPosture: s(right.pricingPosture || left.pricingPosture),
     humanHandoff: s(right.humanHandoff || left.humanHandoff),
-    aiBehavior: compactDraftObject({
-      ...obj(left.aiBehavior),
-      ...obj(right.aiBehavior),
-    }),
-    assistantBehaviorDraft: compactDraftObject({
-      pricingPolicy: mergeBehaviorPolicyPatch(
-        leftBehavior.pricingPolicy,
-        rightBehavior.pricingPolicy
-      ),
-      locationPolicy: mergeBehaviorPolicyPatch(
-        leftBehavior.locationPolicy,
-        rightBehavior.locationPolicy
-      ),
-      bookingPolicy: mergeBehaviorPolicyPatch(
-        leftBehavior.bookingPolicy,
-        rightBehavior.bookingPolicy
-      ),
-      contactPolicy: mergeBehaviorPolicyPatch(
-        leftBehavior.contactPolicy,
-        rightBehavior.contactPolicy
-      ),
-      handoffPolicy: mergeBehaviorPolicyPatch(
-        leftBehavior.handoffPolicy,
-        rightBehavior.handoffPolicy
-      ),
-    }),
   });
 }
 
@@ -716,21 +555,7 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
     hours: mergedHours,
     pricingPosture: mergedPricing,
     handoffRules: mergedHandoff,
-    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
-      obj(safeDraft.assistantBehaviorDraft),
-      obj(patch.assistantBehaviorDraft)
-    ),
-    languages: uniqueStrings(
-      [...arr(safeDraft.languages), ...arr(obj(patch.aiBehavior).languages)],
-      8
-    ),
-    tone: s(obj(patch.aiBehavior).tone || safeDraft.tone),
-    greetingStyle: s(
-      obj(patch.aiBehavior).greetingStyle || safeDraft.greetingStyle
-    ),
-    afterHoursBehavior: s(
-      obj(patch.aiBehavior).afterHoursBehavior || safeDraft.afterHoursBehavior
-    ),
+    languages: uniqueStrings(arr(safeDraft.languages), 8),
   });
 }
 
@@ -1001,12 +826,7 @@ function buildTurn({
     },
     sourceSignals: buildSourceSignals(preview, sources, mergedDraft),
     interviewPlan: buildInterviewPlan(currentStep, resolvedNextQuestion),
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings([...arr(mergedDraft.languages), locale], 8),
-      tone: s(mergedDraft.tone),
-      greetingStyle: s(mergedDraft.greetingStyle),
-      afterHoursBehavior: s(mergedDraft.afterHoursBehavior),
-    }),
+    aiBehavior: {},
     readyForApproval,
   };
 }
@@ -1302,15 +1122,7 @@ async function callOpenAIPolisher({
     hours: uniqueStrings(payload.hours, 16),
     pricingPosture: s(payload.pricingPosture),
     humanHandoff: s(payload.humanHandoff),
-    pricingBehavior: s(payload.pricingBehavior),
-    locationBehavior: s(payload.locationBehavior),
-    bookingBehavior: s(payload.bookingBehavior),
-    contactBehavior: s(payload.contactBehavior),
-    handoffBehavior: s(payload.handoffBehavior),
     languages: uniqueStrings(payload.languages, 8),
-    tone: s(payload.tone),
-    greetingStyle: s(payload.greetingStyle),
-    afterHoursBehavior: s(payload.afterHoursBehavior),
   });
 }
 
@@ -1320,7 +1132,7 @@ function buildReasonerSystemPrompt(locale = "az-AZ") {
     `Output locale is ${locale}.`,
     "Your job is not to match keywords. Your job is to understand the business from the latest user message and current setup state.",
     "The user may write in any language and may describe the whole business in 1-3 sentences.",
-    "Extract every explicit business fact you can: identity, description, services, contact routes, hours, pricing posture, handoff/risk rules, website URL, and assistant behavior guidance.",
+    "Extract every explicit business fact you can: identity, description, services, contact routes, hours, pricing posture, handoff/risk rules, and website URL.",
     "If the message is a rich business brief, set action to business_brief.",
     "If it answers the current setup question, set action to direct_answer.",
     "If it corrects an earlier fact, set action to correction and targetStep to the corrected area.",
@@ -1363,11 +1175,6 @@ function buildReasonerUserPrompt({
           pricingPosture: "explicit pricing logic, not invented exact pricing",
           humanHandoff: "explicit or safety-critical human handoff/risk rules",
           websiteUrl: "explicit website URL only",
-          pricingBehavior: "how assistant should answer pricing if explicit",
-          locationBehavior: "how assistant should answer location if explicit",
-          bookingBehavior: "how assistant should route bookings if explicit",
-          contactBehavior: "which contact channel to prefer if explicit",
-          handoffBehavior: "how to hand off to a person if explicit",
         },
       },
       null,
@@ -1453,14 +1260,6 @@ function buildAcceptedPatchFromReasonerPayload(payload = {}) {
   out.hours = uniqueStrings(source.hours, 16);
   out.pricingPosture = s(source.pricingPosture);
   out.humanHandoff = s(source.humanHandoff);
-
-  out.aiBehavior = compactDraftObject({
-    pricingBehavior: s(source.pricingBehavior),
-    locationBehavior: s(source.locationBehavior),
-    bookingBehavior: s(source.bookingBehavior),
-    contactBehavior: s(source.contactBehavior),
-    handoffBehavior: s(source.handoffBehavior),
-  });
 
   return compactDraftObject(out);
 }
