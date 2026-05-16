@@ -54,16 +54,21 @@ function resolveSetupLocaleFromSetup(setup = {}) {
 function deriveWebsitePrefillDraft(core = {}) {
   const businessProfile = obj(core.businessProfile);
   const sourceMetadata = obj(core.sourceMetadata);
+  const existingWebsitePrefill = obj(core.websitePrefill);
+  const existingStatus = s(existingWebsitePrefill.status).toLowerCase();
   const websiteUrl =
+    s(existingWebsitePrefill.websiteUrl) ||
     s(businessProfile.websiteUrl) ||
     (normalizeSourceType(sourceMetadata.primarySourceType) === "website"
       ? s(sourceMetadata.primarySourceUrl)
       : "");
 
+  const skipped = existingStatus === "skipped" && !websiteUrl;
+
   return {
     supported: true,
     mode: "source_or_manual_url",
-    status: websiteUrl ? "captured" : "awaiting_input",
+    status: websiteUrl ? "captured" : skipped ? "skipped" : "awaiting_input",
     websiteUrl,
     scanSuggested: Boolean(websiteUrl),
   };
@@ -897,10 +902,19 @@ export function safeDraftVersion(draftRow = {}) {
 
 export function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
   const mergedCore = mergeSetupAssistantCore(seed, value);
+  const sourceWebsitePrefill =
+    obj(value).websitePrefill ||
+    obj(value).website_prefill ||
+    obj(seed).websitePrefill ||
+    obj(seed).website_prefill ||
+    {};
 
   return {
     ...mergedCore,
-    websitePrefill: deriveWebsitePrefillDraft(mergedCore),
+    websitePrefill: deriveWebsitePrefillDraft({
+      ...mergedCore,
+      websitePrefill: sourceWebsitePrefill,
+    }),
     namespace: SETUP_ASSISTANT_NAMESPACE,
     sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
   };
