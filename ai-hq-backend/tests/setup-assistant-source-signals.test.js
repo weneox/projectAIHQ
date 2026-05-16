@@ -7,6 +7,11 @@ import {
   buildSetupSourceSignals,
   detectSetupSignalContradictions,
 } from "../src/services/workspace/setup/setupAssistantApp/sourceSignals.js";
+import {
+  buildBehaviorTargetCandidate,
+  buildDefaultAssistantBehaviorDraft,
+  normalizeBehaviorPolicyKey,
+} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
 import { buildDraft } from "./setup-assistant-test-helpers.js";
 
 function createSourceRichDraft() {
@@ -43,7 +48,7 @@ function createSourceRichDraft() {
   });
 }
 
-test("source signals discover evidence targets without producing behavior suggestions", () => {
+test("source signals stay business evidence only", () => {
   const draft = createSourceRichDraft();
   const sources = [
     {
@@ -59,18 +64,6 @@ test("source signals discover evidence targets without producing behavior sugges
       sourceUrl: "https://acme.az/pricing",
     },
     {
-      sourceType: "website",
-      role: "supporting",
-      label: "Booking",
-      sourceUrl: "https://acme.az/book",
-    },
-    {
-      sourceType: "website",
-      role: "supporting",
-      label: "Email",
-      sourceUrl: "https://acme.az/email",
-    },
-    {
       sourceType: "google_maps",
       role: "supporting",
       label: "Map",
@@ -83,18 +76,18 @@ test("source signals discover evidence targets without producing behavior sugges
     sources,
   });
 
-  assert.equal(signals.pricingTargetCandidates[0].url, "https://acme.az/pricing");
-  assert.equal(
-    signals.locationTargetCandidates[0].url,
-    "https://maps.google.com/?q=Acme"
-  );
-  assert.equal(signals.bookingTargetCandidates[0].url, "https://wa.me/994551112233");
-  assert.equal(signals.contactTargetCandidates[0].url, "https://acme.az/email");
+  assert.equal(signals.primarySourceUrl, "https://acme.az");
+  assert.ok(signals.strongestEvidence.some((item) => /Website source/i.test(item)));
+  assert.equal(Object.prototype.hasOwnProperty.call(signals, "suggestedAssistantBehaviorDraft"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(signals, "pricingTargetCandidates"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(signals, "locationTargetCandidates"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(signals, "behaviorTargetCandidates"), false);
+});
 
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(signals, "suggestedAssistantBehaviorDraft"),
-    false
-  );
+test("shared behavior helpers are compatibility no-ops", () => {
+  assert.deepEqual(buildDefaultAssistantBehaviorDraft(), {});
+  assert.equal(normalizeBehaviorPolicyKey("pricing_policy"), "");
+  assert.equal(buildBehaviorTargetCandidate("https://acme.az/pricing"), null);
 });
 
 test("draft state stays grounded without carrying behavior-brain suggestions", () => {
@@ -115,12 +108,6 @@ test("draft state stays grounded without carrying behavior-brain suggestions", (
         sourceUrl: "https://acme.az/pricing",
       },
       {
-        sourceType: "website",
-        role: "supporting",
-        label: "Email",
-        sourceUrl: "https://acme.az/email",
-      },
-      {
         sourceType: "google_maps",
         role: "supporting",
         label: "Map",
@@ -135,7 +122,7 @@ test("draft state stays grounded without carrying behavior-brain suggestions", (
   });
 
   assert.equal(draftState.businessName, "Acme Clinic");
-  assert.equal(draftState.locationTargetUrl, "https://maps.google.com/?q=Acme");
+  assert.equal(draftState.locationTargetUrl, undefined);
   assert.equal(
     Object.prototype.hasOwnProperty.call(draftState, "suggestedAssistantBehaviorDraft"),
     false
