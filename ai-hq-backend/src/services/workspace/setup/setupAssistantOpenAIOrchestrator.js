@@ -5,7 +5,6 @@ import { arr, compactDraftObject, obj, s } from "./draftShared.js";
 import {
   parseHoursNote,
   parsePricingNote,
-  parseServicesNote,
 } from "./setupAssistantParser.js";
 import {
   INTENT_ONLY_RESPONSES,
@@ -18,324 +17,14 @@ import {
 import {
   buildApprovalBlockers,
   isDraftReadyForApproval,
-  validateStepAnswer,
 } from "./setupAssistantApp/relevance.js";
 import {
-  buildRecognizedSourceCandidate,
   inferContactType,
   normalizeWebsiteUrl,
 } from "./setupAssistantApp/shared.js";
 import { mergeAssistantBehaviorDraft } from "./setupAssistantApp/sanitize.js";
 
 let cachedClient = null;
-
-const STEP_ORDER = [
-  "company",
-  "description",
-  "services",
-  "contacts",
-  "hours",
-  "pricing",
-  "handoff",
-  "pricing_behavior",
-  "location_behavior",
-  "booking_behavior",
-  "contact_behavior",
-  "handoff_behavior",
-];
-
-const SOCIAL_PATTERNS = [
-  /\bhow are you\b/i,
-  /\bhow r you\b/i,
-  /\bwhat('?s| is) up\b/i,
-  /\bnec[eə]s[eə]n\b/i,
-  /\bnecesen\b/i,
-  /\bsalam\b/i,
-  /\bhello\b/i,
-  /\bhey\b/i,
-  /\bhi\b/i,
-  /\bok\b/i,
-  /\bokay\b/i,
-];
-
-const CONFUSION_PATTERNS = [
-  /\bi don't understand\b/i,
-  /\bi dont understand\b/i,
-  /\banlamad[iı]m\b/i,
-  /\bbaşa düşmədim\b/i,
-  /\bbasa dusmedim\b/i,
-  /\bqar[iı]şd[iı]m\b/i,
-  /\bconfused\b/i,
-  /\bwhich one\b/i,
-  /\bwhat do you mean\b/i,
-];
-
-const CORRECTION_PATTERNS = [
-  /\byox\b/i,
-  /\bdeyil\b/i,
-  /\bd[uü]z[eə]li[şs]\b/i,
-  /\bduzelis\b/i,
-  /\bwrong\b/i,
-  /\bnot\b/i,
-  /\bactually\b/i,
-  /\binstead\b/i,
-  /\bcorrection\b/i,
-];
-
-const STEP_KEYWORDS = {
-  company: [
-    "company",
-    "business",
-    "name",
-    "ad",
-    "adı",
-    "sirket",
-    "şirkət",
-    "brand",
-    "website",
-    "sayt",
-  ],
-  description: [
-    "description",
-    "summary",
-    "nə iş",
-    "ne ish",
-    "what do",
-    "about",
-    "təsvir",
-    "tesvir",
-  ],
-  services: [
-    "service",
-    "services",
-    "xidmət",
-    "xidmet",
-    "offer",
-    "təklif",
-  ],
-  contacts: [
-    "contact",
-    "phone",
-    "number",
-    "whatsapp",
-    "wp",
-    "email",
-    "instagram",
-    "facebook",
-    "telegram",
-    "əlaqə",
-    "elaqe",
-    "nömrə",
-    "nomre",
-  ],
-  hours: [
-    "hours",
-    "working",
-    "open",
-    "close",
-    "schedule",
-    "saat",
-    "iş saat",
-    "is saat",
-    "24/7",
-  ],
-  pricing: [
-    "price",
-    "pricing",
-    "cost",
-    "quote",
-    "qiymət",
-    "qiymet",
-    "azn",
-    "usd",
-    "eur",
-    "from",
-    "starting",
-    "xidmətə görə",
-    "xidmete gore",
-    "dəyişir",
-    "deyisir",
-  ],
-  handoff: [
-    "handoff",
-    "human",
-    "operator",
-    "manager",
-    "doctor",
-    "admin",
-    "insan",
-    "yönləndir",
-    "yonlendir",
-    "şikayət",
-    "sikayet",
-    "urgent",
-    "təcili",
-    "tecli",
-  ],
-  pricing_behavior: [
-    "pricing behavior",
-    "pricing policy",
-    "price behavior",
-    "qiymət davranış",
-    "qiymet davranis",
-    "pricing page",
-    "price page",
-    "ask service first",
-    "link first",
-    "answer then link",
-  ],
-  location_behavior: [
-    "location behavior",
-    "location policy",
-    "map",
-    "xəritə",
-    "xerite",
-    "address behavior",
-    "ünvan",
-    "unvan",
-  ],
-  booking_behavior: [
-    "booking behavior",
-    "booking policy",
-    "booking route",
-    "reservation",
-    "rezervasiya",
-    "appointment",
-    "instagram dm",
-  ],
-  contact_behavior: [
-    "contact behavior",
-    "contact policy",
-    "contact preference",
-    "əlaqə üstünlüyü",
-    "elaqe ustunluyu",
-    "whatsapp first",
-    "phone first",
-    "email first",
-  ],
-  handoff_behavior: [
-    "handoff behavior",
-    "handoff policy",
-    "ask reason first",
-    "contextual handoff",
-    "direct handoff",
-    "insana keçid",
-    "insana kecid",
-  ],
-};
-
-const STEP_EXAMPLES = {
-  "az-AZ": {
-    company: ["Neox Clinic", "Neox Clinic neox.az"],
-    description: [
-      "Dəri baxımı və kosmetoloji xidmətlər göstəririk.",
-      "Veb sayt və çatbot həlləri hazırlayırıq.",
-    ],
-    services: [
-      "botoks, dolğu, lazer epilyasiya",
-      "veb sayt, çatbot, avtomatizasiya",
-    ],
-    contacts: [
-      "+994 50 111 22 33 WhatsApp",
-      "hello@brand.az",
-      "@brandname",
-    ],
-    hours: [
-      "bazar ertəsi-cümə 09:00-18:00, şənbə 10:00-14:00",
-      "hər gün 10:00-20:00",
-      "24/7",
-    ],
-    pricing: [
-      "Qiymət xidmətə görə dəyişir.",
-      "Qiymətlər 20 AZN-dən başlayır.",
-      "Əvvəlcə sorğu alırıq.",
-    ],
-    handoff: [
-      "Operator istəyi, şikayət və təcili hal olanda insana yönləndir.",
-      "Ödəniş problemi olanda insana keç.",
-    ],
-    pricing_behavior: [
-      "qısa cavab + pricing page",
-      "əvvəlcə xidmət soruş",
-      "birbaşa pricing page-ə yönləndir",
-    ],
-    location_behavior: [
-      "ünvan + xəritə",
-      "birbaşa xəritə",
-      "yalnız qısa ünvan",
-    ],
-    booking_behavior: [
-      "WhatsApp-a yönləndir",
-      "Instagram DM-ə yönləndir",
-      "əvvəlcə məlumat topla",
-    ],
-    contact_behavior: [
-      "WhatsApp first",
-      "zəng first",
-      "email first",
-    ],
-    handoff_behavior: [
-      "kontekstə görə keç",
-      "əvvəlcə səbəb soruş",
-      "birbaşa keç",
-    ],
-  },
-  en: {
-    company: ["North Clinic", "North Clinic northclinic.com"],
-    description: [
-      "We provide skincare and cosmetic services.",
-      "We build websites and chatbot systems.",
-    ],
-    services: [
-      "botox, filler, laser epilation",
-      "website development, chatbot setup, automation",
-    ],
-    contacts: [
-      "+994 50 111 22 33 WhatsApp",
-      "hello@brand.az",
-      "@northclinic",
-    ],
-    hours: [
-      "Monday-Friday 09:00-18:00, Saturday 10:00-14:00",
-      "every day 10:00-20:00",
-      "24/7",
-    ],
-    pricing: [
-      "Pricing depends on the service.",
-      "Prices start from 20 AZN.",
-      "We ask for details first.",
-    ],
-    handoff: [
-      "Hand off for complaints, urgent issues, or operator requests.",
-      "Hand off for payment problems.",
-    ],
-    pricing_behavior: [
-      "short answer + pricing page",
-      "ask service first",
-      "link first",
-    ],
-    location_behavior: [
-      "address + map",
-      "map first",
-      "text only",
-    ],
-    booking_behavior: [
-      "route to WhatsApp",
-      "Instagram DM",
-      "collect details first",
-    ],
-    contact_behavior: [
-      "WhatsApp first",
-      "phone first",
-      "email first",
-    ],
-    handoff_behavior: [
-      "contextual handoff",
-      "ask reason first",
-      "direct handoff",
-    ],
-  },
-};
 
 const REASONER_SCHEMA = {
   type: "object",
@@ -1045,320 +734,72 @@ function buildDraftWithAcceptedPatch(draft = {}, acceptedPatch = {}) {
   });
 }
 
-function stripRecognizedSourceFromText(text = "") {
-  const value = s(text);
-  const candidate = buildRecognizedSourceCandidate(value);
-  if (!candidate?.raw) return value;
-
-  return s(value.replace(candidate.raw, " ").replace(/\s{2,}/g, " "));
-}
-
-function extractCompanyValue(text = "") {
-  const source = buildRecognizedSourceCandidate(text);
-  const stripped = stripRecognizedSourceFromText(text);
-
-  if (!stripped) {
-    return {
-      businessName: "",
-      websiteUrl: source?.type === "website" ? source.value : "",
-    };
-  }
-
-  const lines = stripped
-    .split(/\n+/)
-    .map((item) => s(item))
-    .filter(Boolean);
-
-  return {
-    businessName: s(lines[0]),
-    websiteUrl: source?.type === "website" ? source.value : "",
-  };
-}
-
-function extractDescriptionValue(text = "") {
-  const stripped = stripRecognizedSourceFromText(text);
-  return compactText(stripped, 220);
-}
-
-function extractServiceValues(text = "") {
-  const services = parseServicesNote(text, []);
-  const titles = services
-    .map((item) => s(item?.title || item?.name || item?.label))
-    .filter(Boolean);
-
-  if (titles.length) return uniqueStrings(titles, 16);
-
-  return uniqueStrings(splitList(text, 16), 16);
-}
-
-function extractContactCandidates(text = "") {
-  const out = [];
-
-  const emails = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
-  out.push(...emails.map((item) => s(item)));
-
-  const phones =
-    text.match(/(?:\+?\d[\d()\-\s]{6,}\d)/g)?.map((item) => s(item)) || [];
-  out.push(...phones);
-
-  const source = buildRecognizedSourceCandidate(text);
-  if (source?.type && source.type !== "website") {
-    out.push(source.value);
-  }
-
-  const listItems = splitList(text, 16);
-  for (const item of listItems) {
-    const type = inferContactType(item);
-    if (
-      type === "phone" ||
-      type === "email" ||
-      type === "link" ||
-      /whatsapp|wp|telegram|instagram|facebook|wa\.me/i.test(item)
-    ) {
-      out.push(item);
-    }
-  }
-
-  return uniqueStrings(out, 16);
-}
-
-function extractHoursValues(text = "") {
-  const parsed = parseHoursNote(text, []);
-  const hasStructured = arr(parsed).some((row) => {
-    const item = obj(row);
-    return Boolean(
-      item.allDay === true ||
-        item.appointmentOnly === true ||
-        item.closed === true ||
-        s(item.openTime) ||
-        s(item.closeTime) ||
-        s(item.notes)
-    );
-  });
-
-  return hasStructured ? [compactText(text, 220)] : [];
-}
-
-function extractPricingValue(text = "", currentServices = []) {
-  const parsed = parsePricingNote(text, {}, currentServices);
-  const hasMeaningful = Boolean(
-    s(parsed.publicSummary) ||
-      s(parsed.pricingMode) ||
-      s(parsed.pricingNotes) ||
-      Number.isFinite(Number(parsed.startingAt)) ||
-      Number.isFinite(Number(parsed.minPrice))
-  );
-
-  return hasMeaningful ? compactText(text, 220) : "";
-}
-
-function extractHandoffValue(text = "") {
-  return compactText(text, 220) || "";
-}
-
-function buildPatchForStep(step = "", text = "", draft = {}) {
-  const normalizedStep = normalizeQuestionKey(step);
-  const validation = validateStepAnswer(normalizedStep, text, draft);
-  const patch = buildEmptyAcceptedPatch();
-
-  if (validation.accepted !== true) {
-    return {
-      patch,
-      validation,
-    };
-  }
-
-  if (normalizedStep === "company") {
-    const company = extractCompanyValue(text);
-    patch.identity = compactDraftObject({
-      businessName: s(company.businessName),
-      websiteUrl: s(company.websiteUrl),
-    });
-  } else if (normalizedStep === "description") {
-    patch.identity = compactDraftObject({
-      description: extractDescriptionValue(text),
-    });
-  } else if (normalizedStep === "services") {
-    patch.services = uniqueStrings(
-      validation.extractedValues || extractServiceValues(text),
-      16
-    );
-  } else if (normalizedStep === "contacts") {
-    patch.contacts = uniqueStrings(
-      validation.extractedValues || extractContactCandidates(text),
-      16
-    );
-  } else if (normalizedStep === "hours") {
-    patch.hours = extractHoursValues(text);
-  } else if (normalizedStep === "pricing") {
-    patch.pricingPosture = extractPricingValue(text, arr(draft.services));
-  } else if (normalizedStep === "handoff") {
-    patch.humanHandoff = extractHandoffValue(text);
-  }
-
-  return {
-    patch: compactDraftObject(patch),
-    validation,
-  };
-}
-
-function hasQuestionMark(text = "") {
-  return /\?/.test(String(text || ""));
-}
-
-function isSocialTurn(text = "") {
-  return SOCIAL_PATTERNS.some((pattern) => pattern.test(String(text || "")));
-}
-
-function isConfusionTurn(text = "") {
-  return CONFUSION_PATTERNS.some((pattern) => pattern.test(String(text || "")));
-}
-
-function detectCorrectionTargetStep(text = "", currentStep = "") {
-  const value = normalizeMessage(text);
-  if (!CORRECTION_PATTERNS.some((pattern) => pattern.test(value))) {
-    return "";
-  }
-
-  for (const step of STEP_ORDER) {
-    const keywords = STEP_KEYWORDS[step] || [];
-    if (keywords.some((keyword) => value.includes(normalizeMessage(keyword)))) {
-      return step;
-    }
-  }
-
-  return normalizeQuestionKey(currentStep);
-}
-
-function stripCorrectionPrefix(text = "") {
-  return s(text)
-    .replace(
-      /\b(yox|deyil|düzəliş|duzelis|wrong|not|actually|instead|correction)\b[:\s-]*/gi,
-      ""
-    )
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-function isExplicitCrossStepMention(text = "", step = "") {
-  const value = normalizeMessage(text);
-  const keywords = STEP_KEYWORDS[step] || [];
-  return keywords.some((keyword) => value.includes(normalizeMessage(keyword)));
-}
-
-function extractCrossStepSignals(text = "", currentStep = "", draft = {}) {
-  const current = normalizeQuestionKey(currentStep);
-
-  if (!current || !isBehaviorStep(current)) {
-    return {
-      patch: buildEmptyAcceptedPatch(),
-      steps: [],
-    };
-  }
-
-  const patches = [];
-
-  for (const step of STEP_ORDER) {
-    if (step === current) continue;
-    if (!isBehaviorStep(step)) continue;
-    if (!isExplicitCrossStepMention(text, step)) continue;
-
-    const result = buildPatchForStep(step, text, draft);
-    if (hasAcceptedPatchSignal(result.patch)) {
-      patches.push({
-        step,
-        patch: result.patch,
-      });
-    }
-  }
-
-  if (!patches.length) {
-    return {
-      patch: buildEmptyAcceptedPatch(),
-      steps: [],
-    };
-  }
-
-  let merged = buildEmptyAcceptedPatch();
-  for (const item of patches) {
-    merged = mergeAcceptedPatches(merged, item.patch);
-  }
-
-  return {
-    patch: merged,
-    steps: patches.map((item) => item.step),
-  };
-}
-
-function getExamplesForStep(step = "", locale = "az-AZ") {
-  const normalizedLocale = normalizeSetupLocale(locale);
-  const examples =
-    obj(STEP_EXAMPLES[normalizedLocale])[step] ||
-    obj(STEP_EXAMPLES["az-AZ"])[step] ||
-    [];
-  return arr(examples).map((item) => s(item)).filter(Boolean).slice(0, 3);
-}
-
-function buildWarmRedirect(locale = "az-AZ", text = "") {
-  const normalizedLocale = normalizeSetupLocale(locale);
-
-  if (isSocialTurn(text)) {
-    return normalizedLocale === "az-AZ" ? "Oldu." : "Okay.";
-  }
-
-  if (isConfusionTurn(text) || hasQuestionMark(text)) {
-    return normalizedLocale === "az-AZ"
-      ? "Sadə yaza bilərsən."
-      : "You can answer more simply.";
-  }
-
-  return normalizedLocale === "az-AZ" ? "Bu hissə aydın olmadı." : "That part was not clear.";
-}
-
 function buildClarifyMessage({
   locale = "az-AZ",
   step = "",
-  retryCount = 0,
   text = "",
 } = {}) {
   const question = buildQuestion(step, locale);
-  const examples = getExamplesForStep(step, locale);
-
-  if (retryCount <= 1) {
-    if (examples.length) {
-      return [
-        buildWarmRedirect(locale, text),
-        s(question.prompt),
-        normalizeSetupLocale(locale) === "az-AZ"
-          ? `Məsələn: ${examples.join(" / ")}.`
-          : `For example: ${examples.join(" / ")}.`,
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    return [buildWarmRedirect(locale, text), s(question.prompt)]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  if (normalizeSetupLocale(locale) === "az-AZ") {
-    return [
-      buildWarmRedirect(locale, text),
-      "Bir qısa cümlə ilə yaza bilərsən.",
-      examples.length ? `Nümunə: ${examples.join(" / ")}.` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }
+  const isAz = normalizeSetupLocale(locale) === "az-AZ";
 
   return [
-    buildWarmRedirect(locale, text),
-    "You can answer in one short sentence.",
-    examples.length ? `Example: ${examples.join(" / ")}.` : "",
+    isAz
+      ? "Bu məlumatı təhlükəsiz çıxara bilmədim."
+      : "I could not safely extract that information.",
+    s(question.prompt),
+    s(text) ? "" : "",
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function buildBrainUnavailableTurn({
+  locale = "az-AZ",
+  currentStep = "",
+  draft = {},
+  review = null,
+  sources = [],
+  latestMessage = "",
+  model = "",
+  reason = "openai_setup_brain_required",
+} = {}) {
+  const isAz = normalizeSetupLocale(locale) === "az-AZ";
+  const plan = resolveConversationPlan({
+    locale,
+    draft,
+    currentStep,
+    review,
+    allowPark: true,
+  });
+
+  const assistantMessage = isAz
+    ? "Ağıllı setup beyni aktiv deyil. Bu axın keyword fallback ilə davam etməyəcək; OpenAI setup brain aktiv olmalıdır."
+    : "The intelligent setup brain is not active. This flow will not continue with a keyword fallback; the OpenAI setup brain must be enabled.";
+
+  return buildTurn({
+    locale,
+    currentStep,
+    draft,
+    review,
+    sources,
+    latestMessage,
+    acceptedPatch: buildEmptyAcceptedPatch(),
+    provider: "setup_brain_unavailable",
+    model,
+    usedFallback: false,
+    error: reason,
+    assistantMessage,
+    nextQuestion: plan.nextQuestion,
+    rejectedInputs: [
+      {
+        input: s(latestMessage),
+        reason: assistantMessage,
+        suggestedField: normalizeQuestionKey(currentStep),
+      },
+    ],
+    recommendationNotes: [reason],
+    forceReadyForApproval: false,
+  });
 }
 
 function resolveConversationPlan({
@@ -1477,7 +918,7 @@ function buildTurn({
   sources = [],
   latestMessage = "",
   acceptedPatch = {},
-  provider = "local_reasoning",
+  provider = "setup_navigation",
   model = "",
   usedFallback = false,
   error = "",
@@ -1598,7 +1039,7 @@ function buildPassiveTurn({
     sources,
     latestMessage: "",
     acceptedPatch: buildEmptyAcceptedPatch(),
-    provider: "local_reasoning",
+    provider: "setup_navigation",
     model,
     assistantMessage,
     nextQuestion: plan.nextQuestion,
@@ -1617,7 +1058,7 @@ function buildDirectAnswerTurn({
   latestMessage = "",
   acceptedPatch = {},
   model = "",
-  provider = "local_reasoning",
+  provider = "setup_navigation",
   polishedDraftOverride = null,
 } = {}) {
   const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
@@ -1664,7 +1105,7 @@ function buildCorrectionTurn({
   latestMessage = "",
   correctionPatch = {},
   model = "",
-  provider = "local_reasoning",
+  provider = "setup_navigation",
   polishedDraftOverride = null,
 } = {}) {
   const normalizedTarget = normalizeQuestionKey(targetStep);
@@ -1714,7 +1155,7 @@ function buildClarifyTurn({
   sources = [],
   latestMessage = "",
   model = "",
-  provider = "local_reasoning",
+  provider = "setup_navigation",
   invalidReason = "",
 } = {}) {
   const retryCount = countAssistantAsksForStep(review, currentStep);
@@ -2130,7 +1571,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       sources,
       latestMessage: safeMessage,
       acceptedPatch: buildEmptyAcceptedPatch(),
-      provider: "local_reasoning",
+      provider: "setup_navigation",
       model: runtime.model,
       assistantMessage,
       nextQuestion: plan.nextQuestion,
@@ -2140,91 +1581,50 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
   }
 
-  let openaiBusinessBrainAttempted = false;
-
   if (
-    runtime.forceFallback !== true &&
-    forceFallback !== true &&
-    hasOpenAISetupAssistant()
+    runtime.forceFallback === true ||
+    forceFallback === true ||
+    !hasOpenAISetupAssistant()
   ) {
-    openaiBusinessBrainAttempted = true;
-
-    try {
-      const preview = buildCurrentPreview(draft, review);
-      const reasoned = await callOpenAIReasoner({
-        locale,
-        currentStep,
-        question: currentQuestion,
-        preview,
-        latestMessage: safeMessage,
-        model: runtime.model,
-        timeoutMs: runtime.timeoutMs,
-        maxOutputTokens: runtime.maxOutputTokens,
-      });
-
-      const action = s(reasoned.action).toLowerCase();
-      const targetStep = normalizeQuestionKey(
-        s(reasoned.targetStep || currentStep)
-      );
-      const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
-
-      if (
-        ["direct_answer", "correction", "business_brief"].includes(action) &&
-        hasAcceptedPatchSignal(reasonedPatch)
-      ) {
-        const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
-        const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
-          mergedDraft,
-          review,
-          sources,
-          locale,
-          runtime,
-        });
-
-        if (action === "correction" && targetStep) {
-          return buildCorrectionTurn({
-            locale,
-            currentStep,
-            targetStep,
-            draft,
-            review,
-            sources,
-            latestMessage: safeMessage,
-            correctionPatch: reasonedPatch,
-            model: runtime.model,
-            provider: "openai_business_brain",
-            polishedDraftOverride,
-          });
-        }
-
-        return buildDirectAnswerTurn({
-          locale,
-          currentStep,
-          draft,
-          review,
-          sources,
-          latestMessage: safeMessage,
-          acceptedPatch: reasonedPatch,
-          model: runtime.model,
-          provider: "openai_business_brain",
-          polishedDraftOverride,
-        });
-      }
-    } catch {
-      // Keep deterministic setup fallback available if the LLM brain is unavailable.
-    }
+    return buildBrainUnavailableTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      model: runtime.model,
+      reason:
+        runtime.forceFallback === true || forceFallback === true
+          ? "openai_setup_brain_forced_off"
+          : "openai_setup_brain_required",
+    });
   }
 
-  const correctionTarget = detectCorrectionTargetStep(safeMessage, currentStep);
-  if (correctionTarget && correctionTarget !== currentStep) {
-    const correctionText = stripCorrectionPrefix(safeMessage);
-    const correctionResult = buildPatchForStep(correctionTarget, correctionText, draft);
+  try {
+    const preview = buildCurrentPreview(draft, review);
+    const reasoned = await callOpenAIReasoner({
+      locale,
+      currentStep,
+      question: currentQuestion,
+      preview,
+      latestMessage: safeMessage,
+      model: runtime.model,
+      timeoutMs: runtime.timeoutMs,
+      maxOutputTokens: runtime.maxOutputTokens,
+    });
+
+    const action = s(reasoned.action).toLowerCase();
+    const targetStep = normalizeQuestionKey(
+      s(reasoned.targetStep || currentStep)
+    );
+    const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
 
     if (
-      correctionResult.validation?.accepted === true &&
-      hasAcceptedPatchSignal(correctionResult.patch)
+      ["direct_answer", "correction", "business_brief"].includes(action) &&
+      hasAcceptedPatchSignal(reasonedPatch)
     ) {
-      const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionResult.patch);
+      const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
       const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
         mergedDraft,
         review,
@@ -2233,179 +1633,72 @@ export async function runSetupAssistantOpenAIOrchestrator({
         runtime,
       });
 
-      return buildCorrectionTurn({
+      if (action === "correction" && targetStep) {
+        return buildCorrectionTurn({
+          locale,
+          currentStep,
+          targetStep,
+          draft,
+          review,
+          sources,
+          latestMessage: safeMessage,
+          correctionPatch: reasonedPatch,
+          model: runtime.model,
+          provider: "openai_business_brain",
+          polishedDraftOverride,
+        });
+      }
+
+      return buildDirectAnswerTurn({
         locale,
         currentStep,
-        targetStep: correctionTarget,
         draft,
         review,
         sources,
         latestMessage: safeMessage,
-        correctionPatch: correctionResult.patch,
+        acceptedPatch: reasonedPatch,
         model: runtime.model,
-        provider: "local_reasoning",
+        provider: "openai_business_brain",
         polishedDraftOverride,
       });
     }
-  }
 
-  const directInput =
-    correctionTarget && correctionTarget === currentStep
-      ? stripCorrectionPrefix(safeMessage)
-      : safeMessage;
-
-  const directResult = buildPatchForStep(currentStep, directInput, draft);
-  const directPatch = obj(directResult.patch);
-  const directValidation = obj(directResult.validation);
-
-  if (directValidation.accepted === true && hasAcceptedPatchSignal(directPatch)) {
-    const secondary = extractCrossStepSignals(safeMessage, currentStep, draft);
-    const mergedPatch = mergeAcceptedPatches(directPatch, secondary.patch);
-    const mergedDraft = buildDraftWithAcceptedPatch(draft, mergedPatch);
-    const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
-      mergedDraft,
-      review,
-      sources,
-      locale,
-      runtime,
-    });
-
-    return buildDirectAnswerTurn({
+    return buildClarifyTurn({
       locale,
       currentStep,
       draft,
       review,
       sources,
       latestMessage: safeMessage,
-      acceptedPatch: mergedPatch,
       model: runtime.model,
-      provider: "local_reasoning",
-      polishedDraftOverride,
+      provider: "openai_business_brain",
+      invalidReason: s(
+        reasoned.reason || "The AI setup brain could not extract safe business facts."
+      ),
+    });
+  } catch (error) {
+    return buildBrainUnavailableTurn({
+      locale,
+      currentStep,
+      draft,
+      review,
+      sources,
+      latestMessage: safeMessage,
+      model: runtime.model,
+      reason: s(error?.message || "openai_setup_brain_failed"),
     });
   }
-
-  if (
-    openaiBusinessBrainAttempted !== true &&
-    runtime.forceFallback !== true &&
-    forceFallback !== true &&
-    hasOpenAISetupAssistant()
-  ) {
-    try {
-      const preview = buildCurrentPreview(draft, review);
-      const reasoned = await callOpenAIReasoner({
-        locale,
-        currentStep,
-        question: currentQuestion,
-        preview,
-        latestMessage: safeMessage,
-        model: runtime.model,
-        timeoutMs: runtime.timeoutMs,
-        maxOutputTokens: runtime.maxOutputTokens,
-      });
-
-      const action = s(reasoned.action).toLowerCase();
-      const targetStep = normalizeQuestionKey(
-        s(reasoned.targetStep || currentStep)
-      );
-      const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
-
-      if (
-        ["direct_answer", "correction", "business_brief"].includes(action) &&
-        hasAcceptedPatchSignal(reasonedPatch)
-      ) {
-        const mergedDraft = buildDraftWithAcceptedPatch(draft, reasonedPatch);
-        const polishedDraftOverride = await maybeBuildPolishedDraftPreview({
-          mergedDraft,
-          review,
-          sources,
-          locale,
-          runtime,
-        });
-
-        if (action === "correction" && targetStep) {
-          return buildCorrectionTurn({
-            locale,
-            currentStep,
-            targetStep,
-            draft,
-            review,
-            sources,
-            latestMessage: safeMessage,
-            correctionPatch: reasonedPatch,
-            model: runtime.model,
-            provider: "openai_reasoning",
-            polishedDraftOverride,
-          });
-        }
-
-        return buildDirectAnswerTurn({
-          locale,
-          currentStep,
-          draft,
-          review,
-          sources,
-          latestMessage: safeMessage,
-          acceptedPatch: reasonedPatch,
-          model: runtime.model,
-          provider: "openai_reasoning",
-          polishedDraftOverride,
-        });
-      }
-
-      return buildClarifyTurn({
-        locale,
-        currentStep,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        model: runtime.model,
-        provider: "openai_reasoning",
-        invalidReason: s(reasoned.reason || directValidation.reason),
-      });
-    } catch (error) {
-      return buildClarifyTurn({
-        locale,
-        currentStep,
-        draft,
-        review,
-        sources,
-        latestMessage: safeMessage,
-        model: runtime.model,
-        provider: "local_reasoning",
-        invalidReason: s(error?.message || directValidation.reason),
-      });
-    }
-  }
-
-  return buildClarifyTurn({
-    locale,
-    currentStep,
-    draft,
-    review,
-    sources,
-    latestMessage: safeMessage,
-    model: runtime.model,
-    provider: "local_reasoning",
-    invalidReason: s(directValidation.reason),
-  });
 }
 
 export const __test__ = {
   buildCurrentPreview,
   buildSourceSignals,
   resolveReplyLocale,
-  buildPatchForStep,
   buildDraftWithAcceptedPatch,
   hasAcceptedPatchSignal,
   mergeAcceptedPatches,
-  detectCorrectionTargetStep,
-  stripCorrectionPrefix,
-  extractCrossStepSignals,
   resolveConversationPlan,
   countAssistantAsksForStep,
-  isSocialTurn,
-  isConfusionTurn,
   buildAcceptedPatchFromReasonerPayload,
   setCachedClient(client = null) {
     cachedClient = client;

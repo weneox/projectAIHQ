@@ -556,7 +556,9 @@ describe("Inbox", () => {
     await waitFor(() => {
       expect(getLaunchPosture).toHaveBeenCalled();
     });
-    expect(screen.getByText(/business info needs review/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/business info needs review/i)
+    ).toBeInTheDocument();
 
     expect(getLaunchPosture).toHaveBeenCalledTimes(1);
     expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
