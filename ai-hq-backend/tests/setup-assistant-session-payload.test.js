@@ -103,10 +103,14 @@ test("session payload hides the user-facing draft while exposing internal hidden
     payload.setup.rawDraft.pricingPosture.publicSummary,
     "Pricing depends on the service."
   );
-  assert.ok(
+  assert.equal(
     payload.setup.assistant.sections.some(
       (section) => section.key === "pricing_behavior"
-    )
+    ),
+    false
+  );
+  assert.ok(
+    payload.setup.assistant.sections.some((section) => section.key === "pricing")
   );
   assert.deepEqual(payload.setup.assistant.approvalBlockers, []);
 });

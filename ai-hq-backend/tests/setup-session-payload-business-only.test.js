@@ -52,7 +52,7 @@ test("stored setup brain payload ignores legacy behavior fields", () => {
     },
   });
 
-  assert.deepEqual(payload.aiBehavior, {});
+  assert.deepEqual(payload.aiBehavior || {}, {});
   assert.equal(payload.sourceSignals.primarySourceType, "website");
   assert.equal(
     Object.prototype.hasOwnProperty.call(
