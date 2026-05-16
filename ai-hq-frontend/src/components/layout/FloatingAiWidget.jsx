@@ -766,7 +766,7 @@ export default function FloatingAiWidget({
           {!pageMode ? (
             <motion.button
               type="button"
-              aria-label="Close setup"
+              aria-label="Close assistant setup"
               className="absolute inset-0 bg-[rgba(15,23,42,0.16)] pointer-events-auto"
               onClick={() => onOpenChange?.(false)}
               initial={{ opacity: 0 }}
@@ -784,7 +784,7 @@ export default function FloatingAiWidget({
             }
             role={pageMode ? "region" : "dialog"}
             aria-modal={pageMode ? undefined : "true"}
-            aria-label="Setup"
+            aria-label="Assistant setup"
             initial={{ x: "100%", opacity: 0.98 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "100%", opacity: 0.98 }}
@@ -817,7 +817,7 @@ export default function FloatingAiWidget({
                   type="button"
                   onClick={() => onOpenChange?.(false)}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text"
-                  aria-label="Close setup"
+                  aria-label="Close assistant setup"
                 >
                   <X className="h-5 w-5" strokeWidth={2} />
                 </button>
