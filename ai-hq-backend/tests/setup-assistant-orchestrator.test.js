@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import { cfg } from "../src/config.js";
@@ -21,7 +21,15 @@ function withOpenAISetupConfig(t, overrides = {}) {
     openaiSetupTurnPolisherReadyOnly: cfg.ai.openaiSetupTurnPolisherReadyOnly,
   };
 
-  Object.assign(cfg.ai, overrides);
+  Object.assign(cfg.ai, {
+    openaiApiKey: "test-key",
+    openaiSetupAssistantEnabled: true,
+    openaiSetupForceFallback: false,
+    openaiSetupModel: "test-model",
+    openaiSetupEnableTurnPolisher: false,
+    openaiSetupTurnPolisherReadyOnly: true,
+    ...overrides,
+  });
 
   t.after(() => {
     Object.assign(cfg.ai, previous);
@@ -29,7 +37,48 @@ function withOpenAISetupConfig(t, overrides = {}) {
   });
 }
 
-test("business-step answers stay minimal while still producing a deterministic hidden preview", async () => {
+function reasonerPayload(overrides = {}) {
+  return {
+    action: "direct_answer",
+    targetStep: "",
+    reason: "",
+    companyName: "",
+    description: "",
+    services: [],
+    contacts: [],
+    hours: [],
+    pricingPosture: "",
+    humanHandoff: "",
+    websiteUrl: "",
+    pricingBehavior: "",
+    locationBehavior: "",
+    bookingBehavior: "",
+    contactBehavior: "",
+    handoffBehavior: "",
+    ...overrides,
+  };
+}
+
+function setReasonerClient(payloadFactory) {
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => ({
+        output_parsed: payloadFactory(request),
+      }),
+    },
+  });
+}
+
+test("business-step answers require OpenAI brain and produce hidden preview from acceptedPatch", async (t) => {
+  withOpenAISetupConfig(t);
+  setReasonerClient(() =>
+    reasonerPayload({
+      action: "direct_answer",
+      targetStep: "services",
+      services: ["consultation", "implants"],
+    })
+  );
+
   const draft = buildDraft({
     languages: ["en"],
     businessProfile: {
@@ -43,32 +92,74 @@ test("business-step answers stay minimal while still producing a deterministic h
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "services",
-    },
+    session: { currentStep: "services" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "services",
-      },
+      session: { currentStep: "services" },
     },
     latestStep: "services",
     latestMessage: "consultation, implants",
-    forceFallback: true,
   });
 
-  assert.equal(result.provider, "local_reasoning");
+  assert.equal(result.provider, "openai_business_brain");
   assert.deepEqual(result.acceptedPatch.services, ["consultation", "implants"]);
   assert.equal(result.nextQuestion.key, "contacts");
   assert.equal(result.draft.businessName, "Acme Clinic");
   assert.deepEqual(result.draft.coreServices, ["consultation", "implants"]);
   assert.equal(result.sourceSignals.primarySourceUrl, "https://acme.az");
   assert.match(result.assistantMessage, /^Okay\./);
-  assert.doesNotMatch(result.assistantMessage, /http|source|debug/i);
+  assert.doesNotMatch(result.assistantMessage, /debug|source/i);
 });
 
-test("contact-step answers do not emit fake cross-step behavior chatter", async () => {
+test("non-empty setup messages do not use local keyword fallback when OpenAI brain is unavailable", async (t) => {
+  withOpenAISetupConfig(t, {
+    openaiApiKey: "",
+    openaiSetupAssistantEnabled: false,
+    openaiSetupForceFallback: true,
+  });
+  orchestratorTest.clearCachedClient();
+
+  const draft = buildDraft({
+    languages: ["en"],
+    businessProfile: {
+      companyName: "Acme Clinic",
+      description: "Dental clinic in Baku",
+    },
+    progress: {
+      currentQuestionKey: "services",
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "services" },
+    draft,
+    review: {
+      draft,
+      session: { currentStep: "services" },
+    },
+    latestStep: "services",
+    latestMessage: "consultation, implants",
+    forceFallback: true,
+  });
+
+  assert.equal(result.provider, "setup_brain_unavailable");
+  assert.deepEqual(result.acceptedPatch, {});
+  assert.equal(result.usedFallback, false);
+  assert.match(result.error, /openai_setup_brain_forced_off/);
+  assert.match(result.assistantMessage, /OpenAI setup brain/i);
+});
+
+test("contact-step answers carry contacts without fake cross-step behavior chatter", async (t) => {
+  withOpenAISetupConfig(t);
+  setReasonerClient(() =>
+    reasonerPayload({
+      action: "direct_answer",
+      targetStep: "contacts",
+      contacts: ["WhatsApp +994551112233"],
+    })
+  );
+
   const draft = buildCompleteBusinessDraft({
     languages: ["en"],
     contacts: [],
@@ -78,19 +169,14 @@ test("contact-step answers do not emit fake cross-step behavior chatter", async 
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "contacts",
-    },
+    session: { currentStep: "contacts" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "contacts",
-      },
+      session: { currentStep: "contacts" },
     },
     latestStep: "contacts",
     latestMessage: "WhatsApp +994551112233, WhatsApp first",
-    forceFallback: true,
   });
 
   assert.ok(result.acceptedPatch.contacts.some((item) => /\+994551112233/.test(item)));
@@ -103,7 +189,16 @@ test("contact-step answers do not emit fake cross-step behavior chatter", async 
   );
 });
 
-test("correction flow still works without leaking unrelated updates", async () => {
+test("correction flow works through OpenAI acceptedPatch without leaking unrelated updates", async (t) => {
+  withOpenAISetupConfig(t);
+  setReasonerClient(() =>
+    reasonerPayload({
+      action: "correction",
+      targetStep: "company",
+      companyName: "Alpha Clinic",
+    })
+  );
+
   const draft = buildDraft({
     languages: ["en"],
     businessProfile: {
@@ -116,19 +211,14 @@ test("correction flow still works without leaking unrelated updates", async () =
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "services",
-    },
+    session: { currentStep: "services" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "services",
-      },
+      session: { currentStep: "services" },
     },
     latestStep: "services",
     latestMessage: "actually company Alpha Clinic",
-    forceFallback: true,
   });
 
   assert.match(result.acceptedPatch.identity.businessName, /Alpha Clinic/i);
@@ -137,7 +227,16 @@ test("correction flow still works without leaking unrelated updates", async () =
   assert.match(result.assistantMessage, /^Updated\./);
 });
 
-test("pricing answers like 'xidmete gore deyisir' are accepted as valid pricing posture", async () => {
+test("pricing answers like 'xidmete gore deyisir' are accepted by OpenAI brain as pricing posture", async (t) => {
+  withOpenAISetupConfig(t);
+  setReasonerClient(() =>
+    reasonerPayload({
+      action: "direct_answer",
+      targetStep: "pricing",
+      pricingPosture: "xidmete gore deyisir",
+    })
+  );
+
   const draft = buildDraft({
     languages: ["en"],
     businessProfile: {
@@ -161,27 +260,32 @@ test("pricing answers like 'xidmete gore deyisir' are accepted as valid pricing 
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "pricing",
-    },
+    session: { currentStep: "pricing" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "pricing",
-      },
+      session: { currentStep: "pricing" },
     },
     latestStep: "pricing",
     latestMessage: "xidmete gore deyisir",
-    forceFallback: true,
   });
 
-  assert.equal(result.provider, "local_reasoning");
+  assert.equal(result.provider, "openai_business_brain");
   assert.match(result.acceptedPatch.pricingPosture, /deyisir/i);
-  assert.equal(result.nextQuestion.key, "handoff");
+  assert.equal(result.readyForApproval, true);
+  assert.equal(result.nextQuestion, null);
 });
 
-test("clarify turns stay short and move on instead of getting noisy", async () => {
+test("unclear OpenAI turns stay short and move on instead of getting noisy", async (t) => {
+  withOpenAISetupConfig(t);
+  setReasonerClient(() =>
+    reasonerPayload({
+      action: "unclear",
+      targetStep: "pricing",
+      reason: "off topic",
+    })
+  );
+
   const draft = buildDraft({
     languages: ["en"],
     businessProfile: {
@@ -195,15 +299,11 @@ test("clarify turns stay short and move on instead of getting noisy", async () =
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "pricing",
-    },
+    session: { currentStep: "pricing" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "pricing",
-      },
+      session: { currentStep: "pricing" },
       timeline: [
         {
           role: "assistant",
@@ -219,52 +319,61 @@ test("clarify turns stay short and move on instead of getting noisy", async () =
     },
     latestStep: "pricing",
     latestMessage: "how are you?",
-    forceFallback: true,
   });
 
   assert.deepEqual(result.acceptedPatch, {});
+  assert.equal(result.provider, "openai_business_brain");
   assert.equal(result.rejectedInputs.length, 1);
   assert.equal(result.nextQuestion.key, "contacts");
   assert.match(result.assistantMessage, /move to the next part/i);
-  assert.ok(
-    result.assistantMessage.split(/\s+/).filter(Boolean).length <= 25
-  );
+  assert.ok(result.assistantMessage.split(/\s+/).filter(Boolean).length <= 25);
   assert.doesNotMatch(result.assistantMessage, /http|debug|source/i);
 });
 
 test("polished draft override path replaces the hidden preview when the polisher succeeds", async (t) => {
   withOpenAISetupConfig(t, {
-    openaiApiKey: "test-key",
-    openaiSetupAssistantEnabled: true,
-    openaiSetupForceFallback: false,
-    openaiSetupModel: "test-model",
     openaiSetupEnableTurnPolisher: true,
     openaiSetupTurnPolisherReadyOnly: false,
   });
 
   orchestratorTest.setCachedClient({
     responses: {
-      create: async () => ({
-        output_parsed: {
-          businessName: "Acme Clinic",
-          whatThisBusinessIs: "Professional dental clinic focused on implants.",
-          websiteUrl: "https://acme.az",
-          coreServices: ["Consultation", "Implants"],
-          contactRoutes: ["WhatsApp"],
-          hours: ["Mon-Fri 09:00-18:00"],
-          pricingPosture: "Pricing depends on the service.",
-          humanHandoff: "Escalate urgent or complaint cases.",
-          pricingBehavior: "Ask service first.",
-          locationBehavior: "Address + map.",
-          bookingBehavior: "Route to WhatsApp.",
-          contactBehavior: "WhatsApp first.",
-          handoffBehavior: "Contextual handoff.",
-          languages: ["en"],
-          tone: "professional",
-          greetingStyle: "warm",
-          afterHoursBehavior: "take a message",
-        },
-      }),
+      create: async (request = {}) => {
+        const name = request?.text?.format?.name;
+
+        if (name === "setup_assistant_polished_draft") {
+          return {
+            output_parsed: {
+              businessName: "Acme Clinic",
+              whatThisBusinessIs: "Professional dental clinic focused on implants.",
+              websiteUrl: "https://acme.az",
+              coreServices: ["Consultation", "Implants"],
+              contactRoutes: ["WhatsApp"],
+              hours: ["Mon-Fri 09:00-18:00"],
+              pricingPosture: "Pricing depends on the service.",
+              humanHandoff: "Escalate urgent or complaint cases.",
+              pricingBehavior: "Ask service first.",
+              locationBehavior: "Address + map.",
+              bookingBehavior: "Route to WhatsApp.",
+              contactBehavior: "WhatsApp first.",
+              handoffBehavior: "Contextual handoff.",
+              languages: ["en"],
+              tone: "professional",
+              greetingStyle: "warm",
+              afterHoursBehavior: "take a message",
+            },
+          };
+        }
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "direct_answer",
+            targetStep: "services",
+            services: ["Consultation", "Implants"],
+            websiteUrl: "https://acme.az",
+          }),
+        };
+      },
     },
   });
 
@@ -276,21 +385,17 @@ test("polished draft override path replaces the hidden preview when the polisher
   });
 
   const result = await runSetupAssistantOpenAIOrchestrator({
-    session: {
-      currentStep: "services",
-    },
+    session: { currentStep: "services" },
     draft,
     review: {
       draft,
-      session: {
-        currentStep: "services",
-      },
+      session: { currentStep: "services" },
     },
     latestStep: "services",
     latestMessage: "consultation, implants",
   });
 
-  assert.equal(result.provider, "local_reasoning");
+  assert.equal(result.provider, "openai_business_brain");
   assert.equal(
     result.draft.whatThisBusinessIs,
     "Professional dental clinic focused on implants."
