@@ -108,6 +108,65 @@ function compactText(value, max = 220) {
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
 }
 
+const POLICY_VALUE_COPY = {
+  answer_first: "Qiymət faktı varsa qısa cavab verir.",
+  answer_then_link: "Əvvəl qısa izah edir, sonra uyğun link və ya yönləndirmə verir.",
+  link_first: "Qiymət üçün əvvəlcə uyğun linkə yönləndirir.",
+  ask_service_first: "Qiymət demədən əvvəl xidmət növünü dəqiqləşdirir.",
+  quote_first: "Dəqiq qiyməti uydurmur, əvvəlcə sorğu və ya konsultasiyaya yönləndirir.",
+
+  text_only: "Ünvanı qısa mətn kimi verir.",
+  text_then_map: "Ünvanı yazır, lazım olsa xəritə linki də verir.",
+  map_first: "Ünvan üçün xəritə linkini önə çıxarır.",
+
+  best_available: "Ən uyğun mövcud əlaqə yolunu seçir.",
+  route_whatsapp: "Booking üçün WhatsApp-a yönləndirir.",
+  route_instagram: "Booking üçün Instagram DM-ə yönləndirir.",
+  route_website: "Booking üçün website linkinə yönləndirir.",
+  collect_then_route: "Əvvəl qısa məlumat toplayır, sonra uyğun yerə yönləndirir.",
+
+  whatsapp_first: "Əlaqə üçün WhatsApp-ı önə çıxarır.",
+  call_first: "Əlaqə üçün zəngi önə çıxarır.",
+  email_first: "Əlaqə üçün email-i önə çıxarır.",
+
+  contextual_handoff: "Lazım olanda kontekstə görə insana ötürür.",
+  ask_then_handoff: "İnsana ötürməzdən əvvəl qısa səbəb soruşur.",
+  direct_handoff: "İnsan istənəndə birbaşa operatora yönləndirir.",
+
+  warm_professional: "İsti və professional salamlayır.",
+  brief_professional: "Qısa və professional salamlayır.",
+  premium_concierge: "Premium concierge üslubunda salamlayır.",
+  friendly_local: "Səmimi və yerli üslubda salamlayır.",
+
+  warm_invite: "Sonda isti növbəti addım təklifi verir.",
+  brief_invite: "Söhbəti qısa və səliqəli bağlayır.",
+  premium_invite: "Söhbəti premium və nəzakətli bağlayır.",
+  soft_close: "Söhbəti yumşaq şəkildə bağlayır.",
+
+  professional_reassuring: "Professional və arxayın tonda danışır.",
+  warm_human: "İsti və insani tonda danışır.",
+  premium_polished: "Premium və səliqəli tonda danışır.",
+  direct_clear: "Düz, qısa və aydın danışır.",
+
+  concise: "Qısa cavablar verir.",
+  balanced: "Balanslı uzunluqda cavab verir.",
+  detailed: "Lazım olanda daha detallı cavab verir.",
+};
+
+function humanizeDraftValue(value = "") {
+  const text = s(value);
+  if (!text) return "";
+
+  const direct = POLICY_VALUE_COPY[lower(text)];
+  if (direct) return direct;
+
+  if (/^[a-z]+(?:_[a-z]+)+$/.test(text)) {
+    return text.replace(/_/g, " ");
+  }
+
+  return text;
+}
+
 function listPreview(items = [], max = 6) {
   const safe = uniqueStrings(
     arr(items).map((item) => compactText(item, 90)),
@@ -257,9 +316,9 @@ function mergeTimelineEntries(...segments) {
 
 function phaseLabelFromKey(value = "") {
   const key = lower(value);
-  if (key === "business_truth") return "Business truth";
-  if (key === "conversation_policy") return "Conversation policy";
-  if (key === "review_and_launch") return "Review & launch";
+  if (key === "business_truth") return "Biznes faktları";
+  if (key === "conversation_policy") return "AI danışıq qaydası";
+  if (key === "review_and_launch") return "Yoxlama";
   return "Setup";
 }
 
@@ -632,12 +691,11 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
         </div>
 
         <div className="mt-4 text-[21px] font-semibold tracking-[-0.045em] text-text">
-          Set up the launch lane.
+          AI resepsionisti hazırlayaq.
         </div>
 
         <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
-          First approve the business truth. Then define reply behavior and review
-          the draft before live replies.
+          Əvvəl biznes faktlarını toplayırıq. Sonra AI-nin danışıq qaydasını sadə dildə yoxlayıb təsdiqləyirik.
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -724,7 +782,8 @@ function SectionRow({ section = {}, last = false }) {
 }
 
 function EditorialRow({ label, value, noBorder = false }) {
-  if (!s(value)) return null;
+  const displayValue = humanizeDraftValue(value);
+  if (!displayValue) return null;
 
   return (
     <div
@@ -736,7 +795,7 @@ function EditorialRow({ label, value, noBorder = false }) {
         {label}
       </div>
       <div className="text-[14px] leading-7 tracking-[-0.01em] text-text">
-        {value}
+        {displayValue}
       </div>
     </div>
   );
@@ -779,33 +838,33 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
   const reviewFlags = reviewFlagsFromModel(model);
 
   const rows = [
-    ["Business name", draft.businessName],
-    ["What the business does", draft.whatThisBusinessIs],
+    ["Biznes adı", draft.businessName],
+    ["Biznes nə edir", draft.whatThisBusinessIs],
     ["Website", draft.websiteUrl],
-    ["Core services", listPreview(draft.coreServices, 6)],
-    ["Pricing posture", draft.pricingPosture],
-    ["Contact routes", listPreview(draft.contactRoutes, 6)],
-    ["Hours", listPreview(draft.hours, 4)],
-    ["Human handoff", draft.humanHandoff],
-    ["Greeting behavior", draft.greetingBehaviorSummary],
-    ["Closing behavior", draft.closingBehaviorSummary],
-    ["Tone behavior", draft.toneBehaviorSummary],
-    ["Pricing response", draft.pricingBehaviorSummary],
-    ["Location response", draft.locationBehaviorSummary],
-    ["Booking routing", draft.bookingBehaviorSummary],
-    ["Contact preference", draft.contactBehaviorSummary],
-    ["Handoff behavior", draft.handoffBehaviorSummary],
+    ["Əsas xidmətlər", listPreview(draft.coreServices, 6)],
+    ["Qiymət məntiqi", draft.pricingPosture],
+    ["Əlaqə yolları", listPreview(draft.contactRoutes, 6)],
+    ["İş saatları", listPreview(draft.hours, 4)],
+    ["İnsana ötürmə halları", draft.humanHandoff],
+    ["Salamlama", draft.greetingBehaviorSummary],
+    ["Söhbəti bağlama", draft.closingBehaviorSummary],
+    ["Ümumi ton", draft.toneBehaviorSummary],
+    ["Qiymət soruşulanda", draft.pricingBehaviorSummary],
+    ["Ünvan soruşulanda", draft.locationBehaviorSummary],
+    ["Rezervasiya istənəndə", draft.bookingBehaviorSummary],
+    ["Əlaqə istənəndə", draft.contactBehaviorSummary],
+    ["Operator lazım olanda", draft.handoffBehaviorSummary],
   ].filter(([, value]) => s(value));
 
   const hasHighRisk = reviewFlags.some((item) => item.level === "high");
   const statusLabel =
     model.readyForApproval === true
       ? hasHighRisk
-        ? "Review required"
+        ? "Yoxlama lazımdır"
         : reviewFlags.length > 0
-          ? "Ready with notes"
-          : "Ready for approval"
-      : "In progress";
+          ? "Qeydlərlə hazır"
+          : "Təsdiqə hazır"
+      : "Hazırlanır";
 
   const statusTone = hasHighRisk
     ? "text-[#991b1b]"
@@ -823,10 +882,10 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-                    Review & launch
+                    Yoxlama
                   </div>
                   <div className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
-                    Setup draft
+                    AI resepsionist draftı
                   </div>
                   <div className={`mt-1 text-[12px] font-medium ${statusTone}`}>
                     {statusLabel}
@@ -839,7 +898,7 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
                     onClick={onFinalize}
                     disabled={finalizing}
                   >
-                    {finalizing ? "Approving..." : "Approve & launch"}
+                    {finalizing ? "Təsdiqlənir..." : "Təsdiqlə"}
                     <ArrowRight className="h-4 w-4" strokeWidth={2} />
                   </ActionButton>
                 ) : null}
@@ -859,7 +918,7 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
               {reviewFlags.length > 0 ? (
                 <div className="mt-4 rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-white/80 px-4 py-4">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                    Review signals
+                    Yoxlama qeydləri
                   </div>
                   <div className="mt-3">
                     {reviewFlags.map((item, index) => (
@@ -965,7 +1024,7 @@ function buildPhaseCardsFromSections(sections = []) {
   return [
     {
       key: "business_truth",
-      title: "Business truth",
+      title: "Biznes faktları",
       tone:
         business.total > 0 && business.ready === business.total
           ? "success"
@@ -976,16 +1035,16 @@ function buildPhaseCardsFromSections(sections = []) {
         business.total > 0 && business.ready === business.total
           ? "Ready"
           : business.ready > 0 || business.needsReview > 0
-            ? "In progress"
+            ? "Hazırlanır"
             : "Not started",
       summary:
-        "Core facts the AI can safely answer from: identity, services, contacts, hours, pricing, and handoff rules.",
+        "AI-nin təhlükəsiz cavab verəcəyi əsas faktlar: kimlik, xidmətlər, əlaqə, iş saatı, qiymət və insana ötürmə qaydaları.",
       progressText:
         business.total > 0 ? `${business.ready}/${business.total} ready` : "",
     },
     {
       key: "conversation_policy",
-      title: "Conversation policy",
+      title: "AI danışıq qaydası",
       tone:
         conversation.total > 0 && conversation.ready === conversation.total
           ? "success"
@@ -996,10 +1055,10 @@ function buildPhaseCardsFromSections(sections = []) {
         conversation.total > 0 && conversation.ready === conversation.total
           ? "Ready"
           : conversation.ready > 0 || conversation.needsReview > 0
-            ? "In progress"
+            ? "Hazırlanır"
             : "Waiting",
       summary:
-        "Greeting, closing, tone, and routing behavior that shape how the assistant actually speaks.",
+        "AI-nin salamı, tonu, cavab uzunluğu və müştərini hara yönləndirəcəyi.",
       progressText:
         conversation.total > 0
           ? `${conversation.ready}/${conversation.total} ready`
@@ -1007,7 +1066,7 @@ function buildPhaseCardsFromSections(sections = []) {
     },
     {
       key: "review_and_launch",
-      title: "Review & launch",
+      title: "Yoxlama",
       tone:
         review.total > 0 && review.ready === review.total
           ? "success"
@@ -1017,7 +1076,7 @@ function buildPhaseCardsFromSections(sections = []) {
           ? "Ready"
           : "Locked",
       summary:
-        "The final draft opens here only after business truth and conversation policy are ready.",
+        "Biznes faktları və danışıq qaydası hazır olanda son yoxlama burada açılır.",
       progressText: review.total > 0 ? `${review.ready}/${review.total} ready` : "",
     },
   ];
@@ -1125,13 +1184,13 @@ export default function SetupAssistantSections({
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="border-b border-[rgba(15,23,42,0.06)] px-5 py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          Setup flow
+          Assistant setup
         </div>
         <div className="mt-2 text-[19px] font-semibold tracking-[-0.04em] text-text">
-          Business truth, policy, review
+          AI receptionist setup
         </div>
         <div className="mt-1 text-[13px] leading-6 text-text-subtle">
-          Define what AI can safely use, then how it should speak.
+          Biznes faktlarını ver, AI-nin necə cavab verməli olduğunu təhlükəsiz şəkildə quraq.
         </div>
       </div>
 
@@ -1169,7 +1228,7 @@ export default function SetupAssistantSections({
               className="overflow-hidden rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
             >
               <div className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                Business truth coverage
+                Biznes faktları
               </div>
               {arr(groupedSections.business_truth).map((section, index, all) => (
                 <SectionRow
@@ -1189,7 +1248,7 @@ export default function SetupAssistantSections({
               className="overflow-hidden rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
             >
               <div className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                Conversation policy coverage
+                AI danışıq qaydası
               </div>
               {arr(groupedSections.conversation_policy).map((section, index, all) => (
                 <SectionRow
@@ -1241,7 +1300,7 @@ export default function SetupAssistantSections({
               className="rounded-[20px] border border-[rgba(15,23,42,0.06)] bg-white/90 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                Setup review signals
+                Yoxlama qeydləri
               </div>
               <div className="mt-3">
                 {reviewFlags.map((item, index) => (
