@@ -1,4 +1,4 @@
-﻿import { arr, compactDraftObject, mergeDraftState, obj, s } from "../draftShared.js";
+import { arr, compactDraftObject, mergeDraftState, obj, s } from "../draftShared.js";
 import {
   parseHoursNote,
   parsePricingNote,
@@ -10,7 +10,6 @@ import { normalizeQuestionKey } from "./questions.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
-  normalizeBehaviorPolicyKey,
   normalizeWebsiteUrl,
   nowIso,
   splitAnswerList,
@@ -20,7 +19,6 @@ import {
   buildAssistantSourceMetadataPatch,
   mergeSetupAssistantCore,
   mergeSourceMetadata,
-  sanitizeAssistantBehaviorDraft,
   sanitizeAssistantState,
   sanitizeBusinessProfile,
   sanitizeContacts,
@@ -38,32 +36,6 @@ function normalizeStep(value = "") {
   if (normalized) return normalized;
   if (raw === "profile") return "profile";
   if (raw === "website") return "company";
-  return "";
-}
-
-function isBehaviorStep(step = "") {
-  return [
-    "greeting_behavior",
-    "closing_behavior",
-    "tone_behavior",
-    "pricing_behavior",
-    "location_behavior",
-    "booking_behavior",
-    "contact_behavior",
-    "handoff_behavior",
-  ].includes(normalizeStep(step));
-}
-
-function behaviorPolicyKeyFromStep(step = "") {
-  const safeStep = normalizeStep(step);
-  if (safeStep === "greeting_behavior") return "greeting";
-  if (safeStep === "closing_behavior") return "closing";
-  if (safeStep === "tone_behavior") return "tone";
-  if (safeStep === "pricing_behavior") return "pricing";
-  if (safeStep === "location_behavior") return "location";
-  if (safeStep === "booking_behavior") return "booking";
-  if (safeStep === "contact_behavior") return "contact";
-  if (safeStep === "handoff_behavior") return "handoff";
   return "";
 }
 
@@ -257,44 +229,6 @@ function normalizeDirectPatchBody(body = {}) {
     out.assistantState = sanitizeAssistantState(obj(assistantState.value));
   }
 
-  const assistantBehaviorDraft = pickAliasedField(root, [
-    "assistantBehaviorDraft",
-    "assistant_behavior_draft",
-    "assistantBehavior",
-    "assistant_behavior",
-  ]);
-  if (assistantBehaviorDraft.provided) {
-    out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft(
-      obj(assistantBehaviorDraft.value)
-    );
-  }
-
-  const behaviorPatch = {};
-  for (const [targetKey, aliases] of Object.entries({
-    platformDefaults: ["platformDefaults", "platform_defaults"],
-    tenantOverrides: ["tenantOverrides", "tenant_overrides"],
-    greetingPolicy: ["greetingPolicy", "greeting_policy"],
-    closingPolicy: ["closingPolicy", "closing_policy"],
-    tonePolicy: ["tonePolicy", "tone_policy"],
-    pricingPolicy: ["pricingPolicy", "pricing_policy"],
-    locationPolicy: ["locationPolicy", "location_policy"],
-    bookingPolicy: ["bookingPolicy", "booking_policy"],
-    contactPolicy: ["contactPolicy", "contact_policy"],
-    handoffPolicy: ["handoffPolicy", "handoff_policy"],
-  })) {
-    const picked = pickAliasedField(root, aliases);
-    if (picked.provided) {
-      behaviorPatch[targetKey] = obj(picked.value);
-    }
-  }
-
-  if (Object.keys(behaviorPatch).length) {
-    out.assistantBehaviorDraft = sanitizeAssistantBehaviorDraft({
-      ...obj(out.assistantBehaviorDraft),
-      ...behaviorPatch,
-    });
-  }
-
   const progress = pickAliasedField(root, ["progress"]);
   if (progress.provided) {
     out.progress = sanitizeProgress(obj(progress.value));
@@ -391,12 +325,7 @@ function resolveAssistantState(existing = {}, patch = {}) {
       activeSection
   );
 
-  const activeBehaviorPolicy =
-    normalizeBehaviorPolicyKey(
-      s(patchAssistant.activeBehaviorPolicy) ||
-        (isBehaviorStep(activeSection) ? behaviorPolicyKeyFromStep(activeSection) : "") ||
-        s(existingAssistant.activeBehaviorPolicy)
-    ) || "";
+  const activeBehaviorPolicy = "";
 
   return sanitizeAssistantState({
     ...existingAssistant,
@@ -500,36 +429,10 @@ function resolveNextStepFromTurn(turn = {}, currentDraft = {}) {
   );
 }
 
-function sanitizeAcceptedBehaviorPatch(acceptedPatch = {}) {
-  const source = obj(acceptedPatch);
-  const nested = obj(source.assistantBehaviorDraft);
-
-  if (Object.keys(nested).length) {
-    return sanitizeAssistantBehaviorDraft(nested);
-  }
-
-  return sanitizeAssistantBehaviorDraft(
-    compactDraftObject({
-      platformDefaults: obj(source.platformDefaults || source.platform_defaults),
-      tenantOverrides: obj(source.tenantOverrides || source.tenant_overrides),
-      greetingPolicy: obj(source.greetingPolicy || source.greeting_policy),
-      closingPolicy: obj(source.closingPolicy || source.closing_policy),
-      tonePolicy: obj(source.tonePolicy || source.tone_policy),
-      pricingPolicy: obj(source.pricingPolicy || source.pricing_policy),
-      locationPolicy: obj(source.locationPolicy || source.location_policy),
-      bookingPolicy: obj(source.bookingPolicy || source.booking_policy),
-      contactPolicy: obj(source.contactPolicy || source.contact_policy),
-      handoffPolicy: obj(source.handoffPolicy || source.handoff_policy),
-    })
-  );
-}
-
 export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {}) {
   const safeTurn = obj(turn);
   const acceptedPatch = obj(safeTurn.acceptedPatch);
   const acceptedIdentity = obj(acceptedPatch.identity);
-  const acceptedAiBehavior = obj(acceptedPatch.aiBehavior);
-  const acceptedBehaviorDraft = sanitizeAcceptedBehaviorPatch(acceptedPatch);
   const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
 
   const nextServices = buildServicePatchFromAcceptedValues(
@@ -593,17 +496,6 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
         currentDraft.sourceMetadata
       )
     ),
-    assistantBehaviorDraft: acceptedBehaviorDraft,
-    languages: mergeStringLists(
-      currentDraft.languages,
-      acceptedAiBehavior.languages,
-      8
-    ),
-    tone: s(acceptedAiBehavior.tone || currentDraft.tone),
-    greetingStyle: s(acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle),
-    afterHoursBehavior: s(
-      acceptedAiBehavior.afterHoursBehavior || currentDraft.afterHoursBehavior
-    ),
   });
 
   const lastAnsweredStep = normalizeStep(
@@ -615,9 +507,7 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
     ...partialPatch,
     assistantState: {
       activeSection: nextStep,
-      activeBehaviorPolicy: isBehaviorStep(nextStep)
-        ? behaviorPolicyKeyFromStep(nextStep)
-        : "",
+      activeBehaviorPolicy: "",
       lastUpdatedSection: nextStep || lastAnsweredStep,
     },
     progress: {
