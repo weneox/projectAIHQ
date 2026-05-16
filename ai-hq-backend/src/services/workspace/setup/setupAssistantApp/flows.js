@@ -544,43 +544,6 @@ function buildSilentSynthesisPatch({
   };
 }
 
-function shouldUseDeterministicMessagePrelude(step = "", message = "") {
-  const safeStep = s(step).toLowerCase();
-  const text = s(message);
-
-  if (!text) return false;
-
-  return (
-    safeStep === "hours" ||
-    /(?:24\/7|7\/24|appointment|closed|bağlı|bagli|\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:-|to|dan|den|dek)\s*\d{1,2})/i.test(
-      text
-    )
-  );
-}
-
-function buildSafeSupplementalMessagePatch(
-  currentSetupAssistant = {},
-  latestMessage = "",
-  latestStep = ""
-) {
-  if (!shouldUseDeterministicMessagePrelude(latestStep, latestMessage)) {
-    return {};
-  }
-
-  const parsed = normalizeSetupAssistantDraftPatchBody(
-    {
-      step: latestStep,
-      answer: latestMessage,
-    },
-    currentSetupAssistant
-  );
-
-  return {
-    hours: arr(parsed.hours),
-    assistantState: obj(parsed.assistantState),
-    progress: obj(parsed.progress),
-  };
-}
 
 async function maybeUpdateReviewSessionStep({
   reviewSessionId,
@@ -718,7 +681,6 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
         sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
         namespace: SETUP_ASSISTANT_NAMESPACE,
         orchestrationModel: "ask_ai_setup_brain_v4",
-        deterministicFirst: true,
         semanticApprovalGuard: true,
         hiddenSynthesisEnabled: true,
       },
@@ -884,27 +846,13 @@ export async function updateSetupAssistantDraft(
     nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
     if (messageMode) {
-      let supplementalPatch = {};
-      let draftForBrain = {};
       let orchestratorPatch = {};
       let hiddenSynthesisPatch = {};
-
-      stage = "message_build_supplemental_patch";
-      supplementalPatch = buildSafeSupplementalMessagePatch(
-        currentSetupAssistant,
-        latestMessage || (isMessageSkip(body) ? "continue" : ""),
-        latestStep
-      );
-
-      stage = "message_merge_supplemental_patch";
-      draftForBrain = Object.keys(supplementalPatch).length
-        ? mergeSetupAssistantDraft(currentSetupAssistant, supplementalPatch, seed)
-        : currentSetupAssistant;
 
       stage = "message_run_setup_brain";
       rawTurn = await runSetupBrain({
         session: obj(review.session),
-        draft: draftForBrain,
+        draft: currentSetupAssistant,
         sources: arr(reviewForBrain.sources),
         review: reviewForBrain,
         latestStep,
@@ -914,12 +862,12 @@ export async function updateSetupAssistantDraft(
       stage = "message_build_orchestrator_patch";
       orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
         rawTurn,
-        draftForBrain
+        currentSetupAssistant
       );
 
       stage = "message_merge_after_orchestrator";
       mergedSetupAssistant = mergeSetupAssistantDraft(
-        draftForBrain,
+        currentSetupAssistant,
         orchestratorPatch,
         seed
       );
@@ -931,7 +879,7 @@ export async function updateSetupAssistantDraft(
 
       stage = "message_build_hidden_synthesis";
       hiddenSynthesisPatch = buildSilentSynthesisPatch({
-        currentSetupAssistant: draftForBrain,
+        currentSetupAssistant,
         mergedSetupAssistant,
         latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
         latestStep,
@@ -975,7 +923,6 @@ export async function updateSetupAssistantDraft(
 
       stage = "message_collect_updated_fields";
       updatedFields = [
-        ...Object.keys(obj(supplementalPatch)),
         ...Object.keys(obj(orchestratorPatch)),
         "silentSynthesis",
         "setupAssistantBrain",
