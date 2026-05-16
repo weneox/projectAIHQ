@@ -38,13 +38,12 @@ test("business steps stay ahead of behavior even when behavior becomes relevant"
   assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }).key, "company");
 });
 
-test("getNextQuestion enters behavior only after business steps are complete", () => {
+test("getNextQuestion stops after business steps are complete", () => {
   const draft = buildCompleteBusinessDraft();
 
   const next = getNextQuestion({}, draft, {}, { locale: "en" });
 
-  assert.equal(next.key, "greeting_behavior");
-  assert.equal(next.group, "assistant_behavior");
+  assert.equal(next, null);
 });
 
 test("satisfied behavior steps are skipped and irrelevant behavior is auto-satisfied", () => {
