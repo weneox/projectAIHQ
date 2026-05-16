@@ -9,7 +9,6 @@ import {
 } from "./compat.js";
 import {
   buildAssistantQuestion,
-  isBehaviorStepRelevant,
   normalizeSetupLocale,
 } from "./questions.js";
 import {
@@ -26,13 +25,6 @@ import {
 import { mergeSetupAssistantCore, sanitizeSilentSynthesis } from "./sanitize.js";
 import { buildSummary } from "./summary.js";
 
-const BEHAVIOR_SECTION_KEYS = [
-  "pricing_behavior",
-  "location_behavior",
-  "booking_behavior",
-  "contact_behavior",
-  "handoff_behavior",
-];
 
 function uniqueStrings(items = [], max = 24) {
   return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
@@ -172,53 +164,22 @@ function buildAiProfilePreview({ setup = {}, assistant = {}, approvalBlockers = 
           summary: s(draft.pricingSummary),
         }
       : null,
-  ].filter(Boolean);
-
-  const behavior = [
-    s(draft.tone)
-      ? {
-          key: "tone",
-          label: "Danışıq tonu",
-          summary: s(draft.tone),
-        }
-      : null,
-    s(draft.pricingBehaviorSummary)
-      ? {
-          key: "pricing_behavior",
-          label: "Qiymət soruşulanda",
-          summary: s(draft.pricingBehaviorSummary),
-        }
-      : null,
-    s(draft.bookingBehaviorSummary)
-      ? {
-          key: "booking_behavior",
-          label: "Rezervasiya istənəndə",
-          summary: s(draft.bookingBehaviorSummary),
-        }
-      : null,
-    s(draft.contactBehaviorSummary)
-      ? {
-          key: "contact_behavior",
-          label: "Əlaqə istənəndə",
-          summary: s(draft.contactBehaviorSummary),
-        }
-      : null,
-    s(draft.handoffBehaviorSummary || draft.handoffSummary)
+    s(draft.handoffSummary)
       ? {
           key: "handoff",
           label: "İnsana ötürmə",
-          summary: s(draft.handoffBehaviorSummary || draft.handoffSummary),
+          summary: s(draft.handoffSummary),
         }
       : null,
   ].filter(Boolean);
 
   return {
     version: 1,
-    title: "AI resepsionist profili",
+    title: "AI biznes profili",
     summary:
       knows.length > 0
-        ? "Sistem biznes məlumatlarından AI resepsionist üçün ilkin beyin hazırlayıb."
-        : "AI resepsionist üçün hələ kifayət qədər biznes məlumatı yoxdur.",
+        ? "Sistem biznes məlumatlarından ilkin business brain draftı hazırlayıb."
+        : "Business brain üçün hələ kifayət qədər biznes məlumatı yoxdur.",
     sourceStrategy: buildSetupSourceStrategy(setup),
     knows,
     willNotInvent: [
@@ -227,7 +188,6 @@ function buildAiProfilePreview({ setup = {}, assistant = {}, approvalBlockers = 
       "Tibbi, hüquqi və yüksək riskli mövzuda qəti zəmanət verməyəcək.",
       "Əmin olmadığı yerdə qısa şəkildə insana yönləndirmə təklif edəcək.",
     ],
-    behavior,
     missingQuestions: blockers.map((item) => ({
       key: s(item.step || item.key),
       label: s(item.label || item.step || item.key),
@@ -322,11 +282,6 @@ function sanitizeBrainSourceSignals(value = {}) {
     pricingCandidates: uniqueStrings(source.pricingCandidates, 12),
     audienceCandidates: uniqueStrings(source.audienceCandidates, 8),
     languagesCandidates: uniqueStrings(source.languagesCandidates, 8),
-    pricingTargetCandidates: arr(source.pricingTargetCandidates).slice(0, 6),
-    locationTargetCandidates: arr(source.locationTargetCandidates).slice(0, 6),
-    bookingTargetCandidates: arr(source.bookingTargetCandidates).slice(0, 6),
-    contactTargetCandidates: arr(source.contactTargetCandidates).slice(0, 6),
-    suggestedAssistantBehaviorDraft: obj(source.suggestedAssistantBehaviorDraft),
   });
 }
 
@@ -376,12 +331,7 @@ function sanitizeBrainSnapshot(value = {}) {
     recommendation: sanitizeBrainRecommendation(source.recommendation),
     sourceSignals: sanitizeBrainSourceSignals(source.sourceSignals),
     interviewPlan: sanitizeBrainInterviewPlan(source.interviewPlan),
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings(obj(source.aiBehavior).languages, 8),
-      tone: s(obj(source.aiBehavior).tone),
-      greetingStyle: s(obj(source.aiBehavior).greetingStyle),
-      afterHoursBehavior: s(obj(source.aiBehavior).afterHoursBehavior),
-    }),
+    aiBehavior: {},
     readyForApproval: source.readyForApproval === true,
     provider: s(source.provider),
     model: s(source.model),
@@ -390,113 +340,10 @@ function sanitizeBrainSnapshot(value = {}) {
   });
 }
 
-function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
-  const safePolicy = obj(policy);
-
-  if (policyKey === "pricing") {
-    return compactText(
-      [
-        s(safePolicy.mode),
-        safePolicy.preferredTargetUrl
-          ? `target: ${safePolicy.preferredTargetUrl}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      220
-    );
-  }
-
-  if (policyKey === "location") {
-    return compactText(
-      [
-        s(safePolicy.mode),
-        safePolicy.preferredTargetUrl
-          ? `map: ${safePolicy.preferredTargetUrl}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      220
-    );
-  }
-
-  if (policyKey === "booking") {
-    return compactText(
-      [
-        s(safePolicy.mode),
-        safePolicy.preferredTargetUrl
-          ? `target: ${safePolicy.preferredTargetUrl}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      220
-    );
-  }
-
-  if (policyKey === "contact") {
-    return compactText(
-      [
-        s(safePolicy.mode),
-        s(safePolicy.preferredChannel),
-        safePolicy.preferredTargetUrl
-          ? `target: ${safePolicy.preferredTargetUrl}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      220
-    );
-  }
-
-  if (policyKey === "handoff") {
-    return compactText(
-      [
-        s(safePolicy.mode),
-        safePolicy.requiresReason === true ? "requires reason" : "",
-      ]
-        .filter(Boolean)
-        .join(" • "),
-      220
-    );
-  }
-
-  return "";
-}
-
-function buildBehaviorPreview(setup = {}) {
-  const behavior = obj(setup.assistantBehaviorDraft);
-
-  return {
-    pricingBehavior: summarizeBehaviorPolicy(
-      "pricing",
-      obj(behavior.pricingPolicy)
-    ),
-    locationBehavior: summarizeBehaviorPolicy(
-      "location",
-      obj(behavior.locationPolicy)
-    ),
-    bookingBehavior: summarizeBehaviorPolicy(
-      "booking",
-      obj(behavior.bookingPolicy)
-    ),
-    contactBehavior: summarizeBehaviorPolicy(
-      "contact",
-      obj(behavior.contactPolicy)
-    ),
-    handoffBehavior: summarizeBehaviorPolicy(
-      "handoff",
-      obj(behavior.handoffPolicy)
-    ),
-  };
-}
-
 function buildFallbackDraftPreview(setup = {}, { formatHours = null } = {}) {
   const businessProfile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
   const handoff = obj(setup.handoffRules);
-  const behaviorPreview = buildBehaviorPreview(setup);
   const formatHoursSafe =
     typeof formatHours === "function"
       ? formatHours
@@ -518,15 +365,6 @@ function buildFallbackDraftPreview(setup = {}, { formatHours = null } = {}) {
     languages: arr(setup.languages)
       .map((item) => s(item))
       .filter(Boolean),
-    tone: s(setup.tone),
-    greetingStyle: s(setup.greetingStyle),
-    afterHoursBehavior: s(setup.afterHoursBehavior),
-
-    pricingBehaviorSummary: s(behaviorPreview.pricingBehavior),
-    locationBehaviorSummary: s(behaviorPreview.locationBehavior),
-    bookingBehaviorSummary: s(behaviorPreview.bookingBehavior),
-    contactBehaviorSummary: s(behaviorPreview.contactBehavior),
-    handoffBehaviorSummary: s(behaviorPreview.handoffBehavior),
   };
 }
 
@@ -545,14 +383,6 @@ function buildInternalDraftPreview(setup = {}) {
       handoffSummary: s(polished.handoffSummary),
       workingHoursLines: uniqueStrings(polished.workingHoursLines, 16),
       languages: uniqueStrings(polished.languages, 8),
-      tone: s(polished.tone),
-      greetingStyle: s(polished.greetingStyle),
-      afterHoursBehavior: s(polished.afterHoursBehavior),
-      pricingBehaviorSummary: s(polished.pricingBehaviorSummary),
-      locationBehaviorSummary: s(polished.locationBehaviorSummary),
-      bookingBehaviorSummary: s(polished.bookingBehaviorSummary),
-      contactBehaviorSummary: s(polished.contactBehaviorSummary),
-      handoffBehaviorSummary: s(polished.handoffBehaviorSummary),
       professionalizedAt: polished.professionalizedAt || null,
     };
   }
@@ -580,10 +410,6 @@ function buildUserFacingDraftPreview(setup = {}, readyForApproval = false) {
 
 function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
   const sectionStatus = obj(summary.sectionStatus);
-  const approvalBlockers = buildApprovalBlockers(setup);
-  const blockerSteps = new Set(
-    approvalBlockers.map((item) => s(item.step).toLowerCase()).filter(Boolean)
-  );
   const visibleDraft = buildInternalDraftPreview(setup);
 
   const summaryMap = {
@@ -597,7 +423,7 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
     handoff: s(visibleDraft.handoffSummary),
   };
 
-  const baseSections = Object.keys(sectionStatus).map((key) => {
+  return Object.keys(sectionStatus).map((key) => {
     const state = obj(sectionStatus[key]);
 
     return {
@@ -614,56 +440,6 @@ function buildSummarySections(summary = {}, servicesCatalog = {}, setup = {}) {
         key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
     };
   });
-
-  const behaviorDraft = obj(setup.assistantBehaviorDraft);
-
-  const behaviorSections = BEHAVIOR_SECTION_KEYS.map((key) => {
-    const relevant = isBehaviorStepRelevant(key, setup);
-    const blocked = blockerSteps.has(key);
-
-    const policyKey =
-      key === "pricing_behavior"
-        ? "pricingPolicy"
-        : key === "location_behavior"
-          ? "locationPolicy"
-          : key === "booking_behavior"
-            ? "bookingPolicy"
-            : key === "contact_behavior"
-              ? "contactPolicy"
-              : "handoffPolicy";
-
-    const previewKey =
-      key === "pricing_behavior"
-        ? "pricingBehaviorSummary"
-        : key === "location_behavior"
-          ? "locationBehaviorSummary"
-          : key === "booking_behavior"
-            ? "bookingBehaviorSummary"
-            : key === "contact_behavior"
-              ? "contactBehaviorSummary"
-              : "handoffBehaviorSummary";
-
-    return {
-      key,
-      label: key,
-      title: key,
-      status: relevant ? (blocked ? "missing" : "ready") : "not_applicable",
-      summary: s(visibleDraft[previewKey]),
-      metric: {
-        relevant,
-        configured: relevant ? !blocked : true,
-        hasPreferredTarget: Boolean(
-          s(obj(behaviorDraft[policyKey]).preferredTargetUrl)
-        ),
-      },
-      sourceCovered: false,
-      reviewReady: relevant ? !blocked : true,
-      missingFields: relevant && blocked ? [key] : [],
-      suggestedCount: 0,
-    };
-  });
-
-  return [...baseSections, ...behaviorSections];
 }
 
 function buildMinimalSourceSignals(setup = {}) {
@@ -696,8 +472,6 @@ function buildMinimalSourceSignals(setup = {}) {
     ],
     12
   );
-
-  const behavior = obj(setup.assistantBehaviorDraft);
 
   return {
     primarySourceType: s(sourceMetadata.primarySourceType),
@@ -740,27 +514,6 @@ function buildMinimalSourceSignals(setup = {}) {
       [...arr(polished.languages), ...arr(setup.languages)],
       8
     ),
-    pricingTargetCandidates: arr(
-      s(obj(behavior.pricingPolicy).preferredTargetUrl)
-        ? [{ url: s(obj(behavior.pricingPolicy).preferredTargetUrl) }]
-        : []
-    ),
-    locationTargetCandidates: arr(
-      s(obj(behavior.locationPolicy).preferredTargetUrl)
-        ? [{ url: s(obj(behavior.locationPolicy).preferredTargetUrl) }]
-        : []
-    ),
-    bookingTargetCandidates: arr(
-      s(obj(behavior.bookingPolicy).preferredTargetUrl)
-        ? [{ url: s(obj(behavior.bookingPolicy).preferredTargetUrl) }]
-        : []
-    ),
-    contactTargetCandidates: arr(
-      s(obj(behavior.contactPolicy).preferredTargetUrl)
-        ? [{ url: s(obj(behavior.contactPolicy).preferredTargetUrl) }]
-        : []
-    ),
-    suggestedAssistantBehaviorDraft: obj(setup.assistantBehaviorDraft),
   };
 }
 
@@ -796,46 +549,6 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
 
   if (s(draftPreview.handoffSummary)) strong.push("handoff_present");
   else unclear.push("handoff_missing");
-
-  if (isBehaviorStepRelevant("pricing_behavior", setup)) {
-    if (s(draftPreview.pricingBehaviorSummary)) {
-      strong.push("pricing_behavior_present");
-    } else {
-      unclear.push("pricing_behavior_missing");
-    }
-  }
-
-  if (isBehaviorStepRelevant("location_behavior", setup)) {
-    if (s(draftPreview.locationBehaviorSummary)) {
-      strong.push("location_behavior_present");
-    } else {
-      unclear.push("location_behavior_missing");
-    }
-  }
-
-  if (isBehaviorStepRelevant("booking_behavior", setup)) {
-    if (s(draftPreview.bookingBehaviorSummary)) {
-      strong.push("booking_behavior_present");
-    } else {
-      unclear.push("booking_behavior_missing");
-    }
-  }
-
-  if (isBehaviorStepRelevant("contact_behavior", setup)) {
-    if (s(draftPreview.contactBehaviorSummary)) {
-      strong.push("contact_behavior_present");
-    } else {
-      unclear.push("contact_behavior_missing");
-    }
-  }
-
-  if (isBehaviorStepRelevant("handoff_behavior", setup)) {
-    if (s(draftPreview.handoffBehaviorSummary)) {
-      strong.push("handoff_behavior_present");
-    } else {
-      unclear.push("handoff_behavior_missing");
-    }
-  }
 
   return {
     strong,
@@ -1069,19 +782,7 @@ function buildAssistantFromStoredBrain({
     recommendation,
     sourceSignals,
     interviewPlan,
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings(
-        arr(obj(brain.aiBehavior).languages || setup.languages),
-        8
-      ),
-      tone: s(obj(brain.aiBehavior).tone || setup.tone),
-      greetingStyle: s(
-        obj(brain.aiBehavior).greetingStyle || setup.greetingStyle
-      ),
-      afterHoursBehavior: s(
-        obj(brain.aiBehavior).afterHoursBehavior || setup.afterHoursBehavior
-      ),
-    }),
+    aiBehavior: {},
     readyForApproval,
     finalizeAvailable: readyForApproval,
     reviewSessionId: s(session.id),
@@ -1206,15 +907,11 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         hours: arr(setup.hours),
         pricingPosture: obj(setup.pricingPosture),
         handoffRules: obj(setup.handoffRules),
-        assistantBehaviorDraft: obj(setup.assistantBehaviorDraft),
         sourceMetadata: obj(setup.sourceMetadata),
         assistantState: obj(setup.assistantState),
         progress: obj(setup.progress),
         languages: arr(setup.languages),
-        tone: s(setup.tone),
-        greetingStyle: s(setup.greetingStyle),
-        afterHoursBehavior: s(setup.afterHoursBehavior),
-        version: safeDraftVersion(draftRow),
+                    version: safeDraftVersion(draftRow),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
     },
@@ -1287,7 +984,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
     sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
     interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
-    aiBehavior: compactDraftObject(safeTurn.aiBehavior),
+    aiBehavior: {},
     readyForApproval: guardedReadyForApproval,
     finalizeAvailable: guardedReadyForApproval,
     rejectedInputs: arr(safeTurn.rejectedInputs),
@@ -1368,7 +1065,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
         recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
         sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
         interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
-        aiBehavior: obj(safeTurn.aiBehavior),
+        aiBehavior: {},
         readyForApproval: guardedReadyForApproval,
         rejectedInputs: arr(safeTurn.rejectedInputs),
         provider: s(safeTurn.provider),
