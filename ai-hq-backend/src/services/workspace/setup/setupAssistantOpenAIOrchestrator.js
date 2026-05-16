@@ -20,7 +20,6 @@ import {
   isDraftReadyForApproval,
   validateStepAnswer,
 } from "./setupAssistantApp/relevance.js";
-import { patchFromAnswer } from "./setupAssistantApp/patching.js";
 import {
   buildRecognizedSourceCandidate,
   inferContactType,
@@ -1195,10 +1194,6 @@ function buildPatchForStep(step = "", text = "", draft = {}) {
     patch.pricingPosture = extractPricingValue(text, arr(draft.services));
   } else if (normalizedStep === "handoff") {
     patch.humanHandoff = extractHandoffValue(text);
-  } else if (isBehaviorStep(normalizedStep)) {
-    patch.assistantBehaviorDraft = obj(
-      patchFromAnswer(normalizedStep, text, draft).assistantBehaviorDraft
-    );
   }
 
   return {
@@ -2018,50 +2013,13 @@ function buildAcceptedPatchFromReasonerPayload(payload = {}) {
   out.pricingPosture = s(source.pricingPosture);
   out.humanHandoff = s(source.humanHandoff);
 
-  if (s(source.pricingBehavior)) {
-    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
-      assistantBehaviorDraft: obj(
-        patchFromAnswer("pricing_behavior", s(source.pricingBehavior), {})
-          .assistantBehaviorDraft
-      ),
-    }).assistantBehaviorDraft;
-  }
-
-  if (s(source.locationBehavior)) {
-    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
-      assistantBehaviorDraft: obj(
-        patchFromAnswer("location_behavior", s(source.locationBehavior), {})
-          .assistantBehaviorDraft
-      ),
-    }).assistantBehaviorDraft;
-  }
-
-  if (s(source.bookingBehavior)) {
-    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
-      assistantBehaviorDraft: obj(
-        patchFromAnswer("booking_behavior", s(source.bookingBehavior), {})
-          .assistantBehaviorDraft
-      ),
-    }).assistantBehaviorDraft;
-  }
-
-  if (s(source.contactBehavior)) {
-    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
-      assistantBehaviorDraft: obj(
-        patchFromAnswer("contact_behavior", s(source.contactBehavior), {})
-          .assistantBehaviorDraft
-      ),
-    }).assistantBehaviorDraft;
-  }
-
-  if (s(source.handoffBehavior)) {
-    out.assistantBehaviorDraft = mergeAcceptedPatches(out, {
-      assistantBehaviorDraft: obj(
-        patchFromAnswer("handoff_behavior", s(source.handoffBehavior), {})
-          .assistantBehaviorDraft
-      ),
-    }).assistantBehaviorDraft;
-  }
+  out.aiBehavior = compactDraftObject({
+    pricingBehavior: s(source.pricingBehavior),
+    locationBehavior: s(source.locationBehavior),
+    bookingBehavior: s(source.bookingBehavior),
+    contactBehavior: s(source.contactBehavior),
+    handoffBehavior: s(source.handoffBehavior),
+  });
 
   return compactDraftObject(out);
 }
