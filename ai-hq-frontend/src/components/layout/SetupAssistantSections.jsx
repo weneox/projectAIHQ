@@ -376,6 +376,15 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
   const sourceMetadata = obj(setupDraft.sourceMetadata);
   const assistantBehaviorDraft = obj(setupDraft.assistantBehaviorDraft);
   const previewDraft = obj(canonicalAssistant.draft);
+  const reviewSetup = obj(obj(reviewPayload).setup);
+  const aiProfilePreview = obj(
+    reviewSetup.aiProfilePreview || obj(assistantState).aiProfilePreview
+  );
+  const sourceStrategy = obj(
+    reviewSetup.sourceStrategy ||
+      aiProfilePreview.sourceStrategy ||
+      obj(assistantState).sourceStrategy
+  );
 
   const coreServices =
     arr(previewDraft.coreServices).length > 0
@@ -394,6 +403,8 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
 
   return {
     ...canonicalAssistant,
+    sourceStrategy,
+    aiProfilePreview,
     draft: {
       businessName: s(previewDraft.businessName || businessProfile.companyName),
       whatThisBusinessIs: s(
@@ -687,15 +698,15 @@ function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
       <div className="relative">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
           <Sparkles className="h-4 w-4 text-brand" />
-          Setup
+          Smart setup
         </div>
 
         <div className="mt-4 text-[21px] font-semibold tracking-[-0.045em] text-text">
-          AI resepsionisti hazırlayaq.
+          Biznes beynini sehrli şəkildə quraq.
         </div>
 
         <div className="mt-2 max-w-[560px] text-[14px] leading-7 text-text-subtle">
-          Əvvəl biznes faktlarını toplayırıq. Sonra AI-nin danışıq qaydasını sadə dildə yoxlayıb təsdiqləyirik.
+          Website varsa link verin. Website yoxdursa, biznesinizi 2-3 cümlə ilə yazın. Sistem AI resepsionist üçün qısa profile preview hazırlayacaq.
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -940,6 +951,250 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
   );
 }
 
+
+function previewItems(items = []) {
+  return arr(items)
+    .map((item) => {
+      if (typeof item === "string") {
+        return { key: item, label: "", summary: item };
+      }
+
+      const safe = obj(item);
+      const label = s(safe.label || safe.title || safe.key);
+      const summary = s(safe.summary || safe.reason || safe.body || safe.text);
+
+      if (!label && !summary) return null;
+
+      return {
+        key: s(safe.key || label || summary),
+        label,
+        summary,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function hasAiProfilePreview(model = {}) {
+  const preview = obj(model.aiProfilePreview);
+  const source = obj(model.sourceStrategy || preview.sourceStrategy);
+
+  return Boolean(
+    s(preview.title) ||
+      s(preview.summary) ||
+      arr(preview.knows).length ||
+      arr(preview.behavior).length ||
+      arr(preview.willNotInvent).length ||
+      arr(preview.missingQuestions).length ||
+      s(source.productMode)
+  );
+}
+
+function StatusPill({ children, tone = "neutral" }) {
+  const toneClassName =
+    tone === "success"
+      ? "border-[rgba(22,163,74,0.16)] bg-[rgba(240,253,244,0.9)] text-[#166534]"
+      : tone === "warning"
+        ? "border-[rgba(217,119,6,0.18)] bg-[rgba(255,251,235,0.95)] text-[#92400e]"
+        : "border-[rgba(15,23,42,0.08)] bg-white/80 text-text-subtle";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${toneClassName}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SourceStep({ index, title, body, status, active = false }) {
+  return (
+    <div
+      className={`rounded-[18px] border px-4 py-4 ${
+        active
+          ? "border-[rgba(37,99,235,0.18)] bg-[rgba(239,246,255,0.75)]"
+          : "border-[rgba(15,23,42,0.07)] bg-white/80"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
+            active ? "bg-[#0f172a] text-white" : "bg-[rgba(15,23,42,0.06)] text-text"
+          }`}
+        >
+          {index}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold tracking-[-0.01em] text-text">
+            {title}
+          </div>
+          <div className="mt-1 text-[12px] leading-5 text-text-subtle">
+            {body}
+          </div>
+          {status ? (
+            <div className="mt-2">
+              <StatusPill tone={active ? "success" : "neutral"}>{status}</StatusPill>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileList({ title, items = [], empty = "Hələ məlumat yoxdur." }) {
+  const safeItems = previewItems(items);
+
+  return (
+    <div className="rounded-[20px] border border-[rgba(15,23,42,0.07)] bg-white/82 px-4 py-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+        {title}
+      </div>
+
+      {safeItems.length ? (
+        <div className="mt-3 grid gap-3">
+          {safeItems.map((item, index) => (
+            <div key={`${item.key || item.label || item.summary}-${index}`} className="grid grid-cols-[18px_minmax(0,1fr)] gap-3">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 text-success" />
+              <div>
+                {item.label ? (
+                  <div className="text-[13px] font-semibold tracking-[-0.01em] text-text">
+                    {item.label}
+                  </div>
+                ) : null}
+                {item.summary ? (
+                  <div className="mt-0.5 text-[13px] leading-6 text-text-subtle">
+                    {humanizeDraftValue(item.summary)}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 text-[13px] leading-6 text-text-subtle">{empty}</div>
+      )}
+    </div>
+  );
+}
+
+function SetupIntelligenceCard({ model = {}, finalizing = false, onFinalize }) {
+  const preview = obj(model.aiProfilePreview);
+  const source = obj(preview.sourceStrategy || model.sourceStrategy);
+  const website = obj(source.website);
+  const manualBrief = obj(source.manualBrief);
+  const googleMaps = obj(source.googleMaps);
+  const primaryMode = lower(source.primaryMode);
+  const ready = model.readyForApproval === true || preview.readyForReview === true;
+
+  const sourceStatus =
+    primaryMode === "website"
+      ? "Website-dən başla"
+      : "Manual qısa izah";
+
+  return (
+    <motion.div
+      variants={bubbleMotion()}
+      initial="hidden"
+      animate="visible"
+      className="grid gap-4"
+    >
+      <div className="relative overflow-hidden rounded-[26px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(248,250,252,0.98))] px-5 py-5 shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
+        <div className="pointer-events-none absolute right-0 top-0 h-[240px] w-[240px] bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.08),transparent_68%)]" />
+
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+              <Sparkles className="h-4 w-4 text-brand" />
+              Smart setup
+            </div>
+            <div className="mt-3 text-[22px] font-semibold tracking-[-0.045em] text-text">
+              {s(preview.title, "AI resepsionist profili")}
+            </div>
+            <div className="mt-2 max-w-[620px] text-[14px] leading-7 text-text-subtle">
+              {s(
+                preview.summary,
+                "Website və ya qısa biznes izahından AI resepsionist üçün ilkin beyin hazırlanır."
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <StatusPill tone={ready ? "success" : "warning"}>
+              {ready ? "Təsdiqə hazır" : "Tamamlanır"}
+            </StatusPill>
+            <StatusPill>{sourceStatus}</StatusPill>
+          </div>
+        </div>
+
+        <div className="relative mt-5 grid gap-3 md:grid-cols-3">
+          <SourceStep
+            index="1"
+            title="Website"
+            body={s(
+              website.helperText,
+              "Website varsa link verin, sistem məlumatları avtomatik çıxarsın."
+            )}
+            status={s(website.status || "optional")}
+            active={primaryMode === "website"}
+          />
+          <SourceStep
+            index="2"
+            title="Manual brief"
+            body={s(
+              manualBrief.prompt,
+              "Website yoxdursa, biznesinizi 2-3 cümlə ilə yazın."
+            )}
+            status={s(manualBrief.status || "fallback")}
+            active={primaryMode === "manual_brief"}
+          />
+          <SourceStep
+            index="3"
+            title="Google Maps"
+            body={s(
+              googleMaps.helperText,
+              "V1-də əsas mənbə deyil; sonra fallback kimi əlavə olunacaq."
+            )}
+            status={googleMaps.enabled === false ? "V1-də bağlıdır" : "optional"}
+          />
+        </div>
+
+        <div className="relative mt-4 grid gap-4 xl:grid-cols-2">
+          <ProfileList
+            title="AI nələri bilir"
+            items={preview.knows}
+            empty="Biznes faktları hələ toplanmayıb."
+          />
+          <ProfileList
+            title="AI nəyi uydurmayacaq"
+            items={preview.willNotInvent}
+            empty="Təhlükəsizlik qaydası hələ hazırlanmayıb."
+          />
+          <ProfileList
+            title="AI necə davranacaq"
+            items={preview.behavior}
+            empty="Danışıq davranışı hələ hazırlanmayıb."
+          />
+          <ProfileList
+            title="Çatışmayan kritik suallar"
+            items={preview.missingQuestions}
+            empty="Hazırda kritik boşluq görünmür."
+          />
+        </div>
+
+        {ready ? (
+          <div className="relative mt-5 flex justify-end">
+            <ActionButton tone="primary" onClick={onFinalize} disabled={finalizing}>
+              {finalizing ? "Təsdiqlənir..." : "Təsdiqlə"}
+              <ArrowRight className="h-4 w-4" strokeWidth={2} />
+            </ActionButton>
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
+  );
+}
+
 function Composer({
   value,
   busy,
@@ -1144,6 +1399,7 @@ export default function SetupAssistantSections({
   const groupedSections = sectionGroups(arr(model.sections));
   const hasSession =
     Boolean(s(obj(assistant).session?.id)) || displayTimeline.length > 0 || showDraft;
+  const profilePreviewReady = hasAiProfilePreview(model);
 
   useEffect(() => {
     const node = scrollerRef.current;
@@ -1207,7 +1463,15 @@ export default function SetupAssistantSections({
             />
           ) : null}
 
-          {hasSession ? (
+          {hasSession && profilePreviewReady ? (
+            <SetupIntelligenceCard
+              model={model}
+              finalizing={finalizing}
+              onFinalize={onFinalize}
+            />
+          ) : null}
+
+          {hasSession && !profilePreviewReady ? (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1220,7 +1484,7 @@ export default function SetupAssistantSections({
             </motion.div>
           ) : null}
 
-          {arr(groupedSections.business_truth).length > 0 ? (
+          {!profilePreviewReady && arr(groupedSections.business_truth).length > 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1240,7 +1504,7 @@ export default function SetupAssistantSections({
             </motion.div>
           ) : null}
 
-          {arr(groupedSections.conversation_policy).length > 0 ? (
+          {!profilePreviewReady && arr(groupedSections.conversation_policy).length > 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1273,13 +1537,13 @@ export default function SetupAssistantSections({
 
           {showTyping ? <TypingBubble /> : null}
 
-          {showDraft ? (
+          {showDraft && !profilePreviewReady ? (
             <SmartDraftCard
               model={model}
               finalizing={finalizing}
               onFinalize={onFinalize}
             />
-          ) : model.draftPreviewHidden === true && hasAnyDraftContent(model.draft) ? (
+          ) : !profilePreviewReady && model.draftPreviewHidden === true && hasAnyDraftContent(model.draft) ? (
             <motion.div variants={bubbleMotion()} initial="hidden" animate="visible">
               <div className="flex justify-start">
                 <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -1292,7 +1556,7 @@ export default function SetupAssistantSections({
             </motion.div>
           ) : null}
 
-          {reviewFlags.length > 0 && !showDraft ? (
+          {reviewFlags.length > 0 && !showDraft && !profilePreviewReady ? (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
