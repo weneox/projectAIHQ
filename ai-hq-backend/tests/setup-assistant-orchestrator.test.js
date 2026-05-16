@@ -181,8 +181,8 @@ test("contact-step answers carry contacts without fake cross-step behavior chatt
 
   assert.ok(result.acceptedPatch.contacts.some((item) => /\+994551112233/.test(item)));
   assert.deepEqual(result.acceptedPatch.assistantBehaviorDraft || {}, {});
-  assert.equal(result.readyForApproval, false);
-  assert.equal(result.nextQuestion.key, "handoff");
+  assert.equal(result.readyForApproval, true);
+  assert.equal(result.nextQuestion, null);
   assert.doesNotMatch(
     result.assistantMessage,
     /behavior|preference|pricing page|contact policy/i

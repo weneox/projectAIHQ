@@ -1072,37 +1072,15 @@ function extractDraftFieldValue(step = "", draft = {}) {
 }
 
 export function buildApprovalBlockers(draft = {}) {
-  const businessSteps = [
+  const requiredBusinessSteps = [
     "company",
     "description",
     "services",
     "contacts",
-    "hours",
     "pricing",
-    "handoff",
   ];
 
-  const alwaysRequiredBehaviorSteps = [
-    "greeting_behavior",
-    "closing_behavior",
-    "tone_behavior",
-  ];
-
-  const contextualBehaviorSteps = [
-    "pricing_behavior",
-    "location_behavior",
-    "booking_behavior",
-    "contact_behavior",
-    "handoff_behavior",
-  ].filter((step) => isBehaviorStepRelevant(step, draft));
-
-  const steps = [
-    ...businessSteps,
-    ...alwaysRequiredBehaviorSteps,
-    ...contextualBehaviorSteps,
-  ];
-
-  return steps
+  return requiredBusinessSteps
     .map((step) => {
       const value = extractDraftFieldValue(step, draft);
       const validation = validateStepAnswer(step, value, draft);

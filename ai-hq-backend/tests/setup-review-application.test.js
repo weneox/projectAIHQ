@@ -565,7 +565,7 @@ test("review finalize composition stays aligned with canonical setup readiness",
   assert.equal(result.status, 409);
   assert.equal(result.body.ok, false);
   assert.equal(result.body.code, "SETUP_REVIEW_NOT_READY");
-  assert.equal(result.body.assistant.nextQuestion.key, "handoff");
+  assert.equal(result.body.assistant.nextQuestion.key, "business_model");
   assert.equal(result.body.assistant.readyForApproval, false);
   assert.equal(result.body.setup.review.finalizeAvailable, false);
   assert.equal(result.body.setup.summary.sectionStatus.handoff.status, "optional");
