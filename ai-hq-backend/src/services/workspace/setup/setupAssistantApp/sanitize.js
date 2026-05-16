@@ -2,87 +2,14 @@ import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { sanitizeStructuredHours } from "../setupAssistantParser.js";
 import {
   SOURCE_PRIORITY,
-  buildDefaultAssistantBehaviorDraft,
   hasOwn,
   inferContactType,
-  normalizeBehaviorPolicyKey,
-  normalizeBookingBehaviorMode as importedNormalizeBookingBehaviorMode,
-  normalizeClosingBehaviorMode as importedNormalizeClosingBehaviorMode,
-  normalizeContactBehaviorMode as importedNormalizeContactBehaviorMode,
-  normalizeEmpathyLevelMode as importedNormalizeEmpathyLevelMode,
-  normalizeGreetingBehaviorMode as importedNormalizeGreetingBehaviorMode,
-  normalizeHandoffBehaviorMode as importedNormalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode as importedNormalizeLocationBehaviorMode,
-  normalizeMessageLengthMode as importedNormalizeMessageLengthMode,
-  normalizePricingBehaviorMode as importedNormalizePricingBehaviorMode,
   normalizeSourceType,
-  normalizeToneBehaviorMode as importedNormalizeToneBehaviorMode,
   normalizeWebsiteUrl,
   slugify,
   sourceTypeLabel,
   uniqueStrings,
 } from "./shared.js";
-
-const normalizePricingBehaviorModeSafe =
-  typeof importedNormalizePricingBehaviorMode === "function"
-    ? importedNormalizePricingBehaviorMode
-    : () => "";
-
-const normalizeLocationBehaviorModeSafe =
-  typeof importedNormalizeLocationBehaviorMode === "function"
-    ? importedNormalizeLocationBehaviorMode
-    : () => "";
-
-const normalizeBookingBehaviorModeSafe =
-  typeof importedNormalizeBookingBehaviorMode === "function"
-    ? importedNormalizeBookingBehaviorMode
-    : () => "";
-
-const normalizeContactBehaviorModeSafe =
-  typeof importedNormalizeContactBehaviorMode === "function"
-    ? importedNormalizeContactBehaviorMode
-    : () => "";
-
-const normalizeHandoffBehaviorModeSafe =
-  typeof importedNormalizeHandoffBehaviorMode === "function"
-    ? importedNormalizeHandoffBehaviorMode
-    : () => "";
-
-const normalizeClosingBehaviorModeSafe =
-  typeof importedNormalizeClosingBehaviorMode === "function"
-    ? importedNormalizeClosingBehaviorMode
-    : () => "";
-
-const normalizeGreetingBehaviorModeSafe =
-  typeof importedNormalizeGreetingBehaviorMode === "function"
-    ? importedNormalizeGreetingBehaviorMode
-    : () => "";
-
-const normalizeToneBehaviorModeSafe =
-  typeof importedNormalizeToneBehaviorMode === "function"
-    ? importedNormalizeToneBehaviorMode
-    : () => "";
-
-const normalizeMessageLengthModeSafe =
-  typeof importedNormalizeMessageLengthMode === "function"
-    ? importedNormalizeMessageLengthMode
-    : () => "";
-
-const normalizeEmpathyLevelModeSafe =
-  typeof importedNormalizeEmpathyLevelMode === "function"
-    ? importedNormalizeEmpathyLevelMode
-    : () => "";
-
-const normalizePricingBehaviorMode = normalizePricingBehaviorModeSafe;
-const normalizeLocationBehaviorMode = normalizeLocationBehaviorModeSafe;
-const normalizeBookingBehaviorMode = normalizeBookingBehaviorModeSafe;
-const normalizeContactBehaviorMode = normalizeContactBehaviorModeSafe;
-const normalizeHandoffBehaviorMode = normalizeHandoffBehaviorModeSafe;
-const normalizeGreetingBehaviorMode = normalizeGreetingBehaviorModeSafe;
-const normalizeClosingBehaviorMode = normalizeClosingBehaviorModeSafe;
-const normalizeToneBehaviorMode = normalizeToneBehaviorModeSafe;
-const normalizeMessageLengthMode = normalizeMessageLengthModeSafe;
-const normalizeEmpathyLevelMode = normalizeEmpathyLevelModeSafe;
 
 export function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
@@ -280,460 +207,16 @@ export function sanitizeHandoffRules(value = {}) {
   });
 }
 
-function sanitizeBehaviorTargetUrl(value = "") {
+function sanitizeSetupUrl(value = "") {
   return normalizeWebsiteUrl(s(value));
 }
 
-function sanitizeBehaviorNote(value = "") {
-  return s(value);
+export function sanitizeAssistantBehaviorDraft(_value = {}) {
+  return {};
 }
 
-export function sanitizePricingPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().pricingPolicy);
-
-  const mode =
-    normalizePricingBehaviorMode(source.mode || source.defaultBehavior) ||
-    defaults.mode;
-
-  const preferredTargetType =
-    s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
-    defaults.preferredTargetType;
-
-  return compactDraftObject({
-    mode,
-    publicAnswerAllowed:
-      typeof source.publicAnswerAllowed === "boolean"
-        ? source.publicAnswerAllowed
-        : typeof source.public_answer_allowed === "boolean"
-          ? source.public_answer_allowed
-          : defaults.publicAnswerAllowed,
-    redirectEnabled:
-      typeof source.redirectEnabled === "boolean"
-        ? source.redirectEnabled
-        : typeof source.redirect_enabled === "boolean"
-          ? source.redirect_enabled
-          : defaults.redirectEnabled,
-    shouldSummarizeBeforeRedirect:
-      typeof source.shouldSummarizeBeforeRedirect === "boolean"
-        ? source.shouldSummarizeBeforeRedirect
-        : typeof source.should_summarize_before_redirect === "boolean"
-          ? source.should_summarize_before_redirect
-          : defaults.shouldSummarizeBeforeRedirect,
-    askServiceFirst:
-      typeof source.askServiceFirst === "boolean"
-        ? source.askServiceFirst
-        : typeof source.ask_service_first === "boolean"
-          ? source.ask_service_first
-          : defaults.askServiceFirst,
-    preferredTargetType,
-    preferredTargetUrl: sanitizeBehaviorTargetUrl(
-      source.preferredTargetUrl || source.preferred_target_url
-    ),
-    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
-      source.fallbackTargetUrl || source.fallback_target_url
-    ),
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeLocationPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().locationPolicy);
-
-  const mode =
-    normalizeLocationBehaviorMode(source.mode || source.defaultBehavior) ||
-    defaults.mode;
-
-  return compactDraftObject({
-    mode,
-    redirectEnabled:
-      typeof source.redirectEnabled === "boolean"
-        ? source.redirectEnabled
-        : typeof source.redirect_enabled === "boolean"
-          ? source.redirect_enabled
-          : defaults.redirectEnabled,
-    shouldSummarizeBeforeRedirect:
-      typeof source.shouldSummarizeBeforeRedirect === "boolean"
-        ? source.shouldSummarizeBeforeRedirect
-        : typeof source.should_summarize_before_redirect === "boolean"
-          ? source.should_summarize_before_redirect
-          : defaults.shouldSummarizeBeforeRedirect,
-    preferredTargetType:
-      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
-      defaults.preferredTargetType,
-    preferredTargetUrl: sanitizeBehaviorTargetUrl(
-      source.preferredTargetUrl || source.preferred_target_url
-    ),
-    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
-      source.fallbackTargetUrl || source.fallback_target_url
-    ),
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeBookingPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().bookingPolicy);
-
-  const mode =
-    normalizeBookingBehaviorMode(source.mode || source.defaultBehavior) ||
-    defaults.mode;
-
-  return compactDraftObject({
-    mode,
-    redirectEnabled:
-      typeof source.redirectEnabled === "boolean"
-        ? source.redirectEnabled
-        : typeof source.redirect_enabled === "boolean"
-          ? source.redirect_enabled
-          : defaults.redirectEnabled,
-    collectLeadFirst:
-      typeof source.collectLeadFirst === "boolean"
-        ? source.collectLeadFirst
-        : typeof source.collect_lead_first === "boolean"
-          ? source.collect_lead_first
-          : defaults.collectLeadFirst,
-    preferredTargetType:
-      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
-      defaults.preferredTargetType,
-    preferredTargetUrl: sanitizeBehaviorTargetUrl(
-      source.preferredTargetUrl || source.preferred_target_url
-    ),
-    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
-      source.fallbackTargetUrl || source.fallback_target_url
-    ),
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeContactPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().contactPolicy);
-
-  const mode =
-    normalizeContactBehaviorMode(source.mode || source.defaultBehavior) ||
-    defaults.mode;
-
-  return compactDraftObject({
-    mode,
-    preferredChannel: s(
-      source.preferredChannel || source.preferred_channel
-    ).toLowerCase(),
-    preferredTargetType:
-      s(source.preferredTargetType || source.preferred_target_type).toLowerCase() ||
-      defaults.preferredTargetType,
-    preferredTargetUrl: sanitizeBehaviorTargetUrl(
-      source.preferredTargetUrl || source.preferred_target_url
-    ),
-    fallbackTargetUrl: sanitizeBehaviorTargetUrl(
-      source.fallbackTargetUrl || source.fallback_target_url
-    ),
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeHandoffPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().handoffPolicy);
-
-  const mode =
-    normalizeHandoffBehaviorMode(source.mode || source.defaultBehavior) ||
-    defaults.mode;
-
-  return compactDraftObject({
-    mode,
-    requiresReason:
-      typeof source.requiresReason === "boolean"
-        ? source.requiresReason
-        : typeof source.requires_reason === "boolean"
-          ? source.requires_reason
-          : defaults.requiresReason,
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizePlatformDefaults(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().platformDefaults);
-
-  return compactDraftObject({
-    greetingMode:
-      normalizeGreetingBehaviorMode(source.greetingMode || source.greeting_mode) ||
-      defaults.greetingMode,
-    closingMode:
-      normalizeClosingBehaviorMode(source.closingMode || source.closing_mode) ||
-      defaults.closingMode,
-    toneMode:
-      normalizeToneBehaviorMode(source.toneMode || source.tone_mode) ||
-      defaults.toneMode,
-    messageLength:
-      normalizeMessageLengthMode(
-        source.messageLength || source.message_length
-      ) || defaults.messageLength,
-    empathyLevel:
-      normalizeEmpathyLevelMode(
-        source.empathyLevel || source.empathy_level
-      ) || defaults.empathyLevel,
-    emojiPolicy:
-      s(source.emojiPolicy || source.emoji_policy).toLowerCase() ||
-      defaults.emojiPolicy,
-    askOneQuestionAtATime:
-      typeof source.askOneQuestionAtATime === "boolean"
-        ? source.askOneQuestionAtATime
-        : typeof source.ask_one_question_at_a_time === "boolean"
-          ? source.ask_one_question_at_a_time
-          : defaults.askOneQuestionAtATime,
-    avoidHardSell:
-      typeof source.avoidHardSell === "boolean"
-        ? source.avoidHardSell
-        : typeof source.avoid_hard_sell === "boolean"
-          ? source.avoid_hard_sell
-          : defaults.avoidHardSell,
-    admitUncertainty:
-      typeof source.admitUncertainty === "boolean"
-        ? source.admitUncertainty
-        : typeof source.admit_uncertainty === "boolean"
-          ? source.admit_uncertainty
-          : defaults.admitUncertainty,
-    neverInventBusinessFacts:
-      typeof source.neverInventBusinessFacts === "boolean"
-        ? source.neverInventBusinessFacts
-        : typeof source.never_invent_business_facts === "boolean"
-          ? source.never_invent_business_facts
-          : defaults.neverInventBusinessFacts,
-    useCustomerProvidedNameCarefully:
-      typeof source.useCustomerProvidedNameCarefully === "boolean"
-        ? source.useCustomerProvidedNameCarefully
-        : typeof source.use_customer_provided_name_carefully === "boolean"
-          ? source.use_customer_provided_name_carefully
-          : defaults.useCustomerProvidedNameCarefully,
-    languageMode:
-      s(source.languageMode || source.language_mode).toLowerCase() ||
-      defaults.languageMode,
-    handoffPriority:
-      s(source.handoffPriority || source.handoff_priority).toLowerCase() ||
-      defaults.handoffPriority,
-  });
-}
-
-export function sanitizeTenantOverrides(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().tenantOverrides);
-
-  return compactDraftObject({
-    enabled:
-      typeof source.enabled === "boolean"
-        ? source.enabled
-        : defaults.enabled,
-    greetingOverrideActive:
-      typeof source.greetingOverrideActive === "boolean"
-        ? source.greetingOverrideActive
-        : typeof source.greeting_override_active === "boolean"
-          ? source.greeting_override_active
-          : defaults.greetingOverrideActive,
-    closingOverrideActive:
-      typeof source.closingOverrideActive === "boolean"
-        ? source.closingOverrideActive
-        : typeof source.closing_override_active === "boolean"
-          ? source.closing_override_active
-          : defaults.closingOverrideActive,
-    toneOverrideActive:
-      typeof source.toneOverrideActive === "boolean"
-        ? source.toneOverrideActive
-        : typeof source.tone_override_active === "boolean"
-          ? source.tone_override_active
-          : defaults.toneOverrideActive,
-  });
-}
-
-export function sanitizeGreetingPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().greetingPolicy);
-
-  return compactDraftObject({
-    mode:
-      normalizeGreetingBehaviorMode(source.mode || source.defaultBehavior) ||
-      defaults.mode,
-    openingLine: s(source.openingLine || source.opening_line),
-    followupLeadIn: s(source.followupLeadIn || source.followup_lead_in),
-    mentionBusinessName:
-      typeof source.mentionBusinessName === "boolean"
-        ? source.mentionBusinessName
-        : typeof source.mention_business_name === "boolean"
-          ? source.mention_business_name
-          : defaults.mentionBusinessName,
-    mentionChannelContext:
-      typeof source.mentionChannelContext === "boolean"
-        ? source.mentionChannelContext
-        : typeof source.mention_channel_context === "boolean"
-          ? source.mention_channel_context
-          : defaults.mentionChannelContext,
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeClosingPolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().closingPolicy);
-
-  return compactDraftObject({
-    mode:
-      normalizeClosingBehaviorMode(source.mode || source.defaultBehavior) ||
-      defaults.mode,
-    closingLine: s(source.closingLine || source.closing_line),
-    includeNextStepPrompt:
-      typeof source.includeNextStepPrompt === "boolean"
-        ? source.includeNextStepPrompt
-        : typeof source.include_next_step_prompt === "boolean"
-          ? source.include_next_step_prompt
-          : defaults.includeNextStepPrompt,
-    includeHumanOfferWhenRelevant:
-      typeof source.includeHumanOfferWhenRelevant === "boolean"
-        ? source.includeHumanOfferWhenRelevant
-        : typeof source.include_human_offer_when_relevant === "boolean"
-          ? source.include_human_offer_when_relevant
-          : defaults.includeHumanOfferWhenRelevant,
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeTonePolicy(value = {}) {
-  const source = obj(value);
-  const defaults = obj(buildDefaultAssistantBehaviorDraft().tonePolicy);
-
-  return compactDraftObject({
-    mode:
-      normalizeToneBehaviorMode(source.mode || source.defaultBehavior) ||
-      defaults.mode,
-    messageLength:
-      normalizeMessageLengthMode(
-        source.messageLength || source.message_length
-      ) || defaults.messageLength,
-    empathyLevel:
-      normalizeEmpathyLevelMode(
-        source.empathyLevel || source.empathy_level
-      ) || defaults.empathyLevel,
-    shouldStayConcise:
-      typeof source.shouldStayConcise === "boolean"
-        ? source.shouldStayConcise
-        : typeof source.should_stay_concise === "boolean"
-          ? source.should_stay_concise
-          : defaults.shouldStayConcise,
-    shouldAvoidOverexplaining:
-      typeof source.shouldAvoidOverexplaining === "boolean"
-        ? source.shouldAvoidOverexplaining
-        : typeof source.should_avoid_overexplaining === "boolean"
-          ? source.should_avoid_overexplaining
-          : defaults.shouldAvoidOverexplaining,
-    shouldSoundPremium:
-      typeof source.shouldSoundPremium === "boolean"
-        ? source.shouldSoundPremium
-        : typeof source.should_sound_premium === "boolean"
-          ? source.should_sound_premium
-          : defaults.shouldSoundPremium,
-    shouldSoundLocalFriendly:
-      typeof source.shouldSoundLocalFriendly === "boolean"
-        ? source.shouldSoundLocalFriendly
-        : typeof source.should_sound_local_friendly === "boolean"
-          ? source.should_sound_local_friendly
-          : defaults.shouldSoundLocalFriendly,
-    note: sanitizeBehaviorNote(source.note),
-  });
-}
-
-export function sanitizeAssistantBehaviorDraft(value = {}) {
-  const source = obj(value);
-  const nested = obj(
-    source.assistantBehavior ||
-      source.assistant_behavior ||
-      source.assistantBehaviorDraft ||
-      source.assistant_behavior_draft
-  );
-  const defaults = buildDefaultAssistantBehaviorDraft();
-
-  return {
-    platformDefaults: sanitizePlatformDefaults(
-      obj(
-        source.platformDefaults ||
-          source.platform_defaults ||
-          nested.platformDefaults ||
-          defaults.platformDefaults
-      )
-    ),
-    tenantOverrides: sanitizeTenantOverrides(
-      obj(
-        source.tenantOverrides ||
-          source.tenant_overrides ||
-          nested.tenantOverrides ||
-          defaults.tenantOverrides
-      )
-    ),
-    greetingPolicy: sanitizeGreetingPolicy(
-      obj(
-        source.greetingPolicy ||
-          source.greeting_policy ||
-          nested.greetingPolicy ||
-          defaults.greetingPolicy
-      )
-    ),
-    closingPolicy: sanitizeClosingPolicy(
-      obj(
-        source.closingPolicy ||
-          source.closing_policy ||
-          nested.closingPolicy ||
-          defaults.closingPolicy
-      )
-    ),
-    tonePolicy: sanitizeTonePolicy(
-      obj(
-        source.tonePolicy ||
-          source.tone_policy ||
-          nested.tonePolicy ||
-          defaults.tonePolicy
-      )
-    ),
-    pricingPolicy: sanitizePricingPolicy(
-      obj(
-        source.pricingPolicy ||
-          source.pricing_policy ||
-          nested.pricingPolicy ||
-          defaults.pricingPolicy
-      )
-    ),
-    locationPolicy: sanitizeLocationPolicy(
-      obj(
-        source.locationPolicy ||
-          source.location_policy ||
-          nested.locationPolicy ||
-          defaults.locationPolicy
-      )
-    ),
-    bookingPolicy: sanitizeBookingPolicy(
-      obj(
-        source.bookingPolicy ||
-          source.booking_policy ||
-          nested.bookingPolicy ||
-          defaults.bookingPolicy
-      )
-    ),
-    contactPolicy: sanitizeContactPolicy(
-      obj(
-        source.contactPolicy ||
-          source.contact_policy ||
-          nested.contactPolicy ||
-          defaults.contactPolicy
-      )
-    ),
-    handoffPolicy: sanitizeHandoffPolicy(
-      obj(
-        source.handoffPolicy ||
-          source.handoff_policy ||
-          nested.handoffPolicy ||
-          defaults.handoffPolicy
-      )
-    ),
-  };
+export function mergeAssistantBehaviorDraft(_left = {}, _right = {}) {
+  return {};
 }
 
 export function sanitizeProgress(value = {}) {
@@ -776,9 +259,6 @@ export function sanitizeAssistantState(value = {}) {
     lastUpdatedSection: s(
       source.lastUpdatedSection || source.last_updated_section
     ).toLowerCase(),
-    activeBehaviorPolicy: normalizeBehaviorPolicyKey(
-      source.activeBehaviorPolicy || source.active_behavior_policy
-    ),
   });
 }
 
@@ -798,7 +278,7 @@ function sanitizeRawEvidenceItem(value = {}) {
     normalizedText: s(source.normalizedText || source.normalized_text),
     fieldKey: s(source.fieldKey || source.field_key).toLowerCase(),
     confidence: s(source.confidence).toLowerCase(),
-    sourceUrl: sanitizeBehaviorTargetUrl(source.sourceUrl || source.source_url),
+    sourceUrl: sanitizeSetupUrl(source.sourceUrl || source.source_url),
     hidden: source.hidden !== false,
     createdAt: source.createdAt || source.created_at || null,
   });
@@ -833,8 +313,6 @@ function sanitizeRawEvidenceLog(value = []) {
 
 function sanitizeStructuredSynthesisDraft(value = {}) {
   const source = obj(value);
-  const aiBehavior = obj(source.aiBehavior);
-
   return {
     businessProfile: sanitizeBusinessProfile(
       obj(source.businessProfile || source.business_profile)
@@ -848,20 +326,10 @@ function sanitizeStructuredSynthesisDraft(value = {}) {
     handoffRules: sanitizeHandoffRules(
       obj(source.handoffRules || source.handoff_rules || source.handoff)
     ),
-    assistantBehaviorDraft: sanitizeAssistantBehaviorDraft(
-      obj(
-        source.assistantBehaviorDraft ||
-          source.assistant_behavior_draft ||
-          source.assistantBehavior ||
-          source.assistant_behavior
-      )
-    ),
-    languages: uniqueStrings(source.languages || aiBehavior.languages, 8),
-    tone: s(source.tone || aiBehavior.tone),
-    greetingStyle: s(source.greetingStyle || aiBehavior.greetingStyle),
-    afterHoursBehavior: s(
-      source.afterHoursBehavior || aiBehavior.afterHoursBehavior
-    ),
+    languages: uniqueStrings(source.languages, 8),
+    tone: s(source.tone),
+    greetingStyle: s(source.greetingStyle),
+    afterHoursBehavior: s(source.afterHoursBehavior),
   };
 }
 
@@ -875,7 +343,7 @@ function sanitizePolishedDraft(value = {}) {
         source.description ||
         source.whatThisBusinessIs
     ),
-    websiteUrl: sanitizeBehaviorTargetUrl(source.websiteUrl || source.website_url),
+    websiteUrl: sanitizeSetupUrl(source.websiteUrl || source.website_url),
     coreServices: uniqueStrings(source.coreServices || source.services, 24),
     contactRoutes: uniqueStrings(source.contactRoutes || source.contacts, 24),
     workingHoursLines: uniqueStrings(
@@ -887,21 +355,6 @@ function sanitizePolishedDraft(value = {}) {
     ),
     handoffSummary: s(
       source.handoffSummary || source.humanHandoff || source.handoff
-    ),
-    pricingBehaviorSummary: s(
-      source.pricingBehaviorSummary || source.pricingBehavior
-    ),
-    locationBehaviorSummary: s(
-      source.locationBehaviorSummary || source.locationBehavior
-    ),
-    bookingBehaviorSummary: s(
-      source.bookingBehaviorSummary || source.bookingBehavior
-    ),
-    contactBehaviorSummary: s(
-      source.contactBehaviorSummary || source.contactBehavior
-    ),
-    handoffBehaviorSummary: s(
-      source.handoffBehaviorSummary || source.handoffBehavior
     ),
     languages: uniqueStrings(source.languages, 8),
     tone: s(source.tone),
@@ -976,8 +429,6 @@ export function sanitizeSilentSynthesis(value = {}) {
 
 export function sanitizeSetupAssistantCore(value = {}) {
   const source = obj(value);
-  const aiBehavior = obj(source.aiBehavior);
-
   return {
     businessProfile: sanitizeBusinessProfile(
       obj(source.businessProfile || source.business_profile)
@@ -997,21 +448,11 @@ export function sanitizeSetupAssistantCore(value = {}) {
     assistantState: sanitizeAssistantState(
       obj(source.assistantState || source.assistant_state)
     ),
-    assistantBehaviorDraft: sanitizeAssistantBehaviorDraft(
-      obj(
-        source.assistantBehaviorDraft ||
-          source.assistant_behavior_draft ||
-          source.assistantBehavior ||
-          source.assistant_behavior
-      )
-    ),
     progress: sanitizeProgress(source.progress),
-    languages: uniqueStrings(source.languages || aiBehavior.languages, 8),
-    tone: s(source.tone || aiBehavior.tone),
-    greetingStyle: s(source.greetingStyle || aiBehavior.greetingStyle),
-    afterHoursBehavior: s(
-      source.afterHoursBehavior || aiBehavior.afterHoursBehavior
-    ),
+    languages: uniqueStrings(source.languages, 8),
+    tone: s(source.tone),
+    greetingStyle: s(source.greetingStyle),
+    afterHoursBehavior: s(source.afterHoursBehavior),
     silentSynthesis: sanitizeSilentSynthesis(
       obj(
         source.silentSynthesis ||
@@ -1079,111 +520,6 @@ export function mergeProgress(left = {}, right = {}) {
   });
 }
 
-function mergePricingPolicy(left = {}, right = {}) {
-  return sanitizePricingPolicy({
-    ...obj(left),
-    ...obj(right),
-  });
-}
-
-function mergeLocationPolicy(left = {}, right = {}) {
-  return sanitizeLocationPolicy({
-    ...obj(left),
-    ...obj(right),
-  });
-}
-
-function mergeBookingPolicy(left = {}, right = {}) {
-  return sanitizeBookingPolicy({
-    ...obj(left),
-    ...obj(right),
-  });
-}
-
-function mergeContactPolicy(left = {}, right = {}) {
-  return sanitizeContactPolicy({
-    ...obj(left),
-    ...obj(right),
-  });
-}
-
-function mergeHandoffPolicy(left = {}, right = {}) {
-  return sanitizeHandoffPolicy({
-    ...obj(left),
-    ...obj(right),
-  });
-}
-
-export function mergeAssistantBehaviorDraft(left = {}, right = {}) {
-  const a = sanitizeAssistantBehaviorDraft(left);
-  const source = obj(right);
-  const nested = obj(
-    source.assistantBehaviorDraft ||
-      source.assistant_behavior_draft ||
-      source.assistantBehavior ||
-      source.assistant_behavior
-  );
-
-  const platformDefaultsPatch = obj(
-    source.platformDefaults || source.platform_defaults || nested.platformDefaults
-  );
-  const tenantOverridesPatch = obj(
-    source.tenantOverrides || source.tenant_overrides || nested.tenantOverrides
-  );
-  const greetingPatch = obj(
-    source.greetingPolicy || source.greeting_policy || nested.greetingPolicy
-  );
-  const closingPatch = obj(
-    source.closingPolicy || source.closing_policy || nested.closingPolicy
-  );
-  const tonePatch = obj(
-    source.tonePolicy || source.tone_policy || nested.tonePolicy
-  );
-  const pricingPatch = obj(
-    source.pricingPolicy || source.pricing_policy || nested.pricingPolicy
-  );
-  const locationPatch = obj(
-    source.locationPolicy || source.location_policy || nested.locationPolicy
-  );
-  const bookingPatch = obj(
-    source.bookingPolicy || source.booking_policy || nested.bookingPolicy
-  );
-  const contactPatch = obj(
-    source.contactPolicy || source.contact_policy || nested.contactPolicy
-  );
-  const handoffPatch = obj(
-    source.handoffPolicy || source.handoff_policy || nested.handoffPolicy
-  );
-
-  return {
-    platformDefaults: sanitizePlatformDefaults({
-      ...obj(a.platformDefaults),
-      ...platformDefaultsPatch,
-    }),
-    tenantOverrides: sanitizeTenantOverrides({
-      ...obj(a.tenantOverrides),
-      ...tenantOverridesPatch,
-    }),
-    greetingPolicy: sanitizeGreetingPolicy({
-      ...obj(a.greetingPolicy),
-      ...greetingPatch,
-    }),
-    closingPolicy: sanitizeClosingPolicy({
-      ...obj(a.closingPolicy),
-      ...closingPatch,
-    }),
-    tonePolicy: sanitizeTonePolicy({
-      ...obj(a.tonePolicy),
-      ...tonePatch,
-    }),
-    pricingPolicy: mergePricingPolicy(a.pricingPolicy, pricingPatch),
-    locationPolicy: mergeLocationPolicy(a.locationPolicy, locationPatch),
-    bookingPolicy: mergeBookingPolicy(a.bookingPolicy, bookingPatch),
-    contactPolicy: mergeContactPolicy(a.contactPolicy, contactPatch),
-    handoffPolicy: mergeHandoffPolicy(a.handoffPolicy, handoffPatch),
-  };
-}
-
 function mergeRawEvidenceLog(left = [], right = []) {
   return sanitizeRawEvidenceLog([...arr(left), ...arr(right)]);
 }
@@ -1201,10 +537,6 @@ function mergeStructuredSynthesisDraft(left = {}, right = {}) {
     hours: rightHasHours ? sanitizeStructuredHours(b.hours) : a.hours,
     pricingPosture: mergePricingPosture(a.pricingPosture, b.pricingPosture),
     handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
-    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
-      a.assistantBehaviorDraft,
-      b.assistantBehaviorDraft
-    ),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
     greetingStyle: s(b.greetingStyle || a.greetingStyle),
@@ -1231,21 +563,6 @@ function mergePolishedDraft(left = {}, right = {}) {
       : a.workingHoursLines,
     pricingSummary: s(b.pricingSummary || a.pricingSummary),
     handoffSummary: s(b.handoffSummary || a.handoffSummary),
-    pricingBehaviorSummary: s(
-      b.pricingBehaviorSummary || a.pricingBehaviorSummary
-    ),
-    locationBehaviorSummary: s(
-      b.locationBehaviorSummary || a.locationBehaviorSummary
-    ),
-    bookingBehaviorSummary: s(
-      b.bookingBehaviorSummary || a.bookingBehaviorSummary
-    ),
-    contactBehaviorSummary: s(
-      b.contactBehaviorSummary || a.contactBehaviorSummary
-    ),
-    handoffBehaviorSummary: s(
-      b.handoffBehaviorSummary || a.handoffBehaviorSummary
-    ),
     languages: arr(b.languages).length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
     greetingStyle: s(b.greetingStyle || a.greetingStyle),
@@ -1307,15 +624,6 @@ export function mergeSetupAssistantCore(left = {}, right = {}) {
     handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
     sourceMetadata: mergeSourceMetadata(a.sourceMetadata, b.sourceMetadata),
     assistantState: mergeAssistantState(a.assistantState, b.assistantState),
-    assistantBehaviorDraft: mergeAssistantBehaviorDraft(
-      a.assistantBehaviorDraft,
-      obj(
-        rightSource.assistantBehaviorDraft ||
-          rightSource.assistant_behavior_draft ||
-          rightSource.assistantBehavior ||
-          rightSource.assistant_behavior
-      )
-    ),
     progress: mergeProgress(a.progress, b.progress),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
