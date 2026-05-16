@@ -568,7 +568,8 @@ test("review finalize composition stays aligned with canonical setup readiness",
   assert.equal(result.body.assistant.nextQuestion.key, "handoff");
   assert.equal(result.body.assistant.readyForApproval, false);
   assert.equal(result.body.setup.review.finalizeAvailable, false);
-  assert.equal(result.body.setup.summary.sectionStatus.handoff.status, "missing");
+  assert.equal(result.body.setup.summary.sectionStatus.handoff.status, "optional");
+  assert.equal(result.body.setup.summary.sectionStatus.handoff.required, false);
   assert.equal(finalizeCalled, false);
   assert.equal(auditCalls.length, 1);
   assert.equal(auditCalls[0][5].reasonCode, "setup_review_not_ready");
