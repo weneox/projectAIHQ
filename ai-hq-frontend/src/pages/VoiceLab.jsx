@@ -231,10 +231,34 @@ function readinessLabel(score, evaluation = DEFAULT_EVALUATION) {
   return "Not ready";
 }
 
-function buildLocalReadinessReport({ score, evaluation, runtimeMeta }) {
+function buildEmptyCapturedSlots(scenario = {}) {
+  return [...(scenario.requiredSlots || []), ...(scenario.optionalSlots || [])].reduce(
+    (next, slot) => ({
+      ...next,
+      [slot.key]: "",
+    }),
+    {}
+  );
+}
+
+function missingCapturedSlots(scenario = {}, capturedSlots = {}) {
+  return (scenario.requiredSlots || []).filter((slot) => !s(capturedSlots[slot.key]));
+}
+
+function buildLocalReadinessReport({ score, evaluation, runtimeMeta, scenario, capturedSlots }) {
   const blockers = [];
   const nextActions = [];
   const runtimeKnown = Boolean(runtimeMeta);
+  const missingCapture = missingCapturedSlots(scenario, capturedSlots);
+
+  if (missingCapture.length) {
+    blockers.push(
+      `Required captured fields are missing: ${missingCapture
+        .map((slot) => slot.label || slot.key)
+        .join(", ")}.`
+    );
+    nextActions.push("Fill the captured summary or repeat the call until the assistant collects the required fields.");
+  }
 
   if (!runtimeKnown) {
     blockers.push("Run a full Browser Lab session before deciding.");
@@ -279,6 +303,7 @@ function buildLocalReadinessReport({ score, evaluation, runtimeMeta }) {
     runtimeMeta.runtimeApplied === true &&
     evaluation.language === "good" &&
     score >= 4.4 &&
+    missingCapture.length === 0 &&
     blockers.length === 0;
 
   const needsTuning = !ready && score >= 3.8 && blockers.length <= 3;
@@ -314,6 +339,7 @@ export default function VoiceLab() {
   const [scenarioId, setScenarioId] = useState("restaurant_order");
   const [scenarios, setScenarios] = useState(VOICE_LAB_SCENARIOS);
   const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
+  const [capturedSlots, setCapturedSlots] = useState({});
   const [evaluationHistory, setEvaluationHistory] = useState([]);
   const [savingEvaluation, setSavingEvaluation] = useState(false);
   const [events, setEvents] = useState([]);
@@ -331,6 +357,10 @@ export default function VoiceLab() {
     [scenarioId, scenarios]
   );
 
+  const captureSlots = useMemo(
+    () => [...(scenario.requiredSlots || []), ...(scenario.optionalSlots || [])],
+    [scenario]
+  );
   const averageScore = scoreAverage(evaluation);
   const readyLabel = readinessLabel(averageScore, evaluation);
   const readinessReport = useMemo(
@@ -339,8 +369,10 @@ export default function VoiceLab() {
         score: averageScore,
         evaluation,
         runtimeMeta,
+        scenario,
+        capturedSlots,
       }),
-    [averageScore, evaluation, runtimeMeta]
+    [averageScore, evaluation, runtimeMeta, scenario, capturedSlots]
   );
 
   async function loadScenarios() {
@@ -380,6 +412,7 @@ export default function VoiceLab() {
         voice,
         runtimeApplied: runtimeMeta?.runtimeApplied === true,
         tenantKey: s(runtimeMeta?.tenantKey),
+        capturedSlots,
         evaluation,
       });
 
@@ -406,6 +439,13 @@ export default function VoiceLab() {
     }));
   }
 
+  function updateCapturedSlot(key, value) {
+    setCapturedSlots((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
   function applyScenarioPrompt() {
     setInstructions(
       [
@@ -422,6 +462,7 @@ export default function VoiceLab() {
 
   function resetEvaluation() {
     setEvaluation(DEFAULT_EVALUATION);
+    setCapturedSlots(buildEmptyCapturedSlots(scenario));
   }
 
   async function stopLab() {
@@ -830,6 +871,40 @@ export default function VoiceLab() {
           <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
+                <ClipboardCheck className="h-5 w-5 text-text" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-text">Manual captured summary</h2>
+                <p className="text-xs text-text-muted">Agent danışıqda bu məlumatları topladımı?</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {captureSlots.length ? (
+                captureSlots.map((slot) => (
+                  <label key={slot.key} className="block space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                      {(scenario.requiredSlots || []).some((item) => item.key === slot.key) ? "Required" : "Optional"} · {slot.label || slot.key}
+                    </span>
+                    <textarea
+                      className="min-h-[58px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm leading-6 text-text outline-none focus:border-text"
+                      placeholder={slot.description || slot.key}
+                      value={s(capturedSlots[slot.key])}
+                      onChange={(event) => updateCapturedSlot(slot.key, event.target.value)}
+                    />
+                  </label>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
+                  Bu scenario üçün capture slot yoxdur.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
                 <Star className="h-5 w-5 text-text" />
               </div>
               <div>
@@ -972,6 +1047,9 @@ export default function VoiceLab() {
                     </div>
                     <div className="mt-1 text-xs text-text-muted">
                       {s(item.report?.title || item.readiness).replace(/_/g, " ")}
+                    </div>
+                    <div className="mt-1 text-xs text-text-muted">
+                      Capture: {item.captureSummary?.complete ? "complete" : "missing fields"}
                     </div>
                   </div>
                 ))
