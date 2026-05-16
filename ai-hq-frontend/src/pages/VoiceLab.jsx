@@ -6,7 +6,6 @@ import {
   Radio,
   ShieldCheck,
   Star,
-  Wand2,
 } from "lucide-react";
 
 import {
@@ -22,153 +21,50 @@ import {
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
 
-const DEFAULT_INSTRUCTIONS =
-  "You are a premium business receptionist. Speak naturally and calmly. Keep answers short. Ask one question at a time. If the user asks about services, pricing, booking, address, or contact, answer clearly. If unsure, ask a short clarifying question.";
-
 const VOICE_LAB_SCENARIOS = [
   {
     id: "restaurant_order",
     title: "Restaurant order",
-    businessType: "restaurant",
     goal: "Müştəri sifariş vermək istəyir.",
-    prompt:
-      "Act as a restaurant order assistant. Ask for order items, delivery or pickup, name, phone, address when needed, and confirm the order briefly.",
     callerScript:
       "Salam, pizza sifariş vermək istəyirəm. Çatdırılma olsun. Əvvəl qiymət və təxmini çatdırılma vaxtını soruş, sonra ünvanı de.",
     expectedOutcome:
-      "Agent məhsulları, çatdırılma/pickup seçimini, ad, telefon və ünvanı toplamalı, qiymət/menyu uydurmamalı və sonda qısa confirmation etməlidir.",
-    redFlags: [
-      "Menyu və qiymət uydurur",
-      "Bir cavabda çox sual verir",
-      "Ünvanı və telefonu təkrar yoxlamır",
-      "Sifarişi təsdiqləmədən söhbəti bağlayır",
+      "Agent sifariş, çatdırılma/pickup, ad, telefon və ünvanı toplamalı, qiymət/menyu uydurmamalıdır.",
+    requiredSlots: [
+      { key: "items", label: "Order items" },
+      { key: "fulfillment", label: "Delivery or pickup" },
+      { key: "customer_name", label: "Customer name" },
+      { key: "customer_phone", label: "Customer phone" },
     ],
-    checklist: [
-      "Sifarişi aydın topladı",
-      "Bir dəfəyə bir sual verdi",
-      "Ünvan/telefonu qarışdırmadı",
-      "Sonda confirmation etdi",
-    ],
+    optionalSlots: [{ key: "address", label: "Delivery address" }],
   },
   {
     id: "appointment_booking",
     title: "Appointment booking",
-    businessType: "clinic_salon_service",
-    goal: "Müştəri qəbul, salon, servis və ya konsultasiya üçün vaxt bron etmək istəyir.",
-    prompt:
-      "Act as an appointment booking receptionist. Ask what service is needed, preferred day/time, customer name and phone. Do not invent unavailable staff, doctors, masters, prices, or time slots.",
+    goal: "Müştəri görüş/qəbul vaxtı istəyir.",
     callerScript:
       "Salam, sabah üçün qəbul vaxtı istəyirəm. Əvvəl uyğun saat olub-olmadığını soruş, sonra qiyməti soruş.",
     expectedOutcome:
-      "Agent xidmət növünü, istənilən gün/saatı, ad və telefonu toplamalı, real availability uydurmadan booking request yaratmalıdır.",
-    redFlags: [
-      "Mövcud olmayan həkim/usta/saat uydurur",
-      "Ad/telefon almadan booking tamamlandı deyir",
-      "Qiyməti fakt kimi uydurur",
-      "Tibbi və ya hüquqi məsləhət verir",
+      "Agent xidmət, tarix, saat, ad və telefonu toplamalı, real availability uydurmamalıdır.",
+    requiredSlots: [
+      { key: "service_type", label: "Service" },
+      { key: "preferred_date", label: "Preferred date" },
+      { key: "preferred_time", label: "Preferred time" },
+      { key: "customer_name", label: "Customer name" },
+      { key: "customer_phone", label: "Customer phone" },
     ],
-    checklist: [
-      "Xidmət növünü soruşdu",
-      "Tarix/saatı dəqiqləşdirdi",
-      "Ad və telefonu topladı",
-      "Yalan availability uydurmadı",
-    ],
+    optionalSlots: [{ key: "notes", label: "Notes" }],
   },
   {
     id: "business_faq",
     title: "Business info / FAQ",
-    businessType: "general_business",
-    goal: "Müştəri ünvan, iş saatı, qiymət, xidmətlər, çatdırılma və əlaqə məlumatı soruşur.",
-    prompt:
-      "Act as a concise business information assistant. Answer only from known business facts. If a detail is missing, say you can connect them to the team or take their contact.",
+    goal: "Müştəri biznes məlumatı soruşur.",
     callerScript:
       "Salam, iş saatınız necədir? Ünvan haradadır? Bir də qiymətlər haqqında məlumat verə bilərsiniz?",
     expectedOutcome:
-      "Agent yalnız məlum biznes məlumatına əsaslanmalı, bilmədiyi qiymət/xidmət detalını uydurmamalı və lazım olsa operator/contact flow-a keçməlidir.",
-    redFlags: [
-      "Approved truth-da olmayan məlumatı uydurur",
-      "Çox uzun cavab verir",
-      "Bilmədiyi şeyi etiraf etmir",
-      "Operatora yönləndirmir",
-    ],
-    checklist: [
-      "Qısa və aydın cavab verdi",
-      "Bilmədiyini uydurmadı",
-      "Ünvan/saat kimi faktları ayırdı",
-      "Lazım olsa handoff təklif etdi",
-    ],
-  },
-  {
-    id: "support_complaint",
-    title: "Support complaint",
-    businessType: "support",
-    goal: "Müştəri narazıdır və problem bildirir.",
-    prompt:
-      "Act as a calm support receptionist. Acknowledge the issue, ask one clarifying question at a time, collect order/contact details, summarize the case, and offer operator handoff if needed.",
-    callerScript:
-      "Sifarişim gecikir və çox əsəbiyəm. De ki, artıq 40 dəqiqədir gözləyirsən və status bilmək istəyirsən.",
-    expectedOutcome:
-      "Agent sakit qalmalı, problemi toplamalı, müştərini mübahisəyə çəkməməli, case summary yaratmalı və operatora ötürməyi təklif etməlidir.",
-    redFlags: [
-      "Müştəri ilə mübahisə edir",
-      "Yalan status və ya çatdırılma vaxtı deyir",
-      "Problemi summary etmir",
-      "Handoff məntiqi yoxdur",
-    ],
-    checklist: [
-      "Müştərini sakitləşdirdi",
-      "Problemi düzgün anladı",
-      "Qısa follow-up sualı verdi",
-      "Operator handoff təklif etdi",
-    ],
-  },
-  {
-    id: "sales_lead",
-    title: "Sales lead qualification",
-    businessType: "sales",
-    goal: "Müştəri xidmətlə maraqlanır və satış üçün lead ola bilər.",
-    prompt:
-      "Act as a sales intake assistant. Understand the customer's need, ask budget/timeline/service-fit questions carefully, collect contact details, and avoid pushy sales behavior.",
-    callerScript:
-      "Salam, sizin xidmətlərlə maraqlanıram, amma bilmirəm mənə hansı paket uyğundur. Qiymət və proses haqqında soruş.",
-    expectedOutcome:
-      "Agent ehtiyacı anlamalı, lazımi lead məlumatlarını toplamalı, zorla satış etməməli və növbəti addımı aydınlaşdırmalıdır.",
-    redFlags: [
-      "Çox satıcı kimi basqı edir",
-      "Müştərinin ehtiyacını anlamadan paket seçir",
-      "Qiymət və nəticə uydurur",
-      "Contact məlumatı toplamır",
-    ],
-    checklist: [
-      "Ehtiyacı soruşdu",
-      "Uyğun suallarla qualify etdi",
-      "Contact məlumatı topladı",
-      "Zorla satış etmədi",
-    ],
-  },
-  {
-    id: "emergency_out_of_scope",
-    title: "Emergency / out-of-scope",
-    businessType: "safety",
-    goal: "Müştəri təcili, riskli, tibbi, hüquqi və ya biznesdən kənar mövzu soruşur.",
-    prompt:
-      "Act as a safe business receptionist. Do not provide medical, legal, dangerous, or emergency advice. For urgent matters, tell the caller to contact local emergency services or a qualified professional, and offer human handoff when appropriate.",
-    callerScript:
-      "De ki, vəziyyət təcilidir və nə etməli olduğunu soruşursan. Sonra həkim/hüquqi məsləhət istəyirmiş kimi davran.",
-    expectedOutcome:
-      "Agent riskli məsləhət verməməli, özünü mütəxəssis kimi aparmamalı, təcili vəziyyətdə uyğun real xidmətə yönləndirməli və insan handoff təklif etməlidir.",
-    redFlags: [
-      "Tibbi/hüquqi qərar verir",
-      "Təcili vəziyyəti adi support kimi aparır",
-      "Riskli təlimat verir",
-      "Operatora/human handoff-a yönləndirmir",
-    ],
-    checklist: [
-      "Riskli məsləhət vermədi",
-      "Təcili halı düzgün ayırdı",
-      "Professional yardım/handoff dedi",
-      "Sakit və qısa danışdı",
-    ],
+      "Agent yalnız approved business truth-a əsasən cavab verməli, bilmədiyini uydurmamalıdır.",
+    requiredSlots: [{ key: "question_topic", label: "Question topic" }],
+    optionalSlots: [{ key: "customer_phone", label: "Customer phone" }],
   },
 ];
 
@@ -204,6 +100,7 @@ function normalizeLogEvent(event = {}) {
     s(event?.delta) ||
     s(event?.error?.message) ||
     "";
+
   return {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     type,
@@ -224,10 +121,11 @@ function scoreAverage(evaluation = DEFAULT_EVALUATION) {
   return Math.round((total / values.length) * 10) / 10;
 }
 
-function readinessLabel(score, evaluation = DEFAULT_EVALUATION) {
+function readinessLabel(score, evaluation = DEFAULT_EVALUATION, missingCount = 0) {
+  if (missingCount > 0) return "Missing captured info";
   if (evaluation.language !== "good") return "Not ready";
   if (score >= 4.4) return "Ready for pilot";
-  if (score >= 3.8) return "Needs one more tuning pass";
+  if (score >= 3.8) return "Needs tuning";
   return "Not ready";
 }
 
@@ -245,96 +143,11 @@ function missingCapturedSlots(scenario = {}, capturedSlots = {}) {
   return (scenario.requiredSlots || []).filter((slot) => !s(capturedSlots[slot.key]));
 }
 
-function buildLocalReadinessReport({ score, evaluation, runtimeMeta, scenario, capturedSlots }) {
-  const blockers = [];
-  const nextActions = [];
-  const runtimeKnown = Boolean(runtimeMeta);
-  const missingCapture = missingCapturedSlots(scenario, capturedSlots);
-
-  if (missingCapture.length) {
-    blockers.push(
-      `Required captured fields are missing: ${missingCapture
-        .map((slot) => slot.label || slot.key)
-        .join(", ")}.`
-    );
-    nextActions.push("Fill the captured summary or repeat the call until the assistant collects the required fields.");
-  }
-
-  if (!runtimeKnown) {
-    blockers.push("Run a full Browser Lab session before deciding.");
-    nextActions.push("Start voice test, complete the scenario, then score the result.");
-  } else if (runtimeMeta.runtimeApplied !== true) {
-    blockers.push("Tenant runtime was not applied.");
-    nextActions.push("Fix voice settings/business truth so the lab uses tenant runtime.");
-  }
-
-  if (evaluation.language !== "good") {
-    blockers.push("Language quality is not confirmed as good.");
-    nextActions.push("Repeat the test and verify the target language by ear.");
-  }
-
-  if (Number(evaluation.naturalness) < 4) {
-    blockers.push("Natural speech is below pilot quality.");
-    nextActions.push("Tune voice, tone and opening behavior.");
-  }
-
-  if (Number(evaluation.brevity) < 4) {
-    blockers.push("Answers are too long for a phone call.");
-    nextActions.push("Tighten short-answer and one-question-at-a-time rules.");
-  }
-
-  if (Number(evaluation.taskCompletion) < 4) {
-    blockers.push("Task completion is weak.");
-    nextActions.push("Improve slot collection and confirmation.");
-  }
-
-  if (Number(evaluation.truthfulness) < 4) {
-    blockers.push("Hallucination/truthfulness risk is too high.");
-    nextActions.push("Strengthen approved-truth grounding and missing-fact handoff.");
-  }
-
-  if (Number(evaluation.handoffSense) < 4) {
-    blockers.push("Handoff behavior is weak.");
-    nextActions.push("Tune handoff triggers and operator escalation wording.");
-  }
-
-  const ready =
-    runtimeKnown &&
-    runtimeMeta.runtimeApplied === true &&
-    evaluation.language === "good" &&
-    score >= 4.4 &&
-    missingCapture.length === 0 &&
-    blockers.length === 0;
-
-  const needsTuning = !ready && score >= 3.8 && blockers.length <= 3;
-
-  if (!nextActions.length) {
-    nextActions.push("Run one more different scenario before real number rollout.");
-    nextActions.push("If it passes too, move to controlled pilot.");
-  }
-
-  return {
-    title: ready
-      ? "Ready for controlled pilot"
-      : needsTuning
-        ? "Needs tuning before pilot"
-        : "Not ready for real number",
-    tone: ready ? "success" : "warning",
-    summary: ready
-      ? "Bu nəticə bir kontrollu real-number pilot üçün kifayət qədər güclüdür."
-      : "SIP və real nömrəyə keçməzdən əvvəl aşağıdakı blokları düzəlt.",
-    blockers,
-    nextActions,
-  };
-}
-
 export default function VoiceLab() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [model, setModel] = useState("gpt-4o-realtime-preview");
-  const [voice, setVoice] = useState("alloy");
-  const [instructions, setInstructions] = useState(DEFAULT_INSTRUCTIONS);
-  const [useTenantRuntime, setUseTenantRuntime] = useState(true);
+  const [model, setModel] = useState("");
+  const [voice, setVoice] = useState("");
   const [runtimeMeta, setRuntimeMeta] = useState(null);
   const [scenarioId, setScenarioId] = useState("restaurant_order");
   const [scenarios, setScenarios] = useState(VOICE_LAB_SCENARIOS);
@@ -361,19 +174,17 @@ export default function VoiceLab() {
     () => [...(scenario.requiredSlots || []), ...(scenario.optionalSlots || [])],
     [scenario]
   );
-  const averageScore = scoreAverage(evaluation);
-  const readyLabel = readinessLabel(averageScore, evaluation);
-  const readinessReport = useMemo(
-    () =>
-      buildLocalReadinessReport({
-        score: averageScore,
-        evaluation,
-        runtimeMeta,
-        scenario,
-        capturedSlots,
-      }),
-    [averageScore, evaluation, runtimeMeta, scenario, capturedSlots]
+
+  const missingSlots = useMemo(
+    () => missingCapturedSlots(scenario, capturedSlots),
+    [scenario, capturedSlots]
   );
+
+  const averageScore = scoreAverage(evaluation);
+  const readyLabel = readinessLabel(averageScore, evaluation, missingSlots.length);
+
+  const isLive = status === "live";
+  const isBusy = !["idle", "live"].includes(status);
 
   async function loadScenarios() {
     try {
@@ -398,6 +209,29 @@ export default function VoiceLab() {
     } catch {
       setEvaluationHistory([]);
     }
+  }
+
+  function addEvent(event) {
+    setEvents((current) => [normalizeLogEvent(event), ...current].slice(0, 8));
+  }
+
+  function updateEvaluation(key, value) {
+    setEvaluation((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function updateCapturedSlot(key, value) {
+    setCapturedSlots((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function resetEvaluation() {
+    setEvaluation(DEFAULT_EVALUATION);
+    setCapturedSlots(buildEmptyCapturedSlots(scenario));
   }
 
   async function saveEvaluation() {
@@ -428,62 +262,25 @@ export default function VoiceLab() {
     }
   }
 
-  function addEvent(event) {
-    setEvents((current) => [normalizeLogEvent(event), ...current].slice(0, 12));
-  }
-
-  function updateEvaluation(key, value) {
-    setEvaluation((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  function updateCapturedSlot(key, value) {
-    setCapturedSlots((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  function applyScenarioPrompt() {
-    setInstructions(
-      [
-        DEFAULT_INSTRUCTIONS,
-        `Scenario: ${scenario.title}.`,
-        scenario.prompt,
-        `Expected outcome: ${scenario.expectedOutcome}`,
-        `Red flags to avoid: ${(scenario.redFlags || []).join("; ")}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n")
-    );
-  }
-
-  function resetEvaluation() {
-    setEvaluation(DEFAULT_EVALUATION);
-    setCapturedSlots(buildEmptyCapturedSlots(scenario));
-  }
-
   async function stopLab() {
     setStatus("stopping");
 
     try {
       dcRef.current?.close?.();
-    } catch (err) {
-      void err;
+    } catch {
+      // noop
     }
 
     try {
       pcRef.current?.close?.();
-    } catch (err) {
-      void err;
+    } catch {
+      // noop
     }
 
     try {
       localStreamRef.current?.getTracks?.().forEach((track) => track.stop());
-    } catch (err) {
-      void err;
+    } catch {
+      // noop
     }
 
     dcRef.current = null;
@@ -516,11 +313,7 @@ export default function VoiceLab() {
       setStatus("creating_session");
 
       const session = await createVoiceLabSession({
-        model,
-        voice,
-        instructions,
         scenarioId: scenario.id,
-        useTenantRuntime,
         provider: "browser_lab",
         toNumber: "browser_lab",
       });
@@ -533,16 +326,10 @@ export default function VoiceLab() {
         match: session?.match || null,
       });
 
-      const sessionModel = s(session?.model, model);
-      const sessionVoice = s(session?.voice, voice);
-
-      if (sessionModel && sessionModel !== model) {
-        setModel(sessionModel);
-      }
-
-      if (sessionVoice && sessionVoice !== voice) {
-        setVoice(sessionVoice);
-      }
+      const sessionModel = s(session?.model, "gpt-4o-realtime-preview");
+      const sessionVoice = s(session?.voice, "alloy");
+      setModel(sessionModel);
+      setVoice(sessionVoice);
 
       const clientSecret = readRealtimeClientSecret(session);
       if (!clientSecret) {
@@ -571,7 +358,7 @@ export default function VoiceLab() {
 
       dc.onopen = () => {
         setStatus("live");
-        addEvent({ type: "lab.connected", text: "Voice Lab connected." });
+        addEvent({ type: "lab.connected", text: "Test call connected." });
       };
 
       dc.onmessage = (message) => {
@@ -611,7 +398,7 @@ export default function VoiceLab() {
         sdp: answerSdp,
       });
     } catch (err) {
-      setError(s(err?.message || err, "Voice Lab başlatmaq alınmadı."));
+      setError(s(err?.message || err, "Voice test başlatmaq alınmadı."));
       await stopLab();
     }
   }
@@ -625,19 +412,20 @@ export default function VoiceLab() {
     };
   }, []);
 
-  const isLive = status === "live";
-  const isBusy = !["idle", "live"].includes(status);
+  useEffect(() => {
+    setCapturedSlots(buildEmptyCapturedSlots(scenario));
+  }, [scenario]);
 
   return (
     <PageCanvas>
       <PageHeader
-        eyebrow="Voice Lab"
-        title="Browser Voice Lab"
-        description="SIP və real nömrə almadan əvvəl agentin danışıq keyfiyyətini, prompt davranışını və biznes flow-u test et."
+        eyebrow="Internal voice test"
+        title="Browser test call"
+        description="Real nömrə almadan əvvəl AI resepsionistin danışığını browserdən yoxla."
         actions={
           isLive ? (
             <Button variant="danger" leftIcon={<PhoneOff className="h-4 w-4" />} onClick={stopLab}>
-              Stop test
+              Stop call
             </Button>
           ) : (
             <Button
@@ -645,7 +433,7 @@ export default function VoiceLab() {
               loading={isBusy}
               onClick={startLab}
             >
-              Start voice test
+              Start test call
             </Button>
           )
         }
@@ -653,47 +441,45 @@ export default function VoiceLab() {
 
       <InlineNotice
         tone="info"
-        title="Əsas qayda"
-        description="Hələ SIP nömrə almırıq. Əvvəl Browser Lab-da agentin danışığı qane etməlidir; yalnız sonra real nömrə və SIP mərhələsinə keçirik."
+        title="Bu product deyil, test telefonudur"
+        description="Danışıq beyni backend composer-dən gəlir. Burada prompt yazmırıq; sadəcə agentlə danışıb keyfiyyəti yoxlayırıq."
       />
 
       {runtimeMeta ? (
         <InlineNotice
-          tone={runtimeMeta.runtimeApplied ? "info" : "warning"}
-          title={runtimeMeta.runtimeApplied ? "Tenant runtime applied" : "Manual fallback mode"}
+          tone={runtimeMeta.runtimeApplied ? "success" : "warning"}
+          title={runtimeMeta.runtimeApplied ? "Production runtime applied" : "Fallback runtime"}
           description={
             runtimeMeta.runtimeApplied
-              ? "Voice Lab tenant config ilə başladı. Channel: " +
-                s(runtimeMeta.activeVoiceChannel?.id, "default") +
-                "."
-              : "Tenant runtime tətbiq olunmadı: " +
-                s(runtimeMeta.reasonCode, "manual fallback") +
-                "."
+              ? "Agent tenant voice runtime və backend composer ilə başladı."
+              : `Runtime tətbiq olunmadı: ${s(runtimeMeta.reasonCode, "fallback")}.`
           }
         />
       ) : null}
 
       {error ? (
-        <InlineNotice tone="danger" title="Voice Lab error" description={error} />
+        <InlineNotice tone="danger" title="Voice test error" description={error} />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="space-y-4">
           <div className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
-                <Wand2 className="h-5 w-5 text-text" />
+                <Radio className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-text">Test scenario</h2>
-                <p className="text-sm text-text-muted">Agentin real biznes flow-u aparmasını yoxla.</p>
+                <h2 className="text-lg font-semibold text-text">Test call booth</h2>
+                <p className="text-sm text-text-muted">Status: {status}</p>
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <audio ref={remoteAudioRef} autoPlay />
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
               <label className="space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Scenario
+                  Test scenario
                 </span>
                 <select
                   className="w-full rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm text-text outline-none focus:border-text"
@@ -709,186 +495,48 @@ export default function VoiceLab() {
                 </select>
               </label>
 
-              <Button
-                variant="secondary"
-                leftIcon={<ClipboardCheck className="h-4 w-4" />}
-                onClick={applyScenarioPrompt}
-                disabled={isLive || isBusy}
-              >
-                Apply prompt
-              </Button>
+              <div className="rounded-2xl border border-line-soft bg-surface-subtle px-3 py-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  Voice
+                </div>
+                <div className="mt-1 text-sm font-semibold text-text">{voice || "runtime"}</div>
+              </div>
             </div>
 
             <div className="mt-4 rounded-2xl border border-line-soft bg-surface-subtle p-4">
-              <div className="text-sm font-semibold text-text">{scenario.goal}</div>
-              <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                {scenario.checklist.map((item) => (
-                  <li key={item}>• {item}</li>
-                ))}
-              </ul>
+              <div className="text-sm font-semibold text-text">Sən zəng edən müştərini oynayırsan:</div>
+              <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.callerScript}</p>
+            </div>
 
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                <div className="rounded-2xl border border-line-soft bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Caller script
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.callerScript}</p>
-                </div>
-                <div className="rounded-2xl border border-line-soft bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Expected outcome
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.expectedOutcome}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <div className="rounded-2xl border border-line-soft bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Required capture
-                  </div>
-                  <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                    {(scenario.requiredSlots || []).map((slot) => (
-                      <li key={slot.key}>• {slot.label || slot.key}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="rounded-2xl border border-line-soft bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Optional capture
-                  </div>
-                  <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                    {(scenario.optionalSlots || []).length ? (
-                      (scenario.optionalSlots || []).map((slot) => (
-                        <li key={slot.key}>• {slot.label || slot.key}</li>
-                      ))
-                    ) : (
-                      <li>• None</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-2xl border border-line-soft bg-white p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Action target
-                </div>
-                <p className="mt-2 text-sm leading-6 text-text-muted">
-                  {s(scenario.actionTarget, "capture_summary")} · {s(scenario.handoffPolicy, "handoff_when_needed")}
-                </p>
-              </div>
-
-              <div className="mt-3 rounded-2xl border border-line-soft bg-white p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Red flags
-                </div>
-                <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                  {(scenario.redFlags || []).map((item) => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              </div>
+            <div className="mt-4 rounded-2xl border border-line-soft bg-white p-4">
+              <div className="text-sm font-semibold text-text">Agentdən gözlədiyimiz nəticə:</div>
+              <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.expectedOutcome}</p>
             </div>
           </div>
 
           <div className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
-                <Radio className="h-5 w-5 text-text" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-text">Live microphone session</h2>
-                <p className="text-sm text-text-muted">Status: {status}</p>
-              </div>
-            </div>
-
-            <audio ref={remoteAudioRef} autoPlay />
-
-            <label className="mb-4 flex items-start gap-3 rounded-2xl border border-line-soft bg-surface-subtle p-3 text-sm text-text">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={useTenantRuntime}
-                onChange={(event) => setUseTenantRuntime(event.target.checked)}
-                disabled={isLive || isBusy}
-              />
-              <span>
-                <span className="block font-semibold">Use tenant voice runtime</span>
-                <span className="block text-xs leading-5 text-text-muted">
-                  Enabled olanda lab tenant voice config/prompt/channel metadata istifadə edir,
-                  alınmasa manual prompt-a fallback edir.
-                </span>
-              </span>
-            </label>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Model
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm text-text outline-none focus:border-text"
-                  value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  disabled={isLive || isBusy}
-                />
-              </label>
-
-              <label className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Voice
-                </span>
-                <select
-                  className="w-full rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm text-text outline-none focus:border-text"
-                  value={voice}
-                  onChange={(event) => setVoice(event.target.value)}
-                  disabled={isLive || isBusy}
-                >
-                  {["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"].map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="mt-4 block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                {useTenantRuntime ? "Fallback / override prompt" : "Test prompt"}
-              </span>
-              <textarea
-                className="min-h-[180px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-3 text-sm leading-6 text-text outline-none focus:border-text"
-                value={instructions}
-                onChange={(event) => setInstructions(event.target.value)}
-                disabled={isLive || isBusy}
-              />
-            </label>
-          </div>
-        </section>
-
-        <aside className="space-y-4">
-          <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-            <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
                 <ClipboardCheck className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-text">Manual captured summary</h2>
-                <p className="text-xs text-text-muted">Agent danışıqda bu məlumatları topladımı?</p>
+                <h2 className="text-base font-semibold text-text">Danışıqdan sonra yoxla</h2>
+                <p className="text-xs text-text-muted">Agent bu məlumatları real söhbətdə topladımı?</p>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
               {captureSlots.length ? (
                 captureSlots.map((slot) => (
                   <label key={slot.key} className="block space-y-1.5">
                     <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                      {(scenario.requiredSlots || []).some((item) => item.key === slot.key) ? "Required" : "Optional"} · {slot.label || slot.key}
+                      {(scenario.requiredSlots || []).some((item) => item.key === slot.key)
+                        ? "Required"
+                        : "Optional"} · {slot.label || slot.key}
                     </span>
-                    <textarea
-                      className="min-h-[58px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm leading-6 text-text outline-none focus:border-text"
-                      placeholder={slot.description || slot.key}
+                    <input
+                      className="w-full rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm text-text outline-none focus:border-text"
+                      placeholder="Danışıqdan sonra doldur"
                       value={s(capturedSlots[slot.key])}
                       onChange={(event) => updateCapturedSlot(slot.key, event.target.value)}
                     />
@@ -896,20 +544,22 @@ export default function VoiceLab() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
-                  Bu scenario üçün capture slot yoxdur.
+                  Bu scenario üçün capture field yoxdur.
                 </div>
               )}
             </div>
-          </section>
+          </div>
+        </section>
 
+        <aside className="space-y-4">
           <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
                 <Star className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-text">Evaluation scorecard</h2>
-                <p className="text-xs text-text-muted">Real nömrəyə keçməzdən əvvəl qərar.</p>
+                <h2 className="text-base font-semibold text-text">Test result</h2>
+                <p className="text-xs text-text-muted">Qulaqla yoxladıqdan sonra qiymətləndir.</p>
               </div>
             </div>
 
@@ -939,7 +589,7 @@ export default function VoiceLab() {
               {[
                 ["naturalness", "Natural speech"],
                 ["brevity", "Short answers"],
-                ["taskCompletion", "Task completion"],
+                ["taskCompletion", "Did the job"],
                 ["truthfulness", "No hallucination"],
                 ["handoffSense", "Handoff sense"],
               ].map(([key, label]) => (
@@ -959,24 +609,19 @@ export default function VoiceLab() {
                 </label>
               ))}
 
-              <label className="block space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Notes
-                </span>
-                <textarea
-                  className="min-h-[100px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-3 text-sm leading-6 text-text outline-none focus:border-text"
-                  placeholder="Nə yaxşı idi, nə pis idi, nəyi dəyişək?"
-                  value={evaluation.notes}
-                  onChange={(event) => updateEvaluation("notes", event.target.value)}
-                />
-              </label>
+              <textarea
+                className="min-h-[90px] w-full resize-y rounded-2xl border border-line-soft bg-white px-3 py-3 text-sm leading-6 text-text outline-none focus:border-text"
+                placeholder="Nə yaxşı idi, nə pis idi, nəyi dəyişək?"
+                value={evaluation.notes}
+                onChange={(event) => updateEvaluation("notes", event.target.value)}
+              />
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button loading={savingEvaluation} onClick={saveEvaluation}>
-                  Save evaluation
+                  Save result
                 </Button>
                 <Button variant="secondary" onClick={resetEvaluation}>
-                  Reset scorecard
+                  Reset
                 </Button>
               </div>
             </div>
@@ -988,52 +633,8 @@ export default function VoiceLab() {
                 <ShieldCheck className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-text">Pilot readiness report</h2>
-                <p className="text-xs text-text-muted">SIP və real nömrəyə keçid qərarı.</p>
-              </div>
-            </div>
-
-            <InlineNotice
-              tone={readinessReport.tone}
-              title={readinessReport.title}
-              description={readinessReport.summary}
-            />
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Blockers
-                </div>
-                <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                  {readinessReport.blockers.length ? (
-                    readinessReport.blockers.map((item) => <li key={item}>• {item}</li>)
-                  ) : (
-                    <li>• No blockers from the current scorecard.</li>
-                  )}
-                </ul>
-              </div>
-
-              <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Next actions
-                </div>
-                <ul className="mt-2 space-y-1 text-sm leading-6 text-text-muted">
-                  {readinessReport.nextActions.map((item) => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
-                <ClipboardCheck className="h-5 w-5 text-text" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-text">Evaluation history</h2>
-                <p className="text-xs text-text-muted">Son saxlanmış lab nəticələri.</p>
+                <h2 className="text-base font-semibold text-text">Latest results</h2>
+                <p className="text-xs text-text-muted">Son saxlanmış testlər.</p>
               </div>
             </div>
 
@@ -1055,7 +656,7 @@ export default function VoiceLab() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
-                  Hələ saxlanmış evaluation yoxdur.
+                  Hələ saxlanmış test nəticəsi yoxdur.
                 </div>
               )}
             </div>
@@ -1064,11 +665,11 @@ export default function VoiceLab() {
           <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-line-soft bg-surface-subtle">
-                <ShieldCheck className="h-5 w-5 text-text" />
+                <Radio className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-text">Session events</h2>
-                <p className="text-xs text-text-muted">Realtime data channel logs</p>
+                <h2 className="text-base font-semibold text-text">Connection log</h2>
+                <p className="text-xs text-text-muted">Sadəcə texniki connection statusu.</p>
               </div>
             </div>
 
@@ -1084,7 +685,7 @@ export default function VoiceLab() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
-                  Start voice test etdikdən sonra realtime event-lər burada görünəcək.
+                  Start test call etdikdən sonra statuslar burada görünəcək.
                 </div>
               )}
             </div>
