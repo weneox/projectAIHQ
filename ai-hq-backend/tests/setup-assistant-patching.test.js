@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -54,7 +54,7 @@ test("behavior answer bodies no longer create keyword policy patches", () => {
   assert.deepEqual(patch, {});
 });
 
-test("mergeSetupAssistantDraft preserves business data and merges structured direct patch", () => {
+test("mergeSetupAssistantDraft preserves business data and ignores structured behavior patch", () => {
   const merged = mergeSetupAssistantDraft(
     buildCompleteBusinessDraft(),
     normalizeSetupAssistantDraftPatchBody({
@@ -72,8 +72,7 @@ test("mergeSetupAssistantDraft preserves business data and merges structured dir
   assert.equal(merged.businessProfile.companyName, "Acme Clinic");
   assert.equal(merged.pricingPosture.publicSummary, "Starts from 20 AZN.");
   assert.equal(merged.contacts[0].value, "+994551112233");
-  assert.equal(merged.assistantBehaviorDraft.contactPolicy.mode, "whatsapp_first");
-  assert.equal(merged.assistantBehaviorDraft.contactPolicy.preferredChannel, "whatsapp");
+  assert.notEqual(merged.assistantBehaviorDraft?.contactPolicy?.mode, "whatsapp_first");
 });
 
 test("mergeSetupAssistantDraft keeps existing hidden synthesis while structured patches update raw setup fields", () => {
@@ -110,7 +109,7 @@ test("mergeSetupAssistantDraft keeps existing hidden synthesis while structured 
   assert.equal(merged.silentSynthesis.polishedDraft.businessName, "Acme Clinic");
 });
 
-test("buildSetupAssistantPatchFromAcceptedPatch carries LLM behavior policies forward", () => {
+test("buildSetupAssistantPatchFromAcceptedPatch ignores legacy LLM behavior policies", () => {
   const patch = buildSetupAssistantPatchFromAcceptedPatch(
     {
       latestUserInput: {
@@ -129,16 +128,9 @@ test("buildSetupAssistantPatchFromAcceptedPatch carries LLM behavior policies fo
     buildDraft()
   );
 
-  assert.equal(
-    patch.assistantBehaviorDraft.bookingPolicy.mode,
-    "route_whatsapp"
-  );
-  assert.equal(
-    patch.assistantBehaviorDraft.bookingPolicy.preferredTargetUrl,
-    "https://wa.me/994551112233"
-  );
+  assert.equal(patch.assistantBehaviorDraft, undefined);
   assert.equal(patch.progress.lastAnsweredStep, "booking_behavior");
   assert.equal(patch.progress.currentQuestionKey, "contact_behavior");
   assert.equal(patch.assistantState.activeSection, "contact_behavior");
-  assert.equal(patch.assistantState.activeBehaviorPolicy, "contact");
+  assert.equal(patch.assistantState.activeBehaviorPolicy, "");
 });
