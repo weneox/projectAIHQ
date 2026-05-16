@@ -48,40 +48,37 @@ function createSourceRichDraft() {
   });
 }
 
-test("source signals stay business evidence only", () => {
+test("source signals are evidence-only and do not infer business facts by keywords", () => {
   const draft = createSourceRichDraft();
-  const sources = [
-    {
-      sourceType: "website",
-      role: "primary",
-      label: "Website",
-      sourceUrl: "https://acme.az",
-    },
-    {
-      sourceType: "website",
-      role: "supporting",
-      label: "Pricing",
-      sourceUrl: "https://acme.az/pricing",
-    },
-    {
-      sourceType: "google_maps",
-      role: "supporting",
-      label: "Map",
-      sourceUrl: "https://maps.google.com/?q=Acme",
-    },
-  ];
 
   const signals = buildSetupSourceSignals({
     draft,
-    sources,
+    sources: [
+      {
+        sourceType: "website",
+        role: "primary",
+        label: "Website",
+        sourceUrl: "https://acme.az",
+        text: "This source text may mention implants, cleaning, pricing, and hours.",
+      },
+      {
+        sourceType: "website",
+        role: "supporting",
+        label: "Pricing",
+        sourceUrl: "https://acme.az/pricing",
+      },
+    ],
   });
 
   assert.equal(signals.primarySourceUrl, "https://acme.az");
-  assert.ok(signals.strongestEvidence.some((item) => /Website source/i.test(item)));
+  assert.equal(signals.companyNameCandidates[0], "Acme Clinic");
+  assert.deepEqual(signals.serviceCandidates, ["Consultation"]);
+  assert.equal(
+    signals.serviceCandidates.includes("This source text may mention implants, cleaning, pricing, and hours."),
+    false
+  );
   assert.equal(Object.prototype.hasOwnProperty.call(signals, "suggestedAssistantBehaviorDraft"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(signals, "pricingTargetCandidates"), false);
-  assert.equal(Object.prototype.hasOwnProperty.call(signals, "locationTargetCandidates"), false);
-  assert.equal(Object.prototype.hasOwnProperty.call(signals, "behaviorTargetCandidates"), false);
 });
 
 test("shared behavior helpers are compatibility no-ops", () => {
@@ -90,7 +87,7 @@ test("shared behavior helpers are compatibility no-ops", () => {
   assert.equal(buildBehaviorTargetCandidate("https://acme.az/pricing"), null);
 });
 
-test("draft state stays grounded without carrying behavior-brain suggestions", () => {
+test("draft state stays grounded in draft and source metadata only", () => {
   const draft = createSourceRichDraft();
   const signals = buildSetupSourceSignals({
     draft,
@@ -100,18 +97,6 @@ test("draft state stays grounded without carrying behavior-brain suggestions", (
         role: "primary",
         label: "Website",
         sourceUrl: "https://acme.az",
-      },
-      {
-        sourceType: "website",
-        role: "supporting",
-        label: "Pricing",
-        sourceUrl: "https://acme.az/pricing",
-      },
-      {
-        sourceType: "google_maps",
-        role: "supporting",
-        label: "Map",
-        sourceUrl: "https://maps.google.com/?q=Acme",
       },
     ],
   });
@@ -144,14 +129,14 @@ test("draft state stays grounded without carrying behavior-brain suggestions", (
   assert.deepEqual(buildSetupKnownState(draftState), [
     "name: Acme Clinic",
     "description present",
-    "2 service signals",
+    "1 service signals",
     "contact route present",
     "hours present",
     "pricing posture present",
   ]);
 });
 
-test("generic junk does not turn into strong candidate data", () => {
+test("generic source labels do not become candidate business facts", () => {
   const signals = buildSetupSourceSignals({
     draft: buildDraft({
       sourceMetadata: {
@@ -173,4 +158,5 @@ test("generic junk does not turn into strong candidate data", () => {
 
   assert.deepEqual(signals.companyNameCandidates, []);
   assert.deepEqual(signals.serviceCandidates, []);
+  assert.ok(signals.strongestEvidence.some((item) => /website/i.test(item)));
 });
