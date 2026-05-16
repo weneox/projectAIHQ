@@ -6,6 +6,28 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeSlot(slot = {}) {
+  return {
+    key: s(slot.key),
+    label: s(slot.label || slot.key),
+    type: s(slot.type || "text"),
+    description: s(slot.description),
+  };
+}
+
+function cloneSlots(slots = []) {
+  return arr(slots)
+    .map((slot) => normalizeSlot(slot))
+    .filter((slot) => slot.key);
+}
+
+function slotLine(slot = {}) {
+  const item = normalizeSlot(slot);
+  return item.description
+    ? `${item.key} (${item.label}): ${item.description}`
+    : `${item.key} (${item.label})`;
+}
+
 export const VOICE_LAB_SCENARIOS = Object.freeze([
   {
     id: "restaurant_order",
@@ -30,6 +52,18 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Ünvan/telefonu qarışdırmadı",
       "Sonda confirmation etdi",
     ],
+    requiredSlots: [
+      { key: "items", label: "Order items", type: "text", description: "What the caller wants to order." },
+      { key: "fulfillment", label: "Delivery or pickup", type: "choice", description: "Whether the order is delivery or pickup." },
+      { key: "customer_name", label: "Customer name", type: "text", description: "Caller name for the order." },
+      { key: "customer_phone", label: "Customer phone", type: "phone", description: "Callback phone number." },
+    ],
+    optionalSlots: [
+      { key: "address", label: "Delivery address", type: "text", description: "Required when fulfillment is delivery." },
+      { key: "notes", label: "Order notes", type: "text", description: "Extra order details or special requests." },
+    ],
+    actionTarget: "create_order_request",
+    handoffPolicy: "handoff_when_menu_price_status_or_delivery_time_is_unknown",
   },
   {
     id: "appointment_booking",
@@ -54,6 +88,19 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Ad və telefonu topladı",
       "Yalan availability uydurmadı",
     ],
+    requiredSlots: [
+      { key: "service_type", label: "Service", type: "text", description: "What service or appointment the caller needs." },
+      { key: "preferred_date", label: "Preferred date", type: "date", description: "Requested day or date." },
+      { key: "preferred_time", label: "Preferred time", type: "time", description: "Requested time or time range." },
+      { key: "customer_name", label: "Customer name", type: "text", description: "Caller or patient/client name." },
+      { key: "customer_phone", label: "Customer phone", type: "phone", description: "Callback phone number." },
+    ],
+    optionalSlots: [
+      { key: "preferred_staff", label: "Preferred staff", type: "text", description: "Doctor/master/staff preference when caller provides it." },
+      { key: "notes", label: "Notes", type: "text", description: "Extra request details." },
+    ],
+    actionTarget: "create_booking_request",
+    handoffPolicy: "handoff_when_availability_price_medical_or_legal_detail_is_unknown",
   },
   {
     id: "business_faq",
@@ -78,6 +125,15 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Ünvan/saat kimi faktları ayırdı",
       "Lazım olsa handoff təklif etdi",
     ],
+    requiredSlots: [
+      { key: "question_topic", label: "Question topic", type: "text", description: "What business fact the caller is asking about." },
+    ],
+    optionalSlots: [
+      { key: "requested_callback", label: "Callback requested", type: "boolean", description: "Whether caller wants follow-up." },
+      { key: "customer_phone", label: "Customer phone", type: "phone", description: "Collect only if follow-up is requested." },
+    ],
+    actionTarget: "answer_from_business_truth_or_handoff",
+    handoffPolicy: "handoff_when_fact_is_missing_or_caller_wants_human",
   },
   {
     id: "support_complaint",
@@ -102,6 +158,17 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Qısa follow-up sualı verdi",
       "Operator handoff təklif etdi",
     ],
+    requiredSlots: [
+      { key: "issue_summary", label: "Issue summary", type: "text", description: "Short summary of the complaint/problem." },
+      { key: "customer_name", label: "Customer name", type: "text", description: "Caller name." },
+      { key: "customer_phone", label: "Customer phone", type: "phone", description: "Callback phone number." },
+    ],
+    optionalSlots: [
+      { key: "order_reference", label: "Order/reference", type: "text", description: "Order id, appointment reference, or context when available." },
+      { key: "urgency", label: "Urgency", type: "choice", description: "Low, normal, high, or emergency." },
+    ],
+    actionTarget: "create_support_ticket_or_handoff",
+    handoffPolicy: "handoff_when_caller_is_angry_or_status_is_unknown",
   },
   {
     id: "sales_lead",
@@ -126,6 +193,18 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Contact məlumatı topladı",
       "Zorla satış etmədi",
     ],
+    requiredSlots: [
+      { key: "need", label: "Customer need", type: "text", description: "What the caller is interested in." },
+      { key: "customer_name", label: "Customer name", type: "text", description: "Caller name." },
+      { key: "customer_phone", label: "Customer phone", type: "phone", description: "Callback phone number." },
+    ],
+    optionalSlots: [
+      { key: "budget", label: "Budget", type: "text", description: "Budget range if caller is comfortable sharing." },
+      { key: "timeline", label: "Timeline", type: "text", description: "When the caller wants to start or decide." },
+      { key: "email", label: "Email", type: "email", description: "Email address when useful for follow-up." },
+    ],
+    actionTarget: "create_sales_lead",
+    handoffPolicy: "handoff_when_pricing_scope_or_contract_detail_is_unknown",
   },
   {
     id: "emergency_out_of_scope",
@@ -150,6 +229,16 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
       "Professional yardım/handoff dedi",
       "Sakit və qısa danışdı",
     ],
+    requiredSlots: [
+      { key: "risk_type", label: "Risk type", type: "choice", description: "Emergency, medical, legal, safety, or out-of-scope." },
+      { key: "handoff_required", label: "Handoff required", type: "boolean", description: "Whether human handoff or emergency guidance is required." },
+    ],
+    optionalSlots: [
+      { key: "caller_contact", label: "Caller contact", type: "phone", description: "Collect only if safe and appropriate." },
+      { key: "brief_context", label: "Brief context", type: "text", description: "Short non-sensitive summary." },
+    ],
+    actionTarget: "safe_redirect_or_handoff",
+    handoffPolicy: "always_handoff_or_redirect_for_urgent_medical_legal_or_safety_topics",
   },
 ]);
 
@@ -178,6 +267,10 @@ export function listVoiceLabScenarios() {
     ...scenario,
     checklist: arr(scenario.checklist).slice(),
     redFlags: arr(scenario.redFlags).slice(),
+    requiredSlots: cloneSlots(scenario.requiredSlots),
+    optionalSlots: cloneSlots(scenario.optionalSlots),
+    actionTarget: s(scenario.actionTarget),
+    handoffPolicy: s(scenario.handoffPolicy),
   }));
 }
 
@@ -211,6 +304,10 @@ export function buildVoiceLabScenarioInstructions({
     scenario.prompt,
     `Caller roleplay script: ${scenario.callerScript}`,
     `Expected outcome: ${scenario.expectedOutcome}`,
+    `Required information to collect: ${arr(scenario.requiredSlots).map(slotLine).join("; ")}`,
+    `Optional information to collect only when useful: ${arr(scenario.optionalSlots).map(slotLine).join("; ")}`,
+    `Action target after the call: ${s(scenario.actionTarget)}`,
+    `Handoff policy: ${s(scenario.handoffPolicy)}`,
     `Red flags to avoid: ${arr(scenario.redFlags).join("; ")}`,
     "Evaluation priority: natural speech, short answers, one question at a time, no invented facts.",
   ]

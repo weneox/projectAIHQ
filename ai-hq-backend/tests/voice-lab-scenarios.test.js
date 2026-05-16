@@ -29,6 +29,9 @@ test("voice lab canonical scenario library exposes six business call scenarios",
     assert.ok(scenario.expectedOutcome);
     assert.ok(scenario.redFlags.length >= 3);
     assert.ok(scenario.checklist.length >= 4);
+    assert.ok(scenario.requiredSlots.length >= 1);
+    assert.ok(scenario.actionTarget);
+    assert.ok(scenario.handoffPolicy);
   }
 });
 
@@ -71,4 +74,17 @@ test("voice lab scenario aliases keep legacy ids compatible", () => {
   assert.equal(getVoiceLabScenario("clinic_booking")?.id, "appointment_booking");
   assert.equal(getVoiceLabScenario("restaurant")?.id, "restaurant_order");
   assert.equal(getVoiceLabScenario("support")?.id, "support_complaint");
+});
+
+test("voice lab scenario instructions include slot capture contract", () => {
+  const instructions = buildVoiceLabScenarioInstructions({
+    baseInstructions: "Base receptionist prompt.",
+    scenarioId: "restaurant_order",
+  });
+
+  assert.match(instructions, /Required information to collect:/);
+  assert.match(instructions, /items/);
+  assert.match(instructions, /customer_phone/);
+  assert.match(instructions, /Action target after the call:/);
+  assert.match(instructions, /Handoff policy:/);
 });
