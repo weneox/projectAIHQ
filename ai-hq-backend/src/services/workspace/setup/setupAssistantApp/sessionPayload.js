@@ -69,6 +69,175 @@ function deriveWebsitePrefillDraft(core = {}) {
   };
 }
 
+function buildSetupSourceStrategy(setup = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const websitePrefill = obj(setup.websitePrefill);
+  const websiteUrl =
+    s(websitePrefill.websiteUrl) ||
+    s(businessProfile.websiteUrl) ||
+    (normalizeSourceType(sourceMetadata.primarySourceType) === "website"
+      ? s(sourceMetadata.primarySourceUrl)
+      : "");
+
+  const websiteStatus =
+    websiteUrl
+      ? "captured"
+      : s(websitePrefill.status) === "skipped"
+        ? "skipped"
+        : "awaiting_input";
+
+  const primaryMode = websiteUrl ? "website" : "manual_brief";
+
+  return {
+    version: 1,
+    productMode: "ai_business_brain_builder",
+    sourceOrder: ["website", "manual_brief"],
+    disabledSources: ["google_maps"],
+    primaryMode,
+    nextAction:
+      primaryMode === "website"
+        ? "analyze_website_then_review_gaps"
+        : "collect_manual_brief",
+    website: {
+      enabled: true,
+      required: false,
+      status: websiteStatus,
+      url: websiteUrl,
+      helperText:
+        "Website varsa link verin, sistem biznes məlumatlarını avtomatik çıxarsın.",
+    },
+    manualBrief: {
+      enabled: true,
+      required: !websiteUrl,
+      status: websiteUrl ? "available_as_fallback" : "recommended",
+      prompt:
+        "Website yoxdursa, biznesinizi 2-3 cümlə ilə yazın. Sistem AI resepsionist draftını özü hazırlayacaq.",
+      maxSuggestedQuestions: 5,
+    },
+    googleMaps: {
+      enabled: false,
+      status: "disabled_for_v1",
+      helperText:
+        "Google Maps V1 setup-da əsas mənbə deyil; website və manual brief kifayət etməsə sonra fallback kimi əlavə olunacaq.",
+    },
+  };
+}
+
+function buildAiProfilePreview({ setup = {}, assistant = {}, approvalBlockers = [] } = {}) {
+  const draft = buildInternalDraftPreview(setup);
+  const confidence = buildMinimalConfidenceFromSetup(setup);
+  const blockers = arr(approvalBlockers).slice(0, 5);
+
+  const knows = [
+    s(draft.businessName)
+      ? {
+          key: "business_identity",
+          label: "Biznes kimliyi",
+          summary: [s(draft.businessName), s(draft.businessDescription)]
+            .filter(Boolean)
+            .join(" — "),
+        }
+      : null,
+    arr(draft.coreServices).length
+      ? {
+          key: "services",
+          label: "Xidmətlər",
+          summary: uniqueStrings(draft.coreServices, 8).join(", "),
+        }
+      : null,
+    arr(draft.contactRoutes).length
+      ? {
+          key: "contacts",
+          label: "Əlaqə",
+          summary: uniqueStrings(draft.contactRoutes, 6).join(", "),
+        }
+      : null,
+    arr(draft.workingHoursLines).length
+      ? {
+          key: "hours",
+          label: "İş saatları",
+          summary: uniqueStrings(draft.workingHoursLines, 4).join(" • "),
+        }
+      : null,
+    s(draft.pricingSummary)
+      ? {
+          key: "pricing",
+          label: "Qiymət məntiqi",
+          summary: s(draft.pricingSummary),
+        }
+      : null,
+  ].filter(Boolean);
+
+  const behavior = [
+    s(draft.tone)
+      ? {
+          key: "tone",
+          label: "Danışıq tonu",
+          summary: s(draft.tone),
+        }
+      : null,
+    s(draft.pricingBehaviorSummary)
+      ? {
+          key: "pricing_behavior",
+          label: "Qiymət soruşulanda",
+          summary: s(draft.pricingBehaviorSummary),
+        }
+      : null,
+    s(draft.bookingBehaviorSummary)
+      ? {
+          key: "booking_behavior",
+          label: "Rezervasiya istənəndə",
+          summary: s(draft.bookingBehaviorSummary),
+        }
+      : null,
+    s(draft.contactBehaviorSummary)
+      ? {
+          key: "contact_behavior",
+          label: "Əlaqə istənəndə",
+          summary: s(draft.contactBehaviorSummary),
+        }
+      : null,
+    s(draft.handoffBehaviorSummary || draft.handoffSummary)
+      ? {
+          key: "handoff",
+          label: "İnsana ötürmə",
+          summary: s(draft.handoffBehaviorSummary || draft.handoffSummary),
+        }
+      : null,
+  ].filter(Boolean);
+
+  return {
+    version: 1,
+    title: "AI resepsionist profili",
+    summary:
+      knows.length > 0
+        ? "Sistem biznes məlumatlarından AI resepsionist üçün ilkin beyin hazırlayıb."
+        : "AI resepsionist üçün hələ kifayət qədər biznes məlumatı yoxdur.",
+    sourceStrategy: buildSetupSourceStrategy(setup),
+    knows,
+    willNotInvent: [
+      "Təsdiqlənməmiş qiymət, availability və xüsusi şərtləri uydurmayacaq.",
+      "Business Truth-da olmayan xidməti varmış kimi deməyəcək.",
+      "Tibbi, hüquqi və yüksək riskli mövzuda qəti zəmanət verməyəcək.",
+      "Əmin olmadığı yerdə qısa şəkildə insana yönləndirmə təklif edəcək.",
+    ],
+    behavior,
+    missingQuestions: blockers.map((item) => ({
+      key: s(item.step || item.key),
+      label: s(item.label || item.step || item.key),
+      reason: s(item.reason || item.message),
+    })),
+    confidence: {
+      strong: uniqueStrings(confidence.strong, 12),
+      unclear: uniqueStrings(confidence.unclear, 12),
+      contradictions: uniqueStrings(confidence.contradictions, 12),
+    },
+    readyForReview:
+      obj(assistant).readyForApproval === true || blockers.length === 0,
+  };
+}
+
 function normalizeTimelineTurn(value = {}) {
   const source = obj(value);
 
@@ -955,6 +1124,12 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
   const userFacingDraft = buildUserFacingDraftPreview(setup, readyForApproval);
   const internalDraft = buildInternalDraftPreview(setup);
+  const sourceStrategy = buildSetupSourceStrategy(setup);
+  const aiProfilePreview = buildAiProfilePreview({
+    setup,
+    assistant,
+    approvalBlockers,
+  });
 
   return {
     session: {
@@ -983,6 +1158,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       namespace: SETUP_ASSISTANT_NAMESPACE,
       summary,
       websitePrefill: obj(setup.websitePrefill),
+      sourceStrategy,
+      aiProfilePreview,
       draftVisibilityMode: s(silent.visibilityMode || "hidden_until_review"),
       draftPreviewHidden: shouldHideDraftPreview(setup, readyForApproval),
       hiddenSynthesis: {
