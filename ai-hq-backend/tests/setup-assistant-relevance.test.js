@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -6,79 +6,41 @@ import {
   isDraftReadyForApproval,
   validateStepAnswer,
 } from "../src/services/workspace/setup/setupAssistantApp/relevance.js";
-import { buildCompleteBusinessDraft } from "./setup-assistant-test-helpers.js";
+import { buildDraft } from "./setup-assistant-test-helpers.js";
 
-test("business validation rejects greetings and meta chat but accepts real business answers", () => {
-  assert.equal(validateStepAnswer("services", "hello", {}).accepted, false);
-  assert.equal(
-    validateStepAnswer("pricing", "How are you?", {}).reasonCode,
-    "rejected_pricing"
-  );
-
-  assert.equal(
-    validateStepAnswer("pricing", "xidmete gore deyisir", {}).accepted,
-    true
-  );
-  assert.equal(
-    validateStepAnswer("pricing", "pricing depends on the service", {}).accepted,
-    true
-  );
-  assert.equal(
-    validateStepAnswer(
-      "description",
-      "Dental clinic for consultation, whitening, and implants.",
-      {}
-    ).accepted,
-    true
-  );
-  assert.equal(
-    validateStepAnswer(
-      "handoff",
-      "If the customer asks for an operator, there is a complaint, or it is urgent, route to a human.",
-      {}
-    ).accepted,
-    true
-  );
-});
-
-test("behavior validation accepts the new behavior-style answers", () => {
-  const cases = [
-    ["pricing_behavior", "q\u0131sa cavab + pricing page"],
-    ["pricing_behavior", "ask service first"],
-    ["location_behavior", "\u00FCnvan + x\u0259rit\u0259"],
-    ["location_behavior", "map first"],
-    ["booking_behavior", "route to WhatsApp"],
-    ["booking_behavior", "Instagram DM"],
-    ["booking_behavior", "collect details first"],
-    ["contact_behavior", "WhatsApp first"],
-    ["contact_behavior", "phone first"],
-    ["contact_behavior", "email first"],
-    ["handoff_behavior", "contextual handoff"],
-    ["handoff_behavior", "ask reason first"],
-    ["handoff_behavior", "direct handoff"],
-  ];
-
-  for (const [step, answer] of cases) {
-    const result = validateStepAnswer(step, answer, {});
-    assert.equal(result.accepted, true, `${step} should accept "${answer}"`);
-  }
-});
-
-test("approval blockers stay empty when default behavior policies already satisfy relevant behavior", () => {
-  const draft = buildCompleteBusinessDraft({
-    contacts: [{ value: "https://wa.me/994551112233", preferred: true }],
-    assistantBehaviorDraft: {
-      pricingPolicy: {
-        mode: "ask_service_first",
-        askServiceFirst: true,
-      },
+test("setup readiness is business-only and does not use keyword parsing", () => {
+  const draft = buildDraft({
+    businessProfile: {
+      companyName: "Acme Clinic",
+      description: "Dental clinic in Baku",
+    },
+    services: [{ title: "Consultation" }],
+    contacts: [{ type: "phone", value: "+994551112233" }],
+    pricingPosture: {
+      publicSummary: "Pricing depends on the service.",
     },
   });
 
-  const blockers = buildApprovalBlockers(draft);
-  const steps = blockers.map((item) => item.step);
-
-  assert.deepEqual(steps, []);
-  assert.equal(steps.includes("location_behavior"), false);
+  assert.deepEqual(buildApprovalBlockers(draft), []);
   assert.equal(isDraftReadyForApproval(draft), true);
+});
+
+test("setup readiness requires only company description services contacts pricing", () => {
+  const draft = buildDraft({
+    businessProfile: {
+      companyName: "Acme Clinic",
+      description: "Dental clinic in Baku",
+    },
+  });
+
+  assert.deepEqual(
+    buildApprovalBlockers(draft).map((item) => item.step),
+    ["services", "contacts", "pricing"]
+  );
+});
+
+test("hours handoff and legacy behavior answers are optional for setup approval", () => {
+  assert.equal(validateStepAnswer("hours", "Mon-Fri 09:00-18:00").accepted, true);
+  assert.equal(validateStepAnswer("handoff", "urgent cases to operator").accepted, true);
+  assert.equal(validateStepAnswer("pricing_behavior", "ask service first").accepted, true);
 });
