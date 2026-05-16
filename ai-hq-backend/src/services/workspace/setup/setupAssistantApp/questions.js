@@ -1,4 +1,4 @@
-﻿import { arr, compactDraftObject, obj, s } from "../draftShared.js";
+import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 
 export const SUPPORTED_SETUP_LOCALES = [
   "az-AZ",
@@ -16,46 +16,35 @@ export const SUPPORTED_SETUP_LOCALES = [
 const LOCALE_ALIASES = {
   az: "az-AZ",
   "az-az": "az-AZ",
-  azerbaijani: "az-AZ",
-  azeri: "az-AZ",
 
   en: "en",
   "en-us": "en",
   "en-gb": "en",
-  english: "en",
 
   tr: "tr",
   "tr-tr": "tr",
-  turkish: "tr",
 
   ru: "ru",
   "ru-ru": "ru",
-  russian: "ru",
 
   ar: "ar",
   "ar-sa": "ar",
-  arabic: "ar",
 
   es: "es",
   "es-es": "es",
-  spanish: "es",
 
   fr: "fr",
   "fr-fr": "fr",
-  french: "fr",
 
   de: "de",
   "de-de": "de",
-  german: "de",
 
   pt: "pt",
   "pt-br": "pt",
   "pt-pt": "pt",
-  portuguese: "pt",
 
   hi: "hi",
   "hi-in": "hi",
-  hindi: "hi",
 };
 
 export const SETUP_PHASES = {
@@ -311,15 +300,6 @@ export const INTENT_ONLY_RESPONSES = {
   skip: "__skip__",
   keç: "__skip__",
   kec: "__skip__",
-
-  "24/7": "__always_open__",
-  "24 7": "__always_open__",
-  "always open": "__always_open__",
-
-  "appointment only": "__appointment_only__",
-
-  "exact pricing requires a quote": "__quote_required__",
-  "quote required": "__quote_required__",
 };
 
 export function normalizeQuestionKey(value = "") {
@@ -336,14 +316,6 @@ export function normalizeQuestionKey(value = "") {
   if (key === "profile") return "";
   if (key === "website") return "company";
 
-  if (key === "greeting_policy" || key === "greetingpolicy") return "greeting_behavior";
-  if (key === "closing_policy" || key === "closingpolicy") return "closing_behavior";
-  if (key === "tone_policy" || key === "tonepolicy") return "tone_behavior";
-  if (key === "pricing_policy" || key === "pricingpolicy") return "pricing_behavior";
-  if (key === "location_policy" || key === "locationpolicy") return "location_behavior";
-  if (key === "booking_policy" || key === "bookingpolicy") return "booking_behavior";
-  if (key === "contact_policy" || key === "contactpolicy") return "contact_behavior";
-  if (key === "handoff_policy" || key === "handoffpolicy") return "handoff_behavior";
 
   return key;
 }
@@ -397,10 +369,6 @@ function hasMeaningfulHandoff(value = {}) {
   );
 }
 
-export function isBehaviorStepRelevant(_questionKey = "", _draft = {}) {
-  return false;
-}
-
 export function hasSetupSignalForInterview(draft = {}) {
   const safeDraft = obj(draft);
   const businessProfile = obj(safeDraft.businessProfile);
@@ -448,7 +416,6 @@ export function isQuestionSatisfied(questionKey = "", draft = {}) {
   if (key === "pricing") return hasMeaningfulPricing(safeDraft.pricingPosture);
   if (key === "handoff") return hasMeaningfulHandoff(safeDraft.handoffRules);
 
-  if (/_behavior$/.test(key)) return true;
 
   return false;
 }
@@ -539,13 +506,4 @@ export const __test__ = {
   hasMeaningfulHours,
   hasMeaningfulPricing,
   hasMeaningfulHandoff,
-  hasGreetingBehaviorConfigured: () => true,
-  hasClosingBehaviorConfigured: () => true,
-  hasToneBehaviorConfigured: () => true,
-  hasPricingBehaviorConfigured: () => true,
-  hasLocationBehaviorConfigured: () => true,
-  hasBookingBehaviorConfigured: () => true,
-  hasContactBehaviorConfigured: () => true,
-  hasHandoffBehaviorConfigured: () => true,
-  isBehaviorStepRelevant,
 };
