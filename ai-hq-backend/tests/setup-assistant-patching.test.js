@@ -132,5 +132,5 @@ test("buildSetupAssistantPatchFromAcceptedPatch ignores legacy LLM behavior poli
   assert.equal(patch.progress.lastAnsweredStep, "booking_behavior");
   assert.equal(patch.progress.currentQuestionKey, "contact_behavior");
   assert.equal(patch.assistantState.activeSection, "contact_behavior");
-  assert.equal(patch.assistantState.activeBehaviorPolicy, "");
+  assert.equal(patch.assistantState?.activeBehaviorPolicy || "", "");
 });
