@@ -1,11 +1,7 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import {
-  buildBehaviorTargetCandidate,
   buildRecognizedSourceCandidate,
   classifySetupSourceValue,
-  inferContactType,
-  mergeBehaviorTargetCandidates,
-  normalizeBehaviorPolicyKey,
   normalizeSourceType,
   normalizeWebsiteUrl,
   sourceTypeLabel,
@@ -302,40 +298,6 @@ function sourceAuthorityWeight(value = "") {
   return 2;
 }
 
-function extractBehaviorSignals({ draft = {}, review = null } = {}) {
-  const safeDraft = obj(draft);
-  const reviewRoot = obj(review);
-  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
-
-  const draftAssistantState = obj(safeDraft.assistantState);
-  const reviewAssistantState = obj(reviewDraft.assistantState);
-
-  return {
-    greetingCandidates: weightedUniqueStrings(
-      [
-        { value: draftAssistantState.greeting, weight: 2 },
-        { value: draftAssistantState.greetingStyle, weight: 2 },
-        { value: reviewAssistantState.greeting, weight: 2 },
-        { value: reviewAssistantState.greetingStyle, weight: 2 },
-        { value: safeDraft.greetingStyle, weight: 2 },
-        { value: reviewDraft.greetingStyle, weight: 2 },
-      ],
-      sanitizeToneCandidate
-    ),
-    afterHoursCandidates: weightedUniqueStrings(
-      [
-        { value: draftAssistantState.afterHours, weight: 2 },
-        { value: draftAssistantState.afterHoursBehavior, weight: 2 },
-        { value: reviewAssistantState.afterHours, weight: 2 },
-        { value: reviewAssistantState.afterHoursBehavior, weight: 2 },
-        { value: safeDraft.afterHoursBehavior, weight: 2 },
-        { value: reviewDraft.afterHoursBehavior, weight: 2 },
-      ],
-      sanitizeDescriptionCandidate
-    ),
-  };
-}
-
 function buildSourceRows({ draft = {}, sources = [], review = null } = {}) {
   const safeDraft = obj(draft);
   const sourceMetadata = obj(safeDraft.sourceMetadata);
@@ -402,59 +364,6 @@ function buildSourceRows({ draft = {}, sources = [], review = null } = {}) {
   return rows;
 }
 
-function collectBehaviorTargetCandidates({
-  draft = {},
-  review = null,
-  sourceRows = [],
-  sourceSignalSummary = {},
-}) {
-  const safeDraft = obj(draft);
-  const businessProfile = obj(safeDraft.businessProfile);
-  const sourceMetadata = obj(safeDraft.sourceMetadata);
-  const contacts = arr(safeDraft.contacts);
-  const reviewRoot = obj(review);
-  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
-
-  const rawTargets = [];
-
-  const pushTarget = (value = "", label = "") => {
-    const candidate = buildBehaviorTargetCandidate(value, label);
-    if (candidate) rawTargets.push(candidate);
-  };
-
-  for (const row of arr(sourceRows)) {
-    pushTarget(row.sourceUrl, row.label || row.sourceType);
-  }
-
-  pushTarget(sourceMetadata.primarySourceUrl, sourceTypeLabel(sourceMetadata.primarySourceType));
-  pushTarget(businessProfile.websiteUrl, "Website");
-  pushTarget(reviewDraft.businessProfile?.websiteUrl, "Website");
-
-  for (const item of contacts) {
-    const value = s(item?.value || item?.label);
-    const type = inferContactType(value);
-    if (type === "link" || /whatsapp|telegram|instagram|facebook|wa\.me/i.test(value)) {
-      pushTarget(value, s(item?.label || item?.type));
-    }
-  }
-
-  for (const claim of arr(sourceSignalSummary.discoveredPublicClaims)) {
-    const sourceCandidate = buildRecognizedSourceCandidate(claim);
-    if (sourceCandidate?.value) {
-      pushTarget(sourceCandidate.value, claim);
-    }
-  }
-
-  for (const evidence of arr(sourceMetadata.evidenceSummary)) {
-    const sourceCandidate = buildRecognizedSourceCandidate(evidence);
-    if (sourceCandidate?.value) {
-      pushTarget(sourceCandidate.value, evidence);
-    }
-  }
-
-  return mergeBehaviorTargetCandidates(rawTargets);
-}
-
 export function buildSetupSourceSignals({
   session = {},
   draft = {},
@@ -475,8 +384,6 @@ export function buildSetupSourceSignals({
   const websiteKnowledge = obj(
     sourceSignalSummary.website || reviewDebug.websiteKnowledge
   );
-  const behaviorSignals = extractBehaviorSignals({ draft, review });
-
   const sourceRows = buildSourceRows({ draft, sources, review });
 
   const primarySource =
@@ -685,29 +592,6 @@ export function buildSetupSourceSignals({
     sanitizeLanguageCandidate
   );
 
-  const behaviorTargetCandidates = collectBehaviorTargetCandidates({
-    draft,
-    review,
-    sourceRows,
-    sourceSignalSummary,
-  });
-
-  const pricingTargetCandidates = behaviorTargetCandidates.filter(
-    (item) => normalizeBehaviorPolicyKey(item.purpose) === "pricing"
-  );
-
-  const locationTargetCandidates = behaviorTargetCandidates.filter(
-    (item) => normalizeBehaviorPolicyKey(item.purpose) === "location"
-  );
-
-  const bookingTargetCandidates = behaviorTargetCandidates.filter(
-    (item) => normalizeBehaviorPolicyKey(item.purpose) === "booking"
-  );
-
-  const contactTargetCandidates = behaviorTargetCandidates.filter(
-    (item) => normalizeBehaviorPolicyKey(item.purpose) === "contact"
-  );
-
   const strongestEvidence = uniqueStrings(
     [
       primarySource.sourceUrl
@@ -730,15 +614,6 @@ export function buildSetupSourceSignals({
         : "",
       pricingCandidates.length
         ? `Pricing signals: ${listPreview(pricingCandidates, 2)}`
-        : "",
-      pricingTargetCandidates.length
-        ? `Pricing target: ${s(pricingTargetCandidates[0].url)}`
-        : "",
-      locationTargetCandidates.length
-        ? `Location target: ${s(locationTargetCandidates[0].url)}`
-        : "",
-      bookingTargetCandidates.length
-        ? `Booking target: ${s(bookingTargetCandidates[0].url)}`
         : "",
       Number(sourceSignalSummary.website?.pageCount || websiteKnowledge.pageCount || 0) > 0
         ? `Website pages analyzed: ${Number(
@@ -782,14 +657,6 @@ export function buildSetupSourceSignals({
     pricingCandidates,
     audienceCandidates,
     languagesCandidates,
-    greetingCandidates: behaviorSignals.greetingCandidates,
-    afterHoursCandidates: behaviorSignals.afterHoursCandidates,
-
-    behaviorTargetCandidates,
-    pricingTargetCandidates,
-    locationTargetCandidates,
-    bookingTargetCandidates,
-    contactTargetCandidates,
   };
 
   return out;
@@ -816,11 +683,6 @@ export function buildSetupSourceCoverage(sourceSignals = {}) {
   const audience = arr(sourceSignals.audienceCandidates).length >= 1;
   const languages = arr(sourceSignals.languagesCandidates).length >= 1;
 
-  const pricingBehavior = arr(sourceSignals.pricingTargetCandidates).length >= 1;
-  const locationBehavior = arr(sourceSignals.locationTargetCandidates).length >= 1;
-  const bookingBehavior = arr(sourceSignals.bookingTargetCandidates).length >= 1;
-  const contactBehavior = arr(sourceSignals.contactTargetCandidates).length >= 1;
-
   return {
     primarySourceExists,
     identity,
@@ -830,10 +692,6 @@ export function buildSetupSourceCoverage(sourceSignals = {}) {
     pricing,
     audience,
     languages,
-    pricingBehavior,
-    locationBehavior,
-    bookingBehavior,
-    contactBehavior,
   };
 }
 
@@ -930,9 +788,6 @@ export function buildSetupDraftStateFromSignals({
       mergedProfile.brandTone || mergedProfile.tone || draft.tone
     ) || "";
 
-  const greetingStyle = topCandidate(sourceSignals.greetingCandidates);
-  const afterHoursBehavior = topCandidate(sourceSignals.afterHoursCandidates);
-
   return {
     businessName,
     description,
@@ -952,14 +807,6 @@ export function buildSetupDraftStateFromSignals({
     humanHandoff,
     languages,
     tone,
-    greetingStyle,
-    afterHoursBehavior,
-
-    pricingTargetUrl: s(obj(sourceSignals.pricingTargetCandidates[0]).url),
-    locationTargetUrl: s(obj(sourceSignals.locationTargetCandidates[0]).url),
-    bookingTargetUrl: s(obj(sourceSignals.bookingTargetCandidates[0]).url),
-    contactTargetUrl: s(obj(sourceSignals.contactTargetCandidates[0]).url),
-
   };
 }
 
@@ -1035,9 +882,6 @@ export function buildSetupKnownState(draftState = {}) {
   if (arr(draftState.hours).length) bits.push("hours present");
   if (s(draftState.pricingPosture)) bits.push("pricing posture present");
   if (s(draftState.humanHandoff)) bits.push("handoff rules present");
-  if (s(draftState.pricingTargetUrl)) bits.push("pricing target present");
-  if (s(draftState.locationTargetUrl)) bits.push("location target present");
-  if (s(draftState.bookingTargetUrl)) bits.push("booking target present");
 
   return bits.slice(0, 6);
 }
