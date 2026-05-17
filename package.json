@@ -48,7 +48,8 @@
     "ops:postdeploy:full": "npm run ops:postdeploy:verify && npm run ops:prod-spine:smoke",
     "smoke:production": "node scripts/production-smoke.mjs",
     "lint:ui-contract": "node scripts/check-ui-contract.mjs",
-    "test:aihq:setup-brain": "npm run test:setup-brain -w ai-hq-backend"
+    "test:aihq:setup-brain": "npm run test:setup-brain -w ai-hq-backend",
+    "audit:setup-surfaces": "node ./scripts/audit-setup-surfaces.mjs"
   },
   "engines": {
     "node": ">=18"
