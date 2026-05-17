@@ -779,3 +779,67 @@ test("stored source metadata reaches brain without live sources", async (t) => {
   assert.deepEqual(result.draft.coreServices, ["Implants"]);
   assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("source-only instruction without evidence does not call OpenAI brain", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async () => {
+        callCount += 1;
+        return {
+          output_parsed: reasonerPayload({
+            action: "business_brief",
+            targetStep: "company",
+            companyName: "Hallucinated Clinic",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Share the website source.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "Use the website source.",
+  });
+
+  assert.equal(callCount, 0);
+  assert.equal(result.provider, "setup_source_evidence_missing");
+  assert.equal(result.readyForApproval, false);
+  assert.equal(result.acceptedPatch.identity, undefined);
+  assert.match(JSON.stringify(result.rejectedInputs), /source_evidence_missing/);
+  assert.doesNotMatch(JSON.stringify(result), /Hallucinated Clinic|assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
+
+test("source-only guard does not block explicit URLs or contact facts", () => {
+  assert.equal(
+    orchestratorTest.isSourceOnlyInstructionMessage("Use the website source."),
+    true
+  );
+  assert.equal(
+    orchestratorTest.isSourceOnlyInstructionMessage("Use https://acme.az as the website."),
+    false
+  );
+  assert.equal(
+    orchestratorTest.isSourceOnlyInstructionMessage("WhatsApp +994551112233"),
+    false
+  );
+});

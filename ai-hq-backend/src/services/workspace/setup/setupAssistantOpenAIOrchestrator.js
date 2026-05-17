@@ -374,6 +374,28 @@ function buildReasonerSourceEvidence({ sources = [], review = null, draft = {} }
   return out.slice(0, 16);
 }
 
+function isSourceOnlyInstructionMessage(message = "") {
+  const text = s(message).toLowerCase();
+  if (!text) return false;
+
+  if (/https?:\/\//i.test(text)) return false;
+  if (/@/.test(text)) return false;
+  if (/\+?\d[\d\s().-]{6,}/.test(text)) return false;
+
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length > 16) return false;
+
+  const hasSourceReference =
+    /\b(website|site|source|sources|evidence|webpage|page|crawl)\b/i.test(text) ||
+    /\b(sayt|vebsayt|mənbə|menbe|səhifə|sehife)\b/i.test(text);
+
+  const hasUseInstruction =
+    /\b(use|read|check|scan|crawl|look|take|prepare)\b/i.test(text) ||
+    /\b(istifadə|istifade|bax|oxu|hazırla|hazirla|götür|gotur)\b/i.test(text);
+
+  return hasSourceReference && hasUseInstruction;
+}
+
 function buildReasonerRecentContext(review = null) {
   return getTimelineTurns(review)
     .slice(-8)
@@ -1421,14 +1443,31 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
   try {
     const preview = buildCurrentPreview(draft, review);
+    const sourceEvidence = buildReasonerSourceEvidence({ sources, review, draft });
+    const recentContext = buildReasonerRecentContext(review);
+
+    if (isSourceOnlyInstructionMessage(safeMessage) && !sourceEvidence.length) {
+      return buildClarifyTurn({
+        locale,
+        currentStep,
+        draft,
+        review,
+        sources,
+        latestMessage: safeMessage,
+        model: runtime.model,
+        provider: "setup_source_evidence_missing",
+        invalidReason: "source_evidence_missing",
+      });
+    }
+
     const reasoned = await callOpenAIReasoner({
       locale,
       currentStep,
       question: currentQuestion,
       preview,
       latestMessage: safeMessage,
-      sourceEvidence: buildReasonerSourceEvidence({ sources, review, draft }),
-      recentContext: buildReasonerRecentContext(review),
+      sourceEvidence,
+      recentContext,
       model: runtime.model,
       timeoutMs: runtime.timeoutMs,
       maxOutputTokens: runtime.maxOutputTokens,
@@ -1521,6 +1560,7 @@ export const __test__ = {
   buildAcceptedPatchFromReasonerPayload,
   buildReasonerSourceEvidence,
   buildReasonerRecentContext,
+  isSourceOnlyInstructionMessage,
   setCachedClient(client = null) {
     cachedClient = client;
   },
