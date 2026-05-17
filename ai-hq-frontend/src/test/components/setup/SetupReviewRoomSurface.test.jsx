@@ -1,18 +1,18 @@
-﻿/* @vitest-environment jsdom */
+/* @vitest-environment jsdom */
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import SetupReviewRoomPreview from "../../../components/setup/SetupReviewRoomPreview.jsx";
+import SetupReviewRoomSurface from "../../../components/setup/SetupReviewRoomSurface.jsx";
 
 afterEach(() => {
   cleanup();
 });
 
-describe("SetupReviewRoomPreview", () => {
+describe("SetupReviewRoomSurface", () => {
   it("renders review room header, sections, runtime consumers and primary action", () => {
     render(
-      <SetupReviewRoomPreview
+      <SetupReviewRoomSurface
         reviewRoom={{
           primaryExperience: "review_room",
           mainSurface: "business_truth_review",
@@ -100,7 +100,7 @@ describe("SetupReviewRoomPreview", () => {
 
   it("shows blocking issues when approval is not ready", () => {
     render(
-      <SetupReviewRoomPreview
+      <SetupReviewRoomSurface
         reviewRoom={{
           header: {
             status: "missing_required_facts",

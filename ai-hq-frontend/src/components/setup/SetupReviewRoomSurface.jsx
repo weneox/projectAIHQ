@@ -1,4 +1,4 @@
-﻿import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
+import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
 
 function toneClass(tone = "neutral") {
   if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-900";
@@ -12,7 +12,7 @@ function statusLabel(status = "") {
   return String(status || "missing").replace(/_/g, " ");
 }
 
-export default function SetupReviewRoomPreview({ reviewRoom = {} }) {
+export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
   const room = normalizeSetupReviewRoom(reviewRoom);
   const headerTone = toneClass(room.header.badgeTone);
   const blockingIssues = room.issues.filter((issue) => issue.severity === "blocking");
