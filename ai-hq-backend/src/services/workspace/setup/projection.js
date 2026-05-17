@@ -699,6 +699,17 @@ function normalizeLocationForProjection(item = {}) {
   };
 }
 
+function stripLegacyBehaviorFromProjectionDraft(draft = {}) {
+  const next = mergeDeep({}, obj(draft));
+  const profile = obj(next.businessProfile);
+
+  delete profile.nicheBehavior;
+  delete profile.niche_behavior;
+
+  next.businessProfile = compactObject(profile);
+  return next;
+}
+
 function buildBusinessProfileProjection(draft = {}, sourceInfo = {}) {
   const profile = compactObject(draft?.businessProfile);
 
@@ -792,12 +803,6 @@ function buildTruthVersionRequiredError({
   return err;
 }
 
-function extractBehaviorProjection(draft = {}) {
-  return compactObject(
-    obj(draft?.businessProfile?.nicheBehavior || draft?.businessProfile?.niche_behavior)
-  );
-}
-
 async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
   const rawSessionId = s(session?.id);
   const tenantId = s(actor?.tenantId);
@@ -827,9 +832,17 @@ export function buildCanonicalProfileSourceSummary({
   sources = [],
   sourceInfo = {},
   approvedAt = "",
+  impactSummary = null,
+  approvalPolicy = null,
 } = {}) {
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
+  const projectionDraft = stripLegacyBehaviorFromProjectionDraft(draft);
+  const finalImpactSummary = Object.keys(obj(impactSummary)).length
+    ? obj(impactSummary)
+    : buildFinalizeImpactSummary({ draft: projectionDraft });
+  const finalApprovalPolicy = Object.keys(obj(approvalPolicy)).length
+    ? obj(approvalPolicy)
+    : buildFinalizeApprovalPolicySummary({ draft: projectionDraft });
+
   return compactObject({
     reviewSessionId: s(session?.id),
     primarySourceType: s(sourceInfo.primarySourceType),
@@ -839,8 +852,8 @@ export function buildCanonicalProfileSourceSummary({
     lastSnapshotId: s(draft?.lastSnapshotId),
     approvedAt: s(approvedAt),
     governance: obj(draft?.sourceSummary?.governance),
-    finalizeImpact: impactSummary,
-    approvalPolicy,
+    finalizeImpact: finalImpactSummary,
+    approvalPolicy: finalApprovalPolicy,
     sources: arr(sources)
       .map((item) =>
         compactObject({
@@ -1286,8 +1299,9 @@ export async function projectSetupReviewDraftToCanonical(
     deps.refreshRuntimeProjectionBestEffort || refreshRuntimeProjectionBestEffort;
 
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
+  const projectionDraft = stripLegacyBehaviorFromProjectionDraft(draft);
+  const impactSummary = buildFinalizeImpactSummary({ draft: projectionDraft });
+  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft: projectionDraft });
   const persistedReviewSessionId = await resolvePersistedReviewSessionId(
     db,
     actor,
@@ -1318,10 +1332,8 @@ export async function projectSetupReviewDraftToCanonical(
         })
       : null;
 
-  const businessProfile = buildBusinessProfileProjection(draft, sourceInfo);
-  const capabilities = buildCapabilitiesProjection(draft);
-  const behavior = extractBehaviorProjection(draft);
-
+  const businessProfile = buildBusinessProfileProjection(projectionDraft, sourceInfo);
+  const capabilities = buildCapabilitiesProjection(projectionDraft);
   let projectedProfile = false;
   let projectedCapabilities = false;
   let savedProfile = currentProfile;
@@ -1365,7 +1377,6 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
         finalizeImpact: impactSummary,
         approvalPolicy,
       },
@@ -1398,7 +1409,6 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
         finalizeImpact: impactSummary,
         approvalPolicy,
       },
@@ -1416,7 +1426,7 @@ export async function projectSetupReviewDraftToCanonical(
   const serviceProjection = await projectDraftServicesToCanonical({
     db,
     actor,
-    draft,
+    draft: projectionDraft,
     sourceInfo,
   });
 

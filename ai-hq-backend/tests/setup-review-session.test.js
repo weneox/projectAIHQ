@@ -2101,7 +2101,7 @@ test("Case Z1: finalize projection reuses the latest approved truth version when
   assert.equal(projected.truthVersion.id, "version-existing-1");
 });
 
-test("Case Z2: finalize preserves niche-aware behavior into approved truth and runtime", async () => {
+test("Case Z2: finalize drops legacy niche behavior from approved truth and runtime", async () => {
   let versionInput = null;
   let savedProfile = null;
   let savedCapabilities = null;
@@ -2111,9 +2111,7 @@ test("Case Z2: finalize preserves niche-aware behavior into approved truth and r
       db: {
         async query(sql) {
           if (sql.includes("from tenant_setup_review_sessions")) {
-            return {
-              rows: [{ id: "session-1" }],
-            };
+            return { rows: [{ id: "session-1" }] };
           }
           if (sql.includes("from tenants")) {
             return {
@@ -2126,20 +2124,13 @@ test("Case Z2: finalize preserves niche-aware behavior into approved truth and r
               ],
             };
           }
-          if (sql.includes("from tenant_services")) {
-            return {
-              rows: [],
-            };
-          }
           return { rows: [] };
         },
       },
       actor: {
         tenantId: "tenant-1",
         tenantKey: "alpha",
-        user: {
-          name: "Reviewer",
-        },
+        user: { name: "Reviewer" },
       },
       session: {
         id: "session-1",
@@ -2151,28 +2142,9 @@ test("Case Z2: finalize preserves niche-aware behavior into approved truth and r
           companyName: "North Clinic",
           nicheBehavior: {
             businessType: "clinic",
-            niche: "clinic",
-            subNiche: "cosmetic_dentistry",
-            conversionGoal: "book_consultation",
-            primaryCta: "book your consultation",
-            leadQualificationMode: "service_booking_triage",
-            qualificationQuestions: [
-              "What treatment are you interested in?",
-              "What day works best for you?",
-            ],
             bookingFlowType: "appointment_request",
-            handoffTriggers: ["human_request", "medical_urgency"],
-            disallowedClaims: ["diagnosis_or_treatment_guarantees"],
-            toneProfile: "warm_reassuring",
-            channelBehavior: {
-              voice: {
-                primaryAction: "book_or_route_call",
-                qualificationDepth: "guided",
-              },
-              content: {
-                reviewBias: "strict",
-              },
-            },
+            greetingStyle: "warm",
+            afterHoursBehavior: "take a message",
           },
         },
         capabilities: {
@@ -2222,10 +2194,6 @@ test("Case Z2: finalize preserves niche-aware behavior into approved truth and r
           savedCapabilities = {
             id: "capabilities-2",
             approved_by: "Reviewer",
-            supports_voice: true,
-            can_offer_booking: true,
-            primary_language: "en",
-            supported_languages: ["en"],
             capabilities_json: input.capabilitiesJson,
             metadata_json: input.metadataJson,
           };
@@ -2235,67 +2203,26 @@ test("Case Z2: finalize preserves niche-aware behavior into approved truth and r
       truthVersionHelper: {
         async createVersion(input) {
           versionInput = input;
-          return {
-            id: "version-2",
-          };
+          return { id: "version-2" };
         },
       },
     }
   );
 
-  assert.equal(
-    versionInput.profile.profile_json.nicheBehavior.conversionGoal,
-    "book_consultation"
-  );
-  assert.equal(
-    versionInput.profile.profile_json.nicheBehavior.channelBehavior.voice.primaryAction,
-    "book_or_route_call"
-  );
-  assert.equal(
-    versionInput.capabilities.metadata_json.nicheBehavior.bookingFlowType,
-    "appointment_request"
-  );
-  assert.ok(projected.impactSummary.runtimeAreas.includes("behavioral_policy"));
-  assert.ok(projected.approvalPolicy.runtimeAreas.includes("behavioral_policy"));
+  assert.equal(projected.truthVersion.id, "version-2");
 
-  const runtimeProjection = buildTenantRuntimeProjection({
-    tenant: {
-      id: "tenant-1",
-      tenant_key: "alpha",
-      company_name: "North Clinic",
-      default_language: "en",
-    },
-    profile: savedProfile,
-    capabilities: savedCapabilities,
-    contacts: [],
-    locations: [],
-    hours: [],
-    services: [],
-    products: [],
-    faq: [],
-    policies: [],
-    socialAccounts: [],
-    channels: [],
-    mediaAssets: [],
-    knowledge: [],
-    facts: [],
-    operationalFacts: [],
-    publishedTruthFacts: [],
-    channelPolicies: [],
-    operationalChannelPolicies: [],
-    synthesis: {},
+  const serialized = JSON.stringify({
+    versionInput,
+    savedProfile,
+    savedCapabilities,
+    projected,
   });
 
-  assert.equal(runtimeProjection.behavior_json.businessType, "clinic");
-  assert.equal(runtimeProjection.behavior_json.primaryCta, "book your consultation");
-  assert.deepEqual(runtimeProjection.behavior_json.qualificationQuestions, [
-    "What treatment are you interested in?",
-    "What day works best for you?",
-  ]);
-  assert.equal(
-    runtimeProjection.behavior_json.channelBehavior.voice.primaryAction,
-    "book_or_route_call"
+  assert.doesNotMatch(
+    serialized,
+    /nicheBehavior|assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|bookingFlowType/
   );
+
 });
 
 test("Case AA: truth version change detection ignores approval-event metadata-only churn", () => {
