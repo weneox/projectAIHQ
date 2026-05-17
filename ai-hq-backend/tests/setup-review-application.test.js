@@ -13,24 +13,11 @@ import {
   normalizeReviewPatchBody,
 } from "../src/services/workspace/setup/reviewApp.js";
 import {
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
-} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
-import {
   loadSetupTruthPayloadWithStatus,
   loadSetupTruthVersionPayloadWithStatus,
 } from "../src/services/workspace/setup/readApp.js";
 import { executeSetupImport } from "../src/services/workspace/setup/importApp.js";
 import { buildFrontendReviewShape } from "../src/services/workspace/setup/reviewShape.js";
-
-globalThis.normalizePricingBehaviorMode ??= normalizePricingBehaviorMode;
-globalThis.normalizeLocationBehaviorMode ??= normalizeLocationBehaviorMode;
-globalThis.normalizeBookingBehaviorMode ??= normalizeBookingBehaviorMode;
-globalThis.normalizeContactBehaviorMode ??= normalizeContactBehaviorMode;
-globalThis.normalizeHandoffBehaviorMode ??= normalizeHandoffBehaviorMode;
 
 function createFinalizeReadyState() {
   return {
