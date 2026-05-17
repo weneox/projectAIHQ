@@ -911,3 +911,68 @@ test("manual rich business brief without source still reaches OpenAI brain", asy
   assert.equal(result.draft.websiteUrl || "", "");
   assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("explicit website url without source evidence still reaches OpenAI brain", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        callCount += 1;
+        capturedRequest = request;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "direct_answer",
+            targetStep: "company",
+            reason: "The user provided an explicit website URL.",
+            companyName: "Url Dental",
+            description: "",
+            services: [],
+            contacts: [],
+            hours: [],
+            pricingPosture: "",
+            humanHandoff: "",
+            websiteUrl: "https://urldental.az",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Share your website.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "Use https://urldental.az as the website.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+
+  assert.equal(callCount, 1);
+  assert.match(userPrompt, /https:\/\/urldental\.az/);
+  assert.deepEqual(JSON.parse(userPrompt.slice(userPrompt.indexOf("{"))).sourceEvidence, []);
+
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.draft.websiteUrl, "https://urldental.az");
+  assert.doesNotMatch(JSON.stringify(result), /setup_source_evidence_missing|assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
