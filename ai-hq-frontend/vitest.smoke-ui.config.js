@@ -52,6 +52,7 @@ export default mergeConfig(
         "src/test/components/inbox/InboxLeadPanel.test.jsx",
         "src/test/components/layout/Shell.test.jsx",
         "src/test/components/layout/Sidebar.test.jsx",
+        "src/test/components/setup/SetupReviewRoomPreview.test.jsx",
         "src/test/surfaces/home/ProductHomePage.smoke.test.jsx",
         "src/test/pages/AdminTenants.test.jsx",
         "src/test/pages/AdminTeam.test.jsx",
