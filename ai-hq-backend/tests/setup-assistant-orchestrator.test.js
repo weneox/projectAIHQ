@@ -536,3 +536,85 @@ test("reasoner prompt encodes source priority and business-only rules", async (t
   assert.match(userPrompt, /sourceEvidenceCanFillMissingBusinessFacts/);
   assert.match(userPrompt, /doNotCreateAssistantBehaviorPolicy/);
 });
+
+
+test("latest user correction wins over conflicting source evidence", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        capturedRequest = request;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "correction",
+            targetStep: "company",
+            reason: "The latest user message corrects the website evidence.",
+            companyName: "Corrected Dental Studio",
+            description: "Dental studio corrected by the owner.",
+            services: ["Implants"],
+            contacts: ["WhatsApp +994551112233"],
+            hours: ["Monday-Friday 09:00-18:00"],
+            pricingPosture: "Pricing depends on the case.",
+            humanHandoff: "Exact quotes go to a human operator.",
+            websiteUrl: "https://old-source.example",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      businessProfile: {
+        companyName: "Old Website Clinic",
+        description: "Old source description.",
+        websiteUrl: "https://old-source.example",
+      },
+      progress: {
+        currentQuestionKey: "company",
+      },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Use the website source?",
+        },
+      ],
+    },
+    sources: [
+      {
+        sourceType: "website",
+        role: "primary",
+        label: "Old official website",
+        sourceUrl: "https://old-source.example",
+        text:
+          "Old Website Clinic is a clinic. Services include cleaning. Contact +994000000000.",
+      },
+    ],
+    latestStep: "company",
+    latestMessage:
+      "Correction: the business name is Corrected Dental Studio, not Old Website Clinic. Service is implants.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+
+  assert.match(userPrompt, /latestUserMessageBeatsSourceEvidenceWhenContradicting/);
+  assert.match(userPrompt, /Old Website Clinic/);
+  assert.match(userPrompt, /Corrected Dental Studio/);
+
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.acceptedPatch.identity.businessName, "Corrected Dental Studio");
+  assert.equal(result.draft.businessName, "Corrected Dental Studio");
+  assert.deepEqual(result.draft.coreServices, ["Implants"]);
+  assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
