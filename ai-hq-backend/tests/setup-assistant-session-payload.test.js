@@ -237,3 +237,50 @@ test("session payload declares setup as review room product model", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("session payload exposes optional assistant style separate from truth", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const profile = payload.setup.assistantStyleProfile;
+  const modelProfile = payload.setup.productModel.assistantBehaviour.defaultProfile;
+
+  assert.equal(profile.profileKey, "default_professional");
+  assert.equal(profile.setupBlocking, false);
+  assert.equal(profile.truthAuthority, false);
+  assert.equal(profile.purpose, "style_only");
+  assert.equal(profile.toneProfile, "professional");
+  assert.equal(profile.replyLength, "concise");
+  assert.equal(profile.emojiPolicy, "off");
+  assert.equal(profile.openingPolicy, "polite_not_repetitive");
+  assert.equal(profile.languagePolicy, "follow_customer_when_possible");
+  assert.equal(
+    profile.handoffPolicy,
+    "offer_human_help_for_risk_exact_quote_complaint_unclear"
+  );
+  assert.equal(profile.customizationState, "optional");
+  assert.equal(profile.safeToUseWithoutUserCustomization, true);
+
+  assert.deepEqual(modelProfile, profile);
+  assert.equal(payload.setup.productModel.assistantBehaviour.required, false);
+  assert.equal(payload.setup.productModel.assistantBehaviour.setupBlocking, false);
+  assert.equal(payload.setup.productModel.assistantBehaviour.authority, "style_only_not_truth");
+
+  assert.equal(payload.setup.rawDraft.businessProfile.companyName, "Acme Clinic");
+
+  assert.doesNotMatch(
+    JSON.stringify({ profile, modelProfile }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
