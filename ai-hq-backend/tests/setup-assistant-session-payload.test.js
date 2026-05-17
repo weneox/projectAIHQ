@@ -182,3 +182,58 @@ test("response body does not promote finalize when the base payload still has bl
   assert.equal(response.setup.draftPreviewHidden, true);
   assert.deepEqual(response.setup.draft, {});
 });
+
+
+test("session payload declares setup as review room product model", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const model = payload.setup.productModel;
+
+  assert.equal(model.primaryExperience, "review_room");
+  assert.equal(model.setupPurpose, "business_truth_preparation");
+
+  assert.equal(model.businessTruthSetup.required, true);
+  assert.equal(model.businessTruthSetup.runtimeAuthority, "approved_truth");
+  assert.equal(model.businessTruthSetup.draftAuthority, "not_runtime_authority");
+
+  assert.equal(model.assistantBehaviour.required, false);
+  assert.equal(model.assistantBehaviour.defaulted, true);
+  assert.equal(model.assistantBehaviour.authority, "style_only_not_truth");
+  assert.equal(model.assistantBehaviour.setupBlocking, false);
+
+  assert.deepEqual(model.reviewSections, [
+    "profile",
+    "services",
+    "contacts",
+    "hours",
+    "pricing",
+    "handoff",
+    "languages",
+    "sources",
+  ]);
+
+  assert.ok(model.inputMethods.includes("website_source"));
+  assert.ok(model.inputMethods.includes("manual_brief"));
+  assert.ok(model.inputMethods.includes("document_upload"));
+  assert.ok(model.inputMethods.includes("chat_answers"));
+
+  assert.ok(model.productRules.includes("review_room_is_main_experience"));
+  assert.ok(model.productRules.includes("approved_truth_is_runtime_authority"));
+  assert.ok(model.productRules.includes("assistant_behaviour_never_mutates_truth"));
+
+  assert.doesNotMatch(
+    JSON.stringify(model),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
