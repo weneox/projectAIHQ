@@ -813,6 +813,106 @@ export function buildDefaultAssistantStyleProfile() {
   };
 }
 
+function resolveSetupLifecycleAction(status = "") {
+  const safeStatus = s(status).toLowerCase();
+
+  if (safeStatus === "not_started") return "add_business_input";
+  if (safeStatus === "collecting_inputs") return "continue_collecting_inputs";
+  if (safeStatus === "extracting") return "wait_for_extraction";
+  if (safeStatus === "draft_ready") return "review_business_draft";
+  if (safeStatus === "missing_required_facts") return "answer_missing_required_facts";
+  if (safeStatus === "conflict_needs_review") return "resolve_conflicts";
+  if (safeStatus === "ready_for_approval") return "approve_and_publish_truth";
+  if (safeStatus === "approved_live") return "monitor_live_truth";
+  if (safeStatus === "stale_needs_review") return "review_stale_truth";
+
+  return "add_business_input";
+}
+
+export function buildSetupLifecycleState({
+  session = {},
+  setup = {},
+  summary = {},
+  assistant = {},
+  silentSynthesis = {},
+  approvalBlockers = [],
+} = {}) {
+  const sessionStatus = s(session.status || session.status_key).toLowerCase();
+  const phase = s(assistant.phase).toLowerCase();
+  const synthesisStatus = s(silentSynthesis.synthesisStatus).toLowerCase();
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const confidence = obj(assistant.confidence);
+  const blockers = arr(approvalBlockers).map((item) => s(item)).filter(Boolean);
+  const conflictCount = arr(confidence.contradictions).length;
+
+  const hasBusinessProfile = Object.keys(obj(setup.businessProfile)).length > 0;
+  const hasDraft =
+    obj(summary).hasAnyDraft === true ||
+    hasBusinessProfile ||
+    arr(setup.services).length > 0 ||
+    arr(setup.contacts).length > 0 ||
+    Object.keys(obj(silentSynthesis.polishedDraft)).length > 0;
+
+  const hasInputEvidence =
+    s(sourceMetadata.primarySourceUrl) ||
+    arr(sourceMetadata.evidenceSummary).length > 0 ||
+    arr(sourceMetadata.sourceLabels).length > 0;
+
+  const readyForApproval = assistant.readyForApproval === true;
+  const approvedLive = ["approved", "finalized", "live", "completed"].includes(
+    sessionStatus
+  );
+
+  let status = "not_started";
+
+  if (approvedLive) {
+    status = "approved_live";
+  } else if (readyForApproval) {
+    status = "ready_for_approval";
+  } else if (conflictCount > 0) {
+    status = "conflict_needs_review";
+  } else if (blockers.length > 0) {
+    status = "missing_required_facts";
+  } else if (phase === "extracting" || synthesisStatus === "extracting") {
+    status = "extracting";
+  } else if (hasDraft || ["synthesized", "partial"].includes(synthesisStatus)) {
+    status = "draft_ready";
+  } else if (hasInputEvidence) {
+    status = "collecting_inputs";
+  }
+
+  return compactDraftObject({
+    version: 1,
+    status,
+    primaryExperience: "review_room",
+    businessTruthRequired: true,
+    runtimeAuthority: "approved_truth",
+    draftAuthority: "not_runtime_authority",
+    assistantStyleBlocking: false,
+    hasDraft,
+    hasInputEvidence: Boolean(hasInputEvidence),
+    readyForApproval,
+    canApprove: readyForApproval && !approvedLive,
+    needsReview: [
+      "draft_ready",
+      "missing_required_facts",
+      "conflict_needs_review",
+      "ready_for_approval",
+      "stale_needs_review",
+    ].includes(status),
+    needsUserInput: [
+      "not_started",
+      "collecting_inputs",
+      "missing_required_facts",
+      "conflict_needs_review",
+    ].includes(status),
+    approvedLive,
+    approvalBlockers: blockers,
+    conflictCount,
+    recommendedNextAction: resolveSetupLifecycleAction(status),
+  });
+}
+
 export function buildSetupProductModel() {
   return {
     primaryExperience: "review_room",
@@ -900,6 +1000,14 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const readyForApproval = assistant.readyForApproval === true;
   const approvalBlockers = arr(assistant.approvalBlockers);
   const silent = sanitizeSilentSynthesis(obj(setup.silentSynthesis));
+  const lifecycleState = buildSetupLifecycleState({
+    session,
+    setup,
+    summary,
+    assistant,
+    silentSynthesis: silent,
+    approvalBlockers,
+  });
   const userFacingDraft = buildUserFacingDraftPreview(setup, readyForApproval);
   const internalDraft = buildInternalDraftPreview(setup);
   const sourceStrategy = buildSetupSourceStrategy(setup);
@@ -931,7 +1039,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     },
     setup: {
       productModel: buildSetupProductModel(),
-      status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
+      lifecycleState,
+      status: lifecycleState.status,
       draftOnly: true,
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
       namespace: SETUP_ASSISTANT_NAMESPACE,
@@ -950,7 +1059,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         recommendationNotes: arr(silent.recommendationNotes),
       },
       review: {
-        status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
+        status: lifecycleState.status,
+        lifecycleState,
         draftOnly: true,
         sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
         namespace: SETUP_ASSISTANT_NAMESPACE,
