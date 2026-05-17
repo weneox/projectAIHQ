@@ -618,3 +618,93 @@ test("latest user correction wins over conflicting source evidence", async (t) =
   assert.deepEqual(result.draft.coreServices, ["Implants"]);
   assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("reasoner evidence payload is deduped and budgeted", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        capturedRequest = request;
+        return {
+          output_parsed: reasonerPayload({
+            action: "unclear",
+            targetStep: "company",
+            reason: "budget inspection only",
+          }),
+        };
+      },
+    },
+  });
+
+  const longText = "Runtime Dental evidence. " + "x".repeat(2400);
+
+  await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: Array.from({ length: 12 }, (_, index) => ({
+        role: index % 2 ? "user" : "assistant",
+        questionKey: "company",
+        text: `turn-${index} ${"y".repeat(900)}`,
+      })),
+      sourceSignalSummary: {
+        primarySource: {
+          sourceType: "website",
+          sourceUrl: "https://evidence.example",
+        },
+        discoveredPublicClaims: Array.from(
+          { length: 10 },
+          (_, index) => `claim-${index} ${longText}`
+        ),
+      },
+      reviewDebug: {
+        websiteKnowledge: {
+          topPages: Array.from({ length: 10 }, (_, index) => ({
+            title: `Page ${index}`,
+            url: `https://evidence.example/page-${index}`,
+            summary: longText,
+          })),
+        },
+      },
+    },
+    sources: Array.from({ length: 20 }, (_, index) => ({
+      sourceType: "website",
+      role: index === 0 ? "primary" : "supporting",
+      label: `Source ${index % 6}`,
+      sourceUrl: `https://evidence.example/source-${index % 6}`,
+      text: longText,
+    })),
+    latestStep: "company",
+    latestMessage: "Use the website evidence.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+  const payload = JSON.parse(userPrompt.slice(userPrompt.indexOf("{")));
+
+  assert.equal(payload.sourceEvidence.length, 16);
+  assert.equal(payload.recentContext.length, 8);
+
+  assert.ok(
+    payload.sourceEvidence.every((row) => String(row.text || "").length <= 920)
+  );
+  assert.ok(
+    payload.recentContext.every((turn) => String(turn.text || "").length <= 380)
+  );
+
+  const evidenceKeys = payload.sourceEvidence.map((row) =>
+    [row.sourceType, row.sourceUrl, row.label, row.text]
+      .map((item) => String(item || "").toLowerCase())
+      .join("|")
+  );
+
+  assert.equal(new Set(evidenceKeys).size, evidenceKeys.length);
+});
