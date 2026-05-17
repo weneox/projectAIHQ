@@ -620,3 +620,73 @@ test("setup review room exposes evidence panel for source-grounded review", () =
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes runtime consumers gated by approved truth", () => {
+  const draftPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const draftConsumers = draftPayload.setup.reviewRoom.runtimeConsumers;
+
+  assert.equal(draftConsumers.version, 1);
+  assert.equal(draftConsumers.authority, "approved_truth");
+  assert.ok(draftConsumers.blockedCount > 0);
+  assert.equal(draftConsumers.readyAfterApprovalCount, 0);
+  assert.equal(draftConsumers.activeCount, 0);
+
+  const draftByKey = Object.fromEntries(
+    draftConsumers.consumers.map((consumer) => [consumer.key, consumer])
+  );
+
+  for (const key of [
+    "public_widget",
+    "inbox_ai",
+    "voice_assistant",
+    "automation_runtime",
+    "operator_copilot",
+  ]) {
+    assert.equal(draftByKey[key].requiresApprovedTruth, true);
+    assert.equal(draftByKey[key].runtimeAuthority, "approved_truth");
+    assert.equal(draftByKey[key].draftAuthority, "not_runtime_authority");
+    assert.equal(draftByKey[key].currentState, "blocked_pending_approved_truth");
+  }
+
+  const readyPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const readyConsumers = readyPayload.setup.reviewRoom.runtimeConsumers;
+
+  assert.equal(readyConsumers.blockedCount, 0);
+  assert.ok(readyConsumers.readyAfterApprovalCount > 0);
+  assert.equal(readyConsumers.activeCount, 0);
+  assert.ok(
+    readyConsumers.consumers.every(
+      (consumer) => consumer.currentState === "ready_after_approval"
+    )
+  );
+
+  assert.doesNotMatch(
+    JSON.stringify({ draftConsumers, readyConsumers }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
