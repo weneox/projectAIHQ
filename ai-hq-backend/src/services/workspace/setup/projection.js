@@ -832,9 +832,17 @@ export function buildCanonicalProfileSourceSummary({
   sources = [],
   sourceInfo = {},
   approvedAt = "",
+  impactSummary = null,
+  approvalPolicy = null,
 } = {}) {
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
+  const projectionDraft = stripLegacyBehaviorFromProjectionDraft(draft);
+  const finalImpactSummary = Object.keys(obj(impactSummary)).length
+    ? obj(impactSummary)
+    : buildFinalizeImpactSummary({ draft: projectionDraft });
+  const finalApprovalPolicy = Object.keys(obj(approvalPolicy)).length
+    ? obj(approvalPolicy)
+    : buildFinalizeApprovalPolicySummary({ draft: projectionDraft });
+
   return compactObject({
     reviewSessionId: s(session?.id),
     primarySourceType: s(sourceInfo.primarySourceType),
@@ -844,8 +852,8 @@ export function buildCanonicalProfileSourceSummary({
     lastSnapshotId: s(draft?.lastSnapshotId),
     approvedAt: s(approvedAt),
     governance: obj(draft?.sourceSummary?.governance),
-    finalizeImpact: impactSummary,
-    approvalPolicy,
+    finalizeImpact: finalImpactSummary,
+    approvalPolicy: finalApprovalPolicy,
     sources: arr(sources)
       .map((item) =>
         compactObject({
@@ -909,8 +917,8 @@ function buildTruthVersionCreateInput({
       draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
       sourceId: sourceInfo?.primarySourceId || undefined,
       sourceRunId: sourceInfo?.latestRunId || undefined,
-      finalizeImpact: impactSummary,
-      approvalPolicy,
+      finalizeImpact: finalImpactSummary,
+      approvalPolicy: finalApprovalPolicy,
     }),
   };
 }
@@ -1369,8 +1377,8 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-        finalizeImpact: impactSummary,
-        approvalPolicy,
+        finalizeImpact: finalImpactSummary,
+        approvalPolicy: finalApprovalPolicy,
       },
       generatedBy: requestedBy,
       approvedBy: requestedBy,
@@ -1401,8 +1409,8 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
-        finalizeImpact: impactSummary,
-        approvalPolicy,
+        finalizeImpact: finalImpactSummary,
+        approvalPolicy: finalApprovalPolicy,
       },
       approvedBy: requestedBy,
       runtimeRefreshMode: "defer",
@@ -1508,7 +1516,7 @@ export async function projectSetupReviewDraftToCanonical(
       publishedLocations,
       publishedTruthFacts,
       impactSummary,
-      approvalPolicy,
+      approvalPolicy: finalApprovalPolicy,
       persistedReviewSessionId,
       requestedBy,
       approvedAt,
@@ -1644,6 +1652,6 @@ export async function projectSetupReviewDraftToCanonical(
     knowledgeProjection,
     sourceInfo,
     impactSummary,
-    approvalPolicy,
+    approvalPolicy: finalApprovalPolicy,
   };
 }

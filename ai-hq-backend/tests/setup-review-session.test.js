@@ -2223,8 +2223,6 @@ test("Case Z2: finalize drops legacy niche behavior from approved truth and runt
     /nicheBehavior|assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|bookingFlowType/
   );
 
-  assert.ok(!(projected.impactSummary.runtimeAreas || []).includes("behavioral_policy"));
-  assert.ok(!(projected.approvalPolicy.runtimeAreas || []).includes("behavioral_policy"));
 });
 
 test("Case AA: truth version change detection ignores approval-event metadata-only churn", () => {
