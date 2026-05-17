@@ -1,4 +1,4 @@
-﻿import { arr, obj, s } from "../draftShared.js";
+import { arr, obj, s } from "../draftShared.js";
 
 export const REVIEW_MESSAGE =
   "Setup drafts stay separate from approved truth and the strict runtime until a later review and approval step is completed.";
@@ -8,9 +8,7 @@ export const SETUP_ASSISTANT_SOURCE_TYPE = "setup_assistant";
 export const SETUP_ASSISTANT_CURRENT_STEP = "business_model";
 
 export const SETUP_BUSINESS_SECTION = "business";
-export const SETUP_BEHAVIOR_SECTION = "";
 export const SETUP_PHASE_BUSINESS_TRUTH = "business_truth";
-export const SETUP_PHASE_CONVERSATION_POLICY = "";
 export const SETUP_PHASE_REVIEW_AND_LAUNCH = "review_and_launch";
 
 export const SOURCE_PRIORITY = {
@@ -21,18 +19,6 @@ export const SOURCE_PRIORITY = {
   google_maps: 3,
   website: 4,
 };
-
-export const BEHAVIOR_POLICY_KEYS = [];
-export const PRICING_BEHAVIOR_MODES = [];
-export const LOCATION_BEHAVIOR_MODES = [];
-export const BOOKING_BEHAVIOR_MODES = [];
-export const CONTACT_BEHAVIOR_MODES = [];
-export const HANDOFF_BEHAVIOR_MODES = [];
-export const GREETING_BEHAVIOR_MODES = [];
-export const CLOSING_BEHAVIOR_MODES = [];
-export const TONE_BEHAVIOR_MODES = [];
-export const MESSAGE_LENGTH_MODES = [];
-export const EMPATHY_LEVEL_MODES = [];
 
 export const WEBSITE_PATTERN =
   /\b((?:https?:\/\/)?(?:www\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s]*)?)\b/i;
@@ -65,54 +51,6 @@ export function normalizeSourceType(value = "") {
   const type = s(value).toLowerCase();
   if (type === "facebook_page") return "facebook";
   return type;
-}
-
-export function normalizeBehaviorPolicyKey(_value = "") {
-  return "";
-}
-
-export function normalizePricingBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeLocationBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeBookingBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeContactBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeHandoffBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeGreetingBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeClosingBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeToneBehaviorMode(_value = "") {
-  return "";
-}
-
-export function normalizeMessageLengthMode(_value = "") {
-  return "";
-}
-
-export function normalizeEmpathyLevelMode(_value = "") {
-  return "";
-}
-
-export function buildDefaultAssistantBehaviorDraft() {
-  return {};
 }
 
 export function buildUrlCandidate(value = "") {
@@ -262,18 +200,3 @@ export function hasNonManualSourceIdentity(sourceMetadata = {}) {
   );
 }
 
-export function inferTargetPurpose(_value = "", _label = "") {
-  return "general";
-}
-
-export function buildBehaviorTargetCandidate(_value = "", _label = "") {
-  return null;
-}
-
-export function pickBehaviorTargetByPurpose(_candidates = [], _purpose = "") {
-  return null;
-}
-
-export function mergeBehaviorTargetCandidates(_groups = []) {
-  return [];
-}

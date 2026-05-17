@@ -2,20 +2,6 @@ import {
   buildStoredSetupAssistantBrainPayload,
   buildStoredSetupAssistantPayload,
 } from "../src/services/workspace/setup/setupAssistantApp/sessionPayload.js";
-import {
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
-} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
-
-globalThis.normalizePricingBehaviorMode ??= normalizePricingBehaviorMode;
-globalThis.normalizeLocationBehaviorMode ??= normalizeLocationBehaviorMode;
-globalThis.normalizeBookingBehaviorMode ??= normalizeBookingBehaviorMode;
-globalThis.normalizeContactBehaviorMode ??= normalizeContactBehaviorMode;
-globalThis.normalizeHandoffBehaviorMode ??= normalizeHandoffBehaviorMode;
-
 export const FIXED_ISO = "2026-04-17T00:00:00.000Z";
 
 export function buildDraft(overrides = {}) {
@@ -26,12 +12,10 @@ export function buildDraft(overrides = {}) {
     hours: [],
     pricingPosture: {},
     handoffRules: {},
-    assistantBehaviorDraft: {},
     sourceMetadata: {},
     assistantState: {
       activeSection: "company",
       lastUpdatedSection: "",
-      activeBehaviorPolicy: "",
     },
     progress: {
       currentQuestionKey: "company",
@@ -40,9 +24,6 @@ export function buildDraft(overrides = {}) {
       updatedAt: FIXED_ISO,
     },
     languages: ["en"],
-    tone: "",
-    greetingStyle: "",
-    afterHoursBehavior: "",
     ...overrides,
   });
 }
@@ -105,9 +86,6 @@ export function buildReview({
       assistantState: {
         activeSection: currentStep,
         lastUpdatedSection: currentStep,
-        activeBehaviorPolicy: currentStep.endsWith("_behavior")
-          ? currentStep.replace("_behavior", "")
-          : "",
       },
       progress: {
         currentQuestionKey: currentStep,
