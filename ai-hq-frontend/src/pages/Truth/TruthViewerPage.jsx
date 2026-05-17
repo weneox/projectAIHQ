@@ -610,95 +610,6 @@ function groupBusinessRows(fields = []) {
   return { identity, contact, presence, offering };
 }
 
-function groupBehaviorRows(fields = []) {
-  const core = [
-    {
-      key: "greetingBehaviorSummary",
-      label: "Greeting",
-      icon: Sparkles,
-      value:
-        fieldValue(fields, "greetingBehaviorSummary") ||
-        fieldValue(fields, "greetingStyle"),
-      hint:
-        fieldProvenance(fields, "greetingBehaviorSummary") ||
-        fieldProvenance(fields, "greetingStyle"),
-      multiline: true,
-    },
-    {
-      key: "closingBehaviorSummary",
-      label: "Closing",
-      icon: Sparkles,
-      value: fieldValue(fields, "closingBehaviorSummary"),
-      hint: fieldProvenance(fields, "closingBehaviorSummary"),
-      multiline: true,
-    },
-    {
-      key: "toneBehaviorSummary",
-      label: "Tone",
-      icon: ShieldCheck,
-      value:
-        fieldValue(fields, "toneBehaviorSummary") || fieldValue(fields, "tone"),
-      hint:
-        fieldProvenance(fields, "toneBehaviorSummary") ||
-        fieldProvenance(fields, "tone"),
-      multiline: true,
-    },
-    {
-      key: "afterHoursBehavior",
-      label: "After-hours",
-      icon: ShieldAlert,
-      value: fieldValue(fields, "afterHoursBehavior"),
-      hint: fieldProvenance(fields, "afterHoursBehavior"),
-      multiline: true,
-    },
-  ].filter((item) => text(item.value));
-
-  const routing = [
-    {
-      key: "pricingBehaviorSummary",
-      label: "Pricing response",
-      icon: Sparkles,
-      value: fieldValue(fields, "pricingBehaviorSummary"),
-      hint: fieldProvenance(fields, "pricingBehaviorSummary"),
-      multiline: true,
-    },
-    {
-      key: "locationBehaviorSummary",
-      label: "Location response",
-      icon: MapPin,
-      value: fieldValue(fields, "locationBehaviorSummary"),
-      hint: fieldProvenance(fields, "locationBehaviorSummary"),
-      multiline: true,
-    },
-    {
-      key: "bookingBehaviorSummary",
-      label: "Booking routing",
-      icon: Sparkles,
-      value: fieldValue(fields, "bookingBehaviorSummary"),
-      hint: fieldProvenance(fields, "bookingBehaviorSummary"),
-      multiline: true,
-    },
-    {
-      key: "contactBehaviorSummary",
-      label: "Contact preference",
-      icon: Phone,
-      value: fieldValue(fields, "contactBehaviorSummary"),
-      hint: fieldProvenance(fields, "contactBehaviorSummary"),
-      multiline: true,
-    },
-    {
-      key: "handoffBehaviorSummary",
-      label: "Handoff behavior",
-      icon: Wrench,
-      value: fieldValue(fields, "handoffBehaviorSummary"),
-      hint: fieldProvenance(fields, "handoffBehaviorSummary"),
-      multiline: true,
-    },
-  ].filter((item) => text(item.value));
-
-  return { core, routing };
-}
-
 function buildSourceRows(data = {}) {
   const fields = arr(data.fields);
   const sourceSummary = obj(data.sourceSummary);
@@ -1528,7 +1439,6 @@ function Tabs({ activeTab, onChange }) {
   const tabs = [
     ["business", "Business"],
     ["contract", "AI Contract"],
-    ["behavior", "Behavior"],
     ["sources", "Sources"],
     ["versions", "Versions"],
     ["review", "Review queue"],
@@ -1617,25 +1527,17 @@ function buildRuntimeContract({ data = {}, operationalState = {}, runtimeLabel =
   ]);
 
   const bookingReady = hasAnyApprovedField(fields, [
-    "bookingBehaviorSummary",
     "bookingUrl",
     "bookingInstructions",
     "appointmentPolicy",
   ]);
 
   const handoffReady = hasAnyApprovedField(fields, [
-    "handoffBehaviorSummary",
-    "contactBehaviorSummary",
-    "afterHoursBehavior",
-  ]);
-
-  const behaviorReady = hasAnyApprovedField(fields, [
-    "toneBehaviorSummary",
-    "tone",
-    "greetingBehaviorSummary",
-    "closingBehaviorSummary",
-    "handoffBehaviorSummary",
-    "afterHoursBehavior",
+    "handoffRules",
+    "handoffPolicy",
+    "humanHandoff",
+    "operatorHandoff",
+    "complaintHandoff",
   ]);
 
   const capabilities = [
@@ -1731,9 +1633,9 @@ function buildRuntimeContract({ data = {}, operationalState = {}, runtimeLabel =
     {
       key: "handoff-question",
       title: "Customer needs operator help",
-      status: handoffReady || behaviorReady ? "passed" : "guarded",
-      detail: handoffReady || behaviorReady
-        ? "Behavior or handoff rules are available."
+      status: handoffReady ? "passed" : "guarded",
+      detail: handoffReady
+        ? "Approved handoff rules are available."
         : "Operator routing should stay conservative.",
     },
   ];
@@ -2261,55 +2163,35 @@ function BusinessTab({ groups, onEdit }) {
   return (
     <div className="grid items-start gap-4 xl:grid-cols-2">
       <RecordCard
-              onEdit={onEdit}
-              title="Identity"
+        onEdit={onEdit}
+        title="Identity"
         subtitle="Approved public business identity."
         rows={groups.identity}
         tone={groups.identity.length ? "success" : "neutral"}
       />
 
       <RecordCard
-              onEdit={onEdit}
-              title="Contact"
+        onEdit={onEdit}
+        title="Contact"
         subtitle="Approved contact and location facts."
         rows={groups.contact}
         tone={groups.contact.length ? "success" : "neutral"}
       />
 
       <RecordCard
-              onEdit={onEdit}
-              title="Presence"
+        onEdit={onEdit}
+        title="Presence"
         subtitle="Approved online presence."
         rows={groups.presence}
         tone={groups.presence.length ? "success" : "neutral"}
       />
 
       <RecordCard
-              onEdit={onEdit}
-              title="Offering"
+        onEdit={onEdit}
+        title="Offering"
         subtitle="Services, products, pricing, hours, and FAQs."
         rows={groups.offering}
         tone={groups.offering.length ? "success" : "neutral"}
-      />
-    </div>
-  );
-}
-
-function BehaviorTab({ groups }) {
-  return (
-    <div className="grid items-start gap-4 xl:grid-cols-2">
-      <RecordCard
-        title="Conversation behavior"
-        subtitle="Approved customer-facing response style."
-        rows={groups.core}
-        tone={groups.core.length ? "success" : "neutral"}
-      />
-
-      <RecordCard
-        title="Routing behavior"
-        subtitle="Approved handling for pricing, booking, location, and handoff."
-        rows={groups.routing}
-        tone={groups.routing.length ? "success" : "neutral"}
       />
     </div>
   );
@@ -2669,10 +2551,6 @@ export default function TruthViewerPage() {
     () => groupBusinessRows(data.fields),
     [data.fields]
   );
-  const behaviorGroups = useMemo(
-    () => groupBehaviorRows(data.fields),
-    [data.fields]
-  );
   const sourceRows = useMemo(() => buildSourceRows(data), [data]);
 
   const openFieldChange = useCallback((field = {}) => {
@@ -2721,7 +2599,7 @@ export default function TruthViewerPage() {
     setPendingFieldChanges([]);
   }, []);
 
-  
+
   const publishFieldChanges = useCallback(async () => {
     const changes = arr(pendingFieldChanges);
 
@@ -3004,10 +2882,6 @@ const contractModel = useMemo(
           ) : null}
           {activeTab === "business" ? (
             <BusinessTab groups={businessGroups} onEdit={saveFieldChange} />
-          ) : null}
-
-          {activeTab === "behavior" ? (
-            <BehaviorTab groups={behaviorGroups} />
           ) : null}
 
           {activeTab === "contract" ? (
