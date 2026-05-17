@@ -18,6 +18,7 @@ import {
   buildApprovalBlockers,
   isDraftReadyForApproval,
 } from "./setupAssistantApp/relevance.js";
+import { buildSetupSourceSignals } from "./setupAssistantApp/sourceSignals.js";
 import {
   inferContactType,
   normalizeWebsiteUrl,
@@ -382,64 +383,6 @@ function buildReasonerRecentContext(review = null) {
       })
     )
     .filter((turn) => s(turn.text));
-}
-
-function buildSourceSignals(preview = {}, sources = [], draft = {}) {
-  const safePreview = obj(preview);
-  const sourceRows = arr(sources);
-
-  const sourceTypes = uniqueStrings(
-    [
-      ...sourceRows.map((item) => s(item?.type || item?.sourceType)),
-      s(obj(draft.sourceMetadata).primarySourceType),
-      safePreview.websiteUrl ? "website" : "",
-    ],
-    8
-  );
-
-  return {
-    primarySourceType:
-      s(obj(draft.sourceMetadata).primarySourceType) ||
-      (safePreview.websiteUrl ? "website" : s(sourceTypes[0])),
-    primarySourceLabel:
-      s(arr(obj(draft.sourceMetadata).sourceLabels)[0]) ||
-      (safePreview.websiteUrl ? "Website" : s(sourceTypes[0])),
-    primarySourceUrl:
-      s(obj(draft.sourceMetadata).primarySourceUrl) || s(safePreview.websiteUrl),
-    primarySourceAuthorityClass: safePreview.websiteUrl ? "official" : "",
-    pageCount: 0,
-    sourceTypes,
-    strongestEvidence: uniqueStrings(
-      [
-        safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
-        safePreview.whatThisBusinessIs
-          ? `Description: ${safePreview.whatThisBusinessIs}`
-          : "",
-        arr(safePreview.coreServices).length
-          ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
-          : "",
-        arr(safePreview.contactRoutes).length
-          ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
-          : "",
-        arr(safePreview.hours).length
-          ? `Hours: ${arr(safePreview.hours).slice(0, 2).join(" • ")}`
-          : "",
-        s(safePreview.pricingPosture)
-          ? `Pricing: ${safePreview.pricingPosture}`
-          : "",
-      ],
-      12
-    ),
-    discoveredPublicClaims: [],
-    companyNameCandidates: uniqueStrings([safePreview.businessName], 8),
-    descriptionCandidates: uniqueStrings([safePreview.whatThisBusinessIs], 8),
-    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
-    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
-    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
-    pricingCandidates: uniqueStrings([safePreview.pricingPosture], 12),
-    audienceCandidates: [],
-    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
-  };
 }
 
 
@@ -873,7 +816,11 @@ function buildTurn({
     recommendation: {
       notes: uniqueStrings(recommendationNotes, 8),
     },
-    sourceSignals: buildSourceSignals(preview, sources, mergedDraft),
+    sourceSignals: buildSetupSourceSignals({
+      draft: mergedDraft,
+      sources,
+      review,
+    }),
     interviewPlan: buildInterviewPlan(currentStep, resolvedNextQuestion),
     aiBehavior: {},
     readyForApproval,
@@ -1552,7 +1499,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
 
 export const __test__ = {
   buildCurrentPreview,
-  buildSourceSignals,
   resolveReplyLocale,
   buildDraftWithAcceptedPatch,
   hasAcceptedPatchSignal,
