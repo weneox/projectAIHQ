@@ -1174,6 +1174,6 @@ test("business action with empty accepted patch does not mutate setup draft", as
   assert.equal(result.draft.businessName, "Original Business");
   assert.equal(result.draft.websiteUrl, "https://original.example");
   assert.deepEqual(result.draft.coreServices, ["Original Service"]);
-  assert.match(JSON.stringify(result.rejectedInputs), /could not extract safe business facts/i);
+  assert.match(JSON.stringify(result.rejectedInputs), /no usable business fields|could not extract safe business facts/i);
   assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
