@@ -756,3 +756,77 @@ test("setup review room exposes intake options beyond website source", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("response body keeps review room aligned with guarded approval state", () => {
+  const blockedBase = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "services",
+      setupAssistant: buildDraft({
+        languages: ["en"],
+        businessProfile: {
+          companyName: "Only Name",
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const blockedResponse = buildSetupAssistantResponseBody(blockedBase, {
+    readyForApproval: true,
+    phase: "ready",
+    assistantMessage: "Approve it.",
+  });
+
+  assert.equal(blockedResponse.setup.review.readyForApproval, false);
+  assert.equal(blockedResponse.setup.lifecycleState.readyForApproval, false);
+  assert.equal(blockedResponse.setup.reviewRoom.readyForApproval, false);
+  assert.equal(blockedResponse.setup.reviewRoom.actions.approval.enabled, false);
+  assert.equal(
+    blockedResponse.setup.reviewRoom.runtimeConsumers.blockedCount > 0,
+    true
+  );
+
+  const readyBase = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const readyResponse = buildSetupAssistantResponseBody(readyBase, {
+    readyForApproval: true,
+    phase: "ready",
+    assistantMessage: "The draft is ready to approve.",
+  });
+
+  assert.equal(readyResponse.setup.review.readyForApproval, true);
+  assert.equal(readyResponse.setup.lifecycleState.status, "ready_for_approval");
+  assert.equal(readyResponse.setup.reviewRoom.readyForApproval, true);
+  assert.equal(
+    readyResponse.setup.reviewRoom.actions.primary.id,
+    "approve_and_publish_truth"
+  );
+  assert.equal(readyResponse.setup.reviewRoom.actions.approval.enabled, true);
+  assert.equal(readyResponse.setup.reviewRoom.runtimeConsumers.blockedCount, 0);
+  assert.ok(
+    readyResponse.setup.reviewRoom.runtimeConsumers.readyAfterApprovalCount > 0
+  );
+
+  assert.doesNotMatch(
+    JSON.stringify({
+      blocked: blockedResponse.setup.reviewRoom,
+      ready: readyResponse.setup.reviewRoom,
+    }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});

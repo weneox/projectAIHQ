@@ -1828,6 +1828,55 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   };
 }
 
+function buildResponseLifecycleState({
+  lifecycleState = {},
+  guardedReadyForApproval = false,
+} = {}) {
+  const previous = obj(lifecycleState);
+  const previousStatus = s(previous.status || "not_started");
+
+  const status = guardedReadyForApproval ? "ready_for_approval" : previousStatus;
+
+  return compactDraftObject({
+    ...previous,
+    status,
+    readyForApproval: guardedReadyForApproval,
+    canApprove: guardedReadyForApproval,
+    needsReview:
+      guardedReadyForApproval === true ? true : previous.needsReview === true,
+    recommendedNextAction:
+      guardedReadyForApproval === true
+        ? "approve_and_publish_truth"
+        : s(previous.recommendedNextAction || resolveSetupLifecycleAction(status)),
+  });
+}
+
+function buildResponseReviewRoom({
+  reviewRoom = {},
+  lifecycleState = {},
+  guardedReadyForApproval = false,
+} = {}) {
+  const room = obj(reviewRoom);
+  const responseState = buildResponseLifecycleState({
+    lifecycleState,
+    guardedReadyForApproval,
+  });
+  const missingSections = arr(room.missingSections);
+
+  return compactDraftObject({
+    ...room,
+    readyForApproval: guardedReadyForApproval,
+    recommendedNextAction: s(responseState.recommendedNextAction),
+    actions: buildSetupReviewRoomActions({
+      lifecycleState: responseState,
+      missingSections,
+    }),
+    runtimeConsumers: buildSetupReviewRoomRuntimeConsumers({
+      lifecycleState: responseState,
+    }),
+  });
+}
+
 export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   const baseBody = obj(basePayload);
   const session = obj(baseBody.session);
@@ -1860,6 +1909,16 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   const safeTurn = sanitizeBrainSnapshot(turn);
   const guardedReadyForApproval =
     obj(assistant).readyForApproval === true && safeTurn.readyForApproval === true;
+
+  const responseLifecycleState = buildResponseLifecycleState({
+    lifecycleState: setup.lifecycleState,
+    guardedReadyForApproval,
+  });
+  const responseReviewRoom = buildResponseReviewRoom({
+    reviewRoom: setup.reviewRoom,
+    lifecycleState: responseLifecycleState,
+    guardedReadyForApproval,
+  });
 
   const resolvedNextQuestion =
     guardedReadyForApproval === true
@@ -1937,6 +1996,7 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     readyForApproval: guardedReadyForApproval,
     finalizeAvailable: guardedReadyForApproval,
     approvalBlockers: arr(assistant.approvalBlockers),
+    lifecycleState: responseLifecycleState,
     message: "",
   };
 
@@ -1956,6 +2016,8 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
       ...setup,
       assistant: mergedAssistant,
       review: mergedReview,
+      lifecycleState: responseLifecycleState,
+      reviewRoom: responseReviewRoom,
       timeline,
     },
     timeline,
