@@ -10,7 +10,17 @@ test("setup finalize projection drops legacy behavior metadata", async () => {
 
   const result = await projectSetupReviewDraftToCanonical(
     {
-      db: null,
+      db: {
+        async query(sql) {
+          if (sql.includes("from tenant_setup_review_sessions")) {
+            return { rows: [{ id: "session-1" }] };
+          }
+          if (sql.includes("from tenants")) {
+            return { rows: [{ id: "tenant-1", tenant_key: "alpha" }] };
+          }
+          return { rows: [] };
+        },
+      },
       actor: {
         tenantId: "tenant-1",
         tenantKey: "alpha",

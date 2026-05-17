@@ -699,6 +699,17 @@ function normalizeLocationForProjection(item = {}) {
   };
 }
 
+function stripLegacyBehaviorFromProjectionDraft(draft = {}) {
+  const next = mergeDeep({}, obj(draft));
+  const profile = obj(next.businessProfile);
+
+  delete profile.nicheBehavior;
+  delete profile.niche_behavior;
+
+  next.businessProfile = compactObject(profile);
+  return next;
+}
+
 function buildBusinessProfileProjection(draft = {}, sourceInfo = {}) {
   const profile = compactObject(draft?.businessProfile);
 
@@ -1280,8 +1291,9 @@ export async function projectSetupReviewDraftToCanonical(
     deps.refreshRuntimeProjectionBestEffort || refreshRuntimeProjectionBestEffort;
 
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
+  const projectionDraft = stripLegacyBehaviorFromProjectionDraft(draft);
+  const impactSummary = buildFinalizeImpactSummary({ draft: projectionDraft });
+  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft: projectionDraft });
   const persistedReviewSessionId = await resolvePersistedReviewSessionId(
     db,
     actor,
@@ -1312,8 +1324,8 @@ export async function projectSetupReviewDraftToCanonical(
         })
       : null;
 
-  const businessProfile = buildBusinessProfileProjection(draft, sourceInfo);
-  const capabilities = buildCapabilitiesProjection(draft);
+  const businessProfile = buildBusinessProfileProjection(projectionDraft, sourceInfo);
+  const capabilities = buildCapabilitiesProjection(projectionDraft);
   let projectedProfile = false;
   let projectedCapabilities = false;
   let savedProfile = currentProfile;
@@ -1406,7 +1418,7 @@ export async function projectSetupReviewDraftToCanonical(
   const serviceProjection = await projectDraftServicesToCanonical({
     db,
     actor,
-    draft,
+    draft: projectionDraft,
     sourceInfo,
   });
 
