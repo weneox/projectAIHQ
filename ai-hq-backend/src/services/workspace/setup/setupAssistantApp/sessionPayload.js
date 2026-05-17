@@ -1498,6 +1498,102 @@ function buildSetupReviewRoomApprovalPreview({
   };
 }
 
+function buildSetupReviewRoomHeader({
+  lifecycleState = {},
+  issueSummary = {},
+} = {}) {
+  const status = s(lifecycleState.status || "not_started");
+  const blockingCount = Number(issueSummary.blockingCount || 0) || 0;
+  const missingCount = Number(issueSummary.missingCount || 0) || 0;
+  const conflictCount = Number(issueSummary.conflictCount || 0) || 0;
+
+  const map = {
+    not_started: {
+      title: "Prepare your AI business truth",
+      subtitle: "Add a website, brief, pasted text, or answers so AI can prepare a safe business draft.",
+      statusLabel: "Needs input",
+      badgeTone: "neutral",
+      primaryMessage: "Give AI business information to start the setup.",
+    },
+    collecting_inputs: {
+      title: "Collecting business inputs",
+      subtitle: "Add or review the sources AI will use to prepare the business draft.",
+      statusLabel: "Collecting inputs",
+      badgeTone: "info",
+      primaryMessage: "Add enough information for AI to extract business facts.",
+    },
+    extracting: {
+      title: "AI is preparing the business draft",
+      subtitle: "Source evidence and business inputs are being converted into reviewable truth sections.",
+      statusLabel: "Extracting",
+      badgeTone: "info",
+      primaryMessage: "Wait for extraction to finish.",
+    },
+    draft_ready: {
+      title: "Review the AI-prepared business draft",
+      subtitle: "Check each section before publishing it as approved truth.",
+      statusLabel: "Draft ready",
+      badgeTone: "info",
+      primaryMessage: "Review the business facts before approval.",
+    },
+    missing_required_facts: {
+      title: "Complete missing business facts",
+      subtitle: "Some required sections must be completed before this can become approved truth.",
+      statusLabel: "Missing facts",
+      badgeTone: "warning",
+      primaryMessage: missingCount
+        ? `${missingCount} required section(s) need attention.`
+        : "Complete the required sections.",
+    },
+    conflict_needs_review: {
+      title: "Resolve conflicting business evidence",
+      subtitle: "AI found conflicting information. Review the conflict before approval.",
+      statusLabel: "Conflict needs review",
+      badgeTone: "danger",
+      primaryMessage: conflictCount
+        ? `${conflictCount} conflict(s) need review.`
+        : "Resolve conflicts before approval.",
+    },
+    ready_for_approval: {
+      title: "Business truth is ready to approve",
+      subtitle: "Approving will publish this draft as the runtime authority for widget, inbox, voice, and automations.",
+      statusLabel: "Ready for approval",
+      badgeTone: "success",
+      primaryMessage: "Approve to make this truth live.",
+    },
+    approved_live: {
+      title: "Approved business truth is live",
+      subtitle: "Customer-facing AI can now use approved truth as runtime authority.",
+      statusLabel: "Live",
+      badgeTone: "success",
+      primaryMessage: "Monitor and update truth when the business changes.",
+    },
+    stale_needs_review: {
+      title: "Review stale business truth",
+      subtitle: "Some approved truth may be outdated and should be reviewed before relying on it.",
+      statusLabel: "Needs review",
+      badgeTone: "warning",
+      primaryMessage: "Review stale sections before publishing updates.",
+    },
+  };
+
+  const resolved = map[status] || map.not_started;
+
+  return {
+    version: 1,
+    status,
+    blockingCount,
+    title: resolved.title,
+    subtitle: resolved.subtitle,
+    statusLabel: resolved.statusLabel,
+    badgeTone: resolved.badgeTone,
+    primaryMessage: resolved.primaryMessage,
+    trustNote:
+      "Draft data is not runtime authority. Only approved truth can power customer-facing AI.",
+    nextAction: s(lifecycleState.recommendedNextAction),
+  };
+}
+
 function buildSetupReviewRoomActions({
   lifecycleState = {},
   missingSections = [],
@@ -1762,6 +1858,7 @@ export function buildSetupReviewRoom({
     missingSections,
     sections,
   });
+  const issueSummary = buildSetupReviewRoomIssueSummary(issues);
 
   return {
     version: 1,
@@ -1770,6 +1867,10 @@ export function buildSetupReviewRoom({
     chatRole: "input_method",
     draftAuthority: "not_runtime_authority",
     runtimeAuthority: "approved_truth",
+    header: buildSetupReviewRoomHeader({
+      lifecycleState,
+      issueSummary,
+    }),
     sections,
     sectionDetails: buildSetupReviewRoomSectionDetails({
       setup,
@@ -1779,7 +1880,7 @@ export function buildSetupReviewRoom({
     requiredSections,
     missingSections,
     issues,
-    issueSummary: buildSetupReviewRoomIssueSummary(issues),
+    issueSummary,
     approvalPreview: buildSetupReviewRoomApprovalPreview({
       setup,
       lifecycleState,
