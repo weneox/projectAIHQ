@@ -1204,6 +1204,81 @@ function buildSetupReviewRoomEvidence({
   };
 }
 
+function buildRuntimeConsumer({
+  key = "",
+  label = "",
+  description = "",
+  lifecycleState = {},
+} = {}) {
+  const approvedLive = lifecycleState.approvedLive === true;
+  const canApprove = lifecycleState.canApprove === true;
+
+  return compactDraftObject({
+    key,
+    label,
+    description,
+    currentState: approvedLive
+      ? "active"
+      : canApprove
+        ? "ready_after_approval"
+        : "blocked_pending_approved_truth",
+    requiresApprovedTruth: true,
+    enabledAfterApproval: true,
+    runtimeAuthority: "approved_truth",
+    draftAuthority: "not_runtime_authority",
+  });
+}
+
+function buildSetupReviewRoomRuntimeConsumers({ lifecycleState = {} } = {}) {
+  const consumers = [
+    buildRuntimeConsumer({
+      key: "public_widget",
+      label: "Public website widget",
+      description: "Customer-facing widget replies from approved truth only.",
+      lifecycleState,
+    }),
+    buildRuntimeConsumer({
+      key: "inbox_ai",
+      label: "Inbox AI replies",
+      description: "Inbox suggestions and AI replies use approved truth as authority.",
+      lifecycleState,
+    }),
+    buildRuntimeConsumer({
+      key: "voice_assistant",
+      label: "Voice assistant",
+      description: "Voice answers must use approved truth before speaking to callers.",
+      lifecycleState,
+    }),
+    buildRuntimeConsumer({
+      key: "automation_runtime",
+      label: "Automation runtime",
+      description: "Automations can use approved business truth after approval.",
+      lifecycleState,
+    }),
+    buildRuntimeConsumer({
+      key: "operator_copilot",
+      label: "Operator copilot",
+      description: "Human operators can review approved business context.",
+      lifecycleState,
+    }),
+  ];
+
+  return {
+    version: 1,
+    authority: "approved_truth",
+    description:
+      "These runtime surfaces become safe only after the business truth is approved.",
+    consumers,
+    blockedCount: consumers.filter(
+      (item) => item.currentState === "blocked_pending_approved_truth"
+    ).length,
+    readyAfterApprovalCount: consumers.filter(
+      (item) => item.currentState === "ready_after_approval"
+    ).length,
+    activeCount: consumers.filter((item) => item.currentState === "active").length,
+  };
+}
+
 function buildSetupReviewRoomActions({
   lifecycleState = {},
   missingSections = [],
@@ -1490,6 +1565,9 @@ export function buildSetupReviewRoom({
       setup,
       assistant,
       sections,
+    }),
+    runtimeConsumers: buildSetupReviewRoomRuntimeConsumers({
+      lifecycleState,
     }),
     actions: buildSetupReviewRoomActions({
       lifecycleState,
