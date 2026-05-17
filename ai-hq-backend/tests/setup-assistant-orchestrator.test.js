@@ -708,3 +708,74 @@ test("reasoner evidence payload is deduped and budgeted", async (t) => {
 
   assert.equal(new Set(evidenceKeys).size, evidenceKeys.length);
 });
+
+
+test("stored source metadata reaches brain without live sources", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        capturedRequest = request;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "business_brief",
+            targetStep: "company",
+            companyName: "Metadata Dental",
+            description: "Dental clinic from stored metadata evidence.",
+            services: ["Implants"],
+            contacts: ["WhatsApp +994551112233"],
+            pricingPosture: "Pricing depends on the case.",
+            websiteUrl: "https://metadata.example",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      sourceMetadata: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://metadata.example",
+        sourceLabels: ["Stored website source"],
+        evidenceSummary: [
+          "Metadata Dental is a dental clinic. Services include implants. WhatsApp +994551112233.",
+        ],
+      },
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Use stored source metadata?",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "Use the stored website evidence.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+  const payload = JSON.parse(userPrompt.slice(userPrompt.indexOf("{")));
+
+  assert.equal(payload.sourceEvidence.length, 1);
+  assert.equal(payload.sourceEvidence[0].sourceType, "website");
+  assert.equal(payload.sourceEvidence[0].sourceUrl, "https://metadata.example");
+  assert.match(payload.sourceEvidence[0].text, /Metadata Dental/);
+
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.draft.businessName, "Metadata Dental");
+  assert.deepEqual(result.draft.coreServices, ["Implants"]);
+  assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
