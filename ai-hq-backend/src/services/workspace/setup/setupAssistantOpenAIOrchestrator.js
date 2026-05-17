@@ -290,6 +290,100 @@ function buildCurrentPreview(draft = {}, review = null) {
   });
 }
 
+function buildReasonerSourceEvidence({ sources = [], review = null, draft = {} } = {}) {
+  const reviewRoot = obj(review);
+  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
+  const sourceMetadata = obj(draft.sourceMetadata || reviewDraft.sourceMetadata);
+  const sourceSignalSummary = obj(reviewRoot.sourceSignalSummary);
+  const websiteKnowledge = obj(
+    sourceSignalSummary.website || obj(reviewRoot.reviewDebug).websiteKnowledge
+  );
+
+  const rows = [];
+
+  const pushRow = (value = {}) => {
+    const row = compactDraftObject({
+      sourceType: s(value.sourceType || value.type),
+      role: s(value.role),
+      label: s(value.label || value.title || value.name),
+      sourceUrl: s(value.sourceUrl || value.url || obj(value.metadata).sourceUrl),
+      text: compactText(
+        s(
+          value.text ||
+            value.content ||
+            value.summary ||
+            value.excerpt ||
+            value.description ||
+            obj(value.metadata).summary
+        ),
+        900
+      ),
+    });
+
+    if (s(row.sourceType) || s(row.sourceUrl) || s(row.label) || s(row.text)) {
+      rows.push(row);
+    }
+  };
+
+  for (const source of arr(sources).slice(0, 12)) pushRow(source);
+
+  if (s(sourceMetadata.primarySourceType) || s(sourceMetadata.primarySourceUrl)) {
+    pushRow({
+      sourceType: sourceMetadata.primarySourceType,
+      label: arr(sourceMetadata.sourceLabels)[0],
+      sourceUrl: sourceMetadata.primarySourceUrl,
+      text: arr(sourceMetadata.evidenceSummary).join(" | "),
+      role: "primary",
+    });
+  }
+
+  for (const claim of arr(sourceSignalSummary.discoveredPublicClaims).slice(0, 8)) {
+    pushRow({
+      sourceType: s(sourceSignalSummary.primarySource?.sourceType),
+      sourceUrl: s(sourceSignalSummary.primarySource?.sourceUrl),
+      label: "public claim",
+      text: claim,
+    });
+  }
+
+  for (const page of arr(websiteKnowledge.topPages).slice(0, 8)) {
+    pushRow({
+      sourceType: "website",
+      sourceUrl: s(page.url || page.sourceUrl),
+      label: s(page.title || page.label),
+      text: s(page.summary || page.description || page.text),
+    });
+  }
+
+  const seen = new Set();
+  const out = [];
+
+  for (const row of rows) {
+    const key = [row.sourceType, row.sourceUrl, row.label, row.text]
+      .map((item) => s(item).toLowerCase())
+      .join("|");
+
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+
+  return out.slice(0, 16);
+}
+
+function buildReasonerRecentContext(review = null) {
+  return getTimelineTurns(review)
+    .slice(-8)
+    .map((turn) =>
+      compactDraftObject({
+        role: s(turn.role),
+        questionKey: normalizeQuestionKey(turn.questionKey),
+        text: compactText(s(turn.text || turn.message), 360),
+      })
+    )
+    .filter((turn) => s(turn.text));
+}
+
 function buildSourceSignals(preview = {}, sources = [], draft = {}) {
   const safePreview = obj(preview);
   const sourceRows = arr(sources);
@@ -348,56 +442,11 @@ function buildSourceSignals(preview = {}, sources = [], draft = {}) {
   };
 }
 
-function detectLocaleFromText(value = "") {
-  const text = s(value);
 
-  if (!text) return "";
 
-  if (/[\u0600-\u06FF]/.test(text)) return "ar";
-  if (/[\u0900-\u097F]/.test(text)) return "hi";
-  if (/[\u0400-\u04FF]/.test(text)) return "ru";
-
-  if (/[əğıöşüƏĞIİÖŞÜ]/.test(text)) return "az-AZ";
-  if (/[çğıİöşüÇĞİÖŞÜ]/.test(text)) return "tr";
-  if (/[ñáéíóú¿¡]/i.test(text)) return "es";
-  if (/[àâçéèêëîïôûùüÿœ]/i.test(text)) return "fr";
-  if (/[äöüß]/i.test(text)) return "de";
-  if (/[ãõáâàçêéíóôõú]/i.test(text)) return "pt";
-
-  const lower = normalizeMessage(text);
-
-  if (
-    /\b(hə|bəli|yox|şirkət|iş|xidmət|əlaqə|saat|qiymət|insana)\b/.test(lower)
-  ) {
-    return "az-AZ";
-  }
-  if (
-    /\b(ev(et)?|hayir|işletme|hizmet|iletisim|fiyat|insan)\b/.test(lower)
-  ) {
-    return "tr";
-  }
-  if (
-    /\b(what|business|service|contact|hours|price|human)\b/.test(lower)
-  ) {
-    return "en";
-  }
-
-  return "";
-}
-
-function resolveReplyLocale({ draft = {}, latestMessage = "" } = {}) {
-  const safeDraft = obj(draft);
-
-  const explicitLanguage = s(arr(safeDraft.languages)[0]);
-  if (explicitLanguage) {
-    return normalizeSetupLocale(explicitLanguage);
-  }
-
-  const fromText = detectLocaleFromText(latestMessage);
-  if (fromText) {
-    return normalizeSetupLocale(fromText);
-  }
-
+function resolveReplyLocale({ draft = {} } = {}) {
+  const explicitLanguage = s(arr(obj(draft).languages)[0]);
+  if (explicitLanguage) return normalizeSetupLocale(explicitLanguage);
   return "az-AZ";
 }
 
@@ -1148,6 +1197,8 @@ function buildReasonerUserPrompt({
   question = null,
   preview = {},
   latestMessage = "",
+  sourceEvidence = [],
+  recentContext = [],
 } = {}) {
   return [
     "Analyze this setup turn as a business brain extractor, not as a keyword parser.",
@@ -1158,10 +1209,14 @@ function buildReasonerUserPrompt({
         currentQuestion: obj(question),
         currentPreview: obj(preview),
         latestUserMessage: s(latestMessage),
+        sourceEvidence: arr(sourceEvidence).slice(0, 16),
+        recentContext: arr(recentContext).slice(0, 8),
         extractionRules: {
           websiteIsOptional: true,
           googleMapsDisabledForV1: true,
           manualBriefAllowed: true,
+          useAttachedSourceEvidenceWhenUserRefersToWebsiteOrSources: true,
+          extractFromSourceEvidenceWithoutAskingAgainWhenFactsAreExplicit: true,
           maxCriticalMissingQuestionsLater: 5,
           doNotInventUnknownBusinessFacts: true,
           emptyStringMeansNotProvided: true,
@@ -1189,6 +1244,8 @@ async function callOpenAIReasoner({
   question = null,
   preview = {},
   latestMessage = "",
+  sourceEvidence = [],
+  recentContext = [],
   model = "",
   timeoutMs = 7000,
   maxOutputTokens = 650,
@@ -1213,6 +1270,8 @@ async function callOpenAIReasoner({
           question,
           preview,
           latestMessage,
+          sourceEvidence,
+          recentContext,
         }),
       },
     ],
@@ -1408,6 +1467,8 @@ export async function runSetupAssistantOpenAIOrchestrator({
       question: currentQuestion,
       preview,
       latestMessage: safeMessage,
+      sourceEvidence: buildReasonerSourceEvidence({ sources, review, draft }),
+      recentContext: buildReasonerRecentContext(review),
       model: runtime.model,
       timeoutMs: runtime.timeoutMs,
       maxOutputTokens: runtime.maxOutputTokens,
@@ -1499,6 +1560,8 @@ export const __test__ = {
   resolveConversationPlan,
   countAssistantAsksForStep,
   buildAcceptedPatchFromReasonerPayload,
+  buildReasonerSourceEvidence,
+  buildReasonerRecentContext,
   setCachedClient(client = null) {
     cachedClient = client;
   },
