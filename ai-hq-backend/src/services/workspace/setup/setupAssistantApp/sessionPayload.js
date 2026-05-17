@@ -796,6 +796,23 @@ function buildAssistantFromStoredBrain({
   };
 }
 
+export function buildDefaultAssistantStyleProfile() {
+  return {
+    profileKey: "default_professional",
+    setupBlocking: false,
+    truthAuthority: false,
+    purpose: "style_only",
+    toneProfile: "professional",
+    replyLength: "concise",
+    emojiPolicy: "off",
+    openingPolicy: "polite_not_repetitive",
+    languagePolicy: "follow_customer_when_possible",
+    handoffPolicy: "offer_human_help_for_risk_exact_quote_complaint_unclear",
+    customizationState: "optional",
+    safeToUseWithoutUserCustomization: true,
+  };
+}
+
 export function buildSetupProductModel() {
   return {
     primaryExperience: "review_room",
@@ -810,6 +827,7 @@ export function buildSetupProductModel() {
       defaulted: true,
       authority: "style_only_not_truth",
       setupBlocking: false,
+      defaultProfile: buildDefaultAssistantStyleProfile(),
     },
     inputMethods: [
       "website_source",
@@ -921,6 +939,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       websitePrefill: obj(setup.websitePrefill),
       sourceStrategy,
       aiProfilePreview,
+      assistantStyleProfile: buildDefaultAssistantStyleProfile(),
       draftVisibilityMode: s(silent.visibilityMode || "hidden_until_review"),
       draftPreviewHidden: shouldHideDraftPreview(setup, readyForApproval),
       hiddenSynthesis: {
