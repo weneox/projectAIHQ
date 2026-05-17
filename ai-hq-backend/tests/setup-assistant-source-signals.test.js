@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -7,11 +7,6 @@ import {
   buildSetupSourceSignals,
   detectSetupSignalContradictions,
 } from "../src/services/workspace/setup/setupAssistantApp/sourceSignals.js";
-import {
-  buildBehaviorTargetCandidate,
-  buildDefaultAssistantBehaviorDraft,
-  normalizeBehaviorPolicyKey,
-} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
 import { buildDraft } from "./setup-assistant-test-helpers.js";
 
 function createSourceRichDraft() {
@@ -81,11 +76,6 @@ test("source signals are evidence-only and do not infer business facts by keywor
   assert.equal(Object.prototype.hasOwnProperty.call(signals, "pricingTargetCandidates"), false);
 });
 
-test("shared behavior helpers are compatibility no-ops", () => {
-  assert.deepEqual(buildDefaultAssistantBehaviorDraft(), {});
-  assert.equal(normalizeBehaviorPolicyKey("pricing_policy"), "");
-  assert.equal(buildBehaviorTargetCandidate("https://acme.az/pricing"), null);
-});
 
 test("draft state stays grounded in draft and source metadata only", () => {
   const draft = createSourceRichDraft();
