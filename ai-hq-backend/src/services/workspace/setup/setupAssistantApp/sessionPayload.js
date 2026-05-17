@@ -1141,6 +1141,69 @@ function buildSetupReviewRoomSectionDetails({
   ];
 }
 
+function buildSetupReviewRoomEvidence({
+  setup = {},
+  assistant = {},
+  sections = [],
+} = {}) {
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const sourceSignals = obj(assistant.sourceSignals);
+  const primarySourceType = s(
+    sourceMetadata.primarySourceType || sourceSignals.primarySourceType
+  );
+  const primarySourceUrl = s(
+    sourceMetadata.primarySourceUrl || sourceSignals.primarySourceUrl
+  );
+  const sourceLabels = uniqueStrings(
+    [
+      ...arr(sourceMetadata.sourceLabels),
+      s(sourceSignals.primarySourceLabel),
+    ],
+    12
+  );
+  const evidenceTexts = uniqueStrings(
+    [
+      ...arr(sourceMetadata.evidenceSummary),
+      ...arr(sourceSignals.strongestEvidence),
+      ...arr(sourceSignals.discoveredPublicClaims),
+    ],
+    24
+  );
+
+  const evidenceCards = evidenceTexts.map((text, index) =>
+    compactDraftObject({
+      id: `evidence_${index + 1}`,
+      type: primarySourceType || "business_input",
+      label: sourceLabels[0] || primarySourceType || "Business input",
+      sourceUrl: primarySourceUrl,
+      text: compactText(text, 360),
+    })
+  );
+
+  const sectionEvidence = arr(sections).map((section) =>
+    compactDraftObject({
+      section: s(section.key),
+      sourceBacked: section.sourceBacked === true,
+      evidenceCount: section.sourceBacked === true ? evidenceCards.length : 0,
+    })
+  );
+
+  return {
+    version: 1,
+    authority: "evidence_for_review_not_runtime_truth",
+    runtimeAuthorityAfterApproval: "approved_truth",
+    hasEvidence: Boolean(primarySourceUrl || evidenceCards.length || sourceLabels.length),
+    primarySource: compactDraftObject({
+      type: primarySourceType,
+      url: primarySourceUrl,
+      label: sourceLabels[0] || primarySourceType,
+    }),
+    sourceLabels,
+    evidenceCards,
+    sectionEvidence,
+  };
+}
+
 function buildSetupReviewRoomActions({
   lifecycleState = {},
   missingSections = [],
@@ -1423,6 +1486,11 @@ export function buildSetupReviewRoom({
     missingSections,
     issues,
     issueSummary: buildSetupReviewRoomIssueSummary(issues),
+    evidence: buildSetupReviewRoomEvidence({
+      setup,
+      assistant,
+      sections,
+    }),
     actions: buildSetupReviewRoomActions({
       lifecycleState,
       missingSections,

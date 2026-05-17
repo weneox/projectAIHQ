@@ -557,3 +557,66 @@ test("setup review room exposes missing and conflict issues", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes evidence panel for source-grounded review", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+        sourceMetadata: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          sourceLabels: ["Official website"],
+          evidenceSummary: ["Acme Clinic website says it offers dental consultation."],
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+        sourceSignals: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          strongestEvidence: [
+            "Acme Clinic has WhatsApp +994551112233 and consultation service.",
+          ],
+        },
+      }),
+    })
+  );
+
+  const evidence = payload.setup.reviewRoom.evidence;
+
+  assert.equal(evidence.version, 1);
+  assert.equal(evidence.authority, "evidence_for_review_not_runtime_truth");
+  assert.equal(evidence.runtimeAuthorityAfterApproval, "approved_truth");
+  assert.equal(evidence.hasEvidence, true);
+  assert.equal(evidence.primarySource.type, "website");
+  assert.equal(evidence.primarySource.url, "https://acme.az");
+  assert.ok(evidence.sourceLabels.includes("Official website"));
+
+  assert.ok(
+    evidence.evidenceCards.some((card) =>
+      /dental consultation/i.test(card.text)
+    )
+  );
+  assert.ok(
+    evidence.evidenceCards.some((card) =>
+      /WhatsApp \+994551112233/i.test(card.text)
+    )
+  );
+
+  const sectionEvidenceByKey = Object.fromEntries(
+    evidence.sectionEvidence.map((item) => [item.section, item])
+  );
+
+  assert.equal(sectionEvidenceByKey.profile.sourceBacked, true);
+  assert.ok(sectionEvidenceByKey.profile.evidenceCount > 0);
+  assert.equal(sectionEvidenceByKey.sources.sourceBacked, true);
+
+  assert.doesNotMatch(
+    JSON.stringify(evidence),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
