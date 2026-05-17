@@ -2,20 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { loadCurrentReviewPayload } from "../src/services/workspace/setup/reviewFlow.js";
-import {
-  normalizeBookingBehaviorMode,
-  normalizeContactBehaviorMode,
-  normalizeHandoffBehaviorMode,
-  normalizeLocationBehaviorMode,
-  normalizePricingBehaviorMode,
-} from "../src/services/workspace/setup/setupAssistantApp/shared.js";
-
-globalThis.normalizePricingBehaviorMode ??= normalizePricingBehaviorMode;
-globalThis.normalizeLocationBehaviorMode ??= normalizeLocationBehaviorMode;
-globalThis.normalizeBookingBehaviorMode ??= normalizeBookingBehaviorMode;
-globalThis.normalizeContactBehaviorMode ??= normalizeContactBehaviorMode;
-globalThis.normalizeHandoffBehaviorMode ??= normalizeHandoffBehaviorMode;
-
 function createReviewDraft(overrides = {}) {
   return {
     session: {
