@@ -83,7 +83,6 @@ function buildDefaultAssistant() {
       pricingPosture: {},
       handoffRules: {},
       sourceMetadata: {},
-      assistantBehaviorDraft: {},
       assistantState: {},
       progress: {},
       version: 0,
@@ -201,12 +200,6 @@ function normalizeAssistantState(input = null) {
       pricingPosture: obj(draft.pricingPosture),
       handoffRules: obj(draft.handoffRules),
       sourceMetadata: obj(draft.sourceMetadata),
-      assistantBehaviorDraft: obj(
-        draft.assistantBehaviorDraft ||
-          draft.assistantBehavior ||
-          draft.assistant_behavior_draft ||
-          draft.assistant_behavior
-      ),
       assistantState: obj(draft.assistantState),
       progress: obj(draft.progress),
       version: Number(draft.version || 0),
