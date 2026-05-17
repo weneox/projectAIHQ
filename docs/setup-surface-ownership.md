@@ -73,3 +73,16 @@ Then classify each result before adding more setup UI.
 - one frontend review-room experience
 - optional assistant style separated from truth
 - approved truth as only runtime authority
+
+
+## CI guard
+
+After active legacy setup surfaces are cleaned up, run:
+
+    npm run audit:setup-surfaces:strict
+
+This must stay green. If it fails, a new active setup surface is using legacy behavior/truth fields and must be either:
+
+- removed
+- moved to an allowed guard/test fixture
+- converted to the canonical review-room / approved-truth model
