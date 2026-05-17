@@ -843,3 +843,71 @@ test("source-only guard does not block explicit URLs or contact facts", () => {
     false
   );
 });
+
+
+test("manual rich business brief without source still reaches OpenAI brain", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        callCount += 1;
+        capturedRequest = request;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "business_brief",
+            targetStep: "company",
+            reason: "The user provided explicit manual business facts.",
+            companyName: "Manual Dental",
+            description: "Dental clinic in Baku.",
+            services: ["Cleaning", "Implants"],
+            contacts: ["WhatsApp +994551112233"],
+            hours: ["Monday-Friday 09:00-18:00"],
+            pricingPosture: "Pricing depends on the case.",
+            humanHandoff: "Exact quotes go to a human operator.",
+            websiteUrl: "",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Tell me about the business.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage:
+      "No website yet. Business name is Manual Dental. We are a dental clinic in Baku. Services are cleaning and implants. WhatsApp +994551112233. Monday-Friday 09:00-18:00. Pricing depends on the case.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+
+  assert.equal(callCount, 1);
+  assert.match(userPrompt, /Manual Dental/);
+  assert.deepEqual(JSON.parse(userPrompt.slice(userPrompt.indexOf("{"))).sourceEvidence, []);
+
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.draft.businessName, "Manual Dental");
+  assert.deepEqual(result.draft.coreServices, ["Cleaning", "Implants"]);
+  assert.equal(result.draft.websiteUrl || "", "");
+  assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
