@@ -1279,6 +1279,115 @@ function buildSetupReviewRoomRuntimeConsumers({ lifecycleState = {} } = {}) {
   };
 }
 
+function buildSetupReviewRoomIntakeOption({
+  id = "",
+  label = "",
+  description = "",
+  enabled = true,
+  status = "available",
+  action = "",
+  primary = false,
+  setupBlocking = false,
+} = {}) {
+  return compactDraftObject({
+    id,
+    label,
+    description,
+    enabled,
+    status,
+    action,
+    primary,
+    setupBlocking,
+  });
+}
+
+function buildSetupReviewRoomIntake({ setup = {}, lifecycleState = {} } = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const websitePrefill = obj(setup.websitePrefill);
+  const websiteUrl =
+    s(websitePrefill.websiteUrl) ||
+    s(businessProfile.websiteUrl) ||
+    s(sourceMetadata.primarySourceUrl);
+
+  const hasDraft = lifecycleState.hasDraft === true;
+  const canApprove = lifecycleState.canApprove === true;
+
+  const options = [
+    buildSetupReviewRoomIntakeOption({
+      id: "website_source",
+      label: "Website",
+      description: "Add a website and let AI extract business facts from source evidence.",
+      enabled: true,
+      status: websiteUrl ? "captured" : "available",
+      action: websiteUrl ? "review_website_source" : "add_website_source",
+      primary: !hasDraft,
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "manual_brief",
+      label: "Manual brief",
+      description: "Write a short business description and let AI prepare the draft.",
+      enabled: true,
+      status: hasDraft ? "available_to_update" : "recommended",
+      action: "add_manual_brief",
+      primary: !websiteUrl && !hasDraft,
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "pasted_text",
+      label: "Paste text",
+      description: "Paste existing business information, service lists, contacts, or policies.",
+      enabled: true,
+      status: "available",
+      action: "paste_business_info",
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "chat_answers",
+      label: "Answer questions",
+      description: "Answer only the missing setup questions AI asks.",
+      enabled: true,
+      status: hasDraft ? "available_for_gaps" : "available",
+      action: "answer_setup_questions",
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "existing_truth",
+      label: "Existing truth",
+      description: "Use existing approved business truth as a starting point when available.",
+      enabled: true,
+      status: "available_if_present",
+      action: "use_existing_truth",
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "document_upload",
+      label: "Document upload",
+      description: "Upload menus, service lists, PDFs, or internal business documents.",
+      enabled: false,
+      status: "planned",
+      action: "planned_document_upload",
+    }),
+    buildSetupReviewRoomIntakeOption({
+      id: "channel_metadata",
+      label: "Channel metadata",
+      description: "Use connected channel metadata as supporting context.",
+      enabled: false,
+      status: "planned",
+      action: "planned_channel_metadata",
+    }),
+  ];
+
+  return {
+    version: 1,
+    purpose: "collect_business_truth_inputs",
+    websiteIsInputNotSetupModel: true,
+    chatIsInputNotMainExperience: true,
+    primaryExperience: "review_room",
+    canAddMoreInput: !canApprove,
+    canStillAddInputAfterReady: canApprove,
+    options,
+    enabledOptions: options.filter((option) => option.enabled === true).map((option) => option.id),
+    plannedOptions: options.filter((option) => option.enabled !== true).map((option) => option.id),
+  };
+}
+
 function buildSetupReviewRoomActions({
   lifecycleState = {},
   missingSections = [],
@@ -1565,6 +1674,10 @@ export function buildSetupReviewRoom({
       setup,
       assistant,
       sections,
+    }),
+    intake: buildSetupReviewRoomIntake({
+      setup,
+      lifecycleState,
     }),
     runtimeConsumers: buildSetupReviewRoomRuntimeConsumers({
       lifecycleState,

@@ -690,3 +690,69 @@ test("setup review room exposes runtime consumers gated by approved truth", () =
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes intake options beyond website source", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+        sourceMetadata: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          sourceLabels: ["Official website"],
+          evidenceSummary: ["Acme Clinic website evidence"],
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const intake = payload.setup.reviewRoom.intake;
+  const byId = Object.fromEntries(intake.options.map((option) => [option.id, option]));
+
+  assert.equal(intake.version, 1);
+  assert.equal(intake.purpose, "collect_business_truth_inputs");
+  assert.equal(intake.websiteIsInputNotSetupModel, true);
+  assert.equal(intake.chatIsInputNotMainExperience, true);
+  assert.equal(intake.primaryExperience, "review_room");
+
+  for (const id of [
+    "website_source",
+    "manual_brief",
+    "pasted_text",
+    "chat_answers",
+    "existing_truth",
+    "document_upload",
+    "channel_metadata",
+  ]) {
+    assert.ok(byId[id], id);
+  }
+
+  assert.equal(byId.website_source.enabled, true);
+  assert.equal(byId.website_source.status, "captured");
+  assert.equal(byId.website_source.action, "review_website_source");
+
+  assert.equal(byId.manual_brief.enabled, true);
+  assert.equal(byId.pasted_text.enabled, true);
+  assert.equal(byId.chat_answers.enabled, true);
+  assert.equal(byId.existing_truth.enabled, true);
+
+  assert.equal(byId.document_upload.enabled, false);
+  assert.equal(byId.document_upload.status, "planned");
+  assert.equal(byId.channel_metadata.enabled, false);
+  assert.equal(byId.channel_metadata.status, "planned");
+
+  assert.ok(intake.enabledOptions.includes("website_source"));
+  assert.ok(intake.enabledOptions.includes("manual_brief"));
+  assert.ok(intake.plannedOptions.includes("document_upload"));
+
+  assert.doesNotMatch(
+    JSON.stringify(intake),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
