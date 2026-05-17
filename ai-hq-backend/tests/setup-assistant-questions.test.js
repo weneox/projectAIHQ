@@ -1,11 +1,13 @@
-﻿import test from "node:test";
+﻿import fs from "node:fs";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  INTENT_ONLY_RESPONSES,
   SECTION_ORDER,
-  __test__ as questionsTest,
   getNextQuestion,
   isQuestionSatisfied,
+  normalizeQuestionKey,
 } from "../src/services/workspace/setup/setupAssistantApp/questions.js";
 import {
   buildCompleteBusinessDraft,
@@ -37,10 +39,7 @@ test("business steps stay ordered and behavior steps are no longer part of setup
     "pricing",
     "handoff",
   ]);
-  assert.equal(
-    questionsTest.isBehaviorStepRelevant("pricing_behavior", draft),
-    false
-  );
+  assert.equal(isQuestionSatisfied("pricing_behavior", draft), false);
   assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }).key, "company");
 });
 
@@ -52,16 +51,52 @@ test("getNextQuestion stops after business steps are complete", () => {
   assert.equal(next, null);
 });
 
-test("legacy behavior steps are treated as satisfied compatibility no-ops", () => {
+test("legacy behavior keys are not setup questions anymore", () => {
   const draft = buildCompleteBusinessDraft();
 
-  assert.equal(isQuestionSatisfied("greeting_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("closing_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("tone_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("pricing_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("contact_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("handoff_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("location_behavior", draft), true);
-  assert.equal(isQuestionSatisfied("booking_behavior", draft), true);
+  for (const key of [
+    "greeting_behavior",
+    "closing_behavior",
+    "tone_behavior",
+    "pricing_behavior",
+    "contact_behavior",
+    "handoff_behavior",
+    "location_behavior",
+    "booking_behavior",
+  ]) {
+    assert.equal(isQuestionSatisfied(key, draft), false);
+  }
+
+  assert.equal(normalizeQuestionKey("pricing_policy"), "pricing_policy");
   assert.equal(getNextQuestion({}, draft, {}, { locale: "en" }), null);
+});
+
+test("setup question module keeps only navigation intents, not business fact keywords", () => {
+  assert.equal(INTENT_ONLY_RESPONSES.ok, "__continue__");
+  assert.equal(INTENT_ONLY_RESPONSES.skip, "__skip__");
+  assert.equal(Object.prototype.hasOwnProperty.call(INTENT_ONLY_RESPONSES, "24/7"), false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(INTENT_ONLY_RESPONSES, "quote required"),
+    false
+  );
+
+  const source = fs.readFileSync(
+    new URL(
+      "../src/services/workspace/setup/setupAssistantApp/questions.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  for (const token of [
+    "appointment only",
+    "quote required",
+    "greeting_policy",
+    "pricing_policy",
+    "_behavior$",
+    "isBehaviorStepRelevant",
+    "hasGreetingBehaviorConfigured",
+  ]) {
+    assert.equal(source.includes(token), false, `${token} must not remain`);
+  }
 });
