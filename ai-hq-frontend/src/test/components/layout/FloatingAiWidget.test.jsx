@@ -159,6 +159,45 @@ describe("FloatingAiWidget", () => {
     });
   });
 
+  it("does not render legacy assistant behavior draft data", async () => {
+    renderWidget(
+      createAssistant({
+        session: { id: "session-legacy", draftVersion: 1 },
+        draft: {
+          businessProfile: {
+            companyName: "Luna Smile",
+          },
+          services: [],
+          contacts: [],
+          hours: [],
+          pricingPosture: {},
+          handoffRules: {},
+          sourceMetadata: {},
+          assistantBehaviorDraft: {
+            greetingPolicy: {
+              openingLine: "LEGACY GREETING SHOULD NOT RENDER",
+            },
+          },
+          assistantState: {},
+          progress: {},
+          version: 1,
+        },
+        assistant: {
+          nextQuestion: {
+            key: "services",
+            step: "services",
+            prompt: "List the services.",
+          },
+          sections: [],
+          timeline: [],
+          readyForApproval: false,
+        },
+      })
+    );
+
+    expect(document.body).not.toHaveTextContent("LEGACY GREETING SHOULD NOT RENDER");
+  });
+
   it("routes submitted answers through sendSetupAssistantMessage for the active step", async () => {
     vi.mocked(sendSetupAssistantMessage).mockResolvedValue({
       ok: true,
