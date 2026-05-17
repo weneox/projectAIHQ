@@ -976,3 +976,70 @@ test("explicit website url without source evidence still reaches OpenAI brain", 
   assert.equal(result.draft.websiteUrl, "https://urldental.az");
   assert.doesNotMatch(JSON.stringify(result), /setup_source_evidence_missing|assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("off-topic brain response does not mutate setup draft", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async () => {
+        callCount += 1;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "off_topic",
+            targetStep: "company",
+            reason: "The message is not about business setup.",
+            companyName: "Should Not Be Saved",
+            description: "This must not mutate the draft.",
+            services: ["Fake Service"],
+            contacts: ["fake@example.com"],
+            pricingPosture: "Fake pricing",
+            websiteUrl: "https://fake.example",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      businessProfile: {
+        companyName: "Original Clinic",
+        description: "Original description.",
+        websiteUrl: "https://original.example",
+      },
+      services: [{ title: "Original Service" }],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Tell me about the business.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "Who won the football match yesterday?",
+  });
+
+  assert.equal(callCount, 1);
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.readyForApproval, false);
+  assert.deepEqual(result.acceptedPatch || {}, {});
+  assert.equal(result.draft.businessName, "Original Clinic");
+  assert.equal(result.draft.websiteUrl, "https://original.example");
+  assert.deepEqual(result.draft.coreServices, ["Original Service"]);
+
+  const serialized = JSON.stringify(result);
+  assert.doesNotMatch(serialized, /Should Not Be Saved|Fake Service|fake@example\.com|https:\/\/fake\.example/);
+  assert.doesNotMatch(serialized, /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
