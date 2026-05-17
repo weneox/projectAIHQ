@@ -458,66 +458,10 @@ export function parseHoursNote(note = "", currentHours = []) {
   return WEEK_DAYS.map((day) => compactDraftObject(baseRows.get(day)));
 }
 
-function buildPublicSummary({
-  mode,
-  startingAt,
-  minPrice,
-  currency,
-  perServicePricing,
-  note,
-}) {
-  const symbol = currency ? `${currency} ` : "";
-
-  if (mode === "fixed_price" && minPrice != null) {
-    return `Public price is ${symbol}${minPrice}.`.trim();
-  }
-  if (mode === "starting_from" && startingAt != null) {
-    return `Public replies can say pricing starts from ${symbol}${startingAt}.`.trim();
-  }
-  if (mode === "variable_by_service" && arr(perServicePricing).length) {
-    return "Public replies can explain that pricing changes by service and the exact amount depends on the selected work.";
-  }
-  if (mode === "promotional" && minPrice != null) {
-    return `A promotional starting price of ${symbol}${minPrice} is available, subject to terms.`.trim();
-  }
-  if (mode === "operator_only") {
-    return "Exact pricing should stay with an operator.";
-  }
-  if (mode === "quote_required") {
-    return "Public replies can explain that an exact quote requires more details.";
-  }
-  return compactSentence(note, 160);
-}
-
-function detectPricingMode(text = "", servicePairs = [], amounts = []) {
-  const lower = normalizeLocaleText(text);
-
-  const hasFromLanguage =
-    /\b(from|starting at|starts at|starting from|baslayir|baslangic)\b/i.test(lower);
-  const hasPromoLanguage =
-    /\b(promo|promotion|discount|sale|campaign|endirim|kampaniya)\b/i.test(lower);
-  const hasQuoteLanguage =
-    /\b(quote|depends|after inspection|after review|case by case|custom quote|deqiq qiymet|qiymet deyişir|deyisir|xidmete gore|ise gore|sorguya gore)\b/i.test(
-      lower
-    );
-  const hasOperatorOnlyLanguage =
-    /\b(call|dm|message us|contact us|operator|manager|human|muraciet edin|elaqe saxlayin)\b/i.test(
-      lower
-    );
-
-  if (servicePairs.length > 1) return "variable_by_service";
-  if (hasPromoLanguage) return "promotional";
-  if (hasOperatorOnlyLanguage && !amounts.length) return "operator_only";
-  if (hasQuoteLanguage) return "quote_required";
-  if (hasFromLanguage) return "starting_from";
-  if (amounts.length === 1) return "fixed_price";
-  if (amounts.length > 1) return "variable_by_service";
-  return "quote_required";
-}
-
-export function parsePricingNote(note = "", currentPricing = {}, currentServices = []) {
+export function parsePricingNote(note = "", currentPricing = {}) {
   const text = s(note);
   const existing = obj(currentPricing);
+
   if (!text) return compactDraftObject(existing);
 
   const amounts = Array.from(
@@ -530,89 +474,22 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
     .filter((item) => item.value != null);
 
   const currency =
-    s(existing.currency).toUpperCase() || findCurrency(text) || "AZN";
-
-  const servicePairs = text
-    .split(/\n|;+/)
-    .map((item) => s(item))
-    .filter(Boolean)
-    .map((line) => {
-      const pair = line.match(
-        /^([^:-]+?)\s*(?:[:\-]\s*)?((?:[$]\s*)?\d+(?:[.,]\d{1,2})?(?:\s*(?:azn|usd|eur|gbp))?)/i
-      );
-      if (!pair) return null;
-      const title = s(pair[1]);
-      return compactDraftObject({
-        serviceKey: slugify(title),
-        title,
-        mode: "fixed_price",
-        minPrice: parseAmount(pair[2]),
-        maxPrice: parseAmount(pair[2]),
-        priceLabel: s(pair[2]),
-      });
-    })
-    .filter(Boolean);
-
-  const pricingMode = detectPricingMode(text, servicePairs, amounts);
-  const minPrice = amounts.length ? Math.min(...amounts.map((item) => item.value)) : null;
-  const maxPrice = amounts.length ? Math.max(...amounts.map((item) => item.value)) : null;
-  const startingAt =
-    pricingMode === "starting_from" || pricingMode === "promotional"
-      ? minPrice
-      : existing.startingAt ?? null;
-
-  const publicSummary = buildPublicSummary({
-    mode: pricingMode,
-    startingAt,
-    minPrice,
-    currency,
-    perServicePricing: servicePairs,
-    note: text,
-  });
-
-  const quoteLike =
-    pricingMode === "quote_required" || pricingMode === "operator_only";
+    s(existing.currency).toUpperCase() || findCurrency(text) || "";
 
   return compactDraftObject({
-    pricingMode,
+    ...existing,
     currency,
-    publicSummary,
-    startingAt,
-    minPrice,
-    maxPrice,
-    perServicePricing:
-      servicePairs.length > 0
-        ? servicePairs
-        : arr(existing.perServicePricing).filter((item) =>
-            arr(currentServices).some(
-              (service) =>
-                s(service?.key).toLowerCase() === s(item?.serviceKey).toLowerCase() ||
-                s(service?.title).toLowerCase() === s(item?.title).toLowerCase()
-            )
-          ),
-    allowPublicPriceReplies: !quoteLike,
-    requiresOperatorForExactQuote: [
-      "quote_required",
-      "operator_only",
-      "variable_by_service",
-      "promotional",
-    ].includes(pricingMode),
+    publicSummary: compactSentence(text, 260),
     pricingNotes: compactSentence(text, 260),
-    pricingConfidence:
-      servicePairs.length > 1 || amounts.length > 0
-        ? "medium"
-        : quoteLike
-          ? "low"
-          : "medium",
-    operatorEscalationRules: uniqueStrings(
-      [
-        pricingMode === "quote_required" ? "Exact quote requested" : "",
-        pricingMode === "operator_only" ? "Any pricing request" : "",
-        pricingMode === "variable_by_service" ? "Service combination is unclear" : "",
-        pricingMode === "promotional" ? "Promotion applicability is unclear" : "",
-      ],
-      8
-    ),
+    minPrice: amounts.length
+      ? Math.min(...amounts.map((item) => item.value))
+      : existing.minPrice,
+    maxPrice: amounts.length
+      ? Math.max(...amounts.map((item) => item.value))
+      : existing.maxPrice,
+    allowPublicPriceReplies: existing.allowPublicPriceReplies === true,
+    requiresOperatorForExactQuote:
+      existing.requiresOperatorForExactQuote === true,
   });
 }
 
