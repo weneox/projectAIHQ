@@ -43,38 +43,6 @@ const LOCALIZED_QUESTION_COPY = {
     body: "When must AI hand off to a person?",
     placeholder: "Handoff rules",
   },
-  greeting_behavior: {
-    body: "How should AI greet customers? You can include a sample line.",
-    placeholder: "Example: brief professional greeting",
-  },
-  closing_behavior: {
-    body: "How should it close a conversation? Offer a next step or keep it brief?",
-    placeholder: "Example: warm close with next step",
-  },
-  tone_behavior: {
-    body: "Overall tone: professional, warm, premium, direct, or brief?",
-    placeholder: "Example: professional and calm, short answers",
-  },
-  pricing_behavior: {
-    body: "How should AI answer pricing questions?",
-    placeholder: "Example: answer plus pricing page",
-  },
-  location_behavior: {
-    body: "How should AI answer location questions?",
-    placeholder: "Example: address plus map link",
-  },
-  booking_behavior: {
-    body: "Where should AI send customers for booking?",
-    placeholder: "Example: WhatsApp or booking page",
-  },
-  contact_behavior: {
-    body: "Which contact channel should AI prioritize?",
-    placeholder: "Example: WhatsApp first",
-  },
-  handoff_behavior: {
-    body: "How should AI behave when a human handoff is needed?",
-    placeholder: "Example: ask one short reason first",
-  },
 };
 
 function s(value, fallback = "") {
@@ -317,7 +285,6 @@ function mergeTimelineEntries(...segments) {
 function phaseLabelFromKey(value = "") {
   const key = lower(value);
   if (key === "business_truth") return "Biznes faktları";
-  if (key === "conversation_policy") return "AI danışıq qaydası";
   if (key === "review_and_launch") return "Yoxlama";
   return "Setup";
 }
@@ -374,7 +341,6 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
   const pricingPosture = obj(setupDraft.pricingPosture);
   const handoffRules = obj(setupDraft.handoffRules);
   const sourceMetadata = obj(setupDraft.sourceMetadata);
-  const assistantBehaviorDraft = obj(setupDraft.assistantBehaviorDraft);
   const previewDraft = obj(canonicalAssistant.draft);
   const reviewSetup = obj(obj(reviewPayload).setup);
   const aiProfilePreview = obj(
@@ -422,38 +388,6 @@ function buildFinalViewModel(reviewPayload = null, assistantState = {}) {
       contactRoutes,
       humanHandoff: s(previewDraft.humanHandoff || handoffRules.summary),
       hours,
-      greetingBehaviorSummary: s(
-        previewDraft.greetingBehaviorSummary ||
-          obj(assistantBehaviorDraft.greetingPolicy).openingLine
-      ),
-      closingBehaviorSummary: s(
-        previewDraft.closingBehaviorSummary ||
-          obj(assistantBehaviorDraft.closingPolicy).closingLine
-      ),
-      toneBehaviorSummary: s(
-        previewDraft.toneBehaviorSummary ||
-          obj(assistantBehaviorDraft.tonePolicy).mode
-      ),
-      pricingBehaviorSummary: s(
-        previewDraft.pricingBehaviorSummary ||
-          obj(assistantBehaviorDraft.pricingPolicy).mode
-      ),
-      locationBehaviorSummary: s(
-        previewDraft.locationBehaviorSummary ||
-          obj(assistantBehaviorDraft.locationPolicy).mode
-      ),
-      bookingBehaviorSummary: s(
-        previewDraft.bookingBehaviorSummary ||
-          obj(assistantBehaviorDraft.bookingPolicy).mode
-      ),
-      contactBehaviorSummary: s(
-        previewDraft.contactBehaviorSummary ||
-          obj(assistantBehaviorDraft.contactPolicy).mode
-      ),
-      handoffBehaviorSummary: s(
-        previewDraft.handoffBehaviorSummary ||
-          obj(assistantBehaviorDraft.handoffPolicy).mode
-      ),
     },
   };
 }
@@ -470,14 +404,7 @@ function hasAnyDraftContent(draft = {}) {
       arr(safeDraft.hours).length > 0 ||
       s(safeDraft.pricingPosture) ||
       s(safeDraft.humanHandoff) ||
-      s(safeDraft.greetingBehaviorSummary) ||
-      s(safeDraft.closingBehaviorSummary) ||
-      s(safeDraft.toneBehaviorSummary) ||
-      s(safeDraft.pricingBehaviorSummary) ||
-      s(safeDraft.locationBehaviorSummary) ||
-      s(safeDraft.bookingBehaviorSummary) ||
-      s(safeDraft.contactBehaviorSummary) ||
-      s(safeDraft.handoffBehaviorSummary)
+      s(safeDraft.humanHandoff)
   );
 }
 
@@ -511,7 +438,6 @@ function toneClass(tone = "neutral") {
 function sectionGroups(sections = []) {
   const groups = {
     business_truth: [],
-    conversation_policy: [],
     review_and_launch: [],
   };
 
@@ -857,14 +783,6 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
     ["Əlaqə yolları", listPreview(draft.contactRoutes, 6)],
     ["İş saatları", listPreview(draft.hours, 4)],
     ["İnsana ötürmə halları", draft.humanHandoff],
-    ["Salamlama", draft.greetingBehaviorSummary],
-    ["Söhbəti bağlama", draft.closingBehaviorSummary],
-    ["Ümumi ton", draft.toneBehaviorSummary],
-    ["Qiymət soruşulanda", draft.pricingBehaviorSummary],
-    ["Ünvan soruşulanda", draft.locationBehaviorSummary],
-    ["Rezervasiya istənəndə", draft.bookingBehaviorSummary],
-    ["Əlaqə istənəndə", draft.contactBehaviorSummary],
-    ["Operator lazım olanda", draft.handoffBehaviorSummary],
   ].filter(([, value]) => s(value));
 
   const hasHighRisk = reviewFlags.some((item) => item.level === "high");
@@ -983,7 +901,6 @@ function hasAiProfilePreview(model = {}) {
     s(preview.title) ||
       s(preview.summary) ||
       arr(preview.knows).length ||
-      arr(preview.behavior).length ||
       arr(preview.willNotInvent).length ||
       arr(preview.missingQuestions).length ||
       s(source.productMode)
@@ -1171,11 +1088,6 @@ function SetupIntelligenceCard({ model = {}, finalizing = false, onFinalize }) {
             empty="Təhlükəsizlik qaydası hələ hazırlanmayıb."
           />
           <ProfileList
-            title="AI necə davranacaq"
-            items={preview.behavior}
-            empty="Danışıq davranışı hələ hazırlanmayıb."
-          />
-          <ProfileList
             title="Çatışmayan kritik suallar"
             items={preview.missingQuestions}
             empty="Hazırda kritik boşluq görünmür."
@@ -1273,7 +1185,6 @@ function buildPhaseCardsFromSections(sections = []) {
   const groups = sectionGroups(sections);
 
   const business = phaseProgress(groups.business_truth);
-  const conversation = phaseProgress(groups.conversation_policy);
   const review = phaseProgress(groups.review_and_launch);
 
   return [
@@ -1296,28 +1207,6 @@ function buildPhaseCardsFromSections(sections = []) {
         "AI-nin təhlükəsiz cavab verəcəyi əsas faktlar: kimlik, xidmətlər, əlaqə, iş saatı, qiymət və insana ötürmə qaydaları.",
       progressText:
         business.total > 0 ? `${business.ready}/${business.total} ready` : "",
-    },
-    {
-      key: "conversation_policy",
-      title: "AI danışıq qaydası",
-      tone:
-        conversation.total > 0 && conversation.ready === conversation.total
-          ? "success"
-          : conversation.ready > 0 || conversation.needsReview > 0
-            ? "warning"
-            : "neutral",
-      status:
-        conversation.total > 0 && conversation.ready === conversation.total
-          ? "Ready"
-          : conversation.ready > 0 || conversation.needsReview > 0
-            ? "Hazırlanır"
-            : "Waiting",
-      summary:
-        "AI-nin salamı, tonu, cavab uzunluğu və müştərini hara yönləndirəcəyi.",
-      progressText:
-        conversation.total > 0
-          ? `${conversation.ready}/${conversation.total} ready`
-          : "",
     },
     {
       key: "review_and_launch",
@@ -1399,7 +1288,9 @@ export default function SetupAssistantSections({
   const groupedSections = sectionGroups(arr(model.sections));
   const hasSession =
     Boolean(s(obj(assistant).session?.id)) || displayTimeline.length > 0 || showDraft;
-  const profilePreviewReady = hasAiProfilePreview(model);
+  const reviewRoom = obj(obj(reviewPayload).setup).reviewRoom;
+  const hasReviewRoom = Object.keys(obj(reviewRoom)).length > 0;
+  const profilePreviewReady = hasAiProfilePreview(model) && !hasReviewRoom;
 
   useEffect(() => {
     const node = scrollerRef.current;
@@ -1446,7 +1337,7 @@ export default function SetupAssistantSections({
           AI receptionist setup
         </div>
         <div className="mt-1 text-[13px] leading-6 text-text-subtle">
-          Biznes faktlarını ver, AI-nin necə cavab verməli olduğunu təhlükəsiz şəkildə quraq.
+          Biznes faktlarını ver, AI üçün təsdiqlənə bilən Business Truth hazırlayaq.
         </div>
       </div>
 
@@ -1461,6 +1352,10 @@ export default function SetupAssistantSections({
               onStartSetup={onStartSetup}
               onGoToChannels={onGoToChannels}
             />
+          ) : null}
+
+          {hasSession && hasReviewRoom ? (
+            <SetupReviewRoomPreview reviewRoom={reviewRoom} />
           ) : null}
 
           {hasSession && profilePreviewReady ? (
@@ -1495,26 +1390,6 @@ export default function SetupAssistantSections({
                 Biznes faktları
               </div>
               {arr(groupedSections.business_truth).map((section, index, all) => (
-                <SectionRow
-                  key={s(section.key || index)}
-                  section={section}
-                  last={index === all.length - 1}
-                />
-              ))}
-            </motion.div>
-          ) : null}
-
-          {!profilePreviewReady && arr(groupedSections.conversation_policy).length > 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden rounded-[22px] border border-[rgba(15,23,42,0.06)] bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
-            >
-              <div className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                AI danışıq qaydası
-              </div>
-              {arr(groupedSections.conversation_policy).map((section, index, all) => (
                 <SectionRow
                   key={s(section.key || index)}
                   section={section}
