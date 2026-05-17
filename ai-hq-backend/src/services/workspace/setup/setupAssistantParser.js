@@ -78,36 +78,6 @@ const CURRENCY_ALIASES = {
   pound: "GBP",
 };
 
-const GENERIC_SERVICE_WORDS = new Set([
-  "service",
-  "services",
-  "xidmet",
-  "xidmetler",
-  "automation",
-  "avtomasiya",
-  "digital",
-  "premium",
-  "business",
-  "website",
-  "web",
-  "marketing",
-  "sales",
-  "growth",
-  "solution",
-  "solutions",
-  "consulting",
-  "support",
-  "online",
-  "instagram",
-  "facebook",
-  "whatsapp",
-  "telegram",
-  "contact",
-  "contacts",
-  "link",
-  "source",
-]);
-
 function slugify(value = "") {
   return s(value)
     .toLowerCase()
@@ -488,138 +458,6 @@ export function parseHoursNote(note = "", currentHours = []) {
   return WEEK_DAYS.map((day) => compactDraftObject(baseRows.get(day)));
 }
 
-function inferServiceCategory(text = "") {
-  const lower = normalizeLocaleText(text);
-
-  if (/\b(tax|payroll|bookkeeping|accounting|cfo|finance)\b/i.test(lower)) {
-    return "finance";
-  }
-  if (/\b(doctor|clinic|dental|treatment|wellness|medical)\b/i.test(lower)) {
-    return "clinic";
-  }
-  if (/\b(salon|hair|beauty|spa|nail|cosmetic)\b/i.test(lower)) {
-    return "beauty";
-  }
-  if (/\b(legal|law|contract|court|attorney)\b/i.test(lower)) {
-    return "legal";
-  }
-  if (/\b(marketing|brand|seo|ads|campaign|website)\b/i.test(lower)) {
-    return "marketing";
-  }
-  if (/\b(course|academy|lesson|training|education|coach)\b/i.test(lower)) {
-    return "education";
-  }
-  if (/\b(repair|installation|maintenance|technician)\b/i.test(lower)) {
-    return "home_service";
-  }
-  if (/\b(event|reservation|restaurant|booking)\b/i.test(lower)) {
-    return "hospitality";
-  }
-  if (/\b(chatbot|crm|integration|automation|avtomasiya|lead)\b/i.test(lower)) {
-    return "automation";
-  }
-
-  return "general";
-}
-
-function looksLikeGenericService(text = "") {
-  const normalized = normalizeLocaleText(text);
-  if (!normalized) return true;
-
-  const words = normalized.split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-
-  if (words.length === 1 && GENERIC_SERVICE_WORDS.has(words[0])) return true;
-
-  if (
-    GENERIC_SERVICE_WORDS.has(normalized) ||
-    /\b(contact|hours|pricing|price|website|instagram|facebook|whatsapp|telegram)\b/i.test(
-      normalized
-    )
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function parseServiceLine(line = "") {
-  const text = s(line);
-  if (!text) return null;
-
-  const pairMatch = text.match(/^([^:-]+?)\s*(?:[:\-]\s*)(.+)$/);
-  const candidateTitle = s(pairMatch?.[1] || text);
-  const remainder = s(pairMatch?.[2]);
-
-  const titleWords = candidateTitle.split(/\s+/).filter(Boolean);
-  if (!titleWords.length) return null;
-  if (looksLikeGenericService(candidateTitle)) return null;
-
-  const priceMatch = remainder.match(
-    /((?:[$]\s*)?\d+(?:[.,]\d{1,2})?(?:\s*(?:azn|usd|eur|gbp))?)/i
-  );
-
-  return compactDraftObject({
-    key: slugify(candidateTitle),
-    title: candidateTitle,
-    summary: priceMatch ? s(remainder.replace(priceMatch[0], "")) : remainder,
-    category: inferServiceCategory(`${candidateTitle} ${remainder}`),
-    priceLabel: s(priceMatch?.[0]),
-    availabilityStatus: "available",
-  });
-}
-
-export function parseServicesNote(note = "", currentServices = []) {
-  const lines = s(note)
-    .split(/\n|;|,/)
-    .map((item) => s(item))
-    .filter(Boolean);
-
-  const out = [];
-  const seen = new Set();
-
-  for (const item of [...arr(currentServices), ...lines]) {
-    const normalized =
-      typeof item === "string"
-        ? parseServiceLine(item)
-        : parseServiceLine(item?.title || item?.name || item?.label || "");
-
-    const merged = normalized
-      ? {
-          ...normalized,
-          ...(typeof item === "object" ? compactDraftObject(item) : {}),
-          key: s(normalized.key || item?.key || slugify(normalized.title)),
-          category: s(item?.category || normalized.category || "general"),
-          title: s(item?.title || normalized.title),
-          summary: s(item?.summary || item?.description || normalized.summary),
-          priceLabel: s(item?.priceLabel || item?.price_label || normalized.priceLabel),
-        }
-      : typeof item === "object" && s(item?.title) && !looksLikeGenericService(s(item.title))
-        ? compactDraftObject({
-            ...item,
-            key: s(item.key || slugify(item.title)),
-            title: s(item.title),
-            category: s(item.category || inferServiceCategory(item.title)),
-          })
-        : null;
-
-    if (!merged?.title) continue;
-
-    const dedupeKey = `${s(merged.key).toLowerCase()}|${s(merged.title).toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    out.push(
-      compactDraftObject({
-        ...merged,
-        aliases: uniqueStrings(merged.aliases, 8),
-      })
-    );
-  }
-
-  return out.slice(0, 40);
-}
-
 function buildPublicSummary({
   mode,
   startingAt,
@@ -704,8 +542,6 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
       );
       if (!pair) return null;
       const title = s(pair[1]);
-      if (looksLikeGenericService(title)) return null;
-
       return compactDraftObject({
         serviceKey: slugify(title),
         title,
@@ -783,7 +619,6 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
 export const __test__ = {
   parseHoursNote,
   parsePricingNote,
-  parseServicesNote,
   sanitizeStructuredHours,
   parseDaysFromText,
   parseTimeRange,
