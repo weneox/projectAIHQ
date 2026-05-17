@@ -796,6 +796,51 @@ function buildAssistantFromStoredBrain({
   };
 }
 
+export function buildSetupProductModel() {
+  return {
+    primaryExperience: "review_room",
+    setupPurpose: "business_truth_preparation",
+    businessTruthSetup: {
+      required: true,
+      runtimeAuthority: "approved_truth",
+      draftAuthority: "not_runtime_authority",
+    },
+    assistantBehaviour: {
+      required: false,
+      defaulted: true,
+      authority: "style_only_not_truth",
+      setupBlocking: false,
+    },
+    inputMethods: [
+      "website_source",
+      "manual_brief",
+      "document_upload",
+      "pasted_text",
+      "chat_answers",
+      "existing_truth",
+      "channel_metadata",
+    ],
+    reviewSections: [
+      "profile",
+      "services",
+      "contacts",
+      "hours",
+      "pricing",
+      "handoff",
+      "languages",
+      "sources",
+    ],
+    productRules: [
+      "website_is_input_not_setup_model",
+      "chat_is_input_not_main_experience",
+      "review_room_is_main_experience",
+      "draft_is_not_runtime_authority",
+      "approved_truth_is_runtime_authority",
+      "assistant_behaviour_never_mutates_truth",
+    ],
+  };
+}
+
 export function buildSetupAssistantSessionPayload(review = {}) {
   const session = obj(review.session);
   const draftRow = obj(review.draft);
@@ -867,6 +912,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       namespace: SETUP_ASSISTANT_NAMESPACE,
     },
     setup: {
+      productModel: buildSetupProductModel(),
       status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
       draftOnly: true,
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
