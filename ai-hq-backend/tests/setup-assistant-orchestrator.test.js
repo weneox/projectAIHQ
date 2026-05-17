@@ -391,3 +391,94 @@ test("polished draft override path replaces the hidden preview when the polisher
   assert.equal(Object.prototype.hasOwnProperty.call(result.draft, "pricingBehavior"), false);
   assert.equal(result.sourceSignals.primarySourceUrl, "https://acme.az");
 });
+
+
+test("golden source evidence produces complete hidden business draft", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        capturedRequest = request;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "business_brief",
+            targetStep: "company",
+            reason: "Official website evidence contains the setup facts.",
+            companyName: "Nova Dental Studio",
+            description: "Dental studio in Baku focused on implants, cleaning, and orthodontic consultations.",
+            services: ["Dental implants", "Teeth cleaning", "Orthodontic consultation"],
+            contacts: ["WhatsApp +994551112233", "hello@novadental.az"],
+            hours: ["Monday-Friday 09:00-18:00", "Saturday 10:00-15:00"],
+            pricingPosture: "Pricing depends on the selected service and case complexity.",
+            humanHandoff: "Route urgent pain, complaints, exact quotes, and appointment changes to a human operator.",
+            websiteUrl: "https://novadental.az",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: {
+        currentQuestionKey: "company",
+      },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Share your website or business details.",
+        },
+      ],
+    },
+    sources: [
+      {
+        sourceType: "website",
+        role: "primary",
+        label: "Official website",
+        sourceUrl: "https://novadental.az",
+        text:
+          "Nova Dental Studio is a dental studio in Baku focused on implants, teeth cleaning, and orthodontic consultations. Contact WhatsApp +994551112233 or hello@novadental.az. Working hours are Monday-Friday 09:00-18:00 and Saturday 10:00-15:00. Pricing depends on the selected service and case complexity. Urgent pain, complaints, exact quotes, and appointment changes should go to a human operator.",
+      },
+    ],
+    latestStep: "company",
+    latestMessage: "Use the website source and prepare the setup.",
+  });
+
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+
+  assert.match(userPrompt, /sourceEvidence/);
+  assert.match(userPrompt, /Official website/);
+  assert.match(userPrompt, /Nova Dental Studio/);
+  assert.match(userPrompt, /recentContext/);
+  assert.match(userPrompt, /extractFromSourceEvidenceWithoutAskingAgainWhenFactsAreExplicit/);
+
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.readyForApproval, true);
+  assert.equal(result.nextQuestion, null);
+  assert.equal(result.draft.businessName, "Nova Dental Studio");
+  assert.match(result.draft.whatThisBusinessIs, /dental studio/i);
+  assert.deepEqual(result.draft.coreServices, [
+    "Dental implants",
+    "Teeth cleaning",
+    "Orthodontic consultation",
+  ]);
+  assert.ok(result.draft.contactRoutes.some((item) => /\+994551112233/.test(item)));
+  assert.ok(result.draft.contactRoutes.some((item) => /hello@novadental\.az/.test(item)));
+  assert.ok(result.draft.hours.some((item) => /monday/i.test(item)));
+  assert.match(result.draft.pricingPosture, /depends on the selected service/i);
+  assert.match(result.draft.humanHandoff, /urgent pain/i);
+  assert.equal(result.sourceSignals.primarySourceUrl, "https://novadental.az");
+  assert.equal(Object.prototype.hasOwnProperty.call(result, "assistantBehaviorDraft"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.acceptedPatch, "assistantBehaviorDraft"), false);
+});
