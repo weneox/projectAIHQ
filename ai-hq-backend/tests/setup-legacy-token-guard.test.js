@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-const setupRoot = path.resolve("src/services/workspace/setup");
+const setupRootCandidates = [
+  path.resolve("src/services/workspace/setup"),
+  path.resolve("ai-hq-backend/src/services/workspace/setup"),
+];
+
+const setupRoot = setupRootCandidates.find((candidate) =>
+  fs.existsSync(candidate)
+);
+
+assert.ok(setupRoot, "setup source root must exist");
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

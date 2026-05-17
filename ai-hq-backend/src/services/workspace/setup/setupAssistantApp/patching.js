@@ -238,23 +238,7 @@ function normalizeDirectPatchBody(body = {}) {
     out.languages = uniqueStrings(arr(languages.value).map((item) => s(item)), 8);
   }
 
-  const tone = pickAliasedField(root, ["tone"]);
-  if (tone.provided) {
-    out.tone = s(tone.value);
-  }
 
-  const greetingStyle = pickAliasedField(root, ["greetingStyle", "greeting_style"]);
-  if (greetingStyle.provided) {
-    out.greetingStyle = s(greetingStyle.value);
-  }
-
-  const afterHoursBehavior = pickAliasedField(root, [
-    "afterHoursBehavior",
-    "after_hours_behavior",
-  ]);
-  if (afterHoursBehavior.provided) {
-    out.afterHoursBehavior = s(afterHoursBehavior.value);
-  }
 
   return compactDraftObject(out);
 }

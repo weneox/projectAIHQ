@@ -327,9 +327,6 @@ function sanitizeStructuredSynthesisDraft(value = {}) {
       obj(source.handoffRules || source.handoff_rules || source.handoff)
     ),
     languages: uniqueStrings(source.languages, 8),
-    tone: s(source.tone),
-    greetingStyle: s(source.greetingStyle),
-    afterHoursBehavior: s(source.afterHoursBehavior),
   };
 }
 
@@ -357,9 +354,6 @@ function sanitizePolishedDraft(value = {}) {
       source.handoffSummary || source.humanHandoff || source.handoff
     ),
     languages: uniqueStrings(source.languages, 8),
-    tone: s(source.tone),
-    greetingStyle: s(source.greetingStyle),
-    afterHoursBehavior: s(source.afterHoursBehavior),
     professionalizedAt: source.professionalizedAt || source.professionalized_at || null,
   });
 }
@@ -450,9 +444,6 @@ export function sanitizeSetupAssistantCore(value = {}) {
     ),
     progress: sanitizeProgress(source.progress),
     languages: uniqueStrings(source.languages, 8),
-    tone: s(source.tone),
-    greetingStyle: s(source.greetingStyle),
-    afterHoursBehavior: s(source.afterHoursBehavior),
     silentSynthesis: sanitizeSilentSynthesis(
       obj(
         source.silentSynthesis ||
@@ -539,8 +530,6 @@ function mergeStructuredSynthesisDraft(left = {}, right = {}) {
     handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
-    greetingStyle: s(b.greetingStyle || a.greetingStyle),
-    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
   };
 }
 
@@ -565,8 +554,6 @@ function mergePolishedDraft(left = {}, right = {}) {
     handoffSummary: s(b.handoffSummary || a.handoffSummary),
     languages: arr(b.languages).length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
-    greetingStyle: s(b.greetingStyle || a.greetingStyle),
-    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
     professionalizedAt: b.professionalizedAt || a.professionalizedAt || null,
   });
 }
@@ -627,8 +614,6 @@ export function mergeSetupAssistantCore(left = {}, right = {}) {
     progress: mergeProgress(a.progress, b.progress),
     languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
     tone: s(b.tone || a.tone),
-    greetingStyle: s(b.greetingStyle || a.greetingStyle),
-    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
     silentSynthesis: mergeSilentSynthesis(
       a.silentSynthesis,
       obj(

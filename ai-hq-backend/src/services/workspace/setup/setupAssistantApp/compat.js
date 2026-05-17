@@ -79,7 +79,7 @@ function pickLikelyAddress(items = []) {
   return "";
 }
 
-function summarizeGreetingPolicy(behavior = {}) {
+) {
   const policy = obj(behavior.greetingPolicy);
   const platformDefaults = obj(behavior.platformDefaults);
 
@@ -92,7 +92,7 @@ function summarizeGreetingPolicy(behavior = {}) {
     .join(" • ");
 }
 
-function summarizeClosingPolicy(behavior = {}) {
+) {
   const policy = obj(behavior.closingPolicy);
   const platformDefaults = obj(behavior.platformDefaults);
 
@@ -106,7 +106,7 @@ function summarizeClosingPolicy(behavior = {}) {
     .join(" • ");
 }
 
-function summarizeTonePolicy(behavior = {}) {
+) {
   const policy = obj(behavior.tonePolicy);
   const platformDefaults = obj(behavior.platformDefaults);
 
@@ -121,7 +121,7 @@ function summarizeTonePolicy(behavior = {}) {
     .join(" • ");
 }
 
-function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
+) {
   const safePolicy = obj(policy);
 
   if (policyKey === "pricing") {
@@ -187,9 +187,6 @@ function buildCompatDraftView(assistant = {}) {
   const sourceSignals = obj(assistant.sourceSignals);
   const recommendation = obj(assistant.recommendation);
   const confidence = obj(assistant.confidence);
-  const aiBehavior = obj(assistant.aiBehavior);
-  const assistantBehaviorDraft = obj(reviewDraft.assistantBehaviorDraft);
-
   const contactRoutes = uniqueStrings(
     [
       ...arr(userDraft.contactRoutes),
@@ -278,53 +275,7 @@ function buildCompatDraftView(assistant = {}) {
 
   const reasoningSummary = uniqueStrings(arr(recommendation.notes), 12).join(" ");
 
-  const greetingBehaviorSummary = firstText(
-    userDraft.greetingBehaviorSummary,
-    reviewDraft.greetingBehaviorSummary,
-    summarizeGreetingPolicy(assistantBehaviorDraft)
-  );
 
-  const closingBehaviorSummary = firstText(
-    userDraft.closingBehaviorSummary,
-    reviewDraft.closingBehaviorSummary,
-    summarizeClosingPolicy(assistantBehaviorDraft)
-  );
-
-  const toneBehaviorSummary = firstText(
-    userDraft.toneBehaviorSummary,
-    reviewDraft.toneBehaviorSummary,
-    summarizeTonePolicy(assistantBehaviorDraft)
-  );
-
-  const pricingBehaviorSummary = firstText(
-    userDraft.pricingBehaviorSummary,
-    reviewDraft.pricingBehaviorSummary,
-    summarizeBehaviorPolicy("pricing", obj(assistantBehaviorDraft.pricingPolicy))
-  );
-
-  const locationBehaviorSummary = firstText(
-    userDraft.locationBehaviorSummary,
-    reviewDraft.locationBehaviorSummary,
-    summarizeBehaviorPolicy("location", obj(assistantBehaviorDraft.locationPolicy))
-  );
-
-  const bookingBehaviorSummary = firstText(
-    userDraft.bookingBehaviorSummary,
-    reviewDraft.bookingBehaviorSummary,
-    summarizeBehaviorPolicy("booking", obj(assistantBehaviorDraft.bookingPolicy))
-  );
-
-  const contactBehaviorSummary = firstText(
-    userDraft.contactBehaviorSummary,
-    reviewDraft.contactBehaviorSummary,
-    summarizeBehaviorPolicy("contact", obj(assistantBehaviorDraft.contactPolicy))
-  );
-
-  const handoffBehaviorSummary = firstText(
-    userDraft.handoffBehaviorSummary,
-    reviewDraft.handoffBehaviorSummary,
-    summarizeBehaviorPolicy("handoff", obj(assistantBehaviorDraft.handoffPolicy))
-  );
 
   return {
     businessName,
@@ -338,25 +289,6 @@ function buildCompatDraftView(assistant = {}) {
     primaryEmail,
     primaryAddress,
     languages,
-    tone: firstText(userDraft.tone, reviewDraft.tone, aiBehavior.tone),
-    greetingStyle: firstText(
-      userDraft.greetingStyle,
-      reviewDraft.greetingStyle,
-      aiBehavior.greetingStyle
-    ),
-    afterHoursBehavior: firstText(
-      userDraft.afterHoursBehavior,
-      reviewDraft.afterHoursBehavior,
-      aiBehavior.afterHoursBehavior
-    ),
-    greetingBehaviorSummary,
-    closingBehaviorSummary,
-    toneBehaviorSummary,
-    pricingBehaviorSummary,
-    locationBehaviorSummary,
-    bookingBehaviorSummary,
-    contactBehaviorSummary,
-    handoffBehaviorSummary,
     reasoningSummary,
     unclear: arr(confidence.unclear),
   };
@@ -418,19 +350,6 @@ export function buildAssistantCompatBusinessFacts(assistant = {}) {
     websiteUrl: s(view.websiteUrl),
     hours: uniqueStrings(view.hours, 24),
     languages: uniqueStrings(view.languages, 12),
-
-    tone: s(view.tone),
-    greetingStyle: s(view.greetingStyle),
-    afterHoursBehavior: s(view.afterHoursBehavior),
-
-    greetingBehaviorSummary: s(view.greetingBehaviorSummary),
-    closingBehaviorSummary: s(view.closingBehaviorSummary),
-    toneBehaviorSummary: s(view.toneBehaviorSummary),
-    pricingBehaviorSummary: s(view.pricingBehaviorSummary),
-    locationBehaviorSummary: s(view.locationBehaviorSummary),
-    bookingBehaviorSummary: s(view.bookingBehaviorSummary),
-    contactBehaviorSummary: s(view.contactBehaviorSummary),
-    handoffBehaviorSummary: s(view.handoffBehaviorSummary),
 
     faqQuestions: [],
     reasoningSummary: s(view.reasoningSummary),
