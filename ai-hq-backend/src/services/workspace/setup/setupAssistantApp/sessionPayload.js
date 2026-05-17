@@ -1217,7 +1217,88 @@ function buildSetupReviewRoomActions({
   };
 }
 
-export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
+function buildSetupReviewRoomIssues({
+  lifecycleState = {},
+  assistant = {},
+  missingSections = [],
+  sections = [],
+} = {}) {
+  const sectionByKey = Object.fromEntries(
+    arr(sections).map((section) => [s(section.key), section])
+  );
+
+  const missingIssues = arr(missingSections).map((sectionKey) => {
+    const section = obj(sectionByKey[sectionKey]);
+
+    return compactDraftObject({
+      id: `missing_${s(sectionKey)}`,
+      type: "missing_required_fact",
+      severity: "blocking",
+      section: s(sectionKey),
+      label: s(section.label || sectionKey),
+      message: `${s(section.label || sectionKey)} is required before approval.`,
+      action: s(section.action || "review_section"),
+    });
+  });
+
+  const conflictIssues = arr(obj(assistant.confidence).contradictions).map(
+    (message, index) =>
+      compactDraftObject({
+        id: `conflict_${index + 1}`,
+        type: "source_conflict",
+        severity: "blocking",
+        section: "sources",
+        label: "Source conflict",
+        message: s(message),
+        action: "resolve_conflicts",
+      })
+  );
+
+  const lifecycleConflictCount = Number(lifecycleState.conflictCount || 0) || 0;
+  const syntheticConflict =
+    lifecycleConflictCount > 0 && conflictIssues.length === 0
+      ? [
+          {
+            id: "conflict_1",
+            type: "source_conflict",
+            severity: "blocking",
+            section: "sources",
+            label: "Source conflict",
+            message: "Review conflicting setup evidence before approval.",
+            action: "resolve_conflicts",
+          },
+        ]
+      : [];
+
+  return [...conflictIssues, ...syntheticConflict, ...missingIssues];
+}
+
+function buildSetupReviewRoomIssueSummary(issues = []) {
+  const allIssues = arr(issues);
+  const missingCount = allIssues.filter(
+    (issue) => issue.type === "missing_required_fact"
+  ).length;
+  const conflictCount = allIssues.filter(
+    (issue) => issue.type === "source_conflict"
+  ).length;
+  const blockingCount = allIssues.filter(
+    (issue) => issue.severity === "blocking"
+  ).length;
+
+  return {
+    missingCount,
+    conflictCount,
+    blockingCount,
+    hasBlockingIssues: blockingCount > 0,
+    highestSeverity: blockingCount > 0 ? "blocking" : "none",
+  };
+}
+
+export function buildSetupReviewRoom({
+  setup = {},
+  lifecycleState = {},
+  assistant = {},
+} = {}) {
   const profile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
   const handoff = obj(setup.handoffRules);
@@ -1318,6 +1399,12 @@ export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
   const missingSections = sections
     .filter((section) => section.required !== false && section.status === "missing")
     .map((section) => section.key);
+  const issues = buildSetupReviewRoomIssues({
+    lifecycleState,
+    assistant,
+    missingSections,
+    sections,
+  });
 
   return {
     version: 1,
@@ -1334,6 +1421,8 @@ export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
     }),
     requiredSections,
     missingSections,
+    issues,
+    issueSummary: buildSetupReviewRoomIssueSummary(issues),
     actions: buildSetupReviewRoomActions({
       lifecycleState,
       missingSections,
@@ -1392,7 +1481,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     silentSynthesis: silent,
     approvalBlockers,
   });
-  const reviewRoom = buildSetupReviewRoom({ setup, lifecycleState });
+  const reviewRoom = buildSetupReviewRoom({ setup, lifecycleState, assistant });
   const userFacingDraft = buildUserFacingDraftPreview(setup, readyForApproval);
   const internalDraft = buildInternalDraftPreview(setup);
   const sourceStrategy = buildSetupSourceStrategy(setup);

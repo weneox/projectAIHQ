@@ -479,3 +479,81 @@ test("setup review room exposes action model for approval and edits", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes missing and conflict issues", () => {
+  const incompletePayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "services",
+      setupAssistant: buildDraft({
+        languages: ["en"],
+        businessProfile: {
+          companyName: "Only Name",
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+        confidence: {
+          strong: [],
+          unclear: ["services_missing"],
+          contradictions: [],
+        },
+      }),
+    })
+  );
+
+  const incompleteRoom = incompletePayload.setup.reviewRoom;
+
+  assert.equal(incompleteRoom.issueSummary.hasBlockingIssues, true);
+  assert.ok(incompleteRoom.issueSummary.missingCount > 0);
+  assert.equal(incompleteRoom.issueSummary.conflictCount, 0);
+  assert.ok(
+    incompleteRoom.issues.some(
+      (issue) =>
+        issue.type === "missing_required_fact" &&
+        issue.severity === "blocking" &&
+        issue.section === "services"
+    )
+  );
+
+  const conflictPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+        confidence: {
+          strong: ["business_name_present"],
+          unclear: [],
+          contradictions: ["Website says Old Clinic, owner says New Clinic."],
+        },
+      }),
+    })
+  );
+
+  const conflictRoom = conflictPayload.setup.reviewRoom;
+
+  assert.equal(conflictPayload.setup.lifecycleState.status, "conflict_needs_review");
+  assert.equal(conflictRoom.issueSummary.conflictCount, 1);
+  assert.equal(conflictRoom.issueSummary.hasBlockingIssues, true);
+  assert.ok(
+    conflictRoom.issues.some(
+      (issue) =>
+        issue.type === "source_conflict" &&
+        issue.action === "resolve_conflicts" &&
+        /Old Clinic/.test(issue.message)
+    )
+  );
+
+  assert.doesNotMatch(
+    JSON.stringify({
+      incompleteRoom,
+      conflictRoom,
+    }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
