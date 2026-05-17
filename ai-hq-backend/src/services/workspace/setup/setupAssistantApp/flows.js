@@ -270,48 +270,6 @@ function buildHoursLines(hours = []) {
     .slice(0, 16);
 }
 
-function summarizeBehaviorPolicy(policyKey = "", policy = {}) {
-  const safePolicy = obj(policy);
-
-  if (policyKey === "pricing") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "location") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "booking") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "contact") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredChannel),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "handoff") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.requiresReason === true ? "requires reason" : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return "";
-}
 
 function buildStructuredDraftFromSetupAssistant(setup = {}) {
   const safeSetup = obj(setup);
@@ -323,11 +281,6 @@ function buildStructuredDraftFromSetupAssistant(setup = {}) {
     hours: arr(safeSetup.hours),
     pricingPosture: obj(safeSetup.pricingPosture),
     handoffRules: obj(safeSetup.handoffRules),
-    assistantBehaviorDraft: obj(safeSetup.assistantBehaviorDraft),
-    languages: arr(safeSetup.languages),
-    tone: s(safeSetup.tone),
-    greetingStyle: s(safeSetup.greetingStyle),
-    afterHoursBehavior: s(safeSetup.afterHoursBehavior),
   };
 }
 
@@ -338,8 +291,6 @@ function buildPolishedDraftFromSetupAssistant(setup = {}, responseTurn = {}) {
   const businessProfile = obj(safeSetup.businessProfile);
   const pricing = obj(safeSetup.pricingPosture);
   const handoff = obj(safeSetup.handoffRules);
-  const behavior = obj(safeSetup.assistantBehaviorDraft);
-
   const services = uniqueStrings(
     [
       ...arr(draftFromBrain.coreServices),
@@ -384,36 +335,9 @@ function buildPolishedDraftFromSetupAssistant(setup = {}, responseTurn = {}) {
         handoff.summary ||
         arr(handoff.triggers).join(", ")
     ),
-    pricingBehaviorSummary: s(
-      draftFromBrain.pricingBehavior ||
-        summarizeBehaviorPolicy("pricing", behavior.pricingPolicy)
-    ),
-    locationBehaviorSummary: s(
-      draftFromBrain.locationBehavior ||
-        summarizeBehaviorPolicy("location", behavior.locationPolicy)
-    ),
-    bookingBehaviorSummary: s(
-      draftFromBrain.bookingBehavior ||
-        summarizeBehaviorPolicy("booking", behavior.bookingPolicy)
-    ),
-    contactBehaviorSummary: s(
-      draftFromBrain.contactBehavior ||
-        summarizeBehaviorPolicy("contact", behavior.contactPolicy)
-    ),
-    handoffBehaviorSummary: s(
-      draftFromBrain.handoffBehavior ||
-        summarizeBehaviorPolicy("handoff", behavior.handoffPolicy)
-    ),
     languages: uniqueStrings(
       [...arr(draftFromBrain.languages), ...arr(safeSetup.languages)],
       8
-    ),
-    tone: s(draftFromBrain.tone || safeSetup.tone),
-    greetingStyle: s(
-      draftFromBrain.greetingStyle || safeSetup.greetingStyle
-    ),
-    afterHoursBehavior: s(
-      draftFromBrain.afterHoursBehavior || safeSetup.afterHoursBehavior
     ),
     professionalizedAt: nowIso(),
   };
