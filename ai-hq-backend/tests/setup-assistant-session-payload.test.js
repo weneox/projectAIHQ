@@ -830,3 +830,77 @@ test("response body keeps review room aligned with guarded approval state", () =
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes approval preview for publishable truth", () => {
+  const readyPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+        sourceMetadata: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          sourceLabels: ["Official website"],
+          evidenceSummary: ["Acme Clinic source evidence"],
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const preview = readyPayload.setup.reviewRoom.approvalPreview;
+
+  assert.equal(preview.version, 1);
+  assert.equal(preview.canApprove, true);
+  assert.equal(preview.action, "approve_and_publish_truth");
+  assert.equal(preview.draftAuthorityBeforeApproval, "not_runtime_authority");
+  assert.equal(preview.runtimeAuthorityAfterApproval, "approved_truth");
+  assert.equal(preview.blockedBy.length, 0);
+  assert.equal(preview.missingSections.length, 0);
+
+  const publishKeys = preview.publishes.map((item) => item.key);
+
+  assert.ok(publishKeys.includes("profile"));
+  assert.ok(publishKeys.includes("services"));
+  assert.ok(publishKeys.includes("contacts"));
+  assert.ok(publishKeys.includes("pricing"));
+  assert.ok(publishKeys.includes("sources"));
+  assert.ok(preview.publishCount > 0);
+
+  assert.ok(preview.excludedFromTruth.includes("assistant_style_profile"));
+  assert.ok(preview.excludedFromTruth.includes("raw_source_evidence"));
+  assert.ok(preview.excludedFromTruth.includes("transient_chat_turns"));
+
+  const blockedPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "services",
+      setupAssistant: buildDraft({
+        languages: ["en"],
+        businessProfile: {
+          companyName: "Only Name",
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const blockedPreview = blockedPayload.setup.reviewRoom.approvalPreview;
+
+  assert.equal(blockedPreview.canApprove, false);
+  assert.equal(blockedPreview.action, "blocked");
+  assert.ok(blockedPreview.blockedBy.length > 0);
+  assert.ok(blockedPreview.missingSections.length > 0);
+  assert.equal(blockedPreview.runtimeAuthorityAfterApproval, "approved_truth");
+
+  assert.doesNotMatch(
+    JSON.stringify({ preview, blockedPreview }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});

@@ -1388,6 +1388,116 @@ function buildSetupReviewRoomIntake({ setup = {}, lifecycleState = {} } = {}) {
   };
 }
 
+function buildSetupReviewRoomApprovalPreview({
+  setup = {},
+  lifecycleState = {},
+  missingSections = [],
+  issues = [],
+} = {}) {
+  const draft = buildInternalDraftPreview(setup);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const canApprove = lifecycleState.canApprove === true;
+  const blockers = arr(issues)
+    .filter((issue) => issue.severity === "blocking")
+    .map((issue) =>
+      compactDraftObject({
+        id: s(issue.id),
+        type: s(issue.type),
+        section: s(issue.section),
+        message: s(issue.message),
+      })
+    );
+
+  const publishableSections = [
+    s(draft.businessName) || s(draft.businessDescription)
+      ? {
+          key: "profile",
+          label: "Business profile",
+          summary: [s(draft.businessName), s(draft.businessDescription)]
+            .filter(Boolean)
+            .join(" — "),
+        }
+      : null,
+    arr(draft.coreServices).length
+      ? {
+          key: "services",
+          label: "Services",
+          summary: arr(draft.coreServices).join(", "),
+        }
+      : null,
+    arr(draft.contactRoutes).length
+      ? {
+          key: "contacts",
+          label: "Contacts",
+          summary: arr(draft.contactRoutes).join(", "),
+        }
+      : null,
+    arr(draft.workingHoursLines).length
+      ? {
+          key: "hours",
+          label: "Hours and availability",
+          summary: arr(draft.workingHoursLines).join(" • "),
+        }
+      : null,
+    s(draft.pricingSummary)
+      ? {
+          key: "pricing",
+          label: "Pricing posture",
+          summary: s(draft.pricingSummary),
+        }
+      : null,
+    s(draft.handoffSummary)
+      ? {
+          key: "handoff",
+          label: "Human handoff",
+          summary: s(draft.handoffSummary),
+        }
+      : null,
+    arr(draft.languages).length
+      ? {
+          key: "languages",
+          label: "Languages",
+          summary: arr(draft.languages).join(", "),
+        }
+      : null,
+    s(sourceMetadata.primarySourceUrl) || arr(sourceMetadata.evidenceSummary).length
+      ? {
+          key: "sources",
+          label: "Sources",
+          summary:
+            s(sourceMetadata.primarySourceUrl) ||
+            uniqueStrings(sourceMetadata.evidenceSummary, 2).join(" • "),
+        }
+      : null,
+  ].filter(Boolean);
+
+  return {
+    version: 1,
+    canApprove,
+    action: canApprove ? "approve_and_publish_truth" : "blocked",
+    title: canApprove
+      ? "Ready to publish approved truth"
+      : "Approval is blocked",
+    draftAuthorityBeforeApproval: "not_runtime_authority",
+    runtimeAuthorityAfterApproval: "approved_truth",
+    publishes: publishableSections,
+    publishCount: publishableSections.length,
+    blockedBy: canApprove ? [] : blockers,
+    missingSections: canApprove ? [] : arr(missingSections),
+    excludedFromTruth: [
+      "assistant_style_profile",
+      "raw_source_evidence",
+      "unapproved_draft_notes",
+      "transient_chat_turns",
+    ],
+    notes: [
+      "Approved truth becomes the only runtime authority for customer-facing answers.",
+      "Assistant style can change delivery, but it cannot change approved facts.",
+      "Raw evidence remains review context, not direct runtime authority.",
+    ],
+  };
+}
+
 function buildSetupReviewRoomActions({
   lifecycleState = {},
   missingSections = [],
@@ -1670,6 +1780,12 @@ export function buildSetupReviewRoom({
     missingSections,
     issues,
     issueSummary: buildSetupReviewRoomIssueSummary(issues),
+    approvalPreview: buildSetupReviewRoomApprovalPreview({
+      setup,
+      lifecycleState,
+      missingSections,
+      issues,
+    }),
     evidence: buildSetupReviewRoomEvidence({
       setup,
       assistant,
