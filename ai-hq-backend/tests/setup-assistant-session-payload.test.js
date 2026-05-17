@@ -284,3 +284,67 @@ test("session payload exposes optional assistant style separate from truth", () 
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("session payload exposes setup lifecycle state model", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const state = payload.setup.lifecycleState;
+
+  assert.equal(state.version, 1);
+  assert.equal(state.status, "draft_ready");
+  assert.equal(payload.setup.status, "draft_ready");
+  assert.equal(payload.setup.review.status, "draft_ready");
+  assert.equal(state.primaryExperience, "review_room");
+  assert.equal(state.businessTruthRequired, true);
+  assert.equal(state.runtimeAuthority, "approved_truth");
+  assert.equal(state.draftAuthority, "not_runtime_authority");
+  assert.equal(state.assistantStyleBlocking, false);
+  assert.equal(state.hasDraft, true);
+  assert.equal(state.readyForApproval, false);
+  assert.equal(state.canApprove, false);
+  assert.equal(state.needsReview, true);
+  assert.equal(state.recommendedNextAction, "review_business_draft");
+
+  assert.doesNotMatch(
+    JSON.stringify(state),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
+
+test("ready setup lifecycle promotes approval action without making draft runtime authority", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const state = payload.setup.lifecycleState;
+
+  assert.equal(state.status, "ready_for_approval");
+  assert.equal(state.readyForApproval, true);
+  assert.equal(state.canApprove, true);
+  assert.equal(state.needsReview, true);
+  assert.equal(state.runtimeAuthority, "approved_truth");
+  assert.equal(state.draftAuthority, "not_runtime_authority");
+  assert.equal(state.recommendedNextAction, "approve_and_publish_truth");
+  assert.equal(payload.setup.review.lifecycleState.status, "ready_for_approval");
+});
