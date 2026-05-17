@@ -792,12 +792,6 @@ function buildTruthVersionRequiredError({
   return err;
 }
 
-function extractBehaviorProjection(draft = {}) {
-  return compactObject(
-    obj(draft?.businessProfile?.nicheBehavior || draft?.businessProfile?.niche_behavior)
-  );
-}
-
 async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
   const rawSessionId = s(session?.id);
   const tenantId = s(actor?.tenantId);
@@ -1320,8 +1314,6 @@ export async function projectSetupReviewDraftToCanonical(
 
   const businessProfile = buildBusinessProfileProjection(draft, sourceInfo);
   const capabilities = buildCapabilitiesProjection(draft);
-  const behavior = extractBehaviorProjection(draft);
-
   let projectedProfile = false;
   let projectedCapabilities = false;
   let savedProfile = currentProfile;
@@ -1365,7 +1357,6 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
         finalizeImpact: impactSummary,
         approvalPolicy,
       },
@@ -1398,7 +1389,6 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
         finalizeImpact: impactSummary,
         approvalPolicy,
       },
