@@ -1,3 +1,4 @@
+import { normalizeSetupReviewRoom } from "../lib/setupReviewRoom.js";
 import { apiGet, apiPatch, apiPost, apiPut } from "./client.js";
 
 const SETUP_STATE_PATH = "/api/setup/status";
@@ -123,20 +124,10 @@ function normalizeSetupDraftPayload(value = {}) {
     handoffRules: obj(source.handoffRules),
     sourceMetadata: obj(source.sourceMetadata),
 
-    assistantBehaviorDraft: obj(
-      source.assistantBehaviorDraft ||
-        source.assistantBehavior ||
-        source.assistant_behavior_draft ||
-        source.assistant_behavior
-    ),
-
     assistantState: obj(source.assistantState),
     progress: obj(source.progress),
 
     languages: arr(source.languages),
-    tone: s(source.tone),
-    greetingStyle: s(source.greetingStyle),
-    afterHoursBehavior: s(source.afterHoursBehavior),
 
     version: toNumber(source.version, 0),
     updatedAt: source.updatedAt || null,
@@ -169,6 +160,10 @@ function normalizeSetupPayload(value = {}) {
     namespace: s(source.namespace),
     summary: obj(source.summary),
     websitePrefill: obj(source.websitePrefill),
+    productModel: obj(source.productModel),
+    lifecycleState: obj(source.lifecycleState),
+    assistantStyleProfile: obj(source.assistantStyleProfile),
+    reviewRoom: normalizeSetupReviewRoom(source.reviewRoom),
     review: normalizeSetupReviewPayload(source.review),
     draft: normalizeSetupDraftPayload(source.draft),
     assistant: normalizeAssistantPayload(source.assistant),
@@ -366,3 +361,8 @@ export function finalizeCurrentSetupReview(payload = {}) {
     timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
   });
 }
+
+export const __test__ = {
+  normalizeSetupPayload,
+  normalizeSetupAssistantResponse,
+};
