@@ -86,3 +86,12 @@ This must stay green. If it fails, a new active setup surface is using legacy be
 - removed
 - moved to an allowed guard/test fixture
 - converted to the canonical review-room / approved-truth model
+
+
+## Root lint gate
+
+The root lint gate also runs the strict setup surface audit.
+
+    npm run lint:all
+
+This means active legacy setup surfaces cannot silently return during normal repository lint checks.
