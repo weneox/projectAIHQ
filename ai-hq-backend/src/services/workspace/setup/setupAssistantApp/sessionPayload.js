@@ -979,6 +979,168 @@ function buildReviewRoomSection({
   });
 }
 
+function buildReviewRoomFact({
+  key = "",
+  label = "",
+  value = "",
+  kind = "text",
+} = {}) {
+  const safeValue = s(value);
+  if (!safeValue) return null;
+
+  return compactDraftObject({
+    key,
+    label,
+    value: safeValue,
+    kind,
+  });
+}
+
+function buildSetupReviewRoomSectionDetails({
+  setup = {},
+  sections = [],
+  hasSourceEvidence = false,
+} = {}) {
+  const profile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const sectionByKey = Object.fromEntries(
+    arr(sections).map((section) => [s(section.key), section])
+  );
+
+  const detail = ({
+    key = "",
+    title = "",
+    facts = [],
+    items = [],
+    emptyState = "",
+  } = {}) => {
+    const section = obj(sectionByKey[key]);
+
+    return compactDraftObject({
+      key,
+      title,
+      status: s(section.status || "missing"),
+      action: s(section.action || "review"),
+      sourceBacked: section.sourceBacked === true,
+      facts: arr(facts).filter(Boolean),
+      items: arr(items).map((item) => s(item)).filter(Boolean).slice(0, 40),
+      emptyState,
+    });
+  };
+
+  return [
+    detail({
+      key: "profile",
+      title: "Business profile",
+      facts: [
+        buildReviewRoomFact({
+          key: "companyName",
+          label: "Business name",
+          value: profile.companyName,
+        }),
+        buildReviewRoomFact({
+          key: "description",
+          label: "Description",
+          value: profile.description,
+        }),
+        buildReviewRoomFact({
+          key: "websiteUrl",
+          label: "Website",
+          value: profile.websiteUrl,
+          kind: "url",
+        }),
+      ],
+      emptyState: "Add the business name and a short description.",
+    }),
+    detail({
+      key: "services",
+      title: "Services",
+      items: arr(setup.services).map((item) =>
+        s(item?.title || item?.name || item?.label)
+      ),
+      emptyState: "Add the services this business offers.",
+    }),
+    detail({
+      key: "contacts",
+      title: "Contacts",
+      items: arr(setup.contacts).map((item) =>
+        [s(item?.label), s(item?.value || item?.type)]
+          .filter(Boolean)
+          .join(": ")
+      ),
+      emptyState: "Add public contact routes such as phone, WhatsApp, email, or address.",
+    }),
+    detail({
+      key: "hours",
+      title: "Hours and availability",
+      items: formatSetupAssistantHoursForCanonical(setup.hours),
+      emptyState: "Add working hours or availability posture.",
+    }),
+    detail({
+      key: "pricing",
+      title: "Pricing posture",
+      facts: [
+        buildReviewRoomFact({
+          key: "publicSummary",
+          label: "Public summary",
+          value: pricing.publicSummary || pricing.pricingNotes,
+        }),
+        buildReviewRoomFact({
+          key: "currency",
+          label: "Currency",
+          value: pricing.currency,
+        }),
+      ],
+      emptyState: "Add what AI may safely say about pricing.",
+    }),
+    detail({
+      key: "handoff",
+      title: "Human handoff",
+      facts: [
+        buildReviewRoomFact({
+          key: "summary",
+          label: "Summary",
+          value: handoff.summary,
+        }),
+      ],
+      items: arr(handoff.triggers),
+      emptyState: "Add when AI should route the customer to a human.",
+    }),
+    detail({
+      key: "languages",
+      title: "Languages",
+      items: arr(setup.languages),
+      emptyState: "Add the languages the assistant should support.",
+    }),
+    detail({
+      key: "sources",
+      title: "Sources",
+      facts: [
+        buildReviewRoomFact({
+          key: "primarySourceType",
+          label: "Primary source type",
+          value: sourceMetadata.primarySourceType,
+        }),
+        buildReviewRoomFact({
+          key: "primarySourceUrl",
+          label: "Primary source URL",
+          value: sourceMetadata.primarySourceUrl,
+          kind: "url",
+        }),
+      ],
+      items: [
+        ...arr(sourceMetadata.sourceLabels),
+        ...arr(sourceMetadata.evidenceSummary),
+      ],
+      emptyState: hasSourceEvidence
+        ? ""
+        : "Add a website, document, or manual brief as evidence.",
+    }),
+  ];
+}
+
 export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
   const profile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
@@ -1082,6 +1244,11 @@ export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
     draftAuthority: "not_runtime_authority",
     runtimeAuthority: "approved_truth",
     sections,
+    sectionDetails: buildSetupReviewRoomSectionDetails({
+      setup,
+      sections,
+      hasSourceEvidence: Boolean(hasSourceEvidence),
+    }),
     requiredSections: sections
       .filter((section) => section.required !== false)
       .map((section) => section.key),
