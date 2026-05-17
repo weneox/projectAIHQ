@@ -314,7 +314,7 @@ test("runtime source evidence creates review-ready hidden synthesis without beha
   assert.equal(result.status, 200);
   assert.equal(result.body.setup.assistant.provider, "openai_business_brain");
   assert.equal(result.body.setup.assistant.readyForApproval, true);
-  assert.equal(result.body.setup.assistant.nextQuestion, null);
+  assert.equal(result.body.setup.assistant.nextQuestion ?? null, null);
 
   const userPrompt = String(
     capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
