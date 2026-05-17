@@ -1043,3 +1043,70 @@ test("off-topic brain response does not mutate setup draft", async (t) => {
   assert.doesNotMatch(serialized, /Should Not Be Saved|Fake Service|fake@example\.com|https:\/\/fake\.example/);
   assert.doesNotMatch(serialized, /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("unclear brain response does not mutate setup draft", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async () => {
+        callCount += 1;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "unclear",
+            targetStep: "company",
+            reason: "Not enough reliable business facts.",
+            companyName: "Should Not Mutate",
+            description: "Should not be saved.",
+            services: ["Ghost Service"],
+            contacts: ["ghost@example.com"],
+            pricingPosture: "Ghost pricing",
+            websiteUrl: "https://ghost.example",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      businessProfile: {
+        companyName: "Original Business",
+        description: "Original business description.",
+        websiteUrl: "https://original.example",
+      },
+      services: [{ title: "Original Service" }],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Tell me about the business.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "hmm maybe later not sure",
+  });
+
+  assert.equal(callCount, 1);
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.readyForApproval, false);
+  assert.deepEqual(result.acceptedPatch || {}, {});
+  assert.equal(result.draft.businessName, "Original Business");
+  assert.equal(result.draft.websiteUrl, "https://original.example");
+  assert.deepEqual(result.draft.coreServices, ["Original Service"]);
+
+  const serialized = JSON.stringify(result);
+  assert.doesNotMatch(serialized, /Should Not Mutate|Ghost Service|ghost@example\.com|https:\/\/ghost\.example/);
+  assert.doesNotMatch(serialized, /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
