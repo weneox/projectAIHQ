@@ -2,7 +2,6 @@ import { arr, compactDraftObject, mergeDraftState, obj, s } from "../draftShared
 import {
   parseHoursNote,
   parsePricingNote,
-  parseServicesNote,
   sanitizeStructuredHours,
 } from "../setupAssistantParser.js";
 import { normalizeStoredSetupAssistantPayload } from "./sessionPayload.js";
@@ -377,8 +376,11 @@ function buildServicePatchFromAcceptedValues(values = [], currentServices = []) 
     24
   );
 
-  if (!nextValues.length) return [];
-  return parseServicesNote(nextValues.join("; "), currentServices);
+  return sanitizeServices(
+    nextValues.map((title) => ({
+      title,
+    }))
+  );
 }
 
 function buildContactPatchFromAcceptedValues(values = [], currentContacts = []) {
