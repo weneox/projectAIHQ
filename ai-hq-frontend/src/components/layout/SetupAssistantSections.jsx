@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
+import SetupReviewRoomPreview from "../setup/SetupReviewRoomPreview.jsx";
+
 const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
 const TYPING_BUBBLE_DELAY_MS = 320;
 
