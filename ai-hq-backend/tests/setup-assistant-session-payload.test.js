@@ -416,3 +416,66 @@ test("session payload exposes setup review room sections", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes action model for approval and edits", () => {
+  const readyPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const readyActions = readyPayload.setup.reviewRoom.actions;
+
+  assert.equal(readyActions.version, 1);
+  assert.equal(readyActions.primary.id, "approve_and_publish_truth");
+  assert.equal(readyActions.primary.intent, "finalize_review");
+  assert.equal(readyActions.primary.enabled, true);
+  assert.equal(readyActions.approval.enabled, true);
+  assert.equal(readyActions.approval.blockedReason, "");
+  assert.equal(readyActions.approval.runtimeAuthorityAfterApproval, "approved_truth");
+
+  assert.ok(
+    readyActions.secondary.some(
+      (action) =>
+        action.id === "customize_assistant_style" &&
+        action.setupBlocking === false
+    )
+  );
+
+  const incompletePayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "services",
+      setupAssistant: buildDraft({
+        languages: ["en"],
+        businessProfile: {
+          companyName: "Only Name",
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const incompleteActions = incompletePayload.setup.reviewRoom.actions;
+
+  assert.equal(incompleteActions.primary.id, "answer_missing_required_facts");
+  assert.equal(incompleteActions.primary.intent, "answer_missing_facts");
+  assert.equal(incompleteActions.approval.enabled, false);
+  assert.equal(incompleteActions.approval.blockedReason, "missing_required_sections");
+  assert.ok(incompleteActions.approval.missingSections.length > 0);
+
+  assert.doesNotMatch(
+    JSON.stringify({ readyActions, incompleteActions }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
