@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 
 const roots = [
@@ -35,6 +35,31 @@ const legacyTokens = [
   "Questionnaire",
 ];
 
+const allowedLegacyReferencePaths = [
+  "ai-hq-backend/tests/setup-legacy-token-guard.test.js",
+  "ai-hq-backend/tests/setup-assistant-session-payload.test.js",
+  "ai-hq-backend/tests/setup-session-payload-business-only.test.js",
+  "ai-hq-backend/tests/setup-projection-business-only.test.js",
+  "ai-hq-backend/tests/setup-assistant-sanitize-business-only.test.js",
+  "ai-hq-frontend/src/lib/setupReviewRoom.js",
+  "ai-hq-frontend/src/test/lib/setupReviewRoom.test.js",
+];
+
+function isTestFile(file = "") {
+  return file.includes("/tests/") || file.includes("/src/test/");
+}
+
+function isAllowedLegacyReference(file = "") {
+  return allowedLegacyReferencePaths.includes(file);
+}
+
+function classifySetupSurface(file = "", legacyHits = []) {
+  if (!legacyHits.length) return "canonical";
+  if (isAllowedLegacyReference(file)) return "allowed_legacy_guard";
+  if (isTestFile(file)) return "legacy_test_fixture";
+  return "active_legacy_candidate";
+}
+
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
 
@@ -64,6 +89,7 @@ const matched = files
 
     return {
       file,
+      className: classifySetupSurface(file, legacyHits),
       hasLegacyToken: legacyHits.length > 0,
       legacyHits,
     };
@@ -75,7 +101,15 @@ console.log("AIHQ setup surface ownership audit");
 console.log("");
 
 for (const item of matched) {
-  const marker = item.hasLegacyToken ? "LEGACY?" : "setup";
+  const marker =
+    item.className === "active_legacy_candidate"
+      ? "ACTIVE_LEGACY?"
+      : item.className === "legacy_test_fixture"
+        ? "legacy_test"
+        : item.className === "allowed_legacy_guard"
+          ? "allowed_guard"
+          : "setup";
+
   console.log(`${marker} ${item.file}`);
 
   if (item.legacyHits.length) {
@@ -83,6 +117,24 @@ for (const item of matched) {
   }
 }
 
+const activeLegacy = matched.filter(
+  (item) => item.className === "active_legacy_candidate"
+);
+const legacyTests = matched.filter((item) => item.className === "legacy_test_fixture");
+const allowedGuards = matched.filter((item) => item.className === "allowed_legacy_guard");
+
 console.log("");
 console.log(`count=${matched.length}`);
 console.log(`legacyCandidates=${matched.filter((item) => item.hasLegacyToken).length}`);
+console.log(`activeLegacyCandidates=${activeLegacy.length}`);
+console.log(`legacyTestFixtures=${legacyTests.length}`);
+console.log(`allowedLegacyGuards=${allowedGuards.length}`);
+
+if (process.env.SETUP_SURFACE_AUDIT_STRICT === "1" && activeLegacy.length) {
+  console.error("");
+  console.error("Active legacy setup surfaces remain:");
+  for (const item of activeLegacy) {
+    console.error(`- ${item.file}: ${item.legacyHits.join(", ")}`);
+  }
+  process.exitCode = 1;
+}

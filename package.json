@@ -49,7 +49,8 @@
     "smoke:production": "node scripts/production-smoke.mjs",
     "lint:ui-contract": "node scripts/check-ui-contract.mjs",
     "test:aihq:setup-brain": "npm run test:setup-brain -w ai-hq-backend",
-    "audit:setup-surfaces": "node ./scripts/audit-setup-surfaces.mjs"
+    "audit:setup-surfaces": "node ./scripts/audit-setup-surfaces.mjs",
+    "audit:setup-surfaces:strict": "cross-env SETUP_SURFACE_AUDIT_STRICT=1 node ./scripts/audit-setup-surfaces.mjs"
   },
   "engines": {
     "node": ">=18"
