@@ -191,13 +191,15 @@ function splitList(value = "", limit = 24) {
 }
 
 function getTimelineTurns(review = {}) {
-  const direct = arr(review.timeline)
+  const safeReview = obj(review);
+
+  const direct = arr(safeReview.timeline)
     .map((item) => obj(item))
     .filter((item) => s(item.text || item.message));
 
   if (direct.length) return direct;
 
-  return arr(review.events)
+  return arr(safeReview.events)
     .map((event) => ({
       role: s(event.role),
       text: s(event.text || event.message),
