@@ -904,3 +904,60 @@ test("setup review room exposes approval preview for publishable truth", () => {
     /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
   );
 });
+
+
+test("setup review room exposes product header copy from lifecycle state", () => {
+  const readyPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const readyHeader = readyPayload.setup.reviewRoom.header;
+
+  assert.equal(readyHeader.version, 1);
+  assert.equal(readyHeader.status, "ready_for_approval");
+  assert.equal(readyHeader.statusLabel, "Ready for approval");
+  assert.equal(readyHeader.badgeTone, "success");
+  assert.match(readyHeader.title, /ready to approve/i);
+  assert.match(readyHeader.subtitle, /runtime authority/i);
+  assert.match(readyHeader.trustNote, /Draft data is not runtime authority/i);
+  assert.equal(readyHeader.nextAction, "approve_and_publish_truth");
+
+  const missingPayload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "services",
+      setupAssistant: buildDraft({
+        languages: ["en"],
+        businessProfile: {
+          companyName: "Only Name",
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const missingHeader = missingPayload.setup.reviewRoom.header;
+
+  assert.equal(missingHeader.status, "missing_required_facts");
+  assert.equal(missingHeader.statusLabel, "Missing facts");
+  assert.equal(missingHeader.badgeTone, "warning");
+  assert.ok(missingHeader.blockingCount > 0);
+  assert.match(missingHeader.primaryMessage, /required section/i);
+  assert.equal(missingHeader.nextAction, "answer_missing_required_facts");
+
+  assert.doesNotMatch(
+    JSON.stringify({ readyHeader, missingHeader }),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
