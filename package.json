@@ -39,7 +39,7 @@
     "test:frontend:stable:ci": "npm run test:stable:ci -w ai-hq-frontend",
     "test:backend:all": "npm run test -w shared-contracts && npm run test -w ai-hq-backend && npm run test -w meta-bot-backend && npm run test -w twilio-voice-backend",
     "validate:env": "npm run validate:env -w shared-contracts && npm run validate:env -w ai-hq-backend && npm run validate:env -w meta-bot-backend && npm run validate:env -w twilio-voice-backend && npm run validate:env -w ai-hq-frontend",
-    "lint:all": "npm run lint -w shared-contracts && npm run lint -w ai-hq-backend && npm run lint -w meta-bot-backend && npm run lint -w twilio-voice-backend && npm run lint -w ai-hq-frontend",
+    "lint:all": "npm run audit:setup-surfaces:strict && npm run lint -w shared-contracts && npm run lint -w ai-hq-backend && npm run lint -w meta-bot-backend && npm run lint -w twilio-voice-backend && npm run lint -w ai-hq-frontend",
     "test:all": "npm run test:frontend:stable && npm run test:backend:all",
     "build:all": "npm run build:shared-contracts && npm run build:ai-hq-backend && npm run build:meta-bot-backend && npm run build:twilio-voice-backend && npm run build:frontends",
     "ops:frontend:prod-smoke": "node scripts/frontend-prod-smoke.mjs",
