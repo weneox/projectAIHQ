@@ -1110,3 +1110,70 @@ test("unclear brain response does not mutate setup draft", async (t) => {
   assert.doesNotMatch(serialized, /Should Not Mutate|Ghost Service|ghost@example\.com|https:\/\/ghost\.example/);
   assert.doesNotMatch(serialized, /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
 });
+
+
+test("business action with empty accepted patch does not mutate setup draft", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let callCount = 0;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async () => {
+        callCount += 1;
+
+        return {
+          output_parsed: reasonerPayload({
+            action: "business_brief",
+            targetStep: "company",
+            reason: "Claims business brief but provides no usable business fields.",
+            companyName: "",
+            description: "",
+            services: [],
+            contacts: [],
+            hours: [],
+            pricingPosture: "",
+            humanHandoff: "",
+            websiteUrl: "",
+          }),
+        };
+      },
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      businessProfile: {
+        companyName: "Original Business",
+        description: "Original description.",
+        websiteUrl: "https://original.example",
+      },
+      services: [{ title: "Original Service" }],
+      progress: { currentQuestionKey: "company" },
+    }),
+    review: {
+      timeline: [
+        {
+          role: "assistant",
+          questionKey: "company",
+          text: "Tell me about the business.",
+        },
+      ],
+    },
+    sources: [],
+    latestStep: "company",
+    latestMessage: "It is a business, prepare it.",
+  });
+
+  assert.equal(callCount, 1);
+  assert.equal(result.provider, "openai_business_brain");
+  assert.equal(result.readyForApproval, false);
+  assert.deepEqual(result.acceptedPatch || {}, {});
+  assert.equal(result.draft.businessName, "Original Business");
+  assert.equal(result.draft.websiteUrl, "https://original.example");
+  assert.deepEqual(result.draft.coreServices, ["Original Service"]);
+  assert.match(JSON.stringify(result.rejectedInputs), /could not extract safe business facts/i);
+  assert.doesNotMatch(JSON.stringify(result), /assistantBehaviorDraft|pricingBehavior|bookingBehavior|greetingStyle/);
+});
