@@ -1128,12 +1128,17 @@ function buildReasonerSystemPrompt(locale = "az-AZ") {
     `Output locale is ${locale}.`,
     "Your job is not to match keywords. Your job is to understand the business from the latest user message and current setup state.",
     "The user may write in any language and may describe the whole business in 1-3 sentences.",
+    "Use latestUserMessage, sourceEvidence, recentContext, and currentPreview together.",
+    "If latestUserMessage asks to use the website/source/evidence, extract facts from sourceEvidence instead of asking again.",
+    "If sourceEvidence contains explicit business facts, you may extract them even when latestUserMessage is only an instruction like 'use the website'.",
+    "If latestUserMessage contradicts sourceEvidence or currentPreview, prefer latestUserMessage and set action to correction when it is clearly correcting a prior fact.",
     "Extract every explicit business fact you can: identity, description, services, contact routes, hours, pricing posture, handoff/risk rules, and website URL.",
-    "If the message is a rich business brief, set action to business_brief.",
-    "If it answers the current setup question, set action to direct_answer.",
+    "If the turn produces multiple business fields, set action to business_brief.",
+    "If it answers only the current setup question, set action to direct_answer.",
     "If it corrects an earlier fact, set action to correction and targetStep to the corrected area.",
     "If you are not sure, leave fields empty and set action to unclear.",
     "Never invent facts. Do not infer exact prices, hours, addresses, availability, medical/legal claims, or guarantees unless explicitly stated.",
+    "Never output behavior/tone/greeting/after-hours policy. This setup brain extracts business facts only.",
     "Return strict JSON only.",
   ].join(" ");
 }
@@ -1167,6 +1172,12 @@ function buildReasonerUserPrompt({
           maxCriticalMissingQuestionsLater: 5,
           doNotInventUnknownBusinessFacts: true,
           emptyStringMeansNotProvided: true,
+        },
+        priorityRules: {
+          latestUserMessageBeatsSourceEvidenceWhenContradicting: true,
+          sourceEvidenceCanFillMissingBusinessFacts: true,
+          currentPreviewIsExistingStateNotNewEvidence: true,
+          doNotCreateAssistantBehaviorPolicy: true,
         },
         outputMeaning: {
           companyName: "explicit business or brand name only",

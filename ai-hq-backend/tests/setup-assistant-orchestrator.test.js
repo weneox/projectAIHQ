@@ -482,3 +482,57 @@ test("golden source evidence produces complete hidden business draft", async (t)
   assert.equal(Object.prototype.hasOwnProperty.call(result, "assistantBehaviorDraft"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(result.acceptedPatch, "assistantBehaviorDraft"), false);
 });
+
+
+test("reasoner prompt encodes source priority and business-only rules", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let capturedRequest = null;
+
+  orchestratorTest.setCachedClient({
+    responses: {
+      create: async (request = {}) => {
+        capturedRequest = request;
+        return {
+          output_parsed: reasonerPayload({
+            action: "unclear",
+            targetStep: "company",
+            reason: "contract inspection only",
+          }),
+        };
+      },
+    },
+  });
+
+  await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "company" },
+    draft: buildDraft({
+      languages: ["en"],
+      progress: { currentQuestionKey: "company" },
+    }),
+    sources: [
+      {
+        sourceType: "website",
+        role: "primary",
+        label: "Official website",
+        sourceUrl: "https://contract.example",
+        text: "Contract Clinic is a clinic in Baku.",
+      },
+    ],
+    latestStep: "company",
+    latestMessage: "Use the website.",
+  });
+
+  const systemPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "system")?.content || ""
+  );
+  const userPrompt = String(
+    capturedRequest?.input?.find((item) => item?.role === "user")?.content || ""
+  );
+
+  assert.match(systemPrompt, /extract facts from sourceEvidence instead of asking again/i);
+  assert.match(systemPrompt, /Never output behavior\/tone\/greeting\/after-hours policy/i);
+  assert.match(userPrompt, /priorityRules/);
+  assert.match(userPrompt, /sourceEvidenceCanFillMissingBusinessFacts/);
+  assert.match(userPrompt, /doNotCreateAssistantBehaviorPolicy/);
+});
