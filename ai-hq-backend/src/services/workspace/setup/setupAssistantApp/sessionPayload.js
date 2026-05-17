@@ -959,6 +959,140 @@ export function buildSetupProductModel() {
   };
 }
 
+function buildReviewRoomSection({
+  key = "",
+  label = "",
+  status = "missing",
+  itemCount = 0,
+  sourceBacked = false,
+  required = true,
+  action = "review",
+} = {}) {
+  return compactDraftObject({
+    key,
+    label,
+    status,
+    required,
+    itemCount,
+    sourceBacked,
+    action,
+  });
+}
+
+export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
+  const profile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const stateStatus = s(lifecycleState.status);
+
+  const hasSourceEvidence =
+    s(sourceMetadata.primarySourceUrl) ||
+    arr(sourceMetadata.evidenceSummary).length > 0 ||
+    arr(sourceMetadata.sourceLabels).length > 0;
+
+  const sectionStatus = (complete) => {
+    if (stateStatus === "conflict_needs_review") return "needs_review";
+    return complete ? "complete" : "missing";
+  };
+
+  const sections = [
+    buildReviewRoomSection({
+      key: "profile",
+      label: "Business profile",
+      status: sectionStatus(Boolean(s(profile.companyName) && s(profile.description))),
+      itemCount: [profile.companyName, profile.description, profile.websiteUrl]
+        .map((item) => s(item))
+        .filter(Boolean).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_profile",
+    }),
+    buildReviewRoomSection({
+      key: "services",
+      label: "Services",
+      status: sectionStatus(arr(setup.services).length > 0),
+      itemCount: arr(setup.services).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_services",
+    }),
+    buildReviewRoomSection({
+      key: "contacts",
+      label: "Contacts",
+      status: sectionStatus(arr(setup.contacts).length > 0),
+      itemCount: arr(setup.contacts).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_contacts",
+    }),
+    buildReviewRoomSection({
+      key: "hours",
+      label: "Hours and availability",
+      status: sectionStatus(arr(setup.hours).length > 0),
+      itemCount: arr(setup.hours).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_hours",
+    }),
+    buildReviewRoomSection({
+      key: "pricing",
+      label: "Pricing posture",
+      status: sectionStatus(Boolean(s(pricing.publicSummary || pricing.pricingNotes))),
+      itemCount: s(pricing.publicSummary || pricing.pricingNotes) ? 1 : 0,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_pricing",
+    }),
+    buildReviewRoomSection({
+      key: "handoff",
+      label: "Human handoff",
+      status: sectionStatus(Boolean(s(handoff.summary) || arr(handoff.triggers).length > 0)),
+      itemCount: [handoff.summary, ...arr(handoff.triggers)]
+        .map((item) => s(item))
+        .filter(Boolean).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_handoff",
+    }),
+    buildReviewRoomSection({
+      key: "languages",
+      label: "Languages",
+      status: sectionStatus(arr(setup.languages).length > 0),
+      itemCount: arr(setup.languages).length,
+      sourceBacked: false,
+      action: "review_languages",
+    }),
+    buildReviewRoomSection({
+      key: "sources",
+      label: "Sources",
+      status: hasSourceEvidence ? "complete" : "missing",
+      required: false,
+      itemCount: [
+        sourceMetadata.primarySourceUrl,
+        ...arr(sourceMetadata.evidenceSummary),
+        ...arr(sourceMetadata.sourceLabels),
+      ]
+        .map((item) => s(item))
+        .filter(Boolean).length,
+      sourceBacked: Boolean(hasSourceEvidence),
+      action: "review_sources",
+    }),
+  ];
+
+  return {
+    version: 1,
+    primaryExperience: "review_room",
+    mainSurface: "business_truth_review",
+    chatRole: "input_method",
+    draftAuthority: "not_runtime_authority",
+    runtimeAuthority: "approved_truth",
+    sections,
+    requiredSections: sections
+      .filter((section) => section.required !== false)
+      .map((section) => section.key),
+    missingSections: sections
+      .filter((section) => section.required !== false && section.status === "missing")
+      .map((section) => section.key),
+    readyForApproval: lifecycleState.readyForApproval === true,
+    recommendedNextAction: s(lifecycleState.recommendedNextAction),
+  };
+}
+
 export function buildSetupAssistantSessionPayload(review = {}) {
   const session = obj(review.session);
   const draftRow = obj(review.draft);
@@ -1008,6 +1142,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     silentSynthesis: silent,
     approvalBlockers,
   });
+  const reviewRoom = buildSetupReviewRoom({ setup, lifecycleState });
   const userFacingDraft = buildUserFacingDraftPreview(setup, readyForApproval);
   const internalDraft = buildInternalDraftPreview(setup);
   const sourceStrategy = buildSetupSourceStrategy(setup);
@@ -1040,6 +1175,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     setup: {
       productModel: buildSetupProductModel(),
       lifecycleState,
+      reviewRoom,
       status: lifecycleState.status,
       draftOnly: true,
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,

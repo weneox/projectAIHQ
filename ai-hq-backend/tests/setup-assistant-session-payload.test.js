@@ -348,3 +348,71 @@ test("ready setup lifecycle promotes approval action without making draft runtim
   assert.equal(state.recommendedNextAction, "approve_and_publish_truth");
   assert.equal(payload.setup.review.lifecycleState.status, "ready_for_approval");
 });
+
+
+test("session payload exposes setup review room sections", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+        sourceMetadata: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          sourceLabels: ["Official website"],
+          evidenceSummary: ["Acme Clinic website evidence"],
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: false,
+        phase: "interview",
+      }),
+    })
+  );
+
+  const room = payload.setup.reviewRoom;
+
+  assert.equal(room.version, 1);
+  assert.equal(room.primaryExperience, "review_room");
+  assert.equal(room.mainSurface, "business_truth_review");
+  assert.equal(room.chatRole, "input_method");
+  assert.equal(room.draftAuthority, "not_runtime_authority");
+  assert.equal(room.runtimeAuthority, "approved_truth");
+
+  assert.deepEqual(
+    room.sections.map((section) => section.key),
+    [
+      "profile",
+      "services",
+      "contacts",
+      "hours",
+      "pricing",
+      "handoff",
+      "languages",
+      "sources",
+    ]
+  );
+
+  assert.ok(room.requiredSections.includes("profile"));
+  assert.ok(room.requiredSections.includes("services"));
+  assert.ok(room.requiredSections.includes("contacts"));
+  assert.equal(room.requiredSections.includes("sources"), false);
+
+  const byKey = Object.fromEntries(room.sections.map((section) => [section.key, section]));
+
+  assert.equal(byKey.profile.status, "complete");
+  assert.equal(byKey.services.status, "complete");
+  assert.equal(byKey.contacts.status, "complete");
+  assert.equal(byKey.pricing.status, "complete");
+  assert.equal(byKey.sources.status, "complete");
+  assert.equal(byKey.sources.required, false);
+  assert.equal(byKey.sources.sourceBacked, true);
+
+  assert.equal(room.readyForApproval, false);
+  assert.equal(room.recommendedNextAction, "review_business_draft");
+
+  assert.doesNotMatch(
+    JSON.stringify(room),
+    /assistantBehaviorDraft|pricingBehavior|locationBehavior|bookingBehavior|contactBehavior|handoffBehavior|greetingStyle|afterHoursBehavior|local_reasoning/
+  );
+});
