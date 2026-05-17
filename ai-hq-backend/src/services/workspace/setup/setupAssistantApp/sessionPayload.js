@@ -1141,6 +1141,82 @@ function buildSetupReviewRoomSectionDetails({
   ];
 }
 
+function buildSetupReviewRoomActions({
+  lifecycleState = {},
+  missingSections = [],
+} = {}) {
+  const status = s(lifecycleState.status);
+  const recommendedNextAction = s(lifecycleState.recommendedNextAction);
+  const canApprove = lifecycleState.canApprove === true;
+  const missing = arr(missingSections).map((item) => s(item)).filter(Boolean);
+
+  const primary = canApprove
+    ? {
+        id: "approve_and_publish_truth",
+        label: "Approve and make live",
+        intent: "finalize_review",
+        enabled: true,
+      }
+    : {
+        id: recommendedNextAction || "add_business_input",
+        label:
+          status === "not_started"
+            ? "Add business information"
+            : status === "collecting_inputs"
+              ? "Continue adding information"
+              : status === "missing_required_facts"
+                ? "Complete missing facts"
+                : status === "conflict_needs_review"
+                  ? "Resolve conflicts"
+                  : "Review business draft",
+        intent:
+          status === "conflict_needs_review"
+            ? "resolve_conflicts"
+            : status === "missing_required_facts"
+              ? "answer_missing_facts"
+              : "continue_setup",
+        enabled: true,
+      };
+
+  return {
+    version: 1,
+    primary,
+    secondary: [
+      {
+        id: "add_more_input",
+        label: "Add more business information",
+        intent: "add_input",
+        enabled: true,
+      },
+      {
+        id: "edit_review_sections",
+        label: "Edit review sections",
+        intent: "edit_sections",
+        enabled: true,
+      },
+      {
+        id: "customize_assistant_style",
+        label: "Customize assistant style",
+        intent: "customize_style",
+        enabled: true,
+        setupBlocking: false,
+      },
+    ],
+    approval: {
+      id: "approve_and_publish_truth",
+      label: "Approve and make live",
+      enabled: canApprove,
+      blockedReason: canApprove
+        ? ""
+        : missing.length
+          ? "missing_required_sections"
+          : "not_ready_for_approval",
+      missingSections: missing,
+      runtimeAuthorityAfterApproval: "approved_truth",
+    },
+  };
+}
+
 export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
   const profile = obj(setup.businessProfile);
   const pricing = obj(setup.pricingPosture);
@@ -1236,6 +1312,13 @@ export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
     }),
   ];
 
+  const requiredSections = sections
+    .filter((section) => section.required !== false)
+    .map((section) => section.key);
+  const missingSections = sections
+    .filter((section) => section.required !== false && section.status === "missing")
+    .map((section) => section.key);
+
   return {
     version: 1,
     primaryExperience: "review_room",
@@ -1249,12 +1332,12 @@ export function buildSetupReviewRoom({ setup = {}, lifecycleState = {} } = {}) {
       sections,
       hasSourceEvidence: Boolean(hasSourceEvidence),
     }),
-    requiredSections: sections
-      .filter((section) => section.required !== false)
-      .map((section) => section.key),
-    missingSections: sections
-      .filter((section) => section.required !== false && section.status === "missing")
-      .map((section) => section.key),
+    requiredSections,
+    missingSections,
+    actions: buildSetupReviewRoomActions({
+      lifecycleState,
+      missingSections,
+    }),
     readyForApproval: lifecycleState.readyForApproval === true,
     recommendedNextAction: s(lifecycleState.recommendedNextAction),
   };
