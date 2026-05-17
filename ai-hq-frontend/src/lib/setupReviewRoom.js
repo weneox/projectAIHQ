@@ -1,0 +1,192 @@
+﻿export function s(value, fallback = "") {
+  return String(value ?? fallback).trim() || fallback;
+}
+
+export function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+export function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+const FORBIDDEN_LEGACY_TOKENS = [
+  "assistantBehaviorDraft",
+  "pricingBehavior",
+  "locationBehavior",
+  "bookingBehavior",
+  "contactBehavior",
+  "handoffBehavior",
+  "greetingStyle",
+  "afterHoursBehavior",
+  "local_reasoning",
+];
+
+export function setupReviewRoomHasLegacyTokens(value = {}) {
+  const serialized = JSON.stringify(value || {});
+  return FORBIDDEN_LEGACY_TOKENS.some((token) => serialized.includes(token));
+}
+
+export function normalizeSetupReviewRoomHeader(reviewRoom = {}) {
+  const header = obj(obj(reviewRoom).header);
+
+  return {
+    status: s(header.status || "not_started"),
+    title: s(header.title || "Prepare your AI business truth"),
+    subtitle: s(
+      header.subtitle ||
+        "Add business information so AI can prepare a safe review draft."
+    ),
+    statusLabel: s(header.statusLabel || "Needs input"),
+    badgeTone: s(header.badgeTone || "neutral"),
+    primaryMessage: s(header.primaryMessage),
+    trustNote: s(
+      header.trustNote ||
+        "Draft data is not runtime authority. Only approved truth can power customer-facing AI."
+    ),
+    nextAction: s(header.nextAction || "add_business_input"),
+    blockingCount: Number(header.blockingCount || 0) || 0,
+  };
+}
+
+export function normalizeSetupReviewRoomSections(reviewRoom = {}) {
+  return arr(obj(reviewRoom).sections).map((section) => ({
+    key: s(section?.key),
+    label: s(section?.label || section?.key),
+    status: s(section?.status || "missing"),
+    required: section?.required !== false,
+    itemCount: Number(section?.itemCount || 0) || 0,
+    sourceBacked: section?.sourceBacked === true,
+    action: s(section?.action || "review"),
+  })).filter((section) => section.key);
+}
+
+export function normalizeSetupReviewRoomSectionDetails(reviewRoom = {}) {
+  return arr(obj(reviewRoom).sectionDetails).map((section) => ({
+    key: s(section?.key),
+    title: s(section?.title || section?.key),
+    status: s(section?.status || "missing"),
+    action: s(section?.action || "review"),
+    sourceBacked: section?.sourceBacked === true,
+    facts: arr(section?.facts).map((fact) => ({
+      key: s(fact?.key),
+      label: s(fact?.label || fact?.key),
+      value: s(fact?.value),
+      kind: s(fact?.kind || "text"),
+    })).filter((fact) => fact.key && fact.value),
+    items: arr(section?.items).map((item) => s(item)).filter(Boolean),
+    emptyState: s(section?.emptyState),
+  })).filter((section) => section.key);
+}
+
+export function normalizeSetupReviewRoomActions(reviewRoom = {}) {
+  const actions = obj(obj(reviewRoom).actions);
+  const primary = obj(actions.primary);
+  const approval = obj(actions.approval);
+
+  return {
+    primary: {
+      id: s(primary.id || "add_business_input"),
+      label: s(primary.label || "Add business information"),
+      intent: s(primary.intent || "continue_setup"),
+      enabled: primary.enabled !== false,
+    },
+    secondary: arr(actions.secondary).map((action) => ({
+      id: s(action?.id),
+      label: s(action?.label || action?.id),
+      intent: s(action?.intent),
+      enabled: action?.enabled !== false,
+      setupBlocking: action?.setupBlocking === true,
+    })).filter((action) => action.id),
+    approval: {
+      id: s(approval.id || "approve_and_publish_truth"),
+      label: s(approval.label || "Approve and make live"),
+      enabled: approval.enabled === true,
+      blockedReason: s(approval.blockedReason),
+      missingSections: arr(approval.missingSections).map((item) => s(item)).filter(Boolean),
+      runtimeAuthorityAfterApproval: s(
+        approval.runtimeAuthorityAfterApproval || "approved_truth"
+      ),
+    },
+  };
+}
+
+export function normalizeSetupReviewRoomIssues(reviewRoom = {}) {
+  return arr(obj(reviewRoom).issues).map((issue) => ({
+    id: s(issue?.id),
+    type: s(issue?.type),
+    severity: s(issue?.severity || "info"),
+    section: s(issue?.section),
+    label: s(issue?.label || issue?.type),
+    message: s(issue?.message),
+    action: s(issue?.action),
+  })).filter((issue) => issue.id && issue.message);
+}
+
+export function normalizeSetupReviewRoomRuntimeConsumers(reviewRoom = {}) {
+  const runtimeConsumers = obj(obj(reviewRoom).runtimeConsumers);
+
+  return {
+    authority: s(runtimeConsumers.authority || "approved_truth"),
+    blockedCount: Number(runtimeConsumers.blockedCount || 0) || 0,
+    readyAfterApprovalCount:
+      Number(runtimeConsumers.readyAfterApprovalCount || 0) || 0,
+    activeCount: Number(runtimeConsumers.activeCount || 0) || 0,
+    consumers: arr(runtimeConsumers.consumers).map((consumer) => ({
+      key: s(consumer?.key),
+      label: s(consumer?.label || consumer?.key),
+      description: s(consumer?.description),
+      currentState: s(consumer?.currentState || "blocked_pending_approved_truth"),
+      requiresApprovedTruth: consumer?.requiresApprovedTruth !== false,
+      runtimeAuthority: s(consumer?.runtimeAuthority || "approved_truth"),
+      draftAuthority: s(consumer?.draftAuthority || "not_runtime_authority"),
+    })).filter((consumer) => consumer.key),
+  };
+}
+
+export function normalizeSetupReviewRoomIntake(reviewRoom = {}) {
+  const intake = obj(obj(reviewRoom).intake);
+
+  return {
+    purpose: s(intake.purpose || "collect_business_truth_inputs"),
+    websiteIsInputNotSetupModel: intake.websiteIsInputNotSetupModel === true,
+    chatIsInputNotMainExperience: intake.chatIsInputNotMainExperience === true,
+    primaryExperience: s(intake.primaryExperience || "review_room"),
+    canAddMoreInput: intake.canAddMoreInput !== false,
+    canStillAddInputAfterReady: intake.canStillAddInputAfterReady === true,
+    options: arr(intake.options).map((option) => ({
+      id: s(option?.id),
+      label: s(option?.label || option?.id),
+      description: s(option?.description),
+      enabled: option?.enabled === true,
+      status: s(option?.status || "available"),
+      action: s(option?.action),
+      primary: option?.primary === true,
+      setupBlocking: option?.setupBlocking === true,
+    })).filter((option) => option.id),
+  };
+}
+
+export function normalizeSetupReviewRoom(reviewRoom = {}) {
+  const safeRoom = obj(reviewRoom);
+
+  return {
+    primaryExperience: s(safeRoom.primaryExperience || "review_room"),
+    mainSurface: s(safeRoom.mainSurface || "business_truth_review"),
+    chatRole: s(safeRoom.chatRole || "input_method"),
+    draftAuthority: s(safeRoom.draftAuthority || "not_runtime_authority"),
+    runtimeAuthority: s(safeRoom.runtimeAuthority || "approved_truth"),
+    readyForApproval: safeRoom.readyForApproval === true,
+    recommendedNextAction: s(safeRoom.recommendedNextAction),
+    hasLegacyTokens: setupReviewRoomHasLegacyTokens(safeRoom),
+    header: normalizeSetupReviewRoomHeader(safeRoom),
+    sections: normalizeSetupReviewRoomSections(safeRoom),
+    sectionDetails: normalizeSetupReviewRoomSectionDetails(safeRoom),
+    actions: normalizeSetupReviewRoomActions(safeRoom),
+    issues: normalizeSetupReviewRoomIssues(safeRoom),
+    runtimeConsumers: normalizeSetupReviewRoomRuntimeConsumers(safeRoom),
+    intake: normalizeSetupReviewRoomIntake(safeRoom),
+  };
+}
