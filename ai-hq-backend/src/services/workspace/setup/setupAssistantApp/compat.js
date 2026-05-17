@@ -79,107 +79,6 @@ function pickLikelyAddress(items = []) {
   return "";
 }
 
-) {
-  const policy = obj(behavior.greetingPolicy);
-  const platformDefaults = obj(behavior.platformDefaults);
-
-  return [
-    s(policy.mode || platformDefaults.greetingMode),
-    s(policy.openingLine),
-    s(policy.followupLeadIn),
-  ]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-) {
-  const policy = obj(behavior.closingPolicy);
-  const platformDefaults = obj(behavior.platformDefaults);
-
-  return [
-    s(policy.mode || platformDefaults.closingMode),
-    s(policy.closingLine),
-    policy.includeNextStepPrompt === false ? "no next-step prompt" : "",
-    policy.includeHumanOfferWhenRelevant === false ? "no human-offer hint" : "",
-  ]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-) {
-  const policy = obj(behavior.tonePolicy);
-  const platformDefaults = obj(behavior.platformDefaults);
-
-  return [
-    s(policy.mode || platformDefaults.toneMode),
-    s(policy.messageLength || platformDefaults.messageLength),
-    s(policy.empathyLevel || platformDefaults.empathyLevel),
-    policy.shouldSoundPremium === true ? "premium" : "",
-    policy.shouldSoundLocalFriendly === true ? "local-friendly" : "",
-  ]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-) {
-  const safePolicy = obj(policy);
-
-  if (policyKey === "pricing") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.preferredTargetUrl
-        ? `target: ${safePolicy.preferredTargetUrl}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "location") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.preferredTargetUrl
-        ? `map: ${safePolicy.preferredTargetUrl}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "booking") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.preferredTargetUrl
-        ? `target: ${safePolicy.preferredTargetUrl}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "contact") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredChannel),
-      safePolicy.preferredTargetUrl
-        ? `target: ${safePolicy.preferredTargetUrl}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "handoff") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.requiresReason === true ? "requires reason" : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return "";
-}
 
 function buildCompatDraftView(assistant = {}) {
   const userDraft = obj(assistant.draft);
@@ -218,7 +117,6 @@ function buildCompatDraftView(assistant = {}) {
     [
       ...arr(userDraft.languages),
       ...arr(reviewDraft.languages),
-      ...arr(aiBehavior.languages),
       ...arr(sourceSignals.languagesCandidates),
     ],
     12

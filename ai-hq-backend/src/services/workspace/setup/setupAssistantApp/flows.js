@@ -270,48 +270,6 @@ function buildHoursLines(hours = []) {
     .slice(0, 16);
 }
 
-) {
-  const safePolicy = obj(policy);
-
-  if (policyKey === "pricing") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "location") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "booking") {
-    return [s(safePolicy.mode), s(safePolicy.preferredTargetUrl)]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "contact") {
-    return [
-      s(safePolicy.mode),
-      s(safePolicy.preferredChannel),
-      s(safePolicy.preferredTargetUrl),
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  if (policyKey === "handoff") {
-    return [
-      s(safePolicy.mode),
-      safePolicy.requiresReason === true ? "requires reason" : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return "";
-}
 
 function buildStructuredDraftFromSetupAssistant(setup = {}) {
   const safeSetup = obj(setup);
