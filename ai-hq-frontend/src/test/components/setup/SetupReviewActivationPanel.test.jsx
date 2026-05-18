@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 
-import SetupReviewActivationPanel from "../../../components/layout/SetupReviewActivationPanel.jsx";
+import SetupReviewActivationPanel from "../../../components/setup/SetupReviewActivationPanel.jsx";
 
 function createReviewPayload() {
   return {

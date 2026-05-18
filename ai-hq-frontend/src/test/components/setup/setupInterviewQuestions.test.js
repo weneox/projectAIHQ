@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SETUP_INTERVIEW_QUESTIONS } from "../../../components/layout/setupInterviewQuestions.js";
+import { SETUP_INTERVIEW_QUESTIONS } from "../../../components/setup/setupInterviewQuestions.js";
 
 describe("setupInterviewQuestions", () => {
   it("keeps the primary setup scope limited to launch-critical questions", () => {
