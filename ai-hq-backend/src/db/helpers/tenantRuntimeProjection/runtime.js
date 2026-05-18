@@ -518,7 +518,8 @@ async function markTenantRuntimeProjectionStale(
   { runtimeProjectionId = "", freshness = {} } = {}
 ) {
   const projectionId = s(runtimeProjectionId);
-  if (!projectionId) return null;
+  const tenantId = s(obj(freshness).tenantId);
+  if (!projectionId || !tenantId) return null;
 
   return await one(
     client,
@@ -529,6 +530,7 @@ async function markTenantRuntimeProjectionStale(
       metadata_json = coalesce(metadata_json, '{}'::jsonb) || $2::jsonb,
       updated_at = now()
     where id = $1
+      and tenant_id = $3
     returning *
     `,
     [
@@ -547,6 +549,7 @@ async function markTenantRuntimeProjectionStale(
         expectedSources: obj(obj(freshness).expectedSources),
         currentSources: obj(obj(freshness).currentSources),
       }),
+      tenantId,
     ]
   );
 }
@@ -556,7 +559,8 @@ async function markTenantRuntimeProjectionReady(
   { runtimeProjectionId = "", freshness = {} } = {}
 ) {
   const projectionId = s(runtimeProjectionId);
-  if (!projectionId) return null;
+  const tenantId = s(obj(freshness).tenantId);
+  if (!projectionId || !tenantId) return null;
 
   return await one(
     client,
@@ -568,6 +572,7 @@ async function markTenantRuntimeProjectionReady(
       metadata_json = coalesce(metadata_json, '{}'::jsonb) || $2::jsonb,
       updated_at = now()
     where id = $1
+      and tenant_id = $3
     returning *
     `,
     [
@@ -586,6 +591,7 @@ async function markTenantRuntimeProjectionReady(
           obj(freshness).currentPublishedTruthVersionId
         ),
       }),
+      tenantId,
     ]
   );
 }
@@ -1111,6 +1117,7 @@ export async function refreshTenantRuntimeProjection(
   const { client, ownsClient } = await resolveClientAccess(dbOrPool);
 
   let runId = "";
+  let runTenantId = "";
 
   try {
     if (ownsClient) await client.query("begin");
@@ -1148,6 +1155,7 @@ export async function refreshTenantRuntimeProjection(
       tenant,
       graph: rawGraph,
     });
+    runTenantId = s(graph.tenant.id);
     const publishedTruthVersionId = s(graph?.publishedTruthVersion?.id);
 
     if (!publishedTruthVersionId) {
@@ -1257,6 +1265,7 @@ export async function refreshTenantRuntimeProjection(
         output_summary_json = $4::jsonb,
         updated_at = now()
       where id = $1
+        and tenant_id = $5
       `,
       [
         runId,
@@ -1274,6 +1283,7 @@ export async function refreshTenantRuntimeProjection(
           channelCount: arr(saved.channels_json).length,
           retrievalCorpusCount: arr(saved.retrieval_corpus_json).length,
         }),
+        runTenantId,
       ]
     );
 
@@ -1288,7 +1298,7 @@ export async function refreshTenantRuntimeProjection(
     };
   } catch (error) {
     try {
-      if (runId) {
+      if (runId && runTenantId) {
         await client.query(
           `
           update tenant_business_runtime_projection_runs
@@ -1301,11 +1311,13 @@ export async function refreshTenantRuntimeProjection(
             errors_json = jsonb_build_array(jsonb_build_object('message', $3)),
             updated_at = now()
           where id = $1
+            and tenant_id = $4
           `,
           [
             runId,
             s(error?.code || "runtime_projection_failed"),
             s(error?.message || "runtime projection failed"),
+            runTenantId,
           ]
         );
       }
