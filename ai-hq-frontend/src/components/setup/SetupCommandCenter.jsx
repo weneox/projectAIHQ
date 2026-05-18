@@ -7,7 +7,9 @@ import {
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
+  importGoogleMapsForSetup,
   importSourceForSetup,
+  importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
 } from "../../api/setup.js";
@@ -619,6 +621,43 @@ export default function SetupCommandCenter({
     navigate("/channels");
   }
 
+  async function importSetupSourceByType(sourceInput = {}, answer = "") {
+    const sourceType = lower(sourceInput.type || "website");
+    const sourceValue = s(sourceInput.value);
+
+    const payload = {
+      primarySource: {
+        type: sourceType,
+        sourceType,
+        value: sourceValue,
+        url: sourceValue,
+        sourceUrl: sourceValue,
+      },
+      sources: [
+        {
+          type: sourceType,
+          sourceType,
+          value: sourceValue,
+          url: sourceValue,
+          sourceUrl: sourceValue,
+        },
+      ],
+      note: answer,
+      allowSessionReuse: true,
+      waitForCompletion: true,
+    };
+
+    if (sourceType === "website") {
+      return importWebsiteForSetup(payload);
+    }
+
+    if (sourceType === "google_maps") {
+      return importGoogleMapsForSetup(payload);
+    }
+
+    return importSourceForSetup(payload);
+  }
+
   async function handleSetupParseMessage({ text, step, source = null }) {
     const answer = s(text);
     if (!answer || saving || finalizing || resetting) return null;
@@ -634,30 +673,7 @@ export default function SetupCommandCenter({
         sourceInput.isImportedSource === true && s(sourceInput.value);
 
       if (shouldImportSource) {
-        const sourceType = lower(sourceInput.type || "website");
-        const sourceValue = s(sourceInput.value);
-
-        const response = await importSourceForSetup({
-          primarySource: {
-            type: sourceType,
-            sourceType,
-            value: sourceValue,
-            url: sourceValue,
-            sourceUrl: sourceValue,
-          },
-          sources: [
-            {
-              type: sourceType,
-              sourceType,
-              value: sourceValue,
-              url: sourceValue,
-              sourceUrl: sourceValue,
-            },
-          ],
-          note: answer,
-          allowSessionReuse: true,
-          waitForCompletion: true,
-        });
+        const response = await importSetupSourceByType(sourceInput, answer);
 
         queryClient.setQueryData(setupReviewQueryKey, response);
 
