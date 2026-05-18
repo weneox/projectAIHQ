@@ -22,7 +22,10 @@ function statusLabel(status = "") {
   return String(status || "missing").replace(/_/g, " ");
 }
 
-export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
+export default function SetupReviewRoomSurface({
+  reviewRoom = {},
+  onAction = () => {},
+}) {
   const room = normalizeSetupReviewRoom(reviewRoom);
   const headerTone = toneClass(room.header.badgeTone);
   const blockingIssues = room.issues.filter((issue) => issue.severity === "blocking");
@@ -64,6 +67,7 @@ export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
           <button
             type="button"
             disabled={!room.actions.primary.enabled}
+            onClick={() => onAction(room.actions.primary)}
             className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {room.actions.primary.label}

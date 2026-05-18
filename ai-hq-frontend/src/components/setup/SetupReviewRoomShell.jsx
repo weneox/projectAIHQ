@@ -1303,6 +1303,27 @@ export default function SetupReviewRoomShell({
     });
   }, [displayTimeline, showTyping, busy]);
 
+  async function handleReviewRoomAction(action = {}) {
+    const id = s(action.id || action.action);
+    const intent = s(action.intent);
+
+    if (busy || action.enabled === false) return;
+
+    if (id === "approve_and_publish_truth" || intent === "finalize_review") {
+      await onFinalize?.();
+      return;
+    }
+
+    if (
+      id === "answer_missing_required_facts" ||
+      id === "add_business_input" ||
+      intent === "answer_missing_facts" ||
+      intent === "continue_setup"
+    ) {
+      textareaRef.current?.focus?.();
+    }
+  }
+
   async function handleSubmit() {
     const text = s(composerValue);
     if (!text || busy || !activeQuestion?.step) return;
@@ -1357,7 +1378,10 @@ export default function SetupReviewRoomShell({
           ) : null}
 
           {hasSession && hasReviewRoom ? (
-            <SetupReviewRoomSurface reviewRoom={reviewRoom} />
+            <SetupReviewRoomSurface
+              reviewRoom={reviewRoom}
+              onAction={handleReviewRoomAction}
+            />
           ) : null}
 
           {hasSession && profilePreviewReady ? (
