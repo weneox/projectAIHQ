@@ -14,6 +14,7 @@ import Inbox from "./pages/Inbox.jsx";
 import ProductHomePage from "./surfaces/home/ProductHomePage.jsx";
 import TruthViewerPage from "./pages/Truth/TruthViewerPage.jsx";
 import ChannelCatalog from "./pages/ChannelCatalog.jsx";
+import SetupCommandCenter from "./components/setup/SetupCommandCenter.jsx";
 import LaunchChecklist from "./pages/LaunchChecklist.jsx";
 import Settings from "./pages/Settings.jsx";
 import Customers from "./pages/Customers.jsx";
@@ -216,14 +217,8 @@ export default function App() {
           <Route path="home" element={<ProductHomePage />} />
           <Route path="launch" element={<LaunchChecklist />} />
 
-          <Route
-            path="setup"
-            element={<Navigate to="/home?assistant=setup" replace />}
-          />
-          <Route
-            path="setup/*"
-            element={<Navigate to="/home?assistant=setup" replace />}
-          />
+          <Route path="setup" element={<SetupCommandCenter />} />
+          <Route path="setup/*" element={<SetupCommandCenter />} />
 
           <Route path="welcome" element={<Navigate to="/home" replace />} />
           <Route path="inbox" element={<Inbox />} />
