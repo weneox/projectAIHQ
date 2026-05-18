@@ -306,6 +306,39 @@ function clearSetupConversationStorage(tenantKey = "") {
   }
 }
 
+function humanizeSetupSourceError(error = null, sourceType = "") {
+  const code = lower(error?.code || error?.payload?.error);
+  const message = lower(error?.message || error?.payload?.reason);
+  const sourceLabel =
+    lower(sourceType) === "google_maps"
+      ? "Google Maps linkini"
+      : lower(sourceType) === "instagram"
+        ? "Instagram profilini"
+        : "mənbəni";
+
+  if (code === "request_timeout" || message.includes("timeout")) {
+    return "Oxuma çox uzun çəkdi. Bir az sonra yenidən yoxla və ya qısa biznes təsviri yaz.";
+  }
+
+  if (
+    message.includes("unsafe") ||
+    message.includes("denied") ||
+    message.includes("valid source url")
+  ) {
+    return `${sourceLabel} oxuya bilmədim. Linki yoxla və ya biznes haqqında qısa təsvir yaz.`;
+  }
+
+  if (
+    message.includes("network") ||
+    message.includes("fetch") ||
+    message.includes("unavailable")
+  ) {
+    return "Mənbəyə indi çata bilmədim. Linki yoxla və ya qısa təsvirlə davam et.";
+  }
+
+  return "Mənbəni oxuya bilmədim. Linki yoxla və ya biznes haqqında qısa təsvir yaz.";
+}
+
 function hasVisibleSetupState(state = {}) {
   const assistant = obj(state.assistant);
   const draft = obj(state.draft);
@@ -314,8 +347,7 @@ function hasVisibleSetupState(state = {}) {
   const sourceMetadata = obj(draft.sourceMetadata);
 
   return Boolean(
-    s(obj(state.session).id) ||
-      s(profile.companyName) ||
+    s(profile.companyName) ||
       s(profile.description) ||
       s(profile.websiteUrl) ||
       arr(draft.services).length ||
@@ -626,6 +658,11 @@ export default function SetupCommandCenter({
     const sourceValue = s(sourceInput.value);
 
     const payload = {
+      type: sourceType,
+      sourceType,
+      value: sourceValue,
+      url: sourceValue,
+      sourceUrl: sourceValue,
       primarySource: {
         type: sourceType,
         sourceType,
@@ -648,7 +685,10 @@ export default function SetupCommandCenter({
     };
 
     if (sourceType === "website") {
-      return importWebsiteForSetup(payload);
+      return importWebsiteForSetup({
+        ...payload,
+        websiteUrl: sourceValue,
+      });
     }
 
     if (sourceType === "google_maps") {
@@ -698,8 +738,17 @@ export default function SetupCommandCenter({
 
       return response;
     } catch (error) {
+      const sourceInput = obj(source);
+      const shouldImportSource =
+        sourceInput.isImportedSource === true && s(sourceInput.value);
+
       setSetupError(
-        s(error?.message, "The answer could not be processed. Please try again.")
+        shouldImportSource
+          ? humanizeSetupSourceError(error, sourceInput.type)
+          : s(
+              error?.message,
+              "Məlumatı əlavə edə bilmədim. Zəhmət olmasa yenidən yoxla."
+            )
       );
       throw error;
     } finally {

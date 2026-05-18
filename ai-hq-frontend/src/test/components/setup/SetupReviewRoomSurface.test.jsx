@@ -1,4 +1,4 @@
-﻿/* @vitest-environment jsdom */
+/* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -31,7 +31,7 @@ describe("SetupReviewRoomSurface", () => {
           actions: {
             primary: {
               id: "add_business_input",
-              label: "Mənbə əlavə et",
+              label: "M?nb? ?lav? et",
               enabled: true,
             },
           },
@@ -41,19 +41,55 @@ describe("SetupReviewRoomSurface", () => {
     );
 
     expect(
-      screen.getByRole("region", { name: /business setup workspace/i })
+      screen.getByRole("region", { name: /setup workspace/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/biznesini ai üçün tanıdaq/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("medhouse.az")).toBeInTheDocument();
+    expect(screen.getByText(/biznesini ai ���n tanidaq/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/google maps/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Oxu" })).toBeDisabled();
 
     expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/not ready/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/truth hazırdır/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/tapılan faktlar/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/truth hazirdir/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/bunlari tapdim/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^faktlar$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/ai cavab preview/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/aktiv olacaq/i)).not.toBeInTheDocument();
+  });
+
+  it("renders a clean source-loading state without progress panels", () => {
+    render(
+      <SetupReviewRoomSurface
+        sourceValue="weneox.com"
+        sourceBusy
+        reviewRoom={{
+          brain: {
+            version: 0,
+            sourceIntelligence: { quality: "missing", evidenceCount: 0 },
+            sectionCompletion: { percent: 0 },
+            missingFactsPlan: { required: true, missingSections: [] },
+            conflictPlan: { hasConflicts: false },
+            decisionPlan: { operatorDecision: "add_business_input" },
+            runtimeSimulation: { canActivateAfterApproval: false },
+          },
+          sections: [],
+          runtimeConsumers: { consumers: [] },
+          actions: {
+            primary: {
+              id: "add_business_input",
+              label: "M?nb? ?lav? et",
+              enabled: true,
+            },
+          },
+          issues: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText(/biznes m?lumatlari oxunur/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/tamamlanib/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/bunlari tapdim/i)).not.toBeInTheDocument();
   });
 
   it("submits a website source from the empty state", () => {
@@ -61,7 +97,7 @@ describe("SetupReviewRoomSurface", () => {
 
     render(
       <SetupReviewRoomSurface
-        sourceValue="medhouse.az"
+        sourceValue="weneox.com"
         sourceType="website"
         onSubmitSource={onSubmitSource}
         reviewRoom={{
@@ -79,7 +115,7 @@ describe("SetupReviewRoomSurface", () => {
           actions: {
             primary: {
               id: "add_business_input",
-              label: "Mənbə əlavə et",
+              label: "M?nb? ?lav? et",
               enabled: true,
             },
           },
@@ -108,7 +144,7 @@ describe("SetupReviewRoomSurface", () => {
               missingSections: ["hours"],
               nextQuestionKey: "hours",
               nextQuestion: {
-                prompt: "İş saatlarını əlavə edin.",
+                prompt: "Is saatlarini ?lav? edin.",
               },
             },
             conflictPlan: { hasConflicts: false },
@@ -124,8 +160,8 @@ describe("SetupReviewRoomSurface", () => {
               facts: [
                 {
                   key: "companyName",
-                  label: "Biznes adı",
-                  value: "Medhouse Klinika",
+                  label: "Biznes adi",
+                  value: "Atlas Klinika",
                 },
                 {
                   key: "category",
@@ -137,11 +173,11 @@ describe("SetupReviewRoomSurface", () => {
             },
             {
               key: "services",
-              title: "Xidmətlər",
+              title: "Xidm?tl?r",
               status: "complete",
               sourceBacked: true,
               facts: [],
-              items: ["Klinika xidmətləri", "Müayinə"],
+              items: ["Klinika xidm?tl?ri", "M�ayin?"],
             },
           ],
           sections: [],
@@ -159,16 +195,70 @@ describe("SetupReviewRoomSurface", () => {
       />
     );
 
-    expect(screen.getByText(/sistem biznesini oxuyur/i)).toBeInTheDocument();
-    expect(screen.getByText(/tapılan faktlar/i)).toBeInTheDocument();
-    expect(screen.getByText(/biznes adı/i)).toBeInTheDocument();
-    expect(screen.getByText(/medhouse klinika/i)).toBeInTheDocument();
-    expect(screen.getByText(/klinika xidmətləri/i)).toBeInTheDocument();
-    expect(screen.getByText(/tamamlanmalı məlumatlar/i)).toBeInTheDocument();
-    expect(screen.getByText(/iş saatlarını əlavə edin/i)).toBeInTheDocument();
+    expect(screen.getByText(/bunlari tapdim/i)).toBeInTheDocument();
+    expect(screen.getByText(/^faktlar$/i)).toBeInTheDocument();
+    expect(screen.getByText(/biznes adi/i)).toBeInTheDocument();
+    expect(screen.getByText(/atlas klinika/i)).toBeInTheDocument();
+    expect(screen.getByText(/klinika xidm?tl?ri/i)).toBeInTheDocument();
+    expect(screen.getByText(/aydinlasdirmali oldugum suallar/i)).toBeInTheDocument();
+    expect(screen.getByText("Is saatlarini ?lav? edin.")).toBeInTheDocument();
 
     expect(screen.queryByText(/ai brain/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/runtime readiness/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/72%/i)).not.toBeInTheDocument();
+  });
+
+  it("hides fake missing or empty-answer blockers", () => {
+    render(
+      <SetupReviewRoomSurface
+        sourceValue=""
+        reviewRoom={{
+          brain: {
+            version: 5,
+            sourceIntelligence: { quality: "strong", evidenceCount: 1 },
+            sectionCompletion: { percent: 40 },
+            missingFactsPlan: { required: true, missingSections: ["missing"] },
+            conflictPlan: { hasConflicts: false },
+            decisionPlan: { operatorDecision: "answer_missing_facts" },
+            runtimeSimulation: { canActivateAfterApproval: false },
+          },
+          sectionDetails: [
+            {
+              key: "profile",
+              title: "Profil",
+              sourceBacked: true,
+              facts: [
+                {
+                  key: "companyName",
+                  label: "Biznes adi",
+                  value: "Atlas Klinika",
+                },
+              ],
+              items: [],
+            },
+          ],
+          actions: {
+            primary: {
+              id: "answer_missing_required_facts",
+              label: "Tamamla",
+              enabled: true,
+            },
+          },
+          issues: [
+            {
+              id: "bad-empty",
+              severity: "blocking",
+              section: "missing",
+              message: "Empty answer",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText(/bunlari tapdim/i)).toBeInTheDocument();
+    expect(screen.queryByText(/empty answer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/aydinlasdirmali oldugum suallar/i)).not.toBeInTheDocument();
   });
 
   it("reveals approval only when truth can be approved", () => {
@@ -207,8 +297,8 @@ describe("SetupReviewRoomSurface", () => {
               facts: [
                 {
                   key: "companyName",
-                  label: "Biznes adı",
-                  value: "Medhouse Klinika",
+                  label: "Biznes adi",
+                  value: "Atlas Klinika",
                 },
               ],
               items: [],
@@ -217,7 +307,7 @@ describe("SetupReviewRoomSurface", () => {
           actions: {
             primary: {
               id: "approve_and_publish_truth",
-              label: "Truth-u təsdiqlə",
+              label: "T?sdiql?",
               intent: "finalize_review",
               enabled: true,
             },
@@ -231,14 +321,65 @@ describe("SetupReviewRoomSurface", () => {
       />
     );
 
-    expect(screen.getByText(/təsdiqə hazırdır/i)).toBeInTheDocument();
+    expect(screen.getByText(/t?sdiql?m?y? hazirdir/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /truth-u təsdiqlə/i }));
+    fireEvent.click(screen.getByRole("button", { name: /t?sdiql?/i }));
 
     expect(onAction).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "approve_and_publish_truth",
       })
     );
+  });
+
+  it("hides approval until the review is actually approvable", () => {
+    render(
+      <SetupReviewRoomSurface
+        sourceValue=""
+        reviewRoom={{
+          readyForApproval: false,
+          brain: {
+            version: 5,
+            sourceIntelligence: { quality: "strong", evidenceCount: 4 },
+            sectionCompletion: { percent: 100 },
+            missingFactsPlan: { required: false, missingSections: [] },
+            conflictPlan: { hasConflicts: false },
+            decisionPlan: { operatorDecision: "approve_truth", canApprove: false },
+            runtimeSimulation: { canActivateAfterApproval: true },
+          },
+          sectionDetails: [
+            {
+              key: "profile",
+              title: "Profil",
+              sourceBacked: true,
+              facts: [
+                {
+                  key: "companyName",
+                  label: "Biznes adi",
+                  value: "Atlas Klinika",
+                },
+              ],
+              items: [],
+            },
+          ],
+          actions: {
+            primary: {
+              id: "approve_and_publish_truth",
+              label: "T?sdiql?",
+              intent: "finalize_review",
+              enabled: true,
+            },
+          },
+          approvalPreview: {
+            canApprove: false,
+          },
+          runtimeConsumers: { consumers: [] },
+          issues: [],
+        }}
+      />
+    );
+
+    expect(screen.queryByText(/t?sdiql?m?y? hazirdir/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /t?sdiql?/i })).not.toBeInTheDocument();
   });
 });

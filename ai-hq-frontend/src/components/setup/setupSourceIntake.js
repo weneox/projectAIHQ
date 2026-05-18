@@ -98,6 +98,7 @@ export function resolveSetupSourceInput(value = "") {
   return {
     type,
     value: normalizeSetupSourceValue(type, value),
-    isImportedSource: type === "website" || type === "google_maps",
+    isImportedSource:
+      type === "website" || type === "google_maps" || type === "instagram",
   };
 }

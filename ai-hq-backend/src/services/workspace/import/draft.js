@@ -143,6 +143,9 @@ const PROMO_NOISE_RE =
 const TESTIMONIAL_RE =
   /\b(testimonial|testimonials|review|reviews|what our clients say|what clients say|happy clients|client feedback|highly recommend|recommend|recommended|very satisfied|great job|thank you)\b/i;
 
+const CTA_SUMMARY_NOISE_RE =
+  /\b(read it here|start free|no credit card|get \d+\s+(days?|months?)|limited time|sign up|log in)\b/i;
+
 const SOCIAL_HOST_RE =
   /\b(instagram\.com|facebook\.com|fb\.com|linkedin\.com|wa\.me|whatsapp\.com|t\.me|telegram\.me|youtube\.com|youtu\.be|x\.com|twitter\.com|tiktok\.com|pinterest\.com)\b/i;
 
@@ -277,7 +280,11 @@ function looksLikeNavMenuGarbage(text = "") {
 function isLikelyTestimonialOrPromo(text = "") {
   const value = cleanDisplayText(text, 800);
   if (!value) return false;
-  return TESTIMONIAL_RE.test(value) || PROMO_NOISE_RE.test(value);
+  return (
+    TESTIMONIAL_RE.test(value) ||
+    PROMO_NOISE_RE.test(value) ||
+    CTA_SUMMARY_NOISE_RE.test(value)
+  );
 }
 
 function takeSentencePrefix(text = "", maxSentences = 2) {
@@ -382,6 +389,21 @@ function isLikelyAddressText(text = "") {
   if (looksLikeGoogleMapsPlaceholder(value)) return false;
   if (looksLikeNavMenuGarbage(value)) return false;
   if (isLikelyTestimonialOrPromo(value)) return false;
+  if (
+    /\b(back office|front office|full suite|suite of|software suite|building the|building a|building your|infrastructure|commerce features|members?|employees?|workforce|workers?|team members?)\b/i.test(
+      value
+    )
+  ) {
+    return false;
+  }
+  if (
+    /\boffice\b/i.test(value) &&
+    !/\b(address|location|head office|registered office|office address|office location|office\s*[:,-]|\d{1,4}|street|st\.?|avenue|ave|road|rd\.?|floor|building|suite)\b/i.test(
+      value
+    )
+  ) {
+    return false;
+  }
 
   if (!(hasDigit || hasComma || hasStreetLike || signalHits >= 2)) return false;
   if (stable.split(" ").length > 18 && signalHits < 2 && !hasDigit) return false;

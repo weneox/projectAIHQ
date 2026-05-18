@@ -9,6 +9,7 @@ export default defineConfig({
       "src/test/api/launch.test.js",
       "src/test/api/truth.test.js",
       "src/test/api/setup.test.js",
+      "src/test/components/setup/setupSourceIntake.test.js",
       "src/test/api/trust.test.js",
       "src/test/lib/appEntry.test.js",
       "src/test/lib/readinessViewModel.test.jsx",

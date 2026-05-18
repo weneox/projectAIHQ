@@ -436,6 +436,51 @@ test("common landing pages with footer contact clues still yield a useful setup 
   assert.ok(profile.socialLinks.some((item) => item.platform === "linkedin"));
 });
 
+test("website synthesis drops CTA summaries and office-suite false addresses", () => {
+  const homePage = analyzePage({
+    html: `
+      <html>
+        <head>
+          <title>CommerceFlow</title>
+          <meta
+            name="description"
+            content="CommerceFlow helps retailers build online stores, manage payments, and run unified commerce operations."
+          />
+        </head>
+        <body>
+          <main>
+            <h1>CommerceFlow</h1>
+            <p>The 2024 Commerce Wave is here. Discover what makes CommerceFlow a Leader. Read it here.</p>
+            <p>Use a connected back office to sell in person, online, on social media, and marketplaces.</p>
+            <p>Build the solution your business needs with our suite of B2B APIs and compatible apps.</p>
+            <p>Dedicated to building the infrastructure and commerce features you need, before you need them.</p>
+            <p>London Office 44 members</p>
+            <ul>
+              <li>Online store builder</li>
+              <li>Payments orchestration</li>
+              <li>Inventory automation</li>
+            </ul>
+          </main>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://commerceflow.example/",
+  });
+
+  const rollup = buildSiteRollup(homePage, [homePage], []);
+  const websiteSignals = buildWebsiteSignals({
+    pages: [homePage],
+    site: rollup,
+    crawl: { warnings: [] },
+  });
+  const profile = synthesizeBusinessProfile(websiteSignals);
+
+  assert.equal(profile.companyTitle, "CommerceFlow");
+  assert.match(profile.companySummaryShort, /retailers|online stores|commerce/i);
+  assert.doesNotMatch(profile.companySummaryShort, /read it here|commerce wave|leader/i);
+  assert.equal(profile.addresses.length, 0);
+});
+
 test("website artifact drafts keep normalized page records, classifications, and chunked evidence", () => {
   const homePage = analyzePage({
     html: HOME_HTML,

@@ -53,6 +53,7 @@ export default mergeConfig(
         "src/test/components/layout/Shell.test.jsx",
         "src/test/components/layout/Sidebar.test.jsx",
         "src/test/components/setup/SetupReviewRoomSurface.test.jsx",
+        "src/test/components/setup/SetupReviewRoomShell.test.jsx",
         "src/test/components/setup/SetupCommandCenter.test.jsx",
         "src/test/surfaces/home/ProductHomePage.smoke.test.jsx",
         "src/test/pages/AdminTenants.test.jsx",

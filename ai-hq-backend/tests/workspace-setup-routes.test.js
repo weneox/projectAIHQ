@@ -557,7 +557,11 @@ test("setup import routes validate source type before import execution", async (
 
   assert.equal(res.statusCode, 400);
   assert.equal(res.body.error, "SourceImportFailed");
-  assert.deepEqual(res.body.supportedSourceTypes, ["website", "google_maps"]);
+  assert.deepEqual(res.body.supportedSourceTypes, [
+    "website",
+    "google_maps",
+    "instagram",
+  ]);
 });
 
 test("setup import routes pass website imports through the shared import executor", async () => {
@@ -667,6 +671,65 @@ test("setup import routes keep sourceType in generic import responses", async ()
   assert.equal(res.body.message, "website import completed");
 });
 
+test("setup import routes accept instagram through generic source import", async () => {
+  const router = createRouter();
+
+  registerSetupImportRoutes(router, {
+    db: {},
+    requireSetupActor() {
+      return { tenantId: "tenant-1" };
+    },
+    resolveSourceUrlFromBody(body) {
+      return body.url || "";
+    },
+    resolveInstagramBundleUrl() {
+      return "";
+    },
+    normalizeIncomingSourceType(value) {
+      return String(value || "").trim();
+    },
+    async importWebsiteSource() {
+      throw new Error("not expected");
+    },
+    async importGoogleMapsSource() {
+      throw new Error("not expected");
+    },
+    async importSource() {},
+    async importSourceBundle() {
+      throw new Error("not expected");
+    },
+    async executeSetupImport(input) {
+      assert.equal(input.executeImport.name, "importSource");
+      assert.equal(input.executeArgs.sourceType, "instagram");
+      assert.equal(input.executeArgs.url, "https://instagram.com/openai");
+      return {
+        status: 200,
+        body: input.responseBody({
+          ok: true,
+          message: "instagram import completed",
+        }),
+      };
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+  });
+
+  const handler = getRoute(router, "POST", "/setup/import/source");
+  const req = createReq({
+    body: {
+      sourceType: "instagram",
+      url: "https://instagram.com/openai",
+    },
+  });
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.sourceType, "instagram");
+});
+
 test("setup import routes accept websiteUrl for website imports", async () => {
   const router = createRouter();
 
@@ -774,6 +837,76 @@ test("setup import routes accept website_url for website imports", async () => {
   const handler = getRoute(router, "POST", "/setup/import/website");
   const req = createReq({
     body: { website_url: "https://website-snake.example" },
+  });
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(res.body.accepted, true);
+});
+
+test("setup import routes accept nested primarySource URL for website imports", async () => {
+  const router = createRouter();
+
+  registerSetupImportRoutes(router, {
+    db: {},
+    requireSetupActor() {
+      return { tenantId: "tenant-1" };
+    },
+    resolveSourceUrlFromBody(body) {
+      return (
+        body.primarySource?.sourceUrl ||
+        body.primarySource?.url ||
+        body.sources?.[0]?.sourceUrl ||
+        ""
+      );
+    },
+    resolveInstagramBundleUrl() {
+      return "";
+    },
+    normalizeIncomingSourceType() {
+      return "";
+    },
+    async importWebsiteSource() {
+      throw new Error("not expected");
+    },
+    async importGoogleMapsSource() {
+      throw new Error("not expected");
+    },
+    async importSource() {
+      throw new Error("not expected");
+    },
+    async importSourceBundle() {
+      throw new Error("not expected");
+    },
+    async executeSetupImport(input) {
+      assert.equal(input.executeImport.name, "importWebsiteSource");
+      assert.equal(input.executeArgs.url, "https://nested.example");
+      return {
+        status: 202,
+        body: {
+          ok: true,
+          accepted: true,
+          message: "Website import accepted",
+        },
+      };
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+  });
+
+  const handler = getRoute(router, "POST", "/setup/import/website");
+  const req = createReq({
+    body: {
+      primarySource: {
+        type: "website",
+        sourceType: "website",
+        sourceUrl: "https://nested.example",
+      },
+      sources: [],
+    },
   });
   const res = createRes();
 

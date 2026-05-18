@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
 import SetupReviewRoomSurface from "./SetupReviewRoomSurface.jsx";
-import {
-  normalizeSetupSourceValue,
-  resolveSetupSourceInput,
-} from "./setupSourceIntake.js";
+import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -75,33 +72,13 @@ function hasAnySetupState(reviewRoom = {}, assistant = {}) {
   );
 }
 
-function resolveTypedSourceInput(value = "", sourceType = "website") {
+function resolveTypedSourceInput(value = "") {
   const text = s(value);
-  const selectedType = lower(sourceType || "website");
   const auto = resolveSetupSourceInput(text);
-
-  if (selectedType === "manual") {
-    return {
-      type: "manual",
-      value: text,
-      isImportedSource: false,
-    };
-  }
-
-  const resolvedType =
-    auto.type && auto.type !== "manual" ? auto.type : selectedType || "website";
-
-  const normalizedValue =
-    normalizeSetupSourceValue(resolvedType, text) ||
-    auto.value ||
-    normalizeSetupSourceValue("website", text) ||
-    text;
 
   return {
     ...auto,
-    type: resolvedType,
-    value: normalizedValue,
-    isImportedSource: resolvedType !== "manual",
+    value: auto.value || text,
   };
 }
 
@@ -135,7 +112,7 @@ function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
     actions: {
       primary: {
         id: state.readyForApproval ? "approve_and_publish_truth" : "add_business_input",
-        label: state.readyForApproval ? "Truth-u təsdiqlə" : "Mənbə və ya məlumat əlavə et",
+        label: state.readyForApproval ? "Təsdiqlə" : "Mənbə və ya məlumat əlavə et",
         intent: state.readyForApproval ? "finalize_review" : "continue_setup",
         enabled: true,
       },
@@ -171,7 +148,6 @@ function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
 }
 
 export default function SetupReviewRoomShell({
-  sessionHydrated = false,
   assistant = {},
   reviewPayload = null,
   saving = false,
@@ -183,7 +159,6 @@ export default function SetupReviewRoomShell({
   onStartSetup,
 }) {
   const [sourceValue, setSourceValue] = useState("");
-  const [sourceType, setSourceType] = useState("website");
   const [localStatus, setLocalStatus] = useState("");
 
   const rawReviewRoom = useMemo(
@@ -206,21 +181,16 @@ export default function SetupReviewRoomShell({
   );
 
   const busy = saving || finalizing || capturingSource;
-  const sourceBusy = busy || !sessionHydrated;
-  const hasState = hasAnySetupState(reviewRoom, assistant);
+  const sourceBusy = busy;
 
   async function handleSubmitSource() {
     const text = s(sourceValue);
     if (!text || busy) return;
 
-    const resolvedSource = resolveTypedSourceInput(text, sourceType);
+    const resolvedSource = resolveTypedSourceInput(text);
     const isSourceImport = resolvedSource.isImportedSource === true;
 
-    setLocalStatus(
-      isSourceImport
-        ? `${sourceType === "manual" ? "Məlumat" : "Mənbə"} qəbul edildi. Oxuma başlayır...`
-        : "Məlumat qəbul edildi."
-    );
+    setLocalStatus(isSourceImport ? "Biznes məlumatları oxunur" : "");
 
     try {
       await onStartSetup?.();
@@ -234,11 +204,7 @@ export default function SetupReviewRoomShell({
       });
 
       setSourceValue("");
-      setLocalStatus(
-        isSourceImport
-          ? "Mənbə qəbul edildi. Faktlar yenilənir."
-          : "Məlumat əlavə edildi."
-      );
+      setLocalStatus("");
     } catch {
       setLocalStatus("");
     }
@@ -266,10 +232,8 @@ export default function SetupReviewRoomShell({
       <SetupReviewRoomSurface
         reviewRoom={reviewRoom}
         sourceValue={sourceValue}
-        sourceType={sourceType}
         sourceBusy={sourceBusy}
-        sourceStatus={errorMessage || localStatus || (hasState ? "" : "Başlamaq üçün mənbə əlavə et")}
-        onSourceTypeChange={setSourceType}
+        sourceStatus={errorMessage || localStatus}
         onSourceValueChange={setSourceValue}
         onSubmitSource={handleSubmitSource}
         onAction={handleAction}

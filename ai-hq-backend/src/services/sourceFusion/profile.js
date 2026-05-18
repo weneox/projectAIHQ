@@ -187,6 +187,21 @@ function isPricingHeavyText(text = "") {
 
 function isAddressLike(text = "") {
   const x = s(text);
+  if (
+    /\b(back office|front office|full suite|suite of|software suite|building the|building a|building your|infrastructure|commerce features|members?|employees?|workforce|workers?|team members?)\b/i.test(
+      x
+    )
+  ) {
+    return false;
+  }
+  if (
+    /\boffice\b/i.test(x) &&
+    !/\b(address|location|head office|registered office|office address|office location|office\s*[:,-]|\d{1,4}|street|st\.?|avenue|ave|road|rd\.?|floor|building|suite)\b/i.test(
+      x
+    )
+  ) {
+    return false;
+  }
   return (
     /\b(address|office|location|ünvan|unvan|filial|branch|street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd|floor|building|blok|bina|suite|apt|apartment|küçə|kuce|küçəsi|kucesi|prospekt|rayon|district|baku|bakı|azerbaijan|azərbaycan)\b/i.test(
       x

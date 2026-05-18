@@ -27,7 +27,7 @@ function createReviewRoom(overrides = {}) {
           {
             key: "companyName",
             label: "Biznes adı",
-            value: "Medhouse Klinika",
+            value: "Atlas Klinika",
           },
         ],
         items: [],
@@ -37,7 +37,7 @@ function createReviewRoom(overrides = {}) {
     actions: {
       primary: {
         id: "approve_and_publish_truth",
-        label: "Truth-u təsdiqlə",
+        label: "Təsdiqlə",
         intent: "finalize_review",
         enabled: true,
       },
@@ -69,8 +69,8 @@ describe("SetupReviewRoomShell", () => {
       />
     );
 
-    fireEvent.change(screen.getByPlaceholderText("medhouse.az"), {
-      target: { value: "medhouse.az" },
+    fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
+      target: { value: "weneox.com" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
@@ -79,11 +79,11 @@ describe("SetupReviewRoomShell", () => {
       expect(onStartSetup).toHaveBeenCalledTimes(1);
       expect(onParseMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          text: "medhouse.az",
+          text: "weneox.com",
           step: "source",
           source: expect.objectContaining({
             type: "website",
-            value: "https://medhouse.az",
+            value: "https://weneox.com",
             isImportedSource: true,
           }),
         })
@@ -147,13 +147,11 @@ describe("SetupReviewRoomShell", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Qısa izah" }));
-
-    fireEvent.change(screen.getByPlaceholderText(/biznes nə edir/i), {
+    fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
       target: { value: "Həftə içi 09:00-18:00 işləyirik." },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /əlavə et/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
 
     await waitFor(() => {
       expect(onParseMessage).toHaveBeenCalledWith(
@@ -183,7 +181,7 @@ describe("SetupReviewRoomShell", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /truth-u təsdiqlə/i }));
+    fireEvent.click(screen.getByRole("button", { name: /təsdiqlə/i }));
 
     await waitFor(() => {
       expect(onFinalize).toHaveBeenCalledTimes(1);

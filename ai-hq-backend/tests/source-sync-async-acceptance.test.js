@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { __test__ as setupTest } from "../src/routes/api/workspace/setup.js";
 import { __test__ as settingsSourcesTest } from "../src/routes/api/settings/sources.js";
 import { __test__ as importTest } from "../src/services/workspace/import.js";
+import { runSourceSync } from "../src/services/sourceSync/index.js";
 import {
   createSourceRun,
   ensureSource,
@@ -81,6 +82,204 @@ test("accepted import payload keeps durable source run identifiers", async () =>
   assert.equal(accepted.reviewSessionId, "session-1");
   assert.equal(accepted.source.id, "source-1");
   assert.equal(accepted.run.id, "run-1");
+});
+
+test("virtual setup source sync can extract website facts without source tables", async () => {
+  const scope = {
+    tenantId: "tenant-1",
+    tenantKey: "tenant-key-1",
+  };
+  const session = { id: "session-1" };
+  const collector = {
+    candidates: [],
+    observations: [],
+    snapshot: {},
+    candidateCount: 0,
+    observationCount: 0,
+    snapshotCount: 0,
+    profilePatch: {},
+    capabilitiesPatch: {},
+    lastSnapshotId: null,
+  };
+
+  const { ensured, createdRun } = importTest.buildVirtualSourceSyncRecords({
+    scope,
+    session,
+    normalizedType: "website",
+    normalizedUrl: "https://example.com",
+    actor: { auditValue: "qa" },
+    requestId: "req-virtual",
+    intakeContext: {
+      sourceCount: 1,
+      sourceTypes: ["website"],
+    },
+  });
+
+  const adapters = importTest.buildInMemorySourceSyncAdapters({
+    scope,
+    source: ensured.source,
+    run: createdRun.run,
+    reviewSessionId: session.id,
+    collector,
+  });
+
+  const result = await runSourceSync({
+    db: {},
+    source: ensured.source,
+    run: createdRun.run,
+    requestedBy: "qa",
+    sources: adapters.sources,
+    knowledge: adapters.knowledge,
+    fusion: adapters.fusion,
+    artifacts: adapters.artifacts,
+    stageDeps: {
+      async withTimeout(fn) {
+        return fn();
+      },
+      async extractWebsiteSource() {
+        return {
+          sourceUrl: "https://example.com",
+          finalUrl: "https://example.com",
+          crawl: { pagesRequested: 1, pagesSucceeded: 1, pagesKept: 1 },
+          site: { quality: { band: "strong", score: 92 } },
+          pages: [
+            {
+              url: "https://example.com",
+              canonicalUrl: "https://example.com",
+              title: "Example Clinic",
+              pageType: "home",
+              serviceHints: ["Appointments"],
+              text: "Example Clinic offers appointments in Baku.",
+            },
+          ],
+        };
+      },
+      buildWebsiteSignals() {
+        return { identity: { companyName: "Example Clinic" } };
+      },
+      synthesizeBusinessProfile() {
+        return {
+          companyName: "Example Clinic",
+          websiteUrl: "https://example.com",
+          services: ["Appointments"],
+          primaryAddress: "Baku",
+        };
+      },
+      buildWebsiteTrustSummary() {
+        return { signalStrength: "strong", score: 0.92 };
+      },
+      isWeakWebsiteExtraction() {
+        return false;
+      },
+      buildWebsiteExtractionWarnings() {
+        return [];
+      },
+      buildWebsiteObservations({ source, run }) {
+        return [
+          {
+            sourceId: source.id,
+            sourceRunId: run.id,
+            sourceType: "website",
+            observationGroup: "profile",
+            claimType: "company_name",
+            claimKey: "companyName",
+            rawValueText: "Example Clinic",
+            normalizedValueText: "Example Clinic",
+            evidenceText: "Example Clinic offers appointments in Baku.",
+            pageUrl: "https://example.com",
+            confidence: 0.94,
+            confidenceLabel: "high",
+          },
+        ];
+      },
+      buildWebsiteSyncQualitySummary() {
+        return { signalStrength: "strong" };
+      },
+      synthesizeTenantBusinessFromObservations() {
+        return {
+          profile: {
+            companyName: "Example Clinic",
+            websiteUrl: "https://example.com",
+            services: ["Appointments"],
+          },
+          governance: {},
+          metrics: {},
+          conflicts: [],
+        };
+      },
+      normalizeSynthesisResult(value) {
+        return value;
+      },
+      buildCandidateAdmission() {
+        return { allowCandidateCreation: true, reason: "" };
+      },
+      buildCandidatesFromSynthesis({ sourceId, sourceRunId }) {
+        return [
+          {
+            sourceId,
+            sourceRunId,
+            candidateGroup: "services",
+            category: "service",
+            itemKey: "appointments",
+            title: "Appointments",
+            valueText: "Appointments",
+            normalizedText: "Appointments",
+            confidence: 0.9,
+            confidenceLabel: "high",
+            sourceEvidenceJson: [],
+          },
+        ];
+      },
+      normalizeCandidateRecord(item) {
+        return item;
+      },
+      normalizeObservationRecord(item) {
+        return item;
+      },
+      buildFinishWarnings() {
+        return { surfacedWarnings: [], debugWarnings: [], diagnostics: {} };
+      },
+      async persistSynthesisOutputs({
+        knowledge,
+        fusion,
+        synthesis,
+        candidateDrafts,
+      }) {
+        const createdRows = await knowledge.createCandidatesBulk(candidateDrafts);
+        const snapshot = await fusion.createSynthesisSnapshot({
+          profile: synthesis.profile,
+        });
+        return {
+          createdRows,
+          createdCount: createdRows.length,
+          snapshot,
+        };
+      },
+      shouldTreatSyncAsPartial() {
+        return false;
+      },
+      buildSourceSignalPayload() {
+        return { profileObserved: true };
+      },
+      buildWebsiteTrustSummaryPayload(value) {
+        return value;
+      },
+      safeWebsitePageCount() {
+        return 1;
+      },
+      dedupeWarnings(items = []) {
+        return [...new Set(items)];
+      },
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "success");
+  assert.equal(result.profile.companyName, "Example Clinic");
+  assert.equal(result.candidateCount, 1);
+  assert.equal(collector.observationCount, 1);
+  assert.equal(collector.candidateCount, 1);
+  assert.equal(result.source.metadata_json.virtualSetupSource, true);
 });
 
 test("dispatchDetachedTask defers source sync work past the request stack", async () => {
