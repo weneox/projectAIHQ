@@ -781,58 +781,39 @@ export default function SetupCommandCenter({
     }
   }
 
-  const wrapperClass = "relative min-h-[calc(100vh-96px)] w-full px-6 py-6";
-
   return (
-    <div className={wrapperClass}>
-      <section
-        className="relative mx-auto flex min-h-[calc(100vh-144px)] w-full max-w-[1280px] flex-col overflow-hidden rounded-[32px] border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.10)]"
-        role="region"
-        aria-label="Setup command center"
-      >
-        <div className="flex items-center justify-between border-b border-[rgba(15,23,42,0.08)] px-7 py-5">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-                Business Truth Command Center
-              </div>
-              <div className="mt-1 text-[18px] font-semibold tracking-[-0.035em] text-text">
-                AI setup brain, review room, approval and runtime readiness
-              </div>
-            </div>
-
-            {canReset ? (
-              <button
-                type="button"
-                onClick={handleSetupReset}
-                disabled={resetting || saving || finalizing}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
-                {resetting ? "Resetting" : "Fresh start"}
-              </button>
-            ) : null}
+    <main className="min-h-[calc(100vh-72px)] bg-[rgb(var(--color-canvas))]">
+      <div className="mx-auto w-full max-w-[1120px] px-6 py-6">
+        {canReset ? (
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSetupReset}
+              disabled={resetting || saving || finalizing}
+              className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-md)] px-3 text-[12px] font-semibold text-text-subtle transition hover:bg-[rgb(var(--color-surface-subtle))] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
+              {resetting ? "Sıfırlanır" : "Yenidən başla"}
+            </button>
           </div>
-        </div>
+        ) : null}
 
-        <div className="min-h-0 flex-1">
-          <SetupReviewRoomShell
-            key={conversationStorageKey}
-            storageKey={conversationStorageKey}
-            sessionHydrated={sessionHydrated}
-            assistant={clientAssistant}
-            reviewPayload={mergedReviewPayload}
-            saving={saving}
-            finalizing={finalizing}
-            capturingSource={resetting}
-            errorMessage={setupError}
-            onParseMessage={handleSetupParseMessage}
-            onFinalize={handleSetupFinalize}
-            onStartSetup={handleStartSetup}
-            onGoToChannels={handleGoToChannels}
-          />
-        </div>
-      </section>
-    </div>
+        <SetupReviewRoomShell
+          key={conversationStorageKey}
+          storageKey={conversationStorageKey}
+          sessionHydrated={sessionHydrated}
+          assistant={clientAssistant}
+          reviewPayload={mergedReviewPayload}
+          saving={saving}
+          finalizing={finalizing}
+          capturingSource={resetting}
+          errorMessage={setupError}
+          onParseMessage={handleSetupParseMessage}
+          onFinalize={handleSetupFinalize}
+          onStartSetup={handleStartSetup}
+          onGoToChannels={handleGoToChannels}
+        />
+      </div>
+    </main>
   );
 }

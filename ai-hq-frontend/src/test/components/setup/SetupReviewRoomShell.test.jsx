@@ -1,4 +1,4 @@
-﻿/* @vitest-environment jsdom */
+/* @vitest-environment jsdom */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -10,29 +10,13 @@ function createReviewRoom(overrides = {}) {
   return {
     brain: {
       version: 5,
-      sourceIntelligence: {
-        quality: "strong",
-        evidenceCount: 2,
-      },
-      sectionCompletion: {
-        percent: 100,
-      },
-      missingFactsPlan: {
-        required: false,
-        missingSections: [],
-      },
-      conflictPlan: {
-        hasConflicts: false,
-      },
-      decisionPlan: {
-        operatorDecision: "approve_truth",
-        reason: "Required business truth is complete.",
-      },
-      runtimeSimulation: {
-        canActivateAfterApproval: true,
-      },
+      sourceIntelligence: { quality: "strong", evidenceCount: 2 },
+      sectionCompletion: { percent: 100 },
+      missingFactsPlan: { required: false, missingSections: [] },
+      conflictPlan: { hasConflicts: false },
+      decisionPlan: { operatorDecision: "approve_truth" },
+      runtimeSimulation: { canActivateAfterApproval: true },
     },
-    sections: [],
     sectionDetails: [
       {
         key: "profile",
@@ -49,6 +33,7 @@ function createReviewRoom(overrides = {}) {
         items: [],
       },
     ],
+    sections: [],
     actions: {
       primary: {
         id: "approve_and_publish_truth",
@@ -56,6 +41,9 @@ function createReviewRoom(overrides = {}) {
         intent: "finalize_review",
         enabled: true,
       },
+    },
+    approvalPreview: {
+      canApprove: true,
     },
     runtimeConsumers: {
       consumers: [],
@@ -66,7 +54,7 @@ function createReviewRoom(overrides = {}) {
 }
 
 describe("SetupReviewRoomShell", () => {
-  it("submits website source as source import intent", async () => {
+  it("submits website source as imported source intent", async () => {
     const onStartSetup = vi.fn().mockResolvedValue(true);
     const onParseMessage = vi.fn().mockResolvedValue(true);
 
@@ -81,17 +69,17 @@ describe("SetupReviewRoomShell", () => {
       />
     );
 
-    fireEvent.change(screen.getByPlaceholderText("https://medhouse.az"), {
-      target: { value: "https://medhouse.az" },
+    fireEvent.change(screen.getByPlaceholderText("medhouse.az"), {
+      target: { value: "medhouse.az" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /oxumağa başla/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
 
     await waitFor(() => {
       expect(onStartSetup).toHaveBeenCalledTimes(1);
       expect(onParseMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          text: "https://medhouse.az",
+          text: "medhouse.az",
           step: "source",
           source: expect.objectContaining({
             type: "website",
@@ -103,7 +91,7 @@ describe("SetupReviewRoomShell", () => {
     });
   });
 
-  it("submits manual brief as missing-fact message instead of source import", async () => {
+  it("submits manual brief as missing fact message", async () => {
     const onParseMessage = vi.fn().mockResolvedValue(true);
 
     render(
@@ -147,6 +135,9 @@ describe("SetupReviewRoomShell", () => {
                   enabled: true,
                 },
               },
+              approvalPreview: {
+                canApprove: false,
+              },
             }),
           },
         }}
@@ -156,14 +147,11 @@ describe("SetupReviewRoomShell", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Manual brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Qısa izah" }));
 
-    fireEvent.change(
-      screen.getByPlaceholderText(/biznes nə edir/i),
-      {
-        target: { value: "Həftə içi 09:00-18:00 işləyirik." },
-      }
-    );
+    fireEvent.change(screen.getByPlaceholderText(/biznes nə edir/i), {
+      target: { value: "Həftə içi 09:00-18:00 işləyirik." },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /əlavə et/i }));
 
