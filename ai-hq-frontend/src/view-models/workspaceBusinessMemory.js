@@ -115,7 +115,7 @@ function buildRuntimeSupportState(trust = null) {
           arr(truthReadiness.blockedItems)
             .map((item) => normalizeAction(item?.nextAction || item?.action || item?.repairAction))
             .find(Boolean),
-          { label: "Continue AI setup", path: "/home?assistant=setup" }
+          { label: "Continue AI setup", path: "/setup" }
         )
       : repairAction,
   };
@@ -240,7 +240,7 @@ export function buildWorkspaceBusinessMemory({
     secondaryAction: hasSetupFollowUp
       ? {
           label: setupState?.action?.label || "Open setup assistant",
-          path: "/home?assistant=setup",
+          path: "/setup",
         }
       : null,
   };

@@ -852,7 +852,7 @@ function buildFallbackOutcomeItems(payloads = {}, domainStates = {}) {
         label: "Pending review",
         nextAction: {
           label: "Open setup assistant",
-          path: "/home?assistant=setup",
+          path: "/setup",
         },
       },
     ];

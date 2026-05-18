@@ -139,7 +139,7 @@ function buildStatePresentation(status, meta = {}) {
             : "Imported setup details still need operator review.",
         action: {
           label: "Open setup assistant",
-          path: "/home?assistant=setup",
+          path: "/setup",
         },
       };
     case "ready_to_continue":
@@ -152,7 +152,7 @@ function buildStatePresentation(status, meta = {}) {
           : "Setup still needs a few details before the workspace is complete.",
         action: {
           label: "Open setup assistant",
-          path: "/home?assistant=setup",
+          path: "/setup",
         },
       };
     case "completed":

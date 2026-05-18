@@ -11,7 +11,7 @@ const INTENT_DEFINITIONS = [
     id: "continue-setup",
     label: "Open setup assistant",
     phrases: ["continue setup", "finish setup", "open setup", "setup intake"],
-    route: "/home?assistant=setup",
+    route: "/setup",
     destinationSurface: "workspace",
   },
   {

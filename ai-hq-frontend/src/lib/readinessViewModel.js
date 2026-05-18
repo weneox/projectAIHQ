@@ -156,7 +156,7 @@ export function pickReadinessAction(readiness = {}, fallbackAction = null) {
 export function buildTruthOperationalState(
   trust = null,
   {
-    setupPath = "/home?assistant=setup",
+    setupPath = "/setup",
     truthPath = "/truth",
   } = {}
 ) {
