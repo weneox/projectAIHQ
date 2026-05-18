@@ -1,6 +1,7 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { buildSetupAssistantServiceCatalog } from "../setupAssistantCatalog.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
+import { buildSetupBrainV5 } from "./brainV5.js";
 import {
   buildAssistantCompatBusinessFacts,
   buildAssistantCompatConversationStatus,
@@ -1898,6 +1899,18 @@ export function buildSetupReviewRoom({
     }),
     runtimeConsumers: buildSetupReviewRoomRuntimeConsumers({
       lifecycleState,
+    }),
+    brain: buildSetupBrainV5({
+      setup,
+      lifecycleState,
+      assistant,
+      reviewRoom: {
+        sections,
+        requiredSections,
+        missingSections,
+        issues,
+        issueSummary,
+      },
     }),
     actions: buildSetupReviewRoomActions({
       lifecycleState,
