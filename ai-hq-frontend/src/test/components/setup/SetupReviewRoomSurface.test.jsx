@@ -98,6 +98,91 @@ describe("SetupReviewRoomSurface", () => {
     ).toBeEnabled();
   });
 
+  it("renders intake options and approval preview", () => {
+    render(
+      <SetupReviewRoomSurface
+        reviewRoom={{
+          header: {
+            title: "Business truth is ready to approve",
+            subtitle: "Approval will publish runtime truth.",
+            statusLabel: "Ready for approval",
+            badgeTone: "success",
+            trustNote: "Draft data is not runtime authority.",
+          },
+          sections: [],
+          actions: {
+            primary: {
+              id: "approve_and_publish_truth",
+              label: "Approve truth",
+              enabled: true,
+            },
+          },
+          intake: {
+            primaryExperience: "review_room",
+            options: [
+              {
+                id: "website_source",
+                label: "Website",
+                description: "Use public website evidence.",
+                enabled: true,
+                status: "captured",
+              },
+              {
+                id: "manual_brief",
+                label: "Manual brief",
+                description: "Write a short business description.",
+                enabled: true,
+                status: "available",
+              },
+              {
+                id: "document_upload",
+                label: "Document upload",
+                description: "Upload menus or documents.",
+                enabled: false,
+                status: "planned",
+              },
+            ],
+          },
+          approvalPreview: {
+            canApprove: true,
+            publishes: [
+              {
+                key: "profile",
+                label: "Business profile",
+                summary: "Acme Clinic — dental clinic.",
+              },
+              {
+                key: "services",
+                label: "Services",
+                summary: "Consultation, cleaning.",
+              },
+            ],
+            excludedFromTruth: [
+              "assistant_style_profile",
+              "raw_source_evidence",
+              "transient_chat_turns",
+            ],
+          },
+          runtimeConsumers: {
+            consumers: [],
+          },
+          issues: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText(/input sources/i)).toBeInTheDocument();
+    expect(screen.getByText(/website/i)).toBeInTheDocument();
+    expect(screen.getByText(/manual brief/i)).toBeInTheDocument();
+    expect(screen.getByText(/document upload/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/business profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/services/i)).toBeInTheDocument();
+    expect(screen.getByText(/not published as truth/i)).toBeInTheDocument();
+    expect(screen.getByText(/assistant style profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/raw source evidence/i)).toBeInTheDocument();
+  });
+
   it("shows blocking issues when approval is not ready", () => {
     render(
       <SetupReviewRoomSurface

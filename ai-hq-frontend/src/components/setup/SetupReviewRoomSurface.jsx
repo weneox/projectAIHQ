@@ -8,6 +8,16 @@ function toneClass(tone = "neutral") {
   return "border-slate-200 bg-slate-50 text-slate-900";
 }
 
+function enabledLabel(enabled = false) {
+  return enabled ? "available" : "planned";
+}
+
+function compactText(value = "", max = 120) {
+  const text = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
+
 function statusLabel(status = "") {
   return String(status || "missing").replace(/_/g, " ");
 }
@@ -16,6 +26,9 @@ export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
   const room = normalizeSetupReviewRoom(reviewRoom);
   const headerTone = toneClass(room.header.badgeTone);
   const blockingIssues = room.issues.filter((issue) => issue.severity === "blocking");
+  const intakeOptions = room.intake.options;
+  const publishItems = room.approvalPreview?.publishes || [];
+  const excludedItems = room.approvalPreview?.excludedFromTruth || [];
 
   return (
     <section
@@ -111,6 +124,89 @@ export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
           </div>
         </aside>
       </div>
+
+      {intakeOptions.length ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-950">Input sources</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Website, brief, pasted text and answers are inputs into the same review room.
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+              {room.intake.primaryExperience}
+            </span>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {intakeOptions.map((option) => (
+              <div
+                key={option.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{option.label}</p>
+                    {option.description ? (
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {compactText(option.description, 140)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                    {option.status || enabledLabel(option.enabled)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {publishItems.length || excludedItems.length ? (
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-slate-950">Approval preview</h3>
+              <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                {room.approvalPreview?.canApprove ? "ready" : "blocked"}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {publishItems.map((item) => (
+                <div key={item.key} className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                  {item.summary ? (
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {compactText(item.summary, 160)}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <aside className="rounded-2xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-950">Not published as truth</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Style, raw evidence and transient chat stay outside runtime truth.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {excludedItems.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600"
+                >
+                  {statusLabel(item)}
+                </span>
+              ))}
+            </div>
+          </aside>
+        </div>
+      ) : null}
 
       {blockingIssues.length ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
