@@ -7,6 +7,7 @@ import {
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
+  importSourceForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
 } from "../../api/setup.js";
@@ -627,6 +628,46 @@ export default function SetupCommandCenter({
 
     try {
       await ensureSession();
+
+      const sourceInput = obj(arguments[0]?.source);
+      const shouldImportSource =
+        sourceInput.isImportedSource === true && s(sourceInput.value);
+
+      if (shouldImportSource) {
+        const sourceType = lower(sourceInput.type || "website");
+        const sourceValue = s(sourceInput.value);
+
+        const response = await importSourceForSetup({
+          primarySource: {
+            type: sourceType,
+            sourceType,
+            value: sourceValue,
+            url: sourceValue,
+            sourceUrl: sourceValue,
+          },
+          sources: [
+            {
+              type: sourceType,
+              sourceType,
+              value: sourceValue,
+              url: sourceValue,
+              sourceUrl: sourceValue,
+            },
+          ],
+          note: answer,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+
+        queryClient.setQueryData(setupReviewQueryKey, response);
+
+        await refreshSetupCommandCenterState({
+          includeChannelStatus: false,
+          emitReason: "setup-source-imported",
+        });
+
+        return response;
+      }
 
       const response = await sendSetupAssistantMessage({
         step: s(step, "company"),
