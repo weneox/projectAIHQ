@@ -113,6 +113,9 @@ const NAV_NOISE_RE =
 const PROMO_NOISE_RE =
   /\b(custom quote|request quote|timeline|days|gün|gun|project complexity|complexity|requirements|meta tags|structured data|performance optimization|most common questions|answers to the most common questions)\b/i;
 
+const CTA_SUMMARY_NOISE_RE =
+  /\b(read it here|start free|no credit card|get \d+\s+(days?|months?)|limited time|sign up|log in)\b/i;
+
 const SOCIAL_HOST_RE =
   /\b(instagram\.com|facebook\.com|fb\.com|linkedin\.com|wa\.me|whatsapp\.com|t\.me|telegram\.me|youtube\.com|youtu\.be|x\.com|twitter\.com|tiktok\.com|pinterest\.com)\b/i;
 
@@ -718,6 +721,13 @@ function looksLikeAddress(raw = "", { relaxed = false } = {}) {
   if (isGenericMapsText(value)) return false;
   if (PROMO_NOISE_RE.test(value)) return false;
   if (
+    /\b(back office|front office|full suite|suite of|software suite|building the|building a|building your|infrastructure|commerce features|members?|employees?|workforce|workers?|team members?)\b/i.test(
+      value
+    )
+  ) {
+    return false;
+  }
+  if (
     /\b(recommend|məsləhət|meslehet|satisfied|project|layihə|layihe|seo|design|website|vebsayt|hazırlanması|hazirlanmasi|corporate websites|landing pages)\b/i.test(
       value
     )
@@ -738,6 +748,15 @@ function looksLikeAddress(raw = "", { relaxed = false } = {}) {
     value.split(/\s+/).length <= 7;
 
   if (!(hasLabel || hasStrongAddressSignal || hasStreetNumberCombo || hasCityOnly)) {
+    return false;
+  }
+
+  if (
+    /\boffice\b/i.test(value) &&
+    !/\b(address|location|head office|registered office|office address|office location|office\s*[:,-]|\d{1,4}|street|st\.?|avenue|ave|road|rd\.?|floor|building|suite)\b/i.test(
+      value
+    )
+  ) {
     return false;
   }
 
@@ -850,7 +869,7 @@ function isSummaryNoise(text = "") {
     return true;
   }
   if (detectPricingLine(value) && value.length > 90) return true;
-  if (PROMO_NOISE_RE.test(value)) return true;
+  if (PROMO_NOISE_RE.test(value) || CTA_SUMMARY_NOISE_RE.test(value)) return true;
   if (
     /\b(simple landing pages|corporate websites|e-commerce projects|timeline may vary)\b/i.test(
       value
@@ -878,7 +897,7 @@ function scoreSummaryLine(text = "") {
   }
   if (detectServiceLine(x)) score += 1;
   if (detectPricingLine(x)) score -= 3;
-  if (PROMO_NOISE_RE.test(x)) score -= 4;
+  if (PROMO_NOISE_RE.test(x) || CTA_SUMMARY_NOISE_RE.test(x)) score -= 4;
   if (x.length > 240) score -= 1;
 
   return score;

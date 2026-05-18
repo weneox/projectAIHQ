@@ -1,6 +1,8 @@
 ﻿// src/services/workspace/import.js
 // FINAL v6.2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â session-aware source import orchestration + website partial-review hardening
 
+import crypto from "node:crypto";
+
 import { runSourceSync } from "../sourceSync/index.js";
 import { buildSetupState } from "./setup.js";
 import { createLogger } from "../../utils/logger.js";
@@ -744,6 +746,318 @@ function shouldForcePartialModeFromWarnings(warnings = []) {
   );
 }
 
+function buildVirtualSourceSyncRecords({
+  scope = {},
+  session = {},
+  normalizedType = "",
+  normalizedUrl = "",
+  actor = {},
+  requestId = "",
+  intakeContext = {},
+} = {}) {
+  const sourceId = crypto.randomUUID();
+  const runId = crypto.randomUUID();
+  const now = nowIso();
+
+  const source = {
+    id: sourceId,
+    tenant_id: s(scope.tenantId),
+    tenant_key: s(scope.tenantKey),
+    source_type: s(normalizedType),
+    type: s(normalizedType),
+    source_url: s(normalizedUrl),
+    url: s(normalizedUrl),
+    display_name: buildSourceDisplayName({
+      sourceType: normalizedType,
+      url: normalizedUrl,
+    }),
+    status: "active",
+    sync_status: "running",
+    review_session_id: s(session?.id),
+    metadata_json: {
+      requestId: s(requestId),
+      sourceType: s(normalizedType),
+      sourceUrl: s(normalizedUrl),
+      intakeContext: obj(intakeContext),
+      virtualSetupSource: true,
+      createdBecause: "source_registry_tables_unavailable",
+    },
+    created_at: now,
+    updated_at: now,
+  };
+
+  const run = {
+    id: runId,
+    tenant_id: s(scope.tenantId),
+    tenant_key: s(scope.tenantKey),
+    source_id: sourceId,
+    source_type: s(normalizedType),
+    source_url: s(normalizedUrl),
+    url: s(normalizedUrl),
+    status: "running",
+    review_session_id: s(session?.id),
+    requested_by: s(actor.auditValue),
+    metadata_json: {
+      requestId: s(requestId),
+      reviewSessionId: s(session?.id),
+      sourceType: s(normalizedType),
+      sourceUrl: s(normalizedUrl),
+      intakeContext: obj(intakeContext),
+      virtualSetupRun: true,
+      createdBecause: "source_registry_tables_unavailable",
+    },
+    started_at: now,
+    created_at: now,
+    updated_at: now,
+  };
+
+  return {
+    ensured: {
+      table: "",
+      virtual: true,
+      source,
+    },
+    createdRun: {
+      table: "",
+      virtual: true,
+      run,
+    },
+  };
+}
+
+function memoryRowMatches(row = {}, params = {}) {
+  const x = obj(row);
+
+  if (s(params.tenantId) && s(x.tenantId || x.tenant_id) !== s(params.tenantId)) {
+    return false;
+  }
+
+  if (s(params.tenantKey) && s(x.tenantKey || x.tenant_key) !== s(params.tenantKey)) {
+    return false;
+  }
+
+  if (s(params.sourceId) && s(x.sourceId || x.source_id) !== s(params.sourceId)) {
+    return false;
+  }
+
+  if (s(params.sourceRunId) && s(x.sourceRunId || x.source_run_id) !== s(params.sourceRunId)) {
+    return false;
+  }
+
+  if (s(params.reviewSessionId) && s(x.reviewSessionId || x.review_session_id) !== s(params.reviewSessionId)) {
+    return false;
+  }
+
+  if (s(params.sourceType) && lower(x.sourceType || x.source_type) !== lower(params.sourceType)) {
+    return false;
+  }
+
+  if (s(params.category) && lower(x.category) !== lower(params.category)) {
+    return false;
+  }
+
+  if (s(params.status) && lower(x.status) !== lower(params.status)) {
+    return false;
+  }
+
+  if (s(params.claimType) && lower(x.claimType || x.claim_type) !== lower(params.claimType)) {
+    return false;
+  }
+
+  if (
+    s(params.resolutionStatus) &&
+    lower(x.resolutionStatus || x.resolution_status) !== lower(params.resolutionStatus)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function paginateMemoryRows(rows = [], params = {}) {
+  const offset = Math.max(0, Number(params.offset || 0));
+  const limit = Math.max(0, Number(params.limit || 1000)) || 1000;
+  return arr(rows).filter((row) => memoryRowMatches(row, params)).slice(offset, offset + limit);
+}
+
+function buildInMemorySourceSyncAdapters({
+  scope = {},
+  source = {},
+  run = {},
+  reviewSessionId = "",
+  collector = null,
+} = {}) {
+  const candidates = [];
+  const observations = [];
+
+  return {
+    sources: {
+      async finishSourceSync(args = {}) {
+        const now = nowIso();
+        return {
+          source: {
+            ...source,
+            sync_status: s(args.syncStatus || args.sourceSyncStatus || "success"),
+            status: s(args.syncStatus || args.sourceSyncStatus || "success"),
+            input_summary_json: obj(args.inputSummaryJson),
+            extraction_summary_json: obj(args.extractionSummaryJson),
+            result_summary_json: obj(args.resultSummaryJson),
+            pages_scanned: args.pagesScanned,
+            records_scanned: args.recordsScanned,
+            candidates_created: args.candidatesCreated,
+            warnings_count: args.warningsCount,
+            logs_json: arr(args.logsJson),
+            last_synced_at: now,
+            updated_at: now,
+          },
+          run: {
+            ...run,
+            status: s(args.runStatus || args.syncStatus || "success"),
+            input_summary_json: obj(args.inputSummaryJson),
+            extraction_summary_json: obj(args.extractionSummaryJson),
+            result_summary_json: obj(args.resultSummaryJson),
+            pages_scanned: args.pagesScanned,
+            records_scanned: args.recordsScanned,
+            candidates_created: args.candidatesCreated,
+            warnings_count: args.warningsCount,
+            logs_json: arr(args.logsJson),
+            finished_at: now,
+            updated_at: now,
+          },
+        };
+      },
+      async markSourceSyncError(args = {}) {
+        const now = nowIso();
+        return {
+          source: {
+            ...source,
+            sync_status: "error",
+            status: "error",
+            error_code: s(args.errorCode || "SOURCE_SYNC_FAILED"),
+            error_message: s(args.errorMessage || "source sync failed"),
+            input_summary_json: obj(args.inputSummaryJson),
+            extraction_summary_json: obj(args.extractionSummaryJson),
+            result_summary_json: obj(args.resultSummaryJson),
+            warnings_count: args.warningsCount,
+            errors_count: args.errorsCount || 1,
+            logs_json: arr(args.logsJson),
+            updated_at: now,
+          },
+          run: {
+            ...run,
+            status: "error",
+            error_code: s(args.errorCode || "SOURCE_SYNC_FAILED"),
+            error_message: s(args.errorMessage || "source sync failed"),
+            input_summary_json: obj(args.inputSummaryJson),
+            extraction_summary_json: obj(args.extractionSummaryJson),
+            result_summary_json: obj(args.resultSummaryJson),
+            warnings_count: args.warningsCount,
+            errors_count: args.errorsCount || 1,
+            logs_json: arr(args.logsJson),
+            finished_at: now,
+            updated_at: now,
+          },
+        };
+      },
+    },
+    knowledge: {
+      async createCandidatesBulk(items = []) {
+        const now = nowIso();
+        const rows = arr(items).map((item) => ({
+          id: crypto.randomUUID(),
+          tenantId: s(scope.tenantId),
+          tenantKey: s(scope.tenantKey),
+          reviewSessionId: s(reviewSessionId),
+          sourceId: s(item.sourceId),
+          sourceRunId: s(item.sourceRunId),
+          status: s(item.status || "needs_review"),
+          firstSeenAt: item.firstSeenAt || now,
+          lastSeenAt: item.lastSeenAt || now,
+          ...obj(item),
+        }));
+
+        candidates.push(...rows);
+        if (collector) {
+          collector.candidates.push(...rows);
+          collector.candidateCount = collector.candidates.length;
+        }
+
+        return rows;
+      },
+      async listCandidates(args = {}) {
+        return paginateMemoryRows(candidates, args);
+      },
+      async upsertBusinessProfile(input = {}) {
+        if (collector) {
+          collector.profilePatch = mergeDeep(collector.profilePatch, obj(input));
+        }
+
+        return {
+          ok: true,
+          staged: true,
+          reviewSessionId: s(reviewSessionId),
+          profile: cloneJson(collector?.profilePatch || {}, {}),
+        };
+      },
+      async upsertBusinessCapabilities(input = {}) {
+        if (collector) {
+          collector.capabilitiesPatch = mergeDeep(collector.capabilitiesPatch, obj(input));
+        }
+
+        return {
+          ok: true,
+          staged: true,
+          reviewSessionId: s(reviewSessionId),
+          capabilities: cloneJson(collector?.capabilitiesPatch || {}, {}),
+        };
+      },
+    },
+    fusion: {
+      async createObservationsBulk(items = []) {
+        const now = nowIso();
+        const rows = arr(items).map((item) => ({
+          id: crypto.randomUUID(),
+          tenantId: s(scope.tenantId),
+          tenantKey: s(scope.tenantKey),
+          reviewSessionId: s(reviewSessionId),
+          firstSeenAt: item.firstSeenAt || now,
+          lastSeenAt: item.lastSeenAt || now,
+          ...obj(item),
+        }));
+
+        observations.push(...rows);
+        if (collector) {
+          collector.observations.push(...rows);
+          collector.observationCount = collector.observations.length;
+        }
+
+        return rows;
+      },
+      async listObservations(args = {}) {
+        return paginateMemoryRows(observations, args);
+      },
+      async createSynthesisSnapshot(input = {}) {
+        const snapshot = {
+          id: crypto.randomUUID(),
+          tenantId: s(scope.tenantId),
+          tenantKey: s(scope.tenantKey),
+          reviewSessionId: s(reviewSessionId),
+          ...obj(input),
+        };
+
+        if (collector) {
+          collector.snapshot = snapshot;
+          collector.lastSnapshotId = snapshot.id;
+          collector.snapshotCount += 1;
+        }
+
+        return snapshot;
+      },
+    },
+    artifacts: null,
+  };
+}
+
 function extractExistingIntakeContext(review = {}) {
   return obj(review?.session?.metadata?.lastIntakeContext);
 }
@@ -1230,6 +1544,7 @@ async function completeImportSourceByType({
   deferFailureStatus = false,
   agentKernel = null,
   runBusinessDraftSynthesis = null,
+  stageDeps = {},
 }) {
   const logger = createLogger({
     component: "workspace-import-complete",
@@ -1242,6 +1557,42 @@ async function completeImportSourceByType({
     sourceType: normalizedType,
   });
 
+  const useInMemorySourceSync = ensured?.virtual === true || createdRun?.virtual === true;
+  const adapters = useInMemorySourceSync
+    ? buildInMemorySourceSyncAdapters({
+        scope,
+        source: ensured.source,
+        run: createdRun.run,
+        reviewSessionId: session.id,
+        collector,
+      })
+    : {
+        sources: buildSourcesAdapter(db, {
+          sourceTable: ensured.table || sourceTable,
+          runTable: createdRun.table || runTable,
+          reviewSessionId: session.id,
+        }),
+        knowledge: buildKnowledgeAdapter({
+          db,
+          scope: {
+            tenantId: scope.tenantId,
+            tenantKey: scope.tenantKey,
+          },
+          reviewSessionId: session.id,
+          collector,
+        }),
+        fusion: buildFusionAdapter({
+          db,
+          scope: {
+            tenantId: scope.tenantId,
+            tenantKey: scope.tenantKey,
+          },
+          reviewSessionId: session.id,
+          collector,
+        }),
+        artifacts: createTenantSourceArtifactsHelpers({ db }),
+      };
+
   const result = await runSourceSync({
     db,
     source: ensured.source,
@@ -1249,30 +1600,11 @@ async function completeImportSourceByType({
     requestedBy: actor.auditValue,
     reviewSessionId: session.id,
     setupReviewSessionId: session.id,
-    sources: buildSourcesAdapter(db, {
-      sourceTable: ensured.table || sourceTable,
-      runTable: createdRun.table || runTable,
-      reviewSessionId: session.id,
-    }),
-    knowledge: buildKnowledgeAdapter({
-      db,
-      scope: {
-        tenantId: scope.tenantId,
-        tenantKey: scope.tenantKey,
-      },
-      reviewSessionId: session.id,
-      collector,
-    }),
-    fusion: buildFusionAdapter({
-      db,
-      scope: {
-        tenantId: scope.tenantId,
-        tenantKey: scope.tenantKey,
-      },
-      reviewSessionId: session.id,
-      collector,
-    }),
-    artifacts: createTenantSourceArtifactsHelpers({ db }),
+    sources: adapters.sources,
+    knowledge: adapters.knowledge,
+    fusion: adapters.fusion,
+    artifacts: adapters.artifacts,
+    stageDeps,
   });
 
   let warnings = arr(result?.warnings).map((x) => s(x)).filter(Boolean);
@@ -1377,7 +1709,9 @@ async function completeImportSourceByType({
       );
 
   const nextPrimarySourceId = promoteImportedSourceToPrimary
-    ? (result?.source || ensured.source)?.id || session.primarySourceId || null
+    ? useInMemorySourceSync
+      ? session.primarySourceId || null
+      : (result?.source || ensured.source)?.id || session.primarySourceId || null
     : session.primarySourceId || null;
 
   const nextSessionMetadata = mergeDeep(obj(session.metadata), {
@@ -1653,6 +1987,7 @@ async function importSourceByType({
   requestId: requestIdOverride = "",
   agentKernel = null,
   runBusinessDraftSynthesis = null,
+  stageDeps = {},
 }) {
   const normalizedUrl = normalizeUrl(url);
   const normalizedType = normalizeSourceType(sourceType);
@@ -1685,14 +2020,6 @@ async function importSourceByType({
 
   const sourceTable = await findFirstExistingTable(db, SOURCE_TABLES);
   const runTable = await findFirstExistingTable(db, SOURCE_RUN_TABLES);
-
-  if (!sourceTable) {
-    throw new Error("Sources table is missing");
-  }
-
-  if (!runTable) {
-    throw new Error("Source sync runs table is missing");
-  }
 
   const requestId =
     s(requestIdOverride) ||
@@ -1847,67 +2174,96 @@ async function importSourceByType({
       },
     });
 
-    ensured = await ensureSource(db, {
-      tenantId: scope.tenantId,
-      tenantKey: scope.tenantKey,
-      sourceType: normalizedType,
-      url: normalizedUrl,
-      requestedBy: actor.auditValue,
-      requestedByUserId: actor.userId,
-      requestedByEmail: actor.email,
-      requestedByName: actor.name,
-      intakeContext,
-      requestId,
-      reviewSessionId: session.id,
-    });
+    if (!sourceTable || !runTable) {
+      if (!waitForCompletion) {
+        throw new Error(
+          !sourceTable
+            ? "Sources table is missing"
+            : "Source sync runs table is missing"
+        );
+      }
 
-    if (!ensured?.source?.id) {
-      throw new Error("SourceRowMissingAfterEnsure");
-    }
+      logger.warn("setup_import.source_registry_tables_missing_inline_fallback", {
+        sourceTableAvailable: Boolean(sourceTable),
+        runTableAvailable: Boolean(runTable),
+        reviewSessionId: s(session?.id),
+      });
 
-    await attachSourceToSetupReviewSession({
-      sessionId: session.id,
-      tenantId: scope.tenantId,
-      sourceId: ensured.source.id,
-      sourceType: normalizedType,
-      role: promoteImportedSourceToPrimary ? "primary" : "supporting",
-      label:
-        s(ensured.source.display_name) ||
-        s(ensured.source.name) ||
-        buildSourceDisplayName({
-          sourceType: normalizedType,
-          url: normalizedUrl,
-        }),
-      position: Math.max(0, arr(currentReview?.sources).length),
-      promotePrimary: promoteImportedSourceToPrimary,
-      metadata: {
+      const virtualRecords = buildVirtualSourceSyncRecords({
+        scope,
+        session,
+        normalizedType,
+        normalizedUrl,
+        actor,
         requestId,
+        intakeContext,
+      });
+
+      ensured = virtualRecords.ensured;
+      createdRun = virtualRecords.createdRun;
+    } else {
+      ensured = await ensureSource(db, {
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+        sourceType: normalizedType,
+        url: normalizedUrl,
+        requestedBy: actor.auditValue,
+        requestedByUserId: actor.userId,
+        requestedByEmail: actor.email,
+        requestedByName: actor.name,
+        intakeContext,
+        requestId,
+        reviewSessionId: session.id,
+      });
+
+      if (!ensured?.source?.id) {
+        throw new Error("SourceRowMissingAfterEnsure");
+      }
+
+      await attachSourceToSetupReviewSession({
+        sessionId: session.id,
+        tenantId: scope.tenantId,
+        sourceId: ensured.source.id,
+        sourceType: normalizedType,
+        role: promoteImportedSourceToPrimary ? "primary" : "supporting",
+        label:
+          s(ensured.source.display_name) ||
+          s(ensured.source.name) ||
+          buildSourceDisplayName({
+            sourceType: normalizedType,
+            url: normalizedUrl,
+          }),
+        position: Math.max(0, arr(currentReview?.sources).length),
+        promotePrimary: promoteImportedSourceToPrimary,
+        metadata: {
+          requestId,
+          sourceUrl: normalizedUrl,
+          sourceAuthorityClass: sourceAuthorityClass(normalizedType),
+          reuseExistingSession,
+          requestedPrimary:
+            sourceSeedKey(intakeContext?.primarySource) ===
+            sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
+        },
+      });
+
+      createdRun = await createSourceRun(db, {
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+        sourceId: ensured.source.id,
+        sourceType: normalizedType,
+        requestedBy: actor.auditValue,
+        requestedByUserId: actor.userId,
+        requestedByEmail: actor.email,
+        requestedByName: actor.name,
         sourceUrl: normalizedUrl,
-        sourceAuthorityClass: sourceAuthorityClass(normalizedType),
-        reuseExistingSession,
-        requestedPrimary:
-          sourceSeedKey(intakeContext?.primarySource) ===
-          sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
-      },
-    });
+        intakeContext,
+        requestId,
+        reviewSessionId: session.id,
+      });
 
-    createdRun = await createSourceRun(db, {
-      tenantId: scope.tenantId,
-      tenantKey: scope.tenantKey,
-      sourceId: ensured.source.id,
-      sourceType: normalizedType,
-      requestedBy: actor.auditValue,
-      requestedByUserId: actor.userId,
-      requestedByEmail: actor.email,
-      requestedByName: actor.name,
-      sourceUrl: normalizedUrl,
-      intakeContext,
-      requestId,
-      reviewSessionId: session.id,
-    });
-
-    if (!createdRun?.run?.id) {
-      throw new Error("SourceSyncRunMissingAfterCreate");
+      if (!createdRun?.run?.id) {
+        throw new Error("SourceSyncRunMissingAfterCreate");
+      }
     }
 
     const completionArgs = {
@@ -1934,6 +2290,7 @@ async function importSourceByType({
       collector,
       agentKernel,
       runBusinessDraftSynthesis,
+      stageDeps,
     };
 
     if (waitForCompletion) {
@@ -2267,6 +2624,8 @@ export const __test__ = {
   mergeImportedDraftPatch,
   isPollutedFailedReviewDraft,
   buildWeakWebsiteDraftWarnings,
+  buildInMemorySourceSyncAdapters,
+  buildVirtualSourceSyncRecords,
   hasDraftIdentityCoverage,
   hasDraftContactCoverage,
   hasDraftServiceCoverage,

@@ -33,6 +33,16 @@ describe("setupSourceIntake", () => {
       value: "https://maps.google.com/?cid=1",
       isImportedSource: true,
     });
+    expect(resolveSetupSourceInput("@acmeclinic")).toEqual({
+      type: "instagram",
+      value: "https://instagram.com/acmeclinic",
+      isImportedSource: true,
+    });
+    expect(resolveSetupSourceInput("Cosmetic clinic in Baku")).toEqual({
+      type: "manual",
+      value: "Cosmetic clinic in Baku",
+      isImportedSource: false,
+    });
   });
 });
 

@@ -139,17 +139,31 @@ function normalizeIncomingSourceType(value = "") {
   ) {
     return "google_maps";
   }
+  if (x === "instagram" || x === "ig" || x === "insta") return "instagram";
 
   return "";
 }
 
 function resolveSourceUrlFromBody(body = {}) {
+  const primarySource = obj(body?.primarySource || body?.primary_source);
+  const firstSource = arr(body?.sources)[0] || {};
+
   return s(
     body?.url ||
       body?.sourceUrl ||
       body?.source_url ||
       body?.link ||
-      body?.value
+      body?.value ||
+      primarySource?.url ||
+      primarySource?.sourceUrl ||
+      primarySource?.source_url ||
+      primarySource?.link ||
+      primarySource?.value ||
+      firstSource?.url ||
+      firstSource?.sourceUrl ||
+      firstSource?.source_url ||
+      firstSource?.link ||
+      firstSource?.value
   );
 }
 

@@ -16,7 +16,7 @@ export function registerSetupImportRoutes(
     s,
   }
 ) {
-  const PRIMARY_SUPPORTED_SOURCE_TYPES = ["website", "google_maps"];
+  const PRIMARY_SUPPORTED_SOURCE_TYPES = ["website", "google_maps", "instagram"];
   const BUNDLE_SUPPORTED_SOURCE_TYPES = ["website", "google_maps", "instagram"];
 
   function normalizeSourceTypeForRoute(value = "") {

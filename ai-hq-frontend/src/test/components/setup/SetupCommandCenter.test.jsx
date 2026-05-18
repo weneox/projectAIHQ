@@ -129,7 +129,7 @@ describe("SetupCommandCenter", () => {
                 {
                   key: "companyName",
                   label: "Biznes adı",
-                  value: "Medhouse Klinika",
+                  value: "Atlas Klinika",
                 },
               ],
               items: [],
@@ -165,11 +165,14 @@ describe("SetupCommandCenter", () => {
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    expect(screen.getByPlaceholderText("medhouse.az")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/google maps/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Oxu" })).toBeDisabled();
     expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/not ready/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/tapılan faktlar/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/yenidən başla/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/missing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/empty answer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/bunları tapdım/i)).not.toBeInTheDocument();
   });
 
   it("routes bare website domain through source import with normalized https URL", async () => {
@@ -177,8 +180,8 @@ describe("SetupCommandCenter", () => {
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    fireEvent.change(screen.getByPlaceholderText("medhouse.az"), {
-      target: { value: "medhouse.az" },
+    fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
+      target: { value: "weneox.com" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
@@ -186,23 +189,29 @@ describe("SetupCommandCenter", () => {
     await waitFor(() => {
       expect(api.importWebsiteForSetup).toHaveBeenCalledWith(
         expect.objectContaining({
+          type: "website",
+          sourceType: "website",
+          value: "https://weneox.com",
+          url: "https://weneox.com",
+          sourceUrl: "https://weneox.com",
+          websiteUrl: "https://weneox.com",
           primarySource: expect.objectContaining({
             type: "website",
             sourceType: "website",
-            value: "https://medhouse.az",
-            url: "https://medhouse.az",
-            sourceUrl: "https://medhouse.az",
+            value: "https://weneox.com",
+            url: "https://weneox.com",
+            sourceUrl: "https://weneox.com",
           }),
           sources: [
             expect.objectContaining({
               type: "website",
               sourceType: "website",
-              value: "https://medhouse.az",
-              url: "https://medhouse.az",
-              sourceUrl: "https://medhouse.az",
+              value: "https://weneox.com",
+              url: "https://weneox.com",
+              sourceUrl: "https://weneox.com",
             }),
           ],
-          note: "medhouse.az",
+          note: "weneox.com",
           allowSessionReuse: true,
           waitForCompletion: true,
         })
@@ -212,6 +221,13 @@ describe("SetupCommandCenter", () => {
     expect(api.importSourceForSetup).not.toHaveBeenCalled();
     expect(api.importGoogleMapsForSetup).not.toHaveBeenCalled();
     expect(api.sendSetupAssistantMessage).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(api.getCurrentSetupReview.mock.calls.length).toBeGreaterThan(1);
+      expect(
+        api.getCurrentSetupAssistantSession.mock.calls.length
+      ).toBeGreaterThan(1);
+    });
   });
 
   it("routes manual brief through setup assistant message", async () => {
@@ -219,13 +235,11 @@ describe("SetupCommandCenter", () => {
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    fireEvent.click(screen.getByRole("button", { name: "Qısa izah" }));
-
-    fireEvent.change(screen.getByPlaceholderText(/biznes nə edir/i), {
+    fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
       target: { value: "Həftə içi 09:00-18:00 işləyirik." },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /əlavə et/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
 
     await waitFor(() => {
       expect(api.sendSetupAssistantMessage).toHaveBeenCalledWith(
@@ -246,10 +260,8 @@ describe("SetupCommandCenter", () => {
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    fireEvent.click(screen.getByRole("button", { name: "Google Maps" }));
-
     fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
-      target: { value: "https://maps.google.com/maps?q=medhouse" },
+      target: { value: "https://maps.google.com/maps?q=OpenAI+San+Francisco" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
@@ -257,10 +269,15 @@ describe("SetupCommandCenter", () => {
     await waitFor(() => {
       expect(api.importGoogleMapsForSetup).toHaveBeenCalledWith(
         expect.objectContaining({
+          type: "google_maps",
+          sourceType: "google_maps",
+          value: "https://maps.google.com/maps?q=OpenAI+San+Francisco",
+          url: "https://maps.google.com/maps?q=OpenAI+San+Francisco",
+          sourceUrl: "https://maps.google.com/maps?q=OpenAI+San+Francisco",
           primarySource: expect.objectContaining({
             type: "google_maps",
             sourceType: "google_maps",
-            value: "https://maps.google.com/maps?q=medhouse",
+            value: "https://maps.google.com/maps?q=OpenAI+San+Francisco",
           }),
           allowSessionReuse: true,
           waitForCompletion: true,
@@ -271,5 +288,26 @@ describe("SetupCommandCenter", () => {
     expect(api.importWebsiteForSetup).not.toHaveBeenCalled();
     expect(api.importSourceForSetup).not.toHaveBeenCalled();
     expect(api.sendSetupAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("shows a clean human message when website import fails", async () => {
+    const error = new Error("website import failed (WebsiteImportFailed)");
+    error.code = "WebsiteImportFailed";
+    api.importWebsiteForSetup.mockRejectedValueOnce(error);
+
+    renderCenter();
+
+    await screen.findByText(/biznesini ai üçün tanıdaq/i);
+
+    fireEvent.change(screen.getByPlaceholderText(/google maps/i), {
+      target: { value: "weneox.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
+
+    expect(
+      await screen.findByText(/mənbəni oxuya bilmədim/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/WebsiteImportFailed/i)).not.toBeInTheDocument();
   });
 });

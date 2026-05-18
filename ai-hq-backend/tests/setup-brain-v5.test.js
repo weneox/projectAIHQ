@@ -7,14 +7,14 @@ test("setup brain v5 plans missing facts and blocks runtime before approval", ()
   const brain = buildSetupBrainV5({
     setup: {
       businessProfile: {
-        companyName: "Medhouse Klinika",
+        companyName: "Atlas Klinika",
         description: "Clinic",
-        websiteUrl: "https://medhouse.example",
+        websiteUrl: "https://atlas.example",
       },
       services: [{ title: "Klinika Xidmətləri" }],
       sourceMetadata: {
         primarySourceType: "website",
-        primarySourceUrl: "https://medhouse.example",
+        primarySourceUrl: "https://atlas.example",
         sourceLabels: ["Official website"],
         evidenceSummary: ["Clinic services and contact page imported"],
       },
@@ -101,7 +101,7 @@ test("setup brain v5 recommends approval only when truth is ready", () => {
   const brain = buildSetupBrainV5({
     setup: {
       businessProfile: {
-        companyName: "Medhouse Klinika",
+        companyName: "Atlas Klinika",
         description: "Clinic",
       },
       services: [{ title: "Klinika Xidmətləri" }],
