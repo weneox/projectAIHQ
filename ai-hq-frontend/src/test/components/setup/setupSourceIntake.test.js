@@ -4,8 +4,8 @@ import {
   classifySetupSourceInput,
   normalizeSetupSourceValue,
   resolveSetupSourceInput,
-} from "../../../components/layout/setupSourceIntake.js";
-import { SETUP_INTERVIEW_QUESTIONS } from "../../../components/layout/setupInterviewQuestions.js";
+} from "../../../components/setup/setupSourceIntake.js";
+import { SETUP_INTERVIEW_QUESTIONS } from "../../../components/setup/setupInterviewQuestions.js";
 
 describe("setupSourceIntake", () => {
   it("classifies supported source inputs without treating social links as websites", () => {
