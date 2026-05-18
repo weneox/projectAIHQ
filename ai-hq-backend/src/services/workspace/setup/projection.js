@@ -895,6 +895,12 @@ function buildTruthVersionCreateInput({
     businessProfileId: businessProfileId || null,
     businessCapabilitiesId: businessCapabilitiesId || null,
     reviewSessionId: persistedReviewSessionId || null,
+    skipRuntimeRefresh: true,
+    runtimeProjectionMetadata: compactObject({
+      source: "projectSetupReviewDraftToCanonical",
+      reviewSessionId: s(session?.id),
+      persistedReviewSessionId: persistedReviewSessionId || undefined,
+    }),
     approvedAt: approvedAt || new Date().toISOString(),
     approvedBy: approvedBy || requestedBy || "system",
     profile: savedProfile,
