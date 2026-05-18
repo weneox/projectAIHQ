@@ -72,7 +72,7 @@ describe("buildTruthOperationalState", () => {
     expect(state.truthReady).toBe(false);
     expect(state.runtimeReady).toBe(false);
     expect(state.status).toBe("blocked");
-    expect(state.action.path).toBe("/home?assistant=setup");
+    expect(state.action.path).toBe("/setup");
     expect(state.reasonCode).toBe("approved_truth_unavailable");
   });
 
