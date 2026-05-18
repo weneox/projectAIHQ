@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import SetupReviewRoomPreview from "../setup/SetupReviewRoomPreview.jsx";
+import SetupReviewRoomSurface from "../setup/SetupReviewRoomSurface.jsx";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
 const TYPING_BUBBLE_DELAY_MS = 320;
@@ -1357,7 +1357,7 @@ export default function SetupAssistantSections({
           ) : null}
 
           {hasSession && hasReviewRoom ? (
-            <SetupReviewRoomPreview reviewRoom={reviewRoom} />
+            <SetupReviewRoomSurface reviewRoom={reviewRoom} />
           ) : null}
 
           {hasSession && profilePreviewReady ? (
