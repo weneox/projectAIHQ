@@ -250,7 +250,7 @@ function buildStages(payload = {}) {
         "Approved runtime authority must be available before live automation can be trusted.",
       icon: DatabaseZap,
       status: runtime.status,
-      action: { label: "Open setup review", path: "/home?assistant=setup" },
+      action: { label: "Open setup review", path: "/setup" },
       blockers: pickBlockers(payload, "runtime"),
       checks: [
         buildCheck({

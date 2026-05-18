@@ -68,21 +68,6 @@ vi.mock("../../../components/layout/Header.jsx", () => ({
   HEADER_HEIGHT: 52,
 }));
 
-vi.mock("../../../components/layout/FloatingAiWidget.jsx", () => ({
-  default: function FloatingAiWidgetMock({ open = false, onOpenChange }) {
-    return (
-      <div>
-        <div data-testid="floating-ai-widget" data-open={open ? "true" : "false"}>
-          widget
-        </div>
-        <button type="button" onClick={() => onOpenChange?.(false)}>
-          close widget
-        </button>
-      </div>
-    );
-  },
-}));
-
 vi.mock("../../../lib/realtime/realtimeStore.js", () => ({
   realtimeStore: {
     subscribeStatus: () => () => {},
@@ -155,29 +140,16 @@ describe("Shell", () => {
     expect(screen.getByText("outlet")).toBeInTheDocument();
   });
 
-  it("opens the global widget from the assistant query param and clears it on close", async () => {
+  it("routes global setup assistant events to the setup command center", async () => {
     pathname = "/home";
-    search = "?assistant=setup";
+    search = "";
 
     render(<Shell />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("floating-ai-widget")).toHaveAttribute(
-        "data-open",
-        "true"
-      );
-    });
-
-    screen.getByRole("button", { name: /close widget/i }).click();
+    window.dispatchEvent(new Event("aihq:open-assistant"));
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith(
-        {
-          pathname: "/home",
-          search: "",
-        },
-        { replace: true }
-      );
+      expect(navigate).toHaveBeenCalledWith("/setup");
     });
   });
 });

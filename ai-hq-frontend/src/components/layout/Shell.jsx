@@ -8,7 +8,6 @@ import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
 import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
@@ -513,7 +512,6 @@ function getInitialCollapsedState() {
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [widgetOpen, setWidgetOpen] = useState(false);
   const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
   const [workspaceMeta, setWorkspaceMeta] = useState(() =>
     mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
@@ -539,11 +537,6 @@ export default function Shell() {
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
   const warningMessageRef = useRef(INITIAL_SHELL_STATS.message);
-
-  const assistantRequested = useMemo(() => {
-    const params = new URLSearchParams(location.search || "");
-    return s(params.get("assistant")).toLowerCase() === "setup";
-  }, [location.search]);
 
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
@@ -712,30 +705,18 @@ export default function Shell() {
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = mobileOpen || widgetOpen ? "hidden" : "";
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [mobileOpen, widgetOpen]);
-
-  useEffect(() => {
-    if (!assistantRequested) return undefined;
-
-    const frame = window.requestAnimationFrame(() => {
-      setWidgetOpen(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [assistantRequested]);
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const handleOpenAssistant = () => {
-      setWidgetOpen(true);
+      navigate("/setup");
     };
 
     window.addEventListener("aihq:open-assistant", handleOpenAssistant);
@@ -743,7 +724,7 @@ export default function Shell() {
     return () => {
       window.removeEventListener("aihq:open-assistant", handleOpenAssistant);
     };
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -816,25 +797,6 @@ export default function Shell() {
       setEmailVerificationSending(false);
     }
   }, [emailVerificationSending]);
-
-  const handleWidgetOpenChange = useCallback(
-    (nextOpen) => {
-      setWidgetOpen(Boolean(nextOpen));
-
-      if (!nextOpen && assistantRequested) {
-        const params = new URLSearchParams(location.search || "");
-        params.delete("assistant");
-        navigate(
-          {
-            pathname: location.pathname,
-            search: params.toString() ? `?${params.toString()}` : "",
-          },
-          { replace: true }
-        );
-      }
-    },
-    [assistantRequested, location.pathname, location.search, navigate]
-  );
 
   const shellSidebarWidth = sidebarCollapsed
     ? SIDEBAR_COLLAPSED_WIDTH
@@ -914,10 +876,6 @@ export default function Shell() {
           )}
         </main>
 
-        <FloatingAiWidget
-          open={widgetOpen}
-          onOpenChange={handleWidgetOpenChange}
-        />
       </div>
     </div>
   );
