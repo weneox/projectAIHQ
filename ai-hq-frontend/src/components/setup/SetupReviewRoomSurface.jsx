@@ -1,4 +1,4 @@
-﻿import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
+import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -35,16 +35,6 @@ function sourceQualityLabel(value = "") {
   if (key === "conflicting") return "Ziddiyyət var";
   if (key === "missing") return "Mənbə yoxdur";
   return statusLabel(value);
-}
-
-function sourceTypeLabel(value = "") {
-  const key = lower(value);
-  if (key === "website") return "Website";
-  if (key === "google_maps") return "Google Maps";
-  if (key === "instagram") return "Instagram";
-  if (key === "facebook") return "Facebook";
-  if (key === "manual") return "Manual brief";
-  return "Mənbə";
 }
 
 function decisionLabel(value = "") {
