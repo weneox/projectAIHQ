@@ -1,6 +1,7 @@
-/* @vitest-environment jsdom */
+﻿/* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SetupReviewRoomSurface from "../../../components/setup/SetupReviewRoomSurface.jsx";
@@ -10,195 +11,87 @@ afterEach(() => {
 });
 
 describe("SetupReviewRoomSurface", () => {
-  it("renders review room header, sections, runtime consumers and primary action", () => {
+  it("renders source-first setup workspace instead of chat UI", () => {
     render(
       <SetupReviewRoomSurface
-        reviewRoom={{
-          primaryExperience: "review_room",
-          mainSurface: "business_truth_review",
-          chatRole: "input_method",
-          draftAuthority: "not_runtime_authority",
-          runtimeAuthority: "approved_truth",
-          readyForApproval: true,
-          header: {
-            status: "ready_for_approval",
-            title: "Business truth is ready to approve",
-            subtitle: "Approving will publish runtime authority.",
-            statusLabel: "Ready for approval",
-            badgeTone: "success",
-            primaryMessage: "Approve to make this truth live.",
-            trustNote:
-              "Draft data is not runtime authority. Only approved truth can power customer-facing AI.",
-          },
-          sections: [
-            {
-              key: "profile",
-              label: "Business profile",
-              status: "complete",
-              itemCount: 2,
-              sourceBacked: true,
-              action: "review_profile",
-            },
-            {
-              key: "services",
-              label: "Services",
-              status: "complete",
-              itemCount: 1,
-              sourceBacked: true,
-              action: "review_services",
-            },
-          ],
-          actions: {
-            primary: {
-              id: "approve_and_publish_truth",
-              label: "Approve and make live",
-              intent: "finalize_review",
-              enabled: true,
-            },
-            approval: {
-              enabled: true,
-              runtimeAuthorityAfterApproval: "approved_truth",
-            },
-          },
-          runtimeConsumers: {
-            authority: "approved_truth",
-            consumers: [
-              {
-                key: "public_widget",
-                label: "Public website widget",
-                description: "Customer-facing widget replies from approved truth only.",
-                currentState: "ready_after_approval",
-                requiresApprovedTruth: true,
-              },
-              {
-                key: "voice_assistant",
-                label: "Voice assistant",
-                description: "Voice answers must use approved truth.",
-                currentState: "ready_after_approval",
-                requiresApprovedTruth: true,
-              },
-            ],
-          },
-          issues: [],
-        }}
-      />
-    );
-
-    expect(
-      screen.getByRole("region", { name: /ai setup review room/i })
-    ).toBeInTheDocument();
-    expect(screen.getByText(/business truth is ready to approve/i)).toBeInTheDocument();
-    expect(screen.getByText(/draft data is not runtime authority/i)).toBeInTheDocument();
-    expect(screen.getByText(/business profile/i)).toBeInTheDocument();
-    expect(screen.getByText(/services/i)).toBeInTheDocument();
-    expect(screen.getByText(/public website widget/i)).toBeInTheDocument();
-    expect(screen.getByText(/voice assistant/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /approve and make live/i })
-    ).toBeEnabled();
-  });
-
-  it("renders setup brain v5 decision panel", () => {
-    render(
-      <SetupReviewRoomSurface
+        sourceValue="https://medhouse.az"
+        sourceType="website"
         reviewRoom={{
           header: {
-            title: "Review the AI-prepared business draft",
-            subtitle: "Check each section before approval.",
-            statusLabel: "Draft ready",
+            statusLabel: "Hazırlanır",
             badgeTone: "info",
-            trustNote: "Draft data is not runtime authority.",
           },
           brain: {
             version: 5,
-            mode: "setup_brain_v5",
+            sourceIntelligence: {
+              quality: "strong",
+              evidenceCount: 3,
+            },
+            sectionCompletion: {
+              percent: 78,
+            },
+            missingFactsPlan: {
+              required: true,
+              missingSections: ["hours", "pricing"],
+              nextQuestionKey: "hours",
+              nextQuestion: {
+                prompt: "İş saatlarını əlavə edin.",
+              },
+            },
+            conflictPlan: {
+              hasConflicts: false,
+            },
             decisionPlan: {
               operatorDecision: "answer_missing_facts",
               reason: "Required business facts are missing.",
             },
-            sectionCompletion: { percent: 67 },
-            sourceIntelligence: { quality: "strong", evidenceCount: 3 },
-            missingFactsPlan: {
-              required: true,
-              missingSections: ["contacts"],
-              nextQuestion: { prompt: "Add a customer contact route." },
+            runtimeSimulation: {
+              canActivateAfterApproval: false,
+              afterApproval: [
+                {
+                  key: "public_widget",
+                  label: "Website widget",
+                  state: "ready",
+                  authority: "approved_truth",
+                },
+              ],
             },
-            conflictPlan: { hasConflicts: false },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
-          sections: [],
-          actions: {
-            primary: {
-              id: "answer_missing_required_facts",
-              label: "Complete missing facts",
-              enabled: true,
-            },
-          },
-          runtimeConsumers: { consumers: [] },
-          issues: [],
-        }}
-      />
-    );
-
-    expect(screen.getByText(/ai brain v5/i)).toBeInTheDocument();
-    expect(screen.getByText(/answer missing facts/i)).toBeInTheDocument();
-    expect(screen.getByText(/required business facts are missing/i)).toBeInTheDocument();
-    expect(screen.getByText("67%")).toBeInTheDocument();
-    expect(screen.getByText(/source intelligence/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 evidence item/i)).toBeInTheDocument();
-    expect(screen.getByText(/add a customer contact route/i)).toBeInTheDocument();
-    expect(screen.getByText(/blocked before approval/i)).toBeInTheDocument();
-  });
-
-  it("renders section details with facts and items", () => {
-    render(
-      <SetupReviewRoomSurface
-        reviewRoom={{
-          header: {
-            title: "Review the AI-prepared business draft",
-            subtitle: "Check each section before approval.",
-            statusLabel: "Draft ready",
-            badgeTone: "info",
-            trustNote: "Draft data is not runtime authority.",
           },
           sections: [],
           sectionDetails: [
             {
               key: "profile",
-              title: "Business profile",
+              title: "Profil",
               status: "complete",
-              action: "review_profile",
               sourceBacked: true,
               facts: [
                 {
                   key: "companyName",
-                  label: "Business name",
-                  value: "Acme Clinic",
-                  kind: "text",
+                  label: "Biznes adı",
+                  value: "Medhouse Klinika",
                 },
                 {
-                  key: "description",
-                  label: "Description",
-                  value: "Dental clinic in Baku.",
-                  kind: "text",
+                  key: "category",
+                  label: "Kateqoriya",
+                  value: "Tibbi klinika",
                 },
               ],
               items: [],
             },
             {
               key: "services",
-              title: "Services",
+              title: "Xidmətlər",
               status: "complete",
-              action: "review_services",
               sourceBacked: true,
               facts: [],
-              items: ["Consultation", "Cleaning"],
+              items: ["Klinika Xidmətləri", "Müayinə"],
             },
           ],
           actions: {
             primary: {
-              id: "continue_review",
-              label: "Continue review",
+              id: "answer_missing_required_facts",
+              label: "Tamamla",
+              intent: "answer_missing_facts",
               enabled: true,
             },
           },
@@ -210,200 +103,65 @@ describe("SetupReviewRoomSurface", () => {
       />
     );
 
-    expect(screen.getByText(/review details/i)).toBeInTheDocument();
-    expect(screen.getByText(/business profile/i)).toBeInTheDocument();
-    expect(screen.getByText(/business name/i)).toBeInTheDocument();
-    expect(screen.getByText(/acme clinic/i)).toBeInTheDocument();
-    expect(screen.getByText(/description/i)).toBeInTheDocument();
-    expect(screen.getByText(/dental clinic in baku/i)).toBeInTheDocument();
-    expect(screen.getByText(/consultation/i)).toBeInTheDocument();
-    expect(screen.getByText(/cleaning/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/source backed/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("region", { name: /business setup workspace/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/biznesini ai üçün tanıdaq/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\. mənbə əlavə et/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("https://medhouse.az")).toBeInTheDocument();
+    expect(screen.getByText(/tapılan biznes faktları/i)).toBeInTheDocument();
+    expect(screen.getByText(/medhouse klinika/i)).toBeInTheDocument();
+    expect(screen.getByText(/klinika xidmətləri/i)).toBeInTheDocument();
+    expect(screen.getByText(/çatışmayanlar/i)).toBeInTheDocument();
+    expect(screen.getByText(/iş saatlarını əlavə edin/i)).toBeInTheDocument();
+    expect(screen.getByText(/canlı preview/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ai brain v5/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/write a message/i)).not.toBeInTheDocument();
   });
 
-  it("renders intake options and approval preview", () => {
-    render(
-      <SetupReviewRoomSurface
-        reviewRoom={{
-          header: {
-            title: "Business truth is ready to approve",
-            subtitle: "Approval will publish runtime truth.",
-            statusLabel: "Ready for approval",
-            badgeTone: "success",
-            trustNote: "Draft data is not runtime authority.",
-          },
-          sections: [],
-          actions: {
-            primary: {
-              id: "approve_and_publish_truth",
-              label: "Approve truth",
-              enabled: true,
-            },
-          },
-          intake: {
-            primaryExperience: "review_room",
-            options: [
-              {
-                id: "website_source",
-                label: "Website",
-                description: "Use public website evidence.",
-                enabled: true,
-                status: "captured",
-              },
-              {
-                id: "manual_brief",
-                label: "Manual brief",
-                description: "Write a short business description.",
-                enabled: true,
-                status: "available",
-              },
-              {
-                id: "document_upload",
-                label: "Document upload",
-                description: "Upload menus or documents.",
-                enabled: false,
-                status: "planned",
-              },
-            ],
-          },
-          approvalPreview: {
-            canApprove: true,
-            publishes: [
-              {
-                key: "profile",
-                label: "Business profile",
-                summary: "Acme Clinic — dental clinic.",
-              },
-              {
-                key: "services",
-                label: "Services",
-                summary: "Consultation, cleaning.",
-              },
-            ],
-            excludedFromTruth: [
-              "assistant_style_profile",
-              "raw_source_evidence",
-              "transient_chat_turns",
-            ],
-          },
-          runtimeConsumers: {
-            consumers: [],
-          },
-          issues: [],
-        }}
-      />
-    );
-
-    expect(screen.getByText(/input sources/i)).toBeInTheDocument();
-    expect(screen.getByText(/website/i)).toBeInTheDocument();
-    expect(screen.getByText(/manual brief/i)).toBeInTheDocument();
-    expect(screen.getByText(/document upload/i)).toBeInTheDocument();
-    expect(screen.getByText(/approval preview/i)).toBeInTheDocument();
-    expect(screen.getByText(/business profile/i)).toBeInTheDocument();
-    expect(screen.getByText(/services/i)).toBeInTheDocument();
-    expect(screen.getByText(/not published as truth/i)).toBeInTheDocument();
-    expect(screen.getByText(/assistant style profile/i)).toBeInTheDocument();
-    expect(screen.getByText(/raw source evidence/i)).toBeInTheDocument();
-  });
-
-  it("calls onAction when the primary action is clicked", () => {
+  it("submits source input and routes primary action", () => {
+    const onSubmitSource = vi.fn();
     const onAction = vi.fn();
 
     render(
       <SetupReviewRoomSurface
+        sourceValue="https://medhouse.az"
+        sourceType="website"
+        onSubmitSource={onSubmitSource}
         onAction={onAction}
         reviewRoom={{
-          header: {
-            title: "Business truth is ready to approve",
-            subtitle: "Approval will publish runtime truth.",
-            statusLabel: "Ready for approval",
-            badgeTone: "success",
-            trustNote: "Draft data is not runtime authority.",
-          },
-          sections: [],
           actions: {
             primary: {
               id: "approve_and_publish_truth",
-              label: "Approve truth",
+              label: "Truth-u təsdiqlə",
               intent: "finalize_review",
               enabled: true,
             },
           },
-          runtimeConsumers: {
-            consumers: [],
+          brain: {
+            version: 5,
+            sourceIntelligence: { quality: "strong", evidenceCount: 2 },
+            sectionCompletion: { percent: 100 },
+            missingFactsPlan: { required: false, missingSections: [] },
+            conflictPlan: { hasConflicts: false },
+            decisionPlan: { operatorDecision: "approve_truth" },
+            runtimeSimulation: { canActivateAfterApproval: true },
           },
+          sections: [],
+          runtimeConsumers: { consumers: [] },
           issues: [],
         }}
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /approve truth/i }));
+    fireEvent.click(screen.getByRole("button", { name: /oxumağa başla/i }));
+    expect(onSubmitSource).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole("button", { name: /truth-u təsdiqlə/i }));
     expect(onAction).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "approve_and_publish_truth",
-        intent: "finalize_review",
       })
     );
-  });
-
-  it("shows blocking issues when approval is not ready", () => {
-    render(
-      <SetupReviewRoomSurface
-        reviewRoom={{
-          header: {
-            status: "missing_required_facts",
-            title: "Complete missing business facts",
-            subtitle: "Some required sections must be completed.",
-            statusLabel: "Missing facts",
-            badgeTone: "warning",
-            primaryMessage: "1 required section needs attention.",
-          },
-          actions: {
-            primary: {
-              id: "answer_missing_required_facts",
-              label: "Complete missing facts",
-              intent: "answer_missing_facts",
-              enabled: true,
-            },
-            approval: {
-              enabled: false,
-              missingSections: ["services"],
-            },
-          },
-          sections: [
-            {
-              key: "services",
-              label: "Services",
-              status: "missing",
-              itemCount: 0,
-            },
-          ],
-          runtimeConsumers: {
-            consumers: [
-              {
-                key: "inbox_ai",
-                label: "Inbox AI replies",
-                currentState: "blocked_pending_approved_truth",
-              },
-            ],
-          },
-          issues: [
-            {
-              id: "missing_services",
-              type: "missing_required_fact",
-              severity: "blocking",
-              section: "services",
-              message: "Services is required before approval.",
-            },
-          ],
-        }}
-      />
-    );
-
-    expect(screen.getByText(/complete missing business facts/i)).toBeInTheDocument();
-    expect(screen.getByText(/needs attention/i)).toBeInTheDocument();
-    expect(screen.getByText(/services is required before approval/i)).toBeInTheDocument();
-    expect(screen.getByText(/blocked pending approved truth/i)).toBeInTheDocument();
   });
 });
