@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import SetupAssistantSections from "../../../components/layout/SetupAssistantSections.jsx";
+import SetupReviewRoomShell from "../../../components/setup/SetupReviewRoomShell.jsx";
 
 function createAssistant(overrides = {}) {
   return {
@@ -40,7 +40,7 @@ function createAssistant(overrides = {}) {
   };
 }
 
-describe("SetupAssistantSections", () => {
+describe("SetupReviewRoomShell", () => {
   beforeEach(() => {
     window.HTMLElement.prototype.scrollTo = vi.fn();
   });
@@ -58,7 +58,7 @@ describe("SetupAssistantSections", () => {
 
   it("reads the canonical assistant state without any legacy assistantBrain fallback", async () => {
     render(
-      <SetupAssistantSections
+      <SetupReviewRoomShell
         sessionHydrated
         assistant={createAssistant()}
         reviewPayload={{
@@ -101,7 +101,7 @@ describe("SetupAssistantSections", () => {
 
   it("keeps the smart draft curated and hides the old analysis-heavy headings", async () => {
     render(
-      <SetupAssistantSections
+      <SetupReviewRoomShell
         sessionHydrated
         assistant={createAssistant({
           assistant: {
@@ -162,7 +162,7 @@ describe("SetupAssistantSections", () => {
 
   it("does not treat legacy review readiness as approval readiness", async () => {
     render(
-      <SetupAssistantSections
+      <SetupReviewRoomShell
         sessionHydrated
         assistant={createAssistant({
           review: {

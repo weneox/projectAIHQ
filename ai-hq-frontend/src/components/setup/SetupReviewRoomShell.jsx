@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import SetupReviewRoomSurface from "../setup/SetupReviewRoomSurface.jsx";
+import SetupReviewRoomSurface from "./SetupReviewRoomSurface.jsx";
 
 const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
 const TYPING_BUBBLE_DELAY_MS = 320;
@@ -1228,7 +1228,7 @@ function buildPhaseCardsFromSections(sections = []) {
   ];
 }
 
-export default function SetupAssistantSections({
+export default function SetupReviewRoomShell({
   storageKey: _storageKey,
   sessionHydrated = false,
   assistant = {},
