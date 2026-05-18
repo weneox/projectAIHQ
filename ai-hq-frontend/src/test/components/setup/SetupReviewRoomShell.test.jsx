@@ -56,6 +56,52 @@ describe("SetupReviewRoomShell", () => {
     });
   }
 
+  it("routes review room approval action to finalize", async () => {
+    const onFinalize = vi.fn().mockResolvedValue(true);
+
+    render(
+      <SetupReviewRoomShell
+        sessionHydrated
+        assistant={createAssistant()}
+        reviewPayload={{
+          setup: {
+            reviewRoom: {
+              header: {
+                title: "Business truth is ready to approve",
+                subtitle: "Approval will publish runtime truth.",
+                statusLabel: "Ready for approval",
+                badgeTone: "success",
+                trustNote: "Draft data is not runtime authority.",
+              },
+              sections: [],
+              actions: {
+                primary: {
+                  id: "approve_and_publish_truth",
+                  label: "Approve truth",
+                  intent: "finalize_review",
+                  enabled: true,
+                },
+              },
+              runtimeConsumers: {
+                consumers: [],
+              },
+              issues: [],
+            },
+          },
+        }}
+        onCaptureSource={vi.fn().mockResolvedValue(true)}
+        onParseMessage={vi.fn()}
+        onFinalize={onFinalize}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /approve truth/i }));
+
+    await waitFor(() => {
+      expect(onFinalize).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("uses canonical setup review room product copy", async () => {
     render(
       <SetupReviewRoomShell

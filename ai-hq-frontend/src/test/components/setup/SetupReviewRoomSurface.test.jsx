@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SetupReviewRoomSurface from "../../../components/setup/SetupReviewRoomSurface.jsx";
 
@@ -252,6 +252,47 @@ describe("SetupReviewRoomSurface", () => {
     expect(screen.getByText(/not published as truth/i)).toBeInTheDocument();
     expect(screen.getByText(/assistant style profile/i)).toBeInTheDocument();
     expect(screen.getByText(/raw source evidence/i)).toBeInTheDocument();
+  });
+
+  it("calls onAction when the primary action is clicked", () => {
+    const onAction = vi.fn();
+
+    render(
+      <SetupReviewRoomSurface
+        onAction={onAction}
+        reviewRoom={{
+          header: {
+            title: "Business truth is ready to approve",
+            subtitle: "Approval will publish runtime truth.",
+            statusLabel: "Ready for approval",
+            badgeTone: "success",
+            trustNote: "Draft data is not runtime authority.",
+          },
+          sections: [],
+          actions: {
+            primary: {
+              id: "approve_and_publish_truth",
+              label: "Approve truth",
+              intent: "finalize_review",
+              enabled: true,
+            },
+          },
+          runtimeConsumers: {
+            consumers: [],
+          },
+          issues: [],
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /approve truth/i }));
+
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "approve_and_publish_truth",
+        intent: "finalize_review",
+      })
+    );
   });
 
   it("shows blocking issues when approval is not ready", () => {
