@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "framer-motion";
-import { RotateCcw, X } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   discardCurrentSetupReview,
@@ -340,14 +339,12 @@ function hasVisibleSetupState(state = {}) {
 
 export default function SetupCommandCenter({
   hidden = false,
-  onOpenChange = null,
   assistant = null,
   storageKey = "",
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pageMode = true;
-  const panelOpen = true;
+  const panelOpen = !hidden;
   const workspace = useWorkspaceTenantKey({ enabled: panelOpen });
 
   const emptySeed = useMemo(
@@ -619,9 +616,6 @@ export default function SetupCommandCenter({
 
   async function handleGoToChannels() {
     navigate("/channels");
-    if (!pageMode) {
-      onOpenChange?.(false);
-    }
   }
 
   async function handleSetupParseMessage({ text, step }) {
@@ -746,100 +740,58 @@ export default function SetupCommandCenter({
     }
   }
 
-  const wrapperClass = pageMode
-    ? "relative min-h-[calc(100vh-96px)] w-full px-6 py-6"
-    : "fixed inset-0 z-[95] pointer-events-none";
+  const wrapperClass = "relative min-h-[calc(100vh-96px)] w-full px-6 py-6";
 
   return (
-    <AnimatePresence>
-      {panelOpen ? (
-        <div className={wrapperClass}>
-          {!pageMode ? (
-            <motion.button
-              type="button"
-              aria-label="Close setup command center"
-              className="absolute inset-0 bg-[rgba(15,23,42,0.16)] pointer-events-auto"
-              onClick={() => onOpenChange?.(false)}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            />
-          ) : null}
-
-          <motion.section
-            className={
-              pageMode
-                ? "relative mx-auto flex min-h-[calc(100vh-144px)] w-full max-w-[1280px] flex-col overflow-hidden rounded-[32px] border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.10)]"
-                : "absolute right-0 top-0 flex h-screen w-[min(760px,100vw)] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.14)] pointer-events-auto"
-            }
-            role={pageMode ? "region" : "dialog"}
-            aria-modal={pageMode ? undefined : "true"}
-            aria-label="Setup command center"
-            initial={{ x: "100%", opacity: 0.98 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: "100%", opacity: 0.98 }}
-            transition={{
-              duration: 0.28,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-[rgba(15,23,42,0.08)] px-7 py-5">
-              <div className="flex items-center gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-                    Business Truth Command Center
-                  </div>
-                  <div className="mt-1 text-[18px] font-semibold tracking-[-0.035em] text-text">
-                    AI setup brain, review room, approval and runtime readiness
-                  </div>
-                </div>
-
-                {canReset ? (
-                  <button
-                    type="button"
-                    onClick={handleSetupReset}
-                    disabled={resetting || saving || finalizing}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
-                    {resetting ? "Resetting" : "Fresh start"}
-                  </button>
-                ) : null}
+    <div className={wrapperClass}>
+      <section
+        className="relative mx-auto flex min-h-[calc(100vh-144px)] w-full max-w-[1280px] flex-col overflow-hidden rounded-[32px] border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.10)]"
+        role="region"
+        aria-label="Setup command center"
+      >
+        <div className="flex items-center justify-between border-b border-[rgba(15,23,42,0.08)] px-7 py-5">
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                Business Truth Command Center
               </div>
-
-              {!pageMode ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenChange?.(false)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text"
-                  aria-label="Close setup command center"
-                >
-                  <X className="h-5 w-5" strokeWidth={2} />
-                </button>
-              ) : null}
+              <div className="mt-1 text-[18px] font-semibold tracking-[-0.035em] text-text">
+                AI setup brain, review room, approval and runtime readiness
+              </div>
             </div>
 
-            <div className="min-h-0 flex-1">
-              <SetupReviewRoomShell
-                key={conversationStorageKey}
-                storageKey={conversationStorageKey}
-                sessionHydrated={sessionHydrated}
-                assistant={clientAssistant}
-                reviewPayload={mergedReviewPayload}
-                saving={saving}
-                finalizing={finalizing}
-                capturingSource={resetting}
-                errorMessage={setupError}
-                onParseMessage={handleSetupParseMessage}
-                onFinalize={handleSetupFinalize}
-                onStartSetup={handleStartSetup}
-                onGoToChannels={handleGoToChannels}
-              />
-            </div>
-          </motion.section>
+            {canReset ? (
+              <button
+                type="button"
+                onClick={handleSetupReset}
+                disabled={resetting || saving || finalizing}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
+                {resetting ? "Resetting" : "Fresh start"}
+              </button>
+            ) : null}
+          </div>
         </div>
-      ) : null}
-    </AnimatePresence>
+
+        <div className="min-h-0 flex-1">
+          <SetupReviewRoomShell
+            key={conversationStorageKey}
+            storageKey={conversationStorageKey}
+            sessionHydrated={sessionHydrated}
+            assistant={clientAssistant}
+            reviewPayload={mergedReviewPayload}
+            saving={saving}
+            finalizing={finalizing}
+            capturingSource={resetting}
+            errorMessage={setupError}
+            onParseMessage={handleSetupParseMessage}
+            onFinalize={handleSetupFinalize}
+            onStartSetup={handleStartSetup}
+            onGoToChannels={handleGoToChannels}
+          />
+        </div>
+      </section>
+    </div>
   );
 }
