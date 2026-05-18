@@ -1,4 +1,4 @@
-﻿import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
+import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -164,8 +164,17 @@ function SourceInput({
   onSubmit,
   compact = false,
 }) {
-  const selected =
-    SOURCE_OPTIONS.find((option) => option.id === sourceType) || SOURCE_OPTIONS[0];
+  const isManual = sourceType === "manual";
+  const placeholder = isManual
+    ? "Biznes nə edir, xidmətlər, əlaqə və vacib məlumatlar..."
+    : "Sayt, Instagram, Google Maps və ya biznes haqqında qısa izah yaz";
+
+  const sourceHints = [
+    ["website", "Website"],
+    ["google_maps", "Google Maps"],
+    ["instagram", "Instagram"],
+    ["manual", "Qısa izah"],
+  ];
 
   return (
     <form
@@ -173,54 +182,56 @@ function SourceInput({
         event.preventDefault();
         onSubmit();
       }}
-      className={compact ? "" : "mx-auto w-full max-w-[760px]"}
+      className={compact ? "w-full" : "mx-auto w-full max-w-[760px]"}
     >
-      <div className="mb-3 flex flex-wrap justify-center gap-1.5">
-        {SOURCE_OPTIONS.map((option) => {
-          const active = option.id === sourceType;
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] shadow-[var(--shadow-sm)]">
+        <div className="flex">
+          {isManual ? (
+            <textarea
+              rows={compact ? 2 : 3}
+              value={value}
+              onChange={(event) => onValueChange(event.target.value)}
+              placeholder={placeholder}
+              className="min-h-[64px] flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] leading-6 text-text outline-none placeholder:text-text-soft"
+            />
+          ) : (
+            <input
+              value={value}
+              onChange={(event) => onValueChange(event.target.value)}
+              placeholder={placeholder}
+              className="h-[58px] flex-1 border-0 bg-transparent px-4 text-[15px] text-text outline-none placeholder:text-text-soft"
+            />
+          )}
 
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onTypeChange(option.id)}
-              className={`h-9 rounded-[var(--radius-md)] px-3 text-[12px] font-semibold transition ${
-                active
-                  ? "bg-[rgb(var(--color-surface-inverse))] text-text-inverse"
-                  : "bg-[rgb(var(--color-surface-subtle))] text-text-subtle hover:text-text"
-              }`}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
+          <button
+            type="submit"
+            disabled={!s(value) || busy}
+            className="min-w-[108px] border-l border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-5 text-[14px] font-semibold text-text transition hover:bg-[rgb(var(--color-surface-muted))] disabled:cursor-not-allowed disabled:text-text-soft"
+          >
+            {busy ? "Oxunur" : isManual ? "Əlavə et" : "Oxu"}
+          </button>
+        </div>
 
-      <div className="flex overflow-hidden rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] shadow-[var(--shadow-sm)]">
-        {sourceType === "manual" ? (
-          <textarea
-            rows={compact ? 2 : 4}
-            value={value}
-            onChange={(event) => onValueChange(event.target.value)}
-            placeholder={selected.placeholder}
-            className="min-h-[72px] flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] leading-6 text-text outline-none placeholder:text-text-soft"
-          />
-        ) : (
-          <input
-            value={value}
-            onChange={(event) => onValueChange(event.target.value)}
-            placeholder={selected.placeholder}
-            className="h-[56px] flex-1 border-0 bg-transparent px-4 text-[15px] text-text outline-none placeholder:text-text-soft"
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-1 border-t border-[rgb(var(--color-line-faint))] bg-[rgb(var(--color-surface-muted))] px-2 py-2">
+          {sourceHints.map(([id, label]) => {
+            const active = id === sourceType;
 
-        <button
-          type="submit"
-          disabled={!s(value) || busy}
-          className="min-w-[116px] bg-[rgb(var(--color-surface-inverse))] px-5 text-[14px] font-semibold text-text-inverse transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[rgb(var(--color-line-strong))]"
-        >
-          {busy ? "Oxunur" : sourceType === "manual" ? "Əlavə et" : "Oxu"}
-        </button>
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onTypeChange(id)}
+                className={`rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[12px] font-semibold transition ${
+                  active
+                    ? "bg-[rgb(var(--color-surface))] text-text shadow-[var(--shadow-xs)]"
+                    : "text-text-subtle hover:bg-[rgb(var(--color-surface))] hover:text-text"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {status ? (
