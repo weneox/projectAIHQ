@@ -619,7 +619,7 @@ export default function SetupCommandCenter({
     navigate("/channels");
   }
 
-  async function handleSetupParseMessage({ text, step }) {
+  async function handleSetupParseMessage({ text, step, source = null }) {
     const answer = s(text);
     if (!answer || saving || finalizing || resetting) return null;
 
@@ -629,7 +629,7 @@ export default function SetupCommandCenter({
     try {
       await ensureSession();
 
-      const sourceInput = obj(arguments[0]?.source);
+      const sourceInput = obj(source);
       const shouldImportSource =
         sourceInput.isImportedSource === true && s(sourceInput.value);
 
