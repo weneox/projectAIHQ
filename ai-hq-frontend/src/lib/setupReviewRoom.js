@@ -1,4 +1,4 @@
-﻿export function s(value, fallback = "") {
+export function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
 
@@ -169,6 +169,39 @@ export function normalizeSetupReviewRoomIntake(reviewRoom = {}) {
   };
 }
 
+export function normalizeSetupReviewRoomApprovalPreview(reviewRoom = {}) {
+  const preview = obj(obj(reviewRoom).approvalPreview);
+
+  return {
+    version: Number(preview.version || 1) || 1,
+    canApprove: preview.canApprove === true,
+    action: s(preview.action || "blocked"),
+    title: s(preview.title),
+    draftAuthorityBeforeApproval: s(
+      preview.draftAuthorityBeforeApproval || "not_runtime_authority"
+    ),
+    runtimeAuthorityAfterApproval: s(
+      preview.runtimeAuthorityAfterApproval || "approved_truth"
+    ),
+    publishes: arr(preview.publishes).map((item) => ({
+      key: s(item?.key),
+      label: s(item?.label || item?.key),
+      summary: s(item?.summary),
+    })).filter((item) => item.key),
+    publishCount:
+      Number(preview.publishCount || arr(preview.publishes).length || 0) || 0,
+    blockedBy: arr(preview.blockedBy).map((item) => ({
+      id: s(item?.id),
+      type: s(item?.type),
+      section: s(item?.section),
+      message: s(item?.message),
+    })).filter((item) => item.id || item.message),
+    missingSections: arr(preview.missingSections).map((item) => s(item)).filter(Boolean),
+    excludedFromTruth: arr(preview.excludedFromTruth).map((item) => s(item)).filter(Boolean),
+    notes: arr(preview.notes).map((item) => s(item)).filter(Boolean),
+  };
+}
+
 export function normalizeSetupReviewRoom(reviewRoom = {}) {
   const safeRoom = obj(reviewRoom);
 
@@ -188,5 +221,6 @@ export function normalizeSetupReviewRoom(reviewRoom = {}) {
     issues: normalizeSetupReviewRoomIssues(safeRoom),
     runtimeConsumers: normalizeSetupReviewRoomRuntimeConsumers(safeRoom),
     intake: normalizeSetupReviewRoomIntake(safeRoom),
+    approvalPreview: normalizeSetupReviewRoomApprovalPreview(safeRoom),
   };
 }

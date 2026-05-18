@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   normalizeSetupReviewRoom,
@@ -115,6 +115,34 @@ describe("setup review room frontend adapter", () => {
     expect(room.intake.websiteIsInputNotSetupModel).toBe(true);
     expect(room.intake.options[0].id).toBe("manual_brief");
     expect(room.hasLegacyTokens).toBe(false);
+  });
+
+  it("normalizes approval preview", () => {
+    const room = normalizeSetupReviewRoom({
+      approvalPreview: {
+        canApprove: true,
+        action: "approve_and_publish_truth",
+        title: "Ready to publish approved truth",
+        publishes: [
+          {
+            key: "profile",
+            label: "Business profile",
+            summary: "Acme Clinic",
+          },
+        ],
+        excludedFromTruth: [
+          "assistant_style_profile",
+          "raw_source_evidence",
+        ],
+        notes: ["Approved truth becomes runtime authority."],
+      },
+    });
+
+    expect(room.approvalPreview.canApprove).toBe(true);
+    expect(room.approvalPreview.action).toBe("approve_and_publish_truth");
+    expect(room.approvalPreview.publishes[0].key).toBe("profile");
+    expect(room.approvalPreview.excludedFromTruth).toContain("assistant_style_profile");
+    expect(room.approvalPreview.notes[0]).toMatch(/runtime authority/i);
   });
 
   it("detects legacy behavior pollution", () => {
