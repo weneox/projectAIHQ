@@ -48,6 +48,8 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
 const GLOBAL_ALERT_HEIGHT = 42;
+const EMAIL_VERIFICATION_BANNER_ENABLED =
+  import.meta.env.VITE_EMAIL_VERIFICATION_BANNER !== "0";
 
 const GENERIC_WORKSPACE_KEYS = new Set([
   "www",
@@ -607,7 +609,7 @@ export default function Shell() {
     let alive = true;
 
     async function loadEmailVerificationState() {
-      if (localWorkspaceEntry) {
+      if (localWorkspaceEntry || !EMAIL_VERIFICATION_BANNER_ENABLED) {
         setEmailVerificationState({
           loading: false,
           visible: false,
@@ -805,6 +807,7 @@ export default function Shell() {
   const topWarningVisible =
     !localWorkspaceEntry && Boolean(shellStats?.message) && !warningDismissed;
   const emailVerificationVisible =
+    EMAIL_VERIFICATION_BANNER_ENABLED &&
     emailVerificationState.loading !== true &&
     emailVerificationState.visible === true &&
     !emailVerificationDismissed;
