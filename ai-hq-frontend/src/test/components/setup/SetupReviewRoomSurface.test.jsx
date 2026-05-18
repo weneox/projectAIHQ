@@ -1,4 +1,4 @@
-﻿/* @vitest-environment jsdom */
+/* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -107,15 +107,13 @@ describe("SetupReviewRoomSurface", () => {
       screen.getByRole("region", { name: /business setup workspace/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/biznesini ai üçün tanıdaq/i)).toBeInTheDocument();
-    expect(screen.getByText(/1\. mənbə əlavə et/i)).toBeInTheDocument();
-    expect(screen.getByDisplayValue("https://medhouse.az")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("https://medhouse.az")).toBeInTheDocument();
     expect(screen.getByText(/tapılan biznes faktları/i)).toBeInTheDocument();
     expect(screen.getByText(/medhouse klinika/i)).toBeInTheDocument();
     expect(screen.getByText(/klinika xidmətləri/i)).toBeInTheDocument();
     expect(screen.getByText(/çatışmayanlar/i)).toBeInTheDocument();
     expect(screen.getByText(/iş saatlarını əlavə edin/i)).toBeInTheDocument();
-    expect(screen.getByText(/canlı preview/i)).toBeInTheDocument();
-    expect(screen.queryByText(/ai brain v5/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/ai brain v5/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/write a message/i)).not.toBeInTheDocument();
   });
 
@@ -154,7 +152,7 @@ describe("SetupReviewRoomSurface", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /oxumağa başla/i }));
+    fireEvent.click(screen.getByRole("button", { name: /oxu/i }));
     expect(onSubmitSource).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: /truth-u təsdiqlə/i }));

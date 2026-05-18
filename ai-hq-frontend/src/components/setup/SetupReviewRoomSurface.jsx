@@ -1,4 +1,4 @@
-import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
+﻿import { normalizeSetupReviewRoom } from "../../lib/setupReviewRoom.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -18,166 +18,129 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value = "", max = 140) {
+function compactText(value = "", max = 160) {
   const text = s(value).replace(/\s+/g, " ");
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
 }
 
-function statusLabel(value = "") {
+function labelize(value = "") {
   return s(value, "pending").replace(/_/g, " ");
 }
 
-function sourceQualityLabel(value = "") {
+function qualityCopy(value = "") {
   const key = lower(value);
-  if (key === "strong") return "Yüksək";
-  if (key === "partial") return "Qismən";
+  if (key === "strong") return "Mənbə yaxşıdır";
+  if (key === "partial") return "Qismən oxundu";
   if (key === "conflicting") return "Ziddiyyət var";
-  if (key === "missing") return "Mənbə yoxdur";
-  return statusLabel(value);
+  if (key === "missing") return "Mənbə gözləyir";
+  return "Mənbə gözləyir";
 }
 
-function decisionLabel(value = "") {
+function decisionCopy(value = "") {
   const key = lower(value);
-  if (key === "approve_truth") return "Təsdiqə hazır";
-  if (key === "answer_missing_facts") return "Məlumat çatışır";
-  if (key === "resolve_conflicts") return "Ziddiyyət həll olunmalıdır";
-  if (key === "review_or_continue") return "Yoxlama mərhələsi";
-  if (key === "clarify_input") return "Dəqiqləşdirmə lazımdır";
-  return "Setup davam edir";
+  if (key === "approve_truth") return "Təsdiqə hazırdır";
+  if (key === "answer_missing_facts") return "Bir neçə məlumat çatışır";
+  if (key === "resolve_conflicts") return "Ziddiyyəti həll etmək lazımdır";
+  if (key === "review_or_continue") return "Yoxlama mərhələsidir";
+  return "Mənbə əlavə et";
 }
 
-function buildTruthRows(room = {}) {
-  const details = arr(room.sectionDetails);
+function collectTruthFacts(room = {}) {
+  const rows = [];
 
-  if (details.length) {
-    return details.map((section) => {
-      const facts = arr(section.facts)
-        .map((fact) => ({
-          key: s(fact.key || fact.label),
-          label: s(fact.label || fact.key),
-          value: compactText(fact.value, 180),
-          verified: section.sourceBacked === true,
-        }))
-        .filter((fact) => fact.key && fact.value);
-
-      const items = arr(section.items)
-        .map((item) => compactText(item, 110))
-        .filter(Boolean);
-
-      return {
-        key: s(section.key || section.title),
-        label: s(section.title || section.label || section.key),
-        status: s(section.status),
+  for (const section of arr(room.sectionDetails)) {
+    const title = s(section.title || section.label || section.key);
+    for (const fact of arr(section.facts)) {
+      const value = compactText(fact.value, 170);
+      if (!value) continue;
+      rows.push({
+        key: `${section.key}-${fact.key || fact.label}`,
+        label: s(fact.label || title),
+        value,
+        section: title,
         sourceBacked: section.sourceBacked === true,
-        facts,
-        items,
-      };
-    });
-  }
-
-  return arr(room.sections).map((section) => ({
-    key: s(section.key),
-    label: s(section.label || section.key),
-    status: s(section.status),
-    sourceBacked: section.sourceBacked === true,
-    facts: [],
-    items: [],
-  }));
-}
-
-function buildMissingFacts(room = {}) {
-  const brain = obj(room.brain);
-  const missingPlan = obj(brain.missingFactsPlan);
-  const missingSections = arr(missingPlan.missingSections)
-    .map((item) => s(item))
-    .filter(Boolean);
-
-  const blocking = arr(room.issues)
-    .filter((issue) => s(issue.severity) === "blocking")
-    .map((issue) => ({
-      key: s(issue.id || issue.section || issue.message),
-      label: s(issue.section || issue.type || "missing"),
-      body: s(issue.message),
-    }))
-    .filter((item) => item.key || item.body);
-
-  if (blocking.length) return blocking;
-
-  return missingSections.map((key) => ({
-    key,
-    label: statusLabel(key),
-    body:
-      s(missingPlan.nextQuestion?.prompt) && key === s(missingPlan.nextQuestionKey)
-        ? s(missingPlan.nextQuestion.prompt)
-        : "Bu məlumat təsdiqdən əvvəl tamamlanmalıdır.",
-  }));
-}
-
-function buildRuntimeRows(room = {}) {
-  const brainRows = arr(obj(obj(room.brain).runtimeSimulation).afterApproval);
-  if (brainRows.length) {
-    return brainRows.map((surface) => ({
-      key: s(surface.key),
-      label: s(surface.label || surface.key),
-      state: s(surface.state),
-      authority: s(surface.authority),
-    }));
-  }
-
-  return arr(obj(room.runtimeConsumers).consumers).map((consumer) => ({
-    key: s(consumer.key),
-    label: s(consumer.label || consumer.key),
-    state: s(consumer.currentState),
-    authority: s(obj(room.runtimeConsumers).authority || room.runtimeAuthority),
-  }));
-}
-
-function buildPreviewFacts(room = {}) {
-  const rows = buildTruthRows(room);
-  const flat = [];
-
-  for (const row of rows) {
-    for (const fact of arr(row.facts)) {
-      if (fact.value) flat.push({ label: fact.label, value: fact.value });
+      });
     }
 
-    if (!arr(row.facts).length && arr(row.items).length) {
-      flat.push({
-        label: row.label,
-        value: row.items.slice(0, 3).join(", "),
+    const items = arr(section.items).map((item) => compactText(item, 90)).filter(Boolean);
+    if (items.length) {
+      rows.push({
+        key: `${section.key}-items`,
+        label: title,
+        value: items.slice(0, 6).join(", "),
+        section: title,
+        sourceBacked: section.sourceBacked === true,
       });
     }
   }
 
-  return flat.slice(0, 4);
+  if (rows.length) return rows.slice(0, 12);
+
+  return arr(room.sections)
+    .filter((section) => Number(section.itemCount || 0) > 0 || s(section.status) === "complete")
+    .map((section) => ({
+      key: s(section.key),
+      label: s(section.label || section.key),
+      value: `${Number(section.itemCount || 0)} məlumat`,
+      section: s(section.label || section.key),
+      sourceBacked: section.sourceBacked === true,
+    }))
+    .slice(0, 12);
+}
+
+function collectMissing(room = {}) {
+  const brain = obj(room.brain);
+  const missing = obj(brain.missingFactsPlan);
+
+  const blockers = arr(room.issues)
+    .filter((issue) => s(issue.severity) === "blocking")
+    .map((issue) => ({
+      key: s(issue.id || issue.section || issue.message),
+      title: labelize(issue.section || issue.type),
+      body: s(issue.message),
+    }))
+    .filter((item) => item.key || item.body);
+
+  if (blockers.length) return blockers;
+
+  return arr(missing.missingSections)
+    .map((item) => s(item))
+    .filter(Boolean)
+    .map((key) => ({
+      key,
+      title: labelize(key),
+      body:
+        s(missing.nextQuestion?.prompt) && s(missing.nextQuestionKey) === key
+          ? s(missing.nextQuestion.prompt)
+          : "Bu məlumat təsdiqdən əvvəl tamamlanmalıdır.",
+    }));
+}
+
+function collectRuntime(room = {}) {
+  const simulation = obj(obj(room.brain).runtimeSimulation);
+  const afterApproval = arr(simulation.afterApproval);
+
+  if (afterApproval.length) {
+    return afterApproval.map((item) => ({
+      key: s(item.key),
+      label: s(item.label || item.key),
+      state: s(item.state),
+    }));
+  }
+
+  return arr(obj(room.runtimeConsumers).consumers).map((item) => ({
+    key: s(item.key),
+    label: s(item.label || item.key),
+    state: s(item.currentState),
+  }));
 }
 
 const SOURCE_OPTIONS = [
-  {
-    id: "website",
-    label: "Website",
-    hint: "URL",
-    placeholder: "https://medhouse.az",
-  },
-  {
-    id: "google_maps",
-    label: "Google Maps",
-    hint: "Biznes profili",
-    placeholder: "Google Maps linki",
-  },
-  {
-    id: "instagram",
-    label: "Instagram",
-    hint: "Profil",
-    placeholder: "@medhouse.klinika və ya profil linki",
-  },
-  {
-    id: "manual",
-    label: "Manual brief",
-    hint: "Qısa izah",
-    placeholder: "Biznes nə edir, xidmətləri və əlaqə məlumatları...",
-  },
+  { id: "website", label: "Website", placeholder: "https://yourbusiness.com" },
+  { id: "google_maps", label: "Google Maps", placeholder: "Google Maps linki" },
+  { id: "instagram", label: "Instagram", placeholder: "@profile və ya Instagram linki" },
+  { id: "manual", label: "Qısa izah", placeholder: "Biznes nə edir, xidmətlər, əlaqə və vacib məlumatlar..." },
 ];
 
 export default function SetupReviewRoomSurface({
@@ -193,392 +156,281 @@ export default function SetupReviewRoomSurface({
 }) {
   const room = normalizeSetupReviewRoom(reviewRoom);
   const brain = obj(room.brain);
-  const hasBrain = Number(brain.version || 0) > 0;
-  const decision = obj(brain.decisionPlan);
   const source = obj(brain.sourceIntelligence);
   const completion = obj(brain.sectionCompletion);
-  const missingFacts = buildMissingFacts(room);
-  const truthRows = buildTruthRows(room);
-  const runtimeRows = buildRuntimeRows(room);
-  const previewFacts = buildPreviewFacts(room);
+  const decision = obj(brain.decisionPlan);
+  const missing = collectMissing(room);
+  const facts = collectTruthFacts(room);
+  const runtime = collectRuntime(room);
   const primaryAction = obj(room.actions.primary);
   const approvalPreview = obj(room.approvalPreview);
-  const publishItems = arr(approvalPreview.publishes);
-  const excludedItems = arr(approvalPreview.excludedFromTruth);
-  const activeSource = SOURCE_OPTIONS.find((item) => item.id === sourceType) || SOURCE_OPTIONS[0];
+  const selectedSource = SOURCE_OPTIONS.find((item) => item.id === sourceType) || SOURCE_OPTIONS[0];
 
-  const readyForApproval =
-    primaryAction.enabled === true &&
-    (s(primaryAction.id).includes("approve") ||
-      s(primaryAction.intent).includes("finalize") ||
-      approvalPreview.canApprove === true);
+  const canApprove =
+    approvalPreview.canApprove === true ||
+    s(primaryAction.id).includes("approve") ||
+    s(primaryAction.intent).includes("finalize");
 
   return (
-    <section
-      aria-label="Business setup workspace"
-      className="min-h-full bg-white text-slate-950"
-    >
-      <div className="grid min-h-full gap-0 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <main className="min-w-0 border-r border-slate-100">
-          <div className="border-b border-slate-100 px-7 py-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Business setup
-                </p>
-                <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.055em] text-slate-950">
-                  Biznesini AI üçün tanıdaq
-                </h1>
-                <p className="mt-2 max-w-[720px] text-[14px] leading-7 text-slate-600">
-                  Mənbə əlavə et. Sistem faktları çıxarsın, çatışmayanları göstərsin və yalnız təsdiqdən sonra AI-larda istifadə etsin.
-                </p>
-              </div>
+    <section aria-label="Business setup workspace" className="min-h-full bg-[rgb(var(--color-canvas))]">
+      <div className="mx-auto grid min-h-full w-full max-w-[1180px] gap-6 px-6 py-6">
+        <header className="grid gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-soft">
+            Business setup
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <h1 className="max-w-[760px] text-[34px] font-semibold leading-[1.05] tracking-[-0.055em] text-text">
+                Biznesini AI üçün sadə şəkildə tanıdaq.
+              </h1>
+              <p className="mt-3 max-w-[680px] text-[14px] leading-7 text-text-subtle">
+                Mənbə əlavə et. Sistem oxusun, tapdığı faktları göstərsin və yalnız çatışmayanı soruşsun.
+              </p>
+            </div>
 
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-700">
-                {hasBrain ? decisionLabel(decision.operatorDecision) : "Mənbə gözləyir"}
+            <div className="app-surface-muted px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
+                Vəziyyət
+              </div>
+              <div className="mt-1 text-[14px] font-semibold text-text">
+                {decisionCopy(decision.operatorDecision)}
               </div>
             </div>
           </div>
+        </header>
 
-          <div className="px-7 py-6">
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSubmitSource();
-              }}
-              className="rounded-[26px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#fbfcfe)] p-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)]"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-[17px] font-semibold tracking-[-0.035em] text-slate-950">
-                    1. Mənbə əlavə et
-                  </h2>
-                  <p className="mt-1 text-[13px] leading-6 text-slate-600">
-                    Website, profil linki və ya qısa izah ver. Setup sual-cavab yox, mənbədən başlasın.
-                  </p>
+        <div className="app-surface overflow-hidden">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmitSource();
+            }}
+            className="border-b border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-5 py-5"
+          >
+            <div className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)_150px] lg:items-end">
+              <div>
+                <label className="text-[12px] font-semibold text-text">Mənbə növü</label>
+                <div className="mt-2 grid grid-cols-2 gap-1 rounded-[var(--radius-lg)] bg-[rgb(var(--color-surface-subtle))] p-1">
+                  {SOURCE_OPTIONS.map((item) => {
+                    const active = item.id === sourceType;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSourceTypeChange(item.id)}
+                        className={`h-9 rounded-[var(--radius-md)] px-2 text-[12px] font-semibold transition ${
+                          active
+                            ? "bg-[rgb(var(--color-surface))] text-text shadow-[var(--shadow-xs)]"
+                            : "text-text-subtle hover:text-text"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
                 </div>
-
-                {sourceStatus ? (
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
-                    {sourceStatus}
-                  </span>
-                ) : null}
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
-                {SOURCE_OPTIONS.map((option) => {
-                  const active = option.id === sourceType;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => onSourceTypeChange(option.id)}
-                      className={`rounded-[18px] border px-4 py-3 text-left transition ${
-                        active
-                          ? "border-emerald-500 bg-emerald-50 text-slate-950"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="text-[13px] font-semibold">{option.label}</div>
-                      <div className="mt-1 text-[12px] text-slate-500">{option.hint}</div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 flex overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+              <div>
+                <label className="text-[12px] font-semibold text-text">
+                  Website, profil və ya biznes izahı
+                </label>
                 {sourceType === "manual" ? (
                   <textarea
                     rows={3}
                     value={sourceValue}
                     onChange={(event) => onSourceValueChange(event.target.value)}
-                    placeholder={activeSource.placeholder}
-                    className="min-h-[88px] flex-1 resize-none border-0 px-4 py-3 text-[14px] outline-none placeholder:text-slate-400"
+                    placeholder={selectedSource.placeholder}
+                    className="mt-2 min-h-[78px] w-full rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-3 py-3 text-[14px] leading-6 outline-none focus:shadow-[var(--focus-ring)]"
                   />
                 ) : (
                   <input
                     value={sourceValue}
                     onChange={(event) => onSourceValueChange(event.target.value)}
-                    placeholder={activeSource.placeholder}
-                    className="h-12 flex-1 border-0 px-4 text-[14px] outline-none placeholder:text-slate-400"
+                    placeholder={selectedSource.placeholder}
+                    className="mt-2 h-[46px] w-full rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-3 text-[14px] outline-none focus:shadow-[var(--focus-ring)]"
                   />
                 )}
-
-                <button
-                  type="submit"
-                  disabled={!s(sourceValue) || sourceBusy}
-                  className="min-w-[150px] bg-slate-950 px-5 text-[13px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {sourceBusy ? "Oxunur..." : sourceType === "manual" ? "Əlavə et" : "Oxumağa başla"}
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
-              <div className="rounded-[20px] border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Mənbə
-                </p>
-                <p className="mt-2 text-[18px] font-semibold tracking-[-0.04em]">
-                  {hasBrain ? sourceQualityLabel(source.quality) : "Gözləyir"}
-                </p>
-                <p className="mt-1 text-[12px] text-slate-500">
-                  {Number(source.evidenceCount || 0)} sübut elementi
-                </p>
               </div>
 
-              <div className="rounded-[20px] border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Tamlıq
-                </p>
-                <p className="mt-2 text-[18px] font-semibold tracking-[-0.04em]">
-                  {Number(completion.percent || 0)}%
-                </p>
-                <p className="mt-1 text-[12px] text-slate-500">
-                  Faktlar hazırlanır
-                </p>
-              </div>
-
-              <div className="rounded-[20px] border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Çatışmayan
-                </p>
-                <p className="mt-2 text-[18px] font-semibold tracking-[-0.04em]">
-                  {missingFacts.length}
-                </p>
-                <p className="mt-1 text-[12px] text-slate-500">
-                  Lazım olan suallar
-                </p>
-              </div>
-
-              <div className="rounded-[20px] border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Növbəti
-                </p>
-                <p className="mt-2 text-[18px] font-semibold tracking-[-0.04em]">
-                  {readyForApproval ? "Təsdiq" : missingFacts.length ? "Tamamla" : "Review"}
-                </p>
-                <p className="mt-1 text-[12px] text-slate-500">
-                  {decision.reason || "Sistem vəziyyəti yoxlayır"}
-                </p>
-              </div>
+              <button
+                type="submit"
+                disabled={!s(sourceValue) || sourceBusy}
+                className="ui-button ui-button--primary ui-button--md ui-button--full"
+              >
+                <span className="ui-button__inner">
+                  {sourceBusy ? "Oxunur..." : sourceType === "manual" ? "Əlavə et" : "Oxu"}
+                </span>
+              </button>
             </div>
 
-            <div className="mt-5 rounded-[26px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.04)]">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                <div>
-                  <h2 className="text-[17px] font-semibold tracking-[-0.035em]">
-                    2. Tapılan biznes faktları
-                  </h2>
-                  <p className="mt-1 text-[13px] text-slate-500">
-                    Bunlar təsdiq üçün hazırlanır. Lazım olsa düzəliş əlavə et.
-                  </p>
+            {sourceStatus ? (
+              <div className="mt-3 text-[12px] font-medium text-text-subtle">{sourceStatus}</div>
+            ) : null}
+          </form>
+
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <main className="min-w-0 px-5 py-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="app-surface-muted px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
+                    Mənbə
+                  </div>
+                  <div className="mt-1 text-[15px] font-semibold text-text">
+                    {qualityCopy(source.quality)}
+                  </div>
+                  <div className="mt-1 text-[12px] text-text-subtle">
+                    {Number(source.evidenceCount || 0)} sübut
+                  </div>
                 </div>
-                <span className="rounded-full bg-slate-50 px-3 py-1 text-[12px] font-semibold text-slate-600">
-                  {truthRows.length} bölmə
-                </span>
+
+                <div className="app-surface-muted px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
+                    Tamlıq
+                  </div>
+                  <div className="mt-1 text-[15px] font-semibold text-text">
+                    {Number(completion.percent || 0)}%
+                  </div>
+                  <div className="mt-1 text-[12px] text-text-subtle">
+                    Business truth hazırlığı
+                  </div>
+                </div>
+
+                <div className="app-surface-muted px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
+                    Növbəti
+                  </div>
+                  <div className="mt-1 text-[15px] font-semibold text-text">
+                    {canApprove ? "Təsdiq" : missing.length ? "Tamamla" : "Yoxla"}
+                  </div>
+                  <div className="mt-1 text-[12px] text-text-subtle">
+                    {missing.length ? `${missing.length} məlumat çatışır` : "Sistem hazırlaşır"}
+                  </div>
+                </div>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {truthRows.length ? (
-                  truthRows.map((row) => (
-                    <div key={row.key || row.label} className="grid gap-4 px-5 py-4 lg:grid-cols-[180px_minmax(0,1fr)_120px]">
-                      <div>
-                        <p className="text-[13px] font-semibold text-slate-950">{row.label}</p>
-                        <p className="mt-1 text-[12px] text-slate-500">
-                          {row.sourceBacked ? "Mənbə ilə dəstəklənir" : "Yoxlanmalıdır"}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        {arr(row.facts).length ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {row.facts.map((fact) => (
-                              <div key={fact.key} className="rounded-[14px] bg-slate-50 px-3 py-2">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                  {fact.label}
-                                </p>
-                                <p className="mt-1 text-[13px] leading-5 text-slate-900">
-                                  {fact.value}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : arr(row.items).length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {row.items.map((item) => (
-                              <span key={item} className="rounded-full bg-slate-50 px-3 py-1.5 text-[12px] font-medium text-slate-700">
-                                {item}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[13px] text-slate-500">Hələ məlumat yoxdur.</p>
-                        )}
-                      </div>
-
-                      <div className="text-right">
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                          {statusLabel(row.status)}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-5 py-12 text-center">
-                    <p className="text-[15px] font-semibold text-slate-950">
-                      Hələ fakt çıxarılmayıb
-                    </p>
-                    <p className="mt-2 text-[13px] text-slate-500">
-                      Yuxarıdan website, profil və ya manual brief əlavə et.
+              <section className="mt-5">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <h2 className="text-[18px] font-semibold tracking-[-0.035em] text-text">
+                      Tapılan faktlar
+                    </h2>
+                    <p className="mt-1 text-[13px] text-text-subtle">
+                      AI bunları mənbədən və cavablardan hazırlayıb.
                     </p>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </main>
-
-        <aside className="min-w-0 bg-slate-50/70 px-5 py-6">
-          <div className="sticky top-5 grid gap-4">
-            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    3. Təsdiq
-                  </p>
-                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.045em]">
-                    {readyForApproval ? "Truth hazırdır" : "Hələ tamamlanır"}
-                  </h2>
-                  <p className="mt-2 text-[13px] leading-6 text-slate-600">
-                    Təsdiqdən əvvəl draft müştəriyə cavab vermir. Runtime yalnız approved truth istifadə edir.
-                  </p>
                 </div>
-              </div>
 
-              {publishItems.length ? (
-                <div className="mt-4 rounded-[18px] bg-slate-50 p-3">
-                  <p className="text-[12px] font-semibold text-slate-700">
-                    Truth-a gedəcək
-                  </p>
-                  <div className="mt-2 grid gap-2">
-                    {publishItems.slice(0, 4).map((item) => (
-                      <div key={s(item.key || item.label)} className="text-[12px] leading-5 text-slate-600">
-                        <span className="font-semibold text-slate-900">{s(item.label || item.key)}:</span>{" "}
-                        {compactText(item.summary, 90)}
+                <div className="mt-4 divide-y divide-[rgb(var(--color-line-soft))] border-y border-[rgb(var(--color-line-soft))]">
+                  {facts.length ? (
+                    facts.map((fact) => (
+                      <div key={fact.key} className="grid gap-3 py-3 md:grid-cols-[170px_minmax(0,1fr)_96px]">
+                        <div className="text-[13px] font-semibold text-text">{fact.label}</div>
+                        <div className="text-[13px] leading-6 text-text-subtle">{fact.value}</div>
+                        <div className="text-left md:text-right">
+                          <span className="text-[11px] font-semibold text-text-soft">
+                            {fact.sourceBacked ? "source" : "review"}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-10 text-center">
+                      <div className="text-[15px] font-semibold text-text">
+                        Hələ məlumat çıxarılmayıb
+                      </div>
+                      <div className="mt-2 text-[13px] text-text-subtle">
+                        Yuxarıdan mənbə əlavə et, sistem faktları burada göstərəcək.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {missing.length ? (
+                <section className="mt-5 app-surface-muted px-4 py-4">
+                  <h2 className="text-[16px] font-semibold tracking-[-0.03em] text-text">
+                    Çatışmayan məlumatlar
+                  </h2>
+                  <div className="mt-3 grid gap-2">
+                    {missing.map((item) => (
+                      <div key={item.key || item.body} className="border-l-2 border-[rgb(var(--color-warning-strong))] pl-3">
+                        <div className="text-[13px] font-semibold text-text">{item.title}</div>
+                        <div className="mt-1 text-[13px] leading-6 text-text-subtle">{item.body}</div>
                       </div>
                     ))}
                   </div>
-                </div>
+                </section>
               ) : null}
+            </main>
 
-              <button
-                type="button"
-                disabled={!primaryAction.enabled}
-                onClick={() => onAction(primaryAction)}
-                className={`mt-4 flex h-11 w-full items-center justify-center rounded-[14px] text-[13px] font-semibold transition ${
-                  primaryAction.enabled
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "bg-slate-200 text-slate-500"
-                }`}
-              >
-                {primaryAction.label || "Təsdiq üçün hazır deyil"}
-              </button>
-
-              {excludedItems.length ? (
-                <p className="mt-3 text-[12px] leading-5 text-slate-500">
-                  Truth-a düşməyəcək: {excludedItems.slice(0, 3).map(statusLabel).join(", ")}
-                </p>
-              ) : null}
-            </section>
-
-            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Çatışmayanlar
-              </p>
-
-              <div className="mt-3 grid gap-2">
-                {missingFacts.length ? (
-                  missingFacts.map((item) => (
-                    <div key={item.key || item.body} className="rounded-[16px] bg-amber-50 px-3 py-3">
-                      <p className="text-[13px] font-semibold text-slate-950">
-                        {statusLabel(item.label)}
-                      </p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-600">
-                        {item.body}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-[16px] bg-emerald-50 px-3 py-3">
-                    <p className="text-[13px] font-semibold text-emerald-800">
-                      Kritik boşluq görünmür
-                    </p>
-                    <p className="mt-1 text-[12px] leading-5 text-emerald-700">
-                      İndi faktları yoxlayıb təsdiq edə bilərsən.
-                    </p>
+            <aside className="border-t border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface-muted))] px-5 py-5 lg:border-l lg:border-t-0">
+              <div className="grid gap-5">
+                <section>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
+                    Təsdiq
                   </div>
-                )}
-              </div>
-            </section>
+                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
+                    {canApprove ? "Truth hazırdır" : "Təsdiqdən əvvəl tamamla"}
+                  </h2>
+                  <p className="mt-2 text-[13px] leading-6 text-text-subtle">
+                    Təsdiqlənməyən draft müştəriyə cavab vermir. Runtime yalnız approved truth istifadə edir.
+                  </p>
 
-            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Canlı preview
-              </p>
+                  <button
+                    type="button"
+                    disabled={!primaryAction.enabled}
+                    onClick={() => onAction(primaryAction)}
+                    className="ui-button ui-button--primary ui-button--md ui-button--full mt-4"
+                  >
+                    <span className="ui-button__inner">
+                      {primaryAction.label || "Təsdiq üçün hazır deyil"}
+                    </span>
+                  </button>
+                </section>
 
-              <div className="mt-4 rounded-[22px] bg-slate-950 p-4 text-white">
-                <p className="text-[12px] text-slate-400">Müştəri soruşur</p>
-                <p className="mt-1 text-[14px] font-semibold">
-                  “Xidmətlər və əlaqə məlumatı nədir?”
-                </p>
+                <div className="app-divider" />
 
-                <div className="mt-4 rounded-[18px] bg-white/10 p-3">
-                  <p className="text-[12px] text-slate-300">AI cavabı yalnız təsdiqli truth-dan gələcək:</p>
-                  <div className="mt-2 grid gap-2">
-                    {previewFacts.length ? (
-                      previewFacts.map((fact) => (
-                        <p key={`${fact.label}-${fact.value}`} className="text-[12px] leading-5 text-white">
-                          <span className="text-slate-400">{fact.label}:</span>{" "}
-                          {fact.value}
-                        </p>
+                <section>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
+                    AI cavab preview
+                  </div>
+                  <div className="mt-3 rounded-[var(--radius-lg)] bg-[rgb(var(--color-surface-inverse))] px-4 py-4 text-text-inverse">
+                    <div className="text-[12px] text-slate-400">Müştəri:</div>
+                    <div className="mt-1 text-[14px] font-semibold">
+                      “Xidmətlər və əlaqə məlumatı nədir?”
+                    </div>
+                    <div className="mt-4 text-[12px] leading-6 text-slate-300">
+                      {facts.length
+                        ? facts.slice(0, 3).map((fact) => `${fact.label}: ${fact.value}`).join(" · ")
+                        : "Mənbə əlavə ediləndən sonra preview burada görünəcək."}
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
+                    Aktiv olacaq
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {runtime.length ? (
+                      runtime.slice(0, 5).map((item) => (
+                        <div key={item.key} className="flex items-center justify-between gap-3 text-[13px]">
+                          <span className="font-semibold text-text">{item.label}</span>
+                          <span className="text-text-soft">{labelize(item.state)}</span>
+                        </div>
                       ))
                     ) : (
-                      <p className="text-[12px] leading-5 text-slate-300">
-                        Mənbə əlavə edildikdən sonra preview burada görünəcək.
+                      <p className="text-[13px] leading-6 text-text-subtle">
+                        Widget, inbox, voice və automation təsdiqdən sonra eyni truth-dan istifadə edəcək.
                       </p>
                     )}
                   </div>
-                </div>
+                </section>
               </div>
-            </section>
-
-            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Aktiv olacaq sistemlər
-              </p>
-
-              <div className="mt-3 grid gap-2">
-                {runtimeRows.length ? (
-                  runtimeRows.map((item) => (
-                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-[14px] bg-slate-50 px-3 py-2.5">
-                      <span className="text-[13px] font-semibold text-slate-900">
-                        {item.label}
-                      </span>
-                      <span className="text-[11px] font-semibold text-slate-500">
-                        {statusLabel(item.state)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-[13px] leading-6 text-slate-500">
-                    Widget, inbox, voice və automation readiness təsdiqdən sonra görünəcək.
-                  </p>
-                )}
-              </div>
-            </section>
+            </aside>
           </div>
-        </aside>
+        </div>
       </div>
     </section>
   );
