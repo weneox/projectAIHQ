@@ -16,7 +16,7 @@ import {
   useWorkspaceTenantKey,
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
-import SetupAssistantSections from "./SetupAssistantSections.jsx";
+import SetupReviewRoomShell from "../setup/SetupReviewRoomShell.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -818,7 +818,7 @@ export default function FloatingAiWidget({
             </div>
 
             <div className="min-h-0 flex-1">
-              <SetupAssistantSections
+              <SetupReviewRoomShell
                 key={conversationStorageKey}
                 storageKey={conversationStorageKey}
                 sessionHydrated={sessionHydrated}
