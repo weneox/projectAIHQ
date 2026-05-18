@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import SetupReviewRoomSurface from "./SetupReviewRoomSurface.jsx";
 import {
   normalizeSetupSourceValue,
@@ -77,9 +77,10 @@ function hasAnySetupState(reviewRoom = {}, assistant = {}) {
 
 function resolveTypedSourceInput(value = "", sourceType = "website") {
   const text = s(value);
-  const type = lower(sourceType || "website");
+  const selectedType = lower(sourceType || "website");
+  const auto = resolveSetupSourceInput(text);
 
-  if (type === "manual") {
+  if (selectedType === "manual") {
     return {
       type: "manual",
       value: text,
@@ -87,14 +88,19 @@ function resolveTypedSourceInput(value = "", sourceType = "website") {
     };
   }
 
-  const auto = resolveSetupSourceInput(text);
-  const resolvedType = type || auto.type || "website";
-  const normalizedValue = normalizeSetupSourceValue(resolvedType, text);
+  const resolvedType =
+    auto.type && auto.type !== "manual" ? auto.type : selectedType || "website";
+
+  const normalizedValue =
+    normalizeSetupSourceValue(resolvedType, text) ||
+    auto.value ||
+    normalizeSetupSourceValue("website", text) ||
+    text;
 
   return {
     ...auto,
     type: resolvedType,
-    value: normalizedValue || auto.value || text,
+    value: normalizedValue,
     isImportedSource: resolvedType !== "manual",
   };
 }

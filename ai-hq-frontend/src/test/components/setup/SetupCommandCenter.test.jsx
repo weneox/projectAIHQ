@@ -1,4 +1,4 @@
-/* @vitest-environment jsdom */
+﻿/* @vitest-environment jsdom */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -55,6 +55,30 @@ function renderCenter() {
   );
 }
 
+function emptyReviewRoom() {
+  return {
+    brain: {
+      version: 0,
+      sourceIntelligence: { quality: "missing", evidenceCount: 0 },
+      sectionCompletion: { percent: 0 },
+      missingFactsPlan: { required: true, missingSections: [] },
+      conflictPlan: { hasConflicts: false },
+      decisionPlan: { operatorDecision: "add_business_input" },
+      runtimeSimulation: { canActivateAfterApproval: false },
+    },
+    sections: [],
+    runtimeConsumers: { consumers: [] },
+    actions: {
+      primary: {
+        id: "add_business_input",
+        label: "Mənbə əlavə et",
+        enabled: true,
+      },
+    },
+    issues: [],
+  };
+}
+
 describe("SetupCommandCenter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,27 +94,7 @@ describe("SetupCommandCenter", () => {
     api.getCurrentSetupReview.mockResolvedValue({
       ok: true,
       setup: {
-        reviewRoom: {
-          brain: {
-            version: 5,
-            sourceIntelligence: { quality: "missing", evidenceCount: 0 },
-            sectionCompletion: { percent: 0 },
-            missingFactsPlan: { required: true, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "add_business_input" },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
-          sections: [],
-          runtimeConsumers: { consumers: [] },
-          actions: {
-            primary: {
-              id: "add_business_input",
-              label: "Mənbə və ya məlumat əlavə et",
-              enabled: true,
-            },
-          },
-          issues: [],
-        },
+        reviewRoom: emptyReviewRoom(),
       },
     });
 
@@ -113,6 +117,22 @@ describe("SetupCommandCenter", () => {
             decisionPlan: { operatorDecision: "answer_missing_facts" },
             runtimeSimulation: { canActivateAfterApproval: false },
           },
+          sectionDetails: [
+            {
+              key: "profile",
+              title: "Profil",
+              status: "complete",
+              sourceBacked: true,
+              facts: [
+                {
+                  key: "companyName",
+                  label: "Biznes adı",
+                  value: "Medhouse Klinika",
+                },
+              ],
+              items: [],
+            },
+          ],
           sections: [],
           runtimeConsumers: { consumers: [] },
           actions: {
@@ -134,16 +154,28 @@ describe("SetupCommandCenter", () => {
     });
   });
 
-  it("routes website input through source import instead of chat message", async () => {
+  it("shows only the progressive source input before analysis", async () => {
     renderCenter();
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    fireEvent.change(screen.getByPlaceholderText("https://medhouse.az"), {
-      target: { value: "https://medhouse.az" },
+    expect(screen.getByPlaceholderText("medhouse.az")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Oxu" })).toBeDisabled();
+    expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not ready/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/tapılan faktlar/i)).not.toBeInTheDocument();
+  });
+
+  it("routes bare website domain through source import with normalized https URL", async () => {
+    renderCenter();
+
+    await screen.findByText(/biznesini ai üçün tanıdaq/i);
+
+    fireEvent.change(screen.getByPlaceholderText("medhouse.az"), {
+      target: { value: "medhouse.az" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /oxumağa başla/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
 
     await waitFor(() => {
       expect(api.importSourceForSetup).toHaveBeenCalledWith(
@@ -155,6 +187,16 @@ describe("SetupCommandCenter", () => {
             url: "https://medhouse.az",
             sourceUrl: "https://medhouse.az",
           }),
+          sources: [
+            expect.objectContaining({
+              type: "website",
+              sourceType: "website",
+              value: "https://medhouse.az",
+              url: "https://medhouse.az",
+              sourceUrl: "https://medhouse.az",
+            }),
+          ],
+          note: "medhouse.az",
           allowSessionReuse: true,
           waitForCompletion: true,
         })
@@ -169,7 +211,7 @@ describe("SetupCommandCenter", () => {
 
     await screen.findByText(/biznesini ai üçün tanıdaq/i);
 
-    fireEvent.click(screen.getByRole("button", { name: "Manual brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Qısa izah" }));
 
     fireEvent.change(screen.getByPlaceholderText(/biznes nə edir/i), {
       target: { value: "Həftə içi 09:00-18:00 işləyirik." },

@@ -18,7 +18,7 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value = "", max = 160) {
+function compactText(value = "", max = 170) {
   const text = s(value).replace(/\s+/g, " ");
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
@@ -28,70 +28,65 @@ function labelize(value = "") {
   return s(value, "pending").replace(/_/g, " ");
 }
 
-function qualityCopy(value = "") {
-  const key = lower(value);
-  if (key === "strong") return "Mənbə yaxşıdır";
-  if (key === "partial") return "Qismən oxundu";
-  if (key === "conflicting") return "Ziddiyyət var";
-  if (key === "missing") return "Mənbə gözləyir";
-  return "Mənbə gözləyir";
-}
-
 function decisionCopy(value = "") {
   const key = lower(value);
+
   if (key === "approve_truth") return "Təsdiqə hazırdır";
-  if (key === "answer_missing_facts") return "Bir neçə məlumat çatışır";
-  if (key === "resolve_conflicts") return "Ziddiyyəti həll etmək lazımdır";
+  if (key === "answer_missing_facts") return "Tamamlanmalı məlumat var";
+  if (key === "resolve_conflicts") return "Ziddiyyət yoxlanmalıdır";
   if (key === "review_or_continue") return "Yoxlama mərhələsidir";
+
   return "Mənbə əlavə et";
 }
 
-function collectTruthFacts(room = {}) {
+function collectFacts(room = {}) {
   const rows = [];
 
   for (const section of arr(room.sectionDetails)) {
-    const title = s(section.title || section.label || section.key);
+    const sectionLabel = s(section.title || section.label || section.key);
+
     for (const fact of arr(section.facts)) {
-      const value = compactText(fact.value, 170);
+      const value = compactText(fact.value, 180);
       if (!value) continue;
+
       rows.push({
-        key: `${section.key}-${fact.key || fact.label}`,
-        label: s(fact.label || title),
+        key: `${section.key || sectionLabel}-${fact.key || fact.label}`,
+        label: s(fact.label || sectionLabel),
         value,
-        section: title,
         sourceBacked: section.sourceBacked === true,
       });
     }
 
-    const items = arr(section.items).map((item) => compactText(item, 90)).filter(Boolean);
+    const items = arr(section.items)
+      .map((item) => compactText(item, 90))
+      .filter(Boolean);
+
     if (items.length) {
       rows.push({
-        key: `${section.key}-items`,
-        label: title,
-        value: items.slice(0, 6).join(", "),
-        section: title,
+        key: `${section.key || sectionLabel}-items`,
+        label: sectionLabel,
+        value: items.slice(0, 7).join(", "),
         sourceBacked: section.sourceBacked === true,
       });
     }
   }
 
-  if (rows.length) return rows.slice(0, 12);
+  if (rows.length) return rows.slice(0, 14);
 
   return arr(room.sections)
-    .filter((section) => Number(section.itemCount || 0) > 0 || s(section.status) === "complete")
+    .filter((section) => Number(section.itemCount || 0) > 0)
     .map((section) => ({
       key: s(section.key),
       label: s(section.label || section.key),
-      value: `${Number(section.itemCount || 0)} məlumat`,
-      section: s(section.label || section.key),
+      value: `${Number(section.itemCount || 0)} məlumat tapıldı`,
       sourceBacked: section.sourceBacked === true,
     }))
-    .slice(0, 12);
+    .slice(0, 14);
 }
 
 function collectMissing(room = {}) {
   const brain = obj(room.brain);
-  const missing = obj(brain.missingFactsPlan);
+  const missingPlan = obj(brain.missingFactsPlan);
 
   const blockers = arr(room.issues)
     .filter((issue) => s(issue.severity) === "blocking")
@@ -104,16 +99,16 @@ function collectMissing(room = {}) {
 
   if (blockers.length) return blockers;
 
-  return arr(missing.missingSections)
+  return arr(missingPlan.missingSections)
     .map((item) => s(item))
     .filter(Boolean)
     .map((key) => ({
       key,
       title: labelize(key),
       body:
-        s(missing.nextQuestion?.prompt) && s(missing.nextQuestionKey) === key
-          ? s(missing.nextQuestion.prompt)
-          : "Bu məlumat təsdiqdən əvvəl tamamlanmalıdır.",
+        s(missingPlan.nextQuestion?.prompt) && s(missingPlan.nextQuestionKey) === key
+          ? s(missingPlan.nextQuestion.prompt)
+          : "Bu məlumatı tamamla ki, AI müştəriyə dəqiq cavab versin.",
     }));
 }
 
@@ -137,11 +132,105 @@ function collectRuntime(room = {}) {
 }
 
 const SOURCE_OPTIONS = [
-  { id: "website", label: "Website", placeholder: "https://yourbusiness.com" },
-  { id: "google_maps", label: "Google Maps", placeholder: "Google Maps linki" },
-  { id: "instagram", label: "Instagram", placeholder: "@profile və ya Instagram linki" },
-  { id: "manual", label: "Qısa izah", placeholder: "Biznes nə edir, xidmətlər, əlaqə və vacib məlumatlar..." },
+  {
+    id: "website",
+    label: "Website",
+    placeholder: "medhouse.az",
+  },
+  {
+    id: "google_maps",
+    label: "Google Maps",
+    placeholder: "Google Maps linki və ya biznes adı",
+  },
+  {
+    id: "instagram",
+    label: "Instagram",
+    placeholder: "@profil və ya Instagram linki",
+  },
+  {
+    id: "manual",
+    label: "Qısa izah",
+    placeholder: "Biznes nə edir, xidmətlər, əlaqə və vacib məlumatlar...",
+  },
 ];
+
+function SourceInput({
+  value,
+  sourceType,
+  busy,
+  status,
+  onTypeChange,
+  onValueChange,
+  onSubmit,
+  compact = false,
+}) {
+  const selected =
+    SOURCE_OPTIONS.find((option) => option.id === sourceType) || SOURCE_OPTIONS[0];
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+      className={compact ? "" : "mx-auto w-full max-w-[760px]"}
+    >
+      <div className="mb-3 flex flex-wrap justify-center gap-1.5">
+        {SOURCE_OPTIONS.map((option) => {
+          const active = option.id === sourceType;
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onTypeChange(option.id)}
+              className={`h-9 rounded-[var(--radius-md)] px-3 text-[12px] font-semibold transition ${
+                active
+                  ? "bg-[rgb(var(--color-surface-inverse))] text-text-inverse"
+                  : "bg-[rgb(var(--color-surface-subtle))] text-text-subtle hover:text-text"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex overflow-hidden rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] shadow-[var(--shadow-sm)]">
+        {sourceType === "manual" ? (
+          <textarea
+            rows={compact ? 2 : 4}
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            placeholder={selected.placeholder}
+            className="min-h-[72px] flex-1 resize-none border-0 bg-transparent px-4 py-3 text-[15px] leading-6 text-text outline-none placeholder:text-text-soft"
+          />
+        ) : (
+          <input
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            placeholder={selected.placeholder}
+            className="h-[56px] flex-1 border-0 bg-transparent px-4 text-[15px] text-text outline-none placeholder:text-text-soft"
+          />
+        )}
+
+        <button
+          type="submit"
+          disabled={!s(value) || busy}
+          className="min-w-[116px] bg-[rgb(var(--color-surface-inverse))] px-5 text-[14px] font-semibold text-text-inverse transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[rgb(var(--color-line-strong))]"
+        >
+          {busy ? "Oxunur" : sourceType === "manual" ? "Əlavə et" : "Oxu"}
+        </button>
+      </div>
+
+      {status ? (
+        <div className="mt-3 text-center text-[13px] font-medium text-text-subtle">
+          {status}
+        </div>
+      ) : null}
+    </form>
+  );
+}
 
 export default function SetupReviewRoomSurface({
   reviewRoom = {},
@@ -156,40 +245,90 @@ export default function SetupReviewRoomSurface({
 }) {
   const room = normalizeSetupReviewRoom(reviewRoom);
   const brain = obj(room.brain);
-  const source = obj(brain.sourceIntelligence);
-  const completion = obj(brain.sectionCompletion);
   const decision = obj(brain.decisionPlan);
-  const missing = collectMissing(room);
-  const facts = collectTruthFacts(room);
-  const runtime = collectRuntime(room);
+  const completion = obj(brain.sectionCompletion);
   const primaryAction = obj(room.actions.primary);
   const approvalPreview = obj(room.approvalPreview);
-  const selectedSource = SOURCE_OPTIONS.find((item) => item.id === sourceType) || SOURCE_OPTIONS[0];
+
+  const facts = collectFacts(room);
+  const missing = collectMissing(room);
+  const runtime = collectRuntime(room);
+
+  const hasFacts = facts.length > 0;
+  const hasMissing = missing.length > 0;
+  const hasMeaningfulProgress =
+    hasFacts ||
+    hasMissing ||
+    Number(completion.percent || 0) > 0 ||
+    Number(obj(brain.sourceIntelligence).evidenceCount || 0) > 0;
 
   const canApprove =
     approvalPreview.canApprove === true ||
     s(primaryAction.id).includes("approve") ||
     s(primaryAction.intent).includes("finalize");
 
-  return (
-    <section aria-label="Business setup workspace" className="min-h-full bg-[rgb(var(--color-canvas))]">
-      <div className="mx-auto grid min-h-full w-full max-w-[1180px] gap-6 px-6 py-6">
-        <header className="grid gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-soft">
+  if (!hasMeaningfulProgress) {
+    return (
+      <section
+        aria-label="Business setup workspace"
+        className="flex min-h-[calc(100vh-150px)] items-center bg-[rgb(var(--color-canvas))]"
+      >
+        <div className="mx-auto w-full max-w-[900px] px-6 py-16 text-center">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-soft">
             Business setup
           </div>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+
+          <h1 className="mx-auto mt-4 max-w-[760px] text-[44px] font-semibold leading-[1.02] tracking-[-0.065em] text-text">
+            Biznesini AI üçün tanıdaq.
+          </h1>
+
+          <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-7 text-text-subtle">
+            Saytını, profilini və ya qısa izahı yaz. Sistem oxusun, faktları çıxarsın və yalnız lazım olanı soruşsun.
+          </p>
+
+          <div className="mt-8">
+            <SourceInput
+              value={sourceValue}
+              sourceType={sourceType}
+              busy={sourceBusy}
+              status={sourceStatus}
+              onTypeChange={onSourceTypeChange}
+              onValueChange={onSourceValueChange}
+              onSubmit={onSubmitSource}
+            />
+          </div>
+
+          <p className="mx-auto mt-5 max-w-[560px] text-[12px] leading-6 text-text-soft">
+            Məsələn: medhouse.az, Instagram profilin, Google Maps linkin və ya biznes haqqında qısa mətn.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-label="Business setup workspace"
+      className="min-h-[calc(100vh-150px)] bg-[rgb(var(--color-canvas))]"
+    >
+      <div className="mx-auto w-full max-w-[980px] px-6 py-8">
+        <header className="mb-7">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-soft">
+            Business setup
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="max-w-[760px] text-[34px] font-semibold leading-[1.05] tracking-[-0.055em] text-text">
-                Biznesini AI üçün sadə şəkildə tanıdaq.
+              <h1 className="text-[34px] font-semibold leading-[1.05] tracking-[-0.06em] text-text">
+                Sistem biznesini oxuyur.
               </h1>
-              <p className="mt-3 max-w-[680px] text-[14px] leading-7 text-text-subtle">
-                Mənbə əlavə et. Sistem oxusun, tapdığı faktları göstərsin və yalnız çatışmayanı soruşsun.
+              <p className="mt-3 max-w-[640px] text-[14px] leading-7 text-text-subtle">
+                Tapılan faktları yoxla. Çatışmayan varsa, sadəcə onu tamamla.
               </p>
             </div>
 
-            <div className="app-surface-muted px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
+            <div className="text-left sm:text-right">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
                 Vəziyyət
               </div>
               <div className="mt-1 text-[14px] font-semibold text-text">
@@ -197,240 +336,123 @@ export default function SetupReviewRoomSurface({
               </div>
             </div>
           </div>
+
+          <div className="mt-6">
+            <SourceInput
+              compact
+              value={sourceValue}
+              sourceType={sourceType}
+              busy={sourceBusy}
+              status={sourceStatus}
+              onTypeChange={onSourceTypeChange}
+              onValueChange={onSourceValueChange}
+              onSubmit={onSubmitSource}
+            />
+          </div>
         </header>
 
-        <div className="app-surface overflow-hidden">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmitSource();
-            }}
-            className="border-b border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-5 py-5"
-          >
-            <div className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)_150px] lg:items-end">
+        {hasFacts ? (
+          <section className="border-y border-[rgb(var(--color-line-soft))] py-5">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <label className="text-[12px] font-semibold text-text">Mənbə növü</label>
-                <div className="mt-2 grid grid-cols-2 gap-1 rounded-[var(--radius-lg)] bg-[rgb(var(--color-surface-subtle))] p-1">
-                  {SOURCE_OPTIONS.map((item) => {
-                    const active = item.id === sourceType;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => onSourceTypeChange(item.id)}
-                        className={`h-9 rounded-[var(--radius-md)] px-2 text-[12px] font-semibold transition ${
-                          active
-                            ? "bg-[rgb(var(--color-surface))] text-text shadow-[var(--shadow-xs)]"
-                            : "text-text-subtle hover:text-text"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
+                <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-text">
+                  Tapılan faktlar
+                </h2>
+                <p className="mt-1 text-[13px] text-text-subtle">
+                  AI bu məlumatları mənbədən və cavablardan hazırlayıb.
+                </p>
+              </div>
+
+              {Number(completion.percent || 0) > 0 ? (
+                <div className="text-[13px] font-semibold text-text-subtle">
+                  {Number(completion.percent || 0)}% tamamlanıb
                 </div>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-text">
-                  Website, profil və ya biznes izahı
-                </label>
-                {sourceType === "manual" ? (
-                  <textarea
-                    rows={3}
-                    value={sourceValue}
-                    onChange={(event) => onSourceValueChange(event.target.value)}
-                    placeholder={selectedSource.placeholder}
-                    className="mt-2 min-h-[78px] w-full rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-3 py-3 text-[14px] leading-6 outline-none focus:shadow-[var(--focus-ring)]"
-                  />
-                ) : (
-                  <input
-                    value={sourceValue}
-                    onChange={(event) => onSourceValueChange(event.target.value)}
-                    placeholder={selectedSource.placeholder}
-                    className="mt-2 h-[46px] w-full rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] px-3 text-[14px] outline-none focus:shadow-[var(--focus-ring)]"
-                  />
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={!s(sourceValue) || sourceBusy}
-                className="ui-button ui-button--primary ui-button--md ui-button--full"
-              >
-                <span className="ui-button__inner">
-                  {sourceBusy ? "Oxunur..." : sourceType === "manual" ? "Əlavə et" : "Oxu"}
-                </span>
-              </button>
+              ) : null}
             </div>
 
-            {sourceStatus ? (
-              <div className="mt-3 text-[12px] font-medium text-text-subtle">{sourceStatus}</div>
-            ) : null}
-          </form>
+            <div className="divide-y divide-[rgb(var(--color-line-soft))]">
+              {facts.map((fact) => (
+                <div
+                  key={fact.key}
+                  className="grid gap-2 py-3 md:grid-cols-[190px_minmax(0,1fr)_90px]"
+                >
+                  <div className="text-[13px] font-semibold text-text">
+                    {fact.label}
+                  </div>
 
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <main className="min-w-0 px-5 py-5">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="app-surface-muted px-4 py-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
-                    Mənbə
+                  <div className="text-[13px] leading-6 text-text-subtle">
+                    {fact.value}
                   </div>
-                  <div className="mt-1 text-[15px] font-semibold text-text">
-                    {qualityCopy(source.quality)}
-                  </div>
-                  <div className="mt-1 text-[12px] text-text-subtle">
-                    {Number(source.evidenceCount || 0)} sübut
-                  </div>
-                </div>
 
-                <div className="app-surface-muted px-4 py-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
-                    Tamlıq
-                  </div>
-                  <div className="mt-1 text-[15px] font-semibold text-text">
-                    {Number(completion.percent || 0)}%
-                  </div>
-                  <div className="mt-1 text-[12px] text-text-subtle">
-                    Business truth hazırlığı
-                  </div>
-                </div>
-
-                <div className="app-surface-muted px-4 py-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-soft">
-                    Növbəti
-                  </div>
-                  <div className="mt-1 text-[15px] font-semibold text-text">
-                    {canApprove ? "Təsdiq" : missing.length ? "Tamamla" : "Yoxla"}
-                  </div>
-                  <div className="mt-1 text-[12px] text-text-subtle">
-                    {missing.length ? `${missing.length} məlumat çatışır` : "Sistem hazırlaşır"}
-                  </div>
-                </div>
-              </div>
-
-              <section className="mt-5">
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <h2 className="text-[18px] font-semibold tracking-[-0.035em] text-text">
-                      Tapılan faktlar
-                    </h2>
-                    <p className="mt-1 text-[13px] text-text-subtle">
-                      AI bunları mənbədən və cavablardan hazırlayıb.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 divide-y divide-[rgb(var(--color-line-soft))] border-y border-[rgb(var(--color-line-soft))]">
-                  {facts.length ? (
-                    facts.map((fact) => (
-                      <div key={fact.key} className="grid gap-3 py-3 md:grid-cols-[170px_minmax(0,1fr)_96px]">
-                        <div className="text-[13px] font-semibold text-text">{fact.label}</div>
-                        <div className="text-[13px] leading-6 text-text-subtle">{fact.value}</div>
-                        <div className="text-left md:text-right">
-                          <span className="text-[11px] font-semibold text-text-soft">
-                            {fact.sourceBacked ? "source" : "review"}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-10 text-center">
-                      <div className="text-[15px] font-semibold text-text">
-                        Hələ məlumat çıxarılmayıb
-                      </div>
-                      <div className="mt-2 text-[13px] text-text-subtle">
-                        Yuxarıdan mənbə əlavə et, sistem faktları burada göstərəcək.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {missing.length ? (
-                <section className="mt-5 app-surface-muted px-4 py-4">
-                  <h2 className="text-[16px] font-semibold tracking-[-0.03em] text-text">
-                    Çatışmayan məlumatlar
-                  </h2>
-                  <div className="mt-3 grid gap-2">
-                    {missing.map((item) => (
-                      <div key={item.key || item.body} className="border-l-2 border-[rgb(var(--color-warning-strong))] pl-3">
-                        <div className="text-[13px] font-semibold text-text">{item.title}</div>
-                        <div className="mt-1 text-[13px] leading-6 text-text-subtle">{item.body}</div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-            </main>
-
-            <aside className="border-t border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface-muted))] px-5 py-5 lg:border-l lg:border-t-0">
-              <div className="grid gap-5">
-                <section>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
-                    Təsdiq
-                  </div>
-                  <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
-                    {canApprove ? "Truth hazırdır" : "Təsdiqdən əvvəl tamamla"}
-                  </h2>
-                  <p className="mt-2 text-[13px] leading-6 text-text-subtle">
-                    Təsdiqlənməyən draft müştəriyə cavab vermir. Runtime yalnız approved truth istifadə edir.
-                  </p>
-
-                  <button
-                    type="button"
-                    disabled={!primaryAction.enabled}
-                    onClick={() => onAction(primaryAction)}
-                    className="ui-button ui-button--primary ui-button--md ui-button--full mt-4"
-                  >
-                    <span className="ui-button__inner">
-                      {primaryAction.label || "Təsdiq üçün hazır deyil"}
+                  <div className="text-left md:text-right">
+                    <span className="text-[11px] font-semibold text-text-soft">
+                      {fact.sourceBacked ? "tapıldı" : "yoxla"}
                     </span>
-                  </button>
-                </section>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
-                <div className="app-divider" />
+        {hasMissing ? (
+          <section className="mt-6">
+            <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-text">
+              Tamamlanmalı məlumatlar
+            </h2>
 
-                <section>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
-                    AI cavab preview
+            <div className="mt-4 grid gap-3">
+              {missing.map((item) => (
+                <div
+                  key={item.key || item.body}
+                  className="border-l-2 border-[rgb(var(--color-warning-strong))] bg-[rgb(var(--color-warning-soft))] px-4 py-3"
+                >
+                  <div className="text-[13px] font-semibold text-text">
+                    {item.title}
                   </div>
-                  <div className="mt-3 rounded-[var(--radius-lg)] bg-[rgb(var(--color-surface-inverse))] px-4 py-4 text-text-inverse">
-                    <div className="text-[12px] text-slate-400">Müştəri:</div>
-                    <div className="mt-1 text-[14px] font-semibold">
-                      “Xidmətlər və əlaqə məlumatı nədir?”
-                    </div>
-                    <div className="mt-4 text-[12px] leading-6 text-slate-300">
-                      {facts.length
-                        ? facts.slice(0, 3).map((fact) => `${fact.label}: ${fact.value}`).join(" · ")
-                        : "Mənbə əlavə ediləndən sonra preview burada görünəcək."}
-                    </div>
+                  <div className="mt-1 text-[13px] leading-6 text-text-subtle">
+                    {item.body}
                   </div>
-                </section>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
-                <section>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-soft">
-                    Aktiv olacaq
-                  </div>
-                  <div className="mt-3 grid gap-2">
-                    {runtime.length ? (
-                      runtime.slice(0, 5).map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 text-[13px]">
-                          <span className="font-semibold text-text">{item.label}</span>
-                          <span className="text-text-soft">{labelize(item.state)}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-[13px] leading-6 text-text-subtle">
-                        Widget, inbox, voice və automation təsdiqdən sonra eyni truth-dan istifadə edəcək.
-                      </p>
-                    )}
-                  </div>
-                </section>
+        {canApprove ? (
+          <section className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-[rgb(var(--color-line-soft))] pt-6">
+            <div>
+              <h2 className="text-[22px] font-semibold tracking-[-0.045em] text-text">
+                Təsdiqə hazırdır
+              </h2>
+              <p className="mt-2 max-w-[560px] text-[13px] leading-6 text-text-subtle">
+                Təsdiqlənməyən draft müştəriyə cavab vermir. Təsdiqdən sonra widget, inbox və voice eyni approved truth-dan istifadə edəcək.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={!primaryAction.enabled}
+              onClick={() => onAction(primaryAction)}
+              className="ui-button ui-button--primary ui-button--md"
+            >
+              <span className="ui-button__inner">
+                {primaryAction.label || "Truth-u təsdiqlə"}
+              </span>
+            </button>
+          </section>
+        ) : null}
+
+        {canApprove && runtime.length ? (
+          <section className="mt-5 grid gap-2 text-[13px] text-text-subtle sm:grid-cols-2">
+            {runtime.slice(0, 4).map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-4">
+                <span className="font-semibold text-text">{item.label}</span>
+                <span>{labelize(item.state)}</span>
               </div>
-            </aside>
-          </div>
-        </div>
+            ))}
+          </section>
+        ) : null}
       </div>
     </section>
   );
