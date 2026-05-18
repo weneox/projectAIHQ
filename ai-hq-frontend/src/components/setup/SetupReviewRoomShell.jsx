@@ -1333,10 +1333,10 @@ export default function SetupReviewRoomShell({
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="border-b border-[rgba(15,23,42,0.06)] px-5 py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          Assistant setup
+          Business truth setup
         </div>
         <div className="mt-2 text-[19px] font-semibold tracking-[-0.04em] text-text">
-          AI receptionist setup
+          Setup review room
         </div>
         <div className="mt-1 text-[13px] leading-6 text-text-subtle">
           Biznes faktlarını ver, AI üçün təsdiqlənə bilən Business Truth hazırlayaq.
@@ -1426,7 +1426,7 @@ export default function SetupReviewRoomShell({
                 <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
                   <div className="text-[13px] leading-6 text-text-muted">
                     Draft preview is hidden for now. Complete business truth and
-                    conversation policy, then review the full draft before launch.
+                    required facts, then review the full draft before launch.
                   </div>
                 </div>
               </div>

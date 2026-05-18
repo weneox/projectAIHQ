@@ -56,6 +56,25 @@ describe("SetupReviewRoomShell", () => {
     });
   }
 
+  it("uses canonical setup review room product copy", async () => {
+    render(
+      <SetupReviewRoomShell
+        sessionHydrated={false}
+        assistant={createAssistant()}
+        onStartSetup={vi.fn()}
+        onGoToChannels={vi.fn()}
+        onCaptureSource={vi.fn().mockResolvedValue(true)}
+        onParseMessage={vi.fn()}
+        onFinalize={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Business truth setup")).toBeInTheDocument();
+    expect(screen.getByText("Setup review room")).toBeInTheDocument();
+    expect(screen.queryByText("Assistant setup")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI receptionist setup")).not.toBeInTheDocument();
+  });
+
   it("reads the canonical assistant state without any legacy assistantBrain fallback", async () => {
     render(
       <SetupReviewRoomShell
@@ -145,12 +164,12 @@ describe("SetupReviewRoomShell", () => {
     await startSetup();
 
     await waitFor(() => {
-      expect(screen.getByText("Setup draft")).toBeInTheDocument();
+      expect(screen.getByText("Business Truth draft")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Review signals")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Approve & launch" })
+      screen.getByRole("button", { name: "Approve truth" })
     ).toBeInTheDocument();
     expect(screen.queryByText("Strongest evidence")).not.toBeInTheDocument();
     expect(screen.queryByText("What the system noticed")).not.toBeInTheDocument();
@@ -209,7 +228,7 @@ describe("SetupReviewRoomShell", () => {
     });
 
     expect(
-      screen.queryByRole("button", { name: "Approve & launch" })
+      screen.queryByRole("button", { name: "Approve truth" })
     ).not.toBeInTheDocument();
   });
 });
