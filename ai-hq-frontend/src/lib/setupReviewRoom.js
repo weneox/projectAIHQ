@@ -169,6 +169,86 @@ export function normalizeSetupReviewRoomIntake(reviewRoom = {}) {
   };
 }
 
+export function normalizeSetupReviewRoomBrain(reviewRoom = {}) {
+  const brain = obj(obj(reviewRoom).brain);
+  const source = obj(brain.sourceIntelligence);
+  const completion = obj(brain.sectionCompletion);
+  const missing = obj(brain.missingFactsPlan);
+  const conflict = obj(brain.conflictPlan);
+  const decision = obj(brain.decisionPlan);
+  const runtime = obj(brain.runtimeSimulation);
+
+  return {
+    version: Number(brain.version || 0) || 0,
+    mode: s(brain.mode),
+    primaryGoal: s(brain.primaryGoal || "prepare_approved_business_truth"),
+    sourceIntelligence: {
+      quality: s(source.quality || "missing"),
+      evidenceCount: Number(source.evidenceCount || 0) || 0,
+      primarySourceType: s(source.primarySourceType),
+      primarySourceUrl: s(source.primarySourceUrl),
+      risks: arr(source.risks).map((item) => s(item)).filter(Boolean),
+      recommendation: s(source.recommendation),
+      evidence: arr(source.evidence).map((item) => s(item)).filter(Boolean),
+    },
+    sectionCompletion: {
+      total: Number(completion.total || 0) || 0,
+      requiredCount: Number(completion.requiredCount || 0) || 0,
+      completeCount: Number(completion.completeCount || 0) || 0,
+      missingCount: Number(completion.missingCount || 0) || 0,
+      needsReviewCount: Number(completion.needsReviewCount || 0) || 0,
+      percent: Number(completion.percent || 0) || 0,
+    },
+    missingFactsPlan: {
+      required: missing.required === true,
+      missingSections: arr(missing.missingSections).map((item) => s(item)).filter(Boolean),
+      nextQuestionKey: s(missing.nextQuestionKey),
+      nextQuestion: obj(missing.nextQuestion),
+      recommendedQuestions: arr(missing.recommendedQuestions).map((question) => ({
+        key: s(question?.key),
+        label: s(question?.label || question?.key),
+        priority: Number(question?.priority || 0) || 0,
+        prompt: s(question?.prompt),
+        action: s(question?.action),
+      })).filter((question) => question.key),
+    },
+    conflictPlan: {
+      hasConflicts: conflict.hasConflicts === true,
+      conflicts: arr(conflict.conflicts).map((item) => s(item)).filter(Boolean),
+      action: s(conflict.action),
+      operatorGuidance: s(conflict.operatorGuidance),
+    },
+    decisionPlan: {
+      status: s(decision.status),
+      canApprove: decision.canApprove === true,
+      operatorDecision: s(decision.operatorDecision),
+      recommendedNextAction: s(decision.recommendedNextAction),
+      reason: s(decision.reason),
+    },
+    runtimeSimulation: {
+      rule: s(runtime.rule || "draft_never_powers_runtime"),
+      canActivateAfterApproval: runtime.canActivateAfterApproval === true,
+      beforeApproval: arr(runtime.beforeApproval).map((surface) => ({
+        key: s(surface?.key),
+        label: s(surface?.label || surface?.key),
+        risk: s(surface?.risk),
+        state: s(surface?.state),
+        authority: s(surface?.authority),
+        safeToUseDraft: surface?.safeToUseDraft === true,
+      })).filter((surface) => surface.key),
+      afterApproval: arr(runtime.afterApproval).map((surface) => ({
+        key: s(surface?.key),
+        label: s(surface?.label || surface?.key),
+        risk: s(surface?.risk),
+        state: s(surface?.state),
+        authority: s(surface?.authority),
+        safeToUseDraft: surface?.safeToUseDraft === true,
+      })).filter((surface) => surface.key),
+    },
+    productRules: arr(brain.productRules).map((item) => s(item)).filter(Boolean),
+  };
+}
+
 export function normalizeSetupReviewRoomApprovalPreview(reviewRoom = {}) {
   const preview = obj(obj(reviewRoom).approvalPreview);
 
@@ -222,5 +302,6 @@ export function normalizeSetupReviewRoom(reviewRoom = {}) {
     runtimeConsumers: normalizeSetupReviewRoomRuntimeConsumers(safeRoom),
     intake: normalizeSetupReviewRoomIntake(safeRoom),
     approvalPreview: normalizeSetupReviewRoomApprovalPreview(safeRoom),
+    brain: normalizeSetupReviewRoomBrain(safeRoom),
   };
 }

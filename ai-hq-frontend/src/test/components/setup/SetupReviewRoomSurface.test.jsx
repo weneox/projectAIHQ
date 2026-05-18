@@ -98,6 +98,58 @@ describe("SetupReviewRoomSurface", () => {
     ).toBeEnabled();
   });
 
+  it("renders setup brain v5 decision panel", () => {
+    render(
+      <SetupReviewRoomSurface
+        reviewRoom={{
+          header: {
+            title: "Review the AI-prepared business draft",
+            subtitle: "Check each section before approval.",
+            statusLabel: "Draft ready",
+            badgeTone: "info",
+            trustNote: "Draft data is not runtime authority.",
+          },
+          brain: {
+            version: 5,
+            mode: "setup_brain_v5",
+            decisionPlan: {
+              operatorDecision: "answer_missing_facts",
+              reason: "Required business facts are missing.",
+            },
+            sectionCompletion: { percent: 67 },
+            sourceIntelligence: { quality: "strong", evidenceCount: 3 },
+            missingFactsPlan: {
+              required: true,
+              missingSections: ["contacts"],
+              nextQuestion: { prompt: "Add a customer contact route." },
+            },
+            conflictPlan: { hasConflicts: false },
+            runtimeSimulation: { canActivateAfterApproval: false },
+          },
+          sections: [],
+          actions: {
+            primary: {
+              id: "answer_missing_required_facts",
+              label: "Complete missing facts",
+              enabled: true,
+            },
+          },
+          runtimeConsumers: { consumers: [] },
+          issues: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText(/ai brain v5/i)).toBeInTheDocument();
+    expect(screen.getByText(/answer missing facts/i)).toBeInTheDocument();
+    expect(screen.getByText(/required business facts are missing/i)).toBeInTheDocument();
+    expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getByText(/source intelligence/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 evidence item/i)).toBeInTheDocument();
+    expect(screen.getByText(/add a customer contact route/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked before approval/i)).toBeInTheDocument();
+  });
+
   it("renders section details with facts and items", () => {
     render(
       <SetupReviewRoomSurface

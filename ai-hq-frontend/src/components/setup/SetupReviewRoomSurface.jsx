@@ -33,6 +33,8 @@ export default function SetupReviewRoomSurface({
   const sectionDetails = room.sectionDetails;
   const publishItems = room.approvalPreview?.publishes || [];
   const excludedItems = room.approvalPreview?.excludedFromTruth || [];
+  const brain = room.brain;
+  const hasBrain = Number(brain?.version || 0) > 0;
 
   return (
     <section
@@ -74,6 +76,79 @@ export default function SetupReviewRoomSurface({
           </button>
         </div>
       </div>
+
+      {hasBrain ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                AI Brain v{brain.version}
+              </p>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight">
+                {statusLabel(brain.decisionPlan.operatorDecision || "review_or_continue")}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {brain.decisionPlan.reason || "AI prepared a setup decision from business evidence."}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/10 px-4 py-3 text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Completion
+              </p>
+              <p className="mt-1 text-2xl font-semibold">{brain.sectionCompletion.percent}%</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl bg-white/8 p-3 ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Source intelligence
+              </p>
+              <p className="mt-2 text-sm font-semibold">{statusLabel(brain.sourceIntelligence.quality)}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                {brain.sourceIntelligence.evidenceCount} evidence item(s)
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/8 p-3 ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Missing facts
+              </p>
+              <p className="mt-2 text-sm font-semibold">
+                {brain.missingFactsPlan.required
+                  ? `${brain.missingFactsPlan.missingSections.length} missing`
+                  : "No blocking gaps"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                {brain.missingFactsPlan.nextQuestion?.prompt || "No next question needed."}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/8 p-3 ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Runtime simulation
+              </p>
+              <p className="mt-2 text-sm font-semibold">
+                {brain.runtimeSimulation.canActivateAfterApproval
+                  ? "Ready after approval"
+                  : "Blocked before approval"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Draft never powers runtime.
+              </p>
+            </div>
+          </div>
+
+          {brain.conflictPlan.hasConflicts ? (
+            <div className="mt-3 rounded-2xl bg-red-500/12 p-3 ring-1 ring-red-300/20">
+              <p className="text-sm font-semibold text-red-100">Conflict plan</p>
+              <p className="mt-1 text-xs leading-5 text-red-100/80">
+                {brain.conflictPlan.operatorGuidance}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="rounded-2xl border border-slate-200 p-4">
