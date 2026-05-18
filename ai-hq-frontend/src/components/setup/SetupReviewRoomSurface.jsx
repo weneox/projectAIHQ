@@ -27,6 +27,7 @@ export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
   const headerTone = toneClass(room.header.badgeTone);
   const blockingIssues = room.issues.filter((issue) => issue.severity === "blocking");
   const intakeOptions = room.intake.options;
+  const sectionDetails = room.sectionDetails;
   const publishItems = room.approvalPreview?.publishes || [];
   const excludedItems = room.approvalPreview?.excludedFromTruth || [];
 
@@ -124,6 +125,78 @@ export default function SetupReviewRoomSurface({ reviewRoom = {} }) {
           </div>
         </aside>
       </div>
+
+      {sectionDetails.length ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-950">Review details</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                These are the business facts AI prepared for operator review.
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+              {sectionDetails.length} detail sections
+            </span>
+          </div>
+
+          <div className="grid gap-3">
+            {sectionDetails.map((section) => (
+              <div
+                key={section.key}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{section.title}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {statusLabel(section.status)}
+                      {section.sourceBacked ? " · source backed" : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                    {section.action || "review"}
+                  </span>
+                </div>
+
+                {section.facts.length ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {section.facts.map((fact) => (
+                      <div key={fact.key} className="rounded-xl bg-white p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          {fact.label}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold leading-5 text-slate-900">
+                          {compactText(fact.value, 140)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {section.items.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {section.items.map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600"
+                      >
+                        {compactText(item, 80)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {!section.facts.length && !section.items.length && section.emptyState ? (
+                  <p className="mt-3 text-xs leading-5 text-slate-500">
+                    {section.emptyState}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {intakeOptions.length ? (
         <div className="mt-5 rounded-2xl border border-slate-200 p-4">

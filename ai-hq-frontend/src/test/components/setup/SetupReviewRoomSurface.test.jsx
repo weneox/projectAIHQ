@@ -98,6 +98,77 @@ describe("SetupReviewRoomSurface", () => {
     ).toBeEnabled();
   });
 
+  it("renders section details with facts and items", () => {
+    render(
+      <SetupReviewRoomSurface
+        reviewRoom={{
+          header: {
+            title: "Review the AI-prepared business draft",
+            subtitle: "Check each section before approval.",
+            statusLabel: "Draft ready",
+            badgeTone: "info",
+            trustNote: "Draft data is not runtime authority.",
+          },
+          sections: [],
+          sectionDetails: [
+            {
+              key: "profile",
+              title: "Business profile",
+              status: "complete",
+              action: "review_profile",
+              sourceBacked: true,
+              facts: [
+                {
+                  key: "companyName",
+                  label: "Business name",
+                  value: "Acme Clinic",
+                  kind: "text",
+                },
+                {
+                  key: "description",
+                  label: "Description",
+                  value: "Dental clinic in Baku.",
+                  kind: "text",
+                },
+              ],
+              items: [],
+            },
+            {
+              key: "services",
+              title: "Services",
+              status: "complete",
+              action: "review_services",
+              sourceBacked: true,
+              facts: [],
+              items: ["Consultation", "Cleaning"],
+            },
+          ],
+          actions: {
+            primary: {
+              id: "continue_review",
+              label: "Continue review",
+              enabled: true,
+            },
+          },
+          runtimeConsumers: {
+            consumers: [],
+          },
+          issues: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText(/review details/i)).toBeInTheDocument();
+    expect(screen.getByText(/business profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/business name/i)).toBeInTheDocument();
+    expect(screen.getByText(/acme clinic/i)).toBeInTheDocument();
+    expect(screen.getByText(/description/i)).toBeInTheDocument();
+    expect(screen.getByText(/dental clinic in baku/i)).toBeInTheDocument();
+    expect(screen.getByText(/consultation/i)).toBeInTheDocument();
+    expect(screen.getByText(/cleaning/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/source backed/i).length).toBeGreaterThan(0);
+  });
+
   it("renders intake options and approval preview", () => {
     render(
       <SetupReviewRoomSurface
