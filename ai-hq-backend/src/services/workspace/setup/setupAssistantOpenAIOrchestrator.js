@@ -41,6 +41,11 @@ const REASONER_SCHEMA = {
     "pricingPosture",
     "humanHandoff",
     "websiteUrl",
+    "sourceQuality",
+    "missingSections",
+    "conflictNotes",
+    "operatorDecision",
+    "decisionReason",
   ],
   properties: {
     action: {
@@ -1604,6 +1609,7 @@ export const __test__ = {
   buildAcceptedPatchFromReasonerPayload,
   buildReasonerSourceEvidence,
   buildReasonerRecentContext,
+  normalizeReasonerBrainDecision,
   isSourceOnlyInstructionMessage,
   setCachedClient(client = null) {
     cachedClient = client;

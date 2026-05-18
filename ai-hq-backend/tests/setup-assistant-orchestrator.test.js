@@ -50,6 +50,11 @@ function reasonerPayload(overrides = {}) {
     pricingPosture: "",
     humanHandoff: "",
     websiteUrl: "",
+    sourceQuality: "partial",
+    missingSections: [],
+    conflictNotes: [],
+    operatorDecision: "review_or_continue",
+    decisionReason: "",
     ...overrides,
   };
 }
@@ -63,6 +68,69 @@ function setReasonerClient(payloadFactory) {
     },
   });
 }
+
+test("OpenAI reasoner decision hints are required and exposed on brainDecision", async (t) => {
+  withOpenAISetupConfig(t);
+
+  let schemaRequired = [];
+  setReasonerClient((request = {}) => {
+    schemaRequired =
+      request?.text?.format?.schema?.required ||
+      request?.text?.format?.json_schema?.schema?.required ||
+      [];
+    return reasonerPayload({
+      action: "business_brief",
+      targetStep: "services",
+      services: ["consultation"],
+      sourceQuality: "strong",
+      missingSections: ["contacts"],
+      conflictNotes: ["Website and operator brief disagree on opening hours."],
+      operatorDecision: "resolve_conflicts",
+      decisionReason: "Resolve opening-hours conflict before approval.",
+    });
+  });
+
+  const draft = buildDraft({
+    languages: ["en"],
+    businessProfile: {
+      companyName: "Acme Clinic",
+      description: "Dental clinic in Baku",
+    },
+    progress: {
+      currentQuestionKey: "services",
+    },
+  });
+
+  const result = await runSetupAssistantOpenAIOrchestrator({
+    session: { currentStep: "services" },
+    draft,
+    review: {
+      draft,
+      session: { currentStep: "services" },
+    },
+    latestStep: "services",
+    latestMessage: "consultation",
+  });
+
+  for (const key of [
+    "sourceQuality",
+    "missingSections",
+    "conflictNotes",
+    "operatorDecision",
+    "decisionReason",
+  ]) {
+    assert.ok(schemaRequired.includes(key), `${key} must be required`);
+  }
+
+  assert.equal(result.brainDecision.source, "openai_reasoner");
+  assert.equal(result.brainDecision.sourceQuality, "strong");
+  assert.deepEqual(result.brainDecision.missingSections, ["contacts"]);
+  assert.deepEqual(result.brainDecision.conflictNotes, [
+    "Website and operator brief disagree on opening hours.",
+  ]);
+  assert.equal(result.brainDecision.operatorDecision, "resolve_conflicts");
+  assert.match(result.brainDecision.decisionReason, /opening-hours conflict/i);
+});
 
 test("business-step answers require OpenAI brain and produce hidden preview from acceptedPatch", async (t) => {
   withOpenAISetupConfig(t);
