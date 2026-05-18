@@ -553,7 +553,7 @@ export default function SetupCommandCenter({
     });
   }
 
-  async async function refreshSetupCommandCenterState({
+  async function refreshSetupCommandCenterState({
     includeChannelStatus = false,
     emitReason = "",
   } = {}) {
