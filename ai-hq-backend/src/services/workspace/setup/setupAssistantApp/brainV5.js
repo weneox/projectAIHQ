@@ -261,22 +261,23 @@ function buildDecisionPlan({
     operatorDecision = "review_or_continue";
   }
 
+  const deterministicReason =
+    operatorDecision === "approve_truth"
+      ? "Required business truth is complete and ready for approval."
+      : operatorDecision === "resolve_conflicts"
+        ? "Conflicting evidence blocks approval."
+        : operatorDecision === "answer_missing_facts"
+          ? "Required business facts are missing."
+          : sourceIntelligence.quality === "missing"
+            ? "No strong business evidence has been provided yet."
+            : "Review the prepared business draft before approval.";
+
   return {
     status,
     canApprove,
     operatorDecision,
     recommendedNextAction: s(lifecycleState.recommendedNextAction),
-    reason:
-      s(brainDecision.decisionReason) ||
-      operatorDecision === "approve_truth"
-        ? "Required business truth is complete and ready for approval."
-        : operatorDecision === "resolve_conflicts"
-          ? "Conflicting evidence blocks approval."
-          : operatorDecision === "answer_missing_facts"
-            ? "Required business facts are missing."
-            : sourceIntelligence.quality === "missing"
-              ? "No strong business evidence has been provided yet."
-              : "Review the prepared business draft before approval.",
+    reason: s(brainDecision.decisionReason) || deterministicReason,
   };
 }
 
