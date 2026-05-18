@@ -57,6 +57,11 @@ const REASONER_SCHEMA = {
     pricingPosture: { type: "string" },
     humanHandoff: { type: "string" },
     websiteUrl: { type: "string" },
+    sourceQuality: { type: "string" },
+    missingSections: { type: "array", items: { type: "string" } },
+    conflictNotes: { type: "array", items: { type: "string" } },
+    operatorDecision: { type: "string" },
+    decisionReason: { type: "string" },
   },
 };
 
@@ -769,6 +774,7 @@ function buildTurn({
   recommendationNotes = [],
   forceReadyForApproval = null,
   polishedDraftOverride = null,
+  brainDecision = null,
 } = {}) {
   const mergedDraft = hasAcceptedPatchSignal(acceptedPatch)
     ? buildDraftWithAcceptedPatch(draft, acceptedPatch)
@@ -846,6 +852,7 @@ function buildTurn({
       review,
     }),
     interviewPlan: buildInterviewPlan(currentStep, resolvedNextQuestion),
+    brainDecision: obj(brainDecision),
     aiBehavior: {},
     readyForApproval,
   };
@@ -900,6 +907,7 @@ function buildDirectAnswerTurn({
   model = "",
   provider = "setup_navigation",
   polishedDraftOverride = null,
+  brainDecision = null,
 } = {}) {
   const mergedDraft = buildDraftWithAcceptedPatch(draft, acceptedPatch);
   const plan = resolveConversationPlan({
@@ -932,6 +940,7 @@ function buildDirectAnswerTurn({
     recommendationNotes: [],
     forceReadyForApproval: plan.readyForApproval === true,
     polishedDraftOverride,
+    brainDecision,
   });
 }
 
@@ -947,6 +956,7 @@ function buildCorrectionTurn({
   model = "",
   provider = "setup_navigation",
   polishedDraftOverride = null,
+  brainDecision = null,
 } = {}) {
   const normalizedTarget = normalizeQuestionKey(targetStep);
   const mergedDraft = buildDraftWithAcceptedPatch(draft, correctionPatch);
@@ -984,6 +994,7 @@ function buildCorrectionTurn({
     recommendationNotes: [],
     forceReadyForApproval: plan.readyForApproval === true,
     polishedDraftOverride,
+    brainDecision,
   });
 }
 
@@ -1163,6 +1174,9 @@ function buildReasonerSystemPrompt(locale = "az-AZ") {
     "If you are not sure, leave fields empty and set action to unclear.",
     "Never invent facts. Do not infer exact prices, hours, addresses, availability, medical/legal claims, or guarantees unless explicitly stated.",
     "Never output behavior/tone/greeting/after-hours policy. This setup brain extracts business facts only.",
+    "Also return decision hints: sourceQuality, missingSections, conflictNotes, operatorDecision, decisionReason.",
+    "operatorDecision must be one of: approve_truth, answer_missing_facts, resolve_conflicts, review_or_continue, clarify_input.",
+    "sourceQuality must be one of: strong, partial, missing, conflicting.",
     "Return strict JSON only.",
   ].join(" ");
 }
@@ -1284,6 +1298,32 @@ async function callOpenAIReasoner({
   }
 
   return obj(payload);
+}
+
+function normalizeReasonerBrainDecision(payload = {}) {
+  const source = obj(payload);
+  const action = s(source.action).toLowerCase();
+  const operatorDecision = s(source.operatorDecision).toLowerCase();
+
+  const resolvedDecision =
+    operatorDecision ||
+    (arr(source.conflictNotes).length
+      ? "resolve_conflicts"
+      : arr(source.missingSections).length
+        ? "answer_missing_facts"
+        : ["direct_answer", "correction", "business_brief"].includes(action)
+          ? "review_or_continue"
+          : "clarify_input");
+
+  return compactDraftObject({
+    version: 1,
+    source: "openai_reasoner",
+    sourceQuality: s(source.sourceQuality),
+    missingSections: uniqueStrings(source.missingSections, 12),
+    conflictNotes: uniqueStrings(source.conflictNotes, 12),
+    operatorDecision: resolvedDecision,
+    decisionReason: s(source.decisionReason || source.reason),
+  });
 }
 
 function buildAcceptedPatchFromReasonerPayload(payload = {}) {
@@ -1478,6 +1518,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       s(reasoned.targetStep || currentStep)
     );
     const reasonedPatch = buildAcceptedPatchFromReasonerPayload(reasoned);
+    const brainDecision = normalizeReasonerBrainDecision(reasoned);
 
     if (
       ["direct_answer", "correction", "business_brief"].includes(action) &&
@@ -1505,6 +1546,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
           model: runtime.model,
           provider: "openai_business_brain",
           polishedDraftOverride,
+          brainDecision,
         });
       }
 
@@ -1519,6 +1561,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
         model: runtime.model,
         provider: "openai_business_brain",
         polishedDraftOverride,
+        brainDecision,
       });
     }
 
@@ -1534,6 +1577,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       invalidReason: s(
         reasoned.reason || "The AI setup brain could not extract safe business facts."
       ),
+      brainDecision,
     });
   } catch (error) {
     return buildBrainUnavailableTurn({

@@ -1,4 +1,4 @@
-﻿import { arr, compactDraftObject, obj, s } from "../draftShared.js";
+import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 
 const REQUIRED_SECTION_PROMPTS = {
   profile: "Confirm the business name, short description, and website.",
@@ -62,6 +62,7 @@ function sourceEvidenceTexts({ setup = {}, assistant = {} } = {}) {
 
 function buildSourceIntelligence({ setup = {}, assistant = {} } = {}) {
   const profile = obj(setup.businessProfile);
+  const brainDecision = obj(assistant.brainDecision);
   const sourceMetadata = obj(setup.sourceMetadata);
   const sourceSignals = obj(assistant.sourceSignals);
   const evidence = sourceEvidenceTexts({ setup, assistant });
@@ -75,7 +76,7 @@ function buildSourceIntelligence({ setup = {}, assistant = {} } = {}) {
   );
 
   const contradictionCount = arr(obj(assistant.confidence).contradictions).length;
-  const quality =
+  const deterministicQuality =
     contradictionCount > 0
       ? "conflicting"
       : primarySourceUrl && evidence.length >= 2
@@ -83,6 +84,10 @@ function buildSourceIntelligence({ setup = {}, assistant = {} } = {}) {
         : primarySourceUrl || evidence.length
           ? "partial"
           : "missing";
+  const aiQuality = s(brainDecision.sourceQuality).toLowerCase();
+  const quality = ["strong", "partial", "missing", "conflicting"].includes(aiQuality)
+    ? aiQuality
+    : deterministicQuality;
 
   return compactDraftObject({
     version: 1,
@@ -134,11 +139,15 @@ function buildSectionCompletion({ reviewRoom = {} } = {}) {
 }
 
 function buildMissingFactsPlan({ assistant = {}, reviewRoom = {} } = {}) {
+  const brainDecision = obj(assistant.brainDecision);
   const sectionByKey = Object.fromEntries(
     arr(reviewRoom.sections).map((section) => [s(section.key), section])
   );
 
-  const missingSections = uniqueStrings(reviewRoom.missingSections, 20);
+  const missingSections = uniqueStrings(
+    [...arr(reviewRoom.missingSections), ...arr(brainDecision.missingSections)],
+    20
+  );
   const nextQuestion = obj(assistant.nextQuestion);
   const nextKey = s(nextQuestion.key || missingSections[0]);
   const recommendedQuestions = missingSections.map((key, index) => {
@@ -169,13 +178,14 @@ function buildMissingFactsPlan({ assistant = {}, reviewRoom = {} } = {}) {
 
 function buildConflictPlan({ assistant = {}, reviewRoom = {} } = {}) {
   const confidence = obj(assistant.confidence);
+  const brainDecision = obj(assistant.brainDecision);
   const issueConflicts = arr(reviewRoom.issues)
     .filter((issue) => s(issue.type) === "source_conflict")
     .map((issue) => s(issue.message))
     .filter(Boolean);
 
   const conflicts = uniqueStrings(
-    [...arr(confidence.contradictions), ...issueConflicts],
+    [...arr(confidence.contradictions), ...issueConflicts, ...arr(brainDecision.conflictNotes)],
     20
   );
 
@@ -226,11 +236,20 @@ function buildDecisionPlan({
   missingFactsPlan = {},
   conflictPlan = {},
   sectionCompletion = {},
+  assistant = {},
 } = {}) {
   const status = s(lifecycleState.status || "not_started");
   const canApprove = lifecycleState.canApprove === true;
 
+  const brainDecision = obj(assistant.brainDecision);
+  const aiDecision = s(brainDecision.operatorDecision).toLowerCase();
   let operatorDecision = "add_business_input";
+
+  if (
+    ["approve_truth", "answer_missing_facts", "resolve_conflicts", "review_or_continue", "clarify_input"].includes(aiDecision)
+  ) {
+    operatorDecision = aiDecision;
+  }
 
   if (conflictPlan.hasConflicts) {
     operatorDecision = "resolve_conflicts";
@@ -238,8 +257,8 @@ function buildDecisionPlan({
     operatorDecision = "answer_missing_facts";
   } else if (canApprove) {
     operatorDecision = "approve_truth";
-  } else if (sectionCompletion.completeCount > 0) {
-    operatorDecision = "review_draft";
+  } else if (sectionCompletion.completeCount > 0 && operatorDecision === "add_business_input") {
+    operatorDecision = "review_or_continue";
   }
 
   return {
@@ -248,6 +267,7 @@ function buildDecisionPlan({
     operatorDecision,
     recommendedNextAction: s(lifecycleState.recommendedNextAction),
     reason:
+      s(brainDecision.decisionReason) ||
       operatorDecision === "approve_truth"
         ? "Required business truth is complete and ready for approval."
         : operatorDecision === "resolve_conflicts"
@@ -277,6 +297,7 @@ export function buildSetupBrainV5({
     missingFactsPlan,
     conflictPlan,
     sectionCompletion,
+    assistant,
   });
 
   return {

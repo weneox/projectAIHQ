@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildSetupBrainV5 } from "../src/services/workspace/setup/setupAssistantApp/brainV5.js";
@@ -162,4 +162,68 @@ test("setup brain v5 recommends approval only when truth is ready", () => {
       (surface) => surface.authority === "approved_truth"
     )
   );
+});
+
+
+test("setup brain v5 merges OpenAI reasoner decision hints", () => {
+  const brain = buildSetupBrainV5({
+    setup: {
+      businessProfile: {
+        companyName: "Acme",
+        description: "Clinic",
+      },
+      services: [{ title: "Consultation" }],
+      contacts: [{ value: "+994551112233" }],
+      sourceMetadata: {
+        evidenceSummary: ["Operator brief provided"],
+      },
+    },
+    lifecycleState: {
+      status: "draft_ready",
+      canApprove: false,
+      approvedLive: false,
+      recommendedNextAction: "review_business_draft",
+    },
+    assistant: {
+      brainDecision: {
+        sourceQuality: "conflicting",
+        missingSections: ["pricing"],
+        conflictNotes: ["Website says one branch, operator says two branches."],
+        operatorDecision: "resolve_conflicts",
+        decisionReason: "Resolve source contradiction before approving.",
+      },
+      confidence: {
+        contradictions: [],
+      },
+    },
+    reviewRoom: {
+      sections: [
+        {
+          key: "profile",
+          label: "Business profile",
+          status: "complete",
+          required: true,
+          itemCount: 2,
+        },
+        {
+          key: "pricing",
+          label: "Pricing posture",
+          status: "complete",
+          required: true,
+          itemCount: 1,
+        },
+      ],
+      missingSections: [],
+      issues: [],
+      issueSummary: {
+        blockingCount: 0,
+      },
+    },
+  });
+
+  assert.equal(brain.sourceIntelligence.quality, "conflicting");
+  assert.equal(brain.missingFactsPlan.missingSections.includes("pricing"), true);
+  assert.equal(brain.conflictPlan.hasConflicts, true);
+  assert.equal(brain.decisionPlan.operatorDecision, "resolve_conflicts");
+  assert.match(brain.decisionPlan.reason, /source contradiction/i);
 });
