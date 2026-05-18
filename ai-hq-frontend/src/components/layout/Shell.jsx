@@ -593,7 +593,7 @@ export default function Shell() {
 
     statsRequestRef.current = request;
     return request;
-  }, [localWorkspaceEntry, EMAIL_VERIFICATION_BANNER_ENABLED]);
+  }, [localWorkspaceEntry]);
 
   const scheduleShellRefresh = useCallback(
     (delay = 160) => {
