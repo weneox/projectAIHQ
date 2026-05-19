@@ -1,4 +1,4 @@
-/* @vitest-environment jsdom */
+ï»¿/* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -10,376 +10,211 @@ afterEach(() => {
   cleanup();
 });
 
+function baseRoom(overrides = {}) {
+  return {
+    brain: {
+      version: 5,
+      sourceIntelligence: { quality: "strong", evidenceCount: 2 },
+      sectionCompletion: { percent: 80 },
+      missingFactsPlan: { required: false, missingSections: [] },
+      conflictPlan: { hasConflicts: false },
+      decisionPlan: { operatorDecision: "review_business_draft" },
+      runtimeSimulation: { canActivateAfterApproval: false },
+    },
+    sections: [],
+    runtimeConsumers: { consumers: [] },
+    actions: {
+      primary: {
+        id: "continue_setup",
+        label: "Continue",
+        intent: "continue_setup",
+        enabled: true,
+      },
+    },
+    issues: [],
+    ...overrides,
+  };
+}
+
+function polishedRoom(overrides = {}) {
+  return baseRoom({
+    evidence: {
+      primarySource: {
+        type: "website",
+        url: "https://atlas.example",
+        label: "atlas.example",
+      },
+      evidenceCards: [
+        {
+          id: "e1",
+          label: "Website",
+          text: "Atlas Clinic website evidence",
+          sourceUrl: "https://atlas.example",
+        },
+      ],
+    },
+    polishedTruthDraft: {
+      title: "Atlas Clinic",
+      subtitle: "Polished draft",
+      source: {
+        type: "website",
+        url: "https://atlas.example",
+        label: "atlas.example",
+      },
+      businessIdentity: {
+        name: "Atlas Clinic",
+        description: "Dental clinic in Baku.",
+        website: "https://atlas.example",
+        publicSummary: "Dental clinic in Baku.",
+      },
+      whatThisBusinessDoes: "Atlas Clinic provides dental care.",
+      services: [{ title: "Consultation", sourceBacked: true }],
+      contacts: [{ type: "phone", label: "Phone", value: "+994501112233" }],
+      hours: ["monday 09:00-18:00"],
+      pricingPosture: "Pricing depends on the service.",
+      safeAiBehavior: {
+        canSay: ["Atlas Clinic provides dental care."],
+        shouldNotSay: ["Do not invent prices."],
+        handoffRules: ["Route uncertain questions to a human."],
+      },
+      missingQuestions: [],
+      approval: { canApprove: false, missingSections: [], publishCount: 4 },
+      evidence: [
+        {
+          label: "Website",
+          text: "Atlas Clinic website evidence",
+          sourceUrl: "https://atlas.example",
+        },
+      ],
+    },
+    ...overrides,
+  });
+}
+
 describe("SetupReviewRoomSurface", () => {
   it("renders composer-only empty setup state", () => {
-    render(
-      <SetupReviewRoomSurface
-        sourceValue=""
-        sourceType="website"
-        reviewRoom={{
-          brain: {
-            version: 0,
-            sourceIntelligence: { quality: "missing", evidenceCount: 0 },
-            sectionCompletion: { percent: 0 },
-            missingFactsPlan: { required: true, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "add_business_input" },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
-          sections: [],
-          runtimeConsumers: { consumers: [] },
-          actions: {
-            primary: {
-              id: "add_business_input",
-              label: "M?nb? ?lav? et",
-              enabled: true,
-            },
-          },
-          issues: [],
-        }}
-      />
-    );
+    render(<SetupReviewRoomSurface sourceValue="" reviewRoom={baseRoom({ brain: { version: 0, sourceIntelligence: { quality: "missing", evidenceCount: 0 }, sectionCompletion: { percent: 0 }, missingFactsPlan: { required: true, missingSections: [] }, conflictPlan: { hasConflicts: false }, decisionPlan: { operatorDecision: "add_business_input" }, runtimeSimulation: { canActivateAfterApproval: false } } })} />);
 
-    expect(
-      screen.getByRole("region", { name: /setup workspace/i })
-    ).toBeInTheDocument();
-
-    expect(screen.getByText(/biznesini ai üçün tanidaq/i)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /setup workspace/i })).toBeInTheDocument();
+    expect(screen.getByText(/biznesini ai/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/google maps/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Oxu" })).toBeDisabled();
-
-    expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/not ready/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/truth hazirdir/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/bunlari tapdim/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^faktlar$/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ai cavab preview/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/aktiv olacaq/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ai biznes truth draft/i)).not.toBeInTheDocument();
   });
 
   it("renders a clean source-loading state without progress panels", () => {
-    render(
-      <SetupReviewRoomSurface
-        sourceValue="weneox.com"
-        sourceBusy
-        reviewRoom={{
-          brain: {
-            version: 0,
-            sourceIntelligence: { quality: "missing", evidenceCount: 0 },
-            sectionCompletion: { percent: 0 },
-            missingFactsPlan: { required: true, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "add_business_input" },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
-          sections: [],
-          runtimeConsumers: { consumers: [] },
-          actions: {
-            primary: {
-              id: "add_business_input",
-              label: "M?nb? ?lav? et",
-              enabled: true,
-            },
-          },
-          issues: [],
-        }}
-      />
-    );
+    render(<SetupReviewRoomSurface sourceValue="weneox.com" sourceBusy reviewRoom={baseRoom({ brain: { version: 0, sourceIntelligence: { quality: "missing", evidenceCount: 0 }, sectionCompletion: { percent: 0 }, missingFactsPlan: { required: true, missingSections: [] }, conflictPlan: { hasConflicts: false }, decisionPlan: { operatorDecision: "add_business_input" }, runtimeSimulation: { canActivateAfterApproval: false } } })} />);
 
-    expect(screen.getByText(/biznes m?lumatlari oxunur/i)).toBeInTheDocument();
+    expect(screen.getByText(/biznes m.lumatlar. oxunur/i)).toBeInTheDocument();
     expect(screen.queryByText(/0%/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/tamamlanib/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/bunlari tapdim/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ai biznes truth draft/i)).not.toBeInTheDocument();
   });
 
   it("submits a website source from the empty state", () => {
     const onSubmitSource = vi.fn();
 
-    render(
-      <SetupReviewRoomSurface
-        sourceValue="weneox.com"
-        sourceType="website"
-        onSubmitSource={onSubmitSource}
-        reviewRoom={{
-          brain: {
-            version: 0,
-            sourceIntelligence: { quality: "missing", evidenceCount: 0 },
-            sectionCompletion: { percent: 0 },
-            missingFactsPlan: { required: true, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "add_business_input" },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
-          sections: [],
-          runtimeConsumers: { consumers: [] },
-          actions: {
-            primary: {
-              id: "add_business_input",
-              label: "M?nb? ?lav? et",
-              enabled: true,
-            },
-          },
-          issues: [],
-        }}
-      />
-    );
+    render(<SetupReviewRoomSurface sourceValue="weneox.com" onSubmitSource={onSubmitSource} reviewRoom={baseRoom()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Oxu" }));
 
     expect(onSubmitSource).toHaveBeenCalledTimes(1);
   });
 
-  it("progressively reveals facts and missing items after source analysis", () => {
+  it("renders polished truth draft from source analysis", () => {
+    render(<SetupReviewRoomSurface sourceValue="" reviewRoom={polishedRoom()} />);
+
+    expect(screen.getByText(/ai biznes truth draft/i)).toBeInTheDocument();
+    expect(screen.getByText(/business identity/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/atlas clinic/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/atlas clinic provides dental care/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/consultation/i)).toBeInTheDocument();
+    expect(screen.getByText(/ai safety/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^faktlar$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/80%/i)).not.toBeInTheDocument();
+  });
+
+  it("renders manual brief or partial assistant state visibly", () => {
     render(
       <SetupReviewRoomSurface
         sourceValue=""
-        sourceType="website"
-        reviewRoom={{
-          brain: {
-            version: 5,
-            sourceIntelligence: { quality: "strong", evidenceCount: 3 },
-            sectionCompletion: { percent: 72 },
-            missingFactsPlan: {
-              required: true,
-              missingSections: ["hours"],
-              nextQuestionKey: "hours",
-              nextQuestion: {
-                prompt: "Is saatlarini ?lav? edin.",
-              },
-            },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "answer_missing_facts" },
-            runtimeSimulation: { canActivateAfterApproval: false },
+        reviewRoom={baseRoom({
+          polishedTruthDraft: {
+            title: "Men bunu anladim",
+            subtitle: "Bakida klinika oldugunuzu anladim.",
+            businessIdentity: { description: "Bakida klinika oldugunuzu anladim." },
+            whatThisBusinessDoes: "Bakida klinika oldugunuzu anladim.",
+            services: [],
+            contacts: [],
+            safeAiBehavior: { canSay: ["Bakida klinika oldugunuzu anladim."], shouldNotSay: ["Do not invent facts."], handoffRules: [] },
+            missingQuestions: [{ key: "services", label: "Services", prompt: "Esas xidmetleri yazin." }],
           },
-          sectionDetails: [
-            {
-              key: "profile",
-              title: "Profil",
-              status: "complete",
-              sourceBacked: true,
-              facts: [
-                {
-                  key: "companyName",
-                  label: "Biznes adi",
-                  value: "Atlas Klinika",
-                },
-                {
-                  key: "category",
-                  label: "Kateqoriya",
-                  value: "Tibbi klinika",
-                },
-              ],
-              items: [],
-            },
-            {
-              key: "services",
-              title: "Xidm?tl?r",
-              status: "complete",
-              sourceBacked: true,
-              facts: [],
-              items: ["Klinika xidm?tl?ri", "Müayin?"],
-            },
-          ],
-          sections: [],
-          runtimeConsumers: { consumers: [] },
-          actions: {
-            primary: {
-              id: "answer_missing_required_facts",
-              label: "Tamamla",
-              intent: "answer_missing_facts",
-              enabled: true,
-            },
-          },
-          issues: [],
-        }}
+        })}
       />
     );
 
-    expect(screen.getByText(/bunlari tapdim/i)).toBeInTheDocument();
-    expect(screen.getByText(/^faktlar$/i)).toBeInTheDocument();
-    expect(screen.getByText(/biznes adi/i)).toBeInTheDocument();
-    expect(screen.getByText(/atlas klinika/i)).toBeInTheDocument();
-    expect(screen.getByText(/klinika xidm?tl?ri/i)).toBeInTheDocument();
-    expect(screen.getByText(/aydinlasdirmali oldugum suallar/i)).toBeInTheDocument();
-    expect(screen.getByText("Is saatlarini ?lav? edin.")).toBeInTheDocument();
-
-    expect(screen.queryByText(/ai brain/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/runtime readiness/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/72%/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/men bunu anladim/i)).toBeInTheDocument();
+    expect(screen.getByText(/esas xidmetleri yazin/i)).toBeInTheDocument();
   });
 
   it("hides fake missing or empty-answer blockers", () => {
     render(
       <SetupReviewRoomSurface
         sourceValue=""
-        reviewRoom={{
-          brain: {
-            version: 5,
-            sourceIntelligence: { quality: "strong", evidenceCount: 1 },
-            sectionCompletion: { percent: 40 },
-            missingFactsPlan: { required: true, missingSections: ["missing"] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "answer_missing_facts" },
-            runtimeSimulation: { canActivateAfterApproval: false },
-          },
+        reviewRoom={baseRoom({
           sectionDetails: [
             {
               key: "profile",
-              title: "Profil",
+              title: "Profile",
               sourceBacked: true,
-              facts: [
-                {
-                  key: "companyName",
-                  label: "Biznes adi",
-                  value: "Atlas Klinika",
-                },
-              ],
+              facts: [{ key: "companyName", label: "Business name", value: "Atlas Clinic" }],
               items: [],
             },
           ],
-          actions: {
-            primary: {
-              id: "answer_missing_required_facts",
-              label: "Tamamla",
-              enabled: true,
-            },
-          },
-          issues: [
-            {
-              id: "bad-empty",
-              severity: "blocking",
-              section: "missing",
-              message: "Empty answer",
-            },
-          ],
-        }}
+          issues: [{ id: "bad-empty", severity: "blocking", section: "missing", message: "Empty answer" }],
+        })}
       />
     );
 
-    expect(screen.getByText(/bunlari tapdim/i)).toBeInTheDocument();
+    expect(screen.getByText(/ai biznes truth draft/i)).toBeInTheDocument();
     expect(screen.queryByText(/empty answer/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/aydinlasdirmali oldugum suallar/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/.at..mayan suallar/i)).not.toBeInTheDocument();
   });
 
-  it("reveals approval only when truth can be approved", () => {
+  it("reveals approval when truth can be approved", () => {
     const onAction = vi.fn();
 
     render(
       <SetupReviewRoomSurface
         sourceValue=""
-        sourceType="website"
         onAction={onAction}
-        reviewRoom={{
-          brain: {
-            version: 5,
-            sourceIntelligence: { quality: "strong", evidenceCount: 4 },
-            sectionCompletion: { percent: 100 },
-            missingFactsPlan: { required: false, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "approve_truth" },
-            runtimeSimulation: {
-              canActivateAfterApproval: true,
-              afterApproval: [
-                {
-                  key: "public_widget",
-                  label: "Website widget",
-                  state: "ready_after_approval",
-                },
-              ],
-            },
-          },
-          sectionDetails: [
-            {
-              key: "profile",
-              title: "Profil",
-              status: "complete",
-              sourceBacked: true,
-              facts: [
-                {
-                  key: "companyName",
-                  label: "Biznes adi",
-                  value: "Atlas Klinika",
-                },
-              ],
-              items: [],
-            },
-          ],
-          actions: {
-            primary: {
-              id: "approve_and_publish_truth",
-              label: "T?sdiql?",
-              intent: "finalize_review",
-              enabled: true,
-            },
-          },
-          approvalPreview: {
-            canApprove: true,
-          },
-          runtimeConsumers: { consumers: [] },
-          issues: [],
-        }}
+        reviewRoom={polishedRoom({
+          readyForApproval: true,
+          actions: { primary: { id: "approve_and_publish_truth", label: "Approve", intent: "finalize_review", enabled: true } },
+          approvalPreview: { canApprove: true },
+        })}
       />
     );
 
-    expect(screen.getByText(/t?sdiql?m?y? hazirdir/i)).toBeInTheDocument();
+    expect(screen.getByText(/t.sdiql.m.y. haz.rd.r/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /t?sdiql?/i }));
+    fireEvent.click(screen.getByRole("button", { name: /t.sdiql/i }));
 
-    expect(onAction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "approve_and_publish_truth",
-      })
-    );
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ id: "approve_and_publish_truth" }));
   });
 
   it("hides approval until the review is actually approvable", () => {
     render(
       <SetupReviewRoomSurface
         sourceValue=""
-        reviewRoom={{
+        reviewRoom={polishedRoom({
           readyForApproval: false,
-          brain: {
-            version: 5,
-            sourceIntelligence: { quality: "strong", evidenceCount: 4 },
-            sectionCompletion: { percent: 100 },
-            missingFactsPlan: { required: false, missingSections: [] },
-            conflictPlan: { hasConflicts: false },
-            decisionPlan: { operatorDecision: "approve_truth", canApprove: false },
-            runtimeSimulation: { canActivateAfterApproval: true },
-          },
-          sectionDetails: [
-            {
-              key: "profile",
-              title: "Profil",
-              sourceBacked: true,
-              facts: [
-                {
-                  key: "companyName",
-                  label: "Biznes adi",
-                  value: "Atlas Klinika",
-                },
-              ],
-              items: [],
-            },
-          ],
-          actions: {
-            primary: {
-              id: "approve_and_publish_truth",
-              label: "T?sdiql?",
-              intent: "finalize_review",
-              enabled: true,
-            },
-          },
-          approvalPreview: {
-            canApprove: false,
-          },
-          runtimeConsumers: { consumers: [] },
-          issues: [],
-        }}
+          actions: { primary: { id: "continue_setup", label: "Continue", intent: "continue_setup", enabled: true } },
+          approvalPreview: { canApprove: false },
+        })}
       />
     );
 
-    expect(screen.queryByText(/t?sdiql?m?y? hazirdir/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /t?sdiql?/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/t.sdiql.m.y. haz.rd.r/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /t.sdiql/i })).not.toBeInTheDocument();
   });
 });

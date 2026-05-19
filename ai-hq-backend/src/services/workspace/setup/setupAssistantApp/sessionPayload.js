@@ -1499,6 +1499,188 @@ function buildSetupReviewRoomApprovalPreview({
   };
 }
 
+function questionForMissingSection(sectionKey = "", section = {}) {
+  const key = s(sectionKey);
+  const label = s(section.label || section.title || key);
+  const prompts = {
+    profile: "Biznes adini və müştəriyə deyiləcək qısa təsviri təsdiqləyin.",
+    services: "AI-nin deyə biləcəyi əsas xidmətləri tamamlayın.",
+    contacts: "Müştərinin istifadə edə biləcəyi telefon, WhatsApp, email və ya ünvanı əlavə edin.",
+    hours: "İş saatlarını və ya görüşlə işləmə qaydasını təsdiqləyin.",
+    pricing: "Qiymətlər haqqında AI-nin nə deyə biləcəyini yazın.",
+    handoff: "AI hansı hallarda mütləq insana ötürməlidir?",
+    languages: "AI hansı dillərdə cavab verməlidir?",
+  };
+
+  return compactDraftObject({
+    key,
+    label,
+    prompt: prompts[key] || `${label} məlumatını təsdiqləyin.`,
+  });
+}
+
+function buildPolishedTruthDraft({
+  setup = {},
+  sections = [],
+  missingSections = [],
+  approvalPreview = {},
+  evidence = {},
+} = {}) {
+  const profile = obj(setup.businessProfile);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const draft = buildInternalDraftPreview(setup);
+  const primarySource = obj(evidence.primarySource);
+  const sectionByKey = Object.fromEntries(
+    arr(sections).map((section) => [s(section.key), section])
+  );
+  const businessName = s(draft.businessName || profile.companyName);
+  const description = s(
+    draft.businessDescription ||
+      profile.description ||
+      profile.summary ||
+      profile.publicSummary
+  );
+  const website = s(
+    draft.websiteUrl ||
+      profile.websiteUrl ||
+      sourceMetadata.primarySourceUrl
+  );
+  const sourceType = s(
+    primarySource.type ||
+      sourceMetadata.primarySourceType ||
+      sourceMetadata.sourceType
+  );
+  const sourceUrl = s(primarySource.url || sourceMetadata.primarySourceUrl);
+  const sourceLabel = s(
+    primarySource.label ||
+      arr(sourceMetadata.sourceLabels)[0] ||
+      sourceType ||
+      "Business input"
+  );
+  const services = arr(setup.services)
+    .map((item, index) =>
+      compactDraftObject({
+        title: s(item?.title || item?.name || item?.label || draft.coreServices[index]),
+        summary: s(item?.summary || item?.description || item?.publicSummary),
+        confidence: item?.confidence ?? item?.confidenceScore ?? null,
+        sourceBacked:
+          item?.sourceBacked === true ||
+          Boolean(sourceUrl || arr(sourceMetadata.evidenceSummary).length),
+      })
+    )
+    .filter((item) => item.title);
+  const fallbackServices = services.length
+    ? services
+    : uniqueStrings(draft.coreServices, 12).map((title) => ({
+        title,
+        sourceBacked: Boolean(sourceUrl),
+      }));
+  const contacts = arr(setup.contacts)
+    .map((item) =>
+      compactDraftObject({
+        type: s(item?.type || item?.kind || item?.channel || "contact"),
+        label: s(item?.label || item?.type || item?.kind || "Contact"),
+        value: s(item?.value || item?.url || item?.address || item?.phone || item?.email),
+      })
+    )
+    .filter((item) => item.value);
+  const fallbackContacts = contacts.length
+    ? contacts
+    : uniqueStrings(draft.contactRoutes, 12).map((value) => ({
+        type: "contact",
+        label: "Contact",
+        value,
+      }));
+  const hours = uniqueStrings(draft.workingHoursLines, 16);
+  const canSay = uniqueStrings(
+    [
+      businessName ? `Biznes adı: ${businessName}` : "",
+      description,
+      fallbackServices.length
+        ? `Xidmətlər: ${fallbackServices.map((item) => item.title).join(", ")}`
+        : "",
+      fallbackContacts.length
+        ? `Əlaqə: ${fallbackContacts.map((item) => item.value).join(", ")}`
+        : "",
+      hours.length ? `İş vaxtı: ${hours.join("; ")}` : "",
+      s(draft.pricingSummary || pricing.publicSummary || pricing.pricingNotes),
+    ],
+    10
+  );
+  const handoffRules = uniqueStrings(
+    [
+      s(draft.handoffSummary || handoff.summary),
+      ...arr(handoff.triggers),
+      "Müştəri qiymət, rezervasiya, şikayət və ya dəqiq tibbi/hüquqi qərar istəyirsə insana yönləndir.",
+    ],
+    8
+  );
+  const missingQuestions = arr(missingSections)
+    .map((key) => questionForMissingSection(key, sectionByKey[key]))
+    .filter((item) => item.key);
+  const evidenceRows = arr(evidence.evidenceCards)
+    .map((item) =>
+      compactDraftObject({
+        label: s(item?.label || sourceLabel),
+        text: s(item?.text),
+        sourceUrl: s(item?.sourceUrl || sourceUrl),
+      })
+    )
+    .filter((item) => item.text)
+    .slice(0, 8);
+
+  return {
+    version: 1,
+    title: businessName || "AI biznes truth draftı",
+    subtitle: sourceUrl
+      ? "Mənbədən çıxarılan faktlar təmizlənib təsdiq üçün hazırlandı."
+      : "Qısa biznes məlumatından ilkin təsdiq draftı hazırlandı.",
+    source: compactDraftObject({
+      type: sourceType || "manual",
+      url: sourceUrl,
+      label: sourceLabel,
+      authorityClass: s(sourceMetadata.primarySourceAuthorityClass || sourceMetadata.sourceAuthorityClass),
+    }),
+    businessIdentity: {
+      name: businessName,
+      description,
+      website,
+      publicSummary: s(profile.publicSummary || description),
+    },
+    whatThisBusinessDoes:
+      description ||
+      (fallbackServices.length
+        ? `${businessName || "Bu biznes"} ${fallbackServices
+            .map((item) => item.title)
+            .join(", ")} təqdim edir.`
+        : ""),
+    services: fallbackServices,
+    contacts: fallbackContacts,
+    hours,
+    pricingPosture: s(
+      draft.pricingSummary || pricing.publicSummary || pricing.pricingNotes
+    ),
+    safeAiBehavior: {
+      canSay,
+      shouldNotSay: [
+        "Təsdiqlənməmiş qiymət, nəticə, zəmanət və ya availability uydurmayacaq.",
+        "Business Truth-da olmayan xidməti varmış kimi deməyəcək.",
+        "Əmin olmadığı detalları fakt kimi təqdim etməyəcək.",
+      ],
+      handoffRules,
+    },
+    missingQuestions,
+    approval: {
+      canApprove: obj(approvalPreview).canApprove === true,
+      missingSections: arr(obj(approvalPreview).missingSections || missingSections),
+      publishCount: Number(obj(approvalPreview).publishCount || 0) || 0,
+    },
+    evidence: evidenceRows,
+  };
+}
+
 function buildSetupReviewRoomHeader({
   lifecycleState = {},
   issueSummary = {},
@@ -1860,6 +2042,24 @@ export function buildSetupReviewRoom({
     sections,
   });
   const issueSummary = buildSetupReviewRoomIssueSummary(issues);
+  const approvalPreview = buildSetupReviewRoomApprovalPreview({
+    setup,
+    lifecycleState,
+    missingSections,
+    issues,
+  });
+  const evidence = buildSetupReviewRoomEvidence({
+    setup,
+    assistant,
+    sections,
+  });
+  const polishedTruthDraft = buildPolishedTruthDraft({
+    setup,
+    sections,
+    missingSections,
+    approvalPreview,
+    evidence,
+  });
 
   return {
     version: 1,
@@ -1882,17 +2082,9 @@ export function buildSetupReviewRoom({
     missingSections,
     issues,
     issueSummary,
-    approvalPreview: buildSetupReviewRoomApprovalPreview({
-      setup,
-      lifecycleState,
-      missingSections,
-      issues,
-    }),
-    evidence: buildSetupReviewRoomEvidence({
-      setup,
-      assistant,
-      sections,
-    }),
+    approvalPreview,
+    evidence,
+    polishedTruthDraft,
     intake: buildSetupReviewRoomIntake({
       setup,
       lifecycleState,
@@ -2012,6 +2204,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       websitePrefill: obj(setup.websitePrefill),
       sourceStrategy,
       aiProfilePreview,
+      polishedTruthDraft: obj(reviewRoom.polishedTruthDraft),
       assistantStyleProfile: buildDefaultAssistantStyleProfile(),
       draftVisibilityMode: s(silent.visibilityMode || "hidden_until_review"),
       draftPreviewHidden: shouldHideDraftPreview(setup, readyForApproval),

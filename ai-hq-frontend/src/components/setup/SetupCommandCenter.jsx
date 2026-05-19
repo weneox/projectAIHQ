@@ -19,6 +19,7 @@ import {
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import SetupReviewRoomShell from "./SetupReviewRoomShell.jsx";
+import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -247,6 +248,85 @@ function buildAssistantFromApi(base = {}, response = {}) {
   });
 }
 
+function normalizeSetupSourceKeyValue(type = "", value = "") {
+  const sourceType = lower(type);
+  const text = s(value);
+  if (!text) return "";
+
+  if (["website", "google_maps", "instagram"].includes(sourceType)) {
+    try {
+      const parsed = new URL(text);
+      parsed.hash = "";
+      const path = parsed.pathname.replace(/\/+$/, "") || "/";
+      parsed.pathname = path;
+      return parsed.toString().replace(/\/$/, "").toLowerCase();
+    } catch {
+      return text.toLowerCase().replace(/\/+$/, "");
+    }
+  }
+
+  return text.toLowerCase();
+}
+
+function buildSetupSourceKey(input = {}) {
+  const sourceInput = obj(input);
+  const type = lower(sourceInput.type || sourceInput.sourceType);
+  const value = normalizeSetupSourceKeyValue(
+    type,
+    sourceInput.value ||
+      sourceInput.url ||
+      sourceInput.sourceUrl ||
+      sourceInput.source_url
+  );
+
+  if (!type || !value) return "";
+  return `${type}|${value}`;
+}
+
+function sourceInputFromUrl(type = "", value = "") {
+  const url = s(value);
+  if (!url) return {};
+  const resolved = resolveSetupSourceInput(url);
+  return {
+    type: lower(type || resolved.type || "website"),
+    value: resolved.value || url,
+  };
+}
+
+function collectPrimarySourceKeysFromPayload(payload = {}) {
+  const root = obj(payload);
+  const setup = obj(root.setup);
+  const reviewRoom = obj(setup.reviewRoom || root.reviewRoom || obj(root.review).reviewRoom);
+  const draft = obj(setup.draft || root.draft);
+  const sourceMetadata = obj(draft.sourceMetadata || setup.sourceMetadata);
+  const assistant = obj(setup.assistant || root.assistant || obj(root.assistant));
+  const evidenceSource = obj(obj(reviewRoom.evidence).primarySource);
+  const polishedSource = obj(obj(reviewRoom.polishedTruthDraft).source);
+  const sourceSignals = obj(assistant.sourceSignals);
+
+  return [
+    buildSetupSourceKey(sourceInputFromUrl(
+      sourceMetadata.primarySourceType,
+      sourceMetadata.primarySourceUrl
+    )),
+    buildSetupSourceKey(sourceInputFromUrl(
+      sourceSignals.primarySourceType,
+      sourceSignals.primarySourceUrl
+    )),
+    buildSetupSourceKey(sourceInputFromUrl(evidenceSource.type, evidenceSource.url)),
+    buildSetupSourceKey(sourceInputFromUrl(polishedSource.type, polishedSource.url)),
+    buildSetupSourceKey(sourceInputFromUrl(root.sourceType, root.sourceUrl)),
+  ].filter(Boolean);
+}
+
+function firstPrimarySourceKey(...payloads) {
+  for (const payload of payloads) {
+    const [key] = collectPrimarySourceKeysFromPayload(payload);
+    if (key) return key;
+  }
+  return "";
+}
+
 function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
   const reviewRoot = obj(reviewPayload);
 
@@ -262,7 +342,12 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
     obj(reviewRoot.assistant).timeline || reviewRoot.timeline
   );
 
-  const hasLocalLiveState = Boolean(
+  const reviewSourceKey = firstPrimarySourceKey(reviewRoot);
+  const assistantSourceKey = firstPrimarySourceKey(assistantState);
+  const sourceMatches =
+    !reviewSourceKey || !assistantSourceKey || reviewSourceKey === assistantSourceKey;
+
+  const hasLocalLiveState = sourceMatches && Boolean(
     localTimeline.length ||
       s(localAssistant.message || localAssistant.assistantMessage) ||
       s(obj(localAssistant.nextQuestion).key) ||
@@ -530,6 +615,7 @@ export default function SetupCommandCenter({
     let nextAssistant = null;
     setClientAssistant((prev) => {
       nextAssistant = buildAssistantFromApi(prev, response);
+      assistantRef.current = nextAssistant;
       return nextAssistant;
     });
 
@@ -540,6 +626,38 @@ export default function SetupCommandCenter({
         buildMergedReviewPayload(previous, nextAssistant)
       );
     }
+
+    return nextAssistant;
+  }
+
+  function resetSetupImportStateForFreshSource() {
+    clearSetupConversationStorage(workspace.tenantKey);
+    queryClient.setQueryData(setupAssistantSessionQueryKey, null);
+    queryClient.setQueryData(setupReviewQueryKey, null);
+    assistantRef.current = emptySeed;
+    setClientAssistant(emptySeed);
+  }
+
+  function applySetupImportResponseToState(response = null, context = {}) {
+    if (!response) return null;
+
+    const nextSourceKey = s(context.nextSourceKey);
+    const responseSourceKey = firstPrimarySourceKey(response);
+    const currentSourceKey = firstPrimarySourceKey(
+      assistantRef.current,
+      queryClient.getQueryData(setupReviewQueryKey)
+    );
+    const mustReplace =
+      context.replacePrimarySource === true ||
+      (nextSourceKey && currentSourceKey && nextSourceKey !== currentSourceKey) ||
+      (responseSourceKey && currentSourceKey && responseSourceKey !== currentSourceKey);
+    const base = mustReplace ? emptySeed : assistantRef.current;
+    const nextAssistant = buildAssistantFromApi(base, response);
+
+    assistantRef.current = nextAssistant;
+    setClientAssistant(nextAssistant);
+    queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+    queryClient.setQueryData(setupReviewQueryKey, response);
 
     return nextAssistant;
   }
@@ -587,6 +705,7 @@ export default function SetupCommandCenter({
 
   async function refreshSetupCommandCenterState({
     includeChannelStatus = false,
+    includeTruthRuntime = false,
     emitReason = "",
   } = {}) {
     const refreshTasks = [
@@ -599,6 +718,15 @@ export default function SetupCommandCenter({
       refreshTasks.push(
         queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
         queryClient.invalidateQueries({ queryKey: metaStatusQueryKey })
+      );
+    }
+
+    if (includeTruthRuntime) {
+      refreshTasks.push(
+        queryClient.invalidateQueries({ queryKey: ["truth"] }),
+        queryClient.invalidateQueries({ queryKey: ["trust"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings-trust"] }),
+        queryClient.invalidateQueries({ queryKey: ["setup-truth-current"] })
       );
     }
 
@@ -653,9 +781,12 @@ export default function SetupCommandCenter({
     navigate("/channels");
   }
 
-  async function importSetupSourceByType(sourceInput = {}, answer = "") {
+  async function importSetupSourceByType(sourceInput = {}, answer = "", options = {}) {
     const sourceType = lower(sourceInput.type || "website");
     const sourceValue = s(sourceInput.value);
+    const metadataJson = obj(options.metadataJson);
+    const allowSessionReuse = options.allowSessionReuse === true;
+    const replacePrimarySource = options.replacePrimarySource === true;
 
     const payload = {
       type: sourceType,
@@ -680,7 +811,10 @@ export default function SetupCommandCenter({
         },
       ],
       note: answer,
-      allowSessionReuse: true,
+      allowSessionReuse,
+      replacePrimarySource,
+      freshSourceImport: replacePrimarySource,
+      metadataJson,
       waitForCompletion: true,
     };
 
@@ -706,16 +840,50 @@ export default function SetupCommandCenter({
     setSetupError("");
 
     try {
-      await ensureSession();
-
       const sourceInput = obj(source);
+      const resolvedSource = sourceInput.isImportedSource
+        ? {
+            ...resolveSetupSourceInput(answer),
+            ...sourceInput,
+            value: sourceInput.value || resolveSetupSourceInput(answer).value,
+          }
+        : sourceInput;
       const shouldImportSource =
-        sourceInput.isImportedSource === true && s(sourceInput.value);
+        resolvedSource.isImportedSource === true && s(resolvedSource.value);
 
       if (shouldImportSource) {
-        const response = await importSetupSourceByType(sourceInput, answer);
+        const nextSourceKey = buildSetupSourceKey(resolvedSource);
+        const previousSourceKey = firstPrimarySourceKey(
+          assistantRef.current,
+          queryClient.getQueryData(setupReviewQueryKey),
+          queryClient.getQueryData(setupAssistantSessionQueryKey)
+        );
+        const sameSource =
+          Boolean(previousSourceKey && nextSourceKey) &&
+          previousSourceKey === nextSourceKey;
+        const replacePrimarySource = !sameSource;
 
-        queryClient.setQueryData(setupReviewQueryKey, response);
+        if (replacePrimarySource) {
+          resetSetupImportStateForFreshSource();
+        }
+
+        const response = await importSetupSourceByType(resolvedSource, answer, {
+          allowSessionReuse: sameSource,
+          replacePrimarySource,
+          metadataJson: {
+            setupImportMode: replacePrimarySource
+              ? "replace_primary_source"
+              : "same_primary_source_retry",
+            previousSourceKey,
+            nextSourceKey,
+          },
+        });
+
+        applySetupImportResponseToState(response, {
+          previousSourceKey,
+          nextSourceKey,
+          replacePrimarySource,
+        });
 
         await refreshSetupCommandCenterState({
           includeChannelStatus: false,
@@ -724,6 +892,8 @@ export default function SetupCommandCenter({
 
         return response;
       }
+
+      await ensureSession();
 
       const response = await sendSetupAssistantMessage({
         step: s(step, "company"),
@@ -774,11 +944,12 @@ export default function SetupCommandCenter({
 
       await refreshSetupCommandCenterState({
         includeChannelStatus: true,
+        includeTruthRuntime: true,
         emitReason: "setup-finalized",
       });
 
-      setClientAssistant((prev) =>
-        normalizeAssistantState({
+      setClientAssistant((prev) => {
+        const next = normalizeAssistantState({
           ...prev,
           review: {
             ...obj(prev.review),
@@ -787,15 +958,17 @@ export default function SetupCommandCenter({
             readyForApproval: false,
             finalizeAvailable: false,
             message:
-              "Business truth was approved. Runtime and approved truth were refreshed.",
+              "Approved Business Truth live. Runtime and voice can now use approved truth.",
           },
           assistant: {
             ...obj(prev.assistant),
             readyForApproval: false,
             finalizeAvailable: false,
           },
-        })
-      );
+        });
+        assistantRef.current = next;
+        return next;
+      });
 
       return response;
     } catch (error) {

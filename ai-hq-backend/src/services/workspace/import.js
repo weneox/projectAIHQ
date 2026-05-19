@@ -108,6 +108,32 @@ function sourceSeedKey(item = {}) {
   return `${lower(seed?.sourceType)}|${lower(seed?.url)}`;
 }
 
+function boolish(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  const normalized = lower(value);
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function shouldReplacePrimarySourceImport({
+  replacePrimarySource = false,
+  freshSourceImport = false,
+  metadataJson = {},
+} = {}) {
+  const metadata = obj(metadataJson);
+  const mode = lower(metadata.setupImportMode || metadata.setup_import_mode);
+
+  return (
+    boolish(replacePrimarySource) ||
+    boolish(freshSourceImport) ||
+    boolish(metadata.replacePrimarySource || metadata.replace_primary_source) ||
+    boolish(metadata.freshSourceImport || metadata.fresh_source_import) ||
+    mode === "replace_primary_source"
+  );
+}
+
 function buildIntakeBundleKey(input = {}) {
   const context = obj(input);
   const primaryKey = sourceSeedKey(context.primarySource);
@@ -368,13 +394,115 @@ function mergeProfileWithPrecedence(contributions = []) {
     fieldSources,
   });
 }
+function sourceSummaryImportKey(item = {}) {
+  const x = obj(item);
+  return sourceSeedKey({
+    sourceType: x.sourceType || x.source_type || x.type,
+    url: x.sourceUrl || x.source_url || x.url || x.value,
+  });
+}
+
+function filterSourceSummaryForAllowedKeys(
+  sourceSummary = {},
+  allowedKeys = null,
+  fallbackSource = {}
+) {
+  if (!(allowedKeys instanceof Set) || allowedKeys.size === 0) {
+    return obj(sourceSummary);
+  }
+
+  const summary = obj(sourceSummary);
+  const fallbackType = lower(fallbackSource.sourceType || fallbackSource.type);
+  const fallbackUrl = s(fallbackSource.url || fallbackSource.sourceUrl);
+  const fallbackKey = sourceSeedKey({
+    sourceType: fallbackType,
+    url: fallbackUrl,
+  });
+  const imports = arr(summary.imports).filter((item) => {
+    const key = sourceSummaryImportKey(item);
+    return key && allowedKeys.has(key);
+  });
+
+  const latestImportKey = sourceSummaryImportKey(summary.latestImport);
+  const latestImport =
+    latestImportKey && allowedKeys.has(latestImportKey)
+      ? obj(summary.latestImport)
+      : obj(imports[imports.length - 1]);
+
+  const summaryPrimaryKey = sourceSeedKey({
+    sourceType: summary.primarySourceType,
+    url: summary.primarySourceUrl,
+  });
+  const useFallbackPrimary =
+    fallbackKey && (!summaryPrimaryKey || !allowedKeys.has(summaryPrimaryKey));
+
+  const primarySourceType = useFallbackPrimary
+    ? fallbackType
+    : s(summary.primarySourceType || fallbackType);
+  const primarySourceUrl = useFallbackPrimary
+    ? fallbackUrl
+    : s(summary.primarySourceUrl || fallbackUrl);
+
+  const sourceTypes = uniqStrings([
+    ...imports.map((item) => s(item?.sourceType)),
+    primarySourceType,
+  ]);
+
+  return {
+    ...summary,
+    primarySourceType,
+    primarySourceUrl,
+    latestImport:
+      Object.keys(latestImport).length > 0
+        ? latestImport
+        : compactObject({
+            sourceType: fallbackType,
+            sourceUrl: fallbackUrl,
+          }),
+    sourceTypes,
+    totalImportedSources: imports.length || sourceTypes.length,
+    imports,
+  };
+}
+
+function filterBusinessProfileFieldSources(profile = {}, allowedKeys = null) {
+  if (!(allowedKeys instanceof Set) || allowedKeys.size === 0) {
+    return obj(profile);
+  }
+
+  const next = cloneJson(profile, obj(profile));
+  const fieldSources = obj(next.fieldSources);
+
+  for (const [field, source] of Object.entries(fieldSources)) {
+    const key = sourceSeedKey({
+      sourceType: source?.sourceType || source?.source_type || source?.type,
+      url: source?.sourceUrl || source?.source_url || source?.url,
+    });
+
+    if (key && !allowedKeys.has(key)) {
+      delete fieldSources[field];
+    }
+  }
+
+  return compactObject({
+    ...next,
+    fieldSources,
+  });
+}
+
 function recomputeDraftFromContributions({
   currentDraft = {},
   contributions = [],
   importedPatch = {},
+  allowedKeys = null,
+  incomingType = "",
+  incomingUrl = "",
 } = {}) {
   const items = arr(contributions);
-  const businessProfile = mergeProfileWithPrecedence(items);
+  const businessProfile = filterBusinessProfileFieldSources(
+    mergeProfileWithPrecedence(items),
+    allowedKeys
+  );
   const capabilities = mergeDeep(
     {},
     ...items.map((item) => obj(item.capabilities))
@@ -395,9 +523,16 @@ function recomputeDraftFromContributions({
     knowledgeItems,
     contributions: items,
   });
-  const sourceSummary = mergeSourceSummaryState(
-    obj(currentDraft.sourceSummary),
-    obj(importedPatch.sourceSummary)
+  const sourceSummary = filterSourceSummaryForAllowedKeys(
+    mergeSourceSummaryState(
+      obj(currentDraft.sourceSummary),
+      obj(importedPatch.sourceSummary)
+    ),
+    allowedKeys,
+    {
+      sourceType: incomingType,
+      url: incomingUrl,
+    }
   );
   const diffFromCanonical = mergeDeep(
     {},
@@ -1400,6 +1535,9 @@ function mergeImportedDraftPatch({
     currentDraft,
     contributions: [...contributionMap.values()],
     importedPatch,
+    allowedKeys,
+    incomingType,
+    incomingUrl,
   });
 }
 
@@ -1457,6 +1595,8 @@ async function buildAcceptedImportResult({
   createdRun,
   collector,
   reuseExistingSession,
+  previousSessionDiscarded = false,
+  activeSourceKey = "",
   promoteImportedSourceToPrimary,
   setup = null,
 }) {
@@ -1481,6 +1621,10 @@ async function buildAcceptedImportResult({
     draftPartial: false,
     startedFreshSession: !reuseExistingSession,
     reusedActiveSession: reuseExistingSession,
+    previousSessionDiscarded,
+    activeSourceKey:
+      s(activeSourceKey) ||
+      sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
     stage: "source_sync",
     status: "queued",
     warnings: [],
@@ -1514,6 +1658,7 @@ async function buildAcceptedImportResult({
       collectorLastSnapshotId: collector?.lastSnapshotId || null,
       freshSession: !reuseExistingSession,
       reuseExistingSession,
+      previousSessionDiscarded,
       promotedPrimarySource: promoteImportedSourceToPrimary,
     },
   };
@@ -1534,6 +1679,8 @@ async function completeImportSourceByType({
   promoteImportedSourceToPrimary,
   currentReview,
   reuseExistingSession,
+  previousSessionDiscarded = false,
+  activeSourceKey = "",
   sourceTable,
   runTable,
   requestId,
@@ -1717,6 +1864,7 @@ async function completeImportSourceByType({
   const nextSessionMetadata = mergeDeep(obj(session.metadata), {
     freshSession: !reuseExistingSession,
     reuseExistingSession,
+    previousSessionDiscarded,
     requestId,
     sourceType: normalizedType,
     sourceUrl: normalizedUrl,
@@ -1745,6 +1893,9 @@ async function completeImportSourceByType({
     requestedSourceTypes: arr(intakeContext.sourceTypes),
     intakeBundleKey,
     primarySourceKey,
+    activeSourceKey:
+      s(activeSourceKey) ||
+      sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
     promotedPrimarySource: promoteImportedSourceToPrimary,
   });
 
@@ -1805,6 +1956,10 @@ async function completeImportSourceByType({
       draftPartial: partial,
       startedFreshSession: !reuseExistingSession,
       reusedActiveSession: reuseExistingSession,
+      previousSessionDiscarded,
+      activeSourceKey:
+        s(activeSourceKey) ||
+        sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
       error: s(result?.error),
       reason: s(result?.reason || result?.error),
       stage: s(result?.stage),
@@ -1854,6 +2009,7 @@ async function completeImportSourceByType({
         actorEmail: actor.email || "",
         freshSession: !reuseExistingSession,
         reuseExistingSession,
+        previousSessionDiscarded,
         promotedPrimarySource: promoteImportedSourceToPrimary,
       },
     };
@@ -1907,6 +2063,10 @@ async function completeImportSourceByType({
     draftPartial: partial,
     startedFreshSession: !reuseExistingSession,
     reusedActiveSession: reuseExistingSession,
+    previousSessionDiscarded,
+    activeSourceKey:
+      s(activeSourceKey) ||
+      sourceSeedKey({ sourceType: normalizedType, url: normalizedUrl }),
     error: s(result?.error),
     reason: s(result?.reason || result?.error),
     stage: s(result?.stage),
@@ -1961,6 +2121,7 @@ async function completeImportSourceByType({
       actorEmail: actor.email || "",
       freshSession: !reuseExistingSession,
       reuseExistingSession,
+      previousSessionDiscarded,
       promotedPrimarySource: promoteImportedSourceToPrimary,
     },
   };
@@ -1983,6 +2144,8 @@ async function importSourceByType({
   primarySource = null,
   metadataJson = {},
   allowSessionReuse = false,
+  replacePrimarySource = false,
+  freshSourceImport = false,
   waitForCompletion = false,
   requestId: requestIdOverride = "",
   agentKernel = null,
@@ -2049,12 +2212,21 @@ async function importSourceByType({
   });
 
   const currentReview = await getCurrentSetupReview(scope.tenantId);
+  const activeSourceKey = sourceSeedKey({
+    sourceType: normalizedType,
+    url: normalizedUrl,
+  });
+  const replacePrimarySourceImport = shouldReplacePrimarySourceImport({
+    replacePrimarySource,
+    freshSourceImport,
+    metadataJson,
+  });
   const reuseExistingSession = shouldReuseSessionForImport({
     currentReview,
     incomingType: normalizedType,
     incomingUrl: normalizedUrl,
     nextIntakeContext: rawIntakeContext,
-    allowSessionReuse,
+    allowSessionReuse: replacePrimarySourceImport ? false : allowSessionReuse,
   });
 
   const intakeContext = reuseExistingSession
@@ -2079,6 +2251,7 @@ async function importSourceByType({
   let session = null;
   let ensured = null;
   let createdRun = null;
+  let previousSessionDiscarded = false;
 
   const collector = createSetupReviewCollector({
     reviewSessionId: "",
@@ -2097,6 +2270,7 @@ async function importSourceByType({
           discardedAt: nowIso(),
         },
       });
+      previousSessionDiscarded = true;
 
       session = await createSetupReviewSession({
         tenantId: scope.tenantId,
@@ -2113,8 +2287,10 @@ async function importSourceByType({
         metadata: {
           freshSession: true,
           reuseExistingSession: false,
+          replacePrimarySourceImport,
           intakeBundleKey,
           primarySourceKey,
+          activeSourceKey,
           requestId,
           sourceType: normalizedType,
           sourceUrl: normalizedUrl,
@@ -2145,8 +2321,10 @@ async function importSourceByType({
         metadata: mergeDeep(obj(existingSession.metadata), {
           freshSession: false,
           reuseExistingSession: true,
+          replacePrimarySourceImport: false,
           intakeBundleKey,
           primarySourceKey,
+          activeSourceKey,
           requestId,
           sourceType: normalizedType,
           sourceUrl: normalizedUrl,
@@ -2281,6 +2459,8 @@ async function importSourceByType({
       promoteImportedSourceToPrimary,
       currentReview,
       reuseExistingSession,
+      previousSessionDiscarded,
+      activeSourceKey,
       sourceTable,
       runTable,
       requestId,
@@ -2322,6 +2502,8 @@ async function importSourceByType({
       createdRun,
       collector,
       reuseExistingSession,
+      previousSessionDiscarded,
+      activeSourceKey,
       promoteImportedSourceToPrimary,
     });
   } catch (error) {
@@ -2617,9 +2799,12 @@ export const __test__ = {
   buildAcceptedImportResult,
   buildIntakeBundleKey,
   buildBundleSources,
+  sourceSeedKey,
+  shouldReplacePrimarySourceImport,
   mergeProfileWithPrecedence,
   normalizeMergedReviewWarnings,
   recomputeDraftFromContributions,
+  filterSourceSummaryForAllowedKeys,
   shouldReuseSessionForImport,
   mergeImportedDraftPatch,
   isPollutedFailedReviewDraft,
