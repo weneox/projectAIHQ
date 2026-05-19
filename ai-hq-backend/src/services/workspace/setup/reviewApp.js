@@ -10,6 +10,7 @@ import { buildSetupAssistantSessionPayload } from "./setupAssistantApp.js";
 import { arr, obj, s } from "./utils.js";
 import { can, normalizeRole } from "../../../utils/roles.js";
 import { safeAppendDecisionEvent } from "../../../db/helpers/decisionEvents.js";
+import { runWithSystemDbContext } from "../../../db/tenantContext.js";
 
 async function defaultGetCurrentSetupReview(tenantId) {
   const reviewHelper = await import("../../../db/helpers/tenantSetupReview.js");
@@ -378,16 +379,20 @@ export async function finalizeSetupReviewComposition(
         finalizeReason: s(body?.reason),
       }),
       async projectDraftToCanonical({ client, tenantId, session, draft, sources }) {
-        projectionSummary = await projectDraftToCanonical({
-          db: client,
-          actor: {
-            ...actor,
-            tenantId,
-          },
-          session,
-          draft,
-          sources,
-        });
+        projectionSummary = await runWithSystemDbContext(
+          "setup_review_finalize_projection",
+          () =>
+            projectDraftToCanonical({
+              db: client,
+              actor: {
+                ...actor,
+                tenantId,
+              },
+              session,
+              draft,
+              sources,
+            })
+        );
         return projectionSummary;
       },
     });
