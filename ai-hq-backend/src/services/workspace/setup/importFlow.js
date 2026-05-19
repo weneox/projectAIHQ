@@ -164,6 +164,16 @@ export function buildImportArgs({ actor, body = {}, requestId = "" }) {
     sources: arr(body?.sources),
     primarySource: body?.primarySource || body?.primary_source || null,
     metadataJson: obj(body?.metadataJson || body?.metadata_json),
+    replacePrimarySource: bool(
+      body?.replacePrimarySource ??
+        body?.replace_primary_source,
+      false
+    ),
+    freshSourceImport: bool(
+      body?.freshSourceImport ??
+        body?.fresh_source_import,
+      false
+    ),
     allowSessionReuse: bool(
       body?.allowSessionReuse ??
         body?.allow_session_reuse ??

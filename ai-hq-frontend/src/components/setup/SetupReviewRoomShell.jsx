@@ -83,14 +83,32 @@ function resolveTypedSourceInput(value = "") {
 }
 
 function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
-  if (Object.keys(obj(reviewRoom)).length) return reviewRoom;
-
+  const safeReviewRoom = obj(reviewRoom);
   const state = assistantState(assistant);
+  const question = obj(state.nextQuestion);
+  const message = s(state.message || state.assistantMessage);
+  const reviewRoomHasContent = Boolean(
+    s(obj(safeReviewRoom.polishedTruthDraft).title) ||
+      arr(safeReviewRoom.sectionDetails).length ||
+      arr(safeReviewRoom.issues).length ||
+      obj(safeReviewRoom.approvalPreview).canApprove === true ||
+      obj(safeReviewRoom.evidence).hasEvidence === true
+  );
+
+  if (
+    Object.keys(safeReviewRoom).length &&
+    (reviewRoomHasContent || (!message && !s(question.prompt)))
+  ) {
+    return reviewRoom;
+  }
+
   const sections = arr(state.sections);
+  const finalized = obj(assistant.review).finalized === true;
 
   return {
     runtimeAuthority: "approved_truth",
     header: {
+      status: finalized ? "approved_live" : "not_started",
       title: "Biznesini AI üçün tanıdaq",
       subtitle:
         "Website, Google Maps, Instagram və ya qısa izah əlavə et. Sistem faktları çıxarıb təsdiq üçün göstərəcək.",
@@ -102,6 +120,45 @@ function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
         "Təsdiqlənməmiş draft müştəriyə cavab vermir. Runtime yalnız approved truth istifadə edir.",
     },
     sections,
+    polishedTruthDraft: {
+      title: message ? "Mən bunu anladım" : "",
+      subtitle: message,
+      businessIdentity: {
+        name: "",
+        description: message,
+        website: "",
+        publicSummary: message,
+      },
+      whatThisBusinessDoes: message,
+      services: [],
+      contacts: [],
+      hours: [],
+      pricingPosture: "",
+      safeAiBehavior: {
+        canSay: message ? [message] : [],
+        shouldNotSay: [
+          "Təsdiqlənməmiş qiymət, availability və xüsusi şərtləri uydurmayacaq.",
+        ],
+        handoffRules: [
+          "Əmin olmadığı yerdə insana yönləndirəcək.",
+        ],
+      },
+      missingQuestions: s(question.prompt)
+        ? [
+            {
+              key: s(question.key || question.step || "next_question"),
+              label: s(question.label || question.key || "Sual"),
+              prompt: s(question.prompt),
+            },
+          ]
+        : [],
+      approval: {
+        canApprove: state.readyForApproval === true,
+        missingSections: [],
+        publishCount: 0,
+      },
+      evidence: [],
+    },
     sectionDetails: [],
     issues: arr(state.confirmationBlockers).map((item, index) => ({
       id: `blocker-${index}`,
@@ -231,6 +288,7 @@ export default function SetupReviewRoomShell({
     <div className="min-h-full bg-white">
       <SetupReviewRoomSurface
         reviewRoom={reviewRoom}
+        assistant={assistant}
         sourceValue={sourceValue}
         sourceBusy={sourceBusy}
         sourceStatus={errorMessage || localStatus}

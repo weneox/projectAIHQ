@@ -282,6 +282,89 @@ export function normalizeSetupReviewRoomApprovalPreview(reviewRoom = {}) {
   };
 }
 
+export function normalizeSetupReviewRoomPolishedTruthDraft(reviewRoom = {}) {
+  const draft = obj(obj(reviewRoom).polishedTruthDraft);
+  const source = obj(draft.source);
+  const identity = obj(draft.businessIdentity);
+  const behavior = obj(draft.safeAiBehavior);
+  const approval = obj(draft.approval);
+
+  return {
+    version: Number(draft.version || 1) || 1,
+    title: s(draft.title),
+    subtitle: s(draft.subtitle),
+    source: {
+      type: s(source.type),
+      url: s(source.url),
+      label: s(source.label),
+      authorityClass: s(source.authorityClass),
+    },
+    businessIdentity: {
+      name: s(identity.name),
+      description: s(identity.description),
+      website: s(identity.website),
+      publicSummary: s(identity.publicSummary),
+    },
+    whatThisBusinessDoes: s(draft.whatThisBusinessDoes),
+    services: arr(draft.services).map((item) => ({
+      title: s(item?.title || item?.name || item?.label),
+      summary: s(item?.summary || item?.description),
+      confidence: item?.confidence ?? null,
+      sourceBacked: item?.sourceBacked === true,
+    })).filter((item) => item.title),
+    contacts: arr(draft.contacts).map((item) => ({
+      type: s(item?.type || "contact"),
+      label: s(item?.label || item?.type || "Contact"),
+      value: s(item?.value),
+    })).filter((item) => item.value),
+    hours: arr(draft.hours).map((item) => s(item)).filter(Boolean),
+    pricingPosture: s(draft.pricingPosture),
+    safeAiBehavior: {
+      canSay: arr(behavior.canSay).map((item) => s(item)).filter(Boolean),
+      shouldNotSay: arr(behavior.shouldNotSay).map((item) => s(item)).filter(Boolean),
+      handoffRules: arr(behavior.handoffRules).map((item) => s(item)).filter(Boolean),
+    },
+    missingQuestions: arr(draft.missingQuestions).map((item) => ({
+      key: s(item?.key || item?.label || item?.prompt),
+      label: s(item?.label || item?.key || "Question"),
+      prompt: s(item?.prompt || item?.message || item?.body),
+    })).filter((item) => item.key && item.prompt),
+    approval: {
+      canApprove: approval.canApprove === true,
+      missingSections: arr(approval.missingSections).map((item) => s(item)).filter(Boolean),
+      publishCount: Number(approval.publishCount || 0) || 0,
+    },
+    evidence: arr(draft.evidence).map((item) => ({
+      label: s(item?.label || "Evidence"),
+      text: s(item?.text),
+      sourceUrl: s(item?.sourceUrl),
+    })).filter((item) => item.text),
+  };
+}
+
+export function normalizeSetupReviewRoomEvidence(reviewRoom = {}) {
+  const evidence = obj(obj(reviewRoom).evidence);
+  const primarySource = obj(evidence.primarySource);
+
+  return {
+    version: Number(evidence.version || 1) || 1,
+    hasEvidence: evidence.hasEvidence === true,
+    primarySource: {
+      type: s(primarySource.type),
+      url: s(primarySource.url),
+      label: s(primarySource.label),
+    },
+    sourceLabels: arr(evidence.sourceLabels).map((item) => s(item)).filter(Boolean),
+    evidenceCards: arr(evidence.evidenceCards).map((item) => ({
+      id: s(item?.id),
+      type: s(item?.type),
+      label: s(item?.label || "Evidence"),
+      sourceUrl: s(item?.sourceUrl),
+      text: s(item?.text),
+    })).filter((item) => item.text),
+  };
+}
+
 export function normalizeSetupReviewRoom(reviewRoom = {}) {
   const safeRoom = obj(reviewRoom);
 
@@ -302,6 +385,8 @@ export function normalizeSetupReviewRoom(reviewRoom = {}) {
     runtimeConsumers: normalizeSetupReviewRoomRuntimeConsumers(safeRoom),
     intake: normalizeSetupReviewRoomIntake(safeRoom),
     approvalPreview: normalizeSetupReviewRoomApprovalPreview(safeRoom),
+    polishedTruthDraft: normalizeSetupReviewRoomPolishedTruthDraft(safeRoom),
+    evidence: normalizeSetupReviewRoomEvidence(safeRoom),
     brain: normalizeSetupReviewRoomBrain(safeRoom),
   };
 }

@@ -417,6 +417,44 @@ test("session payload exposes setup review room sections", () => {
   );
 });
 
+test("session payload exposes polished truth draft for the review room", () => {
+  const payload = buildSetupAssistantSessionPayload(
+    buildReview({
+      currentStep: "company",
+      setupAssistant: buildHiddenSynthesisDraft({
+        languages: ["en"],
+        sourceMetadata: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://acme.az",
+          sourceLabels: ["Official website"],
+          evidenceSummary: ["Acme Clinic offers dental consultation."],
+        },
+      }),
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload({
+        readyForApproval: true,
+        phase: "ready",
+      }),
+    })
+  );
+
+  const draft = payload.setup.reviewRoom.polishedTruthDraft;
+
+  assert.equal(payload.setup.polishedTruthDraft.title, "Acme Clinic");
+  assert.equal(draft.title, "Acme Clinic");
+  assert.equal(draft.source.type, "website");
+  assert.equal(draft.source.url, "https://acme.az");
+  assert.equal(draft.businessIdentity.name, "Acme Clinic");
+  assert.equal(
+    draft.businessIdentity.description,
+    "Professional dental clinic in Baku."
+  );
+  assert.equal(draft.services[0].title, "Consultation");
+  assert.equal(draft.contacts[0].value, "+994551112233");
+  assert.equal(draft.approval.canApprove, true);
+  assert.ok(draft.safeAiBehavior.shouldNotSay.length > 0);
+  assert.equal(draft.evidence[0].sourceUrl, "https://acme.az");
+});
+
 
 test("setup review room exposes action model for approval and edits", () => {
   const readyPayload = buildSetupAssistantSessionPayload(

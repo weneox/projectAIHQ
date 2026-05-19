@@ -172,6 +172,72 @@ test("Case A: same intake bundle stays fresh-by-default until reuse is explicit"
   assert.equal(shouldReuse, false);
 });
 
+test("Case A: replace-primary metadata forces fresh import intent", () => {
+  assert.equal(
+    importTest.shouldReplacePrimarySourceImport({
+      metadataJson: {
+        setupImportMode: "replace_primary_source",
+      },
+      replacePrimarySource: false,
+      freshSourceImport: false,
+    }),
+    true
+  );
+
+  assert.equal(
+    importTest.shouldReplacePrimarySourceImport({
+      metadataJson: {
+        setupImportMode: "same_primary_source_retry",
+      },
+    }),
+    false
+  );
+});
+
+test("Case A: accepted fresh import response exposes active source telemetry", async () => {
+  const result = await importTest.buildAcceptedImportResult({
+    db: {},
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "tenant-1",
+    },
+    role: "owner",
+    tenant: null,
+    normalizedType: "website",
+    normalizedUrl: "https://beta.example",
+    intakeContext: {},
+    requestId: "request-1",
+    session: {
+      id: "session-beta",
+      status: "processing",
+    },
+    ensured: {
+      source: {
+        id: "source-beta",
+      },
+    },
+    createdRun: {
+      run: {
+        id: "run-beta",
+      },
+    },
+    collector: {},
+    reuseExistingSession: false,
+    previousSessionDiscarded: true,
+    activeSourceKey: "website|https://beta.example",
+    promoteImportedSourceToPrimary: true,
+    setup: {
+      status: "draft_ready",
+    },
+  });
+
+  assert.equal(result.startedFreshSession, true);
+  assert.equal(result.reusedActiveSession, false);
+  assert.equal(result.previousSessionDiscarded, true);
+  assert.equal(result.activeSourceKey, "website|https://beta.example");
+  assert.equal(result.sourceUrl, "https://beta.example");
+});
+
 test("Case A2: setup assistant shell can reuse the current session when the same website is scanned", () => {
   const bundle = {
     primarySource: {
@@ -571,6 +637,110 @@ test("Case B2: bundle-scoped merge drops stale contribution keys outside the act
   assert.equal(
     merged.businessProfile.companySummaryLong,
     "Only the website contribution should remain"
+  );
+});
+
+test("Case B3: replace-primary merge drops previous source summary imports", () => {
+  const merged = importTest.mergeImportedDraftPatch({
+    currentDraft: {
+      businessProfile: {
+        companyName: "Alpha Studio",
+        fieldSources: {
+          companyName: {
+            sourceType: "website",
+            sourceUrl: "https://alpha.example",
+          },
+        },
+      },
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example",
+        latestImport: {
+          sourceType: "website",
+          sourceUrl: "https://alpha.example",
+        },
+        imports: [
+          {
+            requestId: "alpha",
+            sourceType: "website",
+            sourceUrl: "https://alpha.example",
+          },
+        ],
+      },
+      draftPayload: {
+        sourceContributions: {
+          "website|https://alpha.example": {
+            businessProfile: {
+              companyName: "Alpha Studio",
+            },
+            sourceSummary: {
+              latestImport: {
+                sourceType: "website",
+                sourceUrl: "https://alpha.example",
+              },
+            },
+          },
+        },
+      },
+    },
+    importedPatch: {
+      businessProfile: {
+        companyName: "Beta Clinic",
+        websiteUrl: "https://beta.example",
+        fieldSources: {
+          companyName: {
+            sourceType: "website",
+            sourceUrl: "https://beta.example",
+          },
+        },
+      },
+      services: [{ title: "Consultation" }],
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://beta.example",
+        latestImport: {
+          requestId: "beta",
+          sourceType: "website",
+          sourceUrl: "https://beta.example",
+        },
+        imports: [
+          {
+            requestId: "beta",
+            sourceType: "website",
+            sourceUrl: "https://beta.example",
+          },
+        ],
+      },
+    },
+    intakeContext: {
+      primarySource: {
+        sourceType: "website",
+        url: "https://beta.example",
+      },
+      sources: [
+        {
+          sourceType: "website",
+          url: "https://beta.example",
+          isPrimary: true,
+        },
+      ],
+    },
+    incomingType: "website",
+    incomingUrl: "https://beta.example",
+  });
+
+  assert.deepEqual(Object.keys(merged.draftPayload.sourceContributions), [
+    "website|https://beta.example",
+  ]);
+  assert.equal(merged.businessProfile.companyName, "Beta Clinic");
+  assert.equal(
+    merged.businessProfile.fieldSources.companyName.sourceUrl,
+    "https://beta.example"
+  );
+  assert.equal(merged.sourceSummary.primarySourceUrl, "https://beta.example");
+  assert.deepEqual(
+    merged.sourceSummary.imports.map((item) => item.sourceUrl),
+    ["https://beta.example"]
   );
 });
 
