@@ -238,6 +238,95 @@ function draftFromRoom(room = {}) {
   };
 }
 
+
+const SETUP_OPERATIONAL_TEXT_RE =
+  /(ağıllı setup beyni aktiv deyil|agilli setup beyni aktiv deyil|openai setup brain|keyword fallback|setup_brain_unavailable|openai_setup_brain_required|openai_setup_brain_forced_off|OPENAI_SETUP_BRAIN_DISABLED)/i;
+
+function isOperationalSetupText(value = "") {
+  return SETUP_OPERATIONAL_TEXT_RE.test(s(value));
+}
+
+function roomHasBrainUnavailableState({ room = {}, draft = {}, assistant = {} } = {}) {
+  const haystack = [
+    obj(assistant).provider,
+    obj(assistant).error,
+    obj(assistant).message,
+    obj(assistant).assistantMessage,
+    obj(room.brain).provider,
+    obj(room.brain).error,
+    obj(room.header).primaryMessage,
+    obj(room.header).subtitle,
+    draft.title,
+    draft.subtitle,
+    obj(draft.businessIdentity).name,
+    obj(draft.businessIdentity).description,
+    draft.whatThisBusinessDoes,
+  ]
+    .map((item) => s(item))
+    .filter(Boolean)
+    .join(" ");
+
+  return isOperationalSetupText(haystack);
+}
+
+function hasUsefulDraftText(value = "") {
+  const text = s(value);
+  return Boolean(text) && !isOperationalSetupText(text);
+}
+
+function hasUsefulEvidence(room = {}, draft = {}) {
+  const evidence = [
+    ...arr(obj(room.evidence).evidenceCards),
+    ...arr(draft.evidence),
+  ];
+
+  return evidence.some((item) => hasUsefulDraftText(item?.text));
+}
+
+function hasRealBusinessDraft({ room = {}, draft = {}, approvalPreview = {} } = {}) {
+  const identity = obj(draft.businessIdentity);
+
+  return Boolean(
+    hasUsefulDraftText(draft.title) ||
+      hasUsefulDraftText(identity.name) ||
+      hasUsefulDraftText(identity.description) ||
+      hasUsefulDraftText(identity.publicSummary) ||
+      hasUsefulDraftText(draft.whatThisBusinessDoes) ||
+      arr(draft.services).some((item) => hasUsefulDraftText(item?.title)) ||
+      arr(draft.contacts).some((item) => hasUsefulDraftText(item?.value)) ||
+      arr(draft.hours).some(hasUsefulDraftText) ||
+      hasUsefulDraftText(draft.pricingPosture) ||
+      Number(approvalPreview.publishCount || 0) > 0 ||
+      hasUsefulEvidence(room, draft)
+  );
+}
+
+function resolveSetupSurfaceState({
+  room = {},
+  draft = {},
+  assistant = {},
+  sourceBusy = false,
+  canApprove = false,
+  finalized = false,
+  approvalPreview = {},
+  missing = [],
+} = {}) {
+  if (finalized) return "approved_live";
+
+  if (roomHasBrainUnavailableState({ room, draft, assistant })) {
+    return "brain_unavailable";
+  }
+
+  const hasRealDraft = hasRealBusinessDraft({ room, draft, approvalPreview });
+
+  if (sourceBusy && !hasRealDraft) return "loading";
+  if (hasRealDraft && canApprove) return "ready_for_approval";
+  if (hasRealDraft) return "draft_ready";
+  if (arr(missing).length > 0) return "needs_input";
+
+  return "empty";
+}
+
 function SourceInput({
   value,
   busy,
@@ -366,6 +455,82 @@ export default function SetupReviewRoomSurface({
   const isInitialLoading = sourceBusy && !hasMeaningfulProgress;
   const sourceLabel =
     hostLabel(source.url) || s(source.label || source.type || "Business input");
+
+  if (surfaceState === "brain_unavailable") {
+    return (
+      <section
+        aria-label="Setup workspace"
+        className="flex min-h-[calc(100vh-150px)] items-center bg-[rgb(var(--color-canvas))]"
+      >
+        <div className="mx-auto w-full max-w-[860px] px-6 py-16">
+          <SourceInput
+            value={sourceValue}
+            busy={sourceBusy}
+            status={sourceStatus}
+            onValueChange={onSourceValueChange}
+            onSubmit={onSubmitSource}
+          />
+
+          <div className="mt-6 rounded-[var(--radius-lg)] border border-[rgb(var(--color-warning-strong))] bg-[rgb(var(--color-surface))] p-6 shadow-[var(--shadow-sm)]">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[rgb(var(--color-warning-strong))]">
+              Setup config
+            </div>
+            <h1 className="mt-3 text-[26px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              Setup AI brain aktiv deyil
+            </h1>
+            <p className="mt-3 text-[14px] leading-7 text-text-subtle">
+              Backend-də OPENAI_API_KEY və OPENAI_SETUP_ASSISTANT_ENABLED=true aktiv edilmədən setup real biznes faktı çıxarmayacaq.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (surfaceState === "needs_input") {
+    return (
+      <section
+        aria-label="Setup workspace"
+        className="flex min-h-[calc(100vh-150px)] items-center bg-[rgb(var(--color-canvas))]"
+      >
+        <div className="mx-auto w-full max-w-[900px] px-6 py-16">
+          <SourceInput
+            value={sourceValue}
+            busy={sourceBusy}
+            status={sourceStatus}
+            onValueChange={onSourceValueChange}
+            onSubmit={onSubmitSource}
+          />
+
+          <div className="mt-6 rounded-[var(--radius-lg)] border border-[rgb(var(--color-line-soft))] bg-[rgb(var(--color-surface))] p-6 shadow-[var(--shadow-sm)]">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-soft">
+              Business input
+            </div>
+            <h1 className="mt-3 text-[26px] font-semibold tracking-[var(--tracking-tight-xl)] text-text">
+              Məlumat kifayət deyil
+            </h1>
+            <p className="mt-3 text-[14px] leading-7 text-text-subtle">
+              Hələ review room açmaq üçün real biznes faktı tapılmayıb. Sayt linki və ya biznesi 2-3 cümlə ilə daha konkret yaz.
+            </p>
+
+            {missing.length ? (
+              <div className="mt-5 space-y-3">
+                {missing.map((item) => (
+                  <div
+                    key={item.key || item.body}
+                    className="rounded-[var(--radius-md)] bg-[rgb(var(--color-surface-muted))] px-4 py-3 text-[13px] leading-6 text-text-subtle"
+                  >
+                    <span className="font-semibold text-text">{item.title}: </span>
+                    {item.body}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (!hasMeaningfulProgress) {
     return (
