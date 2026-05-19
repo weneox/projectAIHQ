@@ -649,6 +649,8 @@ function buildBrainUnavailableTurn({
       },
     ],
     recommendationNotes: [reason],
+    setupBlockingConfigError: true,
+    configErrorCode: "OPENAI_SETUP_BRAIN_DISABLED",
     forceReadyForApproval: false,
   });
 }
@@ -780,6 +782,8 @@ function buildTurn({
   forceReadyForApproval = null,
   polishedDraftOverride = null,
   brainDecision = null,
+  setupBlockingConfigError = false,
+  configErrorCode = "",
 } = {}) {
   const mergedDraft = hasAcceptedPatchSignal(acceptedPatch)
     ? buildDraftWithAcceptedPatch(draft, acceptedPatch)
@@ -823,6 +827,8 @@ function buildTurn({
     model: s(model),
     usedFallback: usedFallback === true,
     error: s(error),
+    setupBlockingConfigError: setupBlockingConfigError === true,
+    configErrorCode: s(configErrorCode),
     latestUserInput: compactDraftObject({
       step: normalizeQuestionKey(currentStep),
       text: latestMessage,

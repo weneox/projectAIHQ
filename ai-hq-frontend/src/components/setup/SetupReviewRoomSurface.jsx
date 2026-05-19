@@ -443,16 +443,22 @@ export default function SetupReviewRoomSurface({
     draftApproval.canApprove === true ||
     room.readyForApproval === true ||
     s(primaryAction.intent).includes("finalize");
-  const hasDraft =
-    s(draft.title) ||
-    s(identity.name) ||
-    s(draft.whatThisBusinessDoes) ||
-    arr(draft.services).length ||
-    arr(draft.contacts).length ||
-    arr(draft.missingQuestions).length ||
-    missing.length > 0;
-  const hasMeaningfulProgress = hasDraft || canApprove || finalized;
-  const isInitialLoading = sourceBusy && !hasMeaningfulProgress;
+  const surfaceState = resolveSetupSurfaceState({
+    room,
+    draft,
+    assistant,
+    sourceBusy,
+    canApprove,
+    finalized,
+    approvalPreview,
+    missing,
+  });
+  const hasMeaningfulProgress = [
+    "draft_ready",
+    "ready_for_approval",
+    "approved_live",
+  ].includes(surfaceState);
+  const isInitialLoading = surfaceState === "loading";
   const sourceLabel =
     hostLabel(source.url) || s(source.label || source.type || "Business input");
 

@@ -1,3 +1,4 @@
+import { cfg } from "../../../../config.js";
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { buildSetupAssistantServiceCatalog } from "../setupAssistantCatalog.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
@@ -38,6 +39,34 @@ function compactText(value = "", max = 280) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
+
+
+function buildSetupBrainStatus(storedBrain = {}) {
+  const brain = obj(storedBrain);
+  const hasOpenAIKey = Boolean(s(cfg.ai?.openaiApiKey));
+  const explicitlyEnabled = cfg.ai?.openaiSetupAssistantEnabled === true;
+  const forceFallback = cfg.ai?.openaiSetupForceFallback === true;
+  const enabled = explicitlyEnabled || hasOpenAIKey;
+  const providerAvailable = enabled && hasOpenAIKey && !forceFallback;
+
+  let errorCode = "";
+  if (forceFallback) errorCode = "OPENAI_SETUP_BRAIN_FORCED_OFF";
+  else if (!hasOpenAIKey) errorCode = "OPENAI_API_KEY_MISSING";
+  else if (!enabled) errorCode = "OPENAI_SETUP_ASSISTANT_DISABLED";
+  else if (brain.setupBlockingConfigError === true) {
+    errorCode = s(brain.configErrorCode || "OPENAI_SETUP_BRAIN_DISABLED");
+  }
+
+  return {
+    enabled,
+    configured: hasOpenAIKey,
+    explicitlyEnabled,
+    forceFallback,
+    providerAvailable,
+    model: s(cfg.ai?.openaiSetupModel || cfg.ai?.openaiModel),
+    errorCode,
+  };
 }
 
 function resolveSetupLocaleFromSetup(setup = {}) {
@@ -2194,6 +2223,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     },
     setup: {
       productModel: buildSetupProductModel(),
+      setupBrainStatus: buildSetupBrainStatus(storedBrain),
       lifecycleState,
       reviewRoom,
       status: lifecycleState.status,

@@ -82,11 +82,20 @@ function resolveTypedSourceInput(value = "") {
   };
 }
 
+
+const SETUP_OPERATIONAL_TEXT_RE =
+  /(ağıllı setup beyni aktiv deyil|agilli setup beyni aktiv deyil|openai setup brain|keyword fallback|setup_brain_unavailable|openai_setup_brain_required|openai_setup_brain_forced_off|OPENAI_SETUP_BRAIN_DISABLED)/i;
+
+function isOperationalSetupText(value = "") {
+  return SETUP_OPERATIONAL_TEXT_RE.test(s(value));
+}
+
 function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
   const safeReviewRoom = obj(reviewRoom);
   const state = assistantState(assistant);
   const question = obj(state.nextQuestion);
   const message = s(state.message || state.assistantMessage);
+  const operationalMessage = isOperationalSetupText(message);
   const reviewRoomHasContent = Boolean(
     s(obj(safeReviewRoom.polishedTruthDraft).title) ||
       arr(safeReviewRoom.sectionDetails).length ||
@@ -100,6 +109,65 @@ function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
     (reviewRoomHasContent || (!message && !s(question.prompt)))
   ) {
     return reviewRoom;
+  }
+
+  if (operationalMessage) {
+    return {
+      runtimeAuthority: "approved_truth",
+      header: {
+        status: "brain_unavailable",
+        title: "Setup AI brain aktiv deyil",
+        subtitle: message,
+        statusLabel: "Config error",
+        badgeTone: "warning",
+        primaryMessage: message,
+        trustNote:
+          "Setup real biznes faktı çıxarmaq üçün backend-də OpenAI setup brain aktiv olmalıdır.",
+      },
+      sections: [],
+      polishedTruthDraft: {},
+      sectionDetails: [],
+      issues: [],
+      actions: {
+        primary: {
+          id: "fix_setup_ai_brain_config",
+          label: "Backend config-i düzəlt",
+          intent: "config_required",
+          enabled: false,
+        },
+      },
+      runtimeConsumers: {
+        consumers: [],
+      },
+      brain: {
+        version: 0,
+        provider: "setup_brain_unavailable",
+        error: "openai_setup_brain_required",
+        setupBlockingConfigError: true,
+        configErrorCode: "OPENAI_SETUP_BRAIN_DISABLED",
+        sourceIntelligence: {
+          quality: "missing",
+          evidenceCount: 0,
+        },
+        sectionCompletion: {
+          percent: 0,
+        },
+        missingFactsPlan: {
+          required: false,
+          missingSections: [],
+        },
+        conflictPlan: {
+          hasConflicts: false,
+        },
+        decisionPlan: {
+          operatorDecision: "setup_config_error",
+          reason: message,
+        },
+        runtimeSimulation: {
+          canActivateAfterApproval: false,
+        },
+      },
+    };
   }
 
   const sections = arr(state.sections);
@@ -121,21 +189,21 @@ function buildFallbackReviewRoom({ reviewRoom = {}, assistant = {} } = {}) {
     },
     sections,
     polishedTruthDraft: {
-      title: message ? "Mən bunu anladım" : "",
-      subtitle: message,
+      title: "",
+      subtitle: "",
       businessIdentity: {
         name: "",
-        description: message,
+        description: "",
         website: "",
-        publicSummary: message,
+        publicSummary: "",
       },
-      whatThisBusinessDoes: message,
+      whatThisBusinessDoes: "",
       services: [],
       contacts: [],
       hours: [],
       pricingPosture: "",
       safeAiBehavior: {
-        canSay: message ? [message] : [],
+        canSay: [],
         shouldNotSay: [
           "Təsdiqlənməmiş qiymət, availability və xüsusi şərtləri uydurmayacaq.",
         ],
