@@ -5,7 +5,7 @@ import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import { cx } from "../../lib/cx.js";
 import {
-  NAVIGATION_GROUPS,
+  getNavigationGroupsForFeatures,
 } from "./shellNavigation.js";
 
 const SIDEBAR_WIDTH = 190;
@@ -235,12 +235,19 @@ function SidebarChromeLayer() {
 
 function SidebarContent({
   shellStats,
+  features,
+  featureFallback = false,
   onNavigate,
   collapsed = false,
   onToggleCollapse,
   mobile = false,
   onCloseMobile,
 }) {
+  const navigationGroups = React.useMemo(
+    () => getNavigationGroupsForFeatures(features, { fallback: featureFallback }),
+    [featureFallback, features]
+  );
+
   return (
     <div className="relative z-[2] flex h-full flex-col">
       {mobile ? (
@@ -260,7 +267,7 @@ function SidebarContent({
 
       <div className="sidebar-scroll flex-1 overflow-y-auto px-0 pb-4 pt-0">
         <div className={cx("space-y-3", collapsed && "space-y-2")}>
-          {NAVIGATION_GROUPS.map((group, index) => (
+          {navigationGroups.map((group, index) => (
             <SidebarGroup
               key={group.id}
               group={group}
@@ -298,6 +305,8 @@ export default function Sidebar({
   mobileOpen,
   setMobileOpen,
   shellStats = {},
+  features,
+  featureFallback = false,
   collapsed = false,
   setCollapsed,
   topOffset = 0,
@@ -321,6 +330,8 @@ export default function Sidebar({
 
           <SidebarContent
             shellStats={shellStats}
+            features={features}
+            featureFallback={featureFallback}
             collapsed={collapsed}
             onToggleCollapse={() => setCollapsed?.((value) => !value)}
           />
@@ -354,6 +365,8 @@ export default function Sidebar({
 
           <SidebarContent
             shellStats={shellStats}
+            features={features}
+            featureFallback={featureFallback}
             mobile
             collapsed={false}
             onNavigate={() => setMobileOpen(false)}

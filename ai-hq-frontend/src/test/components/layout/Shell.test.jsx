@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import "../../setup/vitest.setup.js";
 
 const apiGet = vi.fn();
+const useNotificationsSurface = vi.fn(() => ({
+  enabled: true,
+  open: false,
+  setOpen: vi.fn(),
+  notifications: [],
+  unreadCount: 0,
+}));
 let pathname = "/inbox";
 let search = "";
 const navigate = vi.fn();
@@ -15,12 +22,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("../../../hooks/useNotificationsSurface.js", () => ({
-  useNotificationsSurface: () => ({
-    open: false,
-    setOpen: vi.fn(),
-    notifications: [],
-    unreadCount: 0,
-  }),
+  useNotificationsSurface: (...args) => useNotificationsSurface(...args),
 }));
 
 vi.mock("../../../api/client.js", () => ({
@@ -84,6 +86,10 @@ function mockShellApis() {
       return Promise.resolve({
         workspace: { companyName: "Dental HQ", tenantKey: "dental" },
         user: { name: "Dr. Avery" },
+        features: {
+          core: { notifications: true },
+          channels: { voice: false },
+        },
       });
     }
 
@@ -106,6 +112,7 @@ function mockShellApis() {
 describe("Shell", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useNotificationsSurface.mockClear();
     pathname = "/inbox";
     search = "";
     mockShellApis();
@@ -124,6 +131,41 @@ describe("Shell", () => {
       expect(screen.getByTestId("sidebar")).toHaveAttribute("data-inbox-unread", "5");
       expect(screen.getByTestId("sidebar")).toHaveAttribute("data-leads-open", "1");
       expect(screen.getByTestId("header")).toHaveAttribute("data-workspace", "Dental HQ");
+    });
+
+    await waitFor(() => {
+      expect(useNotificationsSurface).toHaveBeenLastCalledWith({ enabled: true });
+    });
+  });
+
+  it("does not start notification polling when bootstrap freezes notifications", async () => {
+    apiGet.mockImplementation((path) => {
+      if (path === "/api/app/bootstrap") {
+        return Promise.resolve({
+          workspace: { companyName: "Dental HQ", tenantKey: "dental" },
+          features: {
+            core: { notifications: false },
+            channels: { voice: false },
+          },
+        });
+      }
+
+      if (path === "/api/inbox/threads") {
+        return Promise.resolve({ threads: [] });
+      }
+
+      if (path === "/api/leads") {
+        return Promise.resolve({ leads: [] });
+      }
+
+      return Promise.reject(new Error(`Unexpected apiGet path: ${path}`));
+    });
+
+    render(<Shell />);
+
+    await waitFor(() => {
+      expect(apiGet).toHaveBeenCalledWith("/api/app/bootstrap");
+      expect(useNotificationsSurface).toHaveBeenLastCalledWith({ enabled: false });
     });
   });
 

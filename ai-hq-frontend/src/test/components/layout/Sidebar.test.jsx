@@ -86,6 +86,8 @@ describe("Sidebar", () => {
       "/setup",
       "/comments",
       "/voice",
+      "/voice-lab",
+      "/voice-channels",
       "/workspace",
       "/publish",
       "/proposals",
@@ -105,5 +107,21 @@ describe("Sidebar", () => {
         linkOrder.indexOf(expectedVisibleHrefs[i + 1])
       );
     }
+  });
+
+  it("shows voice navigation only when the backend exposes the voice feature", () => {
+    render(
+      <MemoryRouter initialEntries={["/home"]}>
+        <Sidebar
+          mobileOpen={false}
+          setMobileOpen={() => {}}
+          shellStats={{}}
+          features={{ channels: { voice: true } }}
+        />
+      </MemoryRouter>
+    );
+
+    expect(document.querySelector('a[href="/voice-channels"]')).toBeTruthy();
+    expect(document.querySelector('a[href="/voice-lab"]')).toBeTruthy();
   });
 });

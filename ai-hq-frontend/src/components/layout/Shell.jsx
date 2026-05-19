@@ -6,6 +6,7 @@ import { resendVerificationEmail } from "../../api/auth.js";
 import warningIcon from "../../assets/channels/warning.png";
 import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
 import { getAppAuthContext, clearAppAuthContext } from "../../lib/appSession.js";
+import { isFeatureEnabled } from "../../lib/featureFlags.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import Sidebar, {
@@ -518,6 +519,7 @@ export default function Shell() {
   const [workspaceMeta, setWorkspaceMeta] = useState(() =>
     mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
   );
+  const [appBootstrap, setAppBootstrap] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     getInitialCollapsedState
   );
@@ -533,8 +535,17 @@ export default function Shell() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const notifications = useNotificationsSurface();
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+  const featureFallback =
+    appBootstrap !== null && appBootstrap?.ok !== false && Boolean(appBootstrap?.features);
+  const notificationsEnabled =
+    !localWorkspaceEntry &&
+    isFeatureEnabled(appBootstrap?.features, "core.notifications", {
+      fallback: featureFallback,
+    });
+  const notifications = useNotificationsSurface({
+    enabled: notificationsEnabled,
+  });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
@@ -653,6 +664,10 @@ export default function Shell() {
 
     const loadWorkspaceMeta = async () => {
       if (localWorkspaceEntry) {
+        setAppBootstrap({
+          ok: true,
+          features: {},
+        });
         setWorkspaceMeta((prev) =>
           mergeWorkspaceMeta(prev, buildHostFallbackMeta())
         );
@@ -663,6 +678,8 @@ export default function Shell() {
         const response = await apiGet("/api/app/bootstrap");
         if (cancelled) return;
 
+        setAppBootstrap(response);
+
         const extracted = extractWorkspaceMeta(response);
         const hostFallback = buildHostFallbackMeta();
 
@@ -672,6 +689,10 @@ export default function Shell() {
       } catch {
         if (cancelled) return;
 
+        setAppBootstrap({
+          ok: false,
+          features: {},
+        });
         setWorkspaceMeta((prev) =>
           mergeWorkspaceMeta(prev, buildHostFallbackMeta())
         );
@@ -842,6 +863,8 @@ export default function Shell() {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         shellStats={shellStats}
+        features={appBootstrap?.features}
+        featureFallback={featureFallback}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         topOffset={topOffset}
@@ -863,6 +886,8 @@ export default function Shell() {
           notifications={notifications}
           shellStats={shellStats}
           workspaceMeta={workspaceMeta}
+          features={appBootstrap?.features}
+          featureFallback={featureFallback}
         />
 
         <main className="relative min-h-0 flex-1 overflow-hidden bg-white">

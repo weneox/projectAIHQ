@@ -4,21 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   getAppAuthContextMock,
+  getAppBootstrapContextMock,
   getAppSessionContextMock,
   peekAppAuthContextMock,
+  peekAppBootstrapContextMock,
 } = vi.hoisted(() => ({
   getAppAuthContextMock: vi.fn(),
+  getAppBootstrapContextMock: vi.fn(),
   getAppSessionContextMock: vi.fn(async () => ({
     user: { id: "user-1" },
     workspace: { tenantKey: "acme" },
   })),
   peekAppAuthContextMock: vi.fn(),
+  peekAppBootstrapContextMock: vi.fn(),
 }));
 
 vi.mock("../lib/appSession.js", () => ({
   getAppAuthContext: getAppAuthContextMock,
+  getAppBootstrapContext: getAppBootstrapContextMock,
   getAppSessionContext: getAppSessionContextMock,
   peekAppAuthContext: peekAppAuthContextMock,
+  peekAppBootstrapContext: peekAppBootstrapContextMock,
 }));
 
 vi.mock("../lib/appEntry.js", async (importOriginal) => {
@@ -96,6 +102,14 @@ vi.mock("../pages/ChannelCatalog.jsx", () => ({
   default: () => <div>Channels Page</div>,
 }));
 
+vi.mock("../pages/VoiceLab.jsx", () => ({
+  default: () => <div>Voice Lab Page</div>,
+}));
+
+vi.mock("../pages/VoiceChannels.jsx", () => ({
+  default: () => <div>Voice Channels Page</div>,
+}));
+
 vi.mock("../pages/Truth/TruthViewerPage.jsx", () => ({
   default: () => <div>Truth Page</div>,
 }));
@@ -114,12 +128,19 @@ describe("App shell smoke", () => {
     window.history.replaceState({}, "", "/");
 
     peekAppAuthContextMock.mockReturnValue(null);
+    peekAppBootstrapContextMock.mockReturnValue(null);
 
     getAppAuthContextMock.mockResolvedValue({
       authenticated: false,
       resolved: true,
       transientFailure: false,
       unavailable: false,
+    });
+    getAppBootstrapContextMock.mockResolvedValue({
+      ok: true,
+      features: {
+        channels: { voice: true },
+      },
     });
   });
 
@@ -140,5 +161,30 @@ describe("App shell smoke", () => {
       await screen.findByText(text, {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
     ).toBeInTheDocument();
   });
-});
 
+  it.each([
+    ["/voice-lab", "Voice Lab Page"],
+    ["/voice-channels", "Voice Channels Page"],
+  ])("renders %s when the voice feature is enabled", async (path, text) => {
+    window.history.replaceState({}, "", path);
+    render(<App />);
+    expect(
+      await screen.findByText(text, {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects voice routes to home when the backend freezes voice", async () => {
+    getAppBootstrapContextMock.mockResolvedValue({
+      ok: true,
+      features: {
+        channels: { voice: false },
+      },
+    });
+
+    window.history.replaceState({}, "", "/voice-lab");
+    render(<App />);
+    expect(
+      await screen.findByText("Home Page", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+    ).toBeInTheDocument();
+  });
+});

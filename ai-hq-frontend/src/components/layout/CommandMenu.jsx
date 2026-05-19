@@ -3,21 +3,23 @@ import { ArrowRight, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cx } from "../../lib/cx.js";
-import { ALL_SECTIONS } from "./shellNavigation.js";
+import { getAllSectionsForFeatures } from "./shellNavigation.js";
 
-function buildCommandGroups() {
-  return ALL_SECTIONS.map((section) => ({
-    id: section.id,
-    label: section.label,
-    items: [
-      {
-        id: section.id,
-        label: section.label,
-        value: String(section.label || "").trim().toLowerCase(),
-        to: section.to,
-      },
-    ],
-  })).filter((group) => group.items.length > 0);
+function buildCommandGroups(features = {}, featureFallback = false) {
+  return getAllSectionsForFeatures(features, { fallback: featureFallback })
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      items: [
+        {
+          id: section.id,
+          label: section.label,
+          value: String(section.label || "").trim().toLowerCase(),
+          to: section.to,
+        },
+      ],
+    }))
+    .filter((group) => group.items.length > 0);
 }
 
 export default function CommandMenu() {

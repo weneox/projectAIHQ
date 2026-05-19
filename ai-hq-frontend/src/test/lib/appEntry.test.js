@@ -114,8 +114,6 @@ describe("resolveAuthenticatedLanding", () => {
         "/leads",
         "/knowledge",
         "/reports",
-        "/voice-lab",
-        "/voice-channels",
         "/team",
         "/launch",
         "/settings",
@@ -209,5 +207,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(__test__.normalizeLegacyAppRoute("/setup/review")).toBe(
       SETUP_REVIEW_AND_LAUNCH_ROUTE
     );
+    expect(__test__.normalizeLegacyAppRoute("/voice-lab")).toBe("/home");
+    expect(__test__.normalizeLegacyAppRoute("/voice-channels")).toBe("/home");
   });
 });

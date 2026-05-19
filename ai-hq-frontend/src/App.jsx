@@ -6,6 +6,7 @@ import {
   Routes,
 } from "react-router-dom";
 import Shell from "./components/layout/Shell.jsx";
+import FeatureRouteGuard from "./components/auth/FeatureRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
@@ -224,8 +225,22 @@ export default function App() {
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
-          <Route path="voice-lab" element={<VoiceLab />} />
-          <Route path="voice-channels" element={<VoiceChannels />} />
+          <Route
+            path="voice-lab"
+            element={
+              <FeatureRouteGuard featurePath="channels.voice">
+                <VoiceLab />
+              </FeatureRouteGuard>
+            }
+          />
+          <Route
+            path="voice-channels"
+            element={
+              <FeatureRouteGuard featurePath="channels.voice">
+                <VoiceChannels />
+              </FeatureRouteGuard>
+            }
+          />
           <Route path="reports" element={<Reports />} />
           <Route path="channels" element={<ChannelCatalog />} />
           <Route path="knowledge" element={<Knowledge />} />

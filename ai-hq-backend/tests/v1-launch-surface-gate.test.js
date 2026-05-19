@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { cfg } from "../src/config.js";
 import { getFeatureFlags } from "../src/config/features.js";
 import { apiRouter } from "../src/routes/api/index.js";
+import { buildAppBootstrap } from "../src/services/workspace/bootstrap.js";
 
 function createMockRes(onFinish) {
   return {
@@ -180,6 +181,36 @@ test("v1 production feature flags freeze non-launch optional surfaces", async ()
     assert.equal(flags.workflows.internalCallbacks, false);
     assert.equal(flags.workflows.executions, false);
     assert.equal(flags.ops.incidents, false);
+  });
+});
+
+test("app bootstrap exposes v1 feature flags to the frontend", async () => {
+  await withV1ProductionConfig(async () => {
+    const payload = await buildAppBootstrap({
+      db: null,
+      user: { id: "user-1", email: "owner@example.test", role: "owner" },
+      tenant: { id: "tenant-1", key: "acme", name: "Acme" },
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      resolveWorkspaceState: async () => ({
+        workspace: {
+          workspaceReady: true,
+          routeHint: "/home",
+        },
+        readiness: {},
+      }),
+      loadOperationalCounts: async () => ({
+        pendingInbox: 0,
+        pendingComments: 0,
+        newLeads: 0,
+        knowledgeCandidates: 0,
+      }),
+    });
+
+    assert.equal(payload.launch.v1SurfaceEnabled, true);
+    assert.equal(payload.features.core.notifications, false);
+    assert.equal(payload.features.channels.voice, false);
+    assert.equal(payload.features.channels.websiteWidget, true);
   });
 });
 

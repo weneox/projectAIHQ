@@ -12,6 +12,7 @@ import {
   UserRound,
   Target,
 } from "lucide-react";
+import { isFeatureEnabled } from "../../lib/featureFlags.js";
 
 const PRIMARY_SECTIONS = [
   {
@@ -102,6 +103,7 @@ const CRM_SECTIONS = [
 const SECONDARY_SECTIONS = [
   {
     id: "voice-channels",
+    feature: "channels.voice",
     label: "Səs kanalları",
     icon: Radio,
     to: "/voice-channels",
@@ -118,6 +120,7 @@ const SECONDARY_SECTIONS = [
   },
   {
     id: "voice-lab",
+    feature: "channels.voice",
     label: "Voice Lab",
     icon: Radio,
     to: "/voice-lab",
@@ -243,9 +246,40 @@ function pathMatches(pathname = "", candidate = "") {
   return current === target || current.startsWith(`${target}/`);
 }
 
-function getActiveShellSection(pathname = "/") {
+function isSectionEnabled(section = {}, features = {}, fallback = false) {
   return (
-    ALL_SECTIONS.find((section) =>
+    !section.feature ||
+    isFeatureEnabled(features, section.feature, { fallback })
+  );
+}
+
+function filterSectionsForFeatures(sections = [], features = {}, fallback = false) {
+  return sections.filter((section) =>
+    isSectionEnabled(section, features, fallback)
+  );
+}
+
+function getAllSectionsForFeatures(features = {}, { fallback = false } = {}) {
+  return filterSectionsForFeatures(ALL_SECTIONS, features, fallback);
+}
+
+function getNavigationGroupsForFeatures(
+  features = {},
+  { fallback = false } = {}
+) {
+  return NAVIGATION_GROUPS.map((group) => ({
+    ...group,
+    items: filterSectionsForFeatures(group.items, features, fallback),
+  })).filter((group) => group.items.length > 0);
+}
+
+function getActiveShellSection(pathname = "/", options = {}) {
+  const sections = getAllSectionsForFeatures(options.features, {
+    fallback: options.fallback === true,
+  });
+
+  return (
+    sections.find((section) =>
       section.paths.some((path) => pathMatches(pathname, path))
     ) || PRIMARY_SECTIONS[0]
   );
@@ -270,6 +304,8 @@ export {
   PRIMARY_SECTIONS,
   SECONDARY_SECTIONS,
   UTILITY_SECTIONS,
+  getAllSectionsForFeatures,
   getActiveContextItem,
   getActiveShellSection,
+  getNavigationGroupsForFeatures,
 };

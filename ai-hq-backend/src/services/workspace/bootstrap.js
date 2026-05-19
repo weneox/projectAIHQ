@@ -4,6 +4,8 @@
 import { lower, obj, s } from "./shared.js";
 import { getRowsFromFirstTable } from "./db.js";
 import { resolveAuthenticatedWorkspaceState } from "./activeWorkspace.js";
+import { cfg } from "../../config.js";
+import { getFeatureFlags } from "../../config/features.js";
 
 const THREAD_TABLES = ["inbox_threads", "threads"];
 const COMMENT_TABLES = ["comments"];
@@ -126,6 +128,10 @@ export async function buildAppBootstrap({
     },
     counts,
     runtime: obj(readiness.runtime),
+    features: getFeatureFlags(),
+    launch: {
+      v1SurfaceEnabled: cfg.launch?.v1SurfaceEnabled === true,
+    },
     setup: {
       businessProfile: obj(readiness.tenantProfile),
       sources: obj(readiness.sources),

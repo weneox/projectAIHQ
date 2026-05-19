@@ -15,6 +15,7 @@ function getErrorMessage(error, fallback) {
 }
 
 export function useNotificationsSurface({
+  enabled = true,
   recipient = "ceo",
   limit = 20,
 } = {}) {
@@ -30,6 +31,16 @@ export function useNotificationsSurface({
 
   const refresh = useCallback(
     async ({ silent = false } = {}) => {
+      if (!enabled) {
+        setItems([]);
+        setLoading(false);
+        setRefreshing(false);
+        setSavingId("");
+        setError("");
+        setUnavailable(false);
+        return [];
+      }
+
       if (silent) {
         setRefreshing(true);
       } else {
@@ -63,10 +74,12 @@ export function useNotificationsSurface({
         setRefreshing(false);
       }
     },
-    [limit, recipient]
+    [enabled, limit, recipient]
   );
 
   const markRead = useCallback(async (notificationId) => {
+    if (!enabled) return null;
+
     const id = s(notificationId);
     if (!id) return null;
 
@@ -91,13 +104,26 @@ export function useNotificationsSurface({
     } finally {
       setSavingId("");
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setOpen(false);
+      setItems([]);
+      setLoading(false);
+      setRefreshing(false);
+      setSavingId("");
+      setError("");
+      setUnavailable(false);
+      return undefined;
+    }
+
     refresh();
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
+
     const unsubscribeEvents = realtimeStore.subscribeEvents((event) => {
       const type = s(event?.type).toLowerCase();
       if (type === "notification.read") {
@@ -126,9 +152,14 @@ export function useNotificationsSurface({
     return () => {
       unsubscribeEvents();
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   useEffect(() => {
+    if (!enabled) {
+      clearInterval(pollTimerRef.current);
+      return undefined;
+    }
+
     clearInterval(pollTimerRef.current);
     pollTimerRef.current = window.setInterval(() => {
       refresh({ silent: true });
@@ -137,7 +168,7 @@ export function useNotificationsSurface({
     return () => {
       clearInterval(pollTimerRef.current);
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   const unreadCount = useMemo(
     () => items.filter((item) => item.unread).length,
@@ -145,6 +176,7 @@ export function useNotificationsSurface({
   );
 
   return {
+    enabled,
     open,
     setOpen,
     notifications: items,

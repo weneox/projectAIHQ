@@ -268,8 +268,11 @@ function AskAiButton() {
   );
 }
 
-function HeaderPageTitle({ pathname = "" }) {
-  const section = getActiveShellSection(pathname);
+function HeaderPageTitle({ pathname = "", features, featureFallback = false }) {
+  const section = getActiveShellSection(pathname, {
+    features,
+    fallback: featureFallback,
+  });
   if (!section?.label) return null;
 
   const Icon = section.icon;
@@ -373,6 +376,7 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
     }
   }
 
+  const notificationsEnabled = notifications?.enabled !== false;
   const notificationsLoading =
     notifications?.loading === true || notifications?.refreshing === true;
   const unread =
@@ -444,20 +448,22 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
           <div className="mx-2 my-1 h-px bg-[linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,0.075),rgba(255,255,255,0.82),rgba(15,23,42,0))]" />
 
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              notifications?.setOpen?.(!notifications?.open);
-            }}
-            className="group relative mt-1 flex h-10 w-full items-center justify-between overflow-hidden rounded-[12px] px-3 text-left text-[13px] font-semibold text-text transition-colors duration-base ease-premium"
-          >
-            <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(15,23,42,0.034),rgba(15,23,42,0.014),rgba(15,23,42,0))]" />
-            <span className="relative z-[1]">Bildirişlər</span>
-            <span className="relative z-[1] text-[12px] font-semibold text-text-subtle">
-              {notificationsLoading ? "…" : unread > 99 ? "99+" : unread}
-            </span>
-          </button>
+          {notificationsEnabled ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                notifications?.setOpen?.(!notifications?.open);
+              }}
+              className="group relative mt-1 flex h-10 w-full items-center justify-between overflow-hidden rounded-[12px] px-3 text-left text-[13px] font-semibold text-text transition-colors duration-base ease-premium"
+            >
+              <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-base ease-premium group-hover:opacity-100 bg-[linear-gradient(90deg,rgba(15,23,42,0.034),rgba(15,23,42,0.014),rgba(15,23,42,0))]" />
+              <span className="relative z-[1]">Bildirişlər</span>
+              <span className="relative z-[1] text-[12px] font-semibold text-text-subtle">
+                {notificationsLoading ? "…" : unread > 99 ? "99+" : unread}
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -476,6 +482,8 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 }
 
 function NotificationsButton({ notifications }) {
+  if (notifications?.enabled === false) return null;
+
   const unread =
     typeof notifications?.unreadCount === "number" ? notifications.unreadCount : 0;
 
@@ -493,7 +501,13 @@ function NotificationsButton({ notifications }) {
   );
 }
 
-export default function Header({ onMenuClick, notifications, workspaceMeta }) {
+export default function Header({
+  onMenuClick,
+  notifications,
+  workspaceMeta,
+  features,
+  featureFallback = false,
+}) {
   const location = useLocation();
 
   return (
@@ -519,7 +533,11 @@ export default function Header({ onMenuClick, notifications, workspaceMeta }) {
               <Menu className="h-[18px] w-[18px]" strokeWidth={2} />
             </ShellIconButton>
 
-            <HeaderPageTitle pathname={location.pathname} />
+            <HeaderPageTitle
+              pathname={location.pathname}
+              features={features}
+              featureFallback={featureFallback}
+            />
           </div>
 
           <div className="flex items-center gap-2 md:gap-2.5">
