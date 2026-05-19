@@ -369,7 +369,10 @@ export async function finalizeSetupReviewComposition(
     const finalized = await finalizeSetupReviewSession({
       tenantId: actor.tenantId,
       currentStep: "finalize",
-      refreshRuntime: true,
+      // Runtime is refreshed by projectSetupReviewDraftToCanonical.
+      // Avoid the second strict refresh here because prod tenant query guard can
+      // reject internal projection queries that are already scoped by actor tenant.
+      refreshRuntime: false,
       metadata: compactDraftObject({
         ...reviewer,
         finalizeReason: s(body?.reason),
