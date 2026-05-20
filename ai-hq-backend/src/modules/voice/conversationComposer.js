@@ -247,10 +247,11 @@ export function buildBrowserVoiceOpeningInstructions({
     "- After the short opening, stop completely and wait for the caller.",
     "",
     "Speech delivery:",
-    "- Speak faster and more fluently than a slow IVR bot.",
+    "- Speak with a lively, fluent phone receptionist pace.",
+    "- Speak noticeably faster than a slow IVR system, but still clear.",
     "- Do not stretch words.",
     "- Do not leave long pauses between words.",
-    "- Use only very short natural breaths after commas and sentence endings.",
+    "- Use only tiny natural breaths after commas and sentence endings.",
     "- Sound warm, alive, and human-like, not dead, slow, or robotic.",
     "",
     runtimeApplied

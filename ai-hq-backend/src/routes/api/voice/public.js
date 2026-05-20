@@ -511,15 +511,18 @@ function cleanVoiceLabText(value = "", max = 2400) {
 }
 
 function pickVoiceLabModel(value = "") {
-  const raw = s(value, "gpt-realtime-2").toLowerCase();
-  if (raw.startsWith("gpt-realtime")) return raw;
-  return "gpt-realtime-2";
+  const raw = s(value, "gpt-realtime-1.5").toLowerCase();
+
+  // Browser voice adapter üçün daha natural audio-in/audio-out test.
+  if (raw === "gpt-realtime-2") return "gpt-realtime-1.5";
+  if (raw === "gpt-realtime" || raw === "gpt-realtime-1.5") return "gpt-realtime-1.5";
+
+  return "gpt-realtime-1.5";
 }
 
 function pickVoiceLabVoice(value = "") {
   const raw = s(value, "coral").toLowerCase();
 
-  // Browser voice adapter üçün daha canlı və az robotik default.
   if (["alloy", "echo", "shimmer", "verse"].includes(raw)) return "coral";
 
   return ["coral", "sage", "ash", "ballad"].includes(raw)
@@ -616,9 +619,9 @@ async function handleVoiceLabSession(
               },
               turn_detection: {
                 type: "server_vad",
-                threshold: 0.68,
-                prefix_padding_ms: 220,
-                silence_duration_ms: 520,
+                threshold: 0.62,
+                prefix_padding_ms: 180,
+                silence_duration_ms: 380,
                 create_response: false,
                 interrupt_response: false,
               },
