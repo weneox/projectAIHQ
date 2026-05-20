@@ -510,9 +510,9 @@ function cleanVoiceLabText(value = "", max = 2400) {
 }
 
 function pickVoiceLabModel(value = "") {
-  const raw = s(value, "gpt-realtime").toLowerCase();
+  const raw = s(value, "gpt-realtime-2").toLowerCase();
   if (raw.startsWith("gpt-realtime")) return raw;
-  return "gpt-realtime";
+  return "gpt-realtime-2";
 }
 
 function pickVoiceLabVoice(value = "") {
@@ -578,17 +578,28 @@ async function handleVoiceLabSession(
       runtimeApplied,
     });
 
-    const upstream = await fetch("https://api.openai.com/v1/realtime/sessions", {
+    const upstream = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
-        voice,
-        instructions,
-        modalities: ["audio", "text"],
+        expires_after: {
+          anchor: "created_at",
+          seconds: 600,
+        },
+        session: {
+          type: "realtime",
+          model,
+          instructions,
+          output_modalities: ["audio"],
+          audio: {
+            output: {
+              voice,
+            },
+          },
+        },
       }),
     });
 

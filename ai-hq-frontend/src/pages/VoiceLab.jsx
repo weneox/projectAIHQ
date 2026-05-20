@@ -355,7 +355,7 @@ export default function VoiceLab() {
         match: session?.match || null,
       });
 
-      const sessionModel = s(session?.model, "gpt-realtime");
+      const sessionModel = s(session?.model, "gpt-realtime-2");
       const sessionVoice = s(session?.voice, "alloy");
       setModel(sessionModel);
       setVoice(sessionVoice);
@@ -406,7 +406,7 @@ export default function VoiceLab() {
       await pc.setLocalDescription(offer);
 
       const sdpResponse = await fetch(
-        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(sessionModel)}`,
+        "https://api.openai.com/v1/realtime/calls",
         {
           method: "POST",
           body: offer.sdp,
