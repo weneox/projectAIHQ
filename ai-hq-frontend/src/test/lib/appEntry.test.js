@@ -110,6 +110,8 @@ describe("resolveAuthenticatedLanding", () => {
         "/truth",
         "/inbox",
         "/channels",
+        "/voice-channels",
+        "/voice-lab",
         "/customers",
         "/leads",
         "/knowledge",
@@ -207,7 +209,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(__test__.normalizeLegacyAppRoute("/setup/review")).toBe(
       SETUP_REVIEW_AND_LAUNCH_ROUTE
     );
-    expect(__test__.normalizeLegacyAppRoute("/voice-lab")).toBe("/home");
-    expect(__test__.normalizeLegacyAppRoute("/voice-channels")).toBe("/home");
+    expect(__test__.normalizeLegacyAppRoute("/voice-lab")).toBe("/voice-lab");
+    expect(__test__.normalizeLegacyAppRoute("/voice-channels")).toBe("/voice-channels");
   });
 });
