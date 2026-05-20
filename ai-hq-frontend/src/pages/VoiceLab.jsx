@@ -168,7 +168,7 @@ function startBrowserVoiceTurnResponse(dc) {
       type: "response.create",
       response: {
         instructions:
-          "Cavabı yalnız son istifadəçi sözünə əsasən ver. Approved business truth və session qaydalarına əməl et. Qısa, təbii, axıcı telefon resepsionisti kimi danış. Sözlər arasında uzun pauza vermə; vergül və nöqtələrdə yalnız qısa təbii nəfəs saxla. Robot kimi yavaş danışma. Qiymət, mövcudluq və rezervasiya təsdiqi uydurma.",
+          "Cavabı yalnız son istifadəçi sözünə əsasən ver. Approved business truth və session qaydalarına əməl et. Qısa, təbii, çox axıcı və canlı telefon resepsionisti kimi danış. Sözləri uzatma. Sözlər arasında uzun pauza vermə. Vergül və nöqtələrdə yalnız çox qısa təbii nəfəs saxla. Yavaş IVR robot kimi danışma. Qiymət, mövcudluq və rezervasiya təsdiqi uydurma.",
         max_output_tokens: 180,
       },
     })
@@ -414,7 +414,7 @@ export default function VoiceLab() {
       });
 
       const sessionModel = s(session?.model, "gpt-realtime-2");
-      const sessionVoice = s(session?.voice, "shimmer");
+      const sessionVoice = s(session?.voice, "coral");
       setModel(sessionModel);
       setVoice(sessionVoice);
 
@@ -498,7 +498,7 @@ export default function VoiceLab() {
         if (type === "input_audio_buffer.committed") {
           const sinceAssistantDone = Date.now() - Number(lastAssistantDoneAtRef.current || 0);
 
-          if (responseActiveRef.current || sinceAssistantDone < 1200) {
+          if (responseActiveRef.current || sinceAssistantDone < 450) {
             return;
           }
 
