@@ -168,7 +168,7 @@ function startBrowserVoiceTurnResponse(dc) {
       type: "response.create",
       response: {
         instructions:
-          "Cavabı yalnız son istifadəçi sözünə əsasən ver. Approved business truth və session qaydalarına əməl et. Qısa, təbii, telefon resepsionisti kimi danış. Qiymət, mövcudluq və rezervasiya təsdiqi uydurma.",
+          "Cavabı yalnız son istifadəçi sözünə əsasən ver. Approved business truth və session qaydalarına əməl et. Qısa, təbii, axıcı telefon resepsionisti kimi danış. Sözlər arasında uzun pauza vermə; vergül və nöqtələrdə yalnız qısa təbii nəfəs saxla. Robot kimi yavaş danışma. Qiymət, mövcudluq və rezervasiya təsdiqi uydurma.",
         max_output_tokens: 180,
       },
     })
