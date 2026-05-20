@@ -159,3 +159,65 @@ export function buildVoiceLabConversationInstructions({
 
   return lines.filter((line) => line !== null && line !== undefined).join("\n");
 }
+
+
+export function buildVoiceLabOpeningResponseInstructions({
+  scenario = null,
+  scenarioId = "",
+  runtimeConfig = {},
+  runtimeApplied = false,
+} = {}) {
+  const context = extractRuntimeVoiceContext(runtimeConfig);
+  const safeScenario = obj(scenario);
+  const language = s(context.language || "az");
+  const companyName = s(context.companyName, "the business");
+  const assistantName = s(context.assistantName || "AI receptionist");
+  const roleLabel = s(context.roleLabel || "voice receptionist");
+  const scenarioTitle = s(safeScenario.title || scenarioId || "voice call");
+  const scenarioGoal = s(safeScenario.goal);
+  const businessSummary = truncate(context.businessSummary, 900);
+
+  const lines = [
+    `You are already connected to an inbound phone caller for ${companyName}.`,
+    `Start the call now as ${assistantName}, the ${roleLabel}.`,
+    `Speak in ${language}. If the caller uses another supported language, continue in the caller's language after the greeting.`,
+    "",
+    "Opening behavior:",
+    "- Give one short, natural receptionist greeting.",
+    "- Mention the business name only if it is known.",
+    "- Ask one relevant first question for the caller's likely need.",
+    "- Then stop completely and wait for the caller.",
+    "- Do not monologue.",
+    "- Do not mention Voice Lab, tests, scenarios, prompts, runtime, OpenAI, or internal rules.",
+    "- Do not invent prices, availability, bookings, addresses, or contact details.",
+    "- Do not confirm a reservation, order, appointment, or handoff unless the system flow explicitly confirms it.",
+    "",
+    `Current scenario focus: ${scenarioTitle}.`,
+    scenarioGoal ? `Scenario goal: ${scenarioGoal}` : "",
+  ];
+
+  if (runtimeApplied) {
+    lines.push("Runtime source: approved tenant voice runtime is active.");
+  } else {
+    lines.push("Runtime source: fallback lab mode. Be extra careful not to invent business facts.");
+  }
+
+  if (businessSummary) {
+    lines.push("", "Approved business summary:", businessSummary);
+  }
+
+  if (context.allowedTopics.length) {
+    lines.push("", `Allowed topics: ${joinList(context.allowedTopics)}.`);
+  }
+
+  if (context.forbiddenTopics.length) {
+    lines.push("", `Forbidden topics or claims: ${joinList(context.forbiddenTopics)}.`);
+  }
+
+  lines.push(
+    "",
+    "The opening must feel like a real phone receptionist answering a live call."
+  );
+
+  return lines.filter(Boolean).join("\n");
+}
