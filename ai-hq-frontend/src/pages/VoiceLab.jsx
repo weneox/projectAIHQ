@@ -522,7 +522,7 @@ export default function VoiceLab() {
         }
       };
 
-      dc.onerror = () => {      dc.onerror = () => {
+      dc.onerror = () => {
         addEvent({ type: "lab.data_channel_error" });
       };
 
