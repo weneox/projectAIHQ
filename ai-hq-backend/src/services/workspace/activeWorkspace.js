@@ -5,9 +5,31 @@ import { arr, obj, s } from "./shared.js";
 
 const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
 
+function buildWorkspaceTenantContext({
+  tenant = null,
+  tenantId = "",
+  tenantKey = "",
+  source = "workspace.activeWorkspace",
+  reason = "active_workspace_resolution",
+} = {}) {
+  const safeTenant = obj(tenant);
+  const resolvedTenantId = s(tenantId || safeTenant.id || safeTenant.tenant_id);
+  const resolvedTenantKey = s(
+    tenantKey || safeTenant.tenant_key || safeTenant.key
+  ).toLowerCase();
+
+  return {
+    tenantId: resolvedTenantId,
+    tenantKey: resolvedTenantKey,
+    source,
+    reason,
+  };
+}
+
 export function buildActiveWorkspaceDestination(readiness = {}) {
   const setupCompleted = !!readiness?.setupCompleted;
-  const setupPath = s(readiness?.nextSetupRoute || SETUP_WIDGET_ROUTE) || SETUP_WIDGET_ROUTE;
+  const setupPath =
+    s(readiness?.nextSetupRoute || SETUP_WIDGET_ROUTE) || SETUP_WIDGET_ROUTE;
 
   return setupCompleted
     ? {
@@ -36,8 +58,10 @@ export function buildActiveWorkspaceContract({
   const setupCompleted = !!readiness?.setupCompleted;
 
   return {
-    tenantId: s(safeTenant.id || tenantId),
-    tenantKey: s(safeTenant.tenant_key || safeTenant.key || tenantKey).toLowerCase(),
+    tenantId: s(safeTenant.id || safeTenant.tenant_id || tenantId),
+    tenantKey: s(
+      safeTenant.tenant_key || safeTenant.key || tenantKey
+    ).toLowerCase(),
     companyName: s(
       tenantProfile.companyName ||
         safeTenant.company_name ||
@@ -47,7 +71,6 @@ export function buildActiveWorkspaceContract({
     membershipId: s(membershipId),
     role: normalizedRole,
 
-    // destination/routeHint are the canonical route truth.
     setupCompleted,
     setupRequired: !setupCompleted,
     workspaceReady: setupCompleted,
@@ -60,7 +83,6 @@ export function buildActiveWorkspaceContract({
     missingSteps: arr(readiness?.missingSteps),
     primaryMissingStep: s(readiness?.primaryMissingStep),
 
-    // Readiness details still surface the next setup target for shared consumers.
     nextRoute: s(destination.path),
     nextSetupRoute: s(readiness?.nextSetupRoute),
     nextStudioStage: s(readiness?.nextStudioStage),
@@ -76,42 +98,53 @@ export async function resolveAuthenticatedWorkspaceState({
   role = "",
   tenant = null,
 } = {}) {
-  const readiness = await getWorkspaceReadiness({
-    db,
+  const safeTenant = obj(tenant);
+  const tenantContext = buildWorkspaceTenantContext({
+    tenant: safeTenant,
     tenantId,
     tenantKey,
-    role,
-    tenant,
+    reason: "authenticated_workspace_state_resolution",
   });
 
-  let activeSetupSessionId = "";
-  if (!readiness?.setupCompleted) {
-    const activeSetupSession = await runWithTenantContext(
-      {
-        tenantId: s(tenantId || tenant?.id),
-        tenantKey: s(tenantKey || tenant?.tenant_key),
-        source: "workspace.activeWorkspace",
-        reason: "active_setup_session_resolution",
-      },
-      () => getActiveSetupReviewSession(s(tenantId || tenant?.id))
-    );
-    activeSetupSessionId = s(activeSetupSession?.id);
+  const resolveInsideTenantContext = async () => {
+    const readiness = await getWorkspaceReadiness({
+      db,
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      role,
+      tenant: safeTenant,
+    });
+
+    let activeSetupSessionId = "";
+
+    if (!readiness?.setupCompleted) {
+      const activeSetupSession = await getActiveSetupReviewSession(
+        tenantContext.tenantId
+      );
+      activeSetupSessionId = s(activeSetupSession?.id);
+    }
+
+    const workspace = buildActiveWorkspaceContract({
+      readiness,
+      tenant: safeTenant,
+      tenantId: tenantContext.tenantId,
+      tenantKey: tenantContext.tenantKey,
+      membershipId,
+      role,
+      activeSetupSessionId,
+    });
+
+    return {
+      workspace,
+      readiness,
+    };
+  };
+
+  if (tenantContext.tenantId || tenantContext.tenantKey) {
+    return runWithTenantContext(tenantContext, resolveInsideTenantContext);
   }
 
-  const workspace = buildActiveWorkspaceContract({
-    readiness,
-    tenant,
-    tenantId,
-    tenantKey,
-    membershipId,
-    role,
-    activeSetupSessionId,
-  });
-
-  return {
-    workspace,
-    readiness,
-  };
+  return resolveInsideTenantContext();
 }
 
 export async function loadActiveWorkspaceContract(params = {}) {
@@ -131,6 +164,7 @@ export function buildWorkspaceAccessSummary({
   switchToken = "",
 } = {}) {
   const contract = obj(workspace);
+
   const summary = {
     membershipId: s(contract.membershipId || membershipId),
     tenantId: s(contract.tenantId || tenantId),
