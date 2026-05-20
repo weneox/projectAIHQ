@@ -228,27 +228,37 @@ export function buildBrowserVoiceOpeningInstructions({
   runtimeApplied = false,
 } = {}) {
   const context = extractRuntimeVoiceContext(runtimeConfig);
-  const companyName = s(context.companyName, "business");
+  const companyName = s(context.companyName);
   const language = s(context.language || "az");
 
-  const greeting =
-    companyName && companyName !== "the business" && companyName !== "business"
-      ? `Salam, ${companyName}, buyurun.`
-      : "Salam, buyurun.";
-
   return [
-    "You are answering an inbound phone call.",
+    "You are answering a real inbound phone call.",
     `Primary spoken language: ${language}.`,
+    companyName ? `Approved business name: ${companyName}.` : "",
     "",
-    "Opening rule:",
-    `- Say EXACTLY this short phone greeting and nothing else: "${greeting}"`,
-    "- Speak it fluently and naturally, with a smooth phone-receptionist pace.",
-    "- Do not leave long pauses between words.",
-    "- Make commas feel like short natural breaths, not long stops.",
-    "- Then stop completely and wait for the caller.",
-    "- Do not ask booking dates, guest count, price, availability, or any follow-up question in the opening.",
-    "- Do not say welcome to the hotel as if the caller arrived physically.",
-    "- Do not mention browser, lab, test, scenario, runtime, prompt, or internal rules.",
+    "Opening behavior:",
+    "- Create ONE short, natural Azerbaijani phone opening.",
+    "- Include the approved business name naturally if available.",
+    "- The opening should sound like a real receptionist answering a call.",
+    "- It may include a polite open-ended help phrase, for example the meaning of: how may I help you?",
+    "- Do not use a fixed script and do not repeat examples mechanically.",
+    "- Keep it to one short sentence or two very short clauses.",
+    "- Do not ask booking-specific questions in the opening.",
+    "- Do not ask dates, guest count, price, availability, room type, reservation details, or service details in the opening.",
+    "- Do not say a physical-arrival welcome like 'welcome to the hotel'. This is a phone call.",
+    "- After the short opening, stop completely and wait for the caller.",
+    "- Do not mention browser, lab, test, scenario, runtime, prompt, OpenAI, or internal rules.",
+    "",
+    "Style examples only, not fixed scripts:",
+    "- Salam, [business name], sizə necə kömək edə bilərəm?",
+    "- Salam, [business name], buyurun, sizi dinləyirəm.",
+    "- Salam, [business name], necə kömək edə bilərik?",
+    "- Salam, buyurun, sizi eşidirəm.",
+    "",
+    "Speech style:",
+    "- Sound warm, alive, and fluent.",
+    "- Do not sound slow, dead, robotic, or overly formal.",
+    "- Use a smooth receptionist pace with short natural pauses.",
     "",
     runtimeApplied
       ? "Runtime source: approved tenant voice runtime is active."
