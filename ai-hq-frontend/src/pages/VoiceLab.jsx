@@ -121,6 +121,45 @@ function readRealtimeClientSecret(payload = {}) {
   );
 }
 
+function readBrowserVoiceOpeningResponse(payload = {}) {
+  const opening =
+    payload?.openingResponse &&
+    typeof payload.openingResponse === "object" &&
+    !Array.isArray(payload.openingResponse)
+      ? payload.openingResponse
+      : {};
+
+  const instructions = s(opening.instructions);
+
+  return {
+    enabled: opening.enabled !== false,
+    maxOutputTokens: Math.max(
+      40,
+      Math.min(240, Number(opening.maxOutputTokens || 140))
+    ),
+    instructions,
+  };
+}
+
+function startBrowserVoiceOpening(dc, session) {
+  if (!dc || dc.readyState !== "open") return false;
+
+  const opening = readBrowserVoiceOpeningResponse(session);
+  if (!opening.enabled || !opening.instructions) return false;
+
+  dc.send(
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        instructions: opening.instructions,
+        max_output_tokens: opening.maxOutputTokens,
+      },
+    })
+  );
+
+  return true;
+}
+
 function normalizeLogEvent(event = {}) {
   const type = s(event?.type, "event");
   const text =
