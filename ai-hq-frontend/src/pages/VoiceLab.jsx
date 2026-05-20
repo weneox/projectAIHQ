@@ -414,7 +414,7 @@ export default function VoiceLab() {
       });
 
       const sessionModel = s(session?.model, "gpt-realtime-2");
-      const sessionVoice = s(session?.voice, "coral");
+      const sessionVoice = s(session?.voice, "verse");
       setModel(sessionModel);
       setVoice(sessionVoice);
 
