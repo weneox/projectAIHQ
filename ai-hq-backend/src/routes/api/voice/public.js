@@ -1,73 +1,14 @@
 import express from "express";
 import {
-  requireOperatorSurfaceAccess,
-  } from "../../../utils/auth.js";
-import {
-  createLogger,
-  } from "../../../utils/logger.js";
-import {
-  recordRuntimeSignal,
-  } from "../../../observability/runtimeSignals.js";
-import {
-  s,
-  n,
-  ok,
-  fail,
-  getActor,
-  isLiveVoiceStatus,
-  } from "./shared.js";
-import {
-  getTenantVoiceSettings,
-  upsertTenantVoiceSettings,
-  listVoiceCalls,
-  getVoiceDailyUsage,
-  listVoiceCallSessions,
-  resolveTenantScope,
-  } from "./repository.js";
-import {
-  requireTenantScope,
-  normalizeSettingsInput,
-  getScopedCallOrFail,
-  getScopedSessionOrFail,
-  auditSafe,
-  } from "./utils.js";
-import {
-  getTenantBrainRuntime,
-  } from "../../../services/businessBrain/getTenantBrainRuntime.js";
-import {
-  isMissingSchemaError,
-  getSessionCallId,
-  applyOperatorVoiceMutation,
-  readVoiceCallDetails,
-  readVoiceCallEvents,
-  listVoiceCallSessionsForCall,
-  toggleTenantVoiceSettings,
-  resolveVoiceCallSessionForOperator,
-  processVoiceTenantConfig,
-  } from "../../../modules/voice/index.js";
-
-import {
-  createVoiceChannelConnection,
-  buildVoiceSettingsInputWithChannels,
-  confirmVoiceChannelVerification,
-  listVoiceChannelsFromSettings,
-  startVoiceChannelRoutingTest,
-  startVoiceChannelVerification,
-  } from "../../../modules/voice/channelConnection.js";
-import {
-  appendVoiceLabEvaluation,
-  listVoiceLabEvaluationsFromSettings,
-  } from "../../../modules/voice/labEvaluation.js";
-import {
-  buildVoiceLabConversationInstructions,
-  buildVoiceLabConversationInstructions,
-  buildBrowserVoiceOpeningInstructions,
-} from "../../../modules/voice/conversationComposer.js";
-import {
   getVoiceLabScenario,
   listVoiceLabScenarios,
   normalizeVoiceLabScenarioId,
 } from "../../../modules/voice/labScenarios.js";
+import {
+  buildVoiceLabConversationInstructions,
+  buildBrowserVoiceOpeningInstructions,
+} from "../../../modules/voice/conversationComposer.js";
+
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
   component: "voice-public-routes",
