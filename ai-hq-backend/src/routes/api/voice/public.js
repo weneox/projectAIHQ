@@ -517,13 +517,14 @@ function pickVoiceLabModel(value = "") {
 }
 
 function pickVoiceLabVoice(value = "") {
-  const raw = s(value, "verse").toLowerCase();
+  const raw = s(value, "shimmer").toLowerCase();
 
-  if (["alloy", "echo", "shimmer", "coral"].includes(raw)) return "verse";
+  // Browser adapter üçün daha yumşaq/qadınsı receptionist səsi.
+  if (["alloy", "echo", "verse", "coral"].includes(raw)) return "shimmer";
 
-  return ["verse", "sage", "ash", "ballad"].includes(raw)
+  return ["shimmer", "sage", "ash", "ballad", "coral"].includes(raw)
     ? raw
-    : "verse";
+    : "shimmer";
 }
 
 async function handleVoiceLabSession(
