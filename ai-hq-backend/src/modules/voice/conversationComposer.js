@@ -230,6 +230,31 @@ export function buildBrowserVoiceOpeningInstructions({
   runtimeApplied = false,
 } = {}) {
   const context = extractRuntimeVoiceContext(runtimeConfig);
+  const companyName = s(context.companyName, "business");
+  const language = s(context.language || "az");
+
+  const greeting =
+    companyName && companyName !== "the business" && companyName !== "business"
+      ? `Salam, ${companyName}, buyurun.`
+      : "Salam, buyurun.";
+
+  return [
+    "You are answering an inbound phone call.",
+    `Primary spoken language: ${language}.`,
+    "",
+    "Opening rule:",
+    `- Say EXACTLY this short phone greeting and nothing else: "${greeting}"`,
+    "- Then stop completely and wait for the caller.",
+    "- Do not ask booking dates, guest count, price, availability, or any follow-up question in the opening.",
+    "- Do not say welcome to the hotel as if the caller arrived physically.",
+    "- Do not mention browser, lab, test, scenario, runtime, prompt, or internal rules.",
+    "",
+    runtimeApplied
+      ? "Runtime source: approved tenant voice runtime is active."
+      : "Runtime source: fallback browser adapter mode.",
+  ].filter(Boolean).join("\n");
+} = {}) {
+  const context = extractRuntimeVoiceContext(runtimeConfig);
   const safeScenario = obj(scenario);
 
   const companyName = s(context.companyName, "the business");
