@@ -1,13 +1,13 @@
 import express from "express";
 import {
   requireOperatorSurfaceAccess,
-} from "../../../utils/auth.js";
+  } from "../../../utils/auth.js";
 import {
   createLogger,
-} from "../../../utils/logger.js";
+  } from "../../../utils/logger.js";
 import {
   recordRuntimeSignal,
-} from "../../../observability/runtimeSignals.js";
+  } from "../../../observability/runtimeSignals.js";
 import {
   s,
   n,
@@ -15,7 +15,7 @@ import {
   fail,
   getActor,
   isLiveVoiceStatus,
-} from "./shared.js";
+  } from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -23,17 +23,17 @@ import {
   getVoiceDailyUsage,
   listVoiceCallSessions,
   resolveTenantScope,
-} from "./repository.js";
+  } from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
   getScopedCallOrFail,
   getScopedSessionOrFail,
   auditSafe,
-} from "./utils.js";
+  } from "./utils.js";
 import {
   getTenantBrainRuntime,
-} from "../../../services/businessBrain/getTenantBrainRuntime.js";
+  } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
@@ -44,7 +44,7 @@ import {
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
-} from "../../../modules/voice/index.js";
+  } from "../../../modules/voice/index.js";
 
 import {
   createVoiceChannelConnection,
@@ -53,13 +53,15 @@ import {
   listVoiceChannelsFromSettings,
   startVoiceChannelRoutingTest,
   startVoiceChannelVerification,
-} from "../../../modules/voice/channelConnection.js";
+  } from "../../../modules/voice/channelConnection.js";
 import {
   appendVoiceLabEvaluation,
   listVoiceLabEvaluationsFromSettings,
-} from "../../../modules/voice/labEvaluation.js";
+  } from "../../../modules/voice/labEvaluation.js";
 import {
   buildVoiceLabConversationInstructions,
+  buildVoiceLabConversationInstructions,
+  buildBrowserVoiceOpeningInstructions,
 } from "../../../modules/voice/conversationComposer.js";
 import {
   getVoiceLabScenario,
@@ -578,6 +580,13 @@ async function handleVoiceLabSession(
       runtimeApplied,
     });
 
+    const openingResponseInstructions = buildBrowserVoiceOpeningInstructions({
+      scenario,
+      scenarioId,
+      runtimeConfig,
+      runtimeApplied,
+    });
+
     const upstream = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
       headers: {
@@ -631,7 +640,17 @@ async function handleVoiceLabSession(
       activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
       match: runtimeApplied ? obj(runtimeConfig.match) : null,
       session: payload,
-      clientSecret: payload?.value || payload?.client_secret?.value || "",
+      clientSecret:
+        payload?.value ||
+        payload?.client_secret?.value ||
+        payload?.session?.client_secret?.value ||
+        "",
+      openingResponse: {
+        enabled: true,
+        modalities: ["audio", "text"],
+        maxOutputTokens: 140,
+        instructions: openingResponseInstructions,
+      },
     });
   } catch (err) {
     logger.error("voice.lab.session.failed", err);

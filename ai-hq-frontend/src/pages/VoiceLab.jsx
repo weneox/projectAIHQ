@@ -387,7 +387,24 @@ export default function VoiceLab() {
 
       dc.onopen = () => {
         setStatus("live");
-        addEvent({ type: "lab.connected", text: "Test call connected." });
+        addEvent({ type: "browser_voice.connected", text: "Browser voice call connected." });
+
+        try {
+          const openingStarted = startBrowserVoiceOpening(dc, session);
+          addEvent({
+            type: openingStarted
+              ? "browser_voice.opening_started"
+              : "browser_voice.opening_skipped",
+            text: openingStarted
+              ? "Backend voice assistant opening started."
+              : "No backend opening response was available.",
+          });
+        } catch (err) {
+          addEvent({
+            type: "browser_voice.opening_failed",
+            text: s(err?.message || err),
+          });
+        }
       };
 
       dc.onmessage = (message) => {
