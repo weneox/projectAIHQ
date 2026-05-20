@@ -224,8 +224,6 @@ export function buildVoiceLabOpeningResponseInstructions({
 
 
 export function buildBrowserVoiceOpeningInstructions({
-  scenario = null,
-  scenarioId = "",
   runtimeConfig = {},
   runtimeApplied = false,
 } = {}) {
@@ -253,61 +251,4 @@ export function buildBrowserVoiceOpeningInstructions({
       ? "Runtime source: approved tenant voice runtime is active."
       : "Runtime source: fallback browser adapter mode.",
   ].filter(Boolean).join("\n");
-} = {}) {
-  const context = extractRuntimeVoiceContext(runtimeConfig);
-  const safeScenario = obj(scenario);
-
-  const companyName = s(context.companyName, "the business");
-  const assistantName = s(context.assistantName || "AI receptionist");
-  const roleLabel = s(context.roleLabel || "voice receptionist");
-  const language = s(context.language || "az");
-  const scenarioTitle = s(safeScenario.title || scenarioId || "voice call");
-  const scenarioGoal = s(safeScenario.goal);
-  const businessSummary = truncate(context.businessSummary, 900);
-
-  const lines = [
-    `You are connected to a live browser-based phone call for ${companyName}.`,
-    `You are ${assistantName}, the ${roleLabel}.`,
-    `This browser call is a temporary transport adapter for the real voice assistant engine.`,
-    `Primary spoken language: ${language}.`,
-    "",
-    "Call opening policy:",
-    "- Start the call with one short, natural receptionist greeting.",
-    "- Mention the business name only if it is known from approved runtime context.",
-    "- Ask one relevant first question for the caller's likely need.",
-    "- Then stop completely and wait for the caller.",
-    "- Do not monologue.",
-    "- Do not mention browser, lab, testing, scenario, prompts, runtime, OpenAI, or internal rules.",
-    "- Do not invent prices, availability, bookings, addresses, services, people, or contact details.",
-    "- Do not confirm a reservation/order/appointment unless the system explicitly confirms it.",
-    "- If price or availability is unknown, say it must be confirmed and collect a request for the team.",
-    "",
-    `Current call scenario focus: ${scenarioTitle}.`,
-    scenarioGoal ? `Scenario goal: ${scenarioGoal}` : "",
-  ];
-
-  lines.push(
-    runtimeApplied
-      ? "Runtime source: approved tenant voice runtime is active."
-      : "Runtime source: fallback browser adapter mode. Be extra careful not to invent business facts."
-  );
-
-  if (businessSummary) {
-    lines.push("", "Approved business summary:", businessSummary);
-  }
-
-  if (context.allowedTopics.length) {
-    lines.push("", `Allowed topics: ${joinList(context.allowedTopics)}.`);
-  }
-
-  if (context.forbiddenTopics.length) {
-    lines.push("", `Forbidden topics or claims: ${joinList(context.forbiddenTopics)}.`);
-  }
-
-  lines.push(
-    "",
-    "The result must feel like a real phone receptionist answering a real call."
-  );
-
-  return lines.filter(Boolean).join("\n");
 }
