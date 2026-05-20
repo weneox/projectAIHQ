@@ -517,10 +517,15 @@ function pickVoiceLabModel(value = "") {
 }
 
 function pickVoiceLabVoice(value = "") {
-  const raw = s(value, "alloy").toLowerCase();
-  return ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"].includes(raw)
+  const raw = s(value, "coral").toLowerCase();
+
+  // Browser voice adapter üçün alloy/echo/shimmer çox robotik səslənir.
+  // Runtime köhnə alloy saxlayıbsa da, browser call-da coral-a normalize edirik.
+  if (["alloy", "echo", "shimmer"].includes(raw)) return "coral";
+
+  return ["coral", "sage", "verse", "ash", "ballad"].includes(raw)
     ? raw
-    : "alloy";
+    : "coral";
 }
 
 async function handleVoiceLabSession(
