@@ -173,7 +173,7 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 
-  it("redirects voice routes to home when the backend freezes voice", async () => {
+  it("keeps Voice Lab reachable for browser testing when backend voice channels are frozen", async () => {
     getAppBootstrapContextMock.mockResolvedValue({
       ok: true,
       features: {
@@ -184,7 +184,7 @@ describe("App shell smoke", () => {
     window.history.replaceState({}, "", "/voice-lab");
     render(<App />);
     expect(
-      await screen.findByText("Home Page", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+      await screen.findByText("Voice Lab Page", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
     ).toBeInTheDocument();
   });
 });
