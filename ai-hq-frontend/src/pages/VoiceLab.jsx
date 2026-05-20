@@ -355,7 +355,7 @@ export default function VoiceLab() {
         match: session?.match || null,
       });
 
-      const sessionModel = s(session?.model, "gpt-4o-realtime-preview");
+      const sessionModel = s(session?.model, "gpt-realtime");
       const sessionVoice = s(session?.voice, "alloy");
       setModel(sessionModel);
       setVoice(sessionVoice);

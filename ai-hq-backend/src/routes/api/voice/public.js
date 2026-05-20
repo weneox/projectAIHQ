@@ -510,10 +510,9 @@ function cleanVoiceLabText(value = "", max = 2400) {
 }
 
 function pickVoiceLabModel(value = "") {
-  const raw = s(value, "gpt-4o-realtime-preview").toLowerCase();
-  if (raw.startsWith("gpt-4o-realtime")) return raw;
+  const raw = s(value, "gpt-realtime").toLowerCase();
   if (raw.startsWith("gpt-realtime")) return raw;
-  return "gpt-4o-realtime-preview";
+  return "gpt-realtime";
 }
 
 function pickVoiceLabVoice(value = "") {
@@ -621,7 +620,7 @@ async function handleVoiceLabSession(
       activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
       match: runtimeApplied ? obj(runtimeConfig.match) : null,
       session: payload,
-      clientSecret: payload?.client_secret?.value || "",
+      clientSecret: payload?.value || payload?.client_secret?.value || "",
     });
   } catch (err) {
     logger.error("voice.lab.session.failed", err);
