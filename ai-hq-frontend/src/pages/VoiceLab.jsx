@@ -23,6 +23,35 @@ import {
 
 const VOICE_LAB_SCENARIOS = [
   {
+    id: "hotel_booking_inquiry",
+    title: "Otel rezervasiya müraciəti",
+    goal: "Müştəri otel otağı üçün qiymət və mövcudluq soruşur.",
+    callerScript:
+      "Salam, iki nəfər üçün sabahdan iki gecə otaq lazımdır. Qiyməti və boş yer olub-olmadığını bilmək istəyirəm.",
+    expectedOutcome:
+      "Agent qiymət və boş yer uydurmamalıdır. Ad, telefon, giriş tarixi, çıxış tarixi, qonaq sayı və otaq istəyi toplamalı, sonra müraciəti resepsiyaya ötürməyi təklif etməlidir.",
+    requiredSlots: [
+      { key: "customer_name", label: "Müştərinin adı" },
+      { key: "customer_phone", label: "Telefon nömrəsi" },
+      { key: "check_in_date", label: "Giriş tarixi" },
+      { key: "check_out_date", label: "Çıxış tarixi" },
+      { key: "guest_count", label: "Qonaq sayı" },
+      { key: "room_preference", label: "Otaq istəyi" },
+    ],
+    optionalSlots: [{ key: "notes", label: "Əlavə qeydlər" }],
+  },
+  {
+    id: "hotel_business_faq",
+    title: "Otel məlumatları",
+    goal: "Müştəri otelin təsdiqli məlumatlarını soruşur.",
+    callerScript:
+      "Salam, otelin ünvanı haradadır? Saytı hansıdır? Resepsiya neçə saat işləyir? Səhər yeməyi saat neçədədir?",
+    expectedOutcome:
+      "Agent yalnız approved Avrora Hotel truth-a əsasən cavab verməlidir. Ünvanı, saytı, resepsiya saatını və səhər yeməyi saatını düzgün deməlidir. Bilmədiyi məlumatı uydurmamalıdır.",
+    requiredSlots: [{ key: "question_topic", label: "Sual mövzusu" }],
+    optionalSlots: [{ key: "customer_phone", label: "Telefon nömrəsi" }],
+  },
+  {
     id: "restaurant_order",
     title: "Restaurant order",
     goal: "Müştəri sifariş vermək istəyir.",
@@ -149,7 +178,7 @@ export default function VoiceLab() {
   const [model, setModel] = useState("");
   const [voice, setVoice] = useState("");
   const [runtimeMeta, setRuntimeMeta] = useState(null);
-  const [scenarioId, setScenarioId] = useState("restaurant_order");
+  const [scenarioId, setScenarioId] = useState("hotel_booking_inquiry");
   const [scenarios, setScenarios] = useState(VOICE_LAB_SCENARIOS);
   const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
   const [capturedSlots, setCapturedSlots] = useState({});

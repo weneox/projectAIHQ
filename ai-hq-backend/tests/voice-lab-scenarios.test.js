@@ -9,12 +9,14 @@ import {
 } from "../src/modules/voice/labScenarios.js";
 import { normalizeVoiceLabEvaluation } from "../src/modules/voice/labEvaluation.js";
 
-test("voice lab canonical scenario library exposes six business call scenarios", () => {
+test("voice lab canonical scenario library exposes hotel and business call scenarios", () => {
   const scenarios = listVoiceLabScenarios();
 
   assert.deepEqual(
     scenarios.map((scenario) => scenario.id),
     [
+      "hotel_booking_inquiry",
+      "hotel_business_faq",
       "restaurant_order",
       "appointment_booking",
       "business_faq",
@@ -71,6 +73,8 @@ test("voice lab unknown scenario fails closed", () => {
 });
 
 test("voice lab scenario aliases keep legacy ids compatible", () => {
+  assert.equal(getVoiceLabScenario("hotel")?.id, "hotel_booking_inquiry");
+  assert.equal(getVoiceLabScenario("hotel_faq")?.id, "hotel_business_faq");
   assert.equal(getVoiceLabScenario("clinic_booking")?.id, "appointment_booking");
   assert.equal(getVoiceLabScenario("restaurant")?.id, "restaurant_order");
   assert.equal(getVoiceLabScenario("support")?.id, "support_complaint");

@@ -1129,6 +1129,82 @@ test("voice tenant config fails closed when tenant voice settings are missing", 
   assert.equal(result.details?.reasonCode, "voice_settings_missing");
 });
 
+test("browser voice lab can use approved runtime before telephony is configured", async () => {
+  const db = {
+    async query(text) {
+      const sql = String(text || "").toLowerCase();
+      if (sql.includes("from tenants") && sql.includes("where lower(tenant_key)")) {
+        return {
+          rows: [
+            {
+              id: "tenant-1",
+              tenant_key: "acme",
+              company_name: "Acme Clinic",
+              default_language: "az",
+              enabled_languages: ["az", "en"],
+              meta: {},
+            },
+          ],
+        };
+      }
+      if (sql.includes("from tenant_voice_settings")) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const result = await processVoiceTenantConfig({
+    db,
+    tenantKey: "acme",
+    toNumber: "browser_lab",
+    provider: "browser_lab",
+    getRuntime: async () => ({
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+      },
+      raw: {
+        projection: {
+          identity_json: {
+            tenantId: "tenant-1",
+            tenantKey: "acme",
+            companyName: "Acme Clinic",
+            mainLanguage: "az",
+          },
+          profile_json: {
+            summaryShort: "Azerbaijani hotel assistant test.",
+          },
+          contacts_json: [],
+          services_json: [{ title: "Reception" }],
+          voice_json: {
+            enabled: true,
+            supportsCalls: true,
+          },
+          lead_capture_json: {},
+          handoff_json: {},
+          inbox_json: {},
+          comments_json: {},
+          channels_json: [],
+        },
+      },
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.payload?.tenantKey, "acme");
+  assert.equal(result.payload?.authority?.runtimeProjectionId, "projection-1");
+  assert.equal(result.payload?.operationalChannels?.voice?.source, "browser_lab_runtime");
+  assert.equal(result.payload?.activeVoiceChannel?.id, "browser_lab");
+  assert.equal(result.payload?.match?.voiceChannelId, "browser_lab");
+  assert.equal(result.payload?.realtime?.instructions?.includes("Acme Clinic"), true);
+});
+
 test("strict runtime authority failures return structured fail-closed payloads", () => {
   const error = runtimeAuthorityTest.createRuntimeAuthorityError({
     mode: "strict",

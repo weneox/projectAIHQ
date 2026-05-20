@@ -1091,6 +1091,7 @@ function normalizeTruthResponse(payload = {}, source = "") {
     ["Services", normalizeFieldValue(profile.services), "services"],
     ["Products", normalizeFieldValue(profile.products), "products"],
     ["Pricing", normalizeFieldValue(profile.pricingHints), "pricingHints"],
+    ["Hours", normalizeFieldValue(profile.hours), "hours"],
     ["Social", normalizeFieldValue(profile.socialLinks), "socialLinks"],
   ]
     .map(([label, value, key]) => ({

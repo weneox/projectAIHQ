@@ -10,6 +10,7 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
         profile: {
           companyName: "North Clinic",
           websiteUrl: "https://north.example",
+          hours: ["Mon-Fri 09:00-18:00"],
           nicheBehavior: {
             businessType: "clinic",
             niche: "dental_clinic",
@@ -91,6 +92,7 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
   expect(normalized.history[0].sourceSummary).toMatch(/Website/);
   expect(normalized.history[0].diffSummary).toMatch(/companyName/);
   expect(normalized.behavior.hasBehavior).toBe(true);
+  expect(normalized.fields.some((field) => field.key === "hours" && field.value === "Mon-Fri 09:00-18:00")).toBe(true);
   expect(normalized.behavior.rows.some((row) => row.label === "Business type")).toBe(true);
   expect(normalized.behavior.rows.some((row) => row.label === "Channel behavior")).toBe(true);
   expect(normalized.fields[0].provenance).toMatch(/Website/);

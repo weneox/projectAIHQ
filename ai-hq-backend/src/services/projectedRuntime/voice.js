@@ -19,6 +19,17 @@ export function buildVoiceOperationalConfig(operationalChannels = {}) {
     callback: obj(voiceOperational.callback),
     transfer: obj(voiceOperational.transfer),
     limits: obj(voiceOperational.limits),
+    channels: arr(voiceOperational.channels),
+    provider: s(voiceOperational.provider),
+    defaultChannelId: s(voiceOperational.defaultChannelId),
+    activeChannelId: s(voiceOperational.activeChannelId),
+    channelCount: Number.isFinite(Number(voiceOperational.channelCount))
+      ? Number(voiceOperational.channelCount)
+      : arr(voiceOperational.channels).length,
+    readyChannelCount: Number.isFinite(Number(voiceOperational.readyChannelCount))
+      ? Number(voiceOperational.readyChannelCount)
+      : arr(voiceOperational.channels).filter((channel) => obj(channel).ready === true)
+          .length,
     reasonCode: s(voiceOperational.reasonCode),
     source: s(voiceOperational.source),
     updatedAt: s(voiceOperational.updatedAt),

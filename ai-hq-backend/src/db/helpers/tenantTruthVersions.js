@@ -128,6 +128,7 @@ export function buildCanonicalTruthProfile(profile = {}) {
     services: arr(profileJson.services),
     products: arr(profileJson.products),
     pricingHints: arr(profileJson.pricingHints),
+    hours: arr(profileJson.hours),
     socialLinks: arr(profileJson.socialLinks),
     nicheBehavior,
     confidence: toFiniteNumber(current.confidence, 0),

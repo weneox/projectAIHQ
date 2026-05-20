@@ -1,4 +1,5 @@
 import { getActiveSetupReviewSession } from "../../db/helpers/tenantSetupReview.js";
+import { runWithTenantContext } from "../../db/tenantContext.js";
 import { getWorkspaceReadiness } from "./readiness.js";
 import { arr, obj, s } from "./shared.js";
 
@@ -85,8 +86,14 @@ export async function resolveAuthenticatedWorkspaceState({
 
   let activeSetupSessionId = "";
   if (!readiness?.setupCompleted) {
-    const activeSetupSession = await getActiveSetupReviewSession(
-      s(tenantId || tenant?.id)
+    const activeSetupSession = await runWithTenantContext(
+      {
+        tenantId: s(tenantId || tenant?.id),
+        tenantKey: s(tenantKey || tenant?.tenant_key),
+        source: "workspace.activeWorkspace",
+        reason: "active_setup_session_resolution",
+      },
+      () => getActiveSetupReviewSession(s(tenantId || tenant?.id))
     );
     activeSetupSessionId = s(activeSetupSession?.id);
   }

@@ -20,6 +20,146 @@ import {
   normalizeProjectedRuntimeForVoice,
 } from "./projectedRuntime.js";
 
+function arr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function lower(value = "") {
+  return s(value).toLowerCase();
+}
+
+function isBrowserLabProvider(provider = "") {
+  const normalized = lower(provider).replace(/[\s-]+/g, "_");
+  return (
+    normalized === "browser_lab" ||
+    normalized === "browser" ||
+    normalized === "browserlab"
+  );
+}
+
+function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {}) {
+  const current = obj(operationalChannels);
+  const currentVoice = obj(current.voice);
+  const tenantDefaultLanguage = lower(
+    tenant.default_language || tenant.defaultLanguage || "az"
+  );
+  const supportedLanguages = arr(
+    tenant.enabled_languages || tenant.enabledLanguages
+  )
+    .map((entry) => lower(entry))
+    .filter(Boolean);
+  const browserLabChannel = {
+    id: "browser_lab",
+    provider: "browser_lab",
+    label: "Browser Lab",
+    externalNumber: "browser_lab",
+    routeKey: "browser_lab",
+    enabled: true,
+    ready: true,
+    reasonCode: "",
+    ownershipStatus: "verified",
+    routingStatus: "live",
+    activationMode: "browser_lab",
+    verificationMethod: "system_import",
+    connectionStatus: "live",
+    connectionNextAction: "",
+    connectionReady: true,
+    verification: {
+      status: "verified",
+      method: "system_import",
+      verified: true,
+    },
+    routing: {
+      status: "live",
+      activationMode: "browser_lab",
+      live: true,
+    },
+    connection: {
+      status: "live",
+      nextAction: "",
+      verified: true,
+      live: true,
+      connected: true,
+    },
+    defaultLanguage: tenantDefaultLanguage,
+    supportedLanguages,
+    providerConfig: {},
+    operatorRouting: obj(currentVoice.operatorRouting),
+    voiceProfileOverride: {},
+    meta: { labOnly: true },
+    source: "browser_lab_runtime",
+    updatedAt: s(current.generatedAt),
+  };
+  const otherChannels = arr(currentVoice.channels).filter(
+    (channel) => s(obj(channel).id) !== "browser_lab"
+  );
+  const channels = [browserLabChannel, ...otherChannels];
+
+  return {
+    ...current,
+    voice: {
+      ...currentVoice,
+      available: true,
+      ready: true,
+      reasonCode: "",
+      provider: "browser_lab",
+      mode: s(currentVoice.mode || "assistant"),
+      displayName: s(
+        currentVoice.displayName || tenant.company_name || "Browser Lab"
+      ),
+      defaultLanguage: s(currentVoice.defaultLanguage || tenantDefaultLanguage),
+      supportedLanguages,
+      operator: {
+        enabled: true,
+        phone: "",
+        callerId: "",
+        label: "operator",
+        mode: "manual",
+        ...obj(currentVoice.operator),
+      },
+      operatorRouting: {
+        mode: "handoff",
+        defaultDepartment: "",
+        departments: {},
+        ...obj(currentVoice.operatorRouting),
+      },
+      realtime: {
+        model: "gpt-4o-realtime-preview",
+        voice: "alloy",
+        instructions: "",
+        ...obj(currentVoice.realtime),
+      },
+      telephony: {
+        ...obj(currentVoice.telephony),
+        phoneNumber: "browser_lab",
+        channelId: "browser_lab",
+      },
+      channels,
+      defaultChannelId: "browser_lab",
+      activeChannelId: "browser_lab",
+      channelCount: channels.length,
+      readyChannelCount: channels.filter((channel) => obj(channel).ready === true)
+        .length,
+      providers: [
+        ...new Set(
+          channels.map((channel) => s(obj(channel).provider)).filter(Boolean)
+        ),
+      ],
+      callback: {
+        enabled: true,
+        mode: "lead_only",
+        ...obj(currentVoice.callback),
+      },
+      transfer: {
+        strategy: "handoff",
+        ...obj(currentVoice.transfer),
+      },
+      source: "browser_lab_runtime",
+      updatedAt: s(currentVoice.updatedAt || current.generatedAt),
+    },
+  };
+}
+
 export async function processVoiceTenantConfig({
   db,
   tenantKey,
@@ -98,13 +238,16 @@ export async function processVoiceTenantConfig({
     tenantId: resolvedTenantId,
     tenantRow: stableTenant,
   });
+  const effectiveOperationalChannels = isBrowserLabProvider(provider)
+    ? buildBrowserLabOperationalChannels(operationalChannels, stableTenant)
+    : operationalChannels;
 
   let projectedRuntime = null;
   try {
     projectedRuntime = buildVoiceProjectedRuntime({
       runtime,
       tenant: stableTenant,
-      operationalChannels,
+      operationalChannels: effectiveOperationalChannels,
       tenantKey: resolvedTenantKey,
       toNumber,
     });
@@ -127,7 +270,7 @@ export async function processVoiceTenantConfig({
     stableTenant
   );
 
-  if (operationalChannels?.voice?.ready !== true) {
+  if (effectiveOperationalChannels?.voice?.ready !== true) {
     return {
       ok: false,
       statusCode: 409,
@@ -139,12 +282,14 @@ export async function processVoiceTenantConfig({
         strict: true,
         authority: obj(stableProjectedRuntime?.authority || runtime?.authority),
         tenant: stableTenant,
-        operationalChannels,
+        operationalChannels: effectiveOperationalChannels,
         reasonCode: s(
-          operationalChannels?.voice?.reasonCode || "voice_settings_missing"
+          effectiveOperationalChannels?.voice?.reasonCode ||
+            "voice_settings_missing"
         ),
         reason_code: s(
-          operationalChannels?.voice?.reasonCode || "voice_settings_missing"
+          effectiveOperationalChannels?.voice?.reasonCode ||
+            "voice_settings_missing"
         ),
       },
     };
@@ -170,7 +315,7 @@ export async function processVoiceTenantConfig({
           stableTenant
         )
       : stableProjectedRuntime,
-    operationalChannels,
+    operationalChannels: effectiveOperationalChannels,
     authority: {
       ...obj(
         builtPayload.authority ||

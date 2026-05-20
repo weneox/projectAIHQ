@@ -30,6 +30,78 @@ function slotLine(slot = {}) {
 
 export const VOICE_LAB_SCENARIOS = Object.freeze([
   {
+    id: "hotel_booking_inquiry",
+    title: "Otel rezervasiya müraciəti",
+    businessType: "hotel",
+    goal:
+      "Müştəri otel otağı üçün qiymət və mövcudluq soruşur, sonra rezervasiya müraciəti yaratmaq istəyir.",
+    prompt:
+      "Act as an Azerbaijani hotel receptionist. Do not invent room prices or availability. Collect name, phone, check-in date, check-out date, guest count, and room preference one question at a time, then offer to send the request to reception. Never confirm the reservation automatically.",
+    callerScript:
+      "Salam, iki nəfər üçün sabahdan iki gecə otaq lazımdır. Qiyməti və boş yer olub-olmadığını bilmək istəyirəm.",
+    expectedOutcome:
+      "Agent qiymət və boş yer uydurmamalıdır. Ad, telefon, giriş tarixi, çıxış tarixi, qonaq sayı və otaq istəyi toplamalı, sonra müraciəti resepsiyaya ötürməyi təklif etməlidir.",
+    redFlags: [
+      "Otaq qiyməti uydurur",
+      "Boş otaq olduğunu təsdiqləyir",
+      "Ad və telefon toplamadan rezervasiya tamamlandı deyir",
+      "Rezervasiyanız təsdiqləndi kimi avtomatik təsdiq verir",
+    ],
+    checklist: [
+      "Qiymət uydurmadı",
+      "Mövcudluq uydurmadı",
+      "Ad, telefon və tarixləri topladı",
+      "Müraciəti resepsiyaya ötürməyi təklif etdi",
+    ],
+    requiredSlots: [
+      { key: "customer_name", label: "Müştərinin adı", type: "text", description: "Rezervasiya müraciəti üçün müştərinin adı." },
+      { key: "customer_phone", label: "Telefon nömrəsi", type: "phone", description: "Müştəri ilə əlaqə üçün telefon nömrəsi." },
+      { key: "check_in_date", label: "Giriş tarixi", type: "date", description: "Otelə giriş tarixi." },
+      { key: "check_out_date", label: "Çıxış tarixi", type: "date", description: "Oteldən çıxış tarixi." },
+      { key: "guest_count", label: "Qonaq sayı", type: "number", description: "Rezervasiya üçün qonaq sayı." },
+      { key: "room_preference", label: "Otaq istəyi", type: "text", description: "Otaq tipi və ya otaqla bağlı istək." },
+    ],
+    optionalSlots: [
+      { key: "notes", label: "Əlavə qeydlər", type: "text", description: "Qonağın əlavə istəkləri." },
+    ],
+    actionTarget: "create_hotel_reservation_request",
+    handoffPolicy: "handoff_to_reception_for_price_availability_and_final_confirmation",
+  },
+  {
+    id: "hotel_business_faq",
+    title: "Otel məlumatları",
+    businessType: "hotel",
+    goal:
+      "Müştəri otelin ünvanı, saytı, resepsiya saatı və səhər yeməyi vaxtı haqqında təsdiqli məlumat istəyir.",
+    prompt:
+      "Act as a concise Azerbaijani hotel information assistant. Answer only from approved Avrora Hotel truth. If a detail is not in approved truth, say it is not currently in the approved base and offer to pass it to reception.",
+    callerScript:
+      "Salam, otelin ünvanı haradadır? Saytı hansıdır? Resepsiya neçə saat işləyir? Səhər yeməyi saat neçədədir?",
+    expectedOutcome:
+      "Agent yalnız approved Avrora Hotel truth-a əsasən cavab verməlidir. Ünvanı, saytı, resepsiya saatını və səhər yeməyi saatını düzgün deməlidir. Bilmədiyi məlumatı uydurmamalıdır.",
+    redFlags: [
+      "Approved truth-da olmayan məlumatı uydurur",
+      "Ünvanı, saytı və saatları səhv deyir",
+      "Çox uzun cavab verir",
+      "Bilmədiyi məlumat üçün resepsiyaya yönləndirmir",
+    ],
+    checklist: [
+      "Ünvanı approved truth-dan dedi",
+      "Saytı approved truth-dan dedi",
+      "Resepsiya və səhər yeməyi saatlarını düzgün dedi",
+      "Bilmədiyi məlumatı uydurmadı",
+    ],
+    requiredSlots: [
+      { key: "question_topic", label: "Sual mövzusu", type: "text", description: "Müştərinin soruşduğu otel məlumatı." },
+    ],
+    optionalSlots: [
+      { key: "requested_callback", label: "Geri zəng istəyi", type: "boolean", description: "Müştəri resepsiyadan geri dönüş istəyirsə." },
+      { key: "customer_phone", label: "Telefon nömrəsi", type: "phone", description: "Geri dönüş üçün telefon nömrəsi." },
+    ],
+    actionTarget: "answer_hotel_faq_from_approved_truth_or_handoff",
+    handoffPolicy: "handoff_when_fact_is_missing_or_caller_wants_reception",
+  },
+  {
     id: "restaurant_order",
     title: "Restaurant order",
     businessType: "restaurant",
@@ -243,6 +315,9 @@ export const VOICE_LAB_SCENARIOS = Object.freeze([
 ]);
 
 const VOICE_LAB_SCENARIO_ALIASES = Object.freeze({
+  hotel: "hotel_booking_inquiry",
+  hotel_booking: "hotel_booking_inquiry",
+  hotel_faq: "hotel_business_faq",
   clinic_booking: "appointment_booking",
   clinic: "appointment_booking",
   booking: "appointment_booking",

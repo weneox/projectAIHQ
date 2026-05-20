@@ -1944,12 +1944,14 @@ test("Case Y: canonical truth helpers expose approved truth fields, provenance, 
         },
       },
       services: ["Brand strategy"],
+      hours: ["Mon-Fri 09:00-18:00"],
     },
   });
 
   assert.equal(profile.companyName, "Alpha Studio");
   assert.equal(profile.websiteUrl, "https://alpha.example");
   assert.deepEqual(profile.services, ["Brand strategy"]);
+  assert.deepEqual(profile.hours, ["Mon-Fri 09:00-18:00"]);
 
   const provenance = setupTest.buildCanonicalTruthFieldProvenance({
     profile_json: {
