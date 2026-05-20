@@ -225,14 +225,7 @@ export default function App() {
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
-          <Route
-            path="voice-lab"
-            element={
-              <FeatureRouteGuard featurePath="channels.voice">
-                <VoiceLab />
-              </FeatureRouteGuard>
-            }
-          />
+          <Route path="voice-lab" element={<VoiceLab />} />
           <Route
             path="voice-channels"
             element={

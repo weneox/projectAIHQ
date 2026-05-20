@@ -120,7 +120,6 @@ const SECONDARY_SECTIONS = [
   },
   {
     id: "voice-lab",
-    feature: "channels.voice",
     label: "Voice Lab",
     icon: Radio,
     to: "/voice-lab",
