@@ -311,7 +311,7 @@ export function buildBrowserOpeningInstructions({
     "- After the short opening, stop completely and wait for the caller.",
     "",
     "Speech delivery:",
-    "- Speak naturally in the configured primary business language or the caller's language."
+    "- Speak naturally in the configured primary business language or the caller's language.",
     "- Speak with a lively, fluent phone receptionist pace.",
     "- Speak noticeably faster than a slow IVR system, but still clear.",
     "- Do not stretch words.",
