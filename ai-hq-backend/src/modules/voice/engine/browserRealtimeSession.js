@@ -226,10 +226,12 @@ export function buildLiveVoiceInstructions({
     "",
     ...buildLanguageProsodyGuide(context.language),
     "",
-    "Closure:",
+    "Call lifecycle:",
     "- Do not keep the conversation open unnecessarily.",
     "- When the caller's need is handled, ask one short closing question.",
-    "- If the caller says no, thanks, okay, understood, or gives a closing signal, say one short polite goodbye and stop.",
+    "- When the caller semantically closes the conversation in any language, say one short polite closing sentence in that same latest caller language.",
+    "- After that closing sentence, call the end_call tool.",
+    "- Do not continue speaking after calling end_call.",
     "- Keep most replies to one or two short sentences.",
   ];
 
