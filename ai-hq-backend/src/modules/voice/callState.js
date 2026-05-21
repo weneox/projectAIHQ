@@ -22,17 +22,54 @@ function normalizeLanguage(value = "") {
   return raw || "az";
 }
 
+function looksLikePhone(value = "") {
+  const raw = s(value);
+  const lowered = raw.toLowerCase();
+
+  if (!raw) return false;
+
+  if (
+    [
+      "browser",
+      "browser_lab",
+      "browserlab",
+      "test",
+      "unknown",
+      "anonymous",
+      "hidden",
+      "private",
+      "caller",
+      "customer",
+    ].includes(lowered)
+  ) {
+    return false;
+  }
+
+  if (lowered.includes("browser")) return false;
+
+  const digits = raw.replace(/\D+/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+}
+
+function firstUsablePhone(...values) {
+  for (const value of values) {
+    const phone = s(value);
+    if (looksLikePhone(phone)) return phone;
+  }
+  return "";
+}
+
 function readPhone(payload = {}, call = {}) {
-  return s(
-    payload.phone ||
-      payload.customerPhone ||
-      payload.customer_phone ||
-      payload.callbackPhone ||
-      payload.callback_phone ||
-      call.fromNumber ||
-      call.from ||
-      call.phone ||
-      call.customerNumber
+  return firstUsablePhone(
+    payload.phone,
+    payload.customerPhone,
+    payload.customer_phone,
+    payload.callbackPhone,
+    payload.callback_phone,
+    call.fromNumber,
+    call.from,
+    call.phone,
+    call.customerNumber
   );
 }
 
