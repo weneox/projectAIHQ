@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildVoiceBusinessPlaybook,
+  buildVoiceBusinessScopeGuard,
   normalizeVoiceBusinessFamily,
 } from "../src/modules/voice/businessPlaybooks.js";
 import {
@@ -38,6 +39,14 @@ test("restaurant playbook avoids fake confirmed order behavior", () => {
 
   assert.match(playbook, /order request capture/);
   assert.match(playbook, /Do not claim an order is confirmed/);
+});
+
+test("business scope guard is owned by business playbooks", () => {
+  const guard = buildVoiceBusinessScopeGuard().join("\n");
+
+  assert.match(guard, /Business scope guard/);
+  assert.match(guard, /approved business type, supported intents, and approved services/);
+  assert.match(guard, /If the business is a restaurant and the caller asks for a hotel room/);
 });
 
 test("voice call state ignores browser_lab as a real phone number", () => {

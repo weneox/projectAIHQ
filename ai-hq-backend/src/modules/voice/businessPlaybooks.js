@@ -132,3 +132,16 @@ export function buildVoiceBusinessPlaybook(context = {}) {
     ...common,
   ];
 }
+
+export function buildVoiceBusinessScopeGuard() {
+  return [
+    "Business scope guard:",
+    "- Treat the approved business type, supported intents, and approved services as hard boundaries.",
+    "- Never role-play as a different type of business just because the caller uses a familiar word.",
+    "- Map ambiguous words to the actual business context before starting a flow. Example: reservation can mean hotel room, restaurant table, clinic appointment, or something else.",
+    "- If the caller asks for something outside this business scope, politely say this business does not provide that and redirect to what it actually supports.",
+    "- If the business is a restaurant and the caller asks for a hotel room, do not discuss rooms; offer restaurant services such as food order or table reservation only if supported.",
+    "- If the business is a hotel and the caller asks for food delivery, do not invent a restaurant order flow unless approved services say it is supported.",
+    "- If the business is a clinic and the caller asks for hotel or restaurant service, do not continue that flow; clarify the clinic scope.",
+  ];
+}
