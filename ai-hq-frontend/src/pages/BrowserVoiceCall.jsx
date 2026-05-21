@@ -132,6 +132,47 @@ export default function BrowserVoiceCall() {
         <InlineNotice tone="danger" title="Browser voice error" description={error} />
       ) : null}
 
+      {actionRuntime ? (
+        <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                Action runtime
+              </div>
+              <h2 className="mt-1 text-base font-semibold text-text">
+                {s(actionRuntime?.actionRuntime?.businessFamily, "generic")} voice tools
+              </h2>
+            </div>
+            <div className="rounded-full border border-line-soft bg-surface-subtle px-3 py-1 text-xs font-semibold text-text-muted">
+              {actionRuntime.runtimeApplied ? "tenant runtime" : "fallback"}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ["Availability", actionRuntime?.actionRuntime?.availabilityMode],
+              ["Ordering", actionRuntime?.actionRuntime?.orderingMode],
+              ["Reservation", actionRuntime?.actionRuntime?.reservationMode],
+              ["Appointment", actionRuntime?.actionRuntime?.appointmentMode],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  {label}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-text">
+                  {s(value, "disabled")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-line-soft bg-surface-subtle p-3 text-sm text-text-muted">
+            <span className="font-semibold text-text">Enabled tools:</span>{" "}
+            {listToolNames(actionRuntime.tools) || "No action tools enabled"}
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="space-y-4">
           <div className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
