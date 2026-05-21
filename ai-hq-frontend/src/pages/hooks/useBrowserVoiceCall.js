@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { appendBrowserVoiceCallEvent, createBrowserVoiceSession } from "../../api/voice.js";
+import {
+  appendBrowserVoiceCallEvent,
+  createBrowserVoiceSession,
+  executeBrowserVoiceTool,
+} from "../../api/voice.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -87,9 +91,11 @@ function readRealtimeToolCallFromCandidate(candidate = {}) {
   if (!candidate || typeof candidate !== "object") return null;
 
   const name = s(candidate.name || candidate.functionName || candidate.function_name);
-  if (name !== "end_call") return null;
+  if (!name) return null;
 
   return {
+    id: s(candidate.call_id || candidate.callId || candidate.id),
+    itemId: s(candidate.item_id || candidate.itemId),
     name,
     arguments: parseRealtimeToolArguments(candidate.arguments || candidate.args),
   };
@@ -115,6 +121,32 @@ function extractRealtimeToolCall(event = {}) {
   }
 
   return null;
+}
+
+function sendRealtimeToolOutput(dc, toolCall = {}, result = {}) {
+  if (!dc || dc.readyState !== "open") return false;
+
+  const callId = s(toolCall.id || toolCall.call_id || toolCall.callId);
+  if (!callId) return false;
+
+  dc.send(
+    JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: JSON.stringify(result || {}),
+      },
+    })
+  );
+
+  dc.send(
+    JSON.stringify({
+      type: "response.create",
+    })
+  );
+
+  return true;
 }
 
 function extractRealtimeTranscriptEvent(event = {}) {
@@ -263,6 +295,65 @@ export default function useBrowserVoiceCall() {
     }, 1200);
   }, [sendCallEvent, stopCall]);
 
+  const runToolCall = useCallback(async (toolCall = {}) => {
+    const callId = s(callIdRef.current);
+    if (!callId || !toolCall?.name) return;
+
+    addEvent({
+      type: "browser_voice.tool_call",
+      text: toolCall.name,
+    });
+
+    try {
+      const response = await executeBrowserVoiceTool(callId, {
+        toolCallId: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments || {},
+      });
+
+      const result = response?.result || response || {};
+      sendRealtimeToolOutput(dcRef.current, toolCall, result);
+
+      sendCallEvent({
+        eventType: "browser_voice.tool_result",
+        actor: "system",
+        role: "system",
+        payload: {
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          result,
+        },
+      });
+
+      if (toolCall.name === "end_call" || result?.shouldEndCall === true) {
+        endCallFromTool({
+          source: "backend_tool_result",
+          toolName: toolCall.name,
+          result,
+        });
+      }
+    } catch (err) {
+      const result = {
+        ok: false,
+        status: "tool_execution_failed",
+        message: s(err?.message || err || "Tool execution failed."),
+      };
+
+      sendRealtimeToolOutput(dcRef.current, toolCall, result);
+
+      sendCallEvent({
+        eventType: "browser_voice.tool_failed",
+        actor: "system",
+        role: "system",
+        payload: {
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+          error: result.message,
+        },
+      });
+    }
+  }, [addEvent, endCallFromTool, sendCallEvent]);
+
   const startCall = useCallback(async () => {
     setError("");
     setEvents([]);
@@ -377,10 +468,9 @@ export default function useBrowserVoiceCall() {
           addEvent(event);
 
           const toolCall = extractRealtimeToolCall(event);
-          if (toolCall?.name === "end_call") {
-            endCallFromTool({
-              source: "realtime_tool_call",
-              arguments: toolCall.arguments,
+          if (toolCall?.name) {
+            runToolCall({
+              ...toolCall,
               realtimeType: event.type,
             });
             return;
@@ -424,7 +514,7 @@ export default function useBrowserVoiceCall() {
       setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
     }
-  }, [addEvent, endCallFromTool, sendCallEvent, stopCall]);
+  }, [addEvent, runToolCall, sendCallEvent, stopCall]);
 
   useEffect(() => {
     return () => {
