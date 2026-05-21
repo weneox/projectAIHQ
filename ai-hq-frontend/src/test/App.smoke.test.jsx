@@ -184,7 +184,7 @@ describe("App shell smoke", () => {
     window.history.replaceState({}, "", "/voice-lab");
     render(<App />);
     expect(
-      await screen.findByText("Browser voice call", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+      await screen.findByRole("heading", { name: "Browser voice call" }, { timeout: ROUTE_RENDER_TIMEOUT_MS })
     ).toBeInTheDocument();
   });
 });
