@@ -29,6 +29,121 @@ function uniqueStrings(values = []) {
   return [...new Set(arr(values).map((entry) => s(entry)).filter(Boolean))];
 }
 
+function normalizeVoiceActionMode(value = "") {
+  const raw = lower(value);
+  return ["live", "request_only", "disabled"].includes(raw) ? raw : "";
+}
+
+function normalizeVoiceBusinessFamily(value = "") {
+  const raw = lower(value).replace(/[^a-z0-9_]+/g, "_");
+  if (raw === "generic" || raw === "general") return "generic_business";
+
+  return ["restaurant", "hotel", "clinic", "salon", "ecommerce", "generic_business"].includes(raw)
+    ? raw
+    : "generic_business";
+}
+
+function readNestedActionMode(actions = {}, key = "") {
+  return normalizeVoiceActionMode(
+    actions[`${key}Mode`] ||
+      actions[`${key}_mode`] ||
+      obj(actions[key]).mode
+  );
+}
+
+function readNestedProvider(actions = {}, key = "") {
+  return lower(
+    actions[`${key}Provider`] ||
+      actions[`${key}_provider`] ||
+      obj(actions[key]).provider
+  );
+}
+
+function buildVoiceActionsConfig({
+  runtime = {},
+  tenant = {},
+  voiceProfile = {},
+  operationalVoice = {},
+} = {}) {
+  const runtimeActions = obj(runtime.actions || runtime.voiceActions);
+  const profileActions = obj(voiceProfile.actions || voiceProfile.voiceActions);
+  const operationalActions = obj(operationalVoice.actions || operationalVoice.voiceActions);
+  const actions = {
+    ...runtimeActions,
+    ...profileActions,
+    ...operationalActions,
+  };
+
+  const businessFamily = normalizeVoiceBusinessFamily(
+    actions.businessFamily ||
+      actions.businessType ||
+      actions.business_type ||
+      voiceProfile.businessFamily ||
+      voiceProfile.businessType ||
+      voiceProfile.business_type ||
+      tenant.businessFamily ||
+      tenant.businessType ||
+      tenant.business_type ||
+      tenant.industryKey ||
+      runtime.businessFamily ||
+      runtime.businessType ||
+      runtime.business_type ||
+      "generic_business"
+  );
+
+  const availabilityMode =
+    readNestedActionMode(actions, "availability") ||
+    normalizeVoiceActionMode(actions.availabilityMode) ||
+    "disabled";
+  const orderingMode =
+    readNestedActionMode(actions, "ordering") ||
+    normalizeVoiceActionMode(actions.orderingMode) ||
+    "disabled";
+  const reservationMode =
+    readNestedActionMode(actions, "reservation") ||
+    normalizeVoiceActionMode(actions.reservationMode) ||
+    "disabled";
+  const appointmentMode =
+    readNestedActionMode(actions, "appointment") ||
+    normalizeVoiceActionMode(actions.appointmentMode) ||
+    "disabled";
+  const handoffMode =
+    readNestedActionMode(actions, "handoff") ||
+    normalizeVoiceActionMode(actions.handoffMode) ||
+    "request_only";
+
+  return {
+    businessFamily,
+    businessType: businessFamily,
+    availabilityMode,
+    orderingMode,
+    reservationMode,
+    appointmentMode,
+    handoffMode,
+    availability: {
+      mode: availabilityMode,
+      provider: readNestedProvider(actions, "availability"),
+    },
+    ordering: {
+      mode: orderingMode,
+      provider: readNestedProvider(actions, "ordering"),
+    },
+    reservation: {
+      mode: reservationMode,
+      provider: readNestedProvider(actions, "reservation"),
+    },
+    appointment: {
+      mode: appointmentMode,
+      provider: readNestedProvider(actions, "appointment"),
+    },
+    handoff: {
+      mode: handoffMode,
+      provider: readNestedProvider(actions, "handoff"),
+    },
+  };
+}
+
+
 
 function normalizeVoiceProvider(value = "") {
   const provider = lower(value || "twilio");
@@ -236,6 +351,12 @@ export function buildVoiceConfigFromProjectedRuntime(
   });
   const voiceProfile = obj(voice.profile);
   const behaviorConfig = buildVoiceBehaviorConfig(runtime);
+  const voiceActionsConfig = buildVoiceActionsConfig({
+    runtime,
+    tenant,
+    voiceProfile,
+    operationalVoice,
+  });
 
   const resolvedTenantKey = lower(
     tenant.tenantKey || authority.tenantKey || tenantKey || "default"
@@ -265,6 +386,8 @@ export function buildVoiceConfigFromProjectedRuntime(
     tenantKey: resolvedTenantKey,
     companyName,
     defaultLanguage,
+    businessType: voiceActionsConfig.businessType,
+    actions: voiceActionsConfig,
     authority,
     executionPolicy: {
       voice: buildExecutionPolicySurfaceSummary({
