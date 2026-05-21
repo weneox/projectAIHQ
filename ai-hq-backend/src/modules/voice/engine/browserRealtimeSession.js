@@ -241,7 +241,7 @@ export function buildLiveVoiceInstructions({
     "- Do not keep the conversation open unnecessarily.",
     "- When the caller's need is handled, ask one short closing question.",
     "- When the caller semantically closes the conversation in any language, say one short plain closing sentence in that same latest caller language.",
-    "- After that closing sentence, call the end_call tool. This is mandatory for ending the call."
+    "- After that closing sentence, call the end_call tool. This is mandatory for ending the call.",
     "- Do not continue speaking after calling end_call.",
     "- Keep most replies to one or two short sentences.",
   ];
