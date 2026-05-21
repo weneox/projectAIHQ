@@ -103,7 +103,7 @@ vi.mock("../pages/ChannelCatalog.jsx", () => ({
 }));
 
 vi.mock("../pages/VoiceLab.jsx", () => ({
-  default: () => <div>Voice Lab Page</div>,
+  default: () => <div>Browser voice call</div>,
 }));
 
 vi.mock("../pages/VoiceChannels.jsx", () => ({
@@ -163,7 +163,7 @@ describe("App shell smoke", () => {
   });
 
   it.each([
-    ["/voice-lab", "Voice Lab Page"],
+    ["/voice-lab", "Browser voice call"],
     ["/voice-channels", "Voice Channels Page"],
   ])("renders %s when the voice feature is enabled", async (path, text) => {
     window.history.replaceState({}, "", path);
@@ -173,7 +173,7 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps Voice Lab reachable for browser testing when backend voice channels are frozen", async () => {
+  it("keeps Browser Call reachable for browser testing when backend voice channels are frozen", async () => {
     getAppBootstrapContextMock.mockResolvedValue({
       ok: true,
       features: {
@@ -184,7 +184,7 @@ describe("App shell smoke", () => {
     window.history.replaceState({}, "", "/voice-lab");
     render(<App />);
     expect(
-      await screen.findByText("Voice Lab Page", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+      await screen.findByText("Browser voice call", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
     ).toBeInTheDocument();
   });
 });
