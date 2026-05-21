@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createBrowserVoiceSession } from "../../api/voice.js";
+import { appendBrowserVoiceCallEvent, createBrowserVoiceSession } from "../../api/voice.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -69,6 +69,64 @@ function normalizeVoiceEvent(event = {}) {
   };
 }
 
+function extractRealtimeTranscriptEvent(event = {}) {
+  const type = s(event?.type);
+
+  if (type === "conversation.item.input_audio_transcription.completed") {
+    const transcript = s(event?.transcript);
+    return transcript
+      ? {
+          eventType: "browser_voice.transcript.final",
+          actor: "caller",
+          role: "caller",
+          text: transcript,
+          payload: { realtimeType: type },
+        }
+      : null;
+  }
+
+  if (type === "response.audio_transcript.done") {
+    const transcript = s(event?.transcript);
+    return transcript
+      ? {
+          eventType: "browser_voice.transcript.final",
+          actor: "assistant",
+          role: "assistant",
+          text: transcript,
+          payload: { realtimeType: type },
+        }
+      : null;
+  }
+
+  if (type === "response.output_text.done") {
+    const outputText = s(event?.text);
+    return outputText
+      ? {
+          eventType: "browser_voice.transcript.final",
+          actor: "assistant",
+          role: "assistant",
+          text: outputText,
+          payload: { realtimeType: type },
+        }
+      : null;
+  }
+
+  if (type === "error") {
+    return {
+      eventType: "browser_voice.realtime_error",
+      actor: "system",
+      role: "system",
+      text: s(event?.error?.message || event?.message || "Realtime error"),
+      payload: {
+        realtimeType: type,
+        code: s(event?.error?.code),
+      },
+    };
+  }
+
+  return null;
+}
+
 export default function useBrowserVoiceCall() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -81,9 +139,17 @@ export default function useBrowserVoiceCall() {
   const dcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const callIdRef = useRef("");
 
   const addEvent = useCallback((event) => {
     setEvents((current) => [normalizeVoiceEvent(event), ...current].slice(0, 8));
+  }, []);
+
+  const sendCallEvent = useCallback((event = {}) => {
+    const callId = s(callIdRef.current);
+    if (!callId) return;
+
+    appendBrowserVoiceCallEvent(callId, event).catch(() => {});
   }, []);
 
   const stopCall = useCallback(() => {
@@ -107,9 +173,22 @@ export default function useBrowserVoiceCall() {
       // noop
     }
 
+    const callId = s(callIdRef.current);
+    if (callId) {
+      appendBrowserVoiceCallEvent(callId, {
+        eventType: "browser_voice.ended",
+        actor: "system",
+        role: "system",
+        ended: true,
+        outcome: "completed",
+        payload: { status: "stopped_by_operator" },
+      }).catch(() => {});
+    }
+
     dcRef.current = null;
     pcRef.current = null;
     localStreamRef.current = null;
+    callIdRef.current = "";
 
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
@@ -141,12 +220,16 @@ export default function useBrowserVoiceCall() {
         toNumber: "browser",
       });
 
+      const browserCallId = s(session?.browserCallId || session?.callId);
+      callIdRef.current = browserCallId;
+
       setRuntimeMeta({
         runtimeApplied: session?.runtimeApplied === true,
         reasonCode: s(session?.runtimeReasonCode),
         tenantKey: s(session?.tenantKey),
         activeVoiceChannel: session?.activeVoiceChannel || null,
         match: session?.match || null,
+        browserCallId,
       });
 
       const sessionModel = s(session?.model, "gpt-realtime-1.5");
@@ -186,6 +269,15 @@ export default function useBrowserVoiceCall() {
           type: "browser_voice.connected",
           text: "Browser voice call connected.",
         });
+        sendCallEvent({
+          eventType: "browser_voice.connected",
+          actor: "system",
+          role: "system",
+          payload: {
+            model: sessionModel,
+            voice: sessionVoice,
+          },
+        });
 
         try {
           const openingStarted = startBrowserVoiceOpening(dc, session);
@@ -197,6 +289,14 @@ export default function useBrowserVoiceCall() {
               ? "Backend voice assistant opening started."
               : "No backend opening response was available.",
           });
+          sendCallEvent({
+            eventType: openingStarted
+              ? "browser_voice.opening_started"
+              : "browser_voice.opening_skipped",
+            actor: "system",
+            role: "system",
+            payload: { openingStarted },
+          });
         } catch (err) {
           addEvent({
             type: "browser_voice.opening_failed",
@@ -207,7 +307,13 @@ export default function useBrowserVoiceCall() {
 
       dc.onmessage = (message) => {
         try {
-          addEvent(JSON.parse(message.data));
+          const event = JSON.parse(message.data);
+          addEvent(event);
+
+          const transcriptEvent = extractRealtimeTranscriptEvent(event);
+          if (transcriptEvent) {
+            sendCallEvent(transcriptEvent);
+          }
         } catch {
           addEvent({ type: "message", text: message.data });
         }
@@ -242,7 +348,7 @@ export default function useBrowserVoiceCall() {
       setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
     }
-  }, [addEvent, stopCall]);
+  }, [addEvent, sendCallEvent, stopCall]);
 
   useEffect(() => {
     return () => {
