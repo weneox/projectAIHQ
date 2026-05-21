@@ -165,3 +165,8 @@ export async function listVoiceLabScenarios(params = {}) {
   const j = await apiGet(`/api/voice/lab/scenarios${qs(params)}`);
   return normalizeList(j, "scenarios");
 }
+
+
+export async function getVoiceActionRuntime(params = {}) {
+  return apiGet(`/api/voice/actions/runtime${qs(params)}`);
+}
