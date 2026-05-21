@@ -157,6 +157,57 @@ export function normalizeVoiceActionRuntime(runtimeConfig = {}) {
   };
 }
 
+function buildVoiceActionSlotDiscipline(runtime = {}) {
+  const family = s(runtime.businessFamily);
+
+  if (family === "restaurant") {
+    return [
+      "- For table availability, collect date, time, and party size before any customer identity.",
+      "- For food orders, collect items, quantities/options, fulfillment type, and delivery address when delivery is requested.",
+      "- Ask for name or phone only when creating an order, reservation request, or handoff.",
+      "- Do not ask for name or phone to check table availability.",
+    ];
+  }
+
+  if (family === "hotel") {
+    return [
+      "- For room availability, collect check-in date, check-out date or nights, guest count, and room preference before customer identity.",
+      "- Ask for name or phone only when creating a booking request or handoff.",
+      "- Do not ask for name or phone to check room availability.",
+    ];
+  }
+
+  if (family === "clinic") {
+    return [
+      "- For appointment availability, collect service/department, preferred date, preferred time, and urgency before customer identity.",
+      "- Ask for name or phone only when creating an appointment request or handoff.",
+      "- Do not ask for name or phone to check appointment availability.",
+    ];
+  }
+
+  if (family === "salon") {
+    return [
+      "- For service availability, collect service, preferred date, preferred time, and preferred staff only if relevant.",
+      "- Ask for name or phone only when creating an appointment request or handoff.",
+      "- Do not ask for name or phone to check service availability.",
+    ];
+  }
+
+  if (family === "ecommerce") {
+    return [
+      "- For product questions, collect product name, variant, quantity, and fulfillment preference.",
+      "- Ask for name or phone only when creating an order request or handoff.",
+      "- Do not claim stock or delivery time unless a tool or approved runtime confirms it.",
+    ];
+  }
+
+  return [
+    "- First collect the operational criteria needed for the caller's task.",
+    "- Ask for customer identity only after the caller wants to create a request, booking, order, appointment, or handoff.",
+    "- Do not ask for name or phone to check availability.",
+  ];
+}
+
 export function buildVoiceActionPolicy(actionRuntime = {}) {
   const runtime = normalizeVoiceActionRuntime(actionRuntime);
 
@@ -167,6 +218,7 @@ export function buildVoiceActionPolicy(actionRuntime = {}) {
     "- A caller name or phone number never proves availability.",
     "- Collect operational criteria before customer identity.",
     "- Customer identity is collected only when creating a request, booking, order, appointment, or handoff.",
+    ...buildVoiceActionSlotDiscipline(runtime),
     runtime.availabilityMode === "live"
       ? "- Availability can be checked with a live tool."
       : "- Live availability is not configured. You may collect request details but must not claim live availability.",
