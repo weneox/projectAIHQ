@@ -701,7 +701,11 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
   }
 }
 
-async function handleBrowserVoiceToolCall(req, res, { db, dbDisabled = false } = {}) {
+async function handleBrowserVoiceToolCall(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+) {
   const logger = getRouteLogger(req, "voice.browser.tool");
   try {
     if (dbDisabled || !db) {
@@ -727,11 +731,30 @@ async function handleBrowserVoiceToolCall(req, res, { db, dbDisabled = false } =
     const toolArgs = obj(req.body?.arguments || req.body?.args || {});
     const toolCallId = s(req.body?.toolCallId || req.body?.callId);
 
+    let runtimeConfig = {};
+    try {
+      const runtimeResult = await processVoiceTenantConfig({
+        db,
+        tenantKey: scope.tenantKey,
+        toNumber: s(req.body?.toNumber || "browser"),
+        provider: "browser",
+        getRuntime,
+      });
+      if (runtimeResult?.ok === true) {
+        runtimeConfig = readBrowserVoiceConfigPayload(runtimeResult);
+      }
+    } catch (runtimeErr) {
+      logger.warn("voice.browser.tool.runtime_unavailable", {
+        error: s(runtimeErr?.message || runtimeErr),
+      });
+    }
+
     const result = await executeVoiceAction({
       name: toolName,
       args: toolArgs,
       call,
       scope,
+      runtimeConfig,
     });
 
     await appendVoiceCallEvent(db, {
@@ -840,7 +863,7 @@ export function voiceRoutes({
   );
 
   r.post("/voice/browser/calls/:callId/tools", requireOperatorSurfaceAccess, (req, res) =>
-    handleBrowserVoiceToolCall(req, res, { db, dbDisabled })
+    handleBrowserVoiceToolCall(req, res, { db, dbDisabled, getRuntime })
   );
 
   r.post("/voice/browser/session", requireOperatorSurfaceAccess, (req, res) =>
