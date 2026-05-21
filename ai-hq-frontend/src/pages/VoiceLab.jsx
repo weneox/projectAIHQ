@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ClipboardCheck,
   Mic,
@@ -8,11 +8,6 @@ import {
   Star,
 } from "lucide-react";
 
-import {
-  createVoiceLabEvaluation,
-  listVoiceLabEvaluations,
-  listVoiceLabScenarios,
-} from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -21,20 +16,15 @@ import {
 } from "../components/ui/AppShellPrimitives.jsx";
 import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
 import {
-  BROWSER_VOICE_EVALUATION_SCENARIOS,
-  DEFAULT_EVALUATION,
   SCORE_OPTIONS,
-  buildEmptyCapturedSlots,
-  missingCapturedSlots,
-  readinessLabel,
-  scoreAverage,
 } from "./voice/browserVoiceEvaluation.js";
+import useBrowserVoiceEvaluation from "./hooks/useBrowserVoiceEvaluation.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
 
-export default function VoiceLab() {
+export default function BrowserVoiceCall() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [model, setModel] = useState("");
@@ -77,31 +67,6 @@ export default function VoiceLab() {
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
 
-  async function loadScenarios() {
-    try {
-      const nextScenarios = await listVoiceLabScenarios();
-      if (Array.isArray(nextScenarios) && nextScenarios.length) {
-        setScenarios(nextScenarios);
-        setScenarioId((current) =>
-          nextScenarios.some((item) => item.id === current)
-            ? current
-            : nextScenarios[0].id
-        );
-      }
-    } catch {
-      setScenarios(BROWSER_VOICE_EVALUATION_SCENARIOS);
-    }
-  }
-
-  async function loadEvaluationHistory() {
-    try {
-      const history = await listVoiceLabEvaluations();
-      setEvaluationHistory(Array.isArray(history) ? history : []);
-    } catch {
-      setEvaluationHistory([]);
-    }
-  }
-
   function updateEvaluation(key, value) {
     setEvaluation((current) => ({
       ...current,
@@ -122,7 +87,7 @@ export default function VoiceLab() {
   }
 
   async function saveEvaluation() {
-    setError("");
+    setPageError("");
     setSavingEvaluation(true);
 
     try {
@@ -143,7 +108,7 @@ export default function VoiceLab() {
         await loadEvaluationHistory();
       }
     } catch (err) {
-      setError(s(err?.message || err, "Evaluation save alınmadı."));
+      setPageError(s(err?.message || err, "Evaluation save alınmadı."));
     } finally {
       setSavingEvaluation(false);
     }
