@@ -57,6 +57,8 @@ test("browser voice session plan builds live runtime without scenario bias", () 
   assert.match(plan.instructions, /Unsupported caller intents: hotel_room_booking; restaurant_order/);
   assert.match(plan.instructions, /Approved services\/products: Dental consultation/);
   assert.match(plan.instructions, /Do not assume booking/);
+  assert.match(plan.instructions, /Operational logic/);
+  assert.match(plan.instructions, /Do not pretend to check availability/);
   assert.match(plan.instructions, /Approved business context/);
   assert.match(plan.instructions, /Human handoff triggers/);
   assert.match(plan.instructions, /medical diagnosis/);

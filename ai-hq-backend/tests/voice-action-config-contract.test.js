@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  buildVoiceOperationalActionPolicy,
   buildVoiceActionToolDefinitions,
   normalizeVoiceActionRuntime,
 } from "../src/modules/voice/actions/voiceActionContracts.js";
@@ -103,6 +104,14 @@ test("voice action tool schemas read centralized required fields", () => {
       `${tool.name} required fields should stay owned by call state`
     );
   }
+});
+
+test("voice operational action policy owns tool usage guard text", () => {
+  const policy = buildVoiceOperationalActionPolicy().join("\n");
+
+  assert.match(policy, /Operational logic/);
+  assert.match(policy, /Do not pretend to check availability/);
+  assert.match(policy, /Do not claim an action was completed unless the system confirms it/);
 });
 
 test("projected voice config exposes explicit action runtime payload", () => {
