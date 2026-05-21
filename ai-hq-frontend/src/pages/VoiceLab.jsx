@@ -283,7 +283,7 @@ export default function VoiceLab() {
       <PageHeader
         eyebrow="Browser voice call"
         title="Browser voice call"
-        description="Real nömrə almadan əvvəl AI resepsionistin danışığını browserdən yoxla."
+        description="SIP/Twilio qoşulmamışdan əvvəl real voice engine-i browser audio ilə yoxla."
         actions={
           isLive ? (
             <Button variant="danger" leftIcon={<PhoneOff className="h-4 w-4" />} onClick={stopCall}>
@@ -303,8 +303,8 @@ export default function VoiceLab() {
 
       <InlineNotice
         tone="info"
-        title="Bu product deyil, test telefonudur"
-        description="Danışıq beyni backend voice engine-dən gəlir. Burada prompt yazmırıq; sadəcə agentlə danışıb keyfiyyəti yoxlayırıq."
+        title="Browser call adapter"
+        description="Danışıq beyni backend voice engine-dən gəlir. Browser sadəcə SIP/Twilio gələnə qədər müvəqqəti audio transportdur."
       />
 
       {runtimeMeta ? (
@@ -366,12 +366,12 @@ export default function VoiceLab() {
             </div>
 
             <div className="mt-4 rounded-2xl border border-line-soft bg-surface-subtle p-4">
-              <div className="text-sm font-semibold text-text">Sən zəng edən müştərini oynayırsan:</div>
+              <div className="text-sm font-semibold text-text">Evaluation scenario:</div>
               <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.callerScript}</p>
             </div>
 
             <div className="mt-4 rounded-2xl border border-line-soft bg-white p-4">
-              <div className="text-sm font-semibold text-text">Agentdən gözlədiyimiz nəticə:</div>
+              <div className="text-sm font-semibold text-text">Evaluation expectation:</div>
               <p className="mt-2 text-sm leading-6 text-text-muted">{scenario.expectedOutcome}</p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createVoiceLabSession } from "../../api/voice.js";
+import { createBrowserVoiceSession } from "../../api/voice.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -136,10 +136,9 @@ export default function useBrowserVoiceCall({ scenarioId = "" } = {}) {
 
       setStatus("creating_session");
 
-      const session = await createVoiceLabSession({
-        scenarioId,
-        provider: "browser_lab",
-        toNumber: "browser_lab",
+      const session = await createBrowserVoiceSession({
+        provider: "browser",
+        toNumber: "browser",
       });
 
       setRuntimeMeta({
@@ -240,7 +239,7 @@ export default function useBrowserVoiceCall({ scenarioId = "" } = {}) {
         sdp: answerSdp,
       });
     } catch (err) {
-      setError(s(err?.message || err, "Voice call başlatmaq alınmadı."));
+      setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
     }
   }, [addEvent, scenarioId, stopCall]);
