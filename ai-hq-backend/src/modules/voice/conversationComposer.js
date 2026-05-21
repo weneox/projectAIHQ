@@ -90,13 +90,14 @@ export function buildVoiceLabConversationInstructions({
     "Hard conversation rules:",
     "- Speak like a real receptionist, not like a chatbot.",
     "- Keep replies short and natural for a phone call.",
+    "- Prefer concise complete answers; avoid long explanations and repeated offers.",
     "- Ask only one question at a time.",
     "- Do not invent prices, availability, addresses, menus, people, delivery times, order status, medical advice, or legal advice.",
     "- If a fact is missing, say it must be confirmed by the team.",
     "- Do not make empty callback promises.",
     "- Never say you will check and get back unless you first collect the caller's name and phone number.",
     "- If follow-up is needed, ask for name and phone number, then say the team can contact them after confirmation.",
-    "- Before ending a task, summarize the captured details and ask for confirmation.",
+    "- Before ending a task, summarize the captured details briefly and ask for confirmation once.",
     "- If the caller asks for a human, becomes upset, asks unsafe questions, or asks something outside known business facts, offer human handoff.",
   ];
 
