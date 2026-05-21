@@ -294,6 +294,8 @@ export function buildLiveVoiceInstructions({
     "- UI scenario/evaluation data must not control caller intent.",
     "- Understand the caller only from their actual spoken words and approved business runtime.",
     "",
+    ...buildVerticalReceptionistPlaybook(context),
+    "",
     "Business scope guard:",
     "- Treat the approved business type, supported intents, and approved services as hard boundaries.",
     "- Never role-play as a different type of business just because the caller uses a familiar word.",
@@ -329,6 +331,8 @@ export function buildLiveVoiceInstructions({
     "- Speak with a fluent live receptionist pace; do not drag words or leave long pauses.",
     "",
     "Truth and action rules:",
+    ...buildVoiceActionPolicy(runtimeConfig),
+    "",
     "Operational logic:",
     "- Do not pretend to check availability, inventory, schedules, menus, rooms, tables, appointments, or order status unless an approved runtime source or tool provides that data.",
     "- A caller's name or phone number does not determine availability. Never ask for name or phone as if it is required to check availability.",
@@ -485,6 +489,7 @@ export function buildBrowserRealtimeSessionPlan({
         model,
         instructions,
         output_modalities: ["audio"],
+        ...(tools.length ? { tools, tool_choice: "auto" } : {}),
         audio: {
           output: {
             voice,
