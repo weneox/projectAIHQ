@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   ClipboardCheck,
   Mic,
@@ -9,6 +10,7 @@ import {
 
 import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
 import useBrowserVoiceEvaluation from "./hooks/useBrowserVoiceEvaluation.js";
+import { getVoiceActionRuntime } from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -19,6 +21,12 @@ import { SCORE_OPTIONS } from "./voice/browserVoiceEvaluation.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
+}
+
+function listToolNames(value = []) {
+  return Array.isArray(value)
+    ? value.map((item) => s(item?.name || item)).filter(Boolean).join(", ")
+    : "";
 }
 
 export default function BrowserVoiceCall() {
@@ -53,9 +61,31 @@ export default function BrowserVoiceCall() {
     evaluationError,
   } = useBrowserVoiceEvaluation({ model, voice, runtimeMeta });
 
-  const error = callError || evaluationError;
+  const [actionRuntime, setActionRuntime] = useState(null);
+  const [actionRuntimeError, setActionRuntimeError] = useState("");
+
+  const error = callError || evaluationError || actionRuntimeError;
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
+
+  useEffect(() => {
+    let active = true;
+
+    getVoiceActionRuntime({ provider: "browser", toNumber: "browser" })
+      .then((runtime) => {
+        if (!active) return;
+        setActionRuntime(runtime || null);
+        setActionRuntimeError("");
+      })
+      .catch((err) => {
+        if (!active) return;
+        setActionRuntimeError(s(err?.message || err, "Voice action runtime oxunmadı."));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <PageCanvas>
