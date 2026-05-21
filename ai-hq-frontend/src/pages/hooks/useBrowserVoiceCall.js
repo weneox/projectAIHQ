@@ -376,6 +376,16 @@ export default function useBrowserVoiceCall() {
           const event = JSON.parse(message.data);
           addEvent(event);
 
+          const toolCall = extractRealtimeToolCall(event);
+          if (toolCall?.name === "end_call") {
+            endCallFromTool({
+              source: "realtime_tool_call",
+              arguments: toolCall.arguments,
+              realtimeType: event.type,
+            });
+            return;
+          }
+
           const transcriptEvent = extractRealtimeTranscriptEvent(event);
           if (transcriptEvent) {
             sendCallEvent(transcriptEvent);
