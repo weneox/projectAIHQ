@@ -100,8 +100,9 @@ export async function endVoiceCall(callId, body = {}) {
   if (!callId) throw new Error("callId is required");
   return apiPost(`/api/voice/calls/${encodeURIComponent(callId)}/end`, body);
 }
-export async function createVoiceLabSession(body = {}) {
-  return apiPost("/api/voice/lab/session", body);
+
+export async function createBrowserVoiceSession(body = {}) {
+  return apiPost("/api/voice/browser/session", body);
 }
 
 export async function listVoiceChannels(params = {}) {

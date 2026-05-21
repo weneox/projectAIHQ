@@ -1,60 +1,9 @@
-import { useState } from "react";
-import {
-  ClipboardCheck,
-  Mic,
-  PhoneOff,
-  Radio,
-  ShieldCheck,
-  Star,
-} from "lucide-react";
-
-import Button from "../components/ui/Button.jsx";
-import {
-  InlineNotice,
-  PageCanvas,
-  PageHeader,
-} from "../components/ui/AppShellPrimitives.jsx";
-import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
-import {
-  SCORE_OPTIONS,
-} from "./voice/browserVoiceEvaluation.js";
-import useBrowserVoiceEvaluation from "./hooks/useBrowserVoiceEvaluation.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
 
 export default function BrowserVoiceCall() {
-  const [pageError, setPageError] = useState("");
-  const [scenarioId, setScenarioId] = useState("hotel_booking_inquiry");
-  const [scenarios, setScenarios] = useState(BROWSER_VOICE_EVALUATION_SCENARIOS);
-  const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
-  const [capturedSlots, setCapturedSlots] = useState({});
-  const [evaluationHistory, setEvaluationHistory] = useState([]);
-  const [savingEvaluation, setSavingEvaluation] = useState(false);
-
-
-  const scenario = useMemo(
-    () =>
-      scenarios.find((item) => item.id === scenarioId) ||
-      scenarios[0] ||
-      BROWSER_VOICE_EVALUATION_SCENARIOS[0],
-    [scenarioId, scenarios]
-  );
-
-  const captureSlots = useMemo(
-    () => [...(scenario.requiredSlots || []), ...(scenario.optionalSlots || [])],
-    [scenario]
-  );
-
-  const missingSlots = useMemo(
-    () => missingCapturedSlots(scenario, capturedSlots),
-    [scenario, capturedSlots]
-  );
-
-  const averageScore = scoreAverage(evaluation);
-  const readyLabel = readinessLabel(averageScore, evaluation, missingSlots.length);
-
   const {
     status,
     error: callError,
@@ -67,72 +16,29 @@ export default function BrowserVoiceCall() {
     stopCall,
   } = useBrowserVoiceCall();
 
-  const error = callError || pageError;
+  const {
+    scenarioId,
+    setScenarioId,
+    scenarios,
+    scenario,
+    evaluation,
+    updateEvaluation,
+    capturedSlots,
+    updateCapturedSlot,
+    captureSlots,
+    missingSlots,
+    averageScore,
+    readyLabel,
+    evaluationHistory,
+    savingEvaluation,
+    saveEvaluation,
+    resetEvaluation,
+    evaluationError,
+  } = useBrowserVoiceEvaluation({ model, voice, runtimeMeta });
 
+  const error = callError || evaluationError;
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
-
-  function updateEvaluation(key, value) {
-    setEvaluation((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  function updateCapturedSlot(key, value) {
-    setCapturedSlots((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  function resetEvaluation() {
-    setEvaluation(DEFAULT_EVALUATION);
-    setCapturedSlots(buildEmptyCapturedSlots(scenario));
-  }
-
-  async function saveEvaluation() {
-    setPageError("");
-    setSavingEvaluation(true);
-
-    try {
-      const result = await createVoiceLabEvaluation({
-        scenarioId: scenario.id,
-        scenarioTitle: scenario.title,
-        model,
-        voice,
-        runtimeApplied: runtimeMeta?.runtimeApplied === true,
-        tenantKey: s(runtimeMeta?.tenantKey),
-        capturedSlots,
-        evaluation,
-      });
-
-      if (Array.isArray(result?.evaluations)) {
-        setEvaluationHistory(result.evaluations);
-      } else {
-        await loadEvaluationHistory();
-      }
-    } catch (err) {
-      setPageError(s(err?.message || err, "Evaluation save alınmadı."));
-    } finally {
-      setSavingEvaluation(false);
-    }
-  }
-
-
-
-  useEffect(() => {
-    loadScenarios();
-    loadEvaluationHistory();
-
-    return () => {
-      stopCall();
-    };
-  }, []);
-
-  useEffect(() => {
-    setCapturedSlots(buildEmptyCapturedSlots(scenario));
-  }, [scenario]);
 
   return (
     <PageCanvas>
