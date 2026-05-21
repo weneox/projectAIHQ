@@ -2,68 +2,50 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
 function compact(values = []) {
-  return arr(values).map((item) => s(item).toLowerCase()).filter(Boolean);
+  return arr(values).map((item) => s(item)).filter(Boolean);
 }
 
 function normalizeActionMode(value = "") {
   const raw = s(value).toLowerCase();
-
-  if (["live", "request_only", "disabled"].includes(raw)) return raw;
-
-  return "";
+  return ["live", "request_only", "disabled"].includes(raw) ? raw : "disabled";
 }
 
-function normalizeActionModeOrDisabled(value = "") {
-  return normalizeActionMode(value) || "disabled";
+function normalizeOptionalActionMode(value = "") {
+  const raw = s(value).toLowerCase();
+  return ["live", "request_only", "disabled"].includes(raw) ? raw : "";
 }
 
-function includesAny(values = [], needles = []) {
-  const haystack = compact(values).join(" ");
-  return needles.some((needle) => haystack.includes(s(needle).toLowerCase()));
+function readActionMode(runtimeConfig = {}, actions = {}, key = "") {
+  return normalizeActionMode(
+    runtimeConfig[`${key}Mode`] ||
+      runtimeConfig[`${key}_mode`] ||
+      actions[`${key}Mode`] ||
+      actions[`${key}_mode`] ||
+      obj(actions[key]).mode
+  );
 }
 
-function inferBusinessFamily(runtimeConfig = {}, actions = {}) {
-  const raw = [
-    runtimeConfig.businessType,
-    runtimeConfig.business_type,
-    runtimeConfig.industry,
-    runtimeConfig.business?.type,
-    runtimeConfig.business?.category,
-    runtimeConfig.voiceProfile?.businessType,
-    runtimeConfig.voiceProfile?.business_type,
-    runtimeConfig.voiceProfile?.industry,
-    actions.businessType,
-  ]
-    .map((item) => s(item).toLowerCase())
-    .filter(Boolean)
-    .join(" ");
-
-  if (/(restaurant|cafe|caf[eé]|food|pizza|burger|qida|restoran|kafe)/.test(raw)) {
-    return "restaurant";
-  }
-
-  if (/(hotel|hostel|guesthouse|apartment|room|otel|mehmanxana)/.test(raw)) {
-    return "hotel";
-  }
-
-  if (/(clinic|doctor|dentist|medical|hospital|klinika|həkim|hekim|stomatolog)/.test(raw)) {
-    return "clinic";
-  }
-
-  if (/(salon|barber|beauty|spa|hair|nail|bərbər|berber|gözəllik|gozellik)/.test(raw)) {
-    return "salon";
-  }
-
-  if (/(shop|store|ecommerce|e-commerce|retail|delivery|online store|mağaza|magaza)/.test(raw)) {
-    return "ecommerce";
-  }
-
-  return "";
+function readBusinessFamily(runtimeConfig = {}, actions = {}) {
+  return s(
+    actions.businessFamily ||
+      actions.businessType ||
+      actions.business_type ||
+      runtimeConfig.businessFamily ||
+      runtimeConfig.businessType ||
+      runtimeConfig.business_type ||
+      runtimeConfig.voiceProfile?.businessType ||
+      runtimeConfig.voiceProfile?.business_type ||
+      "generic_business"
+  ).toLowerCase();
 }
 
 function readSupportedIntents(runtimeConfig = {}, actions = {}) {
@@ -75,16 +57,6 @@ function readSupportedIntents(runtimeConfig = {}, actions = {}) {
     ...arr(runtimeConfig.operatorRouting?.supportedIntents),
     ...arr(actions.supportedIntents),
   ]);
-}
-
-function inferRequestMode({ explicitMode = "", supportedIntents = [], businessFamily = "", intentNeedles = [], businessFamilies = [] } = {}) {
-  const mode = normalizeActionMode(explicitMode);
-  if (mode) return mode;
-
-  if (includesAny(supportedIntents, intentNeedles)) return "request_only";
-  if (businessFamilies.includes(businessFamily)) return "request_only";
-
-  return "disabled";
 }
 
 export const VOICE_ACTIONS = Object.freeze({
@@ -103,57 +75,24 @@ export const VOICE_ACTION_MODES = Object.freeze({
 });
 
 export function normalizeVoiceActionRuntime(runtimeConfig = {}) {
-  const actions = runtimeConfig?.actions || runtimeConfig?.voiceActions || {};
-  const businessFamily = inferBusinessFamily(runtimeConfig, actions);
-  const supportedIntents = readSupportedIntents(runtimeConfig, actions);
+  const actions = obj(runtimeConfig.actions || runtimeConfig.voiceActions);
 
   return {
-    businessFamily,
-    supportedIntents,
-    availabilityMode: normalizeActionModeOrDisabled(
-      runtimeConfig.availabilityMode ||
-        actions.availabilityMode ||
-        actions.availability?.mode
-    ),
-    orderingMode: inferRequestMode({
-      explicitMode:
-        runtimeConfig.orderingMode ||
-        actions.orderingMode ||
-        actions.ordering?.mode,
-      supportedIntents,
-      businessFamily,
-      intentNeedles: ["order", "food_order", "delivery", "pickup", "takeaway", "sifariş", "sifaris"],
-      businessFamilies: ["restaurant", "ecommerce"],
-    }),
-    reservationMode: inferRequestMode({
-      explicitMode:
-        runtimeConfig.reservationMode ||
-        actions.reservationMode ||
-        actions.reservation?.mode,
-      supportedIntents,
-      businessFamily,
-      intentNeedles: ["reservation", "booking", "table", "room", "rezerv", "bron"],
-      businessFamilies: ["restaurant", "hotel"],
-    }),
-    appointmentMode: inferRequestMode({
-      explicitMode:
-        runtimeConfig.appointmentMode ||
-        actions.appointmentMode ||
-        actions.appointment?.mode,
-      supportedIntents,
-      businessFamily,
-      intentNeedles: ["appointment", "consultation", "visit", "slot", "qəbul", "qebul", "görüş", "gorus"],
-      businessFamilies: ["clinic", "salon"],
-    }),
-    handoffMode: normalizeActionModeOrDisabled(
-      runtimeConfig.handoffMode ||
-        actions.handoffMode ||
-        actions.handoff?.mode ||
-        "request_only"
-    ),
-    enabledTools: arr(runtimeConfig.enabledTools || actions.enabledTools).map((item) =>
-      s(item)
-    ).filter(Boolean),
+    businessFamily: readBusinessFamily(runtimeConfig, actions),
+    supportedIntents: readSupportedIntents(runtimeConfig, actions),
+    availabilityMode: readActionMode(runtimeConfig, actions, "availability"),
+    orderingMode: readActionMode(runtimeConfig, actions, "ordering"),
+    reservationMode: readActionMode(runtimeConfig, actions, "reservation"),
+    appointmentMode: readActionMode(runtimeConfig, actions, "appointment"),
+    handoffMode:
+      normalizeOptionalActionMode(
+        runtimeConfig.handoffMode ||
+          runtimeConfig.handoff_mode ||
+          actions.handoffMode ||
+          actions.handoff_mode ||
+          obj(actions.handoff).mode
+      ) || "request_only",
+    enabledTools: compact(runtimeConfig.enabledTools || actions.enabledTools),
   };
 }
 
