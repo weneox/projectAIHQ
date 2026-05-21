@@ -25,23 +25,14 @@ function s(value, fallback = "") {
 }
 
 export default function BrowserVoiceCall() {
-  const [status, setStatus] = useState("idle");
-  const [error, setError] = useState("");
-  const [model, setModel] = useState("");
-  const [voice, setVoice] = useState("");
-  const [runtimeMeta, setRuntimeMeta] = useState(null);
+  const [pageError, setPageError] = useState("");
   const [scenarioId, setScenarioId] = useState("hotel_booking_inquiry");
   const [scenarios, setScenarios] = useState(BROWSER_VOICE_EVALUATION_SCENARIOS);
   const [evaluation, setEvaluation] = useState(DEFAULT_EVALUATION);
   const [capturedSlots, setCapturedSlots] = useState({});
   const [evaluationHistory, setEvaluationHistory] = useState([]);
   const [savingEvaluation, setSavingEvaluation] = useState(false);
-  const [events, setEvents] = useState([]);
 
-  const pcRef = useRef(null);
-  const dcRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const remoteAudioRef = useRef(null);
 
   const scenario = useMemo(
     () =>
@@ -63,6 +54,20 @@ export default function BrowserVoiceCall() {
 
   const averageScore = scoreAverage(evaluation);
   const readyLabel = readinessLabel(averageScore, evaluation, missingSlots.length);
+
+  const {
+    status,
+    error: callError,
+    model,
+    voice,
+    runtimeMeta,
+    events,
+    remoteAudioRef,
+    startCall,
+    stopCall,
+  } = useBrowserVoiceCall();
+
+  const error = callError || pageError;
 
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
@@ -121,7 +126,7 @@ export default function BrowserVoiceCall() {
     loadEvaluationHistory();
 
     return () => {
-      stopLab();
+      stopCall();
     };
   }, []);
 
