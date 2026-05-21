@@ -435,10 +435,10 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
   }
 }
 
-const DEFAULT_VOICE_LAB_INSTRUCTIONS =
+const DEFAULT_BROWSER_VOICE_INSTRUCTIONS =
   "You are a professional receptionist voice assistant. Speak naturally, keep answers short, ask one question at a time, and help the caller clearly.";
 
-function readVoiceLabConfigPayload(result = {}) {
+function readBrowserVoiceConfigPayload(result = {}) {
   return obj(result?.payload || result?.config || result?.data || {});
 }
 
@@ -455,7 +455,7 @@ function compactVoiceChannel(channel = {}) {
   };
 }
 
-async function resolveVoiceLabRuntimeConfig(
+async function resolveBrowserVoiceRuntimeConfig(
   req,
   res,
   { db, dbDisabled = false, getRuntime = getTenantBrainRuntime, logger }
@@ -495,7 +495,7 @@ async function resolveVoiceLabRuntimeConfig(
 
     return {
       ok: true,
-      config: readVoiceLabConfigPayload(result),
+      config: readBrowserVoiceConfigPayload(result),
     };
   } catch (err) {
     logger?.warn?.("voice.lab.runtime_resolution_failed", {
@@ -505,15 +505,15 @@ async function resolveVoiceLabRuntimeConfig(
   }
 }
 
-function cleanVoiceLabText(value = "", max = 2400) {
+function cleanBrowserVoiceText(value = "", max = 2400) {
   return s(value).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
 }
 
-function pickVoiceLabModel(value = "") {
+function pickBrowserVoiceModel(value = "") {
   return normalizeBrowserVoiceModel(value);
 }
 
-function pickVoiceLabVoice(value = "") {
+function pickBrowserVoiceName(value = "") {
   return normalizeBrowserVoiceName(value);
 }
 
@@ -533,9 +533,9 @@ async function handleBrowserVoiceSession(
       return fail(res, 503, "fetch_unavailable");
     }
 
-    let model = pickVoiceLabModel(req.body?.model);
-    let voice = pickVoiceLabVoice(req.body?.voice);
-    const runtimeResolution = await resolveVoiceLabRuntimeConfig(req, res, {
+    let model = pickBrowserVoiceModel(req.body?.model);
+    let voice = pickBrowserVoiceName(req.body?.voice);
+    const runtimeResolution = await resolveBrowserVoiceRuntimeConfig(req, res, {
       db,
       dbDisabled,
       getRuntime,
@@ -548,16 +548,16 @@ async function handleBrowserVoiceSession(
     const runtimeRealtime = obj(runtimeConfig.realtime);
 
     if (!s(req.body?.model) && s(runtimeRealtime.model)) {
-      model = pickVoiceLabModel(runtimeRealtime.model);
+      model = pickBrowserVoiceModel(runtimeRealtime.model);
     }
     if (!s(req.body?.voice) && s(runtimeRealtime.voice)) {
-      voice = pickVoiceLabVoice(runtimeRealtime.voice);
+      voice = pickBrowserVoiceName(runtimeRealtime.voice);
     }
 
     const baseInstructions =
-      cleanVoiceLabText(req.body?.instructions) ||
-      cleanVoiceLabText(runtimeRealtime.instructions) ||
-      DEFAULT_VOICE_LAB_INSTRUCTIONS;
+      cleanBrowserVoiceText(req.body?.instructions) ||
+      cleanBrowserVoiceText(runtimeRealtime.instructions) ||
+      DEFAULT_BROWSER_VOICE_INSTRUCTIONS;
 
     const browserSessionPlan = buildBrowserRealtimeSessionPlan({
       requestedModel: model,
