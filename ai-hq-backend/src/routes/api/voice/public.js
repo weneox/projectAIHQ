@@ -63,9 +63,10 @@ import {
   normalizeVoiceLabScenarioId,
 } from "../../../modules/voice/labScenarios.js";
 import {
-  buildVoiceLabConversationInstructions,
-  buildBrowserVoiceOpeningInstructions,
-} from "../../../modules/voice/conversationComposer.js";
+  buildBrowserRealtimeSessionPlan,
+  normalizeBrowserVoiceModel,
+  normalizeBrowserVoiceName,
+} from "../../../modules/voice/engine/browserRealtimeSession.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -511,23 +512,11 @@ function cleanVoiceLabText(value = "", max = 2400) {
 }
 
 function pickVoiceLabModel(value = "") {
-  const raw = s(value, "gpt-realtime-1.5").toLowerCase();
-
-  // Browser voice adapter üçün daha natural audio-in/audio-out test.
-  if (raw === "gpt-realtime-2") return "gpt-realtime-1.5";
-  if (raw === "gpt-realtime" || raw === "gpt-realtime-1.5") return "gpt-realtime-1.5";
-
-  return "gpt-realtime-1.5";
+  return normalizeBrowserVoiceModel(value);
 }
 
 function pickVoiceLabVoice(value = "") {
-  const raw = s(value, "coral").toLowerCase();
-
-  if (["alloy", "echo", "shimmer", "verse"].includes(raw)) return "coral";
-
-  return ["coral", "sage", "ash", "ballad"].includes(raw)
-    ? raw
-    : "coral";
+  return normalizeBrowserVoiceName(value);
 }
 
 async function handleVoiceLabSession(
@@ -578,20 +567,16 @@ async function handleVoiceLabSession(
       cleanVoiceLabText(runtimeRealtime.instructions) ||
       DEFAULT_VOICE_LAB_INSTRUCTIONS;
 
-    const instructions = buildVoiceLabConversationInstructions({
+    const browserSessionPlan = buildBrowserRealtimeSessionPlan({
+      requestedModel: model,
+      requestedVoice: voice,
       baseInstructions,
-      scenario,
-      scenarioId,
       runtimeConfig,
       runtimeApplied,
     });
 
-    const openingResponseInstructions = buildBrowserVoiceOpeningInstructions({
-      scenario,
-      scenarioId,
-      runtimeConfig,
-      runtimeApplied,
-    });
+    model = browserSessionPlan.model;
+    voice = browserSessionPlan.voice;
 
     const upstream = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
@@ -599,36 +584,7 @@ async function handleVoiceLabSession(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        expires_after: {
-          anchor: "created_at",
-          seconds: 600,
-        },
-        session: {
-          type: "realtime",
-          model,
-          instructions,
-          output_modalities: ["audio"],
-          audio: {
-            output: {
-              voice,
-            },
-            input: {
-              transcription: {
-                model: "gpt-4o-mini-transcribe",
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.7,
-                prefix_padding_ms: 260,
-                silence_duration_ms: 650,
-                create_response: true,
-                interrupt_response: false,
-              },
-            },
-          },
-        },
-      }),
+      body: JSON.stringify(browserSessionPlan.clientSecretRequest),
     });
 
     const text = await upstream.text().catch(() => "");
@@ -664,12 +620,7 @@ async function handleVoiceLabSession(
         payload?.client_secret?.value ||
         payload?.session?.client_secret?.value ||
         "",
-      openingResponse: {
-        enabled: true,
-        modalities: ["audio", "text"],
-        maxOutputTokens: 140,
-        instructions: openingResponseInstructions,
-      },
+      openingResponse: browserSessionPlan.openingResponse,
     });
   } catch (err) {
     logger.error("voice.lab.session.failed", err);
