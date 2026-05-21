@@ -34,6 +34,28 @@ function titleize(value = "") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function channelProviderLabel(value = "") {
+  const raw = lower(value);
+  if (
+    raw === "browser" ||
+    raw === "browser_lab" ||
+    raw === "browserlab" ||
+    raw === "browser_adapter" ||
+    raw === "pre_sip_browser"
+  ) {
+    return "Browser voice adapter";
+  }
+  return titleize(value);
+}
+
+function activationLabel(value = "") {
+  const raw = lower(value);
+  if (raw === "browser_lab" || raw === "browser_adapter" || raw === "pre_sip_browser") {
+    return "Pre-SIP browser";
+  }
+  return titleize(value);
+}
+
 function statusLabel(channel = {}) {
   const status = lower(channel.connectionStatus || channel.connection?.status);
   if (status === "live") return "Live";
@@ -205,10 +227,10 @@ export default function VoiceChannels() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg font-semibold text-text">{s(channel.label, "Voice number")}</h2>
                         <span className="rounded-full border border-line-soft px-2.5 py-1 text-xs font-semibold text-text-muted">
-                          {titleize(channel.provider)}
+                          {channelProviderLabel(channel.provider)}
                         </span>
                         <span className="rounded-full border border-line-soft px-2.5 py-1 text-xs font-semibold text-text-muted">
-                          {titleize(channel.activationMode)}
+                          {activationLabel(channel.activationMode)}
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-text-muted">
@@ -305,7 +327,6 @@ export default function VoiceChannels() {
               >
                 <option value="sip">Local SIP</option>
                 <option value="twilio">Twilio</option>
-                <option value="browser_lab">Browser Lab</option>
               </select>
             </label>
 
@@ -319,7 +340,6 @@ export default function VoiceChannels() {
                 <option value="sip_trunk">SIP trunk</option>
                 <option value="call_forwarding">Call forwarding</option>
                 <option value="twilio_number">Twilio number</option>
-                <option value="browser_lab">Browser lab</option>
               </select>
             </label>
 

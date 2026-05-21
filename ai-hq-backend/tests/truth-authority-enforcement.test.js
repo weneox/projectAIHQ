@@ -1129,7 +1129,7 @@ test("voice tenant config fails closed when tenant voice settings are missing", 
   assert.equal(result.details?.reasonCode, "voice_settings_missing");
 });
 
-test("browser voice lab can use approved runtime before telephony is configured", async () => {
+test("browser voice adapter can use approved runtime before telephony is configured", async () => {
   const db = {
     async query(text) {
       const sql = String(text || "").toLowerCase();
@@ -1199,7 +1199,10 @@ test("browser voice lab can use approved runtime before telephony is configured"
   assert.equal(result.ok, true);
   assert.equal(result.payload?.tenantKey, "acme");
   assert.equal(result.payload?.authority?.runtimeProjectionId, "projection-1");
-  assert.equal(result.payload?.operationalChannels?.voice?.source, "browser_lab_runtime");
+  assert.equal(result.payload?.operationalChannels?.voice?.source, "browser_adapter_runtime");
+  assert.equal(result.payload?.activeVoiceChannel?.label, "Browser voice adapter");
+  assert.equal(result.payload?.activeVoiceChannel?.source, "browser_adapter_runtime");
+  assert.equal(result.payload?.activeVoiceChannel?.meta?.adapterType, "pre_sip_browser");
   assert.equal(result.payload?.activeVoiceChannel?.id, "browser_lab");
   assert.equal(result.payload?.match?.voiceChannelId, "browser_lab");
   assert.equal(result.payload?.realtime?.instructions?.includes("Acme Clinic"), true);

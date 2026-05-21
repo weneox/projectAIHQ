@@ -111,7 +111,7 @@ describe("resolveAuthenticatedLanding", () => {
         "/inbox",
         "/channels",
         "/voice-channels",
-        "/voice-lab",
+        "/voice-assistant",
         "/customers",
         "/leads",
         "/knowledge",
@@ -209,7 +209,8 @@ describe("resolveAuthenticatedLanding", () => {
     expect(__test__.normalizeLegacyAppRoute("/setup/review")).toBe(
       SETUP_REVIEW_AND_LAUNCH_ROUTE
     );
-    expect(__test__.normalizeLegacyAppRoute("/voice-lab")).toBe("/voice-lab");
+    expect(__test__.normalizeLegacyAppRoute("/voice-lab")).toBe("/voice-assistant");
+    expect(__test__.normalizeLegacyAppRoute("/voice-assistant")).toBe("/voice-assistant");
     expect(__test__.normalizeLegacyAppRoute("/voice-channels")).toBe("/voice-channels");
   });
 });

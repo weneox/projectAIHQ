@@ -70,7 +70,7 @@ describe("Sidebar", () => {
       "/truth",
       "/customers",
       "/leads",
-      "/voice-lab",
+      "/voice-assistant",
       "/reports",
       "/knowledge",
       "/launch",
@@ -122,6 +122,6 @@ describe("Sidebar", () => {
     );
 
     expect(document.querySelector('a[href="/voice-channels"]')).toBeTruthy();
-    expect(document.querySelector('a[href="/voice-lab"]')).toBeTruthy();
+    expect(document.querySelector('a[href="/voice-assistant"]')).toBeTruthy();
   });
 });

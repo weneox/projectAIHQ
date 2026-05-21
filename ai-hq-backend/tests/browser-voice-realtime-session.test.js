@@ -6,6 +6,9 @@ import {
   normalizeBrowserVoiceModel,
   normalizeBrowserVoiceName,
 } from "../src/modules/voice/engine/browserRealtimeSession.js";
+import {
+  VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
+} from "../src/modules/voice/brain/index.js";
 
 test("browser voice session plan builds live runtime without scenario bias", () => {
   const plan = buildBrowserRealtimeSessionPlan({
@@ -48,23 +51,40 @@ test("browser voice session plan builds live runtime without scenario bias", () 
 
   assert.equal(plan.model, "gpt-realtime-1.5");
   assert.equal(plan.voice, "coral");
+  assert.equal(plan.brainPolicyVersion, VOICE_ASSISTANT_BRAIN_POLICY_VERSION);
 
   assert.match(plan.instructions, /Dental Prime/);
-  assert.match(plan.instructions, /Live voice assistant brain/);
+  assert.match(plan.instructions, /Voice assistant brain/);
+  assert.match(plan.instructions, /real inbound business call/);
+  assert.match(plan.instructions, /temporary pre-SIP adapter/);
+  assert.match(plan.instructions, /approved tenant runtime/);
+  assert.match(plan.instructions, /Language policy/);
+  assert.match(plan.instructions, /Turn and noise policy/);
+  assert.match(plan.instructions, /Semantic intent policy/);
+  assert.match(plan.instructions, /Dialogue state and slot policy/);
+  assert.match(plan.instructions, /Grounding policy/);
   assert.match(plan.instructions, /Business scope guard/);
+  assert.match(plan.instructions, /Action planning policy/);
+  assert.match(plan.instructions, /Response composer policy/);
+  assert.match(plan.instructions, /Call lifecycle policy/);
   assert.match(plan.instructions, /Approved business type: clinic/);
   assert.match(plan.instructions, /Supported caller intents: appointment_booking; business_faq/);
   assert.match(plan.instructions, /Unsupported caller intents: hotel_room_booking; restaurant_order/);
   assert.match(plan.instructions, /Approved services\/products: Dental consultation/);
-  assert.match(plan.instructions, /Do not assume booking/);
+  assert.match(plan.instructions, /Booking, order, reservation, appointment, callback, and handoff intent must be explicit/);
   assert.match(plan.instructions, /Operational logic/);
   assert.match(plan.instructions, /Do not pretend to check availability/);
   assert.match(plan.instructions, /Approved business context/);
   assert.match(plan.instructions, /Human handoff triggers/);
   assert.match(plan.instructions, /medical diagnosis/);
+  assert.match(plan.instructions, /end_call tool/);
 
   assert.doesNotMatch(plan.instructions, /Voice Lab canonical scenario/);
   assert.doesNotMatch(plan.instructions, /Caller roleplay script/);
+  assert.doesNotMatch(plan.instructions, /\blab\b/i);
+  assert.doesNotMatch(plan.instructions, /\bscenario\b/i);
+  assert.doesNotMatch(plan.instructions, /\bevaluation\b/i);
+  assert.doesNotMatch(plan.instructions, /\bscorecard\b/i);
   assert.doesNotMatch(plan.instructions, /Appointment booking/);
 
   assert.equal(plan.clientSecretRequest.session.type, "realtime");
@@ -80,6 +100,7 @@ test("browser voice session plan builds live runtime without scenario bias", () 
   );
 
   assert.equal(plan.openingResponse.enabled, true);
+  assert.match(plan.openingResponse.instructions, /pre-SIP browser audio adapter/);
   assert.match(plan.openingResponse.instructions, /Approved business name: Dental Prime/);
 });
 

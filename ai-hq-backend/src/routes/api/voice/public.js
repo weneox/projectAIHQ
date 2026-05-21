@@ -70,6 +70,9 @@ import {
   normalizeBrowserVoiceName,
 } from "../../../modules/voice/engine/browserRealtimeSession.js";
 import {
+  VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
+} from "../../../modules/voice/brain/index.js";
+import {
   buildVoiceActionPolicy,
   buildVoiceActionToolDefinitions,
   normalizeVoiceActionRuntime,
@@ -616,6 +619,9 @@ async function handleBrowserVoiceSession(
       voice,
       runtimeApplied,
       runtimeReasonCode: runtimeApplied ? "" : s(runtimeResolution?.reasonCode),
+      tenantKey: runtimeApplied ? s(runtimeConfig.tenantKey) : "",
+      assistantPolicyVersion: s(browserSessionPlan.brainPolicyVersion),
+      brainPolicyVersion: s(browserSessionPlan.brainPolicyVersion),
       activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
       match: runtimeApplied ? obj(runtimeConfig.match) : null,
       session: payload,
@@ -772,6 +778,11 @@ async function handleBrowserVoiceToolCall(
       eventType: "browser_voice.tool_executed",
       actor: "system",
       payload: {
+        runtimeApplied: !!s(runtimeConfig.tenantKey),
+        tenantKey: s(runtimeConfig.tenantKey || scope.tenantKey),
+        activeChannelProvider: s(runtimeConfig.activeVoiceChannel?.provider || runtimeConfig.match?.provider),
+        activeChannelId: s(runtimeConfig.activeVoiceChannel?.id || runtimeConfig.match?.voiceChannelId),
+        assistantPolicyVersion: VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
         toolCallId,
         toolName,
         arguments: toolArgs,

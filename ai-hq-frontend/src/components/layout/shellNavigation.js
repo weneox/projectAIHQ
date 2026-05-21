@@ -113,22 +113,22 @@ const SECONDARY_SECTIONS = [
         title: "Naviqasiya",
         items: [
           { label: "Səs kanalları", to: "/voice-channels" },
-          { label: "Browser Call", to: "/voice-lab" },
+          { label: "Voice Assistant", to: "/voice-assistant" },
         ],
       },
     ],
   },
   {
-    id: "voice-lab",
-    label: "Browser Call",
+    id: "voice-assistant",
+    label: "Voice Assistant",
     icon: Radio,
-    to: "/voice-lab",
-    paths: ["/voice-lab"],
+    to: "/voice-assistant",
+    paths: ["/voice-assistant", "/voice-lab"],
     contextGroups: [
       {
         title: "Naviqasiya",
         items: [
-          { label: "Browser Call", to: "/voice-lab" },
+          { label: "Voice Assistant", to: "/voice-assistant" },
           { label: "Səs kanalları", to: "/voice-channels" },
         ],
       },

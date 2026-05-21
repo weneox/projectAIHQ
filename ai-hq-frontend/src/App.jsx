@@ -225,7 +225,8 @@ export default function App() {
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
-          <Route path="voice-lab" element={<BrowserVoiceCall />} />
+          <Route path="voice-assistant" element={<BrowserVoiceCall />} />
+          <Route path="voice-lab" element={<Navigate to="/voice-assistant" replace />} />
           <Route
             path="voice-channels"
             element={
