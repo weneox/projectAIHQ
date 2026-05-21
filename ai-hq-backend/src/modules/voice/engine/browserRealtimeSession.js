@@ -470,6 +470,7 @@ export function buildBrowserRealtimeSessionPlan({
     runtimeApplied,
   });
 
+  const tools = buildVoiceActionToolDefinitions(runtimeConfig);
   return {
     model,
     voice,
