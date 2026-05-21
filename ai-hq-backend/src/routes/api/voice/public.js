@@ -79,6 +79,11 @@ import {
   buildRealtimeProviderLinkPayload,
   normalizeProviderRealtimeCallId,
 } from "../../../modules/voice/realtimeControlPlane.js";
+import {
+  VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION,
+  buildRealtimeSidebandConnectionPlan,
+  buildRealtimeSidebandTrace,
+} from "../../../modules/voice/realtimeSidebandConnector.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -600,11 +605,20 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
       voice: s(req.body?.voice),
     });
 
-    const linkPayload = buildRealtimeProviderLinkPayload({
+    const sidebandPlan = buildRealtimeSidebandConnectionPlan({
       target,
-      locationHeader: s(req.body?.locationHeader),
-      source: "browser_webrtc_sdp",
+      env: process.env,
     });
+    const sidebandConnector = buildRealtimeSidebandTrace(sidebandPlan);
+    const linkPayload = {
+      ...buildRealtimeProviderLinkPayload({
+        target,
+        locationHeader: s(req.body?.locationHeader),
+        source: "browser_webrtc_sdp",
+      }),
+      sidebandConnectorVersion: VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION,
+      sidebandConnector,
+    };
 
     const savedEvent = await appendVoiceCallEvent(db, {
       callId,
@@ -624,12 +638,14 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
           ...obj(previousMeta.realtime),
           ...target,
           linkPayload,
+          sidebandConnector,
         },
       },
     });
 
     return ok(res, {
       controlTarget: target,
+      sidebandConnector,
       event: savedEvent,
     });
   } catch (err) {
