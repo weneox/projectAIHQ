@@ -197,6 +197,23 @@ export default function useBrowserVoiceCall() {
     setStatus("idle");
   }, []);
 
+
+  const endCallFromTool = useCallback((payload = {}) => {
+    if (endCallTimerRef.current) return;
+
+    sendCallEvent({
+      eventType: "browser_voice.end_call_tool",
+      actor: "assistant",
+      role: "assistant",
+      payload,
+    });
+
+    endCallTimerRef.current = window.setTimeout(() => {
+      endCallTimerRef.current = null;
+      stopCall();
+    }, 1200);
+  }, [sendCallEvent, stopCall]);
+
   const startCall = useCallback(async () => {
     setError("");
     setEvents([]);
@@ -348,7 +365,7 @@ export default function useBrowserVoiceCall() {
       setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
     }
-  }, [addEvent, sendCallEvent, stopCall]);
+  }, [addEvent, endCallFromTool, sendCallEvent, stopCall]);
 
   useEffect(() => {
     return () => {
