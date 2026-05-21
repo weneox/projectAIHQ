@@ -152,21 +152,6 @@ export async function testVoiceChannelRouting(channelId, body = {}) {
   );
 }
 
-export async function listVoiceLabEvaluations(params = {}) {
-  const j = await apiGet(`/api/voice/lab/evaluations${qs(params)}`);
-  return normalizeList(j, "evaluations");
-}
-
-export async function createVoiceLabEvaluation(body = {}) {
-  return apiPost("/api/voice/lab/evaluations", body);
-}
-
-export async function listVoiceLabScenarios(params = {}) {
-  const j = await apiGet(`/api/voice/lab/scenarios${qs(params)}`);
-  return normalizeList(j, "scenarios");
-}
-
-
 export async function getVoiceActionRuntime(params = {}) {
   return apiGet(`/api/voice/actions/runtime${qs(params)}`);
 }
