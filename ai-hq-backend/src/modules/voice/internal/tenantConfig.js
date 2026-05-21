@@ -129,6 +129,7 @@ function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {
         instructions: "",
         ...obj(currentVoice.realtime),
       },
+      actions: obj(currentVoice.actions || currentVoice.voiceActions),
       telephony: {
         ...obj(currentVoice.telephony),
         phoneNumber: "browser_lab",
