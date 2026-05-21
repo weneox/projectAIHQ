@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import express from "express";
 import {
   requireOperatorSurfaceAccess,
@@ -23,6 +24,7 @@ import {
   getVoiceDailyUsage,
   listVoiceCallSessions,
   appendVoiceCallEvent,
+  createVoiceCall,
   updateVoiceCall,
   resolveTenantScope,
   } from "./repository.js";
