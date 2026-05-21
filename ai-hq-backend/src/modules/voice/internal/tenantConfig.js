@@ -28,16 +28,18 @@ function lower(value = "") {
   return s(value).toLowerCase();
 }
 
-function isBrowserLabProvider(provider = "") {
+function isBrowserAdapterProvider(provider = "") {
   const normalized = lower(provider).replace(/[\s-]+/g, "_");
   return (
     normalized === "browser_lab" ||
+    normalized === "browser_adapter" ||
+    normalized === "pre_sip_browser" ||
     normalized === "browser" ||
     normalized === "browserlab"
   );
 }
 
-function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {}) {
+function buildBrowserAdapterOperationalChannels(operationalChannels = {}, tenant = {}) {
   const current = obj(operationalChannels);
   const currentVoice = obj(current.voice);
   const tenantDefaultLanguage = lower(
@@ -51,7 +53,7 @@ function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {
   const browserLabChannel = {
     id: "browser_lab",
     provider: "browser_lab",
-    label: "Browser Lab",
+    label: "Browser voice adapter",
     externalNumber: "browser_lab",
     routeKey: "browser_lab",
     enabled: true,
@@ -86,8 +88,11 @@ function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {
     providerConfig: {},
     operatorRouting: obj(currentVoice.operatorRouting),
     voiceProfileOverride: {},
-    meta: { labOnly: true },
-    source: "browser_lab_runtime",
+    meta: {
+      adapterType: "pre_sip_browser",
+      compatibilityProvider: "browser_lab",
+    },
+    source: "browser_adapter_runtime",
     updatedAt: s(current.generatedAt),
   };
   const otherChannels = arr(currentVoice.channels).filter(
@@ -105,7 +110,7 @@ function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {
       provider: "browser_lab",
       mode: s(currentVoice.mode || "assistant"),
       displayName: s(
-        currentVoice.displayName || tenant.company_name || "Browser Lab"
+        currentVoice.displayName || tenant.company_name || "Browser voice adapter"
       ),
       defaultLanguage: s(currentVoice.defaultLanguage || tenantDefaultLanguage),
       supportedLanguages,
@@ -155,7 +160,7 @@ function buildBrowserLabOperationalChannels(operationalChannels = {}, tenant = {
         strategy: "handoff",
         ...obj(currentVoice.transfer),
       },
-      source: "browser_lab_runtime",
+      source: "browser_adapter_runtime",
       updatedAt: s(currentVoice.updatedAt || current.generatedAt),
     },
   };
@@ -239,8 +244,8 @@ export async function processVoiceTenantConfig({
     tenantId: resolvedTenantId,
     tenantRow: stableTenant,
   });
-  const effectiveOperationalChannels = isBrowserLabProvider(provider)
-    ? buildBrowserLabOperationalChannels(operationalChannels, stableTenant)
+  const effectiveOperationalChannels = isBrowserAdapterProvider(provider)
+    ? buildBrowserAdapterOperationalChannels(operationalChannels, stableTenant)
     : operationalChannels;
 
   let projectedRuntime = null;

@@ -163,6 +163,10 @@ function normalizeLegacyAppRoute(target = "") {
     return normalizeSetupRoute(raw);
   }
 
+  if (normalizedPath === "/voice-lab" || normalizedPath.startsWith("/voice-lab/")) {
+    return "/voice-assistant";
+  }
+
   for (const legacyPath of LEGACY_PRODUCT_HOME_ROUTES) {
     if (
       normalizedPath === legacyPath ||
@@ -208,7 +212,7 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/inbox",
   "/channels",
   "/voice-channels",
-  "/voice-lab",
+  "/voice-assistant",
   "/customers",
   "/leads",
   "/knowledge",

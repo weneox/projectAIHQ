@@ -102,8 +102,8 @@ vi.mock("../pages/ChannelCatalog.jsx", () => ({
   default: () => <div>Channels Page</div>,
 }));
 
-vi.mock("../pages/VoiceLab.jsx", () => ({
-  default: () => <div>Browser voice call</div>,
+vi.mock("../pages/BrowserVoiceCall.jsx", () => ({
+  default: () => <div>Voice Assistant Page</div>,
 }));
 
 vi.mock("../pages/VoiceChannels.jsx", () => ({
@@ -163,7 +163,8 @@ describe("App shell smoke", () => {
   });
 
   it.each([
-    ["/voice-lab", "Browser voice call"],
+    ["/voice-assistant", "Voice Assistant Page"],
+    ["/voice-lab", "Voice Assistant Page"],
     ["/voice-channels", "Voice Channels Page"],
   ])("renders %s when the voice feature is enabled", async (path, text) => {
     window.history.replaceState({}, "", path);
@@ -173,7 +174,7 @@ describe("App shell smoke", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps Browser Call reachable for browser testing when backend voice channels are frozen", async () => {
+  it("keeps Voice Assistant reachable for browser calls when backend voice channels are frozen", async () => {
     getAppBootstrapContextMock.mockResolvedValue({
       ok: true,
       features: {
@@ -181,10 +182,10 @@ describe("App shell smoke", () => {
       },
     });
 
-    window.history.replaceState({}, "", "/voice-lab");
+    window.history.replaceState({}, "", "/voice-assistant");
     render(<App />);
     expect(
-      await screen.findByRole("heading", { name: "Browser voice call" }, { timeout: ROUTE_RENDER_TIMEOUT_MS })
+      await screen.findByText("Voice Assistant Page", {}, { timeout: ROUTE_RENDER_TIMEOUT_MS })
     ).toBeInTheDocument();
   });
 });

@@ -10,6 +10,10 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function readRealtimeClientSecret(payload = {}) {
   return (
     s(payload?.clientSecret) ||
@@ -221,17 +225,39 @@ export default function useBrowserVoiceCall() {
   const remoteAudioRef = useRef(null);
   const callIdRef = useRef("");
   const endCallTimerRef = useRef(null);
+  const sessionMetaRef = useRef({});
 
   const addEvent = useCallback((event) => {
     setEvents((current) => [normalizeVoiceEvent(event), ...current].slice(0, 8));
+  }, []);
+
+  const buildTracePayload = useCallback((payload = {}) => {
+    const meta = obj(sessionMetaRef.current);
+    const trace = {
+      runtimeApplied: meta.runtimeApplied === true,
+      tenantKey: s(meta.tenantKey),
+      activeChannelProvider: s(meta.activeChannelProvider),
+      activeChannelId: s(meta.activeChannelId),
+      assistantPolicyVersion: s(meta.assistantPolicyVersion),
+    };
+
+    return Object.fromEntries(
+      Object.entries({
+        ...trace,
+        ...obj(payload),
+      }).filter(([, value]) => value !== "" && value !== undefined && value !== null)
+    );
   }, []);
 
   const sendCallEvent = useCallback((event = {}) => {
     const callId = s(callIdRef.current);
     if (!callId) return;
 
-    appendBrowserVoiceCallEvent(callId, event).catch(() => {});
-  }, []);
+    appendBrowserVoiceCallEvent(callId, {
+      ...event,
+      payload: buildTracePayload(event.payload),
+    }).catch(() => {});
+  }, [buildTracePayload]);
 
   const stopCall = useCallback(() => {
     setStatus("stopping");
@@ -262,7 +288,7 @@ export default function useBrowserVoiceCall() {
         role: "system",
         ended: true,
         outcome: "completed",
-        payload: { status: "stopped_by_operator" },
+        payload: buildTracePayload({ status: "stopped_by_operator" }),
       }).catch(() => {});
     }
 
@@ -270,13 +296,14 @@ export default function useBrowserVoiceCall() {
     pcRef.current = null;
     localStreamRef.current = null;
     callIdRef.current = "";
+    sessionMetaRef.current = {};
 
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
     }
 
     setStatus("idle");
-  }, []);
+  }, [buildTracePayload]);
 
 
   const endCallFromTool = useCallback((payload = {}) => {
@@ -379,14 +406,25 @@ export default function useBrowserVoiceCall() {
 
       const browserCallId = s(session?.browserCallId || session?.callId);
       callIdRef.current = browserCallId;
-
-      setRuntimeMeta({
+      const activeVoiceChannel = session?.activeVoiceChannel || null;
+      const sessionMeta = {
         runtimeApplied: session?.runtimeApplied === true,
         reasonCode: s(session?.runtimeReasonCode),
         tenantKey: s(session?.tenantKey),
-        activeVoiceChannel: session?.activeVoiceChannel || null,
+        activeChannelProvider: s(activeVoiceChannel?.provider || session?.match?.provider),
+        activeChannelId: s(activeVoiceChannel?.id || session?.match?.voiceChannelId),
+        assistantPolicyVersion: s(session?.assistantPolicyVersion || session?.brainPolicyVersion),
+      };
+      sessionMetaRef.current = sessionMeta;
+
+      setRuntimeMeta({
+        runtimeApplied: sessionMeta.runtimeApplied,
+        reasonCode: sessionMeta.reasonCode,
+        tenantKey: sessionMeta.tenantKey,
+        activeVoiceChannel,
         match: session?.match || null,
         browserCallId,
+        assistantPolicyVersion: sessionMeta.assistantPolicyVersion,
       });
 
       const sessionModel = s(session?.model, "gpt-realtime-1.5");
