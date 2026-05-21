@@ -295,7 +295,7 @@ export default function VoiceLab() {
               loading={isBusy}
               onClick={startCall}
             >
-              Start test call
+              Start browser call
             </Button>
           )
         }
@@ -320,7 +320,7 @@ export default function VoiceLab() {
       ) : null}
 
       {error ? (
-        <InlineNotice tone="danger" title="Voice test error" description={error} />
+        <InlineNotice tone="danger" title="Browser voice error" description={error} />
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -341,7 +341,7 @@ export default function VoiceLab() {
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
               <label className="space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Test scenario
+                  Evaluation scenario
                 </span>
                 <select
                   className="w-full rounded-2xl border border-line-soft bg-white px-3 py-2 text-sm text-text outline-none focus:border-text"
@@ -547,7 +547,7 @@ export default function VoiceLab() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
-                  Start test call etdikdən sonra statuslar burada görünəcək.
+                  Start browser call etdikdən sonra statuslar burada görünəcək.
                 </div>
               )}
             </div>

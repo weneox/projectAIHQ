@@ -69,7 +69,7 @@ function normalizeVoiceEvent(event = {}) {
   };
 }
 
-export default function useBrowserVoiceCall({ scenarioId = "" } = {}) {
+export default function useBrowserVoiceCall() {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [model, setModel] = useState("");
@@ -242,7 +242,7 @@ export default function useBrowserVoiceCall({ scenarioId = "" } = {}) {
       setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
     }
-  }, [addEvent, scenarioId, stopCall]);
+  }, [addEvent, stopCall]);
 
   useEffect(() => {
     return () => {
