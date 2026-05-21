@@ -67,6 +67,9 @@ import {
   normalizeBrowserVoiceModel,
   normalizeBrowserVoiceName,
 } from "../../../modules/voice/engine/browserRealtimeSession.js";
+import {
+  executeVoiceAction,
+} from "../../../modules/voice/actions/voiceActionRuntime.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -698,6 +701,78 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
   }
 }
 
+async function handleBrowserVoiceToolCall(req, res, { db, dbDisabled = false } = {}) {
+  const logger = getRouteLogger(req, "voice.browser.tool");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const voiceCallId = s(req.params?.callId || req.body?.voiceCallId);
+    if (!voiceCallId) {
+      return fail(res, 400, "voice_call_id_required");
+    }
+
+    const call = await getScopedCallOrFail({ db, scope, callId: voiceCallId, res });
+    if (!call) return;
+
+    const toolName = s(req.body?.name || req.body?.toolName || req.body?.action);
+    if (!toolName) {
+      return fail(res, 400, "voice_tool_name_required");
+    }
+
+    const toolArgs = obj(req.body?.arguments || req.body?.args || {});
+    const toolCallId = s(req.body?.toolCallId || req.body?.callId);
+
+    const result = await executeVoiceAction({
+      name: toolName,
+      args: toolArgs,
+      call,
+      scope,
+    });
+
+    await appendVoiceCallEvent(db, {
+      callId: voiceCallId,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      eventType: "browser_voice.tool_executed",
+      actor: "system",
+      payload: {
+        toolCallId,
+        toolName,
+        arguments: toolArgs,
+        result,
+      },
+    });
+
+    if (result?.shouldEndCall === true) {
+      await updateVoiceCall(db, voiceCallId, {
+        status: "completed",
+        endedAt: new Date().toISOString(),
+        outcome: s(result.status || "completed"),
+      });
+    }
+
+    return ok(res, {
+      toolCallId,
+      name: toolName,
+      result,
+    });
+  } catch (err) {
+    logger.error("voice.browser.tool.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.browser.tool",
+      reasonCode: "browser_voice_tool_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "browser_voice_tool_failed");
+  }
+}
+
 export function voiceRoutes({
   db,
   dbDisabled = false,
@@ -762,6 +837,10 @@ export function voiceRoutes({
 
   r.post("/voice/browser/calls/:callId/events", requireOperatorSurfaceAccess, (req, res) =>
     handleBrowserVoiceCallEvent(req, res, { db, dbDisabled })
+  );
+
+  r.post("/voice/browser/calls/:callId/tools", requireOperatorSurfaceAccess, (req, res) =>
+    handleBrowserVoiceToolCall(req, res, { db, dbDisabled })
   );
 
   r.post("/voice/browser/session", requireOperatorSurfaceAccess, (req, res) =>
