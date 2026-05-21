@@ -1,7 +1,21 @@
+import {
+  ClipboardCheck,
+  Mic,
+  PhoneOff,
+  Radio,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
-}
+import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
+import useBrowserVoiceEvaluation from "./hooks/useBrowserVoiceEvaluation.js";
+import Button from "../components/ui/Button.jsx";
+import {
+  InlineNotice,
+  PageCanvas,
+  PageHeader,
+} from "../components/ui/AppShellPrimitives.jsx";
+import { SCORE_OPTIONS } from "./voice/browserVoiceEvaluation.js";
 
 export default function BrowserVoiceCall() {
   const {
@@ -26,7 +40,6 @@ export default function BrowserVoiceCall() {
     capturedSlots,
     updateCapturedSlot,
     captureSlots,
-    missingSlots,
     averageScore,
     readyLabel,
     evaluationHistory,
