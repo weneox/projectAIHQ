@@ -113,14 +113,14 @@ const SECONDARY_SECTIONS = [
         title: "Naviqasiya",
         items: [
           { label: "Səs kanalları", to: "/voice-channels" },
-          { label: "Voice Lab", to: "/voice-lab" },
+          { label: "Browser Call", to: "/voice-lab" },
         ],
       },
     ],
   },
   {
     id: "voice-lab",
-    label: "Voice Lab",
+    label: "Browser Call",
     icon: Radio,
     to: "/voice-lab",
     paths: ["/voice-lab"],
@@ -128,7 +128,7 @@ const SECONDARY_SECTIONS = [
       {
         title: "Naviqasiya",
         items: [
-          { label: "Voice Lab", to: "/voice-lab" },
+          { label: "Browser Call", to: "/voice-lab" },
           { label: "Səs kanalları", to: "/voice-channels" },
         ],
       },
