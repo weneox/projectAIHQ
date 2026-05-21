@@ -20,7 +20,7 @@ import LaunchChecklist from "./pages/LaunchChecklist.jsx";
 import Settings from "./pages/Settings.jsx";
 import Customers from "./pages/Customers.jsx";
 import Leads from "./pages/Leads.jsx";
-import VoiceLab from "./pages/VoiceLab.jsx";
+import BrowserVoiceCall from "./pages/BrowserVoiceCall.jsx";
 import VoiceChannels from "./pages/VoiceChannels.jsx";
 import Reports from "./pages/Reports.jsx";
 import Knowledge from "./pages/Knowledge.jsx";
@@ -225,7 +225,7 @@ export default function App() {
           <Route path="inbox" element={<Inbox />} />
           <Route path="customers" element={<Customers />} />
           <Route path="leads" element={<Leads />} />
-          <Route path="voice-lab" element={<VoiceLab />} />
+          <Route path="voice-lab" element={<BrowserVoiceCall />} />
           <Route
             path="voice-channels"
             element={
