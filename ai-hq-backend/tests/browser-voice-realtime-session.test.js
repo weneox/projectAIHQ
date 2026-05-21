@@ -16,6 +16,10 @@ test("browser voice session plan builds live runtime without scenario bias", () 
     runtimeConfig: {
       companyName: "Dental Prime",
       defaultLanguage: "az",
+      businessType: "clinic",
+      supportedIntents: ["appointment_booking", "business_faq"],
+      unsupportedIntents: ["hotel_room_booking", "restaurant_order"],
+      services: [{ name: "Dental consultation" }],
       voiceProfile: {
         assistantName: "Ayla",
         roleLabel: "clinic receptionist",
@@ -47,6 +51,11 @@ test("browser voice session plan builds live runtime without scenario bias", () 
 
   assert.match(plan.instructions, /Dental Prime/);
   assert.match(plan.instructions, /Live voice assistant brain/);
+  assert.match(plan.instructions, /Business scope guard/);
+  assert.match(plan.instructions, /Approved business type: clinic/);
+  assert.match(plan.instructions, /Supported caller intents: appointment_booking; business_faq/);
+  assert.match(plan.instructions, /Unsupported caller intents: hotel_room_booking; restaurant_order/);
+  assert.match(plan.instructions, /Approved services\/products: Dental consultation/);
   assert.match(plan.instructions, /Do not assume booking/);
   assert.match(plan.instructions, /Approved business context/);
   assert.match(plan.instructions, /Human handoff triggers/);
@@ -80,4 +89,29 @@ test("browser voice normalizers keep safe realtime defaults", () => {
   assert.equal(normalizeBrowserVoiceName("verse"), "coral");
   assert.equal(normalizeBrowserVoiceName("sage"), "sage");
   assert.equal(normalizeBrowserVoiceName("unknown"), "coral");
+});
+
+
+test("browser voice business scope guard redirects out-of-scope caller intent", () => {
+  const plan = buildBrowserRealtimeSessionPlan({
+    runtimeApplied: true,
+    runtimeConfig: {
+      companyName: "Baku Pizza",
+      businessType: "restaurant",
+      supportedIntents: ["food_order", "table_reservation", "menu_question"],
+      unsupportedIntents: ["hotel_room_booking"],
+      services: ["pizza", "delivery", "table reservation"],
+      voiceProfile: {
+        assistantName: "Leyla",
+        roleLabel: "restaurant receptionist",
+        businessSummary: "Baku Pizza is a restaurant. It accepts food orders and table reservations.",
+      },
+    },
+  });
+
+  assert.match(plan.instructions, /Approved business type: restaurant/);
+  assert.match(plan.instructions, /Supported caller intents: food_order; table_reservation; menu_question/);
+  assert.match(plan.instructions, /Unsupported caller intents: hotel_room_booking/);
+  assert.match(plan.instructions, /If the business is a restaurant and the caller asks for a hotel room/);
+  assert.match(plan.instructions, /do not discuss rooms/);
 });

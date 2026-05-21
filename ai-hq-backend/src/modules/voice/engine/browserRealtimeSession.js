@@ -10,8 +10,26 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function compactLabel(value) {
+  const item = obj(value);
+
+  if (item && Object.keys(item).length) {
+    return s(
+      item.name ||
+        item.title ||
+        item.label ||
+        item.serviceName ||
+        item.intent ||
+        item.key ||
+        item.id
+    );
+  }
+
+  return s(value);
+}
+
 function compact(values = []) {
-  return arr(values).map((value) => s(value)).filter(Boolean);
+  return arr(values).map((value) => compactLabel(value)).filter(Boolean);
 }
 
 function joinList(values = []) {
@@ -27,13 +45,24 @@ function extractVoiceRuntimeContext(runtimeConfig = {}) {
   const voiceProfile = obj(config.voiceProfile);
   const voiceBehavior = obj(config.voiceBehavior);
   const contact = obj(config.contact);
+  const business = obj(config.business || config.businessProfile || config.company);
   const operator = obj(config.operator);
   const operatorRouting = obj(config.operatorRouting);
   const activeVoiceChannel = obj(config.activeVoiceChannel);
   const realtime = obj(config.realtime);
 
   return {
-    companyName: s(config.companyName || voiceProfile.companyName || "the business"),
+    companyName: s(config.companyName || voiceProfile.companyName || business.name || "the business"),
+    businessType: s(
+      config.businessType ||
+        config.business_type ||
+        business.type ||
+        business.category ||
+        voiceProfile.businessType ||
+        voiceProfile.business_type ||
+        voiceProfile.industry ||
+        config.industry
+    ),
     language: s(config.defaultLanguage || voiceProfile.defaultLanguage || "az"),
     assistantName: s(voiceProfile.assistantName || "AI receptionist"),
     roleLabel: s(voiceProfile.roleLabel || "voice receptionist"),
@@ -43,6 +72,28 @@ function extractVoiceRuntimeContext(runtimeConfig = {}) {
     answerStyle: s(voiceProfile.answerStyle || "short_clear"),
     askStyle: s(voiceProfile.askStyle || "single_question"),
     allowedTopics: compact(voiceProfile.allowedTopics),
+    supportedIntents: compact([
+      ...arr(config.supportedIntents),
+      ...arr(config.supported_intents),
+      ...arr(voiceProfile.supportedIntents),
+      ...arr(voiceBehavior.supportedIntents),
+      ...arr(operatorRouting.supportedIntents),
+    ]),
+    unsupportedIntents: compact([
+      ...arr(config.unsupportedIntents),
+      ...arr(config.unsupported_intents),
+      ...arr(voiceProfile.unsupportedIntents),
+      ...arr(voiceBehavior.unsupportedIntents),
+      ...arr(operatorRouting.unsupportedIntents),
+    ]),
+    services: compact([
+      ...arr(config.services),
+      ...arr(config.serviceCatalog),
+      ...arr(config.businessServices),
+      ...arr(config.approvedServices),
+      ...arr(voiceProfile.services),
+      ...arr(voiceProfile.serviceCatalog),
+    ]),
     forbiddenTopics: compact([
       ...arr(voiceProfile.forbiddenTopics),
       ...arr(voiceBehavior.disallowedClaims),
@@ -100,6 +151,20 @@ export function buildLiveVoiceInstructions({
     "- Browser is only a temporary audio transport. It must not affect business logic.",
     "- UI scenario/evaluation data must not control caller intent.",
     "- Understand the caller only from their actual spoken words and approved business runtime.",
+    "",
+    "Business scope guard:",
+    "- Treat the approved business type, supported intents, and approved services as hard boundaries.",
+    "- Never role-play as a different type of business just because the caller uses a familiar word.",
+    "- Map ambiguous words to the actual business context before starting a flow. Example: reservation can mean hotel room, restaurant table, clinic appointment, or something else.",
+    "- If the caller asks for something outside this business scope, politely say this business does not provide that and redirect to what it actually supports.",
+    "- If the business is a restaurant and the caller asks for a hotel room, do not discuss rooms; offer restaurant services such as food order or table reservation only if supported.",
+    "- If the business is a hotel and the caller asks for food delivery, do not invent a restaurant order flow unless approved services say it is supported.",
+    "- If the business is a clinic and the caller asks for hotel or restaurant service, do not continue that flow; clarify the clinic scope.",
+    "",
+    context.businessType ? `Approved business type: ${context.businessType}.` : "",
+    context.supportedIntents.length ? `Supported caller intents: ${joinList(context.supportedIntents)}.` : "",
+    context.unsupportedIntents.length ? `Unsupported caller intents: ${joinList(context.unsupportedIntents)}.` : "",
+    context.services.length ? `Approved services/products: ${joinList(context.services)}.` : "",
     "",
     "Intent rules:",
     "- Do not assume booking, reservation, price, availability, room, service, date, guest count, callback, or handoff intent unless the caller clearly says it.",
@@ -205,6 +270,7 @@ export function buildBrowserOpeningInstructions({
     "You are answering a real inbound phone call.",
     `Primary spoken language: ${language}.`,
     companyName ? `Approved business name: ${companyName}.` : "",
+    context.businessType ? `Opening business scope: ${context.businessType}.` : "",
     "",
     "Opening behavior:",
     "- Create one short, natural Azerbaijani phone opening.",
