@@ -34,6 +34,14 @@ function j(v, d = {}) {
   return d;
 }
 
+
+function voiceActionsFromMeta(value = {}) {
+  const meta = j(value, {});
+  if (isObj(meta.actions)) return meta.actions;
+  if (isObj(meta.voiceActions)) return meta.voiceActions;
+  return {};
+}
+
 function nowIso(x) {
   try {
     if (!x) return null;
@@ -101,6 +109,7 @@ function normalizeVoiceSettings(row = {}) {
 
     costControl: j(row.cost_control, {}),
     meta: j(row.meta, {}),
+    actions: voiceActionsFromMeta(row.meta),
 
     createdAt: nowIso(row.created_at),
     updatedAt: nowIso(row.updated_at),
@@ -313,6 +322,15 @@ export async function getTenantVoiceSettings(db, tenantId) {
 export async function upsertTenantVoiceSettings(db, tenantId, input = {}) {
   if (!db || !tenantId) return null;
 
+  const inputMeta = j(input.meta, {});
+  const inputActions = isObj(input.actions)
+    ? input.actions
+    : isObj(input.voiceActions)
+      ? input.voiceActions
+      : isObj(inputMeta.actions)
+        ? inputMeta.actions
+        : {};
+
   const payload = {
     enabled: b(input.enabled, false),
     provider: s(input.provider, "twilio"),
@@ -355,7 +373,10 @@ export async function upsertTenantVoiceSettings(db, tenantId, input = {}) {
     twilio_config: JSON.stringify(j(input.twilioConfig, {})),
 
     cost_control: JSON.stringify(j(input.costControl, {})),
-    meta: JSON.stringify(j(input.meta, {})),
+    meta: JSON.stringify({
+      ...inputMeta,
+      ...(Object.keys(inputActions).length ? { actions: inputActions } : {}),
+    }),
   };
 
   const row = await one(

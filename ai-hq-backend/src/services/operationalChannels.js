@@ -458,6 +458,7 @@ function normalizeVoiceSettingsRow(settings = null) {
     twilioConfig,
     meta,
     routing,
+    actions: obj(value.actions || value.voiceActions || meta.actions || meta.voiceActions),
     voiceChannels: pickArray(
       value.voiceChannels,
       value.voice_channels,
@@ -497,6 +498,7 @@ function buildMissingVoiceOperational(reasonCode = "voice_settings_missing") {
       voice: "",
       instructions: "",
     },
+    actions: {},
     telephony: {
       phoneNumber: "",
       phoneSid: "",
@@ -661,6 +663,7 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
       voice: s(meta.realtimeVoice || meta.voice || "alloy"),
       instructions: s(normalized.instructions || meta.instructions || ""),
     },
+    actions: obj(normalized.actions),
     telephony: {
       phoneNumber,
       phoneSid: s(normalized.twilioPhoneSid),

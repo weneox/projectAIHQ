@@ -4,7 +4,85 @@ import {
 } from "../../db/helpers/voice.js";
 import { b, isObj, n, s } from "./shared.js";
 
+function normalizeVoiceActionMode(value = "") {
+  const raw = s(value).toLowerCase();
+  return ["live", "request_only", "disabled"].includes(raw) ? raw : "disabled";
+}
+
+function normalizeVoiceBusinessFamily(value = "") {
+  const raw = s(value).toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+  if (raw === "generic" || raw === "general") return "generic_business";
+
+  return ["restaurant", "hotel", "clinic", "salon", "ecommerce", "generic_business"].includes(raw)
+    ? raw
+    : "generic_business";
+}
+
+function normalizeVoiceActionProvider(value = "") {
+  return s(value).toLowerCase();
+}
+
+function normalizeVoiceActionScope(input = {}, key = "") {
+  const item = isObj(input[key]) ? input[key] : {};
+
+  return {
+    mode: normalizeVoiceActionMode(
+      item.mode ||
+        input[`${key}Mode`] ||
+        input[`${key}_mode`]
+    ),
+    provider: normalizeVoiceActionProvider(
+      item.provider ||
+        input[`${key}Provider`] ||
+        input[`${key}_provider`]
+    ),
+  };
+}
+
+function normalizeVoiceActionsInput(value = {}) {
+  const input = isObj(value) ? value : {};
+  const businessType = normalizeVoiceBusinessFamily(
+    input.businessType ||
+      input.business_type ||
+      input.businessFamily ||
+      "generic_business"
+  );
+
+  const availability = normalizeVoiceActionScope(input, "availability");
+  const ordering = normalizeVoiceActionScope(input, "ordering");
+  const reservation = normalizeVoiceActionScope(input, "reservation");
+  const appointment = normalizeVoiceActionScope(input, "appointment");
+  const handoff = normalizeVoiceActionScope(input, "handoff");
+
+  return {
+    businessType,
+    businessFamily: businessType,
+    availabilityMode: availability.mode,
+    orderingMode: ordering.mode,
+    reservationMode: reservation.mode,
+    appointmentMode: appointment.mode,
+    handoffMode: handoff.mode,
+    availability,
+    ordering,
+    reservation,
+    appointment,
+    handoff,
+  };
+}
+
 export function normalizeVoiceSettingsInput(body = {}) {
+  const bodyMeta = isObj(body.meta) ? body.meta : {};
+  const actionInput = isObj(body.actions)
+    ? body.actions
+    : isObj(body.voiceActions)
+      ? body.voiceActions
+      : isObj(bodyMeta.actions)
+        ? bodyMeta.actions
+        : isObj(bodyMeta.voiceActions)
+          ? bodyMeta.voiceActions
+          : {};
+  const actions = normalizeVoiceActionsInput(actionInput);
+
   return {
     enabled: b(body.enabled, false),
     provider: s(body.provider, "twilio"),
@@ -48,7 +126,11 @@ export function normalizeVoiceSettingsInput(body = {}) {
     twilioConfig: isObj(body.twilioConfig) ? body.twilioConfig : {},
 
     costControl: isObj(body.costControl) ? body.costControl : {},
-    meta: isObj(body.meta) ? body.meta : {},
+    actions,
+    meta: {
+      ...bodyMeta,
+      actions,
+    },
   };
 }
 
