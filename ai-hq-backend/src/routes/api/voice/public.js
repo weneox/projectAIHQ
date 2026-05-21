@@ -477,8 +477,8 @@ async function resolveBrowserVoiceRuntimeConfig(
     const result = await processVoiceTenantConfig({
       db,
       tenantKey: scope.tenantKey,
-      toNumber: s(req.body?.toNumber || "browser_lab"),
-      provider: "browser_lab",
+      toNumber: s(req.body?.toNumber || "browser"),
+      provider: "browser",
       getRuntime,
     });
 
@@ -486,7 +486,7 @@ async function resolveBrowserVoiceRuntimeConfig(
       const reasonCode = s(
         result?.error || result?.details?.reasonCode || "browser_voice_runtime_unavailable"
       );
-      logger?.warn?.("voice.lab.runtime_unavailable", {
+      logger?.warn?.("voice.browser.runtime_unavailable", {
         reasonCode,
         statusCode: Number(result?.statusCode || 0),
       });
@@ -498,7 +498,7 @@ async function resolveBrowserVoiceRuntimeConfig(
       config: readBrowserVoiceConfigPayload(result),
     };
   } catch (err) {
-    logger?.warn?.("voice.lab.runtime_resolution_failed", {
+    logger?.warn?.("voice.browser.runtime_resolution_failed", {
       error: s(err?.message || err),
     });
     return { ok: false, reasonCode: "browser_voice_runtime_resolution_failed" };
@@ -686,6 +686,16 @@ export function voiceRoutes({
   );
 
   r.get("/voice/lab/scenarios", requireOperatorSurfaceAccess, handleVoiceLabScenariosList);
+
+  r.post("/voice/browser/session", requireOperatorSurfaceAccess, (req, res) =>
+
+
+    handleBrowserVoiceSession(req, res, { db, dbDisabled, getRuntime })
+
+
+  );
+
+
 
   r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
     handleBrowserVoiceSession(req, res, { db, dbDisabled, getRuntime })
