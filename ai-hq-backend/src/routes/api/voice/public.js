@@ -463,11 +463,11 @@ async function resolveVoiceLabRuntimeConfig(
   { db, dbDisabled = false, getRuntime = getTenantBrainRuntime, logger }
 ) {
   if (req.body?.useTenantRuntime === false) {
-    return { ok: false, reasonCode: "voice_lab_manual_mode" };
+    return { ok: false, reasonCode: "browser_voice_manual_mode" };
   }
 
   if (dbDisabled || !db) {
-    return { ok: false, reasonCode: "voice_lab_db_unavailable" };
+    return { ok: false, reasonCode: "browser_voice_db_unavailable" };
   }
 
   const scope = await requireTenantScope(req, res, db);
@@ -486,7 +486,7 @@ async function resolveVoiceLabRuntimeConfig(
 
     if (result?.ok !== true) {
       const reasonCode = s(
-        result?.error || result?.details?.reasonCode || "voice_lab_runtime_unavailable"
+        result?.error || result?.details?.reasonCode || "browser_voice_runtime_unavailable"
       );
       logger?.warn?.("voice.lab.runtime_unavailable", {
         reasonCode,
@@ -503,7 +503,7 @@ async function resolveVoiceLabRuntimeConfig(
     logger?.warn?.("voice.lab.runtime_resolution_failed", {
       error: s(err?.message || err),
     });
-    return { ok: false, reasonCode: "voice_lab_runtime_resolution_failed" };
+    return { ok: false, reasonCode: "browser_voice_runtime_resolution_failed" };
   }
 }
 
@@ -519,12 +519,12 @@ function pickVoiceLabVoice(value = "") {
   return normalizeBrowserVoiceName(value);
 }
 
-async function handleVoiceLabSession(
+async function handleBrowserVoiceSession(
   req,
   res,
   { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
 ) {
-  const logger = getRouteLogger(req, "voice.lab.session");
+  const logger = getRouteLogger(req, "voice.browser.session");
   try {
     const apiKey = s(process.env.OPENAI_API_KEY);
     if (!apiKey) {
@@ -596,11 +596,11 @@ async function handleVoiceLabSession(
     }
 
     if (!upstream.ok) {
-      logger.warn("voice.lab.session.upstream_failed", {
+      logger.warn("voice.browser.session.upstream_failed", {
         status: upstream.status,
         error: s(payload?.error?.message || payload?.error || payload?.raw).slice(0, 240),
       });
-      return fail(res, upstream.status || 502, "voice_lab_session_failed", {
+      return fail(res, upstream.status || 502, "browser_voice_session_failed", {
         status: upstream.status,
         message: s(payload?.error?.message || payload?.error || "OpenAI realtime session failed"),
       });
@@ -623,14 +623,14 @@ async function handleVoiceLabSession(
       openingResponse: browserSessionPlan.openingResponse,
     });
   } catch (err) {
-    logger.error("voice.lab.session.failed", err);
+    logger.error("voice.browser.session.failed", err);
     recordVoiceRouteFailure({
-      route: "voice.lab.session",
-      reasonCode: "voice_lab_session_failed",
+      route: "voice.browser.session",
+      reasonCode: "browser_voice_session_failed",
       err,
       req,
     });
-    return fail(res, 500, "voice_lab_session_failed");
+    return fail(res, 500, "browser_voice_session_failed");
   }
 }
 
@@ -697,7 +697,7 @@ export function voiceRoutes({
   r.get("/voice/lab/scenarios", requireOperatorSurfaceAccess, handleVoiceLabScenariosList);
 
   r.post("/voice/lab/session", requireOperatorSurfaceAccess, (req, res) =>
-    handleVoiceLabSession(req, res, { db, dbDisabled, getRuntime })
+    handleBrowserVoiceSession(req, res, { db, dbDisabled, getRuntime })
   );
 
   r.get("/voice/lab/evaluations", requireOperatorSurfaceAccess, (req, res) =>
