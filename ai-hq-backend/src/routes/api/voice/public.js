@@ -22,6 +22,8 @@ import {
   listVoiceCalls,
   getVoiceDailyUsage,
   listVoiceCallSessions,
+  appendVoiceCallEvent,
+  updateVoiceCall,
   resolveTenantScope,
   } from "./repository.js";
 import {
@@ -625,6 +627,77 @@ async function handleBrowserVoiceSession(
   }
 }
 
+async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } = {}) {
+  const logger = getRouteLogger(req, "voice.browser.event");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const callId = s(req.params?.callId || req.body?.callId);
+    if (!callId) {
+      return fail(res, 400, "voice_call_id_required");
+    }
+
+    const call = await getScopedCallOrFail({ db, scope, callId, res });
+    if (!call) return;
+
+    const eventType = s(req.body?.eventType || req.body?.type || "browser_voice.event");
+    const actor = s(req.body?.actor || "system");
+    const payload = obj(req.body?.payload || {});
+    const textValue = s(req.body?.text || payload.text || payload.transcript || payload.delta);
+    const role = s(req.body?.role || payload.role);
+
+    const savedEvent = await appendVoiceCallEvent(db, {
+      callId,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      eventType,
+      actor,
+      payload: {
+        ...payload,
+        text: textValue,
+        role,
+      },
+    });
+
+    if (textValue && ["caller", "assistant", "user", "agent"].includes(role)) {
+      const previousTranscript = s(call.transcript);
+      const speaker = role === "assistant" || role === "agent" ? "Assistant" : "Caller";
+      const nextTranscript = [previousTranscript, `${speaker}: ${textValue}`]
+        .filter(Boolean)
+        .join("\n");
+
+      await updateVoiceCall(db, callId, {
+        transcript: nextTranscript,
+        outcome: s(req.body?.outcome || call.outcome || "in_progress"),
+      });
+    }
+
+    if (req.body?.ended === true) {
+      await updateVoiceCall(db, callId, {
+        status: "completed",
+        endedAt: new Date().toISOString(),
+        outcome: s(req.body?.outcome || "completed"),
+      });
+    }
+
+    return ok(res, { event: savedEvent });
+  } catch (err) {
+    logger.error("voice.browser.event.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.browser.event",
+      reasonCode: "browser_voice_event_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "browser_voice_event_failed");
+  }
+}
+
 export function voiceRoutes({
   db,
   dbDisabled = false,
@@ -686,6 +759,10 @@ export function voiceRoutes({
   );
 
   r.get("/voice/lab/scenarios", requireOperatorSurfaceAccess, handleVoiceLabScenariosList);
+
+  r.post("/voice/browser/calls/:callId/events", requireOperatorSurfaceAccess, (req, res) =>
+    handleBrowserVoiceCallEvent(req, res, { db, dbDisabled })
+  );
 
   r.post("/voice/browser/session", requireOperatorSurfaceAccess, (req, res) =>
 

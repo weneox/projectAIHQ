@@ -105,6 +105,11 @@ export async function createBrowserVoiceSession(body = {}) {
   return apiPost("/api/voice/browser/session", body);
 }
 
+export async function appendBrowserVoiceCallEvent(callId, body = {}) {
+  if (!callId) return null;
+  return apiPost(`/api/voice/browser/calls/${encodeURIComponent(callId)}/events`, body);
+}
+
 export async function listVoiceChannels(params = {}) {
   const j = await apiGet(`/api/voice/channels${qs(params)}`);
   return {
