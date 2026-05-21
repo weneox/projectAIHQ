@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ClipboardCheck,
   Mic,
@@ -10,7 +10,6 @@ import {
 
 import {
   createVoiceLabEvaluation,
-  createVoiceLabSession,
   listVoiceLabEvaluations,
   listVoiceLabScenarios,
 } from "../api/voice.js";
@@ -20,6 +19,7 @@ import {
   PageCanvas,
   PageHeader,
 } from "../components/ui/AppShellPrimitives.jsx";
+import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
 
 const VOICE_LAB_SCENARIOS = [
   {
@@ -111,70 +111,6 @@ const DEFAULT_EVALUATION = {
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
-}
-
-function readRealtimeClientSecret(payload = {}) {
-  return (
-    s(payload?.clientSecret) ||
-    s(payload?.session?.client_secret?.value) ||
-    s(payload?.session?.clientSecret?.value)
-  );
-}
-
-function readBrowserVoiceOpeningResponse(payload = {}) {
-  const opening =
-    payload?.openingResponse &&
-    typeof payload.openingResponse === "object" &&
-    !Array.isArray(payload.openingResponse)
-      ? payload.openingResponse
-      : {};
-
-  const instructions = s(opening.instructions);
-
-  return {
-    enabled: opening.enabled !== false,
-    maxOutputTokens: Math.max(
-      40,
-      Math.min(240, Number(opening.maxOutputTokens || 140))
-    ),
-    instructions,
-  };
-}
-
-function startBrowserVoiceOpening(dc, session) {
-  if (!dc || dc.readyState !== "open") return false;
-
-  const opening = readBrowserVoiceOpeningResponse(session);
-  if (!opening.enabled || !opening.instructions) return false;
-
-  dc.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions: opening.instructions,
-        max_output_tokens: opening.maxOutputTokens,
-      },
-    })
-  );
-
-  return true;
-}
-
-
-function normalizeLogEvent(event = {}) {
-  const type = s(event?.type, "event");
-  const text =
-    s(event?.transcript) ||
-    s(event?.text) ||
-    s(event?.delta) ||
-    s(event?.error?.message) ||
-    "";
-
-  return {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    type,
-    text: text.slice(0, 220),
-  };
 }
 
 function scoreAverage(evaluation = DEFAULT_EVALUATION) {
@@ -280,10 +216,6 @@ export default function VoiceLab() {
     }
   }
 
-  function addEvent(event) {
-    setEvents((current) => [normalizeLogEvent(event), ...current].slice(0, 8));
-  }
-
   function updateEvaluation(key, value) {
     setEvaluation((current) => ({
       ...current,
@@ -331,164 +263,7 @@ export default function VoiceLab() {
     }
   }
 
-  async function stopLab() {
-    setStatus("stopping");
 
-    try {
-      dcRef.current?.close?.();
-    } catch {
-      // noop
-    }
-
-    try {
-      pcRef.current?.close?.();
-    } catch {
-      // noop
-    }
-
-    try {
-      localStreamRef.current?.getTracks?.().forEach((track) => track.stop());
-    } catch {
-      // noop
-    }
-
-    dcRef.current = null;
-    pcRef.current = null;
-    localStreamRef.current = null;
-
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
-
-    setStatus("idle");
-  }
-
-  async function startLab() {
-    setError("");
-    setEvents([]);
-    setRuntimeMeta(null);
-    setStatus("requesting_microphone");
-
-    try {
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      localStreamRef.current = localStream;
-
-      setStatus("creating_session");
-
-      const session = await createVoiceLabSession({
-        scenarioId: scenario.id,
-        provider: "browser_lab",
-        toNumber: "browser_lab",
-      });
-
-      setRuntimeMeta({
-        runtimeApplied: session?.runtimeApplied === true,
-        reasonCode: s(session?.runtimeReasonCode),
-        tenantKey: s(session?.tenantKey),
-        activeVoiceChannel: session?.activeVoiceChannel || null,
-        match: session?.match || null,
-      });
-
-      const sessionModel = s(session?.model, "gpt-realtime-1.5");
-      const sessionVoice = s(session?.voice, "coral");
-      setModel(sessionModel);
-      setVoice(sessionVoice);
-
-      const clientSecret = readRealtimeClientSecret(session);
-      if (!clientSecret) {
-        throw new Error("Realtime client secret alınmadı.");
-      }
-
-      setStatus("connecting");
-      const pc = new RTCPeerConnection();
-      pcRef.current = pc;
-
-      pc.ontrack = (event) => {
-        if (!remoteAudioRef.current) return;
-        const [stream] = event.streams || [];
-        if (stream) {
-          remoteAudioRef.current.srcObject = stream;
-          remoteAudioRef.current.play?.().catch(() => {});
-        }
-      };
-
-      localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, localStream);
-      });
-
-      const dc = pc.createDataChannel("oai-events");
-      dcRef.current = dc;
-
-      dc.onopen = () => {
-        setStatus("live");
-        addEvent({ type: "browser_voice.connected", text: "Browser voice call connected." });
-
-        try {
-          const openingStarted = startBrowserVoiceOpening(dc, session);
-          addEvent({
-            type: openingStarted
-              ? "browser_voice.opening_started"
-              : "browser_voice.opening_skipped",
-            text: openingStarted
-              ? "Backend voice assistant opening started."
-              : "No backend opening response was available.",
-          });
-        } catch (err) {
-          addEvent({
-            type: "browser_voice.opening_failed",
-            text: s(err?.message || err),
-          });
-        }
-      };
-
-      dc.onmessage = (message) => {
-        try {
-          const event = JSON.parse(message.data);
-          addEvent(event);
-        } catch {
-          addEvent({ type: "message", text: message.data });
-        }
-      };
-
-      dc.onerror = () => {
-        addEvent({ type: "lab.data_channel_error" });
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const sdpResponse = await fetch(
-        "https://api.openai.com/v1/realtime/calls",
-        {
-          method: "POST",
-          body: offer.sdp,
-          headers: {
-            Authorization: `Bearer ${clientSecret}`,
-            "Content-Type": "application/sdp",
-          },
-        }
-      );
-
-      if (!sdpResponse.ok) {
-        throw new Error(`Realtime WebRTC connect failed: ${sdpResponse.status}`);
-      }
-
-      const answerSdp = await sdpResponse.text();
-      await pc.setRemoteDescription({
-        type: "answer",
-        sdp: answerSdp,
-      });
-    } catch (err) {
-      setError(s(err?.message || err, "Voice test başlatmaq alınmadı."));
-      await stopLab();
-    }
-  }
 
   useEffect(() => {
     loadScenarios();
@@ -506,19 +281,19 @@ export default function VoiceLab() {
   return (
     <PageCanvas>
       <PageHeader
-        eyebrow="Internal voice test"
-        title="Browser test call"
+        eyebrow="Browser voice call"
+        title="Browser voice call"
         description="Real nömrə almadan əvvəl AI resepsionistin danışığını browserdən yoxla."
         actions={
           isLive ? (
-            <Button variant="danger" leftIcon={<PhoneOff className="h-4 w-4" />} onClick={stopLab}>
+            <Button variant="danger" leftIcon={<PhoneOff className="h-4 w-4" />} onClick={stopCall}>
               Stop call
             </Button>
           ) : (
             <Button
               leftIcon={<Mic className="h-4 w-4" />}
               loading={isBusy}
-              onClick={startLab}
+              onClick={startCall}
             >
               Start test call
             </Button>
@@ -529,7 +304,7 @@ export default function VoiceLab() {
       <InlineNotice
         tone="info"
         title="Bu product deyil, test telefonudur"
-        description="Danışıq beyni backend composer-dən gəlir. Burada prompt yazmırıq; sadəcə agentlə danışıb keyfiyyəti yoxlayırıq."
+        description="Danışıq beyni backend voice engine-dən gəlir. Burada prompt yazmırıq; sadəcə agentlə danışıb keyfiyyəti yoxlayırıq."
       />
 
       {runtimeMeta ? (
@@ -538,7 +313,7 @@ export default function VoiceLab() {
           title={runtimeMeta.runtimeApplied ? "Production runtime applied" : "Fallback runtime"}
           description={
             runtimeMeta.runtimeApplied
-              ? "Agent tenant voice runtime və backend composer ilə başladı."
+              ? "Agent tenant voice runtime və backend voice engine ilə başladı."
               : `Runtime tətbiq olunmadı: ${s(runtimeMeta.reasonCode, "fallback")}.`
           }
         />
@@ -556,7 +331,7 @@ export default function VoiceLab() {
                 <Radio className="h-5 w-5 text-text" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-text">Test call booth</h2>
+                <h2 className="text-lg font-semibold text-text">Browser call booth</h2>
                 <p className="text-sm text-text-muted">Status: {status}</p>
               </div>
             </div>
