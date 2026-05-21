@@ -69,6 +69,54 @@ function normalizeVoiceEvent(event = {}) {
   };
 }
 
+function parseRealtimeToolArguments(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function readRealtimeToolCallFromCandidate(candidate = {}) {
+  if (!candidate || typeof candidate !== "object") return null;
+
+  const name = s(candidate.name || candidate.functionName || candidate.function_name);
+  if (name !== "end_call") return null;
+
+  return {
+    name,
+    arguments: parseRealtimeToolArguments(candidate.arguments || candidate.args),
+  };
+}
+
+function extractRealtimeToolCall(event = {}) {
+  const type = s(event?.type);
+
+  if (type === "response.function_call_arguments.done") {
+    return readRealtimeToolCallFromCandidate(event);
+  }
+
+  if (type === "response.output_item.done") {
+    return readRealtimeToolCallFromCandidate(event.item || {});
+  }
+
+  if (type === "response.done") {
+    const output = Array.isArray(event?.response?.output) ? event.response.output : [];
+    for (const item of output) {
+      const toolCall = readRealtimeToolCallFromCandidate(item);
+      if (toolCall) return toolCall;
+    }
+  }
+
+  return null;
+}
+
 function extractRealtimeTranscriptEvent(event = {}) {
   const type = s(event?.type);
 
@@ -140,6 +188,7 @@ export default function useBrowserVoiceCall() {
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const callIdRef = useRef("");
+  const endCallTimerRef = useRef(null);
 
   const addEvent = useCallback((event) => {
     setEvents((current) => [normalizeVoiceEvent(event), ...current].slice(0, 8));
