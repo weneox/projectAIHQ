@@ -74,6 +74,11 @@ import {
   buildVoiceActionCallPatch,
   executeVoiceAction,
 } from "../../../modules/voice/actions/voiceActionRuntime.js";
+import {
+  buildRealtimeControlTarget,
+  buildRealtimeProviderLinkPayload,
+  normalizeProviderRealtimeCallId,
+} from "../../../modules/voice/realtimeControlPlane.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -555,6 +560,90 @@ async function handleBrowserVoiceSession(
   }
 }
 
+async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false } = {}) {
+  const logger = getRouteLogger(req, "voice.browser.realtime_link");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const callId = s(req.params?.callId || req.body?.callId);
+    if (!callId) {
+      return fail(res, 400, "voice_call_id_required");
+    }
+
+    const call = await getScopedCallOrFail({ db, scope, callId, res });
+    if (!call) return;
+
+    const providerRealtimeCallId = normalizeProviderRealtimeCallId(
+      req.body?.providerRealtimeCallId ||
+        req.body?.providerCallId ||
+        req.body?.realtimeCallId ||
+        req.body?.locationHeader
+    );
+
+    if (!providerRealtimeCallId) {
+      return fail(res, 400, "provider_realtime_call_id_required");
+    }
+
+    const target = buildRealtimeControlTarget({
+      provider: s(req.body?.provider || "openai"),
+      transport: s(req.body?.transport || "webrtc"),
+      voiceCallId: callId,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      providerRealtimeCallId,
+      model: s(req.body?.model),
+      voice: s(req.body?.voice),
+    });
+
+    const linkPayload = buildRealtimeProviderLinkPayload({
+      target,
+      locationHeader: s(req.body?.locationHeader),
+      source: "browser_webrtc_sdp",
+    });
+
+    const savedEvent = await appendVoiceCallEvent(db, {
+      callId,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      eventType: "browser_voice.provider_session_linked",
+      actor: "system",
+      payload: linkPayload,
+    });
+
+    const previousMeta = obj(call.meta);
+    await updateVoiceCall(db, callId, {
+      providerCallSid: s(call.providerCallSid || providerRealtimeCallId),
+      meta: {
+        ...previousMeta,
+        realtime: {
+          ...obj(previousMeta.realtime),
+          ...target,
+          linkPayload,
+        },
+      },
+    });
+
+    return ok(res, {
+      controlTarget: target,
+      event: savedEvent,
+    });
+  } catch (err) {
+    logger.error("voice.browser.realtime_link.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.browser.realtime_link",
+      reasonCode: "browser_voice_realtime_link_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "browser_voice_realtime_link_failed");
+  }
+}
+
 async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } = {}) {
   const logger = getRouteLogger(req, "voice.browser.event");
   try {
@@ -858,6 +947,10 @@ export function voiceRoutes({
     handleVoiceActionRuntimePreview(req, res, { db, dbDisabled, getRuntime })
   );
 
+
+  r.post("/voice/browser/calls/:callId/realtime-link", requireOperatorSurfaceAccess, (req, res) =>
+    handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled })
+  );
 
   r.post("/voice/browser/calls/:callId/events", requireOperatorSurfaceAccess, (req, res) =>
     handleBrowserVoiceCallEvent(req, res, { db, dbDisabled })

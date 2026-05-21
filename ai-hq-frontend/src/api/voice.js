@@ -110,6 +110,14 @@ export async function appendBrowserVoiceCallEvent(callId, body = {}) {
   return apiPost(`/api/voice/browser/calls/${encodeURIComponent(callId)}/events`, body);
 }
 
+export async function linkBrowserVoiceRealtimeSession(callId, body = {}) {
+  if (!callId) throw new Error("callId is required");
+  return apiPost(
+    `/api/voice/browser/calls/${encodeURIComponent(callId)}/realtime-link`,
+    body
+  );
+}
+
 export async function executeBrowserVoiceTool(callId, body = {}) {
   if (!callId) throw new Error("callId is required");
   return apiPost(`/api/voice/browser/calls/${encodeURIComponent(callId)}/tools`, body);

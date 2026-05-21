@@ -4,6 +4,7 @@ import {
   appendBrowserVoiceCallEvent,
   createBrowserVoiceSession,
   executeBrowserVoiceTool,
+  linkBrowserVoiceRealtimeSession,
 } from "../../api/voice.js";
 
 function s(value, fallback = "") {
@@ -39,6 +40,44 @@ function readBrowserVoiceOpeningResponse(payload = {}) {
       Math.min(240, Number(opening.maxOutputTokens || 120))
     ),
     instructions: s(opening.instructions),
+  };
+}
+
+function normalizeRealtimeProviderCallId(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    const byQuery = s(
+      url.searchParams.get("call_id") ||
+        url.searchParams.get("callId") ||
+        url.searchParams.get("id")
+    );
+    if (byQuery) return byQuery;
+
+    const parts = url.pathname.split("/").map((part) => s(part)).filter(Boolean);
+    const fromPath = [...parts].reverse().find((part) =>
+      /^call_[A-Za-z0-9_-]+$/.test(part) || /^sess_[A-Za-z0-9_-]+$/.test(part)
+    );
+    if (fromPath) return fromPath;
+  } catch {
+    // noop
+  }
+
+  const match = raw.match(/\b(?:call|sess)_[A-Za-z0-9_-]+\b/);
+  return s(match?.[0]);
+}
+
+function readRealtimeProviderLink(response) {
+  const locationHeader = s(
+    response?.headers?.get?.("Location") ||
+      response?.headers?.get?.("location")
+  );
+
+  return {
+    locationHeader,
+    providerRealtimeCallId: normalizeRealtimeProviderCallId(locationHeader),
   };
 }
 
@@ -560,11 +599,47 @@ export default function useBrowserVoiceCall() {
         throw new Error(`Realtime WebRTC connect failed: ${sdpResponse.status}`);
       }
 
+      const realtimeProviderLink = readRealtimeProviderLink(sdpResponse);
       const answerSdp = await sdpResponse.text();
       await pc.setRemoteDescription({
         type: "answer",
         sdp: answerSdp,
       });
+
+      if (browserCallId && realtimeProviderLink.providerRealtimeCallId) {
+        linkBrowserVoiceRealtimeSession(browserCallId, {
+          provider: "openai",
+          transport: "webrtc",
+          providerRealtimeCallId: realtimeProviderLink.providerRealtimeCallId,
+          locationHeader: realtimeProviderLink.locationHeader,
+          model: sessionModel,
+          voice: sessionVoice,
+        })
+          .then(() => {
+            sessionMetaRef.current = {
+              ...obj(sessionMetaRef.current),
+              providerRealtimeCallId: realtimeProviderLink.providerRealtimeCallId,
+            };
+            setRuntimeMeta((current) =>
+              current
+                ? {
+                    ...current,
+                    providerRealtimeCallId: realtimeProviderLink.providerRealtimeCallId,
+                  }
+                : current
+            );
+            addEvent({
+              type: "browser_voice.provider_session_linked",
+              text: "Realtime provider session linked.",
+            });
+          })
+          .catch(() => {
+            addEvent({
+              type: "browser_voice.provider_session_link_failed",
+              text: "Realtime provider session link failed.",
+            });
+          });
+      }
     } catch (err) {
       setError(s(err?.message || err, "Browser voice call başlatmaq alınmadı."));
       stopCall();
