@@ -68,6 +68,11 @@ import {
   normalizeBrowserVoiceName,
 } from "../../../modules/voice/engine/browserRealtimeSession.js";
 import {
+  buildVoiceActionPolicy,
+  buildVoiceActionToolDefinitions,
+  normalizeVoiceActionRuntime,
+} from "../../../modules/voice/actions/voiceActionContracts.js";
+import {
   executeVoiceAction,
 } from "../../../modules/voice/actions/voiceActionRuntime.js";
 
@@ -796,6 +801,65 @@ async function handleBrowserVoiceToolCall(
   }
 }
 
+async function handleVoiceActionRuntimePreview(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+) {
+  const logger = getRouteLogger(req, "voice.actions.runtime");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const runtimeResult = await processVoiceTenantConfig({
+      db,
+      tenantKey: scope.tenantKey,
+      toNumber: s(req.query?.toNumber || req.body?.toNumber || "browser"),
+      provider: s(req.query?.provider || req.body?.provider || "browser"),
+      getRuntime,
+    });
+
+    if (runtimeResult?.ok !== true) {
+      return ok(res, {
+        runtimeApplied: false,
+        reasonCode: s(runtimeResult?.error || runtimeResult?.details?.reasonCode || "voice_runtime_unavailable"),
+        actionRuntime: normalizeVoiceActionRuntime({}),
+        tools: buildVoiceActionToolDefinitions({}),
+        policy: buildVoiceActionPolicy({}),
+      });
+    }
+
+    const runtimeConfig = readBrowserVoiceConfigPayload(runtimeResult);
+    const actionRuntime = normalizeVoiceActionRuntime(runtimeConfig);
+    const tools = buildVoiceActionToolDefinitions(runtimeConfig);
+    const policy = buildVoiceActionPolicy(runtimeConfig);
+
+    return ok(res, {
+      runtimeApplied: true,
+      actionRuntime,
+      tools: tools.map((tool) => ({
+        type: s(tool.type),
+        name: s(tool.name),
+        description: s(tool.description),
+      })),
+      policy,
+    });
+  } catch (err) {
+    logger.error("voice.actions.runtime.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.actions.runtime",
+      reasonCode: "voice_actions_runtime_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_actions_runtime_failed");
+  }
+}
+
 export function voiceRoutes({
   db,
   dbDisabled = false,
@@ -854,6 +918,10 @@ export function voiceRoutes({
       audit,
       action: "routing_test",
     })
+  );
+
+  r.get("/voice/actions/runtime", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceActionRuntimePreview(req, res, { db, dbDisabled, getRuntime })
   );
 
   r.get("/voice/lab/scenarios", requireOperatorSurfaceAccess, handleVoiceLabScenariosList);
