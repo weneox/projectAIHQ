@@ -144,10 +144,23 @@ function sendRealtimeToolOutput(dc, toolCall = {}, result = {}) {
     })
   );
 
+  const assistantInstruction = s(
+    result?.assistantInstruction || result?.nextAssistantInstruction
+  );
+
   dc.send(
-    JSON.stringify({
-      type: "response.create",
-    })
+    JSON.stringify(
+      assistantInstruction
+        ? {
+            type: "response.create",
+            response: {
+              instructions: assistantInstruction,
+            },
+          }
+        : {
+            type: "response.create",
+          }
+    )
   );
 
   return true;
