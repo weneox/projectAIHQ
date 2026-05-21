@@ -92,3 +92,26 @@ export function buildVoiceOpeningSpeechPolicy({ language = "az", companyName = "
     "- Stop after the opening and wait for the caller.",
   ];
 }
+
+export function buildVoiceLanguageProsodyGuide(language = "") {
+  const lang = normalizeVoiceLanguage(language);
+
+  if (lang === "az") {
+    return [
+      "Azerbaijani prosody guidance:",
+      "- Use natural Azerbaijani sentence melody, not Turkish, Russian, or English stress patterns.",
+      "- For Azerbaijani words, prefer natural final-syllable leaning stress where it sounds idiomatic.",
+      "- Avoid incorrectly stressing the first syllable of common Azerbaijani words.",
+      "- Keep function words light and keep the main semantic stress near the end of the phrase when natural.",
+      "- Do not exaggerate the accent; sound like a calm local receptionist.",
+    ];
+  }
+
+  return [
+    "Speech prosody guidance:",
+    "- Speak naturally in the caller's language or configured primary business language.",
+    "- Use native-like stress and sentence melody for that language.",
+    "- Do not force Azerbaijani, Turkish, Russian, or English stress patterns onto another language.",
+    "- Do not over-enunciate or pause between every word.",
+  ];
+}

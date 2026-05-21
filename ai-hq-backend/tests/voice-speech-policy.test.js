@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildVoiceLanguageProsodyGuide,
   buildVoiceOpeningSpeechPolicy,
   buildVoiceSpeechPolicy,
 } from "../src/modules/voice/speechPolicy.js";
@@ -55,4 +56,20 @@ test("browser opening instructions include centralized opening policy", () => {
 
   assert.match(instructions, /Opening speech policy/);
   assert.match(instructions, /Buyurun, necə kömək edə bilərəm/);
+});
+
+test("live voice instructions use centralized prosody policy", () => {
+  const policy = buildVoiceLanguageProsodyGuide("az").join("\n");
+  const instructions = buildLiveVoiceInstructions({
+    runtimeApplied: true,
+    runtimeConfig: {
+      companyName: "Demo Clinic",
+      businessType: "clinic",
+      defaultLanguage: "az",
+    },
+  });
+
+  assert.match(policy, /Azerbaijani prosody guidance/);
+  assert.match(instructions, /Azerbaijani prosody guidance/);
+  assert.match(instructions, /natural Azerbaijani sentence melody/);
 });

@@ -3,6 +3,7 @@ import {
   buildVoiceActionToolDefinitions,
 } from "../actions/voiceActionContracts.js";
 import {
+  buildVoiceLanguageProsodyGuide,
   buildVoiceOpeningSpeechPolicy,
   buildVoiceSpeechPolicy,
 } from "../speechPolicy.js";
@@ -50,39 +51,6 @@ function joinList(values = []) {
 
 function truncate(value = "", max = 1600) {
   return s(value).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
-}
-
-
-function normalizeLanguageCode(value = "") {
-  const raw = s(value).toLowerCase().replace("_", "-");
-  if (raw.startsWith("az")) return "az";
-  if (raw.startsWith("tr")) return "tr";
-  if (raw.startsWith("ru")) return "ru";
-  if (raw.startsWith("en")) return "en";
-  return raw || "az";
-}
-
-function buildLanguageProsodyGuide(language = "") {
-  const lang = normalizeLanguageCode(language);
-
-  if (lang === "az") {
-    return [
-      "Azerbaijani prosody guidance:",
-      "- Use natural Azerbaijani sentence melody, not Turkish, Russian, or English stress patterns.",
-      "- For Azerbaijani words, prefer natural final-syllable leaning stress where it sounds idiomatic.",
-      "- Avoid incorrectly stressing the first syllable of common Azerbaijani words.",
-      "- Keep function words light and keep the main semantic stress near the end of the phrase when natural.",
-      "- Do not exaggerate the accent; sound like a calm local receptionist.",
-    ];
-  }
-
-  return [
-    "Speech prosody guidance:",
-    "- Speak naturally in the caller's language or configured primary business language.",
-    "- Use native-like stress and sentence melody for that language.",
-    "- Do not force Azerbaijani, Turkish, Russian, or English stress patterns onto another language.",
-    "- Do not over-enunciate or pause between every word.",
-  ];
 }
 
 
@@ -256,7 +224,7 @@ export function buildLiveVoiceInstructions({
     "- Never say you will check and get back unless you first collect the caller's name and phone number.",
     "- If follow-up is needed, ask for name and phone number, then say the team can contact them after confirmation.",
     "",
-    ...buildLanguageProsodyGuide(context.language),
+    ...buildVoiceLanguageProsodyGuide(context.language),
     "",
     "Call lifecycle:",
     "- Do not keep the conversation open unnecessarily.",
