@@ -58,9 +58,7 @@ import {
   listVoiceLabEvaluationsFromSettings,
   } from "../../../modules/voice/labEvaluation.js";
 import {
-  getVoiceLabScenario,
   listVoiceLabScenarios,
-  normalizeVoiceLabScenarioId,
 } from "../../../modules/voice/labScenarios.js";
 import {
   buildBrowserRealtimeSessionPlan,
@@ -537,12 +535,6 @@ async function handleBrowserVoiceSession(
 
     let model = pickVoiceLabModel(req.body?.model);
     let voice = pickVoiceLabVoice(req.body?.voice);
-    const scenarioId = normalizeVoiceLabScenarioId(req.body?.scenarioId || "restaurant_order");
-    const scenario = getVoiceLabScenario(scenarioId);
-    if (!scenario) {
-      return fail(res, 400, "voice_lab_scenario_unknown");
-    }
-
     const runtimeResolution = await resolveVoiceLabRuntimeConfig(req, res, {
       db,
       dbDisabled,
@@ -609,7 +601,6 @@ async function handleBrowserVoiceSession(
     return ok(res, {
       model,
       voice,
-      scenario,
       runtimeApplied,
       runtimeReasonCode: runtimeApplied ? "" : s(runtimeResolution?.reasonCode),
       activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
