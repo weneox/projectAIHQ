@@ -7,6 +7,9 @@ import {
   normalizeVoiceActionRuntime,
 } from "../src/modules/voice/actions/voiceActionContracts.js";
 import {
+  getVoiceActionToolRequiredFields,
+} from "../src/modules/voice/callState.js";
+import {
   buildVoiceConfigFromProjectedRuntime,
 } from "../src/modules/voice/config.js";
 
@@ -82,6 +85,24 @@ test("voice action runtime reads only explicit action modes", () => {
     "create_handoff_request",
     "end_call",
   ]);
+});
+
+test("voice action tool schemas read centralized required fields", () => {
+  const tools = buildVoiceActionToolDefinitions({
+    availabilityMode: "live",
+    reservationMode: "request_only",
+    orderingMode: "request_only",
+    appointmentMode: "request_only",
+    handoffMode: "request_only",
+  });
+
+  for (const tool of tools) {
+    assert.deepEqual(
+      tool.parameters.required,
+      getVoiceActionToolRequiredFields(tool.name),
+      `${tool.name} required fields should stay owned by call state`
+    );
+  }
 });
 
 test("projected voice config exposes explicit action runtime payload", () => {

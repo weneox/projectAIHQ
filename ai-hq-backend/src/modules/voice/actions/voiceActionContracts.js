@@ -1,3 +1,7 @@
+import {
+  getVoiceActionToolRequiredFields,
+} from "../callState.js";
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
@@ -196,7 +200,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           roomType: { type: "string" },
           notes: { type: "string" },
         },
-        required: ["intent"],
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CHECK_AVAILABILITY),
       },
     });
   }
@@ -219,7 +223,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           service: { type: "string" },
           notes: { type: "string" },
         },
-        required: ["date", "customerName", "phone"],
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CREATE_RESERVATION_REQUEST),
       },
     });
   }
@@ -242,7 +246,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           paymentMethod: { type: "string" },
           notes: { type: "string" },
         },
-        required: ["items", "fulfillment", "phone"],
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CREATE_ORDER_REQUEST),
       },
     });
   }
@@ -264,7 +268,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           phone: { type: "string" },
           notes: { type: "string" },
         },
-        required: ["service", "customerName", "phone"],
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CREATE_APPOINTMENT_REQUEST),
       },
     });
   }
@@ -284,7 +288,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           phone: { type: "string" },
           summary: { type: "string" },
         },
-        required: ["reason", "phone", "summary"],
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CREATE_HANDOFF_REQUEST),
       },
     });
   }
@@ -304,7 +308,7 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
         },
         summary: { type: "string" },
       },
-      required: ["reason"],
+      required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.END_CALL),
     },
   });
 

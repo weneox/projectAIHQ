@@ -13,6 +13,19 @@ function cleanPayload(value = {}) {
   );
 }
 
+const VOICE_ACTION_TOOL_REQUIRED_FIELDS = Object.freeze({
+  check_availability: Object.freeze(["intent"]),
+  create_reservation_request: Object.freeze(["date", "customerName", "phone"]),
+  create_order_request: Object.freeze(["items", "fulfillment", "phone"]),
+  create_appointment_request: Object.freeze(["service", "customerName", "phone"]),
+  create_handoff_request: Object.freeze(["reason", "phone", "summary"]),
+  end_call: Object.freeze(["reason"]),
+});
+
+export function getVoiceActionToolRequiredFields(actionName = "") {
+  return [...(VOICE_ACTION_TOOL_REQUIRED_FIELDS[s(actionName)] || [])];
+}
+
 function normalizeLanguage(value = "") {
   const raw = s(value).toLowerCase().replace("_", "-");
   if (raw.startsWith("az")) return "az";
