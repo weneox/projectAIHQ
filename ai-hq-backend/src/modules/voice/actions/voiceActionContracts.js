@@ -6,10 +6,83 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function compact(values = []) {
+  return arr(values).map((item) => s(item).toLowerCase()).filter(Boolean);
+}
+
 function normalizeActionMode(value = "") {
   const raw = s(value).toLowerCase();
 
   if (["live", "request_only", "disabled"].includes(raw)) return raw;
+
+  return "";
+}
+
+function normalizeActionModeOrDisabled(value = "") {
+  return normalizeActionMode(value) || "disabled";
+}
+
+function includesAny(values = [], needles = []) {
+  const haystack = compact(values).join(" ");
+  return needles.some((needle) => haystack.includes(s(needle).toLowerCase()));
+}
+
+function inferBusinessFamily(runtimeConfig = {}, actions = {}) {
+  const raw = [
+    runtimeConfig.businessType,
+    runtimeConfig.business_type,
+    runtimeConfig.industry,
+    runtimeConfig.business?.type,
+    runtimeConfig.business?.category,
+    runtimeConfig.voiceProfile?.businessType,
+    runtimeConfig.voiceProfile?.business_type,
+    runtimeConfig.voiceProfile?.industry,
+    actions.businessType,
+  ]
+    .map((item) => s(item).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  if (/(restaurant|cafe|caf[eé]|food|pizza|burger|qida|restoran|kafe)/.test(raw)) {
+    return "restaurant";
+  }
+
+  if (/(hotel|hostel|guesthouse|apartment|room|otel|mehmanxana)/.test(raw)) {
+    return "hotel";
+  }
+
+  if (/(clinic|doctor|dentist|medical|hospital|klinika|həkim|hekim|stomatolog)/.test(raw)) {
+    return "clinic";
+  }
+
+  if (/(salon|barber|beauty|spa|hair|nail|bərbər|berber|gözəllik|gozellik)/.test(raw)) {
+    return "salon";
+  }
+
+  if (/(shop|store|ecommerce|e-commerce|retail|delivery|online store|mağaza|magaza)/.test(raw)) {
+    return "ecommerce";
+  }
+
+  return "";
+}
+
+function readSupportedIntents(runtimeConfig = {}, actions = {}) {
+  return compact([
+    ...arr(runtimeConfig.supportedIntents),
+    ...arr(runtimeConfig.supported_intents),
+    ...arr(runtimeConfig.voiceProfile?.supportedIntents),
+    ...arr(runtimeConfig.voiceBehavior?.supportedIntents),
+    ...arr(runtimeConfig.operatorRouting?.supportedIntents),
+    ...arr(actions.supportedIntents),
+  ]);
+}
+
+function inferRequestMode({ explicitMode = "", supportedIntents = [], businessFamily = "", intentNeedles = [], businessFamilies = [] } = {}) {
+  const mode = normalizeActionMode(explicitMode);
+  if (mode) return mode;
+
+  if (includesAny(supportedIntents, intentNeedles)) return "request_only";
+  if (businessFamilies.includes(businessFamily)) return "request_only";
 
   return "disabled";
 }
@@ -31,29 +104,48 @@ export const VOICE_ACTION_MODES = Object.freeze({
 
 export function normalizeVoiceActionRuntime(runtimeConfig = {}) {
   const actions = runtimeConfig?.actions || runtimeConfig?.voiceActions || {};
+  const businessFamily = inferBusinessFamily(runtimeConfig, actions);
+  const supportedIntents = readSupportedIntents(runtimeConfig, actions);
 
   return {
-    availabilityMode: normalizeActionMode(
+    businessFamily,
+    supportedIntents,
+    availabilityMode: normalizeActionModeOrDisabled(
       runtimeConfig.availabilityMode ||
         actions.availabilityMode ||
         actions.availability?.mode
     ),
-    orderingMode: normalizeActionMode(
-      runtimeConfig.orderingMode ||
+    orderingMode: inferRequestMode({
+      explicitMode:
+        runtimeConfig.orderingMode ||
         actions.orderingMode ||
-        actions.ordering?.mode
-    ),
-    reservationMode: normalizeActionMode(
-      runtimeConfig.reservationMode ||
+        actions.ordering?.mode,
+      supportedIntents,
+      businessFamily,
+      intentNeedles: ["order", "food_order", "delivery", "pickup", "takeaway", "sifariş", "sifaris"],
+      businessFamilies: ["restaurant", "ecommerce"],
+    }),
+    reservationMode: inferRequestMode({
+      explicitMode:
+        runtimeConfig.reservationMode ||
         actions.reservationMode ||
-        actions.reservation?.mode
-    ),
-    appointmentMode: normalizeActionMode(
-      runtimeConfig.appointmentMode ||
+        actions.reservation?.mode,
+      supportedIntents,
+      businessFamily,
+      intentNeedles: ["reservation", "booking", "table", "room", "rezerv", "bron"],
+      businessFamilies: ["restaurant", "hotel"],
+    }),
+    appointmentMode: inferRequestMode({
+      explicitMode:
+        runtimeConfig.appointmentMode ||
         actions.appointmentMode ||
-        actions.appointment?.mode
-    ),
-    handoffMode: normalizeActionMode(
+        actions.appointment?.mode,
+      supportedIntents,
+      businessFamily,
+      intentNeedles: ["appointment", "consultation", "visit", "slot", "qəbul", "qebul", "görüş", "gorus"],
+      businessFamilies: ["clinic", "salon"],
+    }),
+    handoffMode: normalizeActionModeOrDisabled(
       runtimeConfig.handoffMode ||
         actions.handoffMode ||
         actions.handoff?.mode ||
