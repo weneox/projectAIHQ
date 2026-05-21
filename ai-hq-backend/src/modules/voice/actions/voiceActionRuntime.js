@@ -1,6 +1,9 @@
 import {
   normalizeVoiceActionRuntime,
 } from "./voiceActionContracts.js";
+import {
+  analyzeVoiceActionState,
+} from "../callState.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -326,6 +329,12 @@ export async function executeVoiceAction({
   const runtime = normalizeVoiceActionRuntime(runtimeConfig);
   const mode = actionModeForName(runtime, actionName);
   const provider = readActionProvider(runtimeConfig, actionName);
+  const actionState = analyzeVoiceActionState({
+    actionName,
+    payload,
+    call,
+    runtimeConfig,
+  });
 
   if (actionName === "end_call") {
     return {
@@ -376,21 +385,23 @@ export async function executeVoiceAction({
       "create_handoff_request",
     ].includes(actionName)
   ) {
-    const validation = validateVoiceActionPayload(actionName, payload, call);
-    if (!validation.ok) {
+    if (!actionState.ok) {
       return {
         ok: false,
         action: actionName,
         status: VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS,
         confirmed: false,
         requestOnly: true,
-        missingRequired: validation.missingRequired,
+        missingRequired: actionState.missingRequired,
+        nextMissing: actionState.nextMissing,
+        nextQuestion: actionState.nextQuestion,
+        voiceState: actionState,
         payload,
         callId: s(call.id || call.callId || call.call_id),
         tenantId: s(scope.tenantId),
         tenantKey: s(scope.tenantKey),
         message:
-          "Required fields are missing. Ask the caller for the missing information one question at a time before creating the request.",
+          "Required fields are missing. Ask the caller exactly one next question before creating the request.",
       };
     }
 
@@ -414,6 +425,7 @@ export async function executeVoiceAction({
       requestOnly: true,
       requestId: requestId(actionName),
       payload,
+      voiceState: actionState,
       callId: s(call.id || call.callId || call.call_id),
       tenantId: s(scope.tenantId),
       tenantKey: s(scope.tenantKey),

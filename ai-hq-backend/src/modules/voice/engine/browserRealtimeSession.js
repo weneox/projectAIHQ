@@ -6,6 +6,9 @@ import {
   buildVoiceOpeningSpeechPolicy,
   buildVoiceSpeechPolicy,
 } from "../speechPolicy.js";
+import {
+  buildVoiceBusinessPlaybook,
+} from "../businessPlaybooks.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -332,7 +335,7 @@ export function buildLiveVoiceInstructions({
     "- UI scenario/evaluation data must not control caller intent.",
     "- Understand the caller only from their actual spoken words and approved business runtime.",
     "",
-    ...buildVerticalReceptionistPlaybook(context),
+    ...buildVoiceBusinessPlaybook(context),
     "",
     "Business scope guard:",
     "- Treat the approved business type, supported intents, and approved services as hard boundaries.",
