@@ -361,6 +361,10 @@ export default function useBrowserVoiceCall() {
         payload: {
           toolCallId: toolCall.id,
           toolName: toolCall.name,
+          resultStatus: s(result?.status),
+          assistantInstruction: s(result?.assistantInstruction || result?.nextAssistantInstruction),
+          nextQuestion: s(result?.nextQuestion),
+          missingRequired: Array.isArray(result?.missingRequired) ? result.missingRequired : [],
           result,
         },
       });
