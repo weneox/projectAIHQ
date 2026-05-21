@@ -73,6 +73,7 @@ import {
   normalizeVoiceActionRuntime,
 } from "../../../modules/voice/actions/voiceActionContracts.js";
 import {
+  buildVoiceActionCallPatch,
   executeVoiceAction,
 } from "../../../modules/voice/actions/voiceActionRuntime.js";
 
@@ -775,6 +776,11 @@ async function handleBrowserVoiceToolCall(
         result,
       },
     });
+
+    const callPatch = buildVoiceActionCallPatch({ result, call });
+    if (Object.keys(callPatch).length > 0) {
+      await updateVoiceCall(db, voiceCallId, callPatch);
+    }
 
     if (result?.shouldEndCall === true) {
       await updateVoiceCall(db, voiceCallId, {

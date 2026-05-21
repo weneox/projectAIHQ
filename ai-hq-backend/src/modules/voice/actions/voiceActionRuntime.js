@@ -96,6 +96,88 @@ function buildDemoAvailability({ runtime = {}, payload = {} } = {}) {
   };
 }
 
+
+function readKnownPhone(payload = {}, call = {}) {
+  return s(
+    payload.phone ||
+      payload.customerPhone ||
+      payload.customer_phone ||
+      payload.callbackPhone ||
+      payload.callback_phone ||
+      call.fromNumber ||
+      call.from ||
+      call.phone ||
+      call.customerNumber
+  );
+}
+
+function hasUsefulItems(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  return !!s(value);
+}
+
+function addMissing(list, field, label = field) {
+  list.push({ field, label });
+}
+
+function validateVoiceActionPayload(actionName = "", payload = {}, call = {}) {
+  const action = s(actionName);
+  const p = cleanPayload(payload);
+  const missingRequired = [];
+  const phone = readKnownPhone(p, call);
+  const customerName = s(
+    p.customerName ||
+      p.customer_name ||
+      p.name ||
+      p.fullName ||
+      p.full_name
+  );
+  const service = s(
+    p.service ||
+      p.serviceType ||
+      p.service_type ||
+      p.intent ||
+      p.reason
+  );
+  const date = s(p.date || p.preferredDate || p.preferred_date);
+  const time = s(p.time || p.preferredTime || p.preferred_time);
+
+  if (action === "create_appointment_request") {
+    if (!service) addMissing(missingRequired, "service", "service");
+    if (!date && !time) {
+      addMissing(missingRequired, "preferredDateOrTime", "preferred date or time");
+    }
+    if (!customerName) addMissing(missingRequired, "customerName", "customer name");
+    if (!phone) addMissing(missingRequired, "phone", "phone");
+  }
+
+  if (action === "create_reservation_request") {
+    if (!date) addMissing(missingRequired, "date", "date");
+    if (!customerName) addMissing(missingRequired, "customerName", "customer name");
+    if (!phone) addMissing(missingRequired, "phone", "phone");
+  }
+
+  if (action === "create_order_request") {
+    if (!hasUsefulItems(p.items)) addMissing(missingRequired, "items", "items");
+    if (!s(p.fulfillment)) addMissing(missingRequired, "fulfillment", "delivery or pickup");
+    if (s(p.fulfillment).toLowerCase() === "delivery" && !s(p.address)) {
+      addMissing(missingRequired, "address", "delivery address");
+    }
+    if (!phone) addMissing(missingRequired, "phone", "phone");
+  }
+
+  if (action === "create_handoff_request") {
+    if (!s(p.reason)) addMissing(missingRequired, "reason", "handoff reason");
+    if (!phone) addMissing(missingRequired, "phone", "phone");
+    if (!s(p.summary)) addMissing(missingRequired, "summary", "short summary");
+  }
+
+  return {
+    ok: missingRequired.length === 0,
+    missingRequired,
+  };
+}
+
 function actionModeForName(runtime = {}, actionName = "") {
   if (actionName === "check_availability") return runtime.availabilityMode;
   if (actionName === "create_reservation_request") return runtime.reservationMode;
@@ -105,6 +187,123 @@ function actionModeForName(runtime = {}, actionName = "") {
   return "";
 }
 
+function outcomeTypeForAction(actionName = "") {
+  const name = s(actionName);
+  if (name === "check_availability") return "availability_checked";
+  if (name === "create_reservation_request") return "reservation_request_created";
+  if (name === "create_order_request") return "order_request_created";
+  if (name === "create_appointment_request") return "appointment_request_created";
+  if (name === "create_handoff_request") return "handoff_requested";
+  if (name === "end_call") return "call_ended";
+  return "voice_action_unknown";
+}
+
+function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {}) {
+  const action = s(actionName);
+  const phone = s(payload.phone || payload.customerPhone || payload.customer_phone);
+  const name = s(payload.customerName || payload.customer_name || payload.name);
+  const service = s(payload.service || payload.service_type || payload.intent || payload.reason);
+  const date = s(payload.date || payload.preferredDate || payload.preferred_date);
+  const time = s(payload.time || payload.preferredTime || payload.preferred_time);
+  const summary = s(payload.summary);
+
+  if (summary) return summary;
+
+  if (action === "create_handoff_request") {
+    return [name, phone, service].filter(Boolean).join(" | ") || "Human handoff requested.";
+  }
+
+  if (action === "create_appointment_request") {
+    return [service, date, time, name, phone].filter(Boolean).join(" | ") || "Appointment request captured.";
+  }
+
+  if (action === "create_reservation_request") {
+    return [date, time, payload.partySize ? `${payload.partySize} nəfər` : "", name, phone]
+      .filter(Boolean)
+      .join(" | ") || "Reservation request captured.";
+  }
+
+  if (action === "create_order_request") {
+    return [Array.isArray(payload.items) ? `${payload.items.length} item` : "", s(payload.fulfillment), phone]
+      .filter(Boolean)
+      .join(" | ") || "Order request captured.";
+  }
+
+  if (action === "check_availability") {
+    return status === VOICE_ACTION_RESULT_STATUS.LIVE_AVAILABLE
+      ? "Live availability checked."
+      : "Availability could not be confirmed.";
+  }
+
+  if (action === "end_call") {
+    return "Call ended.";
+  }
+
+  return "Voice action executed.";
+}
+
+export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
+  const action = s(result.action);
+  if (!action) return {};
+
+  const payload = cleanPayload(result.payload || result.criteria || {});
+  const outcome =
+    result.status === VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS
+      ? "voice_action_missing_required_fields"
+      : outcomeTypeForAction(action);
+  const summary = summarizeVoiceAction({
+    actionName: action,
+    payload,
+    status: result.status,
+  });
+
+  const previousExtraction = obj(call.extraction);
+  const previousMeta = obj(call.meta);
+
+  const patch = {
+    outcome,
+    summary: summary || s(call.summary),
+    extraction: {
+      ...previousExtraction,
+      voiceOutcome: {
+        type: outcome,
+        action,
+        status: s(result.status),
+        confirmed: result.confirmed === true,
+        requestOnly: result.requestOnly === true,
+        requestId: s(result.requestId),
+        payload,
+        message: s(result.message),
+        createdAt: new Date().toISOString(),
+      },
+    },
+    meta: {
+      ...previousMeta,
+      lastVoiceAction: {
+        action,
+        outcome,
+        status: s(result.status),
+        requestId: s(result.requestId),
+        shouldEndCall: result.shouldEndCall === true,
+        at: new Date().toISOString(),
+      },
+    },
+  };
+
+  const phone = s(payload.phone || payload.customerPhone || payload.customer_phone);
+  if (phone) {
+    patch.callbackRequested = true;
+    patch.callbackPhone = phone;
+  }
+
+  if (action === "create_handoff_request") {
+    patch.handoffRequested = true;
+    patch.handoffTarget = s(payload.reason || "operator") || "operator";
+  }
+
+  return patch;
+}
+
 export const VOICE_ACTION_RESULT_STATUS = Object.freeze({
   PROVIDER_NOT_CONFIGURED: "provider_not_configured",
   ACTION_DISABLED: "action_disabled",
@@ -112,6 +311,7 @@ export const VOICE_ACTION_RESULT_STATUS = Object.freeze({
   REQUEST_RECORDED: "request_recorded",
   CALL_ENDED: "call_ended",
   UNKNOWN_ACTION: "unknown_action",
+  MISSING_REQUIRED_FIELDS: "missing_required_fields",
 });
 
 export async function executeVoiceAction({
@@ -176,6 +376,24 @@ export async function executeVoiceAction({
       "create_handoff_request",
     ].includes(actionName)
   ) {
+    const validation = validateVoiceActionPayload(actionName, payload, call);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        action: actionName,
+        status: VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS,
+        confirmed: false,
+        requestOnly: true,
+        missingRequired: validation.missingRequired,
+        payload,
+        callId: s(call.id || call.callId || call.call_id),
+        tenantId: s(scope.tenantId),
+        tenantKey: s(scope.tenantKey),
+        message:
+          "Required fields are missing. Ask the caller for the missing information one question at a time before creating the request.",
+      };
+    }
+
     if (!["live", "request_only"].includes(mode)) {
       return {
         ok: false,
