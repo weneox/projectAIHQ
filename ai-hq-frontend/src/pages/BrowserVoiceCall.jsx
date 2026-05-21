@@ -60,7 +60,7 @@ export default function BrowserVoiceCall() {
   return (
     <PageCanvas>
       <PageHeader
-        eyebrow="Browser voice call"
+        eyebrow="Realtime browser adapter"
         title="Browser voice call"
         description="SIP/Twilio qoşulmamışdan əvvəl real voice engine-i browser audio ilə yoxla."
         actions={
