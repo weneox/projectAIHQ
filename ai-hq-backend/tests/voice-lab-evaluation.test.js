@@ -5,7 +5,8 @@ import {
   appendVoiceLabEvaluation,
   listVoiceLabEvaluationsFromSettings,
   normalizeVoiceLabEvaluation,
-} from "../src/modules/voice/labEvaluation.js";
+} from "../src/modules/voice/lab/evaluation.js";
+import { normalizeVoiceLabEvaluation as normalizeCompatVoiceLabEvaluation } from "../src/modules/voice/labEvaluation.js";
 
 test("voice lab evaluation normalizes readiness and score", () => {
   const evaluation = normalizeVoiceLabEvaluation({
@@ -38,6 +39,40 @@ test("voice lab evaluation normalizes readiness and score", () => {
   assert.equal(evaluation.captureSummary.complete, true);
   assert.equal(evaluation.capturedSlots.items, "2 pizza");
   assert.equal(evaluation.scenarioId, "restaurant_order");
+});
+
+test("voice lab evaluation root module remains a compatibility re-export", () => {
+  const evaluation = normalizeVoiceLabEvaluation({
+    scenarioId: "business_faq",
+    capturedSlots: {
+      question_topic: "working hours",
+    },
+    evaluation: {
+      language: "good",
+      naturalness: 4,
+      brevity: 4,
+      taskCompletion: 4,
+      truthfulness: 4,
+      handoffSense: 4,
+    },
+  });
+  const compatEvaluation = normalizeCompatVoiceLabEvaluation({
+    scenarioId: "business_faq",
+    capturedSlots: {
+      question_topic: "working hours",
+    },
+    evaluation: {
+      language: "good",
+      naturalness: 4,
+      brevity: 4,
+      taskCompletion: 4,
+      truthfulness: 4,
+      handoffSense: 4,
+    },
+  });
+
+  assert.equal(compatEvaluation.scenarioId, evaluation.scenarioId);
+  assert.equal(compatEvaluation.readiness, evaluation.readiness);
 });
 
 test("voice lab evaluation appends latest first and caps history", () => {

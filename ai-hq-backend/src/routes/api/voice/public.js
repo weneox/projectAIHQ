@@ -60,10 +60,10 @@ import {
 import {
   appendVoiceLabEvaluation,
   listVoiceLabEvaluationsFromSettings,
-  } from "../../../modules/voice/labEvaluation.js";
+  } from "../../../modules/voice/lab/evaluation.js";
 import {
   listVoiceLabScenarios,
-} from "../../../modules/voice/labScenarios.js";
+} from "../../../modules/voice/lab/scenarios.js";
 import {
   buildBrowserRealtimeSessionPlan,
   normalizeBrowserVoiceModel,

@@ -6,8 +6,9 @@ import {
   getVoiceLabScenario,
   listVoiceLabScenarios,
   requireVoiceLabScenario,
-} from "../src/modules/voice/labScenarios.js";
-import { normalizeVoiceLabEvaluation } from "../src/modules/voice/labEvaluation.js";
+} from "../src/modules/voice/lab/scenarios.js";
+import { normalizeVoiceLabEvaluation } from "../src/modules/voice/lab/evaluation.js";
+import { listVoiceLabScenarios as listCompatVoiceLabScenarios } from "../src/modules/voice/labScenarios.js";
 
 test("voice lab canonical scenario library exposes hotel and business call scenarios", () => {
   const scenarios = listVoiceLabScenarios();
@@ -35,6 +36,13 @@ test("voice lab canonical scenario library exposes hotel and business call scena
     assert.ok(scenario.actionTarget);
     assert.ok(scenario.handoffPolicy);
   }
+});
+
+test("voice lab scenario root module remains a compatibility re-export", () => {
+  assert.deepEqual(
+    listCompatVoiceLabScenarios().map((scenario) => scenario.id),
+    listVoiceLabScenarios().map((scenario) => scenario.id)
+  );
 });
 
 test("voice lab canonical scenario instructions include quality guardrails", () => {
