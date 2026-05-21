@@ -17,6 +17,10 @@ import {
 } from "../components/ui/AppShellPrimitives.jsx";
 import { SCORE_OPTIONS } from "./voice/browserVoiceEvaluation.js";
 
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim() || fallback;
+}
+
 export default function BrowserVoiceCall() {
   const {
     status,
