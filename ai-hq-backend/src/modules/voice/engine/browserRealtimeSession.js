@@ -2,6 +2,10 @@ import {
   buildVoiceActionPolicy,
   buildVoiceActionToolDefinitions,
 } from "../actions/voiceActionContracts.js";
+import {
+  buildVoiceOpeningSpeechPolicy,
+  buildVoiceSpeechPolicy,
+} from "../speechPolicy.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -351,7 +355,7 @@ export function buildLiveVoiceInstructions({
     "- Only enter booking/reservation flow after explicit booking, room, date, price, or availability intent.",
     "- Only collect name and phone when callback, handoff, booking request, or follow-up is actually needed.",
     "",
-    ...buildHumanReceptionistStyleGuide(context),
+    ...buildVoiceSpeechPolicy(context),
     "",
     "Conversation rules:",
     "- Use plain, standard, everyday language. Do not create poetic, unusual, or invented expressions.",
@@ -464,6 +468,8 @@ export function buildBrowserOpeningInstructions({
     `Primary spoken language: ${language}.`,
     companyName ? `Approved business name: ${companyName}.` : "",
     context.businessType ? `Opening business scope: ${context.businessType}.` : "",
+    "",
+    ...buildVoiceOpeningSpeechPolicy({ language, companyName }),
     "",
     "Opening behavior:",
     "- Create one short, natural phone opening in the configured primary business language.",
