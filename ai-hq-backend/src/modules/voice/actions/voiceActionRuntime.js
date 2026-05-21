@@ -3,6 +3,7 @@ import {
 } from "./voiceActionContracts.js";
 import {
   analyzeVoiceActionState,
+  buildVoiceStateInstruction,
 } from "../callState.js";
 
 function s(value, fallback = "") {
@@ -315,6 +316,7 @@ export async function executeVoiceAction({
         nextMissing: actionState.nextMissing,
         nextQuestion: actionState.nextQuestion,
         voiceState: actionState,
+        assistantInstruction: buildVoiceStateInstruction(actionState),
         payload,
         callId: s(call.id || call.callId || call.call_id),
         tenantId: s(scope.tenantId),
