@@ -160,22 +160,6 @@ function startBrowserVoiceOpening(dc, session) {
   return true;
 }
 
-function startBrowserVoiceTurnResponse(dc) {
-  if (!dc || dc.readyState !== "open") return false;
-
-  dc.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions:
-          "Cavabı yalnız son istifadəçi sözünə əsasən ver. Approved business truth və session qaydalarına əməl et. Qısa, təbii, çox axıcı və canlı telefon resepsionisti kimi danış. Daha sürətli danış, sözləri uzatma, sözlər arasında uzun pauza vermə. Vergül və nöqtələrdə yalnız çox qısa təbii nəfəs saxla. Yavaş IVR robot kimi danışma. Qiymət, mövcudluq və rezervasiya təsdiqi uydurma.",
-        max_output_tokens: 180,
-      },
-    })
-  );
-
-  return true;
-}
 
 function normalizeLogEvent(event = {}) {
   const type = s(event?.type, "event");
@@ -246,8 +230,6 @@ export default function VoiceLab() {
   const dcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
-  const responseActiveRef = useRef(false);
-  const lastAssistantDoneAtRef = useRef(0);
 
   const scenario = useMemo(
     () =>
@@ -449,7 +431,6 @@ export default function VoiceLab() {
 
         try {
           const openingStarted = startBrowserVoiceOpening(dc, session);
-          responseActiveRef.current = openingStarted;
           addEvent({
             type: openingStarted
               ? "browser_voice.opening_started"
@@ -459,7 +440,6 @@ export default function VoiceLab() {
               : "No backend opening response was available.",
           });
         } catch (err) {
-          responseActiveRef.current = false;
           addEvent({
             type: "browser_voice.opening_failed",
             text: s(err?.message || err),
@@ -468,57 +448,11 @@ export default function VoiceLab() {
       };
 
       dc.onmessage = (message) => {
-        let event = null;
-
         try {
-          event = JSON.parse(message.data);
+          const event = JSON.parse(message.data);
           addEvent(event);
         } catch {
           addEvent({ type: "message", text: message.data });
-          return;
-        }
-
-        const type = s(event?.type);
-
-        if (type === "response.created") {
-          responseActiveRef.current = true;
-          return;
-        }
-
-        if (
-          type === "response.done" ||
-          type === "response.cancelled" ||
-          type === "response.output_audio.done"
-        ) {
-          responseActiveRef.current = false;
-          lastAssistantDoneAtRef.current = Date.now();
-          return;
-        }
-
-        if (type === "input_audio_buffer.committed") {
-          const sinceAssistantDone = Date.now() - Number(lastAssistantDoneAtRef.current || 0);
-
-          if (responseActiveRef.current || sinceAssistantDone < 450) {
-            return;
-          }
-
-          try {
-            const started = startBrowserVoiceTurnResponse(dc);
-            responseActiveRef.current = started;
-
-            if (started) {
-              addEvent({
-                type: "browser_voice.turn_response_started",
-                text: "Assistant response started after caller turn.",
-              });
-            }
-          } catch (err) {
-            responseActiveRef.current = false;
-            addEvent({
-              type: "browser_voice.turn_response_failed",
-              text: s(err?.message || err),
-            });
-          }
         }
       };
 
