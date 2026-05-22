@@ -60,6 +60,7 @@ test("voice action runtime reads only explicit action modes", () => {
   assert.equal(disabled.appointmentMode, "disabled");
   assert.equal(disabled.availabilityMode, "disabled");
   assert.equal(disabled.handoffMode, "request_only");
+  assert.equal(disabled.universalRequestMode, "request_only");
 
   const enabled = normalizeVoiceActionRuntime({
     businessType: "restaurant",
@@ -76,16 +77,25 @@ test("voice action runtime reads only explicit action modes", () => {
   assert.equal(enabled.reservationMode, "live");
   assert.equal(enabled.availabilityMode, "live");
   assert.equal(enabled.appointmentMode, "disabled");
+  assert.equal(enabled.universalRequestMode, "request_only");
 
   const toolNames = buildVoiceActionToolDefinitions(enabled).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, [
     "check_availability",
+    "create_business_request",
     "create_reservation_request",
     "create_order_request",
     "create_handoff_request",
     "end_call",
   ]);
+
+  const disabledUniversalToolNames = buildVoiceActionToolDefinitions({
+    ...enabled,
+    universalRequestMode: "disabled",
+  }).map((tool) => tool.name);
+
+  assert.equal(disabledUniversalToolNames.includes("create_business_request"), false);
 });
 
 test("voice action tool schemas read centralized required fields", () => {

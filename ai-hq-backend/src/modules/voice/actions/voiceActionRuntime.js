@@ -2,6 +2,12 @@ import {
   normalizeVoiceActionRuntime,
 } from "./voiceActionContracts.js";
 import {
+  VOICE_OPERATION_TYPES,
+  normalizeVoiceActionOutcome,
+  normalizeVoiceBusinessFamily,
+  normalizeVoiceRequestType,
+} from "./voiceOperationTaxonomy.js";
+import {
   analyzeVoiceActionState,
   buildVoiceStateInstruction,
 } from "../callState.js";
@@ -68,6 +74,15 @@ function readActionProvider(runtimeConfig = {}, actionName = "") {
     ).toLowerCase();
   }
 
+  if (actionName === "create_business_request") {
+    return s(
+      runtimeConfig.universalRequestProvider ||
+        actions.universalRequestProvider ||
+        obj(actions.universalRequest).provider ||
+        actions.provider
+    ).toLowerCase();
+  }
+
   return s(actions.provider || runtimeConfig.actionProvider).toLowerCase();
 }
 
@@ -107,18 +122,32 @@ function actionModeForName(runtime = {}, actionName = "") {
   if (actionName === "create_order_request") return runtime.orderingMode;
   if (actionName === "create_appointment_request") return runtime.appointmentMode;
   if (actionName === "create_handoff_request") return runtime.handoffMode;
+  if (actionName === "create_business_request") return runtime.universalRequestMode;
   return "";
 }
 
 function outcomeTypeForAction(actionName = "") {
   const name = s(actionName);
   if (name === "check_availability") return "availability_checked";
+  if (name === "create_business_request") return "business_request_created";
   if (name === "create_reservation_request") return "reservation_request_created";
   if (name === "create_order_request") return "order_request_created";
   if (name === "create_appointment_request") return "appointment_request_created";
   if (name === "create_handoff_request") return "handoff_requested";
   if (name === "end_call") return "call_ended";
   return "voice_action_unknown";
+}
+
+function dbSafeOutcomeForActionResult({ action = "", detailedOutcome = "", result = {} } = {}) {
+  const safe = normalizeVoiceActionOutcome(result.outcome);
+  if (safe !== "unknown") return safe;
+  if (s(action) === "create_handoff_request") return "callback_requested";
+  if (s(action) === "create_business_request" && s(result.payload?.phone || result.payload?.customerPhone)) {
+    return "callback_requested";
+  }
+  if (s(detailedOutcome) === "handoff_requested") return "callback_requested";
+  if (s(result.status) === VOICE_ACTION_RESULT_STATUS.PROVIDER_NOT_CONFIGURED) return "failed";
+  return "unknown";
 }
 
 function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {}) {
@@ -134,6 +163,14 @@ function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {
 
   if (action === "create_handoff_request") {
     return [name, phone, service].filter(Boolean).join(" | ") || "Human handoff requested.";
+  }
+
+  if (action === "create_business_request") {
+    return [
+      s(payload.requestType),
+      s(payload.description || payload.intent || payload.issue),
+      s(payload.phone),
+    ].filter(Boolean).join(" | ") || "Business request captured.";
   }
 
   if (action === "create_appointment_request") {
@@ -174,6 +211,11 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
     result.status === VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS
       ? "voice_action_missing_required_fields"
       : outcomeTypeForAction(action);
+  const safeOutcome = dbSafeOutcomeForActionResult({
+    action,
+    detailedOutcome: outcome,
+    result,
+  });
   const summary = summarizeVoiceAction({
     actionName: action,
     payload,
@@ -184,12 +226,13 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
   const previousMeta = obj(call.meta);
 
   const patch = {
-    outcome,
+    outcome: safeOutcome,
     summary: summary || s(call.summary),
     extraction: {
       ...previousExtraction,
       voiceOutcome: {
         type: outcome,
+        dbOutcome: safeOutcome,
         action,
         status: s(result.status),
         confirmed: result.confirmed === true,
@@ -205,6 +248,7 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
       lastVoiceAction: {
         action,
         outcome,
+        dbOutcome: safeOutcome,
         status: s(result.status),
         requestId: s(result.requestId),
         shouldEndCall: result.shouldEndCall === true,
@@ -222,6 +266,10 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
   if (action === "create_handoff_request") {
     patch.handoffRequested = true;
     patch.handoffTarget = s(payload.reason || "operator") || "operator";
+  }
+
+  if (action === "create_business_request") {
+    patch.extraction.universalBusinessRequest = obj(result.universal);
   }
 
   return patch;
@@ -299,6 +347,7 @@ export async function executeVoiceAction({
 
   if (
     [
+      "create_business_request",
       "create_reservation_request",
       "create_order_request",
       "create_appointment_request",
@@ -346,12 +395,24 @@ export async function executeVoiceAction({
       requestOnly: true,
       requestId: requestId(actionName),
       payload,
+      ...(actionName === "create_business_request"
+        ? {
+            universal: {
+              operationType: VOICE_OPERATION_TYPES.CREATE_REQUEST,
+              requestType: normalizeVoiceRequestType(payload.requestType),
+              businessFamily: normalizeVoiceBusinessFamily(runtime.businessFamily),
+              collectedSlots: actionState.collectedSlots || {},
+            },
+          }
+        : {}),
       voiceState: actionState,
       callId: s(call.id || call.callId || call.call_id),
       tenantId: s(scope.tenantId),
       tenantKey: s(scope.tenantKey),
       message:
-        "Request was recorded for human/operator follow-up. Do not say booking/order/appointment is confirmed.",
+        actionName === "create_business_request"
+          ? "Request was recorded for human/operator follow-up. Do not say it is confirmed."
+          : "Request was recorded for human/operator follow-up. Do not say booking/order/appointment is confirmed.",
     };
   }
 

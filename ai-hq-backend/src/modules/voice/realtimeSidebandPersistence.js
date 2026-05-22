@@ -1,6 +1,7 @@
 import {
   appendVoiceCallEvent,
   updateVoiceCall,
+  updateVoiceCallForTenant,
 } from "../../db/helpers/voice.js";
 
 export const VOICE_REALTIME_SIDEBAND_PERSISTENCE_VERSION =
@@ -20,6 +21,18 @@ function arr(value) {
 
 function readCallId(call = {}) {
   return s(call.id || call.callId || call.call_id);
+}
+
+async function updateRealtimeSidebandCall(db, callId, callPatch, scope = {}) {
+  if (s(scope.tenantId)) {
+    return updateVoiceCallForTenant(db, {
+      id: callId,
+      tenantId: s(scope.tenantId),
+      patch: callPatch,
+    });
+  }
+
+  return updateVoiceCall(db, callId, callPatch);
 }
 
 export function hasPatchKeys(value) {
@@ -97,7 +110,7 @@ export async function persistRealtimeSidebandTrace({
   resultTrace = null,
   callPatch = {},
   appendEvent = appendVoiceCallEvent,
-  updateCall = updateVoiceCall,
+  updateCall = null,
 } = {}) {
   if (!db) {
     return {
@@ -138,7 +151,9 @@ export async function persistRealtimeSidebandTrace({
   let callPatchApplied = false;
 
   if (hasPatchKeys(callPatch)) {
-    updatedCall = await updateCall(db, callId, callPatch);
+    updatedCall = updateCall
+      ? await updateCall(db, callId, callPatch)
+      : await updateRealtimeSidebandCall(db, callId, callPatch, scope);
     callPatchApplied = true;
   }
 
