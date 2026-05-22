@@ -48,6 +48,7 @@ import { launchInternalRoutes, launchRoutes } from "./launch/index.js";
 import { reportsRoutes } from "./reports/index.js";
 import { commentsInternalRoutes, commentsRoutes } from "./comments/index.js";
 import { incidentsRoutes } from "./incidents/index.js";
+import { operationRequestsRoutes } from "./operationRequests/index.js";
 import { settingsRoutes } from "./settings/index.js";
 import { teamRoutes } from "./team/index.js";
 import { voiceRoutes, voiceInternalRoutes } from "./voice/index.js";
@@ -493,6 +494,14 @@ function requireOperationalSurfaceWriteAccess(req, res, next) {
     });
   }
 
+  if (path === "/operation-requests" || path.startsWith("/operation-requests/")) {
+    return requireTenantPermission(req, res, next, {
+      resource: "inbox",
+      action: "write",
+      reason: "operation request write access required",
+    });
+  }
+
   if (path === "/comments" || path.startsWith("/comments/")) {
     return requireTenantPermission(req, res, next, {
       resource: "comments",
@@ -649,6 +658,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use("/", workspaceRoutes({ db, wsHub, audit, dbDisabled }));
   r.use("/", launchRoutes({ db }));
   r.use("/", reportsRoutes({ db }));
+  r.use("/", operationRequestsRoutes({ db, dbDisabled, audit }));
 
   r.use("/", modeRoutes({ db, wsHub }));
   if (agentsEnabled) {
