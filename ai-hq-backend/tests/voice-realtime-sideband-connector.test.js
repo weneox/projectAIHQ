@@ -7,6 +7,10 @@ import {
   buildRealtimeSidebandTrace,
   isRealtimeSidebandEnabled,
 } from "../src/modules/voice/realtimeSidebandConnector.js";
+import {
+  buildOpenAIRealtimeSidebandConnectionPlan,
+  buildOpenAIRealtimeSidebandTrace,
+} from "../src/modules/voice/providers/openaiRealtimeSidebandAdapter.js";
 
 test("realtime sideband connector is disabled by default", () => {
   const env = {};
@@ -69,4 +73,25 @@ test("realtime sideband connector builds ready plan without opening socket", () 
   assert.equal(trace.enabled, true);
   assert.equal(trace.networkIo, false);
   assert.equal(trace.providerRealtimeCallId, "call_abc123");
+});
+
+test("compatibility sideband connector delegates to OpenAI adapter behavior", () => {
+  const input = {
+    target: {
+      provider: "openai",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_abc123",
+    },
+    env: {
+      VOICE_REALTIME_SIDEBAND_ENABLED: "1",
+      OPENAI_API_KEY: "sk-test",
+    },
+  };
+
+  const plan = buildRealtimeSidebandConnectionPlan(input);
+  assert.deepEqual(plan, buildOpenAIRealtimeSidebandConnectionPlan(input));
+  assert.deepEqual(
+    buildRealtimeSidebandTrace(plan),
+    buildOpenAIRealtimeSidebandTrace(plan)
+  );
 });

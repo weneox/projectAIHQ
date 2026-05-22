@@ -8,6 +8,9 @@ import {
   extractRealtimeSidebandTranscript,
   normalizeRealtimeSidebandEvent,
 } from "../src/modules/voice/realtimeSidebandEvents.js";
+import {
+  normalizeOpenAIRealtimeSidebandEvent,
+} from "../src/modules/voice/providers/openaiRealtimeSidebandAdapter.js";
 
 test("sideband event sink extracts tool calls from realtime function argument events", () => {
   const toolCall = extractRealtimeSidebandToolCall({
@@ -100,4 +103,27 @@ test("sideband event sink builds durable trace payloads", () => {
   assert.equal(trace.eventType, "voice.sideband.transcript.final");
   assert.equal(trace.actor, "assistant");
   assert.equal(trace.payload.sidebandEventSinkVersion, VOICE_REALTIME_SIDEBAND_EVENT_SINK_VERSION);
+});
+
+test("compatibility sideband event normalizer delegates to OpenAI adapter behavior", () => {
+  const event = {
+    type: "response.output_item.done",
+    item: {
+      call_id: "tool-call-openai-adapter",
+      name: "create_handoff_request",
+      arguments: "{\"reason\":\"operator\"}",
+    },
+  };
+  const context = {
+    target: {
+      provider: "openai",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_realtime_1",
+    },
+  };
+
+  assert.deepEqual(
+    normalizeRealtimeSidebandEvent(event, context),
+    normalizeOpenAIRealtimeSidebandEvent(event, context)
+  );
 });
