@@ -84,6 +84,11 @@ import {
   buildRealtimeSidebandConnectionPlan,
   buildRealtimeSidebandTrace,
 } from "../../../modules/voice/realtimeSidebandConnector.js";
+import {
+  markVoiceRealtimeToolExecutionFailed,
+  markVoiceRealtimeToolExecutionSent,
+  reserveVoiceRealtimeToolExecution,
+} from "../../../modules/voice/realtimeToolExecutionIdempotency.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -126,6 +131,35 @@ function recordVoiceRouteFailure({
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function buildVoiceToolExecutionIdempotencyPayload(reservation = {}, finalityRecord = null) {
+  return {
+    version: s(reservation.version),
+    idempotencyKey: s(reservation.idempotencyKey),
+    provider: s(reservation.provider),
+    actionType: s(reservation.actionType),
+    acquired: reservation.acquired === true,
+    duplicate: reservation.duplicate === true,
+    skipped: reservation.skipped === true,
+    reasonCode: s(reservation.reasonCode),
+    recordState: s(finalityRecord?.state || reservation.recordState || reservation.record?.state),
+    source: s(reservation.source),
+  };
+}
+
+function buildDuplicateVoiceToolResult({ reservation = {}, toolCallId = "", toolName = "" } = {}) {
+  return {
+    ok: true,
+    status: "duplicate_skipped",
+    duplicate: true,
+    reasonCode: s(
+      reservation.reasonCode || "voice_realtime_tool_execution_duplicate"
+    ),
+    message: "Tool execution already processed.",
+    toolCallId: s(toolCallId),
+    toolName: s(toolName),
+  };
 }
 
 async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
@@ -760,6 +794,80 @@ async function handleBrowserVoiceToolCall(
 
     const toolArgs = obj(req.body?.arguments || req.body?.args || {});
     const toolCallId = s(req.body?.toolCallId || req.body?.callId);
+    const realtimeMeta = obj(obj(call.meta).realtime);
+    const providerRealtimeCallId = normalizeProviderRealtimeCallId(
+      realtimeMeta.providerRealtimeCallId ||
+        req.body?.providerRealtimeCallId ||
+        req.body?.realtimeCallId ||
+        req.body?.providerCallId ||
+        req.body?.providerCallSid ||
+        call.providerCallSid
+    );
+
+    const reservation = await reserveVoiceRealtimeToolExecution({
+      db,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      voiceCallId,
+      providerRealtimeCallId,
+      toolCallId,
+      toolName,
+      args: toolArgs,
+      source: "browser_voice_tool_route",
+    });
+
+    if (reservation?.ok === false) {
+      return fail(res, 409, s(reservation.reasonCode || "voice_realtime_tool_idempotency_unavailable"), {
+        idempotencyKey: s(reservation.idempotencyKey),
+      });
+    }
+
+    if (reservation?.acquired === false) {
+      const result = buildDuplicateVoiceToolResult({
+        reservation,
+        toolCallId,
+        toolName,
+      });
+      const idempotency = buildVoiceToolExecutionIdempotencyPayload(reservation);
+
+      await appendVoiceCallEvent(db, {
+        callId: voiceCallId,
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+        eventType: "browser_voice.tool_executed",
+        actor: "system",
+        payload: {
+          runtimeApplied: false,
+          tenantKey: s(scope.tenantKey),
+          activeChannelProvider: "",
+          activeChannelId: "",
+          assistantPolicyVersion: VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
+          toolCallId,
+          toolName,
+          providerRealtimeCallId,
+          resultStatus: s(result.status),
+          assistantInstruction: "",
+          nextQuestion: "",
+          missingRequired: [],
+          arguments: toolArgs,
+          idempotency,
+          idempotencyKey: s(idempotency.idempotencyKey),
+          reservationAcquired: false,
+          reservationDuplicate: true,
+          reservationState: s(idempotency.recordState),
+          reservationReasonCode: s(idempotency.reasonCode),
+          result,
+        },
+      });
+
+      return ok(res, {
+        toolCallId,
+        name: toolName,
+        providerRealtimeCallId,
+        result,
+        idempotency,
+      });
+    }
 
     let runtimeConfig = {};
     try {
@@ -779,13 +887,49 @@ async function handleBrowserVoiceToolCall(
       });
     }
 
-    const result = await executeVoiceAction({
-      name: toolName,
-      args: toolArgs,
-      call,
-      scope,
-      runtimeConfig,
+    let result = null;
+    try {
+      result = await executeVoiceAction({
+        name: toolName,
+        args: toolArgs,
+        call,
+        scope,
+        runtimeConfig,
+      });
+    } catch (executeErr) {
+      try {
+        await markVoiceRealtimeToolExecutionFailed({
+          db,
+          reservation,
+          errorCode: s(executeErr?.code || "browser_voice_tool_execution_failed"),
+          errorMessage: s(executeErr?.message || executeErr),
+          providerResponse: {
+            source: "browser_voice_tool_route",
+            toolCallId,
+            toolName,
+            providerRealtimeCallId,
+          },
+        });
+      } catch {}
+      throw executeErr;
+    }
+
+    const finalityRecord = await markVoiceRealtimeToolExecutionSent({
+      db,
+      reservation,
+      providerMessageId: toolCallId,
+      providerResponse: {
+        source: "browser_voice_tool_route",
+        toolCallId,
+        toolName,
+        providerRealtimeCallId,
+        resultStatus: s(result?.status),
+      },
     });
+    const idempotency = buildVoiceToolExecutionIdempotencyPayload(
+      reservation,
+      finalityRecord
+    );
 
     await appendVoiceCallEvent(db, {
       callId: voiceCallId,
@@ -801,11 +945,18 @@ async function handleBrowserVoiceToolCall(
         assistantPolicyVersion: VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
         toolCallId,
         toolName,
+        providerRealtimeCallId,
         resultStatus: s(result?.status),
         assistantInstruction: s(result?.assistantInstruction || result?.nextAssistantInstruction),
         nextQuestion: s(result?.nextQuestion),
         missingRequired: Array.isArray(result?.missingRequired) ? result.missingRequired : [],
         arguments: toolArgs,
+        idempotency,
+        idempotencyKey: s(idempotency.idempotencyKey),
+        reservationAcquired: true,
+        reservationDuplicate: false,
+        reservationState: s(idempotency.recordState),
+        reservationReasonCode: s(idempotency.reasonCode),
         result,
       },
     });
@@ -826,7 +977,9 @@ async function handleBrowserVoiceToolCall(
     return ok(res, {
       toolCallId,
       name: toolName,
+      providerRealtimeCallId,
       result,
+      idempotency,
     });
   } catch (err) {
     logger.error("voice.browser.tool.failed", err);
