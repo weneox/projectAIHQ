@@ -103,6 +103,120 @@ function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } =
   };
 }
 
+function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}) {
+  const calls = [];
+  const appendedEvents = [];
+  const updates = [];
+
+  return {
+    calls,
+    appendedEvents,
+    updates,
+    db: {
+      query: async (sql, params = []) => {
+        const text = String(sql);
+
+        if (text.includes("insert into voice_calls")) {
+          const meta = JSON.parse(params[33]);
+          const callRow = {
+            id: params[0],
+            tenant_id: params[1],
+            tenant_key: params[2],
+            provider: params[3],
+            provider_call_sid: params[4] || "",
+            provider_stream_sid: params[5] || "",
+            direction: params[6],
+            status: params[7],
+            from_number: params[8],
+            to_number: params[9],
+            caller_name: params[10] || "",
+            started_at: params[11],
+            answered_at: params[12],
+            ended_at: params[13],
+            duration_seconds: params[14],
+            language: params[15],
+            agent_mode: params[16],
+            handoff_requested: params[17],
+            handoff_completed: params[18],
+            handoff_target: params[19] || "",
+            callback_requested: params[20],
+            callback_phone: params[21] || "",
+            lead_id: params[22] || "",
+            inbox_thread_id: params[23] || "",
+            transcript: params[24] || "",
+            summary: params[25] || "",
+            outcome: params[26],
+            intent: params[27] || "",
+            sentiment: params[28] || "",
+            cost_amount: params[29],
+            cost_currency: params[30],
+            metrics: JSON.parse(params[31]),
+            extraction: JSON.parse(params[32]),
+            meta,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          calls.push(callRow);
+          return { rows: [callRow] };
+        }
+
+        if (text.includes("from voice_calls")) {
+          const id = params[0];
+          return {
+            rows: calls.filter((call) => call.id === id),
+          };
+        }
+
+        if (text.includes("insert into voice_call_events")) {
+          const payload = JSON.parse(params[6]);
+          appendedEvents.push({
+            callId: params[1],
+            tenantId: params[2],
+            tenantKey: params[3],
+            eventType: params[4],
+            actor: params[5],
+            payload,
+          });
+          return {
+            rows: [
+              {
+                id: `event-${appendedEvents.length}`,
+                call_id: params[1],
+                tenant_id: params[2],
+                tenant_key: params[3],
+                event_type: params[4],
+                actor: params[5],
+                payload,
+              },
+            ],
+          };
+        }
+
+        if (text.includes("update voice_calls")) {
+          const id = params[0];
+          const meta = JSON.parse(params[33]);
+          const call = calls.find((item) => item.id === id);
+          if (!call) return { rows: [] };
+
+          call.provider_call_sid = params[4] || "";
+          call.status = params[7];
+          call.meta = meta;
+          updates.push({
+            callId: id,
+            providerCallSid: params[4],
+            meta,
+          });
+          return { rows: [call] };
+        }
+
+        throw new Error(`unexpected query: ${text}`);
+      },
+    },
+    tenantId,
+    tenantKey,
+  };
+}
+
 function buildStartedSidebandRunnerResult() {
   return {
     ok: true,
@@ -158,6 +272,78 @@ function requestJson(server, { path = "/", body = {} } = {}) {
     req.on("error", reject);
     req.end(payload);
   });
+}
+
+async function withBrowserSessionRoute({
+  body = { useTenantRuntime: false },
+  openAiPayload = {
+    value: "client-secret-test",
+    session: {
+      id: "sess_browser_test",
+      client_secret: {
+        value: "client-secret-test",
+      },
+    },
+  },
+  startSidebandRunner = async () => buildStartedSidebandRunnerResult(),
+} = {}) {
+  const previousFetch = globalThis.fetch;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "sk-test";
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(openAiPayload), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+
+  const fixture = makeBrowserSessionDb();
+  const app = express();
+  app.use(express.json());
+  app.use((req, res, next) => {
+    req.auth = {
+      userId: "user-1",
+      tenantId: fixture.tenantId,
+      tenantKey: fixture.tenantKey,
+      role: "admin",
+    };
+    next();
+  });
+  app.use(voiceRoutes({
+    db: fixture.db,
+    startSidebandRunner,
+  }));
+
+  const server = await new Promise((resolve) => {
+    const nextServer = app.listen(0, () => resolve(nextServer));
+  });
+
+  try {
+    return {
+      ...fixture,
+      server,
+      close: () =>
+        new Promise((resolve, reject) => {
+          server.close((err) => (err ? reject(err) : resolve()));
+        }),
+      sessionResponse: await requestJson(server, {
+        path: "/voice/browser/session",
+        body,
+      }),
+    };
+  } finally {
+    if (previousFetch === undefined) {
+      delete globalThis.fetch;
+    } else {
+      globalThis.fetch = previousFetch;
+    }
+    if (previousOpenAiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousOpenAiKey;
+    }
+  }
 }
 
 async function withRealtimeLinkRoute({
@@ -327,6 +513,73 @@ test("browser voice normalizers keep safe realtime defaults", () => {
   assert.equal(normalizeBrowserVoiceName("verse"), "coral");
   assert.equal(normalizeBrowserVoiceName("sage"), "sage");
   assert.equal(normalizeBrowserVoiceName("unknown"), "coral");
+});
+
+test("browser voice session creates and returns a tenant-scoped call id", async () => {
+  const fixture = await withBrowserSessionRoute();
+
+  try {
+    const { sessionResponse, calls } = fixture;
+
+    assert.equal(sessionResponse.statusCode, 200);
+    assert.equal(sessionResponse.body.ok, true);
+    assert.ok(sessionResponse.body.browserCallId);
+    assert.equal(sessionResponse.body.callId, sessionResponse.body.browserCallId);
+    assert.equal(sessionResponse.body.clientSecret, "client-secret-test");
+    assert.equal(sessionResponse.body.runtimeApplied, false);
+    assert.equal(sessionResponse.body.runtimeReasonCode, "browser_voice_manual_mode");
+    assert.ok(sessionResponse.body.openingResponse);
+    assert.equal(sessionResponse.body.call.id, sessionResponse.body.browserCallId);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].id, sessionResponse.body.browserCallId);
+    assert.equal(calls[0].tenant_id, "tenant-1");
+    assert.equal(calls[0].tenant_key, "acme");
+    assert.equal(calls[0].provider, "browser_lab");
+    assert.equal(calls[0].direction, "inbound");
+    assert.equal(calls[0].status, "in_progress");
+    assert.equal(calls[0].from_number, "browser");
+    assert.equal(calls[0].to_number, "browser");
+    assert.equal(calls[0].language, "en");
+    assert.equal(calls[0].agent_mode, "assistant");
+    assert.equal(calls[0].meta.browserVoice, true);
+    assert.equal(calls[0].meta.adapterType, "pre_sip_browser");
+    assert.equal(calls[0].meta.realtimeSessionId, "sess_browser_test");
+    assert.equal(calls[0].meta.model, sessionResponse.body.model);
+    assert.equal(calls[0].meta.voice, sessionResponse.body.voice);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser realtime-link can use the call id returned by browser session", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const linkResponse = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/realtime-link`,
+      body: {
+        provider: "openai",
+        transport: "webrtc",
+        providerRealtimeCallId: "rtc_session_link",
+        locationHeader: "/v1/realtime/calls/rtc_session_link",
+        model: fixture.sessionResponse.body.model,
+        voice: fixture.sessionResponse.body.voice,
+      },
+    });
+
+    assert.equal(linkResponse.statusCode, 200);
+    assert.equal(linkResponse.body.ok, true);
+    assert.equal(linkResponse.body.controlTarget.voiceCallId, callId);
+    assert.equal(linkResponse.body.controlTarget.providerRealtimeCallId, "rtc_session_link");
+    assert.equal(fixture.appendedEvents.length, 1);
+    assert.equal(fixture.appendedEvents[0].callId, callId);
+    assert.equal(fixture.updates.length, 1);
+    assert.equal(fixture.updates[0].callId, callId);
+  } finally {
+    await fixture.close();
+  }
 });
 
 

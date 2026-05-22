@@ -552,10 +552,6 @@ async function resolveBrowserVoiceRuntimeConfig(
   res,
   { db, dbDisabled = false, getRuntime = getTenantBrainRuntime, logger }
 ) {
-  if (req.body?.useTenantRuntime === false) {
-    return { ok: false, reasonCode: "browser_voice_manual_mode" };
-  }
-
   if (dbDisabled || !db) {
     return { ok: false, reasonCode: "browser_voice_db_unavailable" };
   }
@@ -563,6 +559,10 @@ async function resolveBrowserVoiceRuntimeConfig(
   const scope = await requireTenantScope(req, res, db);
   if (!scope) {
     return { ok: false, handled: true, reasonCode: "tenant_required" };
+  }
+
+  if (req.body?.useTenantRuntime === false) {
+    return { ok: false, reasonCode: "browser_voice_manual_mode", scope };
   }
 
   try {
@@ -582,18 +582,19 @@ async function resolveBrowserVoiceRuntimeConfig(
         reasonCode,
         statusCode: Number(result?.statusCode || 0),
       });
-      return { ok: false, reasonCode };
+      return { ok: false, reasonCode, scope };
     }
 
     return {
       ok: true,
       config: readBrowserVoiceConfigPayload(result),
+      scope,
     };
   } catch (err) {
     logger?.warn?.("voice.browser.runtime_resolution_failed", {
       error: s(err?.message || err),
     });
-    return { ok: false, reasonCode: "browser_voice_runtime_resolution_failed" };
+    return { ok: false, reasonCode: "browser_voice_runtime_resolution_failed", scope };
   }
 }
 
@@ -690,7 +691,60 @@ async function handleBrowserVoiceSession(
       });
     }
 
+    const scope = runtimeResolution?.scope || null;
+    if (!scope?.tenantId) {
+      return fail(res, 400, "tenant_required");
+    }
+
+    let call = null;
+    try {
+      call = await createVoiceCall(db, {
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+        provider: "browser_lab",
+        direction: "inbound",
+        status: "in_progress",
+        fromNumber: "browser",
+        toNumber: "browser",
+        startedAt: new Date().toISOString(),
+        answeredAt: new Date().toISOString(),
+        language: s(runtimeConfig.defaultLanguage, "en"),
+        agentMode: "assistant",
+        meta: {
+          browserVoice: true,
+          adapterType: "pre_sip_browser",
+          realtimeSessionId: s(payload?.session?.id || payload?.id),
+          model,
+          voice,
+        },
+      });
+    } catch (createErr) {
+      logger.error("voice.browser.session.call_create_failed", createErr);
+      recordVoiceRouteFailure({
+        route: "voice.browser.session",
+        reasonCode: "browser_voice_call_create_failed",
+        err: createErr,
+        req,
+      });
+      return fail(res, 500, "browser_voice_call_create_failed");
+    }
+
+    if (!call?.id) {
+      return fail(res, 500, "browser_voice_call_create_failed");
+    }
+
     return ok(res, {
+      browserCallId: call.id,
+      callId: call.id,
+      call: {
+        id: call.id,
+        callId: call.id,
+        tenantId: call.tenantId,
+        tenantKey: call.tenantKey,
+        provider: call.provider,
+        direction: call.direction,
+        status: call.status,
+      },
       model,
       voice,
       runtimeApplied,
