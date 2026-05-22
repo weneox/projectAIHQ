@@ -701,7 +701,7 @@ async function handleBrowserVoiceSession(
       call = await createVoiceCall(db, {
         tenantId: scope.tenantId,
         tenantKey: scope.tenantKey,
-        provider: "browser_lab",
+        provider: "other",
         direction: "inbound",
         status: "in_progress",
         fromNumber: "browser",

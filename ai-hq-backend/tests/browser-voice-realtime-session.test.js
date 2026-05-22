@@ -535,7 +535,7 @@ test("browser voice session creates and returns a tenant-scoped call id", async 
     assert.equal(calls[0].id, sessionResponse.body.browserCallId);
     assert.equal(calls[0].tenant_id, "tenant-1");
     assert.equal(calls[0].tenant_key, "acme");
-    assert.equal(calls[0].provider, "browser_lab");
+    assert.equal(calls[0].provider, "other");
     assert.equal(calls[0].direction, "inbound");
     assert.equal(calls[0].status, "in_progress");
     assert.equal(calls[0].from_number, "browser");
