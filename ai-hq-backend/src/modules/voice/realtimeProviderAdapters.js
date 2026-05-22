@@ -9,6 +9,8 @@ export const VOICE_REALTIME_PROVIDER_ADAPTERS_VERSION =
   "voice-realtime-provider-adapters-v1";
 
 export const OPENAI_REALTIME_PROVIDER = "openai";
+const VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION =
+  "voice-realtime-sideband-connector-v1";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -50,6 +52,21 @@ function unsupportedToolOutputResult(provider = "") {
   };
 }
 
+function unsupportedSidebandTrace({ provider = "", target = {} } = {}) {
+  return {
+    version: VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION,
+    enabled: false,
+    status: "unsupported",
+    reasonCode: "unsupported_realtime_provider",
+    provider: normalizeRealtimeProviderName(provider),
+    transport: s(target.transport),
+    providerRealtimeCallId: s(target.providerRealtimeCallId),
+    url: "",
+    networkIo: false,
+    authorizationConfigured: false,
+  };
+}
+
 function buildUnsupportedAdapter(provider = "") {
   const normalizedProvider = normalizeRealtimeProviderName(provider);
 
@@ -59,7 +76,13 @@ function buildUnsupportedAdapter(provider = "") {
     status: "unsupported",
     reasonCode: "unsupported_realtime_provider",
     buildSidebandPlan: () => unsupportedResult({ provider: normalizedProvider }),
-    buildSidebandTrace: () => unsupportedResult({ provider: normalizedProvider }),
+    buildSidebandTrace: ({ target = {} } = {}) => ({
+      ...unsupportedResult({ provider: normalizedProvider }),
+      sidebandTrace: unsupportedSidebandTrace({
+        provider: normalizedProvider,
+        target,
+      }),
+    }),
     normalizeEvent: () => unsupportedResult({ provider: normalizedProvider }),
     buildToolOutputEvents: () => unsupportedToolOutputResult(normalizedProvider),
   };
@@ -165,6 +188,19 @@ export function buildRealtimeProviderSidebandPlan({
   return adapter.buildSidebandPlan({
     target,
     env,
+  });
+}
+
+export function buildRealtimeProviderSidebandTrace({
+  provider = "",
+  plan = {},
+  target = {},
+} = {}) {
+  const adapter = getRealtimeProviderAdapter(provider || target.provider || plan.provider);
+
+  return adapter.buildSidebandTrace({
+    plan,
+    target,
   });
 }
 

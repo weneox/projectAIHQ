@@ -13,6 +13,7 @@ import {
 import {
   OPENAI_REALTIME_PROVIDER,
   VOICE_REALTIME_PROVIDER_ADAPTERS_VERSION,
+  buildRealtimeProviderSidebandTrace,
   buildRealtimeProviderSidebandPlan,
   getRealtimeProviderAdapter,
   normalizeRealtimeProviderEvent,
@@ -177,6 +178,24 @@ test("unknown provider event normalization returns unsupported result", () => {
     sidebandPlan: null,
     normalized: null,
   });
+});
+
+test("unknown provider sideband trace returns compatible unsupported trace", () => {
+  const result = buildRealtimeProviderSidebandTrace({
+    provider: "elevenlabs",
+    target: target("elevenlabs"),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.provider, "elevenlabs");
+  assert.equal(result.status, "unsupported");
+  assert.equal(result.reasonCode, "unsupported_realtime_provider");
+  assert.equal(result.sidebandTrace.enabled, false);
+  assert.equal(result.sidebandTrace.status, "unsupported");
+  assert.equal(result.sidebandTrace.reasonCode, "unsupported_realtime_provider");
+  assert.equal(result.sidebandTrace.provider, "elevenlabs");
+  assert.equal(result.sidebandTrace.providerRealtimeCallId, "call_realtime_1");
+  assert.equal(result.sidebandTrace.networkIo, false);
 });
 
 test("no network or socket behavior exists", () => {
