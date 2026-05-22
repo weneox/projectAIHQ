@@ -8,6 +8,9 @@ import {
   normalizeRealtimeSidebandEvent,
 } from "../src/modules/voice/realtimeSidebandEvents.js";
 import {
+  buildOpenAIRealtimeSidebandToolOutputEvents,
+} from "../src/modules/voice/providers/openaiRealtimeSidebandAdapter.js";
+import {
   OPENAI_REALTIME_PROVIDER,
   VOICE_REALTIME_PROVIDER_ADAPTERS_VERSION,
   buildRealtimeProviderSidebandPlan,
@@ -42,7 +45,9 @@ test("returns OpenAI adapter for openai/gpt/openai_realtime aliases", () => {
     assert.equal(adapter.status, "supported");
     assert.equal(adapter.reasonCode, "");
     assert.equal(typeof adapter.buildSidebandPlan, "function");
+    assert.equal(typeof adapter.buildSidebandTrace, "function");
     assert.equal(typeof adapter.normalizeEvent, "function");
+    assert.equal(typeof adapter.buildToolOutputEvents, "function");
   }
 });
 
@@ -72,6 +77,13 @@ test("unknown provider returns unsupported adapter and result", () => {
     normalized: null,
   });
   assert.deepEqual(normalized, sidebandPlan);
+  assert.deepEqual(adapter.buildToolOutputEvents(), {
+    ok: false,
+    provider: "elevenlabs",
+    status: "unsupported",
+    reasonCode: "unsupported_realtime_provider",
+    outboundEvents: [],
+  });
 });
 
 test("OpenAI sideband plan delegates to existing sideband connector behavior", () => {
@@ -94,6 +106,33 @@ test("OpenAI sideband plan delegates to existing sideband connector behavior", (
   assert.equal(result.reasonCode, expected.reasonCode);
   assert.deepEqual(result.sidebandPlan, expected);
   assert.equal(result.normalized, null);
+});
+
+test("OpenAI adapter builds same outbound tool output events as before", () => {
+  const adapter = getRealtimeProviderAdapter("openai");
+  const input = {
+    toolCall: {
+      id: "tool-call-1",
+      name: "create_handoff_request",
+    },
+    result: {
+      ok: true,
+      status: "request_recorded",
+      assistantInstruction: "Ask exactly this one question next.",
+    },
+  };
+
+  const expected = buildOpenAIRealtimeSidebandToolOutputEvents(input);
+  const result = adapter.buildToolOutputEvents(input);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.provider, OPENAI_REALTIME_PROVIDER);
+  assert.equal(result.status, "built");
+  assert.deepEqual(result.outboundEvents, expected);
+  assert.equal(result.outboundEvents[0].type, "conversation.item.create");
+  assert.equal(result.outboundEvents[0].item.type, "function_call_output");
+  assert.equal(result.outboundEvents[1].type, "response.create");
+  assert.equal(result.outboundEvents[1].response.instructions, "Ask exactly this one question next.");
 });
 
 test("OpenAI event normalization delegates to existing sideband event behavior", () => {

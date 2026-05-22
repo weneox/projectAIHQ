@@ -1,9 +1,9 @@
 import {
-  buildRealtimeSidebandConnectionPlan,
-} from "./realtimeSidebandConnector.js";
-import {
-  normalizeRealtimeSidebandEvent,
-} from "./realtimeSidebandEvents.js";
+  buildOpenAIRealtimeSidebandConnectionPlan,
+  buildOpenAIRealtimeSidebandToolOutputEvents,
+  buildOpenAIRealtimeSidebandTrace,
+  normalizeOpenAIRealtimeSidebandEvent,
+} from "./providers/openaiRealtimeSidebandAdapter.js";
 
 export const VOICE_REALTIME_PROVIDER_ADAPTERS_VERSION =
   "voice-realtime-provider-adapters-v1";
@@ -40,6 +40,16 @@ function unsupportedResult({ provider = "", sidebandPlan = null, normalized = nu
   };
 }
 
+function unsupportedToolOutputResult(provider = "") {
+  return {
+    ok: false,
+    provider: normalizeRealtimeProviderName(provider),
+    status: "unsupported",
+    reasonCode: "unsupported_realtime_provider",
+    outboundEvents: [],
+  };
+}
+
 function buildUnsupportedAdapter(provider = "") {
   const normalizedProvider = normalizeRealtimeProviderName(provider);
 
@@ -49,7 +59,9 @@ function buildUnsupportedAdapter(provider = "") {
     status: "unsupported",
     reasonCode: "unsupported_realtime_provider",
     buildSidebandPlan: () => unsupportedResult({ provider: normalizedProvider }),
+    buildSidebandTrace: () => unsupportedResult({ provider: normalizedProvider }),
     normalizeEvent: () => unsupportedResult({ provider: normalizedProvider }),
+    buildToolOutputEvents: () => unsupportedToolOutputResult(normalizedProvider),
   };
 }
 
@@ -59,7 +71,7 @@ const OPENAI_ADAPTER = {
   status: "supported",
   reasonCode: "",
   buildSidebandPlan({ target = {}, env = process.env } = {}) {
-    const sidebandPlan = buildRealtimeSidebandConnectionPlan({
+    const sidebandPlan = buildOpenAIRealtimeSidebandConnectionPlan({
       target: canonicalTarget(target),
       env,
     });
@@ -73,8 +85,21 @@ const OPENAI_ADAPTER = {
       normalized: null,
     };
   },
+  buildSidebandTrace({ plan = {} } = {}) {
+    const sidebandTrace = buildOpenAIRealtimeSidebandTrace(plan);
+
+    return {
+      ok: true,
+      provider: OPENAI_REALTIME_PROVIDER,
+      status: s(sidebandTrace.status),
+      reasonCode: s(sidebandTrace.reasonCode),
+      sidebandPlan: null,
+      sidebandTrace,
+      normalized: null,
+    };
+  },
   normalizeEvent({ event = {}, target = {} } = {}) {
-    const normalized = normalizeRealtimeSidebandEvent(event, {
+    const normalized = normalizeOpenAIRealtimeSidebandEvent(event, {
       target: canonicalTarget(target),
     });
 
@@ -85,6 +110,19 @@ const OPENAI_ADAPTER = {
       reasonCode: "",
       sidebandPlan: null,
       normalized,
+    };
+  },
+  buildToolOutputEvents({ toolCall = {}, result = {}, includeResponseCreate = true } = {}) {
+    return {
+      ok: true,
+      provider: OPENAI_REALTIME_PROVIDER,
+      status: "built",
+      reasonCode: "",
+      outboundEvents: buildOpenAIRealtimeSidebandToolOutputEvents({
+        toolCall,
+        result,
+        includeResponseCreate,
+      }),
     };
   },
 };

@@ -126,6 +126,118 @@ test("sideband tool dispatcher returns call patch for completed request actions"
   assert.equal(dispatched.callPatch.meta.lastVoiceAction.action, "create_handoff_request");
 });
 
+test("sideband tool dispatcher uses provider adapter output builder", async () => {
+  const adapterCalls = [];
+  const dispatched = await dispatchRealtimeSidebandToolCall({
+    event: {
+      type: "response.function_call_arguments.done",
+      call_id: "tool-call-adapter",
+      name: "create_handoff_request",
+      arguments: {
+        reason: "operator",
+        phone: "+994501112233",
+      },
+    },
+    target: {
+      provider: "openai",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_realtime_1",
+    },
+    call: {
+      id: "voice-call-adapter",
+      extraction: {},
+      meta: {},
+    },
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    reserveExecution: allowReservation,
+    executeAction: async () => ({
+      ok: true,
+      status: "request_recorded",
+    }),
+    getProviderAdapter: (provider) => ({
+      provider,
+      status: "supported",
+      reasonCode: "",
+      buildToolOutputEvents: ({ toolCall, result, includeResponseCreate }) => {
+        adapterCalls.push({
+          toolCallId: toolCall.id,
+          status: result.status,
+          includeResponseCreate,
+        });
+        return {
+          ok: true,
+          provider,
+          status: "built",
+          reasonCode: "",
+          outboundEvents: [
+            {
+              type: "adapter.output",
+              callId: toolCall.id,
+            },
+          ],
+        };
+      },
+    }),
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.deepEqual(adapterCalls, [
+    {
+      toolCallId: "tool-call-adapter",
+      status: "request_recorded",
+      includeResponseCreate: true,
+    },
+  ]);
+  assert.deepEqual(dispatched.outboundEvents, [
+    {
+      type: "adapter.output",
+      callId: "tool-call-adapter",
+    },
+  ]);
+});
+
+test("sideband tool dispatcher returns unsupported result for unsupported provider", async () => {
+  let executeCount = 0;
+
+  const dispatched = await dispatchRealtimeSidebandToolCall({
+    event: {
+      type: "response.function_call_arguments.done",
+      call_id: "tool-call-unsupported",
+      name: "create_handoff_request",
+      arguments: {
+        reason: "operator",
+      },
+    },
+    target: {
+      provider: "elevenlabs",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_realtime_unsupported",
+    },
+    call: {
+      id: "voice-call-unsupported",
+    },
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    executeAction: async () => {
+      executeCount += 1;
+      throw new Error("unsupported provider should not execute");
+    },
+  });
+
+  assert.equal(dispatched.ok, false);
+  assert.equal(dispatched.dispatched, false);
+  assert.equal(dispatched.status, "unsupported");
+  assert.equal(dispatched.reasonCode, "unsupported_realtime_provider");
+  assert.equal(dispatched.providerAdapter.provider, "elevenlabs");
+  assert.deepEqual(dispatched.outboundEvents, []);
+  assert.equal(executeCount, 0);
+});
+
 test("sideband tool output events stay serializable", () => {
   const events = buildRealtimeSidebandToolOutputEvents({
     toolCall: {

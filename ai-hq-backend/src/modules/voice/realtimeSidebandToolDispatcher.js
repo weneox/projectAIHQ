@@ -6,6 +6,12 @@ import {
   normalizeRealtimeSidebandEvent,
 } from "./realtimeSidebandEvents.js";
 import {
+  buildOpenAIRealtimeSidebandToolOutputEvents,
+} from "./providers/openaiRealtimeSidebandAdapter.js";
+import {
+  getRealtimeProviderAdapter,
+} from "./realtimeProviderAdapters.js";
+import {
   markVoiceRealtimeToolExecutionFailed,
   markVoiceRealtimeToolExecutionSent,
   reserveVoiceRealtimeToolExecution,
@@ -24,18 +30,6 @@ function obj(value) {
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function stringifyToolOutput(result = {}) {
-  try {
-    return JSON.stringify(obj(result));
-  } catch {
-    return JSON.stringify({
-      ok: false,
-      status: "tool_output_serialization_failed",
-      message: "Tool output could not be serialized.",
-    });
-  }
 }
 
 function buildToolExecutionIdempotencyPayload(reservation = {}, finalityRecord = null) {
@@ -67,56 +61,79 @@ function buildDuplicateToolResult({ reservation = {}, toolCall = {} } = {}) {
   };
 }
 
-function buildDuplicateToolOutputEvents({
-  toolCall = {},
-  result = {},
+function resolveProviderAdapter({
+  normalized = {},
+  target = {},
+  getProviderAdapter = getRealtimeProviderAdapter,
 } = {}) {
-  const callId = s(toolCall.id || toolCall.call_id || toolCall.callId);
-  if (!callId) return [];
-
-  return [
-    {
-      type: "conversation.item.create",
-      item: {
-        type: "function_call_output",
-        call_id: callId,
-        output: stringifyToolOutput(result),
-      },
-    },
-  ];
+  return getProviderAdapter(
+    s(normalized.provider || target.provider || "openai")
+  );
 }
 
-export function buildRealtimeSidebandToolOutputEvents({
+function buildProviderToolOutputEvents({
+  adapter = null,
   toolCall = {},
   result = {},
+  includeResponseCreate = true,
 } = {}) {
-  const callId = s(toolCall.id || toolCall.call_id || toolCall.callId);
-  if (!callId) return [];
+  if (typeof adapter?.buildToolOutputEvents !== "function") {
+    return {
+      ok: false,
+      provider: s(adapter?.provider),
+      reasonCode: "unsupported_realtime_provider",
+      outboundEvents: [],
+    };
+  }
 
-  const assistantInstruction = s(
-    result.assistantInstruction || result.nextAssistantInstruction
-  );
+  const built = adapter.buildToolOutputEvents({
+    toolCall,
+    result,
+    includeResponseCreate,
+  });
 
-  return [
-    {
-      type: "conversation.item.create",
-      item: {
-        type: "function_call_output",
-        call_id: callId,
-        output: stringifyToolOutput(result),
-      },
+  if (Array.isArray(built)) {
+    return {
+      ok: true,
+      provider: s(adapter.provider),
+      reasonCode: "",
+      outboundEvents: built,
+    };
+  }
+
+  return {
+    ok: built?.ok !== false,
+    provider: s(built?.provider || adapter.provider),
+    reasonCode: s(built?.reasonCode),
+    outboundEvents: arr(built?.outboundEvents),
+  };
+}
+
+function buildUnsupportedProviderDispatchResult({
+  normalized = {},
+  toolCall = {},
+  providerAdapter = {},
+} = {}) {
+  return {
+    ok: false,
+    dispatched: false,
+    status: "unsupported",
+    reasonCode: s(providerAdapter.reasonCode || "unsupported_realtime_provider"),
+    normalized,
+    toolCall,
+    providerAdapter: {
+      provider: s(providerAdapter.provider),
+      status: s(providerAdapter.status || "unsupported"),
+      reasonCode: s(providerAdapter.reasonCode || "unsupported_realtime_provider"),
     },
-    assistantInstruction
-      ? {
-          type: "response.create",
-          response: {
-            instructions: assistantInstruction,
-          },
-        }
-      : {
-          type: "response.create",
-        },
-  ];
+    outboundEvents: [],
+    callPatch: {},
+    resultTrace: null,
+  };
+}
+
+export function buildRealtimeSidebandToolOutputEvents(input = {}) {
+  return buildOpenAIRealtimeSidebandToolOutputEvents(input);
 }
 
 export function buildRealtimeSidebandToolResultTrace({
@@ -165,6 +182,7 @@ export async function dispatchRealtimeSidebandToolCall({
   reserveExecution = reserveVoiceRealtimeToolExecution,
   markExecutionSent = markVoiceRealtimeToolExecutionSent,
   markExecutionFailed = markVoiceRealtimeToolExecutionFailed,
+  getProviderAdapter = getRealtimeProviderAdapter,
 } = {}) {
   const normalized = obj(preNormalized).eventType
     ? preNormalized
@@ -182,6 +200,20 @@ export async function dispatchRealtimeSidebandToolCall({
       callPatch: {},
       resultTrace: null,
     };
+  }
+
+  const providerAdapter = resolveProviderAdapter({
+    normalized,
+    target,
+    getProviderAdapter,
+  });
+
+  if (providerAdapter?.status === "unsupported") {
+    return buildUnsupportedProviderDispatchResult({
+      normalized,
+      toolCall,
+      providerAdapter,
+    });
   }
 
   const reservation = await reserveExecution({
@@ -217,10 +249,22 @@ export async function dispatchRealtimeSidebandToolCall({
       toolCall,
     });
     const idempotency = buildToolExecutionIdempotencyPayload(reservation);
-    const outboundEvents = buildDuplicateToolOutputEvents({
+    const builtOutbound = buildProviderToolOutputEvents({
+      adapter: providerAdapter,
       toolCall,
       result,
+      includeResponseCreate: false,
     });
+
+    if (builtOutbound.ok === false) {
+      return buildUnsupportedProviderDispatchResult({
+        normalized,
+        toolCall,
+        providerAdapter: builtOutbound,
+      });
+    }
+
+    const outboundEvents = builtOutbound.outboundEvents;
     const resultTrace = buildRealtimeSidebandToolResultTrace({
       normalized,
       toolCall,
@@ -286,10 +330,21 @@ export async function dispatchRealtimeSidebandToolCall({
     call,
   });
 
-  const outboundEvents = buildRealtimeSidebandToolOutputEvents({
+  const builtOutbound = buildProviderToolOutputEvents({
+    adapter: providerAdapter,
     toolCall,
     result,
   });
+
+  if (builtOutbound.ok === false) {
+    return buildUnsupportedProviderDispatchResult({
+      normalized,
+      toolCall,
+      providerAdapter: builtOutbound,
+    });
+  }
+
+  const outboundEvents = builtOutbound.outboundEvents;
 
   const resultTrace = buildRealtimeSidebandToolResultTrace({
     normalized,
