@@ -80,10 +80,12 @@ import {
   normalizeProviderRealtimeCallId,
 } from "../../../modules/voice/realtimeControlPlane.js";
 import {
-  VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION,
-  buildRealtimeSidebandConnectionPlan,
-  buildRealtimeSidebandTrace,
-} from "../../../modules/voice/realtimeSidebandConnector.js";
+  buildRealtimeProviderSidebandPlan,
+  buildRealtimeProviderSidebandTrace,
+} from "../../../modules/voice/realtimeProviderAdapters.js";
+import {
+  buildRealtimeSidebandConnectionState,
+} from "../../../modules/voice/realtimeSidebandConnectionLifecycle.js";
 import {
   markVoiceRealtimeToolExecutionFailed,
   markVoiceRealtimeToolExecutionSent,
@@ -639,19 +641,33 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
       voice: s(req.body?.voice),
     });
 
-    const sidebandPlan = buildRealtimeSidebandConnectionPlan({
+    const sidebandPlanResult = buildRealtimeProviderSidebandPlan({
+      provider: target.provider,
       target,
       env: process.env,
     });
-    const sidebandConnector = buildRealtimeSidebandTrace(sidebandPlan);
+    const sidebandPlan = sidebandPlanResult?.sidebandPlan || null;
+    const sidebandTraceResult = buildRealtimeProviderSidebandTrace({
+      provider: target.provider,
+      target,
+      plan: sidebandPlan,
+    });
+    const sidebandConnector = obj(sidebandTraceResult?.sidebandTrace);
+    const sidebandLifecycle = buildRealtimeSidebandConnectionState({
+      provider: target.provider,
+      target,
+      env: process.env,
+      adapterRegistry: () => sidebandPlanResult,
+    });
     const linkPayload = {
       ...buildRealtimeProviderLinkPayload({
         target,
         locationHeader: s(req.body?.locationHeader),
         source: "browser_webrtc_sdp",
       }),
-      sidebandConnectorVersion: VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION,
+      sidebandConnectorVersion: s(sidebandConnector.version),
       sidebandConnector,
+      sidebandLifecycle,
     };
 
     const savedEvent = await appendVoiceCallEvent(db, {
@@ -673,6 +689,7 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
           ...target,
           linkPayload,
           sidebandConnector,
+          sidebandLifecycle,
         },
       },
     });
@@ -680,6 +697,7 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
     return ok(res, {
       controlTarget: target,
       sidebandConnector,
+      sidebandLifecycle,
       event: savedEvent,
     });
   } catch (err) {
