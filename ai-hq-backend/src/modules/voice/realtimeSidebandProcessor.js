@@ -123,6 +123,7 @@ export async function processRealtimeSidebandEvent({
   let dispatchResult = null;
   try {
     dispatchResult = await dispatchToolCall({
+      db,
       event,
       target,
       call,

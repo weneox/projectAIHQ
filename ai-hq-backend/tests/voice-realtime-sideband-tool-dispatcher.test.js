@@ -7,6 +7,20 @@ import {
   dispatchRealtimeSidebandToolCall,
 } from "../src/modules/voice/realtimeSidebandToolDispatcher.js";
 
+function allowReservation(input = {}) {
+  return {
+    ok: true,
+    skipped: false,
+    acquired: true,
+    duplicate: false,
+    reasonCode: "",
+    idempotencyKey: "idem-allow",
+    leaseToken: "lease-allow",
+    recordState: "reserved",
+    source: input.source,
+  };
+}
+
 test("sideband tool dispatcher ignores non-tool realtime events", async () => {
   const dispatched = await dispatchRealtimeSidebandToolCall({
     event: {
@@ -50,6 +64,7 @@ test("sideband tool dispatcher executes missing-field action with server-authore
         },
       },
     },
+    reserveExecution: allowReservation,
   });
 
   assert.equal(dispatched.dispatched, true);
@@ -99,6 +114,7 @@ test("sideband tool dispatcher returns call patch for completed request actions"
         },
       },
     },
+    reserveExecution: allowReservation,
   });
 
   assert.equal(dispatched.dispatched, true);
