@@ -56,6 +56,9 @@ function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } =
 
         if (text.includes("insert into voice_call_events")) {
           const payload = JSON.parse(params[6]);
+          if (String(params[4]).startsWith("browser_voice.")) {
+            throw new Error("voice_call_events_event_type_check");
+          }
           appendedEvents.push({
             callId: params[1],
             tenantId: params[2],
@@ -169,6 +172,9 @@ function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}
 
         if (text.includes("insert into voice_call_events")) {
           const payload = JSON.parse(params[6]);
+          if (String(params[4]).startsWith("browser_voice.")) {
+            throw new Error("voice_call_events_event_type_check");
+          }
           appendedEvents.push({
             callId: params[1],
             tenantId: params[2],
@@ -575,8 +581,72 @@ test("browser realtime-link can use the call id returned by browser session", as
     assert.equal(linkResponse.body.controlTarget.providerRealtimeCallId, "rtc_session_link");
     assert.equal(fixture.appendedEvents.length, 1);
     assert.equal(fixture.appendedEvents[0].callId, callId);
+    assert.equal(fixture.appendedEvents[0].eventType, "voice.event");
+    assert.equal(
+      fixture.appendedEvents[0].payload.originalEventType,
+      "browser_voice.provider_session_linked"
+    );
+    assert.ok(linkResponse.body.sidebandLifecycle);
+    assert.ok(linkResponse.body.sidebandRunner);
     assert.equal(fixture.updates.length, 1);
     assert.equal(fixture.updates[0].callId, callId);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser call event route persists connected events with schema-safe type", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const response = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/events`,
+      body: {
+        eventType: "browser_voice.connected",
+        actor: "system",
+        payload: {
+          model: "gpt-realtime-1.5",
+          voice: "coral",
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.event.eventType, "voice.event");
+    assert.equal(response.body.event.payload.originalEventType, "browser_voice.connected");
+    assert.equal(fixture.appendedEvents.length, 1);
+    assert.equal(fixture.appendedEvents[0].eventType, "voice.event");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser call event route preserves opening_started original event type", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const response = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/events`,
+      body: {
+        eventType: "browser_voice.opening_started",
+        actor: "system",
+        payload: {
+          openingStarted: true,
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.event.eventType, "voice.event");
+    assert.equal(
+      response.body.event.payload.originalEventType,
+      "browser_voice.opening_started"
+    );
+    assert.equal(fixture.appendedEvents[0].payload.openingStarted, true);
   } finally {
     await fixture.close();
   }
@@ -630,6 +700,11 @@ test("browser realtime-link stores sidebandConnector and sidebandLifecycle", asy
   assert.equal(runnerCalls, 0);
 
   assert.equal(appendedEvents.length, 1);
+  assert.equal(appendedEvents[0].eventType, "voice.event");
+  assert.equal(
+    appendedEvents[0].payload.originalEventType,
+    "browser_voice.provider_session_linked"
+  );
   assert.equal(appendedEvents[0].payload.sidebandConnector.status, "disabled");
   assert.equal(appendedEvents[0].payload.sidebandLifecycle.state, "disabled");
   assert.equal(appendedEvents[0].payload.sidebandRunner.status, "disabled");
@@ -667,6 +742,11 @@ test("browser realtime-link response remains compatible and can report ready lif
   assert.equal(runnerCalls.length, 1);
   assert.equal(runnerCalls[0].target.providerRealtimeCallId, "call_realtime_link");
   assert.equal(runnerCalls[0].scope.tenantKey, "acme");
+  assert.equal(appendedEvents[0].eventType, "voice.event");
+  assert.equal(
+    appendedEvents[0].payload.originalEventType,
+    "browser_voice.provider_session_linked"
+  );
   assert.equal(appendedEvents[0].payload.sidebandConnector.status, "ready");
   assert.equal(appendedEvents[0].payload.sidebandLifecycle.state, "ready");
   assert.equal(appendedEvents[0].payload.sidebandRunner.status, "started");
