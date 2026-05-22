@@ -25,7 +25,7 @@ import {
   listVoiceCallSessions,
   appendVoiceCallEvent,
   createVoiceCall,
-  updateVoiceCall,
+  updateVoiceCallForTenant,
   resolveTenantScope,
   } from "./repository.js";
 import {
@@ -955,17 +955,21 @@ async function handleBrowserVoiceRealtimeLink(
     }));
 
     const previousMeta = obj(call.meta);
-    await updateVoiceCall(db, callId, {
-      providerCallSid: s(call.providerCallSid || providerRealtimeCallId),
-      meta: {
-        ...previousMeta,
-        realtime: {
-          ...obj(previousMeta.realtime),
-          ...target,
-          linkPayload,
-          sidebandConnector,
-          sidebandLifecycle,
-          sidebandRunner,
+    await updateVoiceCallForTenant(db, {
+      id: callId,
+      tenantId: scope.tenantId,
+      patch: {
+        providerCallSid: s(call.providerCallSid || providerRealtimeCallId),
+        meta: {
+          ...previousMeta,
+          realtime: {
+            ...obj(previousMeta.realtime),
+            ...target,
+            linkPayload,
+            sidebandConnector,
+            sidebandLifecycle,
+            sidebandRunner,
+          },
         },
       },
     });
@@ -1032,17 +1036,25 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
         .filter(Boolean)
         .join("\n");
 
-      await updateVoiceCall(db, callId, {
-        transcript: nextTranscript,
-        outcome: normalizeVoiceCallOutcome(req.body?.outcome || call.outcome),
+      await updateVoiceCallForTenant(db, {
+        id: callId,
+        tenantId: scope.tenantId,
+        patch: {
+          transcript: nextTranscript,
+          outcome: normalizeVoiceCallOutcome(req.body?.outcome || call.outcome),
+        },
       });
     }
 
     if (req.body?.ended === true) {
-      await updateVoiceCall(db, callId, {
-        status: "completed",
-        endedAt: new Date().toISOString(),
-        outcome: s(req.body?.outcome || "completed"),
+      await updateVoiceCallForTenant(db, {
+        id: callId,
+        tenantId: scope.tenantId,
+        patch: {
+          status: "completed",
+          endedAt: new Date().toISOString(),
+          outcome: s(req.body?.outcome || "completed"),
+        },
       });
     }
 
@@ -1255,14 +1267,22 @@ async function handleBrowserVoiceToolCall(
 
     const callPatch = buildVoiceActionCallPatch({ result, call });
     if (Object.keys(callPatch).length > 0) {
-      await updateVoiceCall(db, voiceCallId, callPatch);
+      await updateVoiceCallForTenant(db, {
+        id: voiceCallId,
+        tenantId: scope.tenantId,
+        patch: callPatch,
+      });
     }
 
     if (result?.shouldEndCall === true) {
-      await updateVoiceCall(db, voiceCallId, {
-        status: "completed",
-        endedAt: new Date().toISOString(),
-        outcome: s(result.status || "completed"),
+      await updateVoiceCallForTenant(db, {
+        id: voiceCallId,
+        tenantId: scope.tenantId,
+        patch: {
+          status: "completed",
+          endedAt: new Date().toISOString(),
+          outcome: s(result.status || "completed"),
+        },
       });
     }
 

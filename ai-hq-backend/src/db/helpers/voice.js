@@ -546,6 +546,23 @@ export async function getVoiceCallById(db, id) {
   return row ? normalizeVoiceCall(row) : null;
 }
 
+export async function getVoiceCallByIdForTenant(db, { id, tenantId } = {}) {
+  if (!db || !id || !tenantId) return null;
+
+  const row = await one(
+    db,
+    `
+      select *
+      from voice_calls
+      where id = $1 and tenant_id = $2
+      limit 1
+    `,
+    [id, tenantId]
+  );
+
+  return row ? normalizeVoiceCall(row) : null;
+}
+
 export async function getVoiceCallByProviderSid(db, providerCallSid) {
   if (!db || !providerCallSid) return null;
 
@@ -716,6 +733,112 @@ export async function updateVoiceCall(db, id, patch = {}) {
     [
       id,
       s(merged.tenantId) || null,
+      s(merged.tenantKey),
+      s(merged.provider, "twilio"),
+      s(merged.providerCallSid) || null,
+      s(merged.providerStreamSid) || null,
+      s(merged.direction, "inbound"),
+      s(merged.status, "queued"),
+      s(merged.fromNumber || merged.from || merged.caller || merged.phone) || null,
+      s(merged.toNumber || merged.to) || null,
+      s(merged.callerName || merged.name) || null,
+      merged.startedAt || null,
+      merged.answeredAt || null,
+      merged.endedAt || null,
+      duration,
+      s(merged.language || merged.lang, "en"),
+      s(merged.agentMode, "assistant"),
+      b(merged.handoffRequested, false),
+      b(merged.handoffCompleted, false),
+      s(merged.handoffTarget) || null,
+      b(merged.callbackRequested, false),
+      s(merged.callbackPhone) || null,
+      s(merged.leadId) || null,
+      s(merged.inboxThreadId) || null,
+      s(merged.transcript),
+      s(merged.summary),
+      s(merged.outcome, "unknown"),
+      s(merged.intent) || null,
+      s(merged.sentiment) || null,
+      Number(merged.costAmount || 0),
+      s(merged.costCurrency, "USD"),
+      JSON.stringify(j(merged.metrics, {})),
+      JSON.stringify(j(merged.extraction, {})),
+      JSON.stringify(j(merged.meta, {})),
+    ]
+  );
+
+  return row ? normalizeVoiceCall(row) : null;
+}
+
+export async function updateVoiceCallForTenant(
+  db,
+  { id, tenantId, patch = {} } = {}
+) {
+  if (!db || !id || !tenantId) return null;
+
+  const current = await getVoiceCallByIdForTenant(db, { id, tenantId });
+  if (!current) return null;
+
+  const merged = {
+    ...current,
+    ...patch,
+    tenantId: current.tenantId || tenantId,
+    metrics: isObj(patch.metrics) ? patch.metrics : current.metrics,
+    extraction: isObj(patch.extraction) ? patch.extraction : current.extraction,
+    meta: isObj(patch.meta) ? patch.meta : current.meta,
+  };
+
+  const duration = n(
+    merged.durationSeconds ?? merged.durationSec ?? merged.duration,
+    0
+  );
+
+  const row = await one(
+    db,
+    `
+      update voice_calls
+      set
+        tenant_id = $2,
+        tenant_key = $3,
+        provider = $4,
+        provider_call_sid = $5,
+        provider_stream_sid = $6,
+        direction = $7,
+        status = $8,
+        from_number = $9,
+        to_number = $10,
+        caller_name = $11,
+        started_at = $12,
+        answered_at = $13,
+        ended_at = $14,
+        duration_seconds = $15,
+        language = $16,
+        agent_mode = $17,
+        handoff_requested = $18,
+        handoff_completed = $19,
+        handoff_target = $20,
+        callback_requested = $21,
+        callback_phone = $22,
+        lead_id = $23,
+        inbox_thread_id = $24,
+        transcript = $25,
+        summary = $26,
+        outcome = $27,
+        intent = $28,
+        sentiment = $29,
+        cost_amount = $30,
+        cost_currency = $31,
+        metrics = $32::jsonb,
+        extraction = $33::jsonb,
+        meta = $34::jsonb,
+        updated_at = now()
+      where id = $1 and tenant_id = $2
+      returning *
+    `,
+    [
+      id,
+      tenantId,
       s(merged.tenantKey),
       s(merged.provider, "twilio"),
       s(merged.providerCallSid) || null,

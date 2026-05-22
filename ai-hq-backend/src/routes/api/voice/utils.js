@@ -9,7 +9,7 @@ import {
 } from "../../../modules/voice/settings.js";
 import {
   resolveTenantScope,
-  getVoiceCallById,
+  getVoiceCallByIdForTenant,
   getVoiceCallSessionById,
   listVoiceCallSessions,
   appendVoiceCallEvent,
@@ -37,7 +37,10 @@ export function normalizeSettingsInput(body = {}) {
 }
 
 export async function getScopedCallOrFail({ db, scope, callId, res }) {
-  const call = await getVoiceCallById(db, s(callId));
+  const call = await getVoiceCallByIdForTenant(db, {
+    id: s(callId),
+    tenantId: scope?.tenantId,
+  });
   if (!call) {
     fail(res, 404, "voice_call_not_found");
     return null;

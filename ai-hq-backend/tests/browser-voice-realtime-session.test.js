@@ -16,6 +16,20 @@ import {
   voiceRoutes,
 } from "../src/routes/api/voice/public.js";
 
+function assertVoiceCallsTenantPredicate(sql) {
+  const text = String(sql).replace(/\s+/g, " ").toLowerCase();
+  const selectsVoiceCalls = text.includes(" from voice_calls ");
+  const updatesVoiceCalls = text.includes("update voice_calls ");
+  if (!selectsVoiceCalls && !updatesVoiceCalls) return;
+
+  const whereClause = text.split(" where ")[1] || "";
+  if (!whereClause.includes("tenant_id")) {
+    const err = new Error("Tenant-scoped database query requires tenant predicate");
+    err.code = "TENANT_PREDICATE_REQUIRED";
+    throw err;
+  }
+}
+
 function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } = {}) {
   const appendedEvents = [];
   const updates = [];
@@ -47,10 +61,14 @@ function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } =
     db: {
       query: async (sql, params = []) => {
         const text = String(sql);
+        assertVoiceCallsTenantPredicate(text);
 
         if (text.includes("from voice_calls")) {
           return {
-            rows: [callRow],
+            rows:
+              params[0] === callRow.id && params[1] === callRow.tenant_id
+                ? [callRow]
+                : [],
           };
         }
 
@@ -83,6 +101,9 @@ function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } =
         }
 
         if (text.includes("update voice_calls")) {
+          if (params[0] !== callRow.id || params[1] !== callRow.tenant_id) {
+            return { rows: [] };
+          }
           const meta = JSON.parse(params[33]);
           updates.push({
             callId: params[0],
@@ -118,6 +139,7 @@ function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}
     db: {
       query: async (sql, params = []) => {
         const text = String(sql);
+        assertVoiceCallsTenantPredicate(text);
 
         if (text.includes("insert into voice_calls")) {
           const meta = JSON.parse(params[33]);
@@ -165,8 +187,11 @@ function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}
 
         if (text.includes("from voice_calls")) {
           const id = params[0];
+          const tenantIdParam = params[1];
           return {
-            rows: calls.filter((call) => call.id === id),
+            rows: calls.filter(
+              (call) => call.id === id && call.tenant_id === tenantIdParam
+            ),
           };
         }
 
@@ -200,8 +225,11 @@ function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}
 
         if (text.includes("update voice_calls")) {
           const id = params[0];
+          const tenantIdParam = params[1];
           const meta = JSON.parse(params[33]);
-          const call = calls.find((item) => item.id === id);
+          const call = calls.find(
+            (item) => item.id === id && item.tenant_id === tenantIdParam
+          );
           if (!call) return { rows: [] };
 
           call.provider_call_sid = params[4] || "";
