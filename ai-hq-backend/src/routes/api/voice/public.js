@@ -167,6 +167,54 @@ function buildDuplicateVoiceToolResult({ reservation = {}, toolCallId = "", tool
   };
 }
 
+const BROWSER_VOICE_SAFE_EVENT_TYPE = "voice.event";
+const VOICE_CALL_OUTCOMES = new Set([
+  "unknown",
+  "lead_captured",
+  "handoff_completed",
+  "callback_requested",
+  "faq_resolved",
+  "missed",
+  "spam",
+  "failed",
+]);
+
+function normalizeVoiceCallOutcome(value = "", fallback = "unknown") {
+  const item = s(value || fallback);
+  return VOICE_CALL_OUTCOMES.has(item) ? item : fallback;
+}
+
+function isBrowserVoiceEventType(value = "") {
+  return s(value).startsWith("browser_voice.");
+}
+
+function buildBrowserVoiceEventInput({
+  callId = "",
+  scope = {},
+  eventType = "",
+  actor = "system",
+  payload = {},
+} = {}) {
+  const originalEventType = s(eventType || "browser_voice.event");
+  const safeEventType = isBrowserVoiceEventType(originalEventType)
+    ? BROWSER_VOICE_SAFE_EVENT_TYPE
+    : originalEventType;
+
+  return {
+    callId,
+    tenantId: scope.tenantId,
+    tenantKey: scope.tenantKey,
+    eventType: safeEventType,
+    actor: s(actor, "system"),
+    payload: {
+      ...obj(payload),
+      ...(safeEventType !== originalEventType
+        ? { originalEventType }
+        : {}),
+    },
+  };
+}
+
 function isRealtimeSidebandRunnerEnabled(env = process.env) {
   const raw = s(
     env.VOICE_REALTIME_SIDEBAND_ENABLED ||
@@ -898,14 +946,13 @@ async function handleBrowserVoiceRealtimeLink(
       sidebandRunner,
     };
 
-    const savedEvent = await appendVoiceCallEvent(db, {
+    const savedEvent = await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
       callId,
-      tenantId: scope.tenantId,
-      tenantKey: scope.tenantKey,
+      scope,
       eventType: "browser_voice.provider_session_linked",
       actor: "system",
       payload: linkPayload,
-    });
+    }));
 
     const previousMeta = obj(call.meta);
     await updateVoiceCall(db, callId, {
@@ -966,10 +1013,9 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
     const textValue = s(req.body?.text || payload.text || payload.transcript || payload.delta);
     const role = s(req.body?.role || payload.role);
 
-    const savedEvent = await appendVoiceCallEvent(db, {
+    const savedEvent = await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
       callId,
-      tenantId: scope.tenantId,
-      tenantKey: scope.tenantKey,
+      scope,
       eventType,
       actor,
       payload: {
@@ -977,7 +1023,7 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
         text: textValue,
         role,
       },
-    });
+    }));
 
     if (textValue && ["caller", "assistant", "user", "agent"].includes(role)) {
       const previousTranscript = s(call.transcript);
@@ -988,7 +1034,7 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
 
       await updateVoiceCall(db, callId, {
         transcript: nextTranscript,
-        outcome: s(req.body?.outcome || call.outcome || "in_progress"),
+        outcome: normalizeVoiceCallOutcome(req.body?.outcome || call.outcome),
       });
     }
 
@@ -1078,10 +1124,9 @@ async function handleBrowserVoiceToolCall(
       });
       const idempotency = buildVoiceToolExecutionIdempotencyPayload(reservation);
 
-      await appendVoiceCallEvent(db, {
+      await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
-        tenantId: scope.tenantId,
-        tenantKey: scope.tenantKey,
+        scope,
         eventType: "browser_voice.tool_executed",
         actor: "system",
         payload: {
@@ -1106,7 +1151,7 @@ async function handleBrowserVoiceToolCall(
           reservationReasonCode: s(idempotency.reasonCode),
           result,
         },
-      });
+      }));
 
       return ok(res, {
         toolCallId,
@@ -1179,10 +1224,9 @@ async function handleBrowserVoiceToolCall(
       finalityRecord
     );
 
-    await appendVoiceCallEvent(db, {
+    await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
       callId: voiceCallId,
-      tenantId: scope.tenantId,
-      tenantKey: scope.tenantKey,
+      scope,
       eventType: "browser_voice.tool_executed",
       actor: "system",
       payload: {
@@ -1207,7 +1251,7 @@ async function handleBrowserVoiceToolCall(
         reservationReasonCode: s(idempotency.reasonCode),
         result,
       },
-    });
+    }));
 
     const callPatch = buildVoiceActionCallPatch({ result, call });
     if (Object.keys(callPatch).length > 0) {
