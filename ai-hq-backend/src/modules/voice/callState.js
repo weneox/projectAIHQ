@@ -1,3 +1,7 @@
+import {
+  analyzeUniversalVoiceSlots,
+} from "./actions/voiceUniversalSlots.js";
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
 }
@@ -15,6 +19,7 @@ function cleanPayload(value = {}) {
 
 const VOICE_ACTION_TOOL_REQUIRED_FIELDS = Object.freeze({
   check_availability: Object.freeze(["intent"]),
+  create_business_request: Object.freeze(["requestType"]),
   create_reservation_request: Object.freeze(["date", "customerName", "phone"]),
   create_order_request: Object.freeze(["items", "fulfillment", "phone"]),
   create_appointment_request: Object.freeze(["service", "customerName", "phone"]),
@@ -197,6 +202,18 @@ export function analyzeVoiceActionState({
 } = {}) {
   const action = s(actionName);
   const data = cleanPayload(Object.keys(obj(payload)).length ? payload : args);
+
+  if (action === "create_business_request") {
+    return analyzeUniversalVoiceSlots({
+      operationType: "create_request",
+      requestType: data.requestType,
+      payload: data,
+      call,
+      runtimeConfig,
+      language,
+    });
+  }
+
   const lang = normalizeLanguage(
     language ||
       runtimeConfig.defaultLanguage ||

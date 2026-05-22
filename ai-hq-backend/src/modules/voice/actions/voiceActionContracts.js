@@ -1,6 +1,10 @@
 import {
   getVoiceActionToolRequiredFields,
 } from "../callState.js";
+import {
+  VOICE_REQUEST_TYPES,
+  normalizeVoiceBusinessFamily,
+} from "./voiceOperationTaxonomy.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -39,7 +43,7 @@ function readActionMode(runtimeConfig = {}, actions = {}, key = "") {
 }
 
 function readBusinessFamily(runtimeConfig = {}, actions = {}) {
-  return s(
+  return normalizeVoiceBusinessFamily(
     actions.businessFamily ||
       actions.businessType ||
       actions.business_type ||
@@ -49,7 +53,7 @@ function readBusinessFamily(runtimeConfig = {}, actions = {}) {
       runtimeConfig.voiceProfile?.businessType ||
       runtimeConfig.voiceProfile?.business_type ||
       "generic_business"
-  ).toLowerCase();
+  );
 }
 
 function readSupportedIntents(runtimeConfig = {}, actions = {}) {
@@ -65,6 +69,7 @@ function readSupportedIntents(runtimeConfig = {}, actions = {}) {
 
 export const VOICE_ACTIONS = Object.freeze({
   CHECK_AVAILABILITY: "check_availability",
+  CREATE_BUSINESS_REQUEST: "create_business_request",
   CREATE_RESERVATION_REQUEST: "create_reservation_request",
   CREATE_ORDER_REQUEST: "create_order_request",
   CREATE_APPOINTMENT_REQUEST: "create_appointment_request",
@@ -88,6 +93,14 @@ export function normalizeVoiceActionRuntime(runtimeConfig = {}) {
     orderingMode: readActionMode(runtimeConfig, actions, "ordering"),
     reservationMode: readActionMode(runtimeConfig, actions, "reservation"),
     appointmentMode: readActionMode(runtimeConfig, actions, "appointment"),
+    universalRequestMode:
+      normalizeOptionalActionMode(
+        runtimeConfig.universalRequestMode ||
+          runtimeConfig.universal_request_mode ||
+          actions.universalRequestMode ||
+          actions.universal_request_mode ||
+          obj(actions.universalRequest).mode
+      ) || "request_only",
     handoffMode:
       normalizeOptionalActionMode(
         runtimeConfig.handoffMode ||
@@ -174,6 +187,9 @@ export function buildVoiceActionPolicy(actionRuntime = {}) {
     runtime.appointmentMode === "live"
       ? "- Appointments can be created with a live tool."
       : "- Live appointment confirmation is not configured. You may create an appointment request only if request mode is enabled.",
+    runtime.universalRequestMode !== "disabled"
+      ? "- Universal business requests may be recorded for human/operator follow-up, but they are not confirmed live transactions."
+      : "- Universal business request intake is disabled for this runtime.",
   ];
 }
 
@@ -220,6 +236,55 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
           notes: { type: "string" },
         },
         required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CHECK_AVAILABILITY),
+      },
+    });
+  }
+
+  if (runtime.universalRequestMode !== "disabled") {
+    tools.push({
+      type: "function",
+      name: VOICE_ACTIONS.CREATE_BUSINESS_REQUEST,
+      description:
+        "Create a universal business request after required details are collected. Works for booking, reservation, appointment, quote, repair, rental, delivery, support, consultation, callback, complaint, and custom business requests. This creates a request only unless a live provider later confirms it.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          requestType: { type: "string", enum: Object.values(VOICE_REQUEST_TYPES) },
+          intent: { type: "string" },
+          service: { type: "string" },
+          product: { type: "string" },
+          category: { type: "string" },
+          issue: { type: "string" },
+          description: { type: "string" },
+          date: { type: "string" },
+          time: { type: "string" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+          quantity: { type: "number" },
+          partySize: { type: "number" },
+          guestCount: { type: "number" },
+          roomType: { type: "string" },
+          vehicleMake: { type: "string" },
+          vehicleModel: { type: "string" },
+          vehicleYear: { type: "string" },
+          licensePlate: { type: "string" },
+          location: { type: "string" },
+          address: { type: "string" },
+          budget: { type: "string" },
+          urgency: { type: "string" },
+          preferredStaff: { type: "string" },
+          department: { type: "string" },
+          customerName: { type: "string" },
+          phone: { type: "string" },
+          email: { type: "string" },
+          companyName: { type: "string" },
+          orderId: { type: "string" },
+          bookingId: { type: "string" },
+          ticketId: { type: "string" },
+          notes: { type: "string" },
+        },
+        required: getVoiceActionToolRequiredFields(VOICE_ACTIONS.CREATE_BUSINESS_REQUEST),
       },
     });
   }
