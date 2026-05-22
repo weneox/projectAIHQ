@@ -1,8 +1,14 @@
 import {
+  createOperationRequest,
+} from "../../db/helpers/operationRequests.js";
+import {
   appendVoiceCallEvent,
   updateVoiceCall,
   updateVoiceCallForTenant,
 } from "../../db/helpers/voice.js";
+import {
+  buildOperationRequestFromVoiceResult,
+} from "./actions/voiceOperationRequestBuilder.js";
 
 export const VOICE_REALTIME_SIDEBAND_PERSISTENCE_VERSION =
   "voice-realtime-sideband-persistence-v1";
@@ -21,6 +27,25 @@ function arr(value) {
 
 function readCallId(call = {}) {
   return s(call.id || call.callId || call.call_id);
+}
+
+function mergePatchWithOperationRequest(callPatch = {}, operationRequest = null) {
+  if (!operationRequest?.id) return callPatch;
+  const patch = obj(callPatch);
+  const extraction = obj(patch.extraction);
+  const meta = obj(patch.meta);
+
+  return {
+    ...patch,
+    extraction: {
+      ...extraction,
+      operationRequestId: s(operationRequest.id),
+    },
+    meta: {
+      ...meta,
+      lastOperationRequestId: s(operationRequest.id),
+    },
+  };
 }
 
 async function updateRealtimeSidebandCall(db, callId, callPatch, scope = {}) {
@@ -111,6 +136,7 @@ export async function persistRealtimeSidebandTrace({
   callPatch = {},
   appendEvent = appendVoiceCallEvent,
   updateCall = null,
+  createRequest = createOperationRequest,
 } = {}) {
   if (!db) {
     return {
@@ -147,6 +173,29 @@ export async function persistRealtimeSidebandTrace({
     events.push(event);
   }
 
+  let operationRequest = null;
+  if (resultTrace) {
+    const resultPayload = obj(resultTrace.payload);
+    const result = obj(resultPayload.result);
+    const requestInput = buildOperationRequestFromVoiceResult({
+      result,
+      call,
+      scope,
+      normalized: normalized || {},
+      toolCall: normalized?.toolCall || {
+        id: resultPayload.toolCallId,
+        name: resultPayload.toolName,
+      },
+    });
+
+    if (requestInput) {
+      operationRequest = await createRequest(db, requestInput);
+      if (operationRequest) {
+        callPatch = mergePatchWithOperationRequest(callPatch, operationRequest);
+      }
+    }
+  }
+
   let updatedCall = null;
   let callPatchApplied = false;
 
@@ -161,6 +210,7 @@ export async function persistRealtimeSidebandTrace({
     ok: true,
     skipped: false,
     events,
+    operationRequest,
     callPatchApplied,
     updatedCall,
   };
