@@ -131,7 +131,19 @@ test("tool call event is dispatched and persisted", async () => {
   assert.equal(persistedArgs.length, 1);
   assert.equal(persistedArgs[0].normalized, result.normalized);
   assert.equal(persistedArgs[0].resultTrace.eventType, "voice.sideband.tool_result");
-  assert.equal(persistedArgs[0].callPatch.outcome, "voice_action_missing_required_fields");
+  assert.equal(persistedArgs[0].callPatch.outcome, "unknown");
+  assert.equal(
+    persistedArgs[0].callPatch.extraction.voiceOutcome.type,
+    "voice_action_missing_required_fields"
+  );
+  assert.equal(
+    persistedArgs[0].callPatch.extraction.voiceOutcome.action,
+    "create_appointment_request"
+  );
+  assert.equal(
+    persistedArgs[0].callPatch.extraction.voiceOutcome.status,
+    "missing_required_fields"
+  );
 });
 
 test("outboundEvents from dispatcher are returned", async () => {
