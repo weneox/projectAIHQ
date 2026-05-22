@@ -191,6 +191,7 @@ async function withOperationRequestApp({ dbFixture = makeDb(), auth = {} } = {})
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
+    req.requestId = req.headers["x-request-id"] || "";
     req.auth = {
       userId: "user-1",
       tenantId: TENANT_ID,
@@ -294,6 +295,106 @@ test("patch rejects forbidden fields", async () => {
 
     assert.equal(response.statusCode, 400);
     assert.equal(response.body.code, "operation_request_patch_forbidden_fields");
+    assert.deepEqual(response.body.rejectedFields, [
+      "sourceCallId",
+      "requestType",
+      "customerPhone",
+    ]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch empty body returns no_operation_request_patch_fields", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {},
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, "no_operation_request_patch_fields");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch invalid status returns explicit validation error", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        status: "done",
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, "invalid_operation_request_status");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch invalid priority returns explicit validation error", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        priority: "critical",
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, "invalid_operation_request_priority");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch forbidden meta field returns rejectedFields with meta path", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        meta: {
+          operatorNotes: "ok",
+          source: "not allowed",
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, "operation_request_patch_forbidden_fields");
+    assert.deepEqual(response.body.rejectedFields, ["meta.source"]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("error response includes requestId when present", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      headers: {
+        "x-request-id": "req-operation-validation",
+      },
+      body: {
+        priority: "critical",
+      },
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.requestId, "req-operation-validation");
   } finally {
     await fixture.close();
   }

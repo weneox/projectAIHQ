@@ -18,11 +18,13 @@ function ok(res, payload = {}) {
   return res.json({ ok: true, ...payload });
 }
 
-function fail(res, status, code) {
+function fail(req, res, status, code, extra = {}) {
   return res.status(status).json({
     ok: false,
     error: code,
     code,
+    requestId: req.requestId || null,
+    ...extra,
   });
 }
 
@@ -51,6 +53,17 @@ const ALLOWED_PATCH_FIELDS = new Set([
 ]);
 
 const ALLOWED_META_FIELDS = new Set(["notes", "operatorNotes"]);
+const STATUS_VALUES = new Set([
+  "new",
+  "in_review",
+  "waiting_customer",
+  "contacted",
+  "scheduled",
+  "resolved",
+  "cancelled",
+  "failed",
+]);
+const PRIORITY_VALUES = new Set(["low", "normal", "high", "urgent"]);
 
 const FORBIDDEN_PATCH_FIELDS = new Set([
   "tenantId",
@@ -127,6 +140,44 @@ function buildPatch(body = {}, current = {}) {
   return patch;
 }
 
+function validatePatchBody(body = {}) {
+  const input = obj(body);
+  const rejectedFields = findRejectedPatchFields(input);
+  if (rejectedFields.length) {
+    return {
+      ok: false,
+      code: "operation_request_patch_forbidden_fields",
+      rejectedFields,
+    };
+  }
+
+  const patchKeys = Object.keys(input);
+  if (!patchKeys.length) {
+    return {
+      ok: false,
+      code: "no_operation_request_patch_fields",
+    };
+  }
+
+  if (input.status !== undefined && !STATUS_VALUES.has(s(input.status).toLowerCase())) {
+    return {
+      ok: false,
+      code: "invalid_operation_request_status",
+    };
+  }
+
+  if (input.priority !== undefined && !PRIORITY_VALUES.has(s(input.priority).toLowerCase())) {
+    return {
+      ok: false,
+      code: "invalid_operation_request_priority",
+    };
+  }
+
+  return {
+    ok: true,
+  };
+}
+
 async function auditOperationRequestPatch({ audit, req, request, before = {}, patch = {} } = {}) {
   if (!audit?.log) return;
   try {
@@ -154,9 +205,9 @@ async function auditOperationRequestPatch({ audit, req, request, before = {}, pa
 }
 
 export async function listOperationRequestsHandler(req, res, { db, dbDisabled = false } = {}) {
-  if (dbDisabled || !db) return fail(res, 503, "db_unavailable");
+  if (dbDisabled || !db) return fail(req, res, 503, "db_unavailable");
   const { tenantId } = readTenant(req);
-  if (!tenantId) return fail(res, 401, "missing_authenticated_tenant_context");
+  if (!tenantId) return fail(req, res, 401, "missing_authenticated_tenant_context");
 
   const requests = await listOperationRequestsForTenant(db, {
     tenantId,
@@ -173,16 +224,16 @@ export async function listOperationRequestsHandler(req, res, { db, dbDisabled = 
 }
 
 export async function getOperationRequestHandler(req, res, { db, dbDisabled = false } = {}) {
-  if (dbDisabled || !db) return fail(res, 503, "db_unavailable");
+  if (dbDisabled || !db) return fail(req, res, 503, "db_unavailable");
   const { tenantId } = readTenant(req);
-  if (!tenantId) return fail(res, 401, "missing_authenticated_tenant_context");
+  if (!tenantId) return fail(req, res, 401, "missing_authenticated_tenant_context");
 
   const request = await getOperationRequestByIdForTenant(db, {
     id: s(req.params?.id),
     tenantId,
   });
 
-  if (!request) return fail(res, 404, "operation_request_not_found");
+  if (!request) return fail(req, res, 404, "operation_request_not_found");
   return ok(res, { request });
 }
 
@@ -191,20 +242,22 @@ export async function patchOperationRequestHandler(
   res,
   { db, dbDisabled = false, audit = null } = {}
 ) {
-  if (dbDisabled || !db) return fail(res, 503, "db_unavailable");
+  if (dbDisabled || !db) return fail(req, res, 503, "db_unavailable");
   const { tenantId } = readTenant(req);
-  if (!tenantId) return fail(res, 401, "missing_authenticated_tenant_context");
+  if (!tenantId) return fail(req, res, 401, "missing_authenticated_tenant_context");
 
-  const rejectedFields = findRejectedPatchFields(req.body);
-  if (rejectedFields.length) {
-    return fail(res, 400, "operation_request_patch_forbidden_fields");
+  const validation = validatePatchBody(req.body);
+  if (!validation.ok) {
+    return fail(req, res, 400, validation.code, {
+      ...(validation.rejectedFields ? { rejectedFields: validation.rejectedFields } : {}),
+    });
   }
 
   const current = await getOperationRequestByIdForTenant(db, {
     id: s(req.params?.id),
     tenantId,
   });
-  if (!current) return fail(res, 404, "operation_request_not_found");
+  if (!current) return fail(req, res, 404, "operation_request_not_found");
 
   const patch = buildPatch(req.body, current);
   const updated = await updateOperationRequestForTenant(db, {
@@ -213,7 +266,7 @@ export async function patchOperationRequestHandler(
     patch,
   });
 
-  if (!updated) return fail(res, 404, "operation_request_not_found");
+  if (!updated) return fail(req, res, 404, "operation_request_not_found");
   await auditOperationRequestPatch({
     audit,
     req,
@@ -244,6 +297,7 @@ export function operationRequestsRoutes({ db, dbDisabled = false, audit = null }
 export const __test__ = {
   buildPatch,
   findRejectedPatchFields,
+  validatePatchBody,
   getOperationRequestHandler,
   listOperationRequestsHandler,
   patchOperationRequestHandler,
