@@ -66,16 +66,43 @@ describe("Voice", () => {
 
   it("does not crash or link when the OpenAI Location header is missing", async () => {
     const linkSession = vi.fn();
+    const warn = vi.fn();
     const result = await linkBrowserVoiceRealtimeSessionFromSdpResponse({
       browserCallId: "voice-call-1",
       response: { headers: new Headers() },
       linkSession,
-      warn: vi.fn(),
+      warn,
     });
 
     expect(result.ok).toBe(true);
     expect(result.attempted).toBe(false);
     expect(result.reasonCode).toBe("provider_realtime_call_id_missing");
+    expect(warn).toHaveBeenCalledWith("Browser voice realtime-link skipped", {
+      reasonCode: "provider_realtime_call_id_missing",
+    });
+    expect(linkSession).not.toHaveBeenCalled();
+  });
+
+  it("does not crash when browserCallId is missing and records a warning", async () => {
+    const linkSession = vi.fn();
+    const warn = vi.fn();
+    const result = await linkBrowserVoiceRealtimeSessionFromSdpResponse({
+      browserCallId: "",
+      response: {
+        headers: new Headers({
+          location: "/v1/realtime/calls/rtc_u7_abc",
+        }),
+      },
+      linkSession,
+      warn,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.attempted).toBe(false);
+    expect(result.reasonCode).toBe("browser_voice_call_id_missing");
+    expect(warn).toHaveBeenCalledWith("Browser voice realtime-link skipped", {
+      reasonCode: "browser_voice_call_id_missing",
+    });
     expect(linkSession).not.toHaveBeenCalled();
   });
 

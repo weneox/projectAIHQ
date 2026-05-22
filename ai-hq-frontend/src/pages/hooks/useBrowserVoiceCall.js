@@ -109,10 +109,14 @@ export async function linkBrowserVoiceRealtimeSessionFromSdpResponse({
   const providerRealtimeCallId = s(realtimeProviderLink.providerRealtimeCallId);
 
   if (!callId || !providerRealtimeCallId) {
+    const reasonCode = callId
+      ? "provider_realtime_call_id_missing"
+      : "browser_voice_call_id_missing";
+    warn?.("Browser voice realtime-link skipped", { reasonCode });
     return {
       ok: true,
       attempted: false,
-      reasonCode: callId ? "provider_realtime_call_id_missing" : "voice_call_id_missing",
+      reasonCode,
       providerRealtimeCallId,
     };
   }
