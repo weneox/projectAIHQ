@@ -234,10 +234,13 @@ function makeBrowserSessionDb({ tenantId = "tenant-1", tenantKey = "acme" } = {}
 
           call.provider_call_sid = params[4] || "";
           call.status = params[7];
+          call.outcome = params[26];
           call.meta = meta;
           updates.push({
             callId: id,
             providerCallSid: params[4],
+            status: params[7],
+            outcome: params[26],
             meta,
           });
           return { rows: [call] };
@@ -675,6 +678,78 @@ test("browser call event route preserves opening_started original event type", a
       "browser_voice.opening_started"
     );
     assert.equal(fixture.appendedEvents[0].payload.openingStarted, true);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser ended event with no outcome completes call with unknown outcome", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const response = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/events`,
+      body: {
+        eventType: "browser_voice.ended",
+        ended: true,
+        payload: {
+          endedBy: "user",
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(fixture.updates.length, 1);
+    assert.equal(fixture.updates[0].status, "completed");
+    assert.equal(fixture.updates[0].outcome, "unknown");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser ended event normalizes invalid completed outcome safely", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const response = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/events`,
+      body: {
+        eventType: "browser_voice.ended",
+        ended: true,
+        outcome: "completed",
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(fixture.updates[0].status, "completed");
+    assert.equal(fixture.updates[0].outcome, "unknown");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("browser ended event preserves valid failed outcome", async () => {
+  const fixture = await withBrowserSessionRoute();
+  const callId = fixture.sessionResponse.body.browserCallId;
+
+  try {
+    const response = await requestJson(fixture.server, {
+      path: `/voice/browser/calls/${callId}/events`,
+      body: {
+        eventType: "browser_voice.ended",
+        ended: true,
+        outcome: "failed",
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(fixture.updates[0].status, "completed");
+    assert.equal(fixture.updates[0].outcome, "failed");
   } finally {
     await fixture.close();
   }

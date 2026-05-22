@@ -1053,7 +1053,7 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
         patch: {
           status: "completed",
           endedAt: new Date().toISOString(),
-          outcome: s(req.body?.outcome || "completed"),
+          outcome: normalizeVoiceCallOutcome(req.body?.outcome, "unknown"),
         },
       });
     }
