@@ -103,6 +103,23 @@ function makeRealtimeLinkDb({ callId = "voice-call-link", tenantKey = "acme" } =
   };
 }
 
+function buildStartedSidebandRunnerResult() {
+  return {
+    ok: true,
+    skipped: false,
+    socketCreated: true,
+    reasonCode: "",
+    lifecycleTrace: {
+      provider: "openai",
+      state: "connecting",
+      status: "connecting",
+      reasonCode: "",
+      providerRealtimeCallId: "call_realtime_link",
+      networkIo: false,
+    },
+  };
+}
+
 function requestJson(server, { path = "/", body = {} } = {}) {
   const address = server.address();
   const payload = JSON.stringify(body);
@@ -143,7 +160,12 @@ function requestJson(server, { path = "/", body = {} } = {}) {
   });
 }
 
-async function withRealtimeLinkRoute({ env = {}, body = {} } = {}) {
+async function withRealtimeLinkRoute({
+  env = {},
+  body = {},
+  startSidebandRunner = async () => buildStartedSidebandRunnerResult(),
+  getRuntime = async () => null,
+} = {}) {
   const previousEnv = {
     VOICE_REALTIME_SIDEBAND_ENABLED: process.env.VOICE_REALTIME_SIDEBAND_ENABLED,
     AIHQ_VOICE_REALTIME_SIDEBAND_ENABLED: process.env.AIHQ_VOICE_REALTIME_SIDEBAND_ENABLED,
@@ -166,7 +188,11 @@ async function withRealtimeLinkRoute({ env = {}, body = {} } = {}) {
     };
     next();
   });
-  app.use(voiceRoutes({ db: fixture.db }));
+  app.use(voiceRoutes({
+    db: fixture.db,
+    getRuntime,
+    startSidebandRunner,
+  }));
 
   const server = await new Promise((resolve) => {
     const nextServer = app.listen(0, () => resolve(nextServer));
@@ -329,7 +355,13 @@ test("browser voice business scope guard redirects out-of-scope caller intent", 
 });
 
 test("browser realtime-link stores sidebandConnector and sidebandLifecycle", async () => {
-  const { response, appendedEvents, updates } = await withRealtimeLinkRoute();
+  let runnerCalls = 0;
+  const { response, appendedEvents, updates } = await withRealtimeLinkRoute({
+    startSidebandRunner: async () => {
+      runnerCalls += 1;
+      throw new Error("runner should not start when flag is off");
+    },
+  });
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.ok, true);
@@ -338,20 +370,32 @@ test("browser realtime-link stores sidebandConnector and sidebandLifecycle", asy
   assert.equal(response.body.sidebandConnector.networkIo, false);
   assert.equal(response.body.sidebandLifecycle.state, "disabled");
   assert.equal(response.body.sidebandLifecycle.networkIo, false);
+  assert.equal(response.body.sidebandRunner.enabled, false);
+  assert.equal(response.body.sidebandRunner.attempted, false);
+  assert.equal(response.body.sidebandRunner.status, "disabled");
+  assert.equal(response.body.sidebandRunner.reasonCode, "sideband_disabled");
+  assert.equal(runnerCalls, 0);
 
   assert.equal(appendedEvents.length, 1);
   assert.equal(appendedEvents[0].payload.sidebandConnector.status, "disabled");
   assert.equal(appendedEvents[0].payload.sidebandLifecycle.state, "disabled");
+  assert.equal(appendedEvents[0].payload.sidebandRunner.status, "disabled");
   assert.equal(updates.length, 1);
   assert.equal(updates[0].meta.realtime.sidebandConnector.status, "disabled");
   assert.equal(updates[0].meta.realtime.sidebandLifecycle.state, "disabled");
+  assert.equal(updates[0].meta.realtime.sidebandRunner.status, "disabled");
 });
 
 test("browser realtime-link response remains compatible and can report ready lifecycle", async () => {
-  const { response, appendedEvents } = await withRealtimeLinkRoute({
+  const runnerCalls = [];
+  const { response, appendedEvents, updates } = await withRealtimeLinkRoute({
     env: {
       VOICE_REALTIME_SIDEBAND_ENABLED: "1",
       OPENAI_API_KEY: "sk-test",
+    },
+    startSidebandRunner: async (input) => {
+      runnerCalls.push(input);
+      return buildStartedSidebandRunnerResult();
     },
   });
 
@@ -363,8 +407,17 @@ test("browser realtime-link response remains compatible and can report ready lif
   assert.equal(response.body.sidebandConnector.status, "ready");
   assert.equal(response.body.sidebandConnector.providerRealtimeCallId, "call_realtime_link");
   assert.equal(response.body.sidebandLifecycle.state, "ready");
+  assert.equal(response.body.sidebandRunner.enabled, true);
+  assert.equal(response.body.sidebandRunner.attempted, true);
+  assert.equal(response.body.sidebandRunner.status, "started");
+  assert.equal(response.body.sidebandRunner.lifecycleState.state, "connecting");
+  assert.equal(runnerCalls.length, 1);
+  assert.equal(runnerCalls[0].target.providerRealtimeCallId, "call_realtime_link");
+  assert.equal(runnerCalls[0].scope.tenantKey, "acme");
   assert.equal(appendedEvents[0].payload.sidebandConnector.status, "ready");
   assert.equal(appendedEvents[0].payload.sidebandLifecycle.state, "ready");
+  assert.equal(appendedEvents[0].payload.sidebandRunner.status, "started");
+  assert.equal(updates[0].meta.realtime.sidebandRunner.status, "started");
 });
 
 test("browser realtime-link gives unsupported provider blocked lifecycle without socket or network", async () => {
@@ -383,12 +436,17 @@ test("browser realtime-link gives unsupported provider blocked lifecycle without
   };
 
   try {
+    let runnerCalls = 0;
     const { response, updates } = await withRealtimeLinkRoute({
       env: {
         VOICE_REALTIME_SIDEBAND_ENABLED: "1",
       },
       body: {
         provider: "elevenlabs",
+      },
+      startSidebandRunner: async () => {
+        runnerCalls += 1;
+        throw new Error("runner should not start for blocked lifecycle");
       },
     });
 
@@ -397,7 +455,13 @@ test("browser realtime-link gives unsupported provider blocked lifecycle without
     assert.equal(response.body.sidebandConnector.reasonCode, "unsupported_realtime_provider");
     assert.equal(response.body.sidebandLifecycle.state, "blocked");
     assert.equal(response.body.sidebandLifecycle.reasonCode, "unsupported_realtime_provider");
+    assert.equal(response.body.sidebandRunner.enabled, true);
+    assert.equal(response.body.sidebandRunner.attempted, false);
+    assert.equal(response.body.sidebandRunner.status, "blocked");
+    assert.equal(response.body.sidebandRunner.reasonCode, "unsupported_realtime_provider");
     assert.equal(updates[0].meta.realtime.sidebandLifecycle.state, "blocked");
+    assert.equal(updates[0].meta.realtime.sidebandRunner.status, "blocked");
+    assert.equal(runnerCalls, 0);
     assert.equal(fetchCalls, 0);
     assert.equal(socketCalls, 0);
   } finally {
@@ -412,4 +476,28 @@ test("browser realtime-link gives unsupported provider blocked lifecycle without
       globalThis.WebSocket = originalWebSocket;
     }
   }
+});
+
+test("browser realtime-link runner failure does not fail route", async () => {
+  const { response, appendedEvents, updates } = await withRealtimeLinkRoute({
+    env: {
+      VOICE_REALTIME_SIDEBAND_ENABLED: "1",
+      OPENAI_API_KEY: "sk-test",
+    },
+    startSidebandRunner: async () => {
+      throw new Error("runner exploded");
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.sidebandConnector.status, "ready");
+  assert.equal(response.body.sidebandLifecycle.state, "ready");
+  assert.equal(response.body.sidebandRunner.enabled, true);
+  assert.equal(response.body.sidebandRunner.attempted, true);
+  assert.equal(response.body.sidebandRunner.status, "failed");
+  assert.equal(response.body.sidebandRunner.reasonCode, "sideband_runner_start_failed");
+  assert.match(response.body.sidebandRunner.error, /runner exploded/);
+  assert.equal(appendedEvents[0].payload.sidebandRunner.status, "failed");
+  assert.equal(updates[0].meta.realtime.sidebandRunner.status, "failed");
 });

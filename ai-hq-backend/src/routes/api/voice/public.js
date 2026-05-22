@@ -91,6 +91,9 @@ import {
   markVoiceRealtimeToolExecutionSent,
   reserveVoiceRealtimeToolExecution,
 } from "../../../modules/voice/realtimeToolExecutionIdempotency.js";
+import {
+  startRealtimeSidebandSocketRunner,
+} from "../../../modules/voice/realtimeSidebandSocketRunner.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -162,6 +165,122 @@ function buildDuplicateVoiceToolResult({ reservation = {}, toolCallId = "", tool
     toolCallId: s(toolCallId),
     toolName: s(toolName),
   };
+}
+
+function isRealtimeSidebandRunnerEnabled(env = process.env) {
+  const raw = s(
+    env.VOICE_REALTIME_SIDEBAND_ENABLED ||
+      env.AIHQ_VOICE_REALTIME_SIDEBAND_ENABLED
+  ).toLowerCase();
+  return ["1", "true", "yes", "y", "on"].includes(raw);
+}
+
+function compactSidebandLifecycleState(state = {}) {
+  const item = obj(state);
+  return {
+    provider: s(item.provider),
+    state: s(item.state),
+    status: s(item.status),
+    reasonCode: s(item.reasonCode),
+    providerRealtimeCallId: s(
+      item.sidebandPlan?.providerRealtimeCallId ||
+        item.target?.providerRealtimeCallId
+    ),
+    networkIo: item.networkIo === true,
+  };
+}
+
+function buildSidebandRunnerStatus({
+  enabled = false,
+  attempted = false,
+  lifecycleState = {},
+  runnerResult = null,
+  err = null,
+} = {}) {
+  const compactLifecycle = compactSidebandLifecycleState(lifecycleState);
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      attempted: false,
+      status: "disabled",
+      reasonCode: "sideband_disabled",
+      lifecycleState: compactLifecycle,
+    };
+  }
+
+  if (err) {
+    return {
+      enabled: true,
+      attempted: true,
+      status: "failed",
+      reasonCode: "sideband_runner_start_failed",
+      error: s(err?.message || err),
+      lifecycleState: compactLifecycle,
+    };
+  }
+
+  if (!attempted) {
+    return {
+      enabled: true,
+      attempted: false,
+      status: s(compactLifecycle.state || compactLifecycle.status || "blocked"),
+      reasonCode: s(compactLifecycle.reasonCode || "sideband_lifecycle_not_ready"),
+      lifecycleState: compactLifecycle,
+    };
+  }
+
+  const runnerLifecycle = obj(runnerResult?.lifecycleTrace || runnerResult?.lifecycleState);
+  return {
+    enabled: true,
+    attempted: true,
+    status: runnerResult?.socketCreated === true
+      ? "started"
+      : s(runnerLifecycle.state || runnerLifecycle.status || "blocked"),
+    reasonCode: s(runnerResult?.reasonCode || runnerLifecycle.reasonCode),
+    socketCreated: runnerResult?.socketCreated === true,
+    lifecycleState: runnerLifecycle?.state || runnerLifecycle?.status
+      ? {
+          provider: s(runnerLifecycle.provider || compactLifecycle.provider),
+          state: s(runnerLifecycle.state),
+          status: s(runnerLifecycle.status || runnerLifecycle.state),
+          reasonCode: s(runnerLifecycle.reasonCode),
+          providerRealtimeCallId: s(
+            runnerLifecycle.providerRealtimeCallId ||
+              compactLifecycle.providerRealtimeCallId
+          ),
+          networkIo: runnerLifecycle.networkIo === true,
+        }
+      : compactLifecycle,
+  };
+}
+
+async function loadBrowserRealtimeLinkRuntimeConfig({
+  db,
+  scope = {},
+  req = null,
+  logger = null,
+  getRuntime = getTenantBrainRuntime,
+} = {}) {
+  try {
+    const runtimeResult = await processVoiceTenantConfig({
+      db,
+      tenantKey: scope.tenantKey,
+      toNumber: s(req?.body?.toNumber || "browser"),
+      provider: "browser",
+      getRuntime,
+    });
+
+    if (runtimeResult?.ok === true) {
+      return readBrowserVoiceConfigPayload(runtimeResult);
+    }
+  } catch (err) {
+    logger?.warn?.("voice.browser.realtime_link.runtime_unavailable", {
+      error: s(err?.message || err),
+    });
+  }
+
+  return {};
 }
 
 async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
@@ -601,7 +720,16 @@ async function handleBrowserVoiceSession(
   }
 }
 
-async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false } = {}) {
+async function handleBrowserVoiceRealtimeLink(
+  req,
+  res,
+  {
+    db,
+    dbDisabled = false,
+    getRuntime = getTenantBrainRuntime,
+    startSidebandRunner = startRealtimeSidebandSocketRunner,
+  } = {}
+) {
   const logger = getRouteLogger(req, "voice.browser.realtime_link");
   try {
     if (dbDisabled || !db) {
@@ -659,6 +787,51 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
       env: process.env,
       adapterRegistry: () => sidebandPlanResult,
     });
+    const sidebandRunnerEnabled = isRealtimeSidebandRunnerEnabled(process.env);
+    let sidebandRunner = buildSidebandRunnerStatus({
+      enabled: sidebandRunnerEnabled,
+      attempted: false,
+      lifecycleState: sidebandLifecycle,
+    });
+
+    if (sidebandRunnerEnabled && sidebandLifecycle.state === "ready") {
+      const runtimeConfig = await loadBrowserRealtimeLinkRuntimeConfig({
+        db,
+        scope,
+        req,
+        logger,
+        getRuntime,
+      });
+
+      try {
+        const runnerResult = await startSidebandRunner({
+          db,
+          call,
+          scope,
+          target,
+          runtimeConfig,
+          env: process.env,
+          logger,
+        });
+        sidebandRunner = buildSidebandRunnerStatus({
+          enabled: true,
+          attempted: true,
+          lifecycleState: sidebandLifecycle,
+          runnerResult,
+        });
+      } catch (runnerErr) {
+        logger.warn("voice.browser.realtime_link.sideband_runner_failed", {
+          error: s(runnerErr?.message || runnerErr),
+        });
+        sidebandRunner = buildSidebandRunnerStatus({
+          enabled: true,
+          attempted: true,
+          lifecycleState: sidebandLifecycle,
+          err: runnerErr,
+        });
+      }
+    }
+
     const linkPayload = {
       ...buildRealtimeProviderLinkPayload({
         target,
@@ -668,6 +841,7 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
       sidebandConnectorVersion: s(sidebandConnector.version),
       sidebandConnector,
       sidebandLifecycle,
+      sidebandRunner,
     };
 
     const savedEvent = await appendVoiceCallEvent(db, {
@@ -690,6 +864,7 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
           linkPayload,
           sidebandConnector,
           sidebandLifecycle,
+          sidebandRunner,
         },
       },
     });
@@ -698,6 +873,7 @@ async function handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled = false
       controlTarget: target,
       sidebandConnector,
       sidebandLifecycle,
+      sidebandRunner,
       event: savedEvent,
     });
   } catch (err) {
@@ -1076,6 +1252,7 @@ export function voiceRoutes({
   audit,
   wsHub = null,
   getRuntime = getTenantBrainRuntime,
+  startSidebandRunner = startRealtimeSidebandSocketRunner,
 } = {}) {
   const r = express.Router();
 
@@ -1136,7 +1313,12 @@ export function voiceRoutes({
 
 
   r.post("/voice/browser/calls/:callId/realtime-link", requireOperatorSurfaceAccess, (req, res) =>
-    handleBrowserVoiceRealtimeLink(req, res, { db, dbDisabled })
+    handleBrowserVoiceRealtimeLink(req, res, {
+      db,
+      dbDisabled,
+      getRuntime,
+      startSidebandRunner,
+    })
   );
 
   r.post("/voice/browser/calls/:callId/events", requireOperatorSurfaceAccess, (req, res) =>
