@@ -5,6 +5,9 @@ import {
   VOICE_REALTIME_SIDEBAND_PROCESSOR_VERSION,
   processRealtimeSidebandEvent,
 } from "../src/modules/voice/realtimeSidebandProcessor.js";
+import {
+  dispatchRealtimeSidebandToolCall,
+} from "../src/modules/voice/realtimeSidebandToolDispatcher.js";
 
 function target() {
   return {
@@ -27,6 +30,27 @@ function scope() {
     tenantId: "tenant-1",
     tenantKey: "acme",
   };
+}
+
+function allowReservation(input = {}) {
+  return {
+    ok: true,
+    skipped: false,
+    acquired: true,
+    duplicate: false,
+    reasonCode: "",
+    idempotencyKey: "idem-processor",
+    leaseToken: "lease-processor",
+    recordState: "reserved",
+    source: input.source,
+  };
+}
+
+function dispatchWithReservation(input = {}) {
+  return dispatchRealtimeSidebandToolCall({
+    ...input,
+    reserveExecution: allowReservation,
+  });
 }
 
 test("transcript event is normalized and persisted without dispatching", async () => {
@@ -89,6 +113,7 @@ test("tool call event is dispatched and persisted", async () => {
         },
       },
     },
+    dispatchToolCall: dispatchWithReservation,
     persistTrace: async (input) => {
       persistedArgs.push(input);
       return {
@@ -347,6 +372,7 @@ test("no network or socket behavior exists", async () => {
           },
         },
       },
+      dispatchToolCall: dispatchWithReservation,
       persistTrace: async () => ({
         ok: true,
         skipped: false,
