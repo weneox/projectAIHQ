@@ -1219,6 +1219,10 @@ async function handleBrowserVoiceToolCall(
       });
       const idempotency = buildVoiceToolExecutionIdempotencyPayload(reservation);
 
+      inboxSinkDelivery = Array.isArray(sinkDispatch.deliveries)
+        ? sinkDispatch.deliveries.find((item) => item?.sink === "inbox") || null
+        : null;
+
       await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
         scope,
@@ -1362,13 +1366,13 @@ async function handleBrowserVoiceToolCall(
       const sinkRegistry = createBusinessActionSinkRegistry({
         inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
       });
-      const sinkDispatch = await dispatchBusinessActionSinks({
+      sinkDispatch = await dispatchBusinessActionSinks({
         requestRecord: result.requestRecord,
         result,
         runtimeConfig,
         registry: sinkRegistry,
       });
-      const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
+      sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
         deliveries: sinkDispatch.deliveries,
       });
 
