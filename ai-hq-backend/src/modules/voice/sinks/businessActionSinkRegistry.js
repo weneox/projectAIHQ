@@ -2,6 +2,7 @@ import {
   VOICE_BUSINESS_ACTION_SINK_STATUS,
   buildBusinessActionSinkContracts,
   normalizeBusinessActionSinkName,
+  resolveBusinessActionSinkNames,
 } from "./businessActionSinkContracts.js";
 
 function s(value, fallback = "") {
@@ -122,13 +123,18 @@ export async function dispatchBusinessActionSinks({
   requestRecord = {},
   result = {},
   runtimeConfig = {},
-  sinks = ["voice_core"],
+  sinks = null,
   registry = createBusinessActionSinkRegistry(),
 } = {}) {
+  const resolvedSinks =
+    Array.isArray(sinks) && sinks.length
+      ? sinks
+      : resolveBusinessActionSinkNames({ runtimeConfig });
+
   const contracts = buildBusinessActionSinkContracts({
     runtimeConfig,
     requestRecord,
-    sinks,
+    sinks: resolvedSinks,
   });
 
   const deliveries = [];

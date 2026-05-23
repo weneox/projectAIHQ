@@ -8,6 +8,10 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function arr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 export const VOICE_BUSINESS_ACTION_SINK_CONTRACT_VERSION =
   "voice_business_action_sink_contract.v1";
 
@@ -108,6 +112,40 @@ export function buildBusinessActionSinkContract({
             ? "voice_business_action_sink_missing_request_id"
             : "",
   };
+}
+
+export function resolveBusinessActionSinkNames({
+  runtimeConfig = {},
+  sinks = null,
+} = {}) {
+  const runtime = obj(runtimeConfig);
+  const explicit = arr(sinks);
+
+  const configured = explicit.length
+    ? explicit
+    : [
+        ...arr(runtime.businessActionSinkNames),
+        ...arr(runtime.voiceSinkNames),
+        ...arr(runtime.enabledSinks),
+        ...arr(runtime.sinks),
+      ];
+
+  const nested = obj(runtime.businessActionSinks || runtime.voiceSinks);
+  const names = ["voice_core", ...configured];
+
+  for (const sink of ["inbox", "calendar", "crm", "webhook"]) {
+    if (obj(nested[sink]).enabled === true) {
+      names.push(sink);
+    }
+  }
+
+  return Array.from(
+    new Set(
+      names
+        .map((item) => normalizeBusinessActionSinkName(item))
+        .filter((item) => item && item !== "none")
+    )
+  );
 }
 
 export function buildBusinessActionSinkContracts({
