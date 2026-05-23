@@ -1,7 +1,16 @@
 ﻿import {
   buildVoiceActionCallPatch,
+  applyVoiceInboxSinkDeliveryToCallPatch,
   executeVoiceAction,
 } from "./actions/voiceActionRuntime.js";
+import {
+  shouldRecordBusinessActionVoiceEvent,
+} from "./events/businessActionEvents.js";
+import {
+  buildBusinessActionSinkDeliverySnapshot,
+  createBusinessActionSinkRegistry,
+  dispatchBusinessActionSinks,
+} from "./sinks/businessActionSinkRegistry.js";
 import {
   normalizeRealtimeSidebandEvent,
 } from "./realtimeSidebandEvents.js";
@@ -58,6 +67,29 @@ function buildDuplicateToolResult({ reservation = {}, toolCall = {} } = {}) {
     message: "Tool execution already processed.",
     toolCallId: s(toolCall.id || toolCall.call_id || toolCall.callId),
     toolName: s(toolCall.name),
+  };
+}
+
+function findInboxSinkDelivery(deliveries = []) {
+  return Array.isArray(deliveries)
+    ? deliveries.find((item) => item?.sink === "inbox") || null
+    : null;
+}
+
+function buildSidebandSinkRuntimeConfig(runtimeConfig = {}) {
+  const runtime = obj(runtimeConfig);
+  const businessActionSinks = obj(runtime.businessActionSinks);
+  const inbox = obj(businessActionSinks.inbox);
+
+  return {
+    ...runtime,
+    businessActionSinks: {
+      ...businessActionSinks,
+      inbox: {
+        ...inbox,
+        enabled: inbox.enabled !== false,
+      },
+    },
   };
 }
 
@@ -162,7 +194,13 @@ export function buildRealtimeSidebandToolResultTrace({
   toolCall = {},
   result = {},
   idempotency = {},
+  sinkDispatch = null,
+  sinkDelivery = null,
+  inboxSinkDelivery = null,
 } = {}) {
+  const dispatch = obj(sinkDispatch);
+  const deliveries = arr(dispatch.deliveries);
+
   return {
     eventType: "voice.sideband.tool_result",
     actor: "system",
@@ -186,6 +224,15 @@ export function buildRealtimeSidebandToolResultTrace({
       reservationDuplicate: idempotency.duplicate === true,
       reservationState: s(idempotency.recordState),
       reservationReasonCode: s(idempotency.reasonCode),
+      sinkDispatch: sinkDispatch
+        ? {
+            ok: dispatch.ok !== false,
+            requestId: s(dispatch.requestId),
+            deliveries,
+          }
+        : null,
+      sinkDelivery: sinkDelivery ? obj(sinkDelivery) : null,
+      inboxSinkDelivery: inboxSinkDelivery ? obj(inboxSinkDelivery) : null,
       result,
     },
   };
@@ -204,6 +251,12 @@ export async function dispatchRealtimeSidebandToolCall({
   markExecutionSent = markVoiceRealtimeToolExecutionSent,
   markExecutionFailed = markVoiceRealtimeToolExecutionFailed,
   getProviderAdapter = getRealtimeProviderAdapter,
+  sinkRegistry = null,
+  createSinkRegistry = createBusinessActionSinkRegistry,
+  dispatchSinks = dispatchBusinessActionSinks,
+  buildSinkDeliverySnapshot = buildBusinessActionSinkDeliverySnapshot,
+  recordBusinessAction = shouldRecordBusinessActionVoiceEvent,
+  applyInboxSinkDeliveryToCallPatch = applyVoiceInboxSinkDeliveryToCallPatch,
 } = {}) {
   const earlyProviderAdapter = resolveProviderAdapter({
     normalized: obj(preNormalized),
@@ -331,6 +384,7 @@ export async function dispatchRealtimeSidebandToolCall({
   }
 
   let result = null;
+  const sinkRuntimeConfig = buildSidebandSinkRuntimeConfig(runtimeConfig);
 
   try {
     result = await executeAction({
@@ -366,14 +420,44 @@ export async function dispatchRealtimeSidebandToolCall({
       source: "sideband_tool_dispatcher",
       toolCallId: s(toolCall.id),
       toolName: s(toolCall.name),
+      providerRealtimeCallId: s(normalized.providerRealtimeCallId),
       resultStatus: s(result?.status),
+      result,
+      runtimeConfig,
+      sinkRuntimeConfig,
     },
   });
 
-  const callPatch = buildVoiceActionCallPatch({
+  let callPatch = buildVoiceActionCallPatch({
     result,
     call,
   });
+  let sinkDispatch = null;
+  let sinkDelivery = null;
+  let inboxSinkDelivery = null;
+
+  if (recordBusinessAction(result)) {
+    const registry =
+      sinkRegistry ||
+      (typeof createSinkRegistry === "function" ? createSinkRegistry() : null);
+
+    sinkDispatch = await dispatchSinks({
+      requestRecord: result.requestRecord,
+      result,
+      runtimeConfig: sinkRuntimeConfig,
+      registry,
+    });
+    sinkDelivery = buildSinkDeliverySnapshot({
+      deliveries: sinkDispatch?.deliveries,
+    });
+    inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch?.deliveries);
+
+    callPatch = applyInboxSinkDeliveryToCallPatch({
+      callPatch,
+      sinkDelivery,
+      inboxSinkDelivery,
+    });
+  }
 
   const builtOutbound = buildProviderToolOutputEvents({
     providerAdapter,
@@ -396,6 +480,9 @@ export async function dispatchRealtimeSidebandToolCall({
     toolCall,
     result,
     idempotency: buildToolExecutionIdempotencyPayload(reservation, finalityRecord),
+    sinkDispatch,
+    sinkDelivery,
+    inboxSinkDelivery,
   });
 
   return {
@@ -406,6 +493,9 @@ export async function dispatchRealtimeSidebandToolCall({
     normalized,
     toolCall,
     result,
+    sinkDispatch,
+    sinkDelivery,
+    inboxSinkDelivery,
     callPatch,
     outboundEvents: builtOutbound.outboundEvents,
     resultTrace,

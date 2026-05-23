@@ -73,6 +73,11 @@ export async function processRealtimeSidebandEvent({
   call = {},
   scope = {},
   runtimeConfig = {},
+  sinkRegistry = null,
+  dispatchSinks = undefined,
+  buildSinkDeliverySnapshot = undefined,
+  recordBusinessAction = undefined,
+  applyInboxSinkDeliveryToCallPatch = undefined,
   normalizeEvent = normalizeRealtimeSidebandEvent,
   dispatchToolCall = dispatchRealtimeSidebandToolCall,
   persistTrace = persistRealtimeSidebandTrace,
@@ -130,6 +135,11 @@ export async function processRealtimeSidebandEvent({
       scope,
       runtimeConfig,
       normalized,
+      sinkRegistry,
+      dispatchSinks,
+      buildSinkDeliverySnapshot,
+      recordBusinessAction,
+      applyInboxSinkDeliveryToCallPatch,
     });
   } catch (err) {
     return failedDispatchResult({ normalized, err });

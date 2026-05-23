@@ -184,6 +184,11 @@ export async function startRealtimeSidebandSocketRunner({
   env = process.env,
   logger = null,
   providerAdapter = null,
+  sinkRegistry = null,
+  dispatchSinks = undefined,
+  buildSinkDeliverySnapshot = undefined,
+  recordBusinessAction = undefined,
+  applyInboxSinkDeliveryToCallPatch = undefined,
   processor = processRealtimeSidebandEvent,
   WebSocketImpl = WebSocket,
 } = {}) {
@@ -371,6 +376,11 @@ export async function startRealtimeSidebandSocketRunner({
         call,
         scope,
         runtimeConfig,
+        sinkRegistry,
+        dispatchSinks,
+        buildSinkDeliverySnapshot,
+        recordBusinessAction,
+        applyInboxSinkDeliveryToCallPatch,
       });
     } catch (err) {
       const error = {
