@@ -11,8 +11,107 @@ function normalizeVoiceLanguage(value = "") {
   return raw || "az";
 }
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function arr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+const AZ_BASELINE_NATURALNESS_LABELS = [
+  "opening_naturalness",
+  "recording_like",
+  "too_formal",
+  "turn_taking",
+  "backchannel",
+  "local_phrase",
+];
+
+const NATURALNESS_REPAIR_RULES = {
+  opening_naturalness:
+    "- opening_naturalness: Opening must be one warm local sentence; no long welcome, no menu-like script.",
+  recording_like:
+    "- recording_like: Avoid a recording-like IVR feel; start and stop like a live person, not a pre-recorded announcement.",
+  too_formal:
+    "- too_formal: Use polite but plain Azerbaijani; avoid bureaucratic, stiff, or over-formal wording.",
+  turn_taking:
+    "- turn_taking: Leave space for the caller; after one useful question, stop and wait.",
+  interruption:
+    "- interruption: If the caller interrupts, yield immediately and follow the caller's latest turn.",
+  local_phrase:
+    "- local_phrase: Use short Azerbaijani acknowledgements sparingly, like 'başa düşdüm', 'aydındır', or 'qeyd etdim'.",
+  prosody:
+    "- prosody: Keep natural Azerbaijani sentence melody; do not over-enunciate every word.",
+  backchannel:
+    "- backchannel: Use brief backchannels only to show listening; never fake confirmation.",
+  latency_pause:
+    "- latency_pause: If there is a pause, use one short bridge phrase, then continue naturally.",
+  stiff_closing:
+    "- stiff_closing: Closing must sound human and brief; do not end like a recorded message.",
+  other:
+    "- other: Keep the voice local, live, short, and caller-led.",
+};
+
+function normalizeNaturalnessInstructionLabel(value = "") {
+  const raw = s(value).toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (NATURALNESS_REPAIR_RULES[raw]) return raw;
+  if (raw === "recorded" || raw === "recording") return "recording_like";
+  if (raw === "formal" || raw === "over_formal") return "too_formal";
+  if (raw === "turntaking") return "turn_taking";
+  if (raw === "opening") return "opening_naturalness";
+  if (raw === "pause" || raw === "latency") return "latency_pause";
+  if (raw === "closing") return "stiff_closing";
+
+  return raw ? "other" : "";
+}
+
+export function normalizeVoiceNaturalnessInstructionLabels(value = []) {
+  return [
+    ...new Set(
+      arr(value)
+        .map(normalizeNaturalnessInstructionLabel)
+        .filter(Boolean)
+    ),
+  ];
+}
+
+function readNaturalnessInstructionLabels(context = {}, language = "az") {
+  const naturalness = obj(context.naturalness || context.voiceNaturalness);
+  const qa = obj(context.qa || context.voiceQa || context.quality);
+
+  const explicit = normalizeVoiceNaturalnessInstructionLabels([
+    ...arr(context.naturalnessLabels),
+    ...arr(context.voiceNaturalnessLabels),
+    ...arr(naturalness.labels),
+    ...arr(qa.naturalnessLabels),
+    ...arr(qa.latestNaturalnessLabels),
+  ]);
+
+  if (explicit.length) return explicit;
+  return normalizeVoiceLanguage(language) === "az" ? AZ_BASELINE_NATURALNESS_LABELS : [];
+}
+
+export function buildVoiceNaturalnessEvalInstructionPolicy(context = {}) {
+  const language = normalizeVoiceLanguage(context.language || context.defaultLanguage || "az");
+  const labels = readNaturalnessInstructionLabels(context, language);
+
+  if (!labels.length) return [];
+
+  return [
+    "Natural voice repair policy:",
+    "- Treat these as internal voice-quality repair targets; never mention labels, scoring, internal review, or repair rules to the caller.",
+    ...labels.map((label) => NATURALNESS_REPAIR_RULES[label] || NATURALNESS_REPAIR_RULES.other),
+  ];
+}
+
 export function buildVoiceSpeechPolicy(context = {}) {
   const language = normalizeVoiceLanguage(context.language || context.defaultLanguage || "az");
+  const naturalnessPolicy = buildVoiceNaturalnessEvalInstructionPolicy({
+    ...context,
+    language,
+  });
 
   const universal = [
     "Voice speech quality policy:",
@@ -45,6 +144,7 @@ export function buildVoiceSpeechPolicy(context = {}) {
       "- Telefonu aldıqdan sonra qısa de: 'Qeyd etdim.'",
       "- Sonda qısa yekun ver: 'Komanda sizinlə əlaqə saxlayacaq.'",
       "- Açılış tərzi belə olmalıdır: 'Salam, [biznes adı]. Buyurun, necə kömək edə bilərəm?'",
+      ...naturalnessPolicy,
       ...universal,
     ];
   }
@@ -55,6 +155,7 @@ export function buildVoiceSpeechPolicy(context = {}) {
       "- Speak like a calm receptionist, not like a scripted bot.",
       "- Keep answers short and practical.",
       "- Avoid formal bureaucratic wording unless the business requires it.",
+      ...naturalnessPolicy,
       ...universal,
     ];
   }
@@ -64,11 +165,15 @@ export function buildVoiceSpeechPolicy(context = {}) {
       "Turkish natural receptionist mode:",
       "- Kısa, doğal ve telefona uygun konuş.",
       "- Gereksiz resmi veya robotik ifadelerden kaçın.",
+      ...naturalnessPolicy,
       ...universal,
     ];
   }
 
-  return universal;
+  return [
+    ...naturalnessPolicy,
+    ...universal,
+  ];
 }
 
 export function buildVoiceOpeningSpeechPolicy({ language = "az", companyName = "" } = {}) {
