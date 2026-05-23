@@ -8,6 +8,9 @@ import {
 export const VOICE_REALTIME_PROVIDER_ADAPTERS_VERSION =
   "voice-realtime-provider-adapters-v1";
 
+export const VOICE_REALTIME_PROVIDER_CONTRACT_VERSION =
+  "voice-realtime-provider-contract-v1";
+
 export const OPENAI_REALTIME_PROVIDER = "openai";
 const VOICE_REALTIME_SIDEBAND_CONNECTOR_VERSION =
   "voice-realtime-sideband-connector-v1";
@@ -67,6 +70,59 @@ function unsupportedSidebandTrace({ provider = "", target = {} } = {}) {
   };
 }
 
+function buildProviderCapabilities({ supported = false } = {}) {
+  return {
+    realtimeSession: supported,
+    sidebandConnector: supported,
+    sidebandTrace: supported,
+    eventNormalization: supported,
+    toolOutputEvents: supported,
+    browserRealtime: supported,
+    externalSpeechAdapter: false,
+    livekitGateway: false,
+    twilioGateway: false,
+  };
+}
+
+export function buildRealtimeProviderContract({ provider = "", transport = "" } = {}) {
+  const normalizedProvider = normalizeRealtimeProviderName(provider);
+  const supported = normalizedProvider === OPENAI_REALTIME_PROVIDER;
+
+  return {
+    version: VOICE_REALTIME_PROVIDER_CONTRACT_VERSION,
+    provider: normalizedProvider,
+    transport: s(transport),
+    supported,
+    status: supported ? "supported" : "unsupported",
+    reasonCode: supported ? "" : "unsupported_realtime_provider",
+    capabilities: buildProviderCapabilities({ supported }),
+    requirements: supported
+      ? {
+          apiKeyEnv: "OPENAI_API_KEY",
+          sidebandEnabledEnv: [
+            "VOICE_REALTIME_SIDEBAND_ENABLED",
+            "AIHQ_VOICE_REALTIME_SIDEBAND_ENABLED",
+          ],
+        }
+      : {
+          apiKeyEnv: "",
+          sidebandEnabledEnv: [],
+        },
+  };
+}
+
+export function assertRealtimeProviderSupported({ provider = "", transport = "" } = {}) {
+  const contract = buildRealtimeProviderContract({ provider, transport });
+
+  return {
+    ok: contract.supported === true,
+    provider: contract.provider,
+    status: contract.status,
+    reasonCode: contract.reasonCode,
+    contract,
+  };
+}
+
 function buildUnsupportedAdapter(provider = "") {
   const normalizedProvider = normalizeRealtimeProviderName(provider);
 
@@ -75,6 +131,7 @@ function buildUnsupportedAdapter(provider = "") {
     provider: normalizedProvider,
     status: "unsupported",
     reasonCode: "unsupported_realtime_provider",
+    contract: buildRealtimeProviderContract({ provider: normalizedProvider }),
     buildSidebandPlan: () => unsupportedResult({ provider: normalizedProvider }),
     buildSidebandTrace: ({ target = {} } = {}) => ({
       ...unsupportedResult({ provider: normalizedProvider }),
@@ -93,6 +150,7 @@ const OPENAI_ADAPTER = {
   provider: OPENAI_REALTIME_PROVIDER,
   status: "supported",
   reasonCode: "",
+  contract: buildRealtimeProviderContract({ provider: OPENAI_REALTIME_PROVIDER }),
   buildSidebandPlan({ target = {}, env = process.env } = {}) {
     const sidebandPlan = buildOpenAIRealtimeSidebandConnectionPlan({
       target: canonicalTarget(target),
