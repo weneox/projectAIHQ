@@ -81,6 +81,9 @@ export function buildVoiceOperatorActionUpdate({
   const operatorState = {
     ...currentOperatorState,
     ...actionState,
+    lastAction: action,
+    note,
+    reasonCode,
   };
 
   return {

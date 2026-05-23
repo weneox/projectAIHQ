@@ -132,6 +132,27 @@ function readToolSignals(call = {}) {
   };
 }
 
+function readOperatorState(call = {}) {
+  const operator = obj(obj(call.meta).operator);
+
+  return {
+    operatorStatus: s(operator.operatorStatus),
+    assigneeId: s(operator.assigneeId),
+    reviewedAt: s(operator.reviewedAt),
+    reviewedBy: s(operator.reviewedBy),
+    assignedAt: s(operator.assignedAt),
+    assignedBy: s(operator.assignedBy),
+    followUpNeeded: operator.followUpNeeded === true,
+    resolvedAt: s(operator.resolvedAt),
+    resolvedBy: s(operator.resolvedBy),
+    reopenedAt: s(operator.reopenedAt),
+    reopenedBy: s(operator.reopenedBy),
+    lastOperatorAction: s(operator.lastAction),
+    operatorNote: s(operator.note),
+    operatorReasonCode: s(operator.reasonCode),
+  };
+}
+
 function buildCallSummary(call = {}) {
   return {
     id: s(call.id || call.callId),
@@ -189,6 +210,7 @@ export function buildVoiceOperatorQueueRow(call = {}) {
   const qa = readQa(call);
   const runtime = readRuntime(call);
   const tools = readToolSignals(call);
+  const operator = readOperatorState(call);
 
   const score = Object.keys(existingScore).length
     ? existingScore
@@ -233,6 +255,20 @@ export function buildVoiceOperatorQueueRow(call = {}) {
     hasTranscript: !!s(call.transcript),
     handoffRequested: callSummary.handoffRequested,
     handoffCompleted: callSummary.handoffCompleted,
+    operatorStatus: operator.operatorStatus,
+    assigneeId: operator.assigneeId,
+    reviewedAt: operator.reviewedAt,
+    reviewedBy: operator.reviewedBy,
+    assignedAt: operator.assignedAt,
+    assignedBy: operator.assignedBy,
+    followUpNeeded: operator.followUpNeeded,
+    resolvedAt: operator.resolvedAt,
+    resolvedBy: operator.resolvedBy,
+    reopenedAt: operator.reopenedAt,
+    reopenedBy: operator.reopenedBy,
+    lastOperatorAction: operator.lastOperatorAction,
+    operatorNote: operator.operatorNote,
+    operatorReasonCode: operator.operatorReasonCode,
     scoreSignals: obj(score.signals),
     outcomeScore: score,
   });
@@ -252,16 +288,30 @@ function normalizeFilterList(value = "") {
 function rowMatchesFilters(row = {}, filters = {}) {
   const scoreStatuses = normalizeFilterList(filters.scoreStatus || filters.outcomeStatus || filters.status);
   const operatorActions = normalizeFilterList(filters.operatorAction);
+  const operatorStatuses = normalizeFilterList(filters.operatorStatus);
+  const assigneeIds = normalizeFilterList(filters.assigneeId);
   const severities = normalizeFilterList(filters.severity);
 
   if (scoreStatuses.length && !scoreStatuses.includes(s(row.scoreStatus).toLowerCase())) return false;
   if (operatorActions.length && !operatorActions.includes(s(row.operatorAction).toLowerCase())) return false;
+  if (operatorStatuses.length && !operatorStatuses.includes(s(row.operatorStatus).toLowerCase())) return false;
+  if (assigneeIds.length && !assigneeIds.includes(s(row.assigneeId).toLowerCase())) return false;
   if (severities.length && !severities.includes(s(row.severity).toLowerCase())) return false;
 
   if (filters.needsHumanReview !== undefined && filters.needsHumanReview !== null && s(filters.needsHumanReview) !== "") {
     if (row.needsHumanReview !== b(filters.needsHumanReview)) return false;
   }
 
+  if (filters.followUpNeeded !== undefined && filters.followUpNeeded !== null && s(filters.followUpNeeded) !== "") {
+    if (row.followUpNeeded !== b(filters.followUpNeeded)) return false;
+  }
+
+  return true;
+}
+
+function isActiveOperatorStatus(value = "") {
+  const status = s(value).toLowerCase();
+  if (status === "resolved" || status === "reviewed") return false;
   return true;
 }
 
@@ -273,6 +323,14 @@ function compareRows(sort = "priority") {
     if (mode === "score_desc") return n(b.score, 0) - n(a.score, 0);
     if (mode === "oldest") return toTimestamp(a.startedAt) - toTimestamp(b.startedAt);
     if (mode === "newest") return toTimestamp(b.startedAt) - toTimestamp(a.startedAt);
+
+    const followUpDelta = Number(b.followUpNeeded === true) - Number(a.followUpNeeded === true);
+    if (followUpDelta) return followUpDelta;
+
+    const activeOperatorDelta =
+      Number(isActiveOperatorStatus(b.operatorStatus)) -
+      Number(isActiveOperatorStatus(a.operatorStatus));
+    if (activeOperatorDelta) return activeOperatorDelta;
 
     const humanDelta = Number(b.needsHumanReview === true) - Number(a.needsHumanReview === true);
     if (humanDelta) return humanDelta;
@@ -311,19 +369,30 @@ export function buildVoiceOperatorQueueReadModel({
     filters: compact({
       scoreStatus: s(filters.scoreStatus || filters.outcomeStatus || filters.status),
       operatorAction: s(filters.operatorAction),
+      operatorStatus: s(filters.operatorStatus),
+      assigneeId: s(filters.assigneeId),
       severity: s(filters.severity),
       needsHumanReview:
         filters.needsHumanReview === undefined || filters.needsHumanReview === null
           ? undefined
           : b(filters.needsHumanReview),
+      followUpNeeded:
+        filters.followUpNeeded === undefined || filters.followUpNeeded === null
+          ? undefined
+          : b(filters.followUpNeeded),
     }),
     summary: {
       total: allRows.length,
       filteredTotal: filteredRows.length,
       needsHumanReview: allRows.filter((row) => row.needsHumanReview === true).length,
+      followUpNeeded: allRows.filter((row) => row.followUpNeeded === true).length,
+      assigned: allRows.filter((row) => s(row.operatorStatus).toLowerCase() === "assigned").length,
+      resolved: allRows.filter((row) => s(row.operatorStatus).toLowerCase() === "resolved").length,
+      reviewed: allRows.filter((row) => s(row.operatorStatus).toLowerCase() === "reviewed").length,
       returnedNeedsHumanReview: rows.filter((row) => row.needsHumanReview === true).length,
       byScoreStatus: countBy(allRows, (row) => row.scoreStatus || "unknown"),
       byOperatorAction: countBy(allRows, (row) => row.operatorAction || "review_optional"),
+      byOperatorStatus: countBy(allRows, (row) => row.operatorStatus || "unknown"),
       bySeverity: countBy(allRows, (row) => row.severity || "none"),
       averageScore: scores.length
         ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)

@@ -296,6 +296,9 @@ test("mark_reviewed updates operator state and appends event", async () => {
   assert.equal(res.body.operatorState.operatorStatus, "reviewed");
   assert.equal(res.body.operatorState.reviewedBy, "operator@acme.test");
   assert.match(res.body.operatorState.reviewedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(res.body.operatorState.lastAction, "mark_reviewed");
+  assert.equal(res.body.operatorState.note, "Checked queue item");
+  assert.equal(res.body.operatorState.reasonCode, "qa_done");
   assert.equal(res.body.call.meta.existingMeta, true);
   assert.equal(res.body.call.meta.operator.existingOperatorField, "keep");
   assert.equal(res.body.call.extraction.existingExtraction, true);

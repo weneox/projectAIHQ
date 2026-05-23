@@ -2049,6 +2049,9 @@ export function voiceRoutes({
         filters: {
           scoreStatus: req.query?.scoreStatus || req.query?.outcomeStatus,
           operatorAction: req.query?.operatorAction,
+          operatorStatus: req.query?.operatorStatus,
+          assigneeId: req.query?.assigneeId,
+          followUpNeeded: req.query?.followUpNeeded,
           severity: req.query?.severity,
           needsHumanReview: req.query?.needsHumanReview,
         },
