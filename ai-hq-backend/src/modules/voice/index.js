@@ -15,6 +15,7 @@ export * from "./overview.js";
 export * from "./callRead.js";
 export * from "./qa/voiceQaCallInspector.js";
 export * from "./qa/voiceQaOutcomeScore.js";
+export * from "./qa/voiceOperatorQueueReadModel.js";
 export * from "./qa/voiceQaAnnotations.js";
 export * from "./qa/voiceQaDataset.js";
 export * from "./sessionLookup.js";

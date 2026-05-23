@@ -49,6 +49,7 @@ import {
   buildVoiceQaAnnotationEventPayload,
   buildVoiceQaAnnotationRecord,
   buildVoiceQaDataset,
+  buildVoiceOperatorQueueReadModel,
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
@@ -1839,7 +1840,19 @@ export function voiceRoutes({
         limit: Math.max(1, Math.min(200, n(req.query?.limit, 50))),
       });
 
-      return ok(res, { calls });
+      const queue = buildVoiceOperatorQueueReadModel({
+        calls,
+        filters: {
+          scoreStatus: req.query?.scoreStatus || req.query?.outcomeStatus,
+          operatorAction: req.query?.operatorAction,
+          severity: req.query?.severity,
+          needsHumanReview: req.query?.needsHumanReview,
+        },
+        sort: req.query?.sort || "priority",
+        limit: Math.max(1, Math.min(200, n(req.query?.queueLimit || req.query?.limit, 50))),
+      });
+
+      return ok(res, { calls, queue, operatorQueue: queue });
     } catch (err) {
       if (isMissingSchemaError(err)) {
         return ok(res, {
