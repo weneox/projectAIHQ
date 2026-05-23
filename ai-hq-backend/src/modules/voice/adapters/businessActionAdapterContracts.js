@@ -127,7 +127,30 @@ function actionModeForName(runtime = {}, actionName = "") {
   return "disabled";
 }
 
-function providerForAction({ runtimeConfig = {}, actionName = "", explicitProvider = "" } = {}) {
+function defaultProviderForAction({ actionName = "", mode = "" } = {}) {
+  if (actionName === VOICE_ACTIONS.END_CALL) return "internal_request";
+
+  if (mode === "request_only") {
+    if (
+      [
+        VOICE_ACTIONS.CREATE_BUSINESS_REQUEST,
+        VOICE_ACTIONS.CREATE_RESERVATION_REQUEST,
+        VOICE_ACTIONS.CREATE_ORDER_REQUEST,
+        VOICE_ACTIONS.CREATE_APPOINTMENT_REQUEST,
+      ].includes(actionName)
+    ) {
+      return "internal_request";
+    }
+
+    if (actionName === VOICE_ACTIONS.CREATE_HANDOFF_REQUEST) {
+      return "manual";
+    }
+  }
+
+  return "unknown";
+}
+
+function providerForAction({ runtimeConfig = {}, actionName = "", explicitProvider = "", mode = "" } = {}) {
   if (explicitProvider) return normalizeBusinessActionProvider(explicitProvider);
 
   const actions = obj(runtimeConfig.actions || runtimeConfig.voiceActions);
@@ -140,19 +163,22 @@ function providerForAction({ runtimeConfig = {}, actionName = "", explicitProvid
 
   if (actionName === VOICE_ACTIONS.CREATE_RESERVATION_REQUEST) {
     return normalizeBusinessActionProvider(
-      runtimeConfig.reservationProvider || readNestedProvider(actions, "reservation")
+      runtimeConfig.reservationProvider || readNestedProvider(actions, "reservation"),
+      defaultProviderForAction({ actionName, mode })
     );
   }
 
   if (actionName === VOICE_ACTIONS.CREATE_ORDER_REQUEST) {
     return normalizeBusinessActionProvider(
-      runtimeConfig.orderingProvider || readNestedProvider(actions, "ordering")
+      runtimeConfig.orderingProvider || readNestedProvider(actions, "ordering"),
+      defaultProviderForAction({ actionName, mode })
     );
   }
 
   if (actionName === VOICE_ACTIONS.CREATE_APPOINTMENT_REQUEST) {
     return normalizeBusinessActionProvider(
-      runtimeConfig.appointmentProvider || readNestedProvider(actions, "appointment")
+      runtimeConfig.appointmentProvider || readNestedProvider(actions, "appointment"),
+      defaultProviderForAction({ actionName, mode })
     );
   }
 
@@ -292,6 +318,7 @@ export function buildBusinessActionAdapterContract({
     runtimeConfig,
     actionName: normalizedActionName,
     explicitProvider: provider,
+    mode: normalizedMode,
   });
   const normalizedBusinessFamily = normalizeVoiceBusinessFamily(
     businessFamily || runtime.businessFamily
