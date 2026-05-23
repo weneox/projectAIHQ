@@ -29,6 +29,40 @@ export const OPENAI_REALTIME_OUTPUT_VOICES = Object.freeze([
   "ballad",
 ]);
 
+export const BROWSER_REALTIME_SUPPORTED_SPEECH_PROVIDERS = Object.freeze([
+  "openai_realtime",
+]);
+
+export function buildVoiceSpeechPipelineCompatibility({
+  asrProvider = "",
+  ttsProvider = "",
+} = {}) {
+  const unsupportedStages = [];
+
+  if (!BROWSER_REALTIME_SUPPORTED_SPEECH_PROVIDERS.includes(asrProvider)) {
+    unsupportedStages.push({
+      stage: "asr",
+      provider: asrProvider,
+      reasonCode: "asr_provider_requires_external_speech_adapter",
+    });
+  }
+
+  if (!BROWSER_REALTIME_SUPPORTED_SPEECH_PROVIDERS.includes(ttsProvider)) {
+    unsupportedStages.push({
+      stage: "tts",
+      provider: ttsProvider,
+      reasonCode: "tts_provider_requires_external_speech_adapter",
+    });
+  }
+
+  return {
+    browserRealtimeSupported: unsupportedStages.length === 0,
+    externalSpeechAdapterRequired: unsupportedStages.length > 0,
+    unsupportedStages,
+    reasonCodes: unsupportedStages.map((stage) => stage.reasonCode),
+  };
+}
+
 export function readVoiceSpeechConfig(runtimeConfig = {}) {
   const realtime = obj(runtimeConfig.realtime || runtimeConfig.voiceRealtime);
 
@@ -138,6 +172,11 @@ export function buildVoiceSpeechPipeline({
       speech.outputVoice
   );
 
+  const compatibility = buildVoiceSpeechPipelineCompatibility({
+    asrProvider,
+    ttsProvider,
+  });
+
   return {
     version: VOICE_SPEECH_PIPELINE_VERSION,
     mode: "realtime_audio",
@@ -153,5 +192,6 @@ export function buildVoiceSpeechPipeline({
       transcriptionModel,
       outputVoice,
     },
+    compatibility,
   };
 }

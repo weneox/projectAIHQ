@@ -7,6 +7,7 @@ import {
 } from "../src/modules/voice/engine/browserRealtimeSession.js";
 import {
   buildVoiceSpeechPipeline,
+  buildVoiceSpeechPipelineCompatibility,
   normalizeRealtimeTranscriptionModel,
   normalizeVoiceOutputName,
   normalizeVoiceSpeechProvider,
@@ -73,4 +74,58 @@ test("browser realtime session uses speech pipeline for voice and transcription 
     "gpt-4o-transcribe"
   );
   assert.equal(plan.clientSecretRequest.session.audio.output.voice, "ash");
+});
+
+
+test("voice speech pipeline marks external speech providers as adapter-required", () => {
+  const pipeline = buildVoiceSpeechPipeline({
+    runtimeConfig: {
+      speech: {
+        input: {
+          provider: "external_stt",
+        },
+        output: {
+          provider: "external_tts",
+        },
+      },
+    },
+  });
+
+  assert.equal(pipeline.asr.provider, "external_stt");
+  assert.equal(pipeline.tts.provider, "external_tts");
+  assert.equal(pipeline.compatibility.browserRealtimeSupported, false);
+  assert.equal(pipeline.compatibility.externalSpeechAdapterRequired, true);
+  assert.deepEqual(pipeline.compatibility.reasonCodes, [
+    "asr_provider_requires_external_speech_adapter",
+    "tts_provider_requires_external_speech_adapter",
+  ]);
+});
+
+test("voice speech compatibility helper does not pretend LiveKit works inside browser realtime", () => {
+  const compatibility = buildVoiceSpeechPipelineCompatibility({
+    asrProvider: "livekit",
+    ttsProvider: "openai_realtime",
+  });
+
+  assert.equal(compatibility.browserRealtimeSupported, false);
+  assert.equal(compatibility.externalSpeechAdapterRequired, true);
+  assert.deepEqual(compatibility.reasonCodes, [
+    "asr_provider_requires_external_speech_adapter",
+  ]);
+});
+
+test("browser realtime plan exposes speech provider compatibility", () => {
+  const plan = buildBrowserRealtimeSessionPlan({
+    runtimeConfig: {
+      speech: {
+        input: {
+          provider: "external_stt",
+        },
+      },
+    },
+  });
+
+  assert.equal(plan.speechPipeline.asr.provider, "external_stt");
+  assert.equal(plan.speechPipeline.compatibility.browserRealtimeSupported, false);
+  assert.equal(plan.speechPipeline.compatibility.externalSpeechAdapterRequired, true);
 });
