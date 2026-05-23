@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildVoiceActionCallPatch,
   executeVoiceAction,
 } from "./actions/voiceActionRuntime.js";
@@ -6,9 +6,7 @@ import {
   normalizeRealtimeSidebandEvent,
 } from "./realtimeSidebandEvents.js";
 import {
-  buildOpenAIRealtimeSidebandToolOutputEvents,
-} from "./providers/openaiRealtimeSidebandAdapter.js";
-import {
+  buildRealtimeProviderToolOutputEvents,
   getRealtimeProviderAdapter,
 } from "./realtimeProviderAdapters.js";
 import {
@@ -21,7 +19,9 @@ export const VOICE_REALTIME_SIDEBAND_TOOL_DISPATCHER_VERSION =
   "voice-realtime-sideband-tool-dispatcher-v1";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
@@ -72,21 +72,40 @@ function resolveProviderAdapter({
 }
 
 function buildProviderToolOutputEvents({
-  adapter = null,
+  providerAdapter = null,
+  normalized = {},
+  target = {},
   toolCall = {},
   result = {},
   includeResponseCreate = true,
 } = {}) {
-  if (typeof adapter?.buildToolOutputEvents !== "function") {
+  if (typeof providerAdapter?.buildToolOutputEvents === "function") {
+    const built = providerAdapter.buildToolOutputEvents({
+      toolCall,
+      result,
+      includeResponseCreate,
+    });
+
+    if (Array.isArray(built)) {
+      return {
+        ok: true,
+        provider: s(providerAdapter.provider || normalized.provider || target.provider),
+        reasonCode: "",
+        outboundEvents: built,
+      };
+    }
+
     return {
-      ok: false,
-      provider: s(adapter?.provider),
-      reasonCode: "unsupported_realtime_provider",
-      outboundEvents: [],
+      ok: built?.ok !== false,
+      provider: s(built?.provider || providerAdapter.provider || normalized.provider || target.provider),
+      reasonCode: s(built?.reasonCode),
+      outboundEvents: arr(built?.outboundEvents),
     };
   }
 
-  const built = adapter.buildToolOutputEvents({
+  const built = buildRealtimeProviderToolOutputEvents({
+    provider: normalized.provider || target.provider || providerAdapter?.provider,
+    target,
     toolCall,
     result,
     includeResponseCreate,
@@ -95,7 +114,7 @@ function buildProviderToolOutputEvents({
   if (Array.isArray(built)) {
     return {
       ok: true,
-      provider: s(adapter.provider),
+      provider: s(providerAdapter?.provider || normalized.provider || target.provider),
       reasonCode: "",
       outboundEvents: built,
     };
@@ -103,7 +122,7 @@ function buildProviderToolOutputEvents({
 
   return {
     ok: built?.ok !== false,
-    provider: s(built?.provider || adapter.provider),
+    provider: s(built?.provider || providerAdapter?.provider || normalized.provider || target.provider),
     reasonCode: s(built?.reasonCode),
     outboundEvents: arr(built?.outboundEvents),
   };
@@ -133,7 +152,9 @@ function buildUnsupportedProviderDispatchResult({
 }
 
 export function buildRealtimeSidebandToolOutputEvents(input = {}) {
-  return buildOpenAIRealtimeSidebandToolOutputEvents(input);
+  const built = buildRealtimeProviderToolOutputEvents(input);
+  if (Array.isArray(built)) return built;
+  return arr(built?.outboundEvents);
 }
 
 export function buildRealtimeSidebandToolResultTrace({
@@ -150,15 +171,15 @@ export function buildRealtimeSidebandToolResultTrace({
     payload: {
       sidebandToolDispatcherVersion: VOICE_REALTIME_SIDEBAND_TOOL_DISPATCHER_VERSION,
       realtimeType: s(normalized.realtimeType),
+      provider: s(normalized.provider),
       providerRealtimeCallId: s(normalized.providerRealtimeCallId),
       toolCallId: s(toolCall.id),
       toolName: s(toolCall.name),
       resultStatus: s(result.status),
-      assistantInstruction: s(
-        result.assistantInstruction || result.nextAssistantInstruction
-      ),
-      nextQuestion: s(result.nextQuestion),
       missingRequired: arr(result.missingRequired),
+      nextMissing: obj(result.nextMissing),
+      nextPromptHint: obj(result.nextPromptHint),
+      voiceState: obj(result.voiceState),
       idempotency: obj(idempotency),
       idempotencyKey: s(idempotency.idempotencyKey),
       reservationAcquired: idempotency.acquired === true,
@@ -184,9 +205,28 @@ export async function dispatchRealtimeSidebandToolCall({
   markExecutionFailed = markVoiceRealtimeToolExecutionFailed,
   getProviderAdapter = getRealtimeProviderAdapter,
 } = {}) {
+  const earlyProviderAdapter = resolveProviderAdapter({
+    normalized: obj(preNormalized),
+    target,
+    getProviderAdapter,
+  });
+
+  if (earlyProviderAdapter?.status === "unsupported") {
+    return buildUnsupportedProviderDispatchResult({
+      normalized: {
+        eventType: "voice.sideband.tool_call",
+        provider: s(target.provider || earlyProviderAdapter.provider),
+        providerRealtimeCallId: s(target.providerRealtimeCallId),
+      },
+      toolCall: {},
+      providerAdapter: earlyProviderAdapter,
+    });
+  }
+
   const normalized = obj(preNormalized).eventType
     ? preNormalized
     : normalizeRealtimeSidebandEvent(event, { target });
+
   const toolCall = normalized.toolCall;
 
   if (!toolCall?.name) {
@@ -248,9 +288,13 @@ export async function dispatchRealtimeSidebandToolCall({
       reservation,
       toolCall,
     });
+
     const idempotency = buildToolExecutionIdempotencyPayload(reservation);
+
     const builtOutbound = buildProviderToolOutputEvents({
-      adapter: providerAdapter,
+      providerAdapter,
+      normalized,
+      target,
       toolCall,
       result,
       includeResponseCreate: false,
@@ -264,7 +308,6 @@ export async function dispatchRealtimeSidebandToolCall({
       });
     }
 
-    const outboundEvents = builtOutbound.outboundEvents;
     const resultTrace = buildRealtimeSidebandToolResultTrace({
       normalized,
       toolCall,
@@ -282,12 +325,13 @@ export async function dispatchRealtimeSidebandToolCall({
       result,
       reservation,
       callPatch: {},
-      outboundEvents,
+      outboundEvents: builtOutbound.outboundEvents,
       resultTrace,
     };
   }
 
   let result = null;
+
   try {
     result = await executeAction({
       name: toolCall.name,
@@ -310,6 +354,7 @@ export async function dispatchRealtimeSidebandToolCall({
         },
       });
     } catch {}
+
     throw err;
   }
 
@@ -331,7 +376,9 @@ export async function dispatchRealtimeSidebandToolCall({
   });
 
   const builtOutbound = buildProviderToolOutputEvents({
-    adapter: providerAdapter,
+    providerAdapter,
+    normalized,
+    target,
     toolCall,
     result,
   });
@@ -343,8 +390,6 @@ export async function dispatchRealtimeSidebandToolCall({
       providerAdapter: builtOutbound,
     });
   }
-
-  const outboundEvents = builtOutbound.outboundEvents;
 
   const resultTrace = buildRealtimeSidebandToolResultTrace({
     normalized,
@@ -362,7 +407,7 @@ export async function dispatchRealtimeSidebandToolCall({
     toolCall,
     result,
     callPatch,
-    outboundEvents,
+    outboundEvents: builtOutbound.outboundEvents,
     resultTrace,
   };
 }

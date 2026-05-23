@@ -534,7 +534,7 @@ test("browser voice session plan builds live runtime without scenario bias", () 
   );
   assert.equal(
     plan.clientSecretRequest.session.audio.input.turn_detection.interrupt_response,
-    false
+    true
   );
 
   assert.equal(plan.openingResponse.enabled, true);

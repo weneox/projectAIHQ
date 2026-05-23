@@ -35,7 +35,7 @@ test("sideband tool dispatcher ignores non-tool realtime events", async () => {
   assert.deepEqual(dispatched.outboundEvents, []);
 });
 
-test("sideband tool dispatcher executes missing-field action with server-authored followup", async () => {
+test("sideband tool dispatcher executes missing-field action with structured followup hint", async () => {
   const dispatched = await dispatchRealtimeSidebandToolCall({
     event: {
       type: "response.function_call_arguments.done",
@@ -70,20 +70,23 @@ test("sideband tool dispatcher executes missing-field action with server-authore
   assert.equal(dispatched.dispatched, true);
   assert.equal(dispatched.result.status, "missing_required_fields");
   assert.equal(dispatched.result.confirmed, false);
-  assert.match(dispatched.result.assistantInstruction, /Ask exactly this one question next/);
+  assert.equal(dispatched.result.nextMissing?.field, "preferredDateOrTime");
+  assert.equal(dispatched.result.nextPromptHint?.field, "preferredDateOrTime");
+  assert.equal("assistantInstruction" in dispatched.result, false);
+  assert.equal("nextQuestion" in dispatched.result, false);
+
   assert.equal(dispatched.outboundEvents.length, 2);
   assert.equal(dispatched.outboundEvents[0].type, "conversation.item.create");
   assert.equal(dispatched.outboundEvents[0].item.call_id, "tool-call-1");
   assert.equal(dispatched.outboundEvents[1].type, "response.create");
-  assert.match(
-    dispatched.outboundEvents[1].response.instructions,
-    /Ask exactly this one question next/
-  );
+  assert.equal(dispatched.outboundEvents[1].response?.instructions, undefined);
+
   assert.equal(dispatched.resultTrace.eventType, "voice.sideband.tool_result");
   assert.equal(
     dispatched.resultTrace.payload.sidebandToolDispatcherVersion,
     VOICE_REALTIME_SIDEBAND_TOOL_DISPATCHER_VERSION
   );
+  assert.equal(dispatched.resultTrace.payload.nextMissing.field, "preferredDateOrTime");
 });
 
 test("sideband tool dispatcher returns call patch for completed request actions", async () => {

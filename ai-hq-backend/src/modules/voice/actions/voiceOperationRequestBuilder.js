@@ -1,3 +1,8 @@
+﻿import {
+  cleanVoiceSlotPayload,
+  readVoicePhoneFromSources,
+  readVoiceSlotValue,
+} from "../slots/voiceSlotContracts.js";
 import {
   VOICE_LEGACY_ACTION_OPERATION_MAP,
   VOICE_OPERATION_TYPES,
@@ -8,7 +13,9 @@ import {
 } from "./voiceOperationTaxonomy.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
@@ -16,29 +23,7 @@ function obj(value) {
 }
 
 function cleanPayload(value = {}) {
-  return Object.fromEntries(
-    Object.entries(obj(value)).filter(([, item]) => item !== undefined && item !== null && item !== "")
-  );
-}
-
-function looksLikePhone(value = "") {
-  const raw = s(value);
-  const lowered = raw.toLowerCase();
-  if (!raw) return false;
-  if (["browser", "browser_lab", "browserlab", "test", "unknown", "anonymous"].includes(lowered)) {
-    return false;
-  }
-  if (lowered.includes("browser")) return false;
-  const digits = raw.replace(/\D+/g, "");
-  return digits.length >= 7 && digits.length <= 15;
-}
-
-function firstUsablePhone(...values) {
-  for (const value of values) {
-    const phone = s(value);
-    if (looksLikePhone(phone)) return phone;
-  }
-  return "";
+  return cleanVoiceSlotPayload(value);
 }
 
 function readAction(result = {}) {
@@ -47,8 +32,13 @@ function readAction(result = {}) {
 
 function requestTypeForAction(action = "", result = {}) {
   if (action === "create_business_request") {
-    return normalizeVoiceRequestType(result.universal?.requestType || result.payload?.requestType);
+    return normalizeVoiceRequestType(
+      result.universal?.requestType ||
+        result.payload?.requestType ||
+        result.payload?.request_type
+    );
   }
+
   return (
     VOICE_LEGACY_ACTION_OPERATION_MAP[action]?.requestType ||
     VOICE_REQUEST_TYPES.CUSTOM_REQUEST
@@ -61,6 +51,7 @@ function operationTypeForAction(action = "", result = {}) {
       result.universal?.operationType || VOICE_OPERATION_TYPES.CREATE_REQUEST
     );
   }
+
   return (
     VOICE_LEGACY_ACTION_OPERATION_MAP[action]?.operationType ||
     VOICE_OPERATION_TYPES.CREATE_REQUEST
@@ -69,25 +60,26 @@ function operationTypeForAction(action = "", result = {}) {
 
 function titleForRequest({ requestType = "", payload = {} } = {}) {
   const subject = s(
-    payload.description ||
-      payload.summary ||
-      payload.intent ||
-      payload.issue ||
-      payload.service ||
-      payload.product ||
-      payload.category
+    readVoiceSlotValue(payload, "description") ||
+      readVoiceSlotValue(payload, "summary") ||
+      readVoiceSlotValue(payload, "intent") ||
+      readVoiceSlotValue(payload, "issue") ||
+      readVoiceSlotValue(payload, "service") ||
+      readVoiceSlotValue(payload, "product") ||
+      readVoiceSlotValue(payload, "category")
   );
+
   return [requestType, subject].filter(Boolean).join(" - ").slice(0, 180);
 }
 
 function readDescription(payload = {}, result = {}) {
   return s(
-    payload.description ||
-      payload.summary ||
-      payload.intent ||
-      payload.issue ||
-      payload.service ||
-      payload.product ||
+    readVoiceSlotValue(payload, "description") ||
+      readVoiceSlotValue(payload, "summary") ||
+      readVoiceSlotValue(payload, "intent") ||
+      readVoiceSlotValue(payload, "issue") ||
+      readVoiceSlotValue(payload, "service") ||
+      readVoiceSlotValue(payload, "product") ||
       result.message
   );
 }
@@ -98,6 +90,7 @@ function isRequestRecorded(result = {}) {
 
 export function shouldCreateOperationRequestFromVoiceResult(result = {}) {
   const action = readAction(result);
+
   return (
     isRequestRecorded(result) &&
     [
@@ -122,22 +115,26 @@ export function buildOperationRequestFromVoiceResult({
 
   const action = readAction(result);
   const payload = cleanPayload(result.payload || result.criteria || {});
-  const collectedSlots = obj(result.universal?.collectedSlots);
+  const collectedSlots = cleanPayload(result.universal?.collectedSlots || {});
   const slots = Object.keys(collectedSlots).length ? collectedSlots : payload;
+
   const requestType = requestTypeForAction(action, result);
   const operationType = operationTypeForAction(action, result);
+
   const businessFamily = normalizeVoiceBusinessFamily(
-    result.universal?.businessFamily || call.businessFamily || call.business_family
+    result.universal?.businessFamily ||
+      call.businessFamily ||
+      call.business_family
   );
-  const customerPhone = firstUsablePhone(
-    payload.phone,
-    payload.customerPhone,
-    payload.customer_phone,
-    call.fromNumber,
-    call.from,
-    call.phone,
-    call.customerNumber
-  );
+
+  const customerPhone = readVoicePhoneFromSources({
+    payload: {
+      ...slots,
+      ...payload,
+    },
+    call,
+  });
+
   const toolCallId = s(toolCall.id || toolCall.call_id || toolCall.callId);
 
   return {
@@ -150,17 +147,29 @@ export function buildOperationRequestFromVoiceResult({
     requestType,
     businessFamily,
     status: "new",
-    priority: s(payload.urgency).toLowerCase() === "urgent" ? "urgent" : "normal",
-    title: titleForRequest({ requestType, payload }),
-    description: readDescription(payload, result),
-    customerName: s(payload.customerName || payload.customer_name || payload.name),
+    priority: s(readVoiceSlotValue(payload, "urgency")).toLowerCase() === "urgent"
+      ? "urgent"
+      : "normal",
+    title: titleForRequest({ requestType, payload: slots }),
+    description: readDescription(slots, result),
+    customerName: s(readVoiceSlotValue(slots, "customerName")),
     customerPhone,
-    customerEmail: s(payload.email || payload.customerEmail || payload.customer_email),
-    companyName: s(payload.companyName || payload.company_name),
-    requestedDate: s(payload.date || payload.requestedDate || payload.startDate),
-    requestedTime: s(payload.time || payload.requestedTime),
-    location: s(payload.location || payload.deliveryArea),
-    address: s(payload.address),
+    customerEmail: s(readVoiceSlotValue(slots, "email")),
+    companyName: s(readVoiceSlotValue(slots, "companyName")),
+    requestedDate: s(
+      readVoiceSlotValue(slots, "date") ||
+        payload.requestedDate ||
+        readVoiceSlotValue(slots, "startDate")
+    ),
+    requestedTime: s(
+      readVoiceSlotValue(slots, "time") ||
+        payload.requestedTime
+    ),
+    location: s(
+      readVoiceSlotValue(slots, "location") ||
+        readVoiceSlotValue(slots, "deliveryArea")
+    ),
+    address: s(readVoiceSlotValue(slots, "address")),
     slots,
     extraction: {
       voiceActionResult: result,

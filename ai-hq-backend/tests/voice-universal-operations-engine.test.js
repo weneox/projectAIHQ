@@ -17,10 +17,9 @@ import {
 } from "../src/modules/voice/actions/voiceOperationTaxonomy.js";
 import {
   analyzeUniversalVoiceSlots,
-  getUniversalSlotQuestion,
 } from "../src/modules/voice/actions/voiceUniversalSlots.js";
 
-test("create_business_request missing required details asks one next question", async () => {
+test("create_business_request missing required details returns one structured prompt hint", async () => {
   const result = await executeVoiceAction({
     name: "create_business_request",
     args: {
@@ -45,10 +44,11 @@ test("create_business_request missing required details asks one next question", 
   assert.equal(result.ok, false);
   assert.equal(result.status, "missing_required_fields");
   assert.equal(result.confirmed, false);
-  assert.equal(result.nextMissing.field, "description");
-  assert.equal(result.nextQuestion, "Could you briefly describe what you need?");
+  assert.equal(result.nextMissing.field, "issue");
+  assert.equal(result.nextPromptHint.field, "issue");
+  assert.equal("nextQuestion" in result, false);
+  assert.equal("assistantInstruction" in result, false);
   assert.equal(result.missingRequired.length >= 1, true);
-  assert.match(result.assistantInstruction, /Ask exactly this one question next/);
 });
 
 test("create_business_request complete request records request-only universal payload", async () => {
@@ -82,7 +82,8 @@ test("create_business_request complete request records request-only universal pa
   assert.equal(result.universal.requestType, VOICE_REQUEST_TYPES.QUOTE_REQUEST);
   assert.equal(result.universal.businessFamily, "b2b_service");
   assert.equal(result.universal.collectedSlots.phone, "+994501112233");
-  assert.match(result.message, /Do not say it is confirmed/);
+  assert.match(result.message, /recorded/i);
+  assert.doesNotMatch(result.message, /confirmed/i);
 });
 
 test("create_business_request supports broad request types", async () => {
@@ -191,8 +192,21 @@ test("universal call patch keeps database outcome safe and preserves detailed ou
   assert.equal(patch.extraction.universalBusinessRequest.requestType, "rental_request");
 });
 
-test("universal slot questions are localized", () => {
-  assert.equal(getUniversalSlotQuestion("description", "en"), "Could you briefly describe what you need?");
-  assert.match(getUniversalSlotQuestion("phone", "az"), /telefon/iu);
-  assert.match(getUniversalSlotQuestion("phone", "ru"), /телефон/iu);
+test("universal slot analysis exposes structured prompt hints", () => {
+  const state = analyzeUniversalVoiceSlots({
+    operationType: "create_request",
+    requestType: "repair_request",
+    payload: {
+      requestType: "repair_request",
+    },
+    call: {
+      fromNumber: "browser",
+    },
+    defaultLanguage: "en",
+  });
+
+  assert.equal(state.ok, false);
+  assert.equal(state.nextMissing.field, "issue");
+  assert.equal(state.nextPromptHint.field, "issue");
+  assert.equal("nextQuestion" in state, false);
 });

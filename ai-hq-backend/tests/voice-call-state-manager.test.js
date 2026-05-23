@@ -9,7 +9,7 @@ import {
   executeVoiceAction,
 } from "../src/modules/voice/actions/voiceActionRuntime.js";
 
-test("voice call state manager asks one natural Azerbaijani next question", () => {
+test("voice call state manager returns one structured next prompt hint", () => {
   const state = analyzeVoiceActionState({
     actionName: "create_appointment_request",
     args: {
@@ -23,10 +23,11 @@ test("voice call state manager asks one natural Azerbaijani next question", () =
 
   assert.equal(state.ok, false);
   assert.equal(state.nextMissing.field, "preferredDateOrTime");
-  assert.equal(state.nextQuestion, "Sizə hansı gün və ya saat daha uyğundur?");
+  assert.equal(state.nextPromptHint.field, "preferredDateOrTime");
+  assert.equal("nextQuestion" in state, false);
 });
 
-test("voice call state instruction blocks multi-field request creation", () => {
+test("voice call state instruction stays internal and blocks fake completion", () => {
   const state = analyzeVoiceActionState({
     actionName: "create_handoff_request",
     args: {
@@ -39,12 +40,13 @@ test("voice call state instruction blocks multi-field request creation", () => {
 
   const instruction = buildVoiceStateInstruction(state);
 
-  assert.match(instruction, /Ask exactly this one question next/);
-  assert.match(instruction, /Əlaqə nömrənizi qeyd edə bilərəm/);
-  assert.match(instruction, /Do not ask multiple missing fields/);
+  assert.equal(typeof instruction, "string");
+  assert.notEqual(instruction.trim(), "");
+  assert.doesNotMatch(instruction, /booking.*confirmed/i);
+  assert.doesNotMatch(instruction, /order.*confirmed/i);
 });
 
-test("voice action runtime returns nextQuestion when required fields are missing", async () => {
+test("voice action runtime returns structured hint when required fields are missing", async () => {
   const result = await executeVoiceAction({
     name: "create_appointment_request",
     args: {
@@ -67,7 +69,9 @@ test("voice action runtime returns nextQuestion when required fields are missing
 
   assert.equal(result.ok, false);
   assert.equal(result.status, "missing_required_fields");
-  assert.equal(result.nextQuestion, "Sizə hansı gün və ya saat daha uyğundur?");
+  assert.equal(result.nextMissing.field, "preferredDateOrTime");
+  assert.equal(result.nextPromptHint.field, "preferredDateOrTime");
+  assert.equal("nextQuestion" in result, false);
   assert.equal(result.voiceState.complete, false);
 });
 
@@ -87,5 +91,5 @@ test("voice call state manager accepts complete appointment request", () => {
 
   assert.equal(state.ok, true);
   assert.equal(state.complete, true);
-  assert.equal(state.nextQuestion, "");
+  assert.equal("nextQuestion" in state, false);
 });

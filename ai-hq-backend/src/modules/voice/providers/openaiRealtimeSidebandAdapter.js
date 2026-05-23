@@ -1,4 +1,4 @@
-import {
+﻿import {
   normalizeProviderRealtimeCallId,
 } from "../realtimeControlPlane.js";
 
@@ -12,7 +12,9 @@ const OPENAI_REALTIME_SIDEBAND_CONNECTOR_VERSION =
   "voice-realtime-sideband-connector-v1";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function lower(value = "") {
@@ -49,6 +51,7 @@ function parseArguments(value) {
 function readToolCallCandidate(candidate = {}) {
   const item = obj(candidate);
   const name = s(item.name || item.functionName || item.function_name);
+
   if (!name) return null;
 
   return {
@@ -73,6 +76,7 @@ function extractOpenAIRealtimeSidebandToolCall(event = {}) {
 
   if (type === "response.done") {
     const output = Array.isArray(item?.response?.output) ? item.response.output : [];
+
     for (const candidate of output) {
       const toolCall = readToolCallCandidate(candidate);
       if (toolCall) return toolCall;
@@ -88,6 +92,7 @@ function extractOpenAIRealtimeSidebandTranscript(event = {}) {
 
   if (type === "conversation.item.input_audio_transcription.completed") {
     const text = clean(item.transcript, 2400);
+
     return text
       ? {
           eventType: "voice.sideband.transcript.final",
@@ -100,6 +105,7 @@ function extractOpenAIRealtimeSidebandTranscript(event = {}) {
 
   if (type === "response.audio_transcript.done") {
     const text = clean(item.transcript, 2400);
+
     return text
       ? {
           eventType: "voice.sideband.transcript.final",
@@ -112,6 +118,7 @@ function extractOpenAIRealtimeSidebandTranscript(event = {}) {
 
   if (type === "response.output_text.done") {
     const text = clean(item.text, 2400);
+
     return text
       ? {
           eventType: "voice.sideband.transcript.final",
@@ -134,9 +141,24 @@ function extractOpenAIRealtimeSidebandTranscript(event = {}) {
   return null;
 }
 
+function sanitizeToolOutputForModel(result = {}) {
+  const output = {
+    ...obj(result),
+  };
+
+  delete output.assistantInstruction;
+  delete output.nextAssistantInstruction;
+  delete output.nextQuestion;
+  delete output.fallbackQuestion;
+  delete output.question;
+  delete output.questions;
+
+  return output;
+}
+
 function stringifyToolOutput(result = {}) {
   try {
-    return JSON.stringify(obj(result));
+    return JSON.stringify(sanitizeToolOutputForModel(result));
   } catch {
     return JSON.stringify({
       ok: false,
@@ -165,9 +187,11 @@ export function normalizeOpenAIRealtimeSidebandEvent(event = {}, context = {}) {
   const type = s(item.type, "event");
   const toolCall = extractOpenAIRealtimeSidebandToolCall(item);
   const transcript = extractOpenAIRealtimeSidebandTranscript(item);
+
   const providerRealtimeCallId = normalizeProviderRealtimeCallId(
     target.providerRealtimeCallId || context.providerRealtimeCallId
   );
+
   const provider = s(target.provider || context.provider || OPENAI_REALTIME_PROVIDER);
   const transport = s(target.transport || context.transport || "webrtc");
 
@@ -212,10 +236,6 @@ export function buildOpenAIRealtimeSidebandToolOutputEvents({
   const callId = s(toolCall.id || toolCall.call_id || toolCall.callId);
   if (!callId) return [];
 
-  const assistantInstruction = s(
-    result.assistantInstruction || result.nextAssistantInstruction
-  );
-
   const events = [
     {
       type: "conversation.item.create",
@@ -228,18 +248,9 @@ export function buildOpenAIRealtimeSidebandToolOutputEvents({
   ];
 
   if (includeResponseCreate) {
-    events.push(
-      assistantInstruction
-        ? {
-            type: "response.create",
-            response: {
-              instructions: assistantInstruction,
-            },
-          }
-        : {
-            type: "response.create",
-          }
-    );
+    events.push({
+      type: "response.create",
+    });
   }
 
   return events;
@@ -251,6 +262,7 @@ export function buildOpenAIRealtimeSidebandConnectionPlan({
 } = {}) {
   const provider = lower(target.provider || OPENAI_REALTIME_PROVIDER);
   const transport = lower(target.transport || "webrtc");
+
   const providerRealtimeCallId = normalizeProviderRealtimeCallId(
     target.providerRealtimeCallId
   );
@@ -289,6 +301,7 @@ export function buildOpenAIRealtimeSidebandConnectionPlan({
   }
 
   const authorizationConfigured = !!s(env.OPENAI_API_KEY);
+
   if (!authorizationConfigured) {
     return {
       ...base,
@@ -299,6 +312,7 @@ export function buildOpenAIRealtimeSidebandConnectionPlan({
   }
 
   let url = "";
+
   try {
     url = buildSidebandUrl(
       env.OPENAI_REALTIME_SIDEBAND_URL || "wss://api.openai.com/v1/realtime",

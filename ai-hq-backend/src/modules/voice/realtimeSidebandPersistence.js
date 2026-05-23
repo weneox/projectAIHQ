@@ -1,4 +1,4 @@
-import {
+﻿import {
   createOperationRequest,
 } from "../../db/helpers/operationRequests.js";
 import {
@@ -14,7 +14,9 @@ export const VOICE_REALTIME_SIDEBAND_PERSISTENCE_VERSION =
   "voice-realtime-sideband-persistence-v1";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
@@ -31,6 +33,7 @@ function readCallId(call = {}) {
 
 function mergePatchWithOperationRequest(callPatch = {}, operationRequest = null) {
   if (!operationRequest?.id) return callPatch;
+
   const patch = obj(callPatch);
   const extraction = obj(patch.extraction);
   const meta = obj(patch.meta);
@@ -82,6 +85,7 @@ export function buildRealtimeSidebandPersistedEventInput({
       ...payload,
       sidebandPersistenceVersion: VOICE_REALTIME_SIDEBAND_PERSISTENCE_VERSION,
       realtimeType: s(normalized.realtimeType || payload.realtimeType),
+      provider: s(normalized.provider || payload.provider),
       providerRealtimeCallId: s(
         normalized.providerRealtimeCallId || payload.providerRealtimeCallId
       ),
@@ -111,17 +115,25 @@ export function buildRealtimeSidebandToolResultEventInput({
       resultStatus: s(
         resultTrace.resultStatus || payload.resultStatus || result.status
       ),
-      assistantInstruction: s(
-        resultTrace.assistantInstruction ||
-          payload.assistantInstruction ||
-          result.assistantInstruction ||
-          result.nextAssistantInstruction
-      ),
-      nextQuestion: s(
-        resultTrace.nextQuestion || payload.nextQuestion || result.nextQuestion
-      ),
       missingRequired: arr(
-        resultTrace.missingRequired || payload.missingRequired || result.missingRequired
+        resultTrace.missingRequired ||
+          payload.missingRequired ||
+          result.missingRequired
+      ),
+      nextMissing: obj(
+        resultTrace.nextMissing ||
+          payload.nextMissing ||
+          result.nextMissing
+      ),
+      nextPromptHint: obj(
+        resultTrace.nextPromptHint ||
+          payload.nextPromptHint ||
+          result.nextPromptHint
+      ),
+      voiceState: obj(
+        resultTrace.voiceState ||
+          payload.voiceState ||
+          result.voiceState
       ),
     },
   };
@@ -147,6 +159,7 @@ export async function persistRealtimeSidebandTrace({
   }
 
   const callId = readCallId(call);
+
   if (!callId) {
     return {
       ok: false,
@@ -160,23 +173,35 @@ export async function persistRealtimeSidebandTrace({
   if (normalized) {
     const event = await appendEvent(
       db,
-      buildRealtimeSidebandPersistedEventInput({ normalized, call, scope })
+      buildRealtimeSidebandPersistedEventInput({
+        normalized,
+        call,
+        scope,
+      })
     );
+
     events.push(event);
   }
 
   if (resultTrace) {
     const event = await appendEvent(
       db,
-      buildRealtimeSidebandToolResultEventInput({ resultTrace, call, scope })
+      buildRealtimeSidebandToolResultEventInput({
+        resultTrace,
+        call,
+        scope,
+      })
     );
+
     events.push(event);
   }
 
   let operationRequest = null;
+
   if (resultTrace) {
     const resultPayload = obj(resultTrace.payload);
     const result = obj(resultPayload.result);
+
     const requestInput = buildOperationRequestFromVoiceResult({
       result,
       call,
@@ -190,6 +215,7 @@ export async function persistRealtimeSidebandTrace({
 
     if (requestInput) {
       operationRequest = await createRequest(db, requestInput);
+
       if (operationRequest) {
         callPatch = mergePatchWithOperationRequest(callPatch, operationRequest);
       }
@@ -203,6 +229,7 @@ export async function persistRealtimeSidebandTrace({
     updatedCall = updateCall
       ? await updateCall(db, callId, callPatch)
       : await updateRealtimeSidebandCall(db, callId, callPatch, scope);
+
     callPatchApplied = true;
   }
 

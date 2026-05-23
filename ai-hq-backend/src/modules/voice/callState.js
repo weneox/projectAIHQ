@@ -1,20 +1,24 @@
-import {
+﻿import {
   analyzeUniversalVoiceSlots,
 } from "./actions/voiceUniversalSlots.js";
+import {
+  buildVoiceMissingSlots,
+  cleanVoiceSlotPayload,
+  firstUsableVoicePhone,
+  hasAnyVoiceSlot,
+  hasVoiceSlot,
+  readVoicePhoneFromSources,
+  readVoiceSlotValue,
+} from "./slots/voiceSlotContracts.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function cleanPayload(value = {}) {
-  const input = obj(value);
-  return Object.fromEntries(
-    Object.entries(input).filter(([, item]) => item !== undefined && item !== null && item !== "")
-  );
 }
 
 const VOICE_ACTION_TOOL_REQUIRED_FIELDS = Object.freeze({
@@ -27,169 +31,170 @@ const VOICE_ACTION_TOOL_REQUIRED_FIELDS = Object.freeze({
   end_call: Object.freeze(["reason"]),
 });
 
+const VOICE_ACTION_STATE_REQUIRED_FIELDS = Object.freeze({
+  check_availability: Object.freeze(["intent"]),
+  create_reservation_request: Object.freeze([
+    "date",
+    "time",
+    "partySize",
+    "customerName",
+    "phone",
+  ]),
+  create_order_request: Object.freeze(["items", "fulfillment", "phone"]),
+  create_appointment_request: Object.freeze([
+    "service",
+    "preferredDateOrTime",
+    "customerName",
+    "phone",
+  ]),
+  create_handoff_request: Object.freeze(["reason", "phone", "summary"]),
+  end_call: Object.freeze(["reason"]),
+});
+
 export function getVoiceActionToolRequiredFields(actionName = "") {
   return [...(VOICE_ACTION_TOOL_REQUIRED_FIELDS[s(actionName)] || [])];
 }
 
-function normalizeLanguage(value = "") {
-  const raw = s(value).toLowerCase().replace("_", "-");
-  if (raw.startsWith("az")) return "az";
-  if (raw.startsWith("ru")) return "ru";
-  if (raw.startsWith("tr")) return "tr";
-  if (raw.startsWith("en")) return "en";
-  return raw || "az";
+function actionIntent(actionName = "") {
+  const action = s(actionName);
+
+  if (action === "create_appointment_request") return "appointment_request";
+  if (action === "create_reservation_request") return "reservation_request";
+  if (action === "create_order_request") return "order_request";
+  if (action === "create_handoff_request") return "handoff_request";
+  if (action === "create_business_request") return "business_request";
+  if (action === "check_availability") return "availability_check";
+  if (action === "end_call") return "end_call";
+
+  return "unknown";
 }
 
-function looksLikePhone(value = "") {
-  const raw = s(value);
-  const lowered = raw.toLowerCase();
-
-  if (!raw) return false;
-
-  if (
-    [
-      "browser",
-      "browser_lab",
-      "browserlab",
-      "test",
-      "unknown",
-      "anonymous",
-      "hidden",
-      "private",
-      "caller",
-      "customer",
-    ].includes(lowered)
-  ) {
-    return false;
-  }
-
-  if (lowered.includes("browser")) return false;
-
-  const digits = raw.replace(/\D+/g, "");
-  return digits.length >= 7 && digits.length <= 15;
-}
-
-function firstUsablePhone(...values) {
-  for (const value of values) {
-    const phone = s(value);
-    if (looksLikePhone(phone)) return phone;
-  }
-  return "";
-}
-
-function readPhone(payload = {}, call = {}) {
-  return firstUsablePhone(
+function readActionPhone(payload = {}, call = {}) {
+  return firstUsableVoicePhone(
+    readVoicePhoneFromSources({ payload, call }),
     payload.phone,
     payload.customerPhone,
     payload.customer_phone,
     payload.callbackPhone,
     payload.callback_phone,
     call.fromNumber,
+    call.from_number,
     call.from,
     call.phone,
-    call.customerNumber
+    call.customerNumber,
+    call.customer_number
   );
 }
 
-function readCustomerName(payload = {}) {
+function readFulfillment(payload = {}) {
   return s(
-    payload.customerName ||
-      payload.customer_name ||
-      payload.name ||
-      payload.fullName ||
-      payload.full_name
+    payload.fulfillment ||
+      payload.deliveryMode ||
+      payload.delivery_mode ||
+      payload.pickupOrDelivery ||
+      payload.pickup_or_delivery
+  ).toLowerCase();
+}
+
+function hasUsefulItems(payload = {}) {
+  const items = payload.items || payload.orderItems || payload.order_items;
+  if (Array.isArray(items)) return items.length > 0;
+  return !!s(items);
+}
+
+function hasAddress(payload = {}) {
+  return hasVoiceSlot(payload, "address");
+}
+
+function actionPayloadPresence({ action = "", payload = {}, call = {} } = {}) {
+  const phone = readActionPhone(payload, call);
+  const fulfillment = readFulfillment(payload);
+
+  return {
+    intent: hasAnyVoiceSlot(payload, ["intent", "service", "product", "roomType", "description"]),
+    service: hasAnyVoiceSlot(payload, ["service", "department"]),
+    date: hasVoiceSlot(payload, "date"),
+    time: hasVoiceSlot(payload, "time"),
+    preferredDateOrTime: hasAnyVoiceSlot(payload, ["date", "time", "startDate", "endDate"]),
+    customerName: hasVoiceSlot(payload, "customerName"),
+    phone: !!phone,
+    items: hasUsefulItems(payload),
+    fulfillment: !!fulfillment,
+    address: hasAddress(payload),
+    reason: !!s(readVoiceSlotValue(payload, "reason") || payload.reason),
+    summary: !!s(readVoiceSlotValue(payload, "summary") || payload.summary),
+    partySize: hasVoiceSlot(payload, "partySize"),
+    action,
+    fulfillmentValue: fulfillment,
+    phoneValue: phone,
+  };
+}
+
+function actionRequirementSatisfied({ field = "", payload = {}, call = {}, present = {} } = {}) {
+  const key = s(field);
+
+  if (!key) return true;
+  if (key === "intent") return present.intent === true;
+  if (key === "items") return present.items === true;
+  if (key === "fulfillment") return present.fulfillment === true;
+  if (key === "phone") return present.phone === true;
+  if (key === "preferredDateOrTime") return present.preferredDateOrTime === true;
+
+  return hasVoiceSlot(payload, key);
+}
+
+function requiredFieldsForAction({ action = "", payload = {}, present = {} } = {}) {
+  const required = [
+    ...(VOICE_ACTION_STATE_REQUIRED_FIELDS[action] || []),
+  ];
+
+  if (action === "create_order_request" && present.fulfillmentValue === "delivery") {
+    required.push("address");
+  }
+
+  return [...new Set(required)];
+}
+
+function buildActionState({
+  action = "",
+  payload = {},
+  call = {},
+  runtimeConfig = {},
+} = {}) {
+  const present = actionPayloadPresence({ action, payload, call });
+  const required = requiredFieldsForAction({ action, payload, present });
+  const phone = present.phoneValue || readActionPhone(payload, call);
+
+  const missingRequired = buildVoiceMissingSlots({
+    required,
+    payload,
+    phone,
+  }).filter((item) =>
+    !actionRequirementSatisfied({
+      field: item.field,
+      payload,
+      call,
+      present,
+    })
   );
-}
 
-function readService(payload = {}) {
-  return s(
-    payload.service ||
-      payload.serviceType ||
-      payload.service_type ||
-      payload.intent ||
-      payload.reason
-  );
-}
+  const nextMissing = missingRequired[0] || null;
 
-function readDate(payload = {}) {
-  return s(payload.date || payload.preferredDate || payload.preferred_date);
-}
-
-function readTime(payload = {}) {
-  return s(payload.time || payload.preferredTime || payload.preferred_time);
-}
-
-function hasUsefulItems(value) {
-  if (Array.isArray(value)) return value.length > 0;
-  return !!s(value);
-}
-
-function addMissing(list, field, label, question = {}) {
-  list.push({
-    field,
-    label: s(label || field),
-    question,
-  });
-}
-
-function questionFor(field = "", language = "az") {
-  const lang = normalizeLanguage(language);
-
-  const az = {
-    service: "Hansı xidmət üçün müraciət etmək istəyirsiniz?",
-    preferredDateOrTime: "Sizə hansı gün və ya saat daha uyğundur?",
-    customerName: "Adınızı necə qeyd edim?",
-    phone: "Əlaqə nömrənizi qeyd edə bilərəm?",
-    date: "Hansı tarix üçün istəyirsiniz?",
-    time: "Saat neçəyə istəyirsiniz?",
-    items: "Nə sifariş etmək istəyirsiniz?",
-    fulfillment: "Çatdırılma olsun?",
-    address: "Çatdırılma ünvanını deyə bilərsiniz?",
-    reason: "Operatora hansı mövzu ilə bağlı yönləndirim?",
-    summary: "Qısaca nə ilə bağlı müraciət etdiyinizi qeyd edim?",
+  return {
+    ok: missingRequired.length === 0,
+    complete: missingRequired.length === 0,
+    action,
+    intent: actionIntent(action),
+    payload,
+    present,
+    required,
+    missingRequired,
+    nextMissing,
+    nextPromptHint: nextMissing?.promptHint || null,
+    runtime: {
+      hasRuntimeConfig: Object.keys(obj(runtimeConfig)).length > 0,
+    },
   };
-
-  const en = {
-    service: "Which service would you like to request?",
-    preferredDateOrTime: "Which day or time works best for you?",
-    customerName: "What name should I note?",
-    phone: "May I take your phone number?",
-    date: "Which date would you like?",
-    time: "What time would you prefer?",
-    items: "What would you like to order?",
-    fulfillment: "Would you like delivery or pickup?",
-    address: "Could you share the delivery address?",
-    reason: "What should I tell the operator this is about?",
-    summary: "Could you briefly summarize what this is about?",
-  };
-
-  const ru = {
-    service: "На какую услугу хотите записаться?",
-    preferredDateOrTime: "Какой день или время вам удобны?",
-    customerName: "Как вас записать?",
-    phone: "Можно ваш номер телефона?",
-    date: "На какую дату хотите?",
-    time: "На какое время удобно?",
-    items: "Что вы хотите заказать?",
-    fulfillment: "Доставка или самовывоз?",
-    address: "Можете сказать адрес доставки?",
-    reason: "По какому вопросу соединить с оператором?",
-    summary: "Кратко скажите, по какому вопросу обращаетесь?",
-  };
-
-  const dict = lang === "ru" ? ru : lang === "en" ? en : az;
-  return dict[field] || dict.summary || az.summary;
-}
-
-function actionIntent(actionName = "") {
-  const action = s(actionName);
-  if (action === "create_appointment_request") return "appointment_request";
-  if (action === "create_reservation_request") return "reservation_request";
-  if (action === "create_order_request") return "order_request";
-  if (action === "create_handoff_request") return "handoff_request";
-  if (action === "check_availability") return "availability_check";
-  if (action === "end_call") return "end_call";
-  return "unknown";
 }
 
 export function analyzeVoiceActionState({
@@ -198,10 +203,9 @@ export function analyzeVoiceActionState({
   payload = {},
   call = {},
   runtimeConfig = {},
-  language = "",
 } = {}) {
   const action = s(actionName);
-  const data = cleanPayload(Object.keys(obj(payload)).length ? payload : args);
+  const data = cleanVoiceSlotPayload(Object.keys(obj(payload)).length ? payload : args);
 
   if (action === "create_business_request") {
     return analyzeUniversalVoiceSlots({
@@ -210,102 +214,35 @@ export function analyzeVoiceActionState({
       payload: data,
       call,
       runtimeConfig,
-      language,
     });
   }
 
-  const lang = normalizeLanguage(
-    language ||
-      runtimeConfig.defaultLanguage ||
-      runtimeConfig.voiceProfile?.defaultLanguage ||
-      call.language ||
-      call.lang ||
-      "az"
-  );
-
-  const missingRequired = [];
-  const phone = readPhone(data, call);
-  const customerName = readCustomerName(data);
-  const service = readService(data);
-  const date = readDate(data);
-  const time = readTime(data);
-  const fulfillment = s(data.fulfillment).toLowerCase();
-
-  if (action === "create_appointment_request") {
-    if (!service) addMissing(missingRequired, "service", "service");
-    if (!date && !time) addMissing(missingRequired, "preferredDateOrTime", "preferred date or time");
-    if (!customerName) addMissing(missingRequired, "customerName", "customer name");
-    if (!phone) addMissing(missingRequired, "phone", "phone");
-  }
-
-  if (action === "create_reservation_request") {
-    if (!date) addMissing(missingRequired, "date", "date");
-    if (!customerName) addMissing(missingRequired, "customerName", "customer name");
-    if (!phone) addMissing(missingRequired, "phone", "phone");
-  }
-
-  if (action === "create_order_request") {
-    if (!hasUsefulItems(data.items)) addMissing(missingRequired, "items", "items");
-    if (!fulfillment) addMissing(missingRequired, "fulfillment", "delivery or pickup");
-    if (fulfillment === "delivery" && !s(data.address)) {
-      addMissing(missingRequired, "address", "delivery address");
-    }
-    if (!phone) addMissing(missingRequired, "phone", "phone");
-  }
-
-  if (action === "create_handoff_request") {
-    if (!s(data.reason)) addMissing(missingRequired, "reason", "handoff reason");
-    if (!phone) addMissing(missingRequired, "phone", "phone");
-    if (!s(data.summary)) addMissing(missingRequired, "summary", "short summary");
-  }
-
-  const nextMissing = missingRequired[0] || null;
-  const nextQuestion = nextMissing ? questionFor(nextMissing.field, lang) : "";
-
-  return {
-    ok: missingRequired.length === 0,
+  return buildActionState({
     action,
-    intent: actionIntent(action),
-    language: lang,
     payload: data,
-    present: {
-      service,
-      date,
-      time,
-      customerName,
-      phone,
-      fulfillment,
-      hasItems: hasUsefulItems(data.items),
-      hasAddress: !!s(data.address),
-    },
-    missingRequired: missingRequired.map((item) => ({
-      field: item.field,
-      label: item.label,
-      nextQuestion: questionFor(item.field, lang),
-    })),
-    nextMissing: nextMissing
-      ? {
-          field: nextMissing.field,
-          label: nextMissing.label,
-        }
-      : null,
-    nextQuestion,
-    complete: missingRequired.length === 0,
-  };
+    call,
+    runtimeConfig,
+  });
 }
 
 export function buildVoiceStateInstruction(state = {}) {
   if (!state || state.complete) {
-    return "All required information for this action has been collected.";
+    return "All required structured fields for this action have been collected.";
   }
 
+  const missingLabels = Array.isArray(state.missingRequired)
+    ? state.missingRequired.map((item) => s(item.label || item.field)).filter(Boolean)
+    : [];
+  const next = state.nextMissing || state.missingRequired?.[0] || null;
+  const nextLabel = s(next?.label || next?.field);
+
   return [
-    "Missing required information:",
-    state.missingRequired.map((item) => `- ${item.label}`).join("\n"),
-    "",
-    "Next step:",
-    `- Ask exactly this one question next: "${state.nextQuestion}"`,
-    "- Do not ask multiple missing fields in one turn.",
-    "- Do not create the request until missing fields are collected.",
+    "Structured action state:",
+    missingLabels.length ? `- Missing fields: ${missingLabels.join(", ")}.` : "",
+    nextLabel ? `- Next missing field: ${nextLabel}.` : "",
+    "- Generate natural caller-facing wording from the voice brain and response composer policy.",
+    "- Do not expose field names, policy names, JSON, tools, database, or internal state to the caller.",
+    "- Ask for only the next missing detail in the caller's language.",
+    "- Do not create the request until required structured fields are complete.",
   ].filter(Boolean).join("\n");
 }

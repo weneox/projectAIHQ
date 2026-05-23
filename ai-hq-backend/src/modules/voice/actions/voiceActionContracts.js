@@ -1,13 +1,12 @@
-import {
-  getVoiceActionToolRequiredFields,
-} from "../callState.js";
-import {
+﻿import {
   VOICE_REQUEST_TYPES,
   normalizeVoiceBusinessFamily,
 } from "./voiceOperationTaxonomy.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
@@ -82,6 +81,36 @@ export const VOICE_ACTION_MODES = Object.freeze({
   REQUEST_ONLY: "request_only",
   DISABLED: "disabled",
 });
+
+const VOICE_ACTION_TOOL_REQUIRED_FIELDS = Object.freeze({
+  [VOICE_ACTIONS.CHECK_AVAILABILITY]: Object.freeze(["intent"]),
+  [VOICE_ACTIONS.CREATE_BUSINESS_REQUEST]: Object.freeze(["requestType"]),
+  [VOICE_ACTIONS.CREATE_RESERVATION_REQUEST]: Object.freeze([
+    "date",
+    "customerName",
+    "phone",
+  ]),
+  [VOICE_ACTIONS.CREATE_ORDER_REQUEST]: Object.freeze([
+    "items",
+    "fulfillment",
+    "phone",
+  ]),
+  [VOICE_ACTIONS.CREATE_APPOINTMENT_REQUEST]: Object.freeze([
+    "service",
+    "customerName",
+    "phone",
+  ]),
+  [VOICE_ACTIONS.CREATE_HANDOFF_REQUEST]: Object.freeze([
+    "reason",
+    "phone",
+    "summary",
+  ]),
+  [VOICE_ACTIONS.END_CALL]: Object.freeze(["reason"]),
+});
+
+export function getVoiceActionToolRequiredFields(actionName = "") {
+  return [...(VOICE_ACTION_TOOL_REQUIRED_FIELDS[s(actionName)] || [])];
+}
 
 export function normalizeVoiceActionRuntime(runtimeConfig = {}) {
   const actions = obj(runtimeConfig.actions || runtimeConfig.voiceActions);
@@ -388,7 +417,13 @@ export function buildVoiceActionToolDefinitions(actionRuntime = {}) {
       properties: {
         reason: {
           type: "string",
-          enum: ["caller_done", "request_resolved", "unsupported_scope", "handoff_not_needed", "other"],
+          enum: [
+            "caller_done",
+            "request_resolved",
+            "unsupported_scope",
+            "handoff_not_needed",
+            "other",
+          ],
         },
         summary: { type: "string" },
       },
