@@ -21,6 +21,24 @@ function allowReservation(input = {}) {
   };
 }
 
+function duplicateReservation(input = {}) {
+  return {
+    ok: true,
+    skipped: false,
+    acquired: false,
+    duplicate: true,
+    reasonCode: "voice_realtime_tool_execution_duplicate",
+    idempotencyKey: input.idempotencyKey || "idem-duplicate",
+    leaseToken: "lease-duplicate",
+    recordState: "sent",
+    source: input.source,
+    record: {
+      state: "sent",
+      provider_response: input.providerResponse || {},
+    },
+  };
+}
+
 test("sideband tool dispatcher ignores non-tool realtime events", async () => {
   const dispatched = await dispatchRealtimeSidebandToolCall({
     event: {
@@ -277,6 +295,250 @@ test("sideband tool dispatcher dispatches inbox sink and links request-recorded 
     dispatched.resultTrace.payload.inboxSinkDelivery.inboxMessageId,
     "inbox-message-1"
   );
+});
+
+test("sideband duplicate redrives stored business request inbox sink without execution", async () => {
+  const requestRecord = {
+    id: "voice_request:acme:voice-call-duplicate:create_business_request:test",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    callId: "voice-call-duplicate",
+    actionName: "create_business_request",
+    requestType: "callback_request",
+    businessFamily: "generic_business",
+    priority: "normal",
+    summary: "callback_request | Caller wants pricing follow-up | +994501112233",
+    customer: {
+      phone: "+994501112233",
+    },
+    payload: {
+      requestType: "callback_request",
+      issue: "Caller wants pricing follow-up",
+      phone: "+994501112233",
+    },
+  };
+  const storedResult = {
+    ok: true,
+    action: "create_business_request",
+    status: "request_recorded",
+    confirmed: false,
+    requestOnly: true,
+    requestId: requestRecord.id,
+    idempotencyKey: requestRecord.id,
+    provider: "internal_request",
+    payload: requestRecord.payload,
+    requestRecord,
+    callId: "voice-call-duplicate",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    businessActionAdapter: {
+      provider: "internal_request",
+      ready: true,
+      productionReady: true,
+      recordsRequest: true,
+      confirmsLiveTransaction: false,
+    },
+    message: "Request was recorded for human or operator follow-up.",
+  };
+  const storedProviderResponse = {
+    source: "sideband_tool_dispatcher",
+    toolCallId: "tool-call-duplicate",
+    toolName: "create_business_request",
+    providerRealtimeCallId: "call_realtime_duplicate",
+    resultStatus: "request_recorded",
+    result: storedResult,
+    runtimeConfig: {
+      tenantKey: "stored-runtime",
+      businessActionSinks: {
+        inbox: {
+          enabled: false,
+        },
+      },
+    },
+    sinkRuntimeConfig: {
+      tenantKey: "stored-sink-runtime",
+      businessActionSinks: {
+        inbox: {
+          enabled: true,
+        },
+      },
+    },
+  };
+  const calls = [];
+
+  const dispatched = await dispatchRealtimeSidebandToolCall({
+    event: {
+      type: "response.function_call_arguments.done",
+      call_id: "tool-call-duplicate",
+      name: "create_business_request",
+      arguments: requestRecord.payload,
+    },
+    target: {
+      provider: "openai",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_realtime_duplicate",
+    },
+    call: {
+      id: "voice-call-duplicate",
+      extraction: {},
+      meta: {},
+    },
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    runtimeConfig: {
+      tenantKey: "current-runtime",
+      businessActionSinks: {
+        inbox: {
+          enabled: false,
+        },
+      },
+    },
+    reserveExecution: async (input) =>
+      duplicateReservation({
+        idempotencyKey: input.idempotencyKey,
+        providerResponse: storedProviderResponse,
+        source: input.source,
+      }),
+    markExecutionSent: async () => {
+      throw new Error("duplicate should not mark sent again");
+    },
+    executeAction: async () => {
+      throw new Error("duplicate should not execute action");
+    },
+    dispatchSinks: async (input) => {
+      calls.push("sinks");
+      assert.equal(input.requestRecord.id, requestRecord.id);
+      assert.equal(input.result, storedResult);
+      assert.equal(input.runtimeConfig.tenantKey, "stored-sink-runtime");
+      assert.equal(input.runtimeConfig.businessActionSinks.inbox.enabled, true);
+      return {
+        ok: true,
+        requestId: requestRecord.id,
+        deliveries: [
+          {
+            ok: true,
+            sink: "voice_core",
+            status: "recorded",
+            requestId: requestRecord.id,
+            reasonCode: "",
+          },
+          {
+            ok: true,
+            sink: "inbox",
+            status: "delivered",
+            requestId: requestRecord.id,
+            inboxThreadId: "inbox-thread-duplicate",
+            inboxMessageId: "inbox-message-duplicate",
+            reasonCode: "",
+          },
+        ],
+      };
+    },
+    sinkRegistry: {
+      version: "test-sink-registry",
+      executors: {},
+    },
+  });
+
+  assert.deepEqual(calls, ["sinks"]);
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.dispatched, false);
+  assert.equal(dispatched.status, "duplicate_skipped");
+  assert.equal(dispatched.result.status, "duplicate_skipped");
+  assert.equal(dispatched.duplicateRedrive.attempted, true);
+  assert.equal(dispatched.duplicateRedrive.ok, true);
+  assert.equal(dispatched.sinkDelivery.inbox, "delivered");
+  assert.equal(dispatched.inboxSinkDelivery.inboxThreadId, "inbox-thread-duplicate");
+  assert.equal(dispatched.callPatch.inboxThreadId, "inbox-thread-duplicate");
+  assert.equal(
+    dispatched.callPatch.extraction.voiceOutcome.inboxSinkDelivery.inboxMessageId,
+    "inbox-message-duplicate"
+  );
+  assert.equal(dispatched.outboundEvents.length, 1);
+  assert.deepEqual(JSON.parse(dispatched.outboundEvents[0].item.output).status, "duplicate_skipped");
+  assert.equal(dispatched.resultTrace.payload.result.status, "duplicate_skipped");
+  assert.equal(dispatched.resultTrace.payload.duplicateRedrive.ok, true);
+  assert.equal(dispatched.resultTrace.payload.sinkDelivery.inbox, "delivered");
+  assert.equal(
+    dispatched.resultTrace.payload.inboxSinkDelivery.inboxThreadId,
+    "inbox-thread-duplicate"
+  );
+});
+
+test("sideband duplicate redrive failure does not crash duplicate response", async () => {
+  const requestRecord = {
+    id: "voice_request:acme:voice-call-redrive-fail:create_business_request:test",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    callId: "voice-call-redrive-fail",
+    actionName: "create_business_request",
+    requestType: "callback_request",
+    payload: {
+      requestType: "callback_request",
+      phone: "+994501112233",
+    },
+  };
+  const storedProviderResponse = {
+    result: {
+      ok: true,
+      action: "create_business_request",
+      status: "request_recorded",
+      requestId: requestRecord.id,
+      requestRecord,
+      payload: requestRecord.payload,
+    },
+    sinkRuntimeConfig: {
+      businessActionSinks: {
+        inbox: {
+          enabled: true,
+        },
+      },
+    },
+  };
+
+  const dispatched = await dispatchRealtimeSidebandToolCall({
+    event: {
+      type: "response.function_call_arguments.done",
+      call_id: "tool-call-redrive-fail",
+      name: "create_business_request",
+      arguments: requestRecord.payload,
+    },
+    target: {
+      provider: "openai",
+      providerRealtimeCallId: "call_realtime_redrive_fail",
+    },
+    call: {
+      id: "voice-call-redrive-fail",
+      extraction: {},
+      meta: {},
+    },
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    reserveExecution: async (input) =>
+      duplicateReservation({
+        idempotencyKey: input.idempotencyKey,
+        providerResponse: storedProviderResponse,
+        source: input.source,
+      }),
+    executeAction: async () => {
+      throw new Error("duplicate should not execute action");
+    },
+    dispatchSinks: async () => {
+      throw new Error("sink unavailable");
+    },
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.status, "duplicate_skipped");
+  assert.deepEqual(dispatched.callPatch, {});
+  assert.equal(dispatched.duplicateRedrive.ok, false);
+  assert.equal(dispatched.duplicateRedrive.reasonCode, "sideband_duplicate_redrive_failed");
+  assert.match(dispatched.resultTrace.payload.duplicateRedrive.errorMessage, /sink unavailable/);
+  assert.equal(dispatched.outboundEvents.length, 1);
 });
 
 test("sideband tool dispatcher uses provider adapter output builder", async () => {

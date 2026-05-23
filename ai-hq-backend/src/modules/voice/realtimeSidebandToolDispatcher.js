@@ -70,6 +70,29 @@ function buildDuplicateToolResult({ reservation = {}, toolCall = {} } = {}) {
   };
 }
 
+function readReservationProviderResponse(reservation = {}) {
+  const record = obj(reservation.record);
+  const value =
+    record.providerResponse ||
+    record.provider_response ||
+    reservation.providerResponse ||
+    reservation.provider_response;
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return obj(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
 function findInboxSinkDelivery(deliveries = []) {
   return Array.isArray(deliveries)
     ? deliveries.find((item) => item?.sink === "inbox") || null
@@ -90,6 +113,71 @@ function buildSidebandSinkRuntimeConfig(runtimeConfig = {}) {
         enabled: inbox.enabled !== false,
       },
     },
+  };
+}
+
+async function redriveSidebandBusinessActionSink({
+  storedProviderResponse = {},
+  runtimeConfig = {},
+  call = {},
+  sinkRegistry = null,
+  createSinkRegistry = createBusinessActionSinkRegistry,
+  dispatchSinks = dispatchBusinessActionSinks,
+  buildSinkDeliverySnapshot = buildBusinessActionSinkDeliverySnapshot,
+  recordBusinessAction = shouldRecordBusinessActionVoiceEvent,
+  applyInboxSinkDeliveryToCallPatch = applyVoiceInboxSinkDeliveryToCallPatch,
+} = {}) {
+  const storedResult = obj(storedProviderResponse.result);
+
+  if (!recordBusinessAction(storedResult)) {
+    return {
+      attempted: false,
+      ok: true,
+      reasonCode: "stored_business_action_result_not_recordable",
+      callPatch: {},
+      sinkDispatch: null,
+      sinkDelivery: null,
+      inboxSinkDelivery: null,
+    };
+  }
+
+  const sinkRuntimeConfig = buildSidebandSinkRuntimeConfig(
+    storedProviderResponse.sinkRuntimeConfig ||
+      storedProviderResponse.runtimeConfig ||
+      runtimeConfig
+  );
+  const registry =
+    sinkRegistry ||
+    (typeof createSinkRegistry === "function" ? createSinkRegistry() : null);
+  const sinkDispatch = await dispatchSinks({
+    requestRecord: storedResult.requestRecord,
+    result: storedResult,
+    runtimeConfig: sinkRuntimeConfig,
+    registry,
+  });
+  const sinkDelivery = buildSinkDeliverySnapshot({
+    deliveries: sinkDispatch?.deliveries,
+  });
+  const inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch?.deliveries);
+
+  let callPatch = buildVoiceActionCallPatch({
+    result: storedResult,
+    call,
+  });
+  callPatch = applyInboxSinkDeliveryToCallPatch({
+    callPatch,
+    sinkDelivery,
+    inboxSinkDelivery,
+  });
+
+  return {
+    attempted: true,
+    ok: true,
+    reasonCode: "",
+    callPatch,
+    sinkDispatch,
+    sinkDelivery,
+    inboxSinkDelivery,
   };
 }
 
@@ -197,6 +285,7 @@ export function buildRealtimeSidebandToolResultTrace({
   sinkDispatch = null,
   sinkDelivery = null,
   inboxSinkDelivery = null,
+  duplicateRedrive = null,
 } = {}) {
   const dispatch = obj(sinkDispatch);
   const deliveries = arr(dispatch.deliveries);
@@ -233,6 +322,7 @@ export function buildRealtimeSidebandToolResultTrace({
         : null,
       sinkDelivery: sinkDelivery ? obj(sinkDelivery) : null,
       inboxSinkDelivery: inboxSinkDelivery ? obj(inboxSinkDelivery) : null,
+      duplicateRedrive: duplicateRedrive ? obj(duplicateRedrive) : null,
       result,
     },
   };
@@ -343,6 +433,15 @@ export async function dispatchRealtimeSidebandToolCall({
     });
 
     const idempotency = buildToolExecutionIdempotencyPayload(reservation);
+    let sinkDispatch = null;
+    let sinkDelivery = null;
+    let inboxSinkDelivery = null;
+    let callPatch = {};
+    let duplicateRedrive = {
+      attempted: false,
+      ok: true,
+      reasonCode: "",
+    };
 
     const builtOutbound = buildProviderToolOutputEvents({
       providerAdapter,
@@ -361,11 +460,46 @@ export async function dispatchRealtimeSidebandToolCall({
       });
     }
 
+    try {
+      const redrive = await redriveSidebandBusinessActionSink({
+        storedProviderResponse: readReservationProviderResponse(reservation),
+        runtimeConfig,
+        call,
+        sinkRegistry,
+        createSinkRegistry,
+        dispatchSinks,
+        buildSinkDeliverySnapshot,
+        recordBusinessAction,
+        applyInboxSinkDeliveryToCallPatch,
+      });
+
+      callPatch = obj(redrive.callPatch);
+      sinkDispatch = redrive.sinkDispatch;
+      sinkDelivery = redrive.sinkDelivery;
+      inboxSinkDelivery = redrive.inboxSinkDelivery;
+      duplicateRedrive = {
+        attempted: redrive.attempted === true,
+        ok: redrive.ok !== false,
+        reasonCode: s(redrive.reasonCode),
+      };
+    } catch (err) {
+      duplicateRedrive = {
+        attempted: true,
+        ok: false,
+        reasonCode: "sideband_duplicate_redrive_failed",
+        errorMessage: s(err?.message || err),
+      };
+    }
+
     const resultTrace = buildRealtimeSidebandToolResultTrace({
       normalized,
       toolCall,
       result,
       idempotency,
+      sinkDispatch,
+      sinkDelivery,
+      inboxSinkDelivery,
+      duplicateRedrive,
     });
 
     return {
@@ -377,7 +511,11 @@ export async function dispatchRealtimeSidebandToolCall({
       toolCall,
       result,
       reservation,
-      callPatch: {},
+      sinkDispatch,
+      sinkDelivery,
+      inboxSinkDelivery,
+      duplicateRedrive,
+      callPatch,
       outboundEvents: builtOutbound.outboundEvents,
       resultTrace,
     };
