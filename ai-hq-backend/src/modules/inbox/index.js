@@ -3,3 +3,5 @@ export * from "./repository.js";
 export * from "./mutations.js";
 export * from "./avatar.js";
 export * from "./operatorHelpers.js";
+
+export * from "./voiceBusinessActionSink.js";
