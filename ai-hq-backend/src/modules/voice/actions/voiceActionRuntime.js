@@ -223,6 +223,45 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
   return patch;
 }
 
+export function applyVoiceInboxSinkDeliveryToCallPatch({
+  callPatch = {},
+  sinkDelivery = null,
+  inboxSinkDelivery = null,
+} = {}) {
+  const patch = { ...obj(callPatch) };
+  const delivery = obj(inboxSinkDelivery);
+  const inboxThreadId = s(delivery.inboxThreadId || delivery.inbox_thread_id);
+
+  if (!inboxThreadId) return patch;
+
+  const currentExtraction = obj(patch.extraction);
+  const currentVoiceOutcome = obj(currentExtraction.voiceOutcome);
+  const currentMeta = obj(patch.meta);
+  const currentLastVoiceAction = obj(currentMeta.lastVoiceAction);
+
+  return {
+    ...patch,
+    inboxThreadId,
+    extraction: {
+      ...currentExtraction,
+      voiceOutcome: {
+        ...currentVoiceOutcome,
+        sinkDelivery: obj(sinkDelivery),
+        inboxSinkDelivery: delivery,
+      },
+    },
+    meta: {
+      ...currentMeta,
+      lastVoiceAction: {
+        ...currentLastVoiceAction,
+        sinkDelivery: obj(sinkDelivery),
+        inboxSinkDelivery: delivery,
+        inboxThreadId,
+      },
+    },
+  };
+}
+
 export const VOICE_ACTION_RESULT_STATUS = Object.freeze({
   PROVIDER_NOT_CONFIGURED: "provider_not_configured",
   EXECUTOR_NOT_IMPLEMENTED: "executor_not_implemented",

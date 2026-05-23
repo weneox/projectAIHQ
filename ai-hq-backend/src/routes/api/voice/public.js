@@ -1399,29 +1399,12 @@ async function handleBrowserVoiceToolCall(
       }));
     }
 
-    const callPatch = buildVoiceActionCallPatch({ result, call });
-    
-    if (inboxSinkDelivery?.inboxThreadId) {
-      const inboxThreadId = s(inboxSinkDelivery.inboxThreadId);
-      callPatch.inboxThreadId = inboxThreadId;
-      callPatch.extraction = {
-        ...obj(callPatch.extraction),
-        voiceOutcome: {
-          ...obj(callPatch.extraction?.voiceOutcome),
-          sinkDelivery: obj(sinkDelivery),
-          inboxSinkDelivery: obj(inboxSinkDelivery),
-        },
-      };
-      callPatch.meta = {
-        ...obj(callPatch.meta),
-        lastVoiceAction: {
-          ...obj(callPatch.meta?.lastVoiceAction),
-          sinkDelivery: obj(sinkDelivery),
-          inboxSinkDelivery: obj(inboxSinkDelivery),
-          inboxThreadId,
-        },
-      };
-    }
+    let callPatch = buildVoiceActionCallPatch({ result, call });
+    callPatch = applyVoiceInboxSinkDeliveryToCallPatch({
+      callPatch,
+      sinkDelivery,
+      inboxSinkDelivery,
+    });
 
     if (Object.keys(callPatch).length > 0) {
       await updateVoiceCallForTenant(db, {
