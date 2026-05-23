@@ -1211,6 +1211,10 @@ async function handleBrowserVoiceToolCall(
       });
     }
 
+    let sinkDispatch = null;
+    let sinkDelivery = null;
+    let inboxSinkDelivery = null;
+
     if (reservation?.acquired === false) {
       const result = buildDuplicateVoiceToolResult({
         reservation,
@@ -1362,13 +1366,13 @@ async function handleBrowserVoiceToolCall(
       const sinkRegistry = createBusinessActionSinkRegistry({
         inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
       });
-      const sinkDispatch = await dispatchBusinessActionSinks({
+      sinkDispatch = await dispatchBusinessActionSinks({
         requestRecord: result.requestRecord,
         result,
         runtimeConfig,
         registry: sinkRegistry,
       });
-      const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
+      sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
         deliveries: sinkDispatch.deliveries,
       });
 
