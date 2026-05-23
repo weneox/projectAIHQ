@@ -129,6 +129,156 @@ test("sideband tool dispatcher returns call patch for completed request actions"
   assert.equal(dispatched.callPatch.meta.lastVoiceAction.action, "create_handoff_request");
 });
 
+test("sideband tool dispatcher dispatches inbox sink and links request-recorded call patch", async () => {
+  const calls = [];
+  const requestRecord = {
+    id: "voice_request:acme:voice-call-sink:create_business_request:test",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    callId: "voice-call-sink",
+    actionName: "create_business_request",
+    requestType: "callback_request",
+    businessFamily: "generic_business",
+    priority: "normal",
+    summary: "callback_request | Caller wants pricing follow-up | +994501112233",
+    customer: {
+      phone: "+994501112233",
+    },
+    payload: {
+      requestType: "callback_request",
+      issue: "Caller wants pricing follow-up",
+      phone: "+994501112233",
+    },
+  };
+  const actionResult = {
+    ok: true,
+    action: "create_business_request",
+    status: "request_recorded",
+    confirmed: false,
+    requestOnly: true,
+    requestId: requestRecord.id,
+    idempotencyKey: requestRecord.id,
+    provider: "internal_request",
+    payload: requestRecord.payload,
+    requestRecord,
+    callId: "voice-call-sink",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    businessActionAdapter: {
+      provider: "internal_request",
+      ready: true,
+      productionReady: true,
+      recordsRequest: true,
+      confirmsLiveTransaction: false,
+    },
+    message: "Request was recorded for human or operator follow-up.",
+  };
+  const sinkDelivery = {
+    ok: true,
+    sink: "inbox",
+    status: "delivered",
+    requestId: requestRecord.id,
+    inboxThreadId: "inbox-thread-1",
+    inboxMessageId: "inbox-message-1",
+    reasonCode: "",
+  };
+
+  const dispatched = await dispatchRealtimeSidebandToolCall({
+    event: {
+      type: "response.function_call_arguments.done",
+      call_id: "tool-call-sink",
+      name: "create_business_request",
+      arguments: requestRecord.payload,
+    },
+    target: {
+      provider: "openai",
+      transport: "webrtc",
+      providerRealtimeCallId: "call_realtime_sink",
+    },
+    call: {
+      id: "voice-call-sink",
+      extraction: {},
+      meta: {},
+    },
+    scope: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    runtimeConfig: {
+      tenantKey: "acme",
+    },
+    reserveExecution: allowReservation,
+    markExecutionSent: async (input) => {
+      calls.push("sent");
+      assert.equal(input.providerResponse.source, "sideband_tool_dispatcher");
+      assert.equal(input.providerResponse.result.status, "request_recorded");
+      assert.equal(input.providerResponse.runtimeConfig.tenantKey, "acme");
+      assert.equal(
+        input.providerResponse.sinkRuntimeConfig.businessActionSinks.inbox.enabled,
+        true
+      );
+      return {
+        state: "sent",
+      };
+    },
+    executeAction: async () => {
+      calls.push("execute");
+      return actionResult;
+    },
+    dispatchSinks: async (input) => {
+      calls.push("sinks");
+      assert.equal(input.requestRecord.id, requestRecord.id);
+      assert.equal(input.result, actionResult);
+      assert.equal(input.runtimeConfig.businessActionSinks.inbox.enabled, true);
+      assert.ok(input.registry);
+      return {
+        ok: true,
+        requestId: requestRecord.id,
+        deliveries: [
+          {
+            ok: true,
+            sink: "voice_core",
+            status: "recorded",
+            requestId: requestRecord.id,
+            reasonCode: "",
+          },
+          sinkDelivery,
+        ],
+      };
+    },
+    sinkRegistry: {
+      version: "test-sink-registry",
+      executors: {},
+    },
+  });
+
+  assert.deepEqual(calls, ["execute", "sent", "sinks"]);
+  assert.equal(dispatched.dispatched, true);
+  assert.equal(dispatched.result.status, "request_recorded");
+  assert.equal(dispatched.sinkDelivery.inbox, "delivered");
+  assert.equal(dispatched.inboxSinkDelivery.inboxThreadId, "inbox-thread-1");
+  assert.equal(dispatched.callPatch.inboxThreadId, "inbox-thread-1");
+  assert.equal(
+    dispatched.callPatch.extraction.voiceOutcome.inboxSinkDelivery.inboxMessageId,
+    "inbox-message-1"
+  );
+  assert.equal(
+    dispatched.callPatch.meta.lastVoiceAction.inboxSinkDelivery.inboxThreadId,
+    "inbox-thread-1"
+  );
+  assert.equal(dispatched.resultTrace.payload.sinkDelivery.inbox, "delivered");
+  assert.equal(
+    dispatched.resultTrace.payload.sinkDispatch.deliveries.some(
+      (item) => item.sink === "inbox" && item.inboxThreadId === "inbox-thread-1"
+    ),
+    true
+  );
+  assert.equal(
+    dispatched.resultTrace.payload.inboxSinkDelivery.inboxMessageId,
+    "inbox-message-1"
+  );
+});
+
 test("sideband tool dispatcher uses provider adapter output builder", async () => {
   const adapterCalls = [];
   const dispatched = await dispatchRealtimeSidebandToolCall({

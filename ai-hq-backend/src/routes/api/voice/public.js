@@ -1050,6 +1050,7 @@ async function handleBrowserVoiceRealtimeLink(
     dbDisabled = false,
     getRuntime = getTenantBrainRuntime,
     startSidebandRunner = startRealtimeSidebandSocketRunner,
+    wsHub = null,
   } = {}
 ) {
   const logger = getRouteLogger(req, "voice.browser.realtime_link");
@@ -1126,12 +1127,16 @@ async function handleBrowserVoiceRealtimeLink(
       });
 
       try {
+        const sinkRegistry = createBusinessActionSinkRegistry({
+          inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
+        });
         const runnerResult = await startSidebandRunner({
           db,
           call,
           scope,
           target,
           runtimeConfig,
+          sinkRegistry,
           env: process.env,
           logger,
         });
@@ -1901,6 +1906,7 @@ export function voiceRoutes({
       dbDisabled,
       getRuntime,
       startSidebandRunner,
+      wsHub,
     })
   );
 
