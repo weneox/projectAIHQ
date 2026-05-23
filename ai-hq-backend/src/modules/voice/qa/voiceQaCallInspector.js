@@ -69,6 +69,106 @@ function readRuntimeEvidenceFromPayload(payload = {}) {
   return {};
 }
 
+function readQaAnnotationFromPayload(payload = {}) {
+  const value = obj(payload);
+
+  if (hasKeys(value.qaAnnotation)) return obj(value.qaAnnotation);
+  if (hasKeys(value.annotation)) return obj(value.annotation);
+  if (hasKeys(obj(value.result).qaAnnotation)) return obj(obj(value.result).qaAnnotation);
+  if (hasKeys(obj(value.result).annotation)) return obj(obj(value.result).annotation);
+
+  return {};
+}
+
+function uniqueRecords(records = []) {
+  const seen = new Set();
+  const output = [];
+
+  for (const record of arr(records)) {
+    const item = obj(record);
+    if (!hasKeys(item)) continue;
+
+    const key = s(item.id) || JSON.stringify(item);
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    output.push(item);
+  }
+
+  return output;
+}
+
+function readQaAnnotations({ call = {}, events = [] } = {}) {
+  const meta = obj(call.meta);
+  const qa = obj(meta.qa);
+  const metaAnnotations = arr(qa.annotations).filter(hasKeys);
+  const eventAnnotations = arr(events)
+    .map((event) => readQaAnnotationFromPayload(readPayload(event)))
+    .filter(hasKeys);
+
+  return uniqueRecords([...metaAnnotations, ...eventAnnotations]);
+}
+
+function summarizeQaAnnotations({ call = {}, events = [] } = {}) {
+  const metaQa = obj(obj(call.meta).qa);
+  const annotations = readQaAnnotations({ call, events });
+  const lastAnnotation = hasKeys(metaQa.lastAnnotation)
+    ? obj(metaQa.lastAnnotation)
+    : obj(annotations.at(-1));
+  const summary = obj(metaQa.summary);
+
+  const issueLabels = [
+    ...new Set(
+      annotations
+        .flatMap((annotation) => arr(annotation.issueLabels))
+        .map((label) => s(label))
+        .filter(Boolean)
+    ),
+  ];
+
+  const slotLabels = [
+    ...new Set(
+      annotations
+        .flatMap((annotation) => arr(annotation.slotLabels))
+        .map((label) => s(label))
+        .filter(Boolean)
+    ),
+  ];
+
+  const latestVerdict = s(
+    summary.latestVerdict || lastAnnotation.verdict
+  );
+  const latestSeverity = s(
+    summary.latestSeverity || lastAnnotation.severity
+  );
+
+  return {
+    hasAnnotations: annotations.length > 0,
+    annotationCount: annotations.length,
+    latestVerdict,
+    latestSeverity,
+    latestIssueLabels: arr(summary.latestIssueLabels).length
+      ? arr(summary.latestIssueLabels)
+      : arr(lastAnnotation.issueLabels),
+    latestSlotLabels: arr(summary.latestSlotLabels).length
+      ? arr(summary.latestSlotLabels)
+      : arr(lastAnnotation.slotLabels),
+    latestAnnotatedAt: s(summary.latestAnnotatedAt || lastAnnotation.createdAt),
+    needsFix:
+      summary.needsFix === true ||
+      ["needs_fix", "bad_call"].includes(latestVerdict),
+    badCall:
+      summary.badCall === true ||
+      latestVerdict === "bad_call",
+    issueLabels,
+    slotLabels,
+    byVerdict: countBy(annotations, (annotation) => annotation.verdict || "reviewed"),
+    bySeverity: countBy(annotations, (annotation) => annotation.severity || "low"),
+    lastAnnotation,
+    annotations,
+  };
+}
+
 function readCallRuntimeEvidence(call = {}, events = []) {
   const meta = obj(call.meta);
   const realtime = obj(meta.realtime);
@@ -261,15 +361,21 @@ function summarizeCall(call = {}) {
   };
 }
 
-function decideInspectorFlags({ callSummary = {}, runtime = {}, tools = {} } = {}) {
+function decideInspectorFlags({ callSummary = {}, runtime = {}, tools = {}, qa = {} } = {}) {
   const hasMissingRequired = tools.hasMissingRequired === true;
   const requestRecorded = tools.hasRequestRecorded === true;
   const blocked = runtime.blocked === true;
+  const qaNeedsFix = qa.needsFix === true;
+  const qaBadCall = qa.badCall === true;
+  const qaPassed = qa.latestVerdict === "pass";
 
   let operatorAction = "review_optional";
   if (blocked) operatorAction = "fix_runtime";
+  else if (qaBadCall) operatorAction = "review_bad_call";
+  else if (qaNeedsFix) operatorAction = "apply_qa_correction";
   else if (hasMissingRequired) operatorAction = "ask_missing_details";
   else if (requestRecorded) operatorAction = "process_request";
+  else if (qaPassed) operatorAction = "reviewed_pass";
 
   return {
     blocked,
@@ -277,8 +383,14 @@ function decideInspectorFlags({ callSummary = {}, runtime = {}, tools = {} } = {
     hasToolOutcome: Number(tools.total || 0) > 0,
     hasMissingRequired,
     requestRecorded,
+    hasQaAnnotations: qa.hasAnnotations === true,
+    qaNeedsFix,
+    qaBadCall,
+    qaPassed,
     needsHumanReview:
       blocked ||
+      qaBadCall ||
+      qaNeedsFix ||
       hasMissingRequired ||
       requestRecorded ||
       callSummary.handoffRequested === true,
@@ -291,7 +403,8 @@ export function buildVoiceQaCallInspector({ call = {}, events = [] } = {}) {
   const runtime = summarizeRuntime({ call, events });
   const tools = summarizeTools(events);
   const timeline = summarizeTimeline(events);
-  const flags = decideInspectorFlags({ callSummary, runtime, tools });
+  const qa = summarizeQaAnnotations({ call, events });
+  const flags = decideInspectorFlags({ callSummary, runtime, tools, qa });
 
   return {
     version: VOICE_QA_CALL_INSPECTOR_VERSION,
@@ -300,6 +413,8 @@ export function buildVoiceQaCallInspector({ call = {}, events = [] } = {}) {
     runtime,
     tools,
     timeline,
+    qa,
+    annotations: qa,
     flags,
   };
 }

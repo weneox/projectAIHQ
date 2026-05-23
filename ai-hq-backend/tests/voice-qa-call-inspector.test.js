@@ -229,3 +229,118 @@ test("voice call events read exposes same QA inspector summary", async () => {
   assert.equal(result.qaInspector.timeline.total, 1);
   assert.equal(result.qaInspector.runtime.hasEvidence, true);
 });
+
+
+test("voice QA call inspector exposes QA annotations from call meta", () => {
+  const inspector = buildVoiceQaCallInspector({
+    call: {
+      id: "call-qa-meta",
+      status: "in_progress",
+      meta: {
+        qa: {
+          annotations: [
+            {
+              id: "annotation-1",
+              verdict: "needs_fix",
+              severity: "medium",
+              issueLabels: ["missing_slot", "unnatural_az"],
+              slotLabels: ["phone"],
+              operatorNote: "Telefon nömrəsi soruşulmalı idi.",
+              createdAt: "2026-05-23T00:00:00.000Z",
+            },
+          ],
+          lastAnnotation: {
+            id: "annotation-1",
+            verdict: "needs_fix",
+            severity: "medium",
+            issueLabels: ["missing_slot", "unnatural_az"],
+            slotLabels: ["phone"],
+            createdAt: "2026-05-23T00:00:00.000Z",
+          },
+          summary: {
+            latestVerdict: "needs_fix",
+            latestSeverity: "medium",
+            latestIssueLabels: ["missing_slot", "unnatural_az"],
+            latestSlotLabels: ["phone"],
+            needsFix: true,
+            badCall: false,
+          },
+        },
+      },
+    },
+    events: [],
+  });
+
+  assert.equal(inspector.qa.hasAnnotations, true);
+  assert.equal(inspector.qa.annotationCount, 1);
+  assert.equal(inspector.qa.latestVerdict, "needs_fix");
+  assert.equal(inspector.qa.needsFix, true);
+  assert.equal(inspector.qa.badCall, false);
+  assert.deepEqual(inspector.qa.issueLabels, ["missing_slot", "unnatural_az"]);
+  assert.deepEqual(inspector.qa.slotLabels, ["phone"]);
+  assert.equal(inspector.flags.hasQaAnnotations, true);
+  assert.equal(inspector.flags.qaNeedsFix, true);
+  assert.equal(inspector.flags.operatorAction, "apply_qa_correction");
+});
+
+test("voice QA call inspector reads annotation events when call meta is missing", () => {
+  const inspector = buildVoiceQaCallInspector({
+    call: {
+      id: "call-qa-event",
+      status: "completed",
+      meta: {},
+    },
+    events: [
+      {
+        id: "event-qa-1",
+        eventType: "voice.qa.annotation_recorded",
+        createdAt: "2026-05-23T00:00:00.000Z",
+        payload: {
+          qaAnnotation: {
+            id: "annotation-event-1",
+            verdict: "bad_call",
+            severity: "high",
+            issueLabels: ["fake_confirmation"],
+            slotLabels: ["booking"],
+            operatorNote: "Agent təsdiqlənməmiş rezervasiyanı təsdiqlədi.",
+            createdAt: "2026-05-23T00:00:00.000Z",
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(inspector.qa.hasAnnotations, true);
+  assert.equal(inspector.qa.latestVerdict, "bad_call");
+  assert.equal(inspector.qa.badCall, true);
+  assert.deepEqual(inspector.qa.issueLabels, ["fake_confirmation"]);
+  assert.equal(inspector.flags.qaBadCall, true);
+  assert.equal(inspector.flags.operatorAction, "review_bad_call");
+});
+
+test("voice QA call inspector treats pass annotation as reviewed pass", () => {
+  const inspector = buildVoiceQaCallInspector({
+    call: {
+      id: "call-pass",
+      status: "completed",
+      meta: {
+        qa: {
+          annotations: [
+            {
+              id: "annotation-pass",
+              verdict: "pass",
+              severity: "low",
+              createdAt: "2026-05-23T00:00:00.000Z",
+            },
+          ],
+        },
+      },
+    },
+    events: [],
+  });
+
+  assert.equal(inspector.qa.latestVerdict, "pass");
+  assert.equal(inspector.flags.qaPassed, true);
+  assert.equal(inspector.flags.needsHumanReview, false);
+  assert.equal(inspector.flags.operatorAction, "reviewed_pass");
+});
