@@ -57,6 +57,7 @@ import {
   buildBusinessActionRecordedVoiceEventPayload,
   dispatchBusinessActionSinks,
   buildBusinessActionSinkDeliverySnapshot,
+  createBusinessActionSinkRegistry,
   } from "../../../modules/voice/index.js";
 import {
   createVoiceChannelConnection,
@@ -993,7 +994,7 @@ async function handleBrowserVoiceRealtimeLink(
           call,
           scope,
           target,
-          runtimeConfig,
+          runtimeConfig: sinkRuntimeConfig,
           env: process.env,
           logger,
         });
@@ -1348,10 +1349,24 @@ async function handleBrowserVoiceToolCall(
     }));
 
     if (shouldRecordBusinessActionVoiceEvent(result)) {
+      const sinkRuntimeConfig = {
+        ...runtimeConfig,
+        businessActionSinks: {
+          ...(runtimeConfig.businessActionSinks || {}),
+          inbox: {
+            ...(runtimeConfig.businessActionSinks?.inbox || {}),
+            enabled: runtimeConfig.businessActionSinks?.inbox?.enabled !== false,
+          },
+        },
+      };
+      const sinkRegistry = createBusinessActionSinkRegistry({
+        inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
+      });
       const sinkDispatch = await dispatchBusinessActionSinks({
         requestRecord: result.requestRecord,
         result,
-        runtimeConfig,
+        runtimeConfig: sinkRuntimeConfig,
+        registry: sinkRegistry,
       });
       const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
         deliveries: sinkDispatch.deliveries,
