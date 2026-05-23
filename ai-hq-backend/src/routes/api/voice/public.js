@@ -53,6 +53,10 @@ import {
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
+  shouldRecordBusinessActionVoiceEvent,
+  buildBusinessActionRecordedVoiceEventPayload,
+  dispatchBusinessActionSinks,
+  buildBusinessActionSinkDeliverySnapshot,
   } from "../../../modules/voice/index.js";
 import {
   createVoiceChannelConnection,
@@ -1344,6 +1348,15 @@ async function handleBrowserVoiceToolCall(
     }));
 
     if (shouldRecordBusinessActionVoiceEvent(result)) {
+      const sinkDispatch = await dispatchBusinessActionSinks({
+        requestRecord: result.requestRecord,
+        result,
+        runtimeConfig,
+      });
+      const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
+        deliveries: sinkDispatch.deliveries,
+      });
+
       await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
         scope,
@@ -1357,6 +1370,8 @@ async function handleBrowserVoiceToolCall(
           runtimeConfig,
           idempotency,
           source: "browser_voice_tool_route",
+          sinkDispatch,
+          sinkDelivery,
         }),
       }));
     }
