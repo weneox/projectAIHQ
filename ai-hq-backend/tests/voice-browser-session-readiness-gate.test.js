@@ -63,3 +63,28 @@ test("browser session readiness gate blocks external speech before token minting
   assert.equal(Object.hasOwn(block.payload, "clientSecret"), false);
   assert.equal(Object.hasOwn(block.payload, "session"), false);
 });
+
+
+test("browser session readiness gate returns runtime evidence without token fields", () => {
+  const plan = buildBrowserRealtimeSessionPlan({
+    runtimeConfig: {
+      realtime: {
+        provider: "livekit",
+      },
+    },
+  });
+
+  const block = buildBrowserRealtimeSessionReadinessBlock(plan, {
+    runtimeApplied: false,
+    runtimeReasonCode: "browser_voice_runtime_unavailable",
+  });
+
+  assert.equal(block.payload.runtimeEvidence.version, "voice-runtime-evidence-v1");
+  assert.equal(block.payload.runtimeEvidence.source, "browser_realtime_session");
+  assert.equal(block.payload.runtimeEvidence.phase, "browser_session_readiness_block");
+  assert.equal(block.payload.runtimeEvidence.blocked, true);
+  assert.equal(block.payload.runtimeEvidence.providerContract.provider, "livekit");
+  assert.equal(block.payload.runtimeEvidence.runtimeReasonCode, "browser_voice_runtime_unavailable");
+  assert.equal(Object.hasOwn(block.payload, "clientSecret"), false);
+  assert.equal(Object.hasOwn(block.payload, "session"), false);
+});

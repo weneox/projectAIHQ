@@ -63,6 +63,9 @@ import {
   normalizeBrowserVoiceName,
 } from "../../../modules/voice/engine/browserRealtimeSession.js";
 import {
+  buildBrowserSessionVoiceEvidence,
+} from "../../../modules/voice/evidence/voiceRuntimeEvidence.js";
+import {
   VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
 } from "../../../modules/voice/brain/index.js";
 import {
@@ -658,15 +661,24 @@ function pickBrowserVoiceName(value = "") {
   return normalizeBrowserVoiceName(value);
 }
 
-export function buildBrowserRealtimeSessionReadinessBlock(sessionPlan = {}) {
+export function buildBrowserRealtimeSessionReadinessBlock(sessionPlan = {}, context = {}) {
   const readiness = obj(sessionPlan.readiness);
 
   if (readiness.ready !== false) {
     return null;
   }
 
+  const runtimeEvidence = buildBrowserSessionVoiceEvidence({
+    sessionPlan,
+    runtimeApplied: context.runtimeApplied === true,
+    runtimeReasonCode: s(context.runtimeReasonCode),
+    phase: "browser_session_readiness_block",
+  });
+
   const reasonCode = s(
-    readiness.reasonCode || "browser_voice_session_not_ready"
+    runtimeEvidence.reasonCode ||
+      readiness.reasonCode ||
+      "browser_voice_session_not_ready"
   );
 
   return {
@@ -678,6 +690,8 @@ export function buildBrowserRealtimeSessionReadinessBlock(sessionPlan = {}) {
       readiness,
       providerContract: obj(sessionPlan.providerContract),
       speechPipeline: obj(sessionPlan.speechPipeline),
+      runtimeEvidence,
+      evidence: runtimeEvidence,
     },
   };
 }
@@ -735,7 +749,17 @@ async function handleBrowserVoiceSession(
     model = browserSessionPlan.model;
     voice = browserSessionPlan.voice;
 
-    const readinessBlock = buildBrowserRealtimeSessionReadinessBlock(browserSessionPlan);
+    const runtimeReasonCode = runtimeApplied ? "" : s(runtimeResolution?.reasonCode);
+    const browserSessionEvidence = buildBrowserSessionVoiceEvidence({
+      sessionPlan: browserSessionPlan,
+      runtimeApplied,
+      runtimeReasonCode,
+    });
+
+    const readinessBlock = buildBrowserRealtimeSessionReadinessBlock(browserSessionPlan, {
+      runtimeApplied,
+      runtimeReasonCode,
+    });
     if (readinessBlock) {
       logger.warn("voice.browser.session.readiness_blocked", {
         reasonCode: s(readinessBlock.payload?.reasonCode),
@@ -804,6 +828,10 @@ async function handleBrowserVoiceSession(
           realtimeSessionId: s(payload?.session?.id || payload?.id),
           model,
           voice,
+          readiness: obj(browserSessionPlan.readiness),
+          providerContract: obj(browserSessionPlan.providerContract),
+          speechPipeline: obj(browserSessionPlan.speechPipeline),
+          runtimeEvidence: browserSessionEvidence,
         },
       });
     } catch (createErr) {
@@ -836,8 +864,13 @@ async function handleBrowserVoiceSession(
       model,
       voice,
       runtimeApplied,
-      runtimeReasonCode: runtimeApplied ? "" : s(runtimeResolution?.reasonCode),
+      runtimeReasonCode,
       tenantKey: runtimeApplied ? s(runtimeConfig.tenantKey) : "",
+      readiness: obj(browserSessionPlan.readiness),
+      providerContract: obj(browserSessionPlan.providerContract),
+      speechPipeline: obj(browserSessionPlan.speechPipeline),
+      runtimeEvidence: browserSessionEvidence,
+      evidence: browserSessionEvidence,
       assistantPolicyVersion: s(browserSessionPlan.brainPolicyVersion),
       brainPolicyVersion: s(browserSessionPlan.brainPolicyVersion),
       activeVoiceChannel: runtimeApplied ? obj(runtimeConfig.activeVoiceChannel) : null,
