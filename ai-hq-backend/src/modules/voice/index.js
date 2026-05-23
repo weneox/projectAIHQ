@@ -20,3 +20,10 @@ export * from "./qa/voiceQaAnnotations.js";
 export * from "./qa/voiceQaDataset.js";
 export * from "./sessionLookup.js";
 export { processVoiceTenantConfig } from "./internal/tenantConfig.js";
+
+export * from "./adapters/voiceAdapterContracts.js";
+export * from "./adapters/speechAdapterContracts.js";
+export * from "./adapters/businessActionAdapterContracts.js";
+export * from "./adapters/businessActionExecutorRegistry.js";
+export * from "./adapters/businessActionRequestRecord.js";
+export * from "./events/businessActionEvents.js";

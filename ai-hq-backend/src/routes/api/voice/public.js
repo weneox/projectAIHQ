@@ -1343,6 +1343,24 @@ async function handleBrowserVoiceToolCall(
       },
     }));
 
+    if (shouldRecordBusinessActionVoiceEvent(result)) {
+      await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
+        callId: voiceCallId,
+        scope,
+        eventType: "business_request_recorded",
+        actor: "voice_action_executor",
+        payload: buildBusinessActionRecordedVoiceEventPayload({
+          result,
+          toolCallId,
+          toolName,
+          providerRealtimeCallId,
+          runtimeConfig,
+          idempotency,
+          source: "browser_voice_tool_route",
+        }),
+      }));
+    }
+
     const callPatch = buildVoiceActionCallPatch({ result, call });
     if (Object.keys(callPatch).length > 0) {
       await updateVoiceCallForTenant(db, {

@@ -1,4 +1,4 @@
-﻿import {
+import {
   normalizeVoiceActionRuntime,
 } from "./voiceActionContracts.js";
 import {
@@ -10,6 +10,12 @@ import {
 import {
   analyzeVoiceActionState,
 } from "../callState.js";
+import {
+  buildBusinessActionAdapterContract,
+} from "../adapters/businessActionAdapterContracts.js";
+import {
+  executeBusinessActionWithAdapter,
+} from "../adapters/businessActionExecutorRegistry.js";
 
 function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
@@ -19,10 +25,6 @@ function s(value, fallback = "") {
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function requestId(prefix = "voice_action") {
-  return `${prefix}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 }
 
 function cleanPayload(value = {}) {
@@ -36,75 +38,6 @@ function cleanPayload(value = {}) {
       return true;
     })
   );
-}
-
-function readActionProvider(runtimeConfig = {}, actionName = "") {
-  const actions = obj(runtimeConfig.actions || runtimeConfig.voiceActions);
-  const availability = obj(actions.availability);
-  const reservation = obj(actions.reservation);
-  const ordering = obj(actions.ordering);
-  const appointment = obj(actions.appointment);
-
-  if (actionName === "check_availability") {
-    return s(
-      runtimeConfig.availabilityProvider ||
-        actions.availabilityProvider ||
-        availability.provider ||
-        actions.provider
-    ).toLowerCase();
-  }
-
-  if (actionName === "create_reservation_request") {
-    return s(
-      runtimeConfig.reservationProvider ||
-        actions.reservationProvider ||
-        reservation.provider ||
-        actions.provider
-    ).toLowerCase();
-  }
-
-  if (actionName === "create_order_request") {
-    return s(
-      runtimeConfig.orderingProvider ||
-        actions.orderingProvider ||
-        ordering.provider ||
-        actions.provider
-    ).toLowerCase();
-  }
-
-  if (actionName === "create_appointment_request") {
-    return s(
-      runtimeConfig.appointmentProvider ||
-        actions.appointmentProvider ||
-        appointment.provider ||
-        actions.provider
-    ).toLowerCase();
-  }
-
-  if (actionName === "create_business_request") {
-    return s(
-      runtimeConfig.universalRequestProvider ||
-        actions.universalRequestProvider ||
-        obj(actions.universalRequest).provider ||
-        actions.provider
-    ).toLowerCase();
-  }
-
-  return s(actions.provider || runtimeConfig.actionProvider).toLowerCase();
-}
-
-function isDemoProvider(value = "") {
-  return ["internal_demo", "demo", "mock"].includes(s(value).toLowerCase());
-}
-
-function actionModeForName(runtime = {}, actionName = "") {
-  if (actionName === "check_availability") return runtime.availabilityMode;
-  if (actionName === "create_reservation_request") return runtime.reservationMode;
-  if (actionName === "create_order_request") return runtime.orderingMode;
-  if (actionName === "create_appointment_request") return runtime.appointmentMode;
-  if (actionName === "create_handoff_request") return runtime.handoffMode;
-  if (actionName === "create_business_request") return runtime.universalRequestMode;
-  return "";
 }
 
 function outcomeTypeForAction(actionName = "") {
@@ -135,7 +68,13 @@ function dbSafeOutcomeForActionResult({ action = "", detailedOutcome = "", resul
   }
 
   if (s(detailedOutcome) === "handoff_requested") return "callback_requested";
-  if (s(result.status) === VOICE_ACTION_RESULT_STATUS.PROVIDER_NOT_CONFIGURED) return "failed";
+
+  if (
+    s(result.status) === VOICE_ACTION_RESULT_STATUS.PROVIDER_NOT_CONFIGURED ||
+    s(result.status) === VOICE_ACTION_RESULT_STATUS.EXECUTOR_NOT_IMPLEMENTED
+  ) {
+    return "failed";
+  }
 
   return "unknown";
 }
@@ -199,24 +138,6 @@ function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {
   return "Voice action executed.";
 }
 
-function buildDemoAvailability({ runtime = {}, payload = {} } = {}) {
-  const family = s(runtime.businessFamily || "business");
-  const criteria = cleanPayload(payload);
-
-  return {
-    ok: true,
-    action: "check_availability",
-    status: VOICE_ACTION_RESULT_STATUS.LIVE_AVAILABLE,
-    confirmed: true,
-    live: true,
-    provider: "internal_demo",
-    businessFamily: family,
-    criteria,
-    available: true,
-    message: "Demo provider shows availability for the requested criteria.",
-  };
-}
-
 export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
   const action = s(result.action);
   if (!action) return {};
@@ -259,6 +180,10 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
         missingRequired: Array.isArray(result.missingRequired) ? result.missingRequired : [],
         nextMissing: result.nextMissing || null,
         message: s(result.message),
+        reasonCode: s(result.reasonCode),
+        businessActionAdapter: obj(result.businessActionAdapter),
+        requestRecord: obj(result.requestRecord),
+        idempotencyKey: s(result.idempotencyKey),
         createdAt: new Date().toISOString(),
       },
     },
@@ -271,6 +196,10 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
         status: s(result.status),
         requestId: s(result.requestId),
         shouldEndCall: result.shouldEndCall === true,
+        reasonCode: s(result.reasonCode),
+        businessActionAdapter: obj(result.businessActionAdapter),
+        requestRecordId: s(result.requestRecord?.id || result.requestId),
+        idempotencyKey: s(result.idempotencyKey),
         at: new Date().toISOString(),
       },
     },
@@ -296,6 +225,7 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
 
 export const VOICE_ACTION_RESULT_STATUS = Object.freeze({
   PROVIDER_NOT_CONFIGURED: "provider_not_configured",
+  EXECUTOR_NOT_IMPLEMENTED: "executor_not_implemented",
   ACTION_DISABLED: "action_disabled",
   LIVE_AVAILABLE: "live_available",
   REQUEST_RECORDED: "request_recorded",
@@ -304,18 +234,40 @@ export const VOICE_ACTION_RESULT_STATUS = Object.freeze({
   MISSING_REQUIRED_FIELDS: "missing_required_fields",
 });
 
+function isRequestAction(actionName = "") {
+  return [
+    "create_business_request",
+    "create_reservation_request",
+    "create_order_request",
+    "create_appointment_request",
+    "create_handoff_request",
+  ].includes(s(actionName));
+}
+
+function buildUniversalRequestEvidence({ actionName = "", payload = {}, runtime = {}, actionState = {} } = {}) {
+  if (s(actionName) !== "create_business_request") return {};
+
+  return {
+    universal: {
+      operationType: VOICE_OPERATION_TYPES.CREATE_REQUEST,
+      requestType: normalizeVoiceRequestType(payload.requestType),
+      businessFamily: normalizeVoiceBusinessFamily(runtime.businessFamily),
+      collectedSlots: actionState.collectedSlots || {},
+    },
+  };
+}
+
 export async function executeVoiceAction({
   name = "",
   args = {},
   call = {},
   scope = {},
   runtimeConfig = {},
+  businessActionExecutorRegistry = null,
 } = {}) {
   const actionName = s(name);
   const payload = cleanPayload(args);
   const runtime = normalizeVoiceActionRuntime(runtimeConfig);
-  const mode = actionModeForName(runtime, actionName);
-  const provider = readActionProvider(runtimeConfig, actionName);
   const actionState = analyzeVoiceActionState({
     actionName,
     payload,
@@ -323,58 +275,52 @@ export async function executeVoiceAction({
     runtimeConfig,
   });
 
+  const businessActionAdapter = buildBusinessActionAdapterContract({
+    actionName,
+    runtimeConfig,
+  });
+
   if (actionName === "end_call") {
+    const result = await executeBusinessActionWithAdapter({
+      actionName,
+      args: payload,
+      call,
+      scope,
+      runtimeConfig,
+      businessActionAdapter,
+      ...(businessActionExecutorRegistry
+        ? { registry: businessActionExecutorRegistry }
+        : {}),
+    });
+
     return {
-      ok: true,
-      action: actionName,
-      status: VOICE_ACTION_RESULT_STATUS.CALL_ENDED,
-      shouldEndCall: true,
-      confirmed: true,
-      summary: s(payload.summary || "Caller ended the conversation."),
-      payload,
+      ...result,
       voiceState: actionState,
+      payload,
     };
   }
 
   if (actionName === "check_availability") {
-    if (mode !== "live") {
-      return {
-        ok: false,
-        action: actionName,
-        status: VOICE_ACTION_RESULT_STATUS.ACTION_DISABLED,
-        confirmed: false,
-        live: false,
-        criteria: payload,
-        voiceState: actionState,
-        message: "Live availability is disabled for this business.",
-      };
-    }
-
-    if (isDemoProvider(provider)) {
-      return buildDemoAvailability({ runtime, payload });
-    }
+    const result = await executeBusinessActionWithAdapter({
+      actionName,
+      args: payload,
+      call,
+      scope,
+      runtimeConfig,
+      businessActionAdapter,
+      ...(businessActionExecutorRegistry
+        ? { registry: businessActionExecutorRegistry }
+        : {}),
+    });
 
     return {
-      ok: false,
-      action: actionName,
-      status: VOICE_ACTION_RESULT_STATUS.PROVIDER_NOT_CONFIGURED,
-      confirmed: false,
-      live: false,
-      criteria: payload,
+      ...result,
+      criteria: cleanPayload(result.criteria || payload),
       voiceState: actionState,
-      message: "Live availability provider is not configured for this business.",
     };
   }
 
-  if (
-    [
-      "create_business_request",
-      "create_reservation_request",
-      "create_order_request",
-      "create_appointment_request",
-      "create_handoff_request",
-    ].includes(actionName)
-  ) {
+  if (isRequestAction(actionName)) {
     if (!actionState.ok) {
       return {
         ok: false,
@@ -386,6 +332,7 @@ export async function executeVoiceAction({
         nextMissing: actionState.nextMissing,
         nextPromptHint: actionState.nextPromptHint,
         voiceState: actionState,
+        businessActionAdapter,
         payload,
         callId: s(call.id || call.callId || call.call_id),
         tenantId: s(scope.tenantId),
@@ -394,42 +341,31 @@ export async function executeVoiceAction({
       };
     }
 
-    if (!["live", "request_only"].includes(mode)) {
-      return {
-        ok: false,
-        action: actionName,
-        status: VOICE_ACTION_RESULT_STATUS.ACTION_DISABLED,
-        confirmed: false,
-        requestOnly: false,
-        payload,
-        voiceState: actionState,
-        message: "This action is not enabled for the current business runtime.",
-      };
-    }
+    const result = await executeBusinessActionWithAdapter({
+      actionName,
+      args: payload,
+      call,
+      scope,
+      runtimeConfig,
+      businessActionAdapter,
+      ...(businessActionExecutorRegistry
+        ? { registry: businessActionExecutorRegistry }
+        : {}),
+    });
 
     return {
-      ok: true,
-      action: actionName,
-      status: VOICE_ACTION_RESULT_STATUS.REQUEST_RECORDED,
-      confirmed: false,
-      requestOnly: true,
-      requestId: requestId(actionName),
-      payload,
-      ...(actionName === "create_business_request"
-        ? {
-            universal: {
-              operationType: VOICE_OPERATION_TYPES.CREATE_REQUEST,
-              requestType: normalizeVoiceRequestType(payload.requestType),
-              businessFamily: normalizeVoiceBusinessFamily(runtime.businessFamily),
-              collectedSlots: actionState.collectedSlots || {},
-            },
-          }
-        : {}),
+      ...result,
+      payload: cleanPayload(result.payload || payload),
+      ...buildUniversalRequestEvidence({
+        actionName,
+        payload,
+        runtime,
+        actionState,
+      }),
       voiceState: actionState,
-      callId: s(call.id || call.callId || call.call_id),
-      tenantId: s(scope.tenantId),
-      tenantKey: s(scope.tenantKey),
-      message: "Request was recorded for human or operator follow-up.",
+      callId: s(result.callId || call.id || call.callId || call.call_id),
+      tenantId: s(result.tenantId || scope.tenantId),
+      tenantKey: s(result.tenantKey || scope.tenantKey),
     };
   }
 
@@ -440,6 +376,7 @@ export async function executeVoiceAction({
     confirmed: false,
     payload,
     voiceState: actionState,
+    businessActionAdapter,
     message: "Unknown voice action.",
   };
 }
