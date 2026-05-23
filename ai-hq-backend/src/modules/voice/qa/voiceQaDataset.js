@@ -82,7 +82,11 @@ function deriveDatasetUse({ row = {} } = {}) {
     return "runtime_debug";
   }
 
-  if (includesAny(issueLabels, ["robotic_voice", "unnatural_az", "interruption_issue", "silence_issue", "latency_issue"])) {
+  if (
+    arr(row.naturalnessLabels).length > 0 ||
+    Number(row.naturalnessScore || 0) > 0 ||
+    includesAny(issueLabels, ["robotic_voice", "unnatural_az", "interruption_issue", "silence_issue", "latency_issue"])
+  ) {
     return "naturalness_eval";
   }
 
@@ -148,6 +152,16 @@ export function buildVoiceQaDatasetRow({
     ...arr(qa.latestSlotLabels),
     ...arr(tools.missingRequired),
   ]);
+  const lastAnnotation = obj(qa.lastAnnotation);
+  const naturalnessLabels = uniqueStrings([
+    ...arr(qa.naturalnessLabels),
+    ...arr(qa.latestNaturalnessLabels),
+    ...arr(lastAnnotation.naturalnessLabels),
+  ]);
+  const naturalnessScore = n(
+    qa.latestNaturalnessScore || lastAnnotation.naturalnessScore,
+    0
+  );
 
   const row = {
     version: VOICE_QA_DATASET_VERSION,
@@ -172,7 +186,10 @@ export function buildVoiceQaDatasetRow({
     qaAnnotationCount: n(qa.annotationCount, 0),
     issueLabels,
     slotLabels,
-    lastAnnotation: obj(qa.lastAnnotation),
+    naturalnessLabels,
+    naturalnessScore,
+    naturalnessIssue: s(lastAnnotation.naturalnessIssue),
+    lastAnnotation,
 
     runtimeBlocked: runtime.blocked === true,
     runtimeReasonCode: s(runtime.reasonCode),
@@ -200,12 +217,14 @@ function rowMatches(row = {}, filters = {}) {
   const label = s(filters.label);
   const issueLabel = s(filters.issueLabel);
   const slotLabel = s(filters.slotLabel);
+  const naturalnessLabel = s(filters.naturalnessLabel);
   const operatorAction = s(filters.operatorAction);
 
   if (verdict && s(row.qaVerdict) !== verdict) return false;
   if (label && s(row.label) !== label) return false;
   if (issueLabel && !arr(row.issueLabels).includes(issueLabel)) return false;
   if (slotLabel && !arr(row.slotLabels).includes(slotLabel)) return false;
+  if (naturalnessLabel && !arr(row.naturalnessLabels).includes(naturalnessLabel)) return false;
   if (operatorAction && s(row.operatorAction) !== operatorAction) return false;
   if (bool(filters.onlyAnnotated) && n(row.qaAnnotationCount, 0) <= 0) return false;
   if (bool(filters.onlyNeedsFix) && !["needs_fix", "bad_call", "runtime_blocked", "missing_required"].includes(s(row.label))) return false;
@@ -230,6 +249,11 @@ function summarizeRows(rows = []) {
       normalized.flatMap((row) => arr(row.slotLabels)),
       (label) => label
     ),
+    byNaturalnessLabel: countBy(
+      normalized.flatMap((row) => arr(row.naturalnessLabels)),
+      (label) => label
+    ),
+    naturalnessSamples: normalized.filter((row) => arr(row.naturalnessLabels).length > 0).length,
     annotated: normalized.filter((row) => n(row.qaAnnotationCount, 0) > 0).length,
     needsFix: normalized.filter((row) =>
       ["needs_fix", "bad_call", "runtime_blocked", "missing_required"].includes(s(row.label))

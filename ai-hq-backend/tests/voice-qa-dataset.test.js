@@ -202,3 +202,59 @@ test("voice QA dataset filters by issue label and operator action", () => {
   assert.equal(dataset.rows[0].callId, "call-2");
   assert.equal(dataset.rows[0].use, "tool_policy_eval");
 });
+
+
+test("voice QA dataset exposes naturalness eval labels", () => {
+  const dataset = buildVoiceQaDataset({
+    items: [
+      {
+        call: {
+          id: "call-naturalness-1",
+          transcript: "Salam, necə kömək edə bilərəm?",
+        },
+        inspector: {
+          call: {
+            id: "call-naturalness-1",
+            status: "completed",
+            language: "az",
+          },
+          runtime: {
+            blocked: false,
+          },
+          tools: {
+            total: 0,
+          },
+          qa: {
+            latestVerdict: "needs_fix",
+            latestSeverity: "medium",
+            annotationCount: 1,
+            latestNaturalnessLabels: ["recording_like", "too_formal"],
+            latestNaturalnessScore: 2,
+            lastAnnotation: {
+              naturalnessIssue: "Səs yazı kimi başlayır və çox rəsmi danışır.",
+              naturalnessLabels: ["recording_like", "too_formal"],
+              naturalnessScore: 2,
+            },
+          },
+          flags: {
+            operatorAction: "apply_qa_correction",
+            qaNeedsFix: true,
+            needsHumanReview: true,
+          },
+        },
+      },
+    ],
+    filters: {
+      naturalnessLabel: "recording_like",
+    },
+  });
+
+  assert.equal(dataset.rows.length, 1);
+  assert.equal(dataset.rows[0].use, "naturalness_eval");
+  assert.deepEqual(dataset.rows[0].naturalnessLabels, ["recording_like", "too_formal"]);
+  assert.equal(dataset.rows[0].naturalnessScore, 2);
+  assert.equal(dataset.rows[0].naturalnessIssue, "Səs yazı kimi başlayır və çox rəsmi danışır.");
+  assert.equal(dataset.summary.byNaturalnessLabel.recording_like, 1);
+  assert.equal(dataset.summary.byNaturalnessLabel.too_formal, 1);
+  assert.equal(dataset.summary.naturalnessSamples, 1);
+});

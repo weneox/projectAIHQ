@@ -20,6 +20,20 @@ const ISSUE_LABELS = new Set([
   "other",
 ]);
 
+const NATURALNESS_LABELS = new Set([
+  "opening_naturalness",
+  "turn_taking",
+  "interruption",
+  "local_phrase",
+  "too_formal",
+  "recording_like",
+  "prosody",
+  "backchannel",
+  "latency_pause",
+  "stiff_closing",
+  "other",
+]);
+
 function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
   if (typeof value === "object") return fallback;
@@ -90,6 +104,21 @@ export function normalizeVoiceQaIssueLabels(value = []) {
   return [...new Set(labels)];
 }
 
+export function normalizeVoiceQaNaturalnessLabels(value = []) {
+  const labels = normalizeList(value).map((label) =>
+    NATURALNESS_LABELS.has(label) ? label : "other"
+  );
+
+  return [...new Set(labels)];
+}
+
+export function normalizeVoiceQaNaturalnessScore(value = null) {
+  if (value === undefined || value === null || value === "") return 0;
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 0;
+  return Math.max(1, Math.min(5, Math.round(next)));
+}
+
 export function buildVoiceQaAnnotationRecord({
   input = {},
   call = {},
@@ -103,6 +132,12 @@ export function buildVoiceQaAnnotationRecord({
   );
   const verdict = normalizeVoiceQaVerdict(payload.verdict, issueLabels);
   const severity = normalizeVoiceQaSeverity(payload.severity, verdict);
+  const naturalnessLabels = normalizeVoiceQaNaturalnessLabels(
+    payload.naturalnessLabels || payload.naturalnessTags || payload.voiceLabels
+  );
+  const naturalnessScore = normalizeVoiceQaNaturalnessScore(
+    payload.naturalnessScore || payload.voiceScore || payload.speechScore
+  );
 
   const annotation = compact({
     version: VOICE_QA_ANNOTATION_VERSION,
@@ -117,6 +152,8 @@ export function buildVoiceQaAnnotationRecord({
     correctionText: s(payload.correctionText || payload.correction || payload.fixedText),
     operatorNote: s(payload.operatorNote || payload.note || payload.notes),
     naturalnessIssue: s(payload.naturalnessIssue || payload.naturalness || payload.voiceIssue),
+    naturalnessLabels,
+    naturalnessScore,
     createdAt: s(now),
   });
 
@@ -127,7 +164,9 @@ export function buildVoiceQaAnnotationRecord({
     !!annotation.expectedOutcome ||
     !!annotation.correctionText ||
     !!annotation.operatorNote ||
-    !!annotation.naturalnessIssue;
+    !!annotation.naturalnessIssue ||
+    annotation.naturalnessLabels?.length > 0 ||
+    Number(annotation.naturalnessScore || 0) > 0;
 
   if (!hasSignal) {
     return {
@@ -157,6 +196,8 @@ export function buildVoiceQaAnnotationEventPayload({
     severity: s(annotation.severity),
     issueLabels: arr(annotation.issueLabels),
     slotLabels: arr(annotation.slotLabels),
+    naturalnessLabels: arr(annotation.naturalnessLabels),
+    naturalnessScore: Number(annotation.naturalnessScore || 0),
   };
 }
 
@@ -180,6 +221,8 @@ export function buildVoiceQaAnnotationCallPatch({
     latestSeverity: s(annotation.severity),
     latestIssueLabels: arr(annotation.issueLabels),
     latestSlotLabels: arr(annotation.slotLabels),
+    latestNaturalnessLabels: arr(annotation.naturalnessLabels),
+    latestNaturalnessScore: Number(annotation.naturalnessScore || 0),
     latestAnnotatedAt: s(annotation.createdAt),
     needsFix: ["needs_fix", "bad_call"].includes(s(annotation.verdict)),
     badCall: s(annotation.verdict) === "bad_call",

@@ -6,6 +6,7 @@ import {
   buildVoiceQaAnnotationEventPayload,
   buildVoiceQaAnnotationRecord,
   normalizeVoiceQaIssueLabels,
+  normalizeVoiceQaNaturalnessLabels,
   normalizeVoiceQaSeverity,
   normalizeVoiceQaVerdict,
   VOICE_QA_ANNOTATION_VERSION,
@@ -132,4 +133,62 @@ test("voice QA annotation call patch appends bounded QA history in call meta", (
   assert.equal(patch.meta.qa.summary.latestVerdict, "needs_fix");
   assert.equal(patch.meta.qa.summary.needsFix, true);
   assert.equal(patch.meta.qa.summary.badCall, false);
+});
+
+
+test("voice QA annotation normalizes naturalness labels and score", () => {
+  const record = buildVoiceQaAnnotationRecord({
+    id: "annotation-naturalness-1",
+    now: "2026-05-23T00:00:00.000Z",
+    call: {
+      id: "call-naturalness-1",
+    },
+    input: {
+      verdict: "needs_fix",
+      naturalnessLabels: ["recording_like", "too_formal", "unknown_label"],
+      naturalnessScore: 2.4,
+      naturalnessIssue: "Səs yazı kimi başlayır və çox rəsmi bağlanır.",
+    },
+  });
+
+  assert.equal(record.ok, true);
+  assert.deepEqual(record.annotation.naturalnessLabels, [
+    "recording_like",
+    "too_formal",
+    "other",
+  ]);
+  assert.equal(record.annotation.naturalnessScore, 2);
+  assert.deepEqual(normalizeVoiceQaNaturalnessLabels(["turn_taking", "bad_x"]), [
+    "turn_taking",
+    "other",
+  ]);
+
+  const payload = buildVoiceQaAnnotationEventPayload({
+    annotation: record.annotation,
+    call: {
+      id: "call-naturalness-1",
+    },
+  });
+
+  assert.deepEqual(payload.naturalnessLabels, [
+    "recording_like",
+    "too_formal",
+    "other",
+  ]);
+  assert.equal(payload.naturalnessScore, 2);
+
+  const patch = buildVoiceQaAnnotationCallPatch({
+    call: {
+      id: "call-naturalness-1",
+      meta: {},
+    },
+    annotation: record.annotation,
+  });
+
+  assert.deepEqual(patch.meta.qa.summary.latestNaturalnessLabels, [
+    "recording_like",
+    "too_formal",
+    "other",
+  ]);
+  assert.equal(patch.meta.qa.summary.latestNaturalnessScore, 2);
 });
