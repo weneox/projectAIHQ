@@ -7,6 +7,9 @@ import {
   VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
 } from "../brain/index.js";
 import {
+  buildRealtimeProviderContract,
+} from "../realtimeProviderAdapters.js";
+import {
   buildVoiceSpeechPipeline,
   normalizeVoiceOutputName,
 } from "../speech/voiceSpeechPipeline.js";
@@ -76,6 +79,81 @@ export function normalizeBrowserVoiceName(value = "") {
   return normalizeVoiceOutputName(value);
 }
 
+export function readBrowserRealtimeProvider(runtimeConfig = {}) {
+  const realtime = readRealtimeConfig(runtimeConfig);
+
+  return s(
+    realtime.provider ||
+      realtime.realtimeProvider ||
+      realtime.voiceProvider ||
+      runtimeConfig.realtimeProvider ||
+      runtimeConfig.voiceRealtimeProvider ||
+      "openai"
+  );
+}
+
+export function readBrowserRealtimeTransport(runtimeConfig = {}) {
+  const realtime = readRealtimeConfig(runtimeConfig);
+
+  return s(
+    realtime.transport ||
+      realtime.realtimeTransport ||
+      realtime.voiceTransport ||
+      runtimeConfig.realtimeTransport ||
+      runtimeConfig.voiceRealtimeTransport ||
+      "webrtc"
+  );
+}
+
+export function buildBrowserRealtimeSessionReadiness({
+  runtimeConfig = {},
+  speechPipeline = null,
+} = {}) {
+  const provider = readBrowserRealtimeProvider(runtimeConfig);
+  const transport = readBrowserRealtimeTransport(runtimeConfig);
+  const providerContract = buildRealtimeProviderContract({ provider, transport });
+  const speech = speechPipeline || buildVoiceSpeechPipeline({ runtimeConfig });
+
+  const speechCompatibility = obj(speech.compatibility);
+  const speechSupported = speechCompatibility.browserRealtimeSupported !== false;
+
+  const blockingReasons = [];
+
+  if (!providerContract.supported) {
+    blockingReasons.push({
+      scope: "provider",
+      reasonCode: providerContract.reasonCode || "unsupported_realtime_provider",
+      provider: providerContract.provider,
+    });
+  }
+
+  if (!speechSupported) {
+    const reasonCodes = Array.isArray(speechCompatibility.reasonCodes)
+      ? speechCompatibility.reasonCodes
+      : ["speech_pipeline_not_browser_realtime_supported"];
+
+    for (const reasonCode of reasonCodes) {
+      blockingReasons.push({
+        scope: "speech",
+        reasonCode: s(reasonCode, "speech_pipeline_not_browser_realtime_supported"),
+        provider: s(speech.asr?.provider || speech.tts?.provider),
+      });
+    }
+  }
+
+  return {
+    version: "browser-realtime-session-readiness-v1",
+    ready: blockingReasons.length === 0,
+    status: blockingReasons.length === 0 ? "ready" : "blocked",
+    reasonCode: s(blockingReasons[0]?.reasonCode),
+    provider: providerContract.provider,
+    transport: providerContract.transport,
+    providerContract,
+    speechCompatibility,
+    blockingReasons,
+  };
+}
+
 export function buildBrowserTurnDetectionConfig(runtimeConfig = {}) {
   const turnDetection = readTurnDetectionConfig(runtimeConfig);
 
@@ -135,6 +213,10 @@ export function buildBrowserRealtimeSessionPlan({
     runtimeConfig,
     requestedVoice,
   });
+  const readiness = buildBrowserRealtimeSessionReadiness({
+    runtimeConfig,
+    speechPipeline,
+  });
   const voice = speechPipeline.tts.voice;
 
   const instructions = buildLiveVoiceInstructions({
@@ -156,6 +238,8 @@ export function buildBrowserRealtimeSessionPlan({
     model,
     voice,
     speechPipeline,
+    readiness,
+    providerContract: readiness.providerContract,
     instructions,
     openingResponse: {
       enabled: true,
