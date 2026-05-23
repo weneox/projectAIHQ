@@ -60,6 +60,9 @@ import {
   createVoiceBusinessActionInboxSinkExecutor,
 } from "../../../modules/inbox/voiceBusinessActionSink.js";
 import {
+  buildVoiceOperatorActionUpdate,
+} from "../../../modules/voice/operator/voiceOperatorActions.js";
+import {
   createVoiceChannelConnection,
   buildVoiceSettingsInputWithChannels,
   confirmVoiceChannelVerification,
@@ -1649,6 +1652,100 @@ async function handleVoiceQaAnnotation(
   }
 }
 
+async function handleVoiceOperatorAction(
+  req,
+  res,
+  { db, dbDisabled = false, audit } = {}
+) {
+  const logger = getRouteLogger(req, "voice.calls.operator_action");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const call = await getScopedCallOrFail({
+      db,
+      scope,
+      callId: req.params?.id,
+      res,
+    });
+    if (!call) return;
+
+    const actor = getActor(req);
+    const actionResult = buildVoiceOperatorActionUpdate({
+      call,
+      input: req.body || {},
+      actor,
+    });
+
+    if (!actionResult.ok) {
+      return fail(
+        res,
+        actionResult.statusCode || 400,
+        actionResult.reasonCode || "voice_operator_action_invalid",
+        {
+          action: actionResult.action,
+          allowedActions: actionResult.allowedActions || [],
+        }
+      );
+    }
+
+    const event = await appendVoiceCallEvent(db, {
+      callId: call.id,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      eventType: "voice.operator.action_recorded",
+      actor,
+      payload: actionResult.eventPayload,
+    });
+
+    const updatedCall = await updateVoiceCallForTenant(db, {
+      id: call.id,
+      tenantId: scope.tenantId,
+      patch: actionResult.patch,
+    });
+
+    await auditSafe(audit, {
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      actor,
+      action: actionResult.auditAction,
+      objectType: "voice_call",
+      objectId: call.id,
+      meta: {
+        action: actionResult.action,
+        note: s(actionResult.eventPayload?.note),
+        reasonCode: s(actionResult.eventPayload?.reasonCode),
+        operatorState: actionResult.operatorState,
+      },
+    });
+
+    return ok(res, {
+      action: actionResult.action,
+      event,
+      call: updatedCall,
+      operatorState: actionResult.operatorState,
+    });
+  } catch (err) {
+    logger.error("voice.calls.operator_action.failed", err, {
+      callId: s(req.params?.id),
+    });
+    recordVoiceRouteFailure({
+      route: "voice.calls.operator_action",
+      reasonCode: "voice_operator_action_failed",
+      err,
+      req,
+      context: {
+        callId: s(req.params?.id),
+      },
+    });
+    return fail(res, 500, "voice_operator_action_failed");
+  }
+}
+
 async function handleVoiceActionRuntimePreview(
   req,
   res,
@@ -2018,6 +2115,10 @@ export function voiceRoutes({
 
   r.post("/voice/calls/:id/qa/annotations", requireOperatorSurfaceAccess, (req, res) =>
     handleVoiceQaAnnotation(req, res, { db, dbDisabled, audit })
+  );
+
+  r.post("/voice/calls/:id/operator-actions", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceOperatorAction(req, res, { db, dbDisabled, audit })
   );
 
   r.get("/voice/calls/:id/events", requireOperatorSurfaceAccess, async (req, res) => {
