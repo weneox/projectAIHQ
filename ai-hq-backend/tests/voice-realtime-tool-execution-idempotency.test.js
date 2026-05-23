@@ -513,6 +513,374 @@ test("browser tool path uses same key contract where practical", async () => {
   }
 });
 
+test("duplicate browser tool redrives stored business request inbox sink without runtime load", async () => {
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const voiceCallId = "22222222-2222-4222-8222-222222222222";
+  const inboxThreadId = "33333333-3333-4333-8333-333333333333";
+  const inboxMessageId = "44444444-4444-4444-8444-444444444444";
+  const toolCallId = "tool-call-redrive";
+  const providerRealtimeCallId = "call_realtime_redrive";
+  const args = {
+    requestType: "callback_request",
+    issue: "Need an operator callback",
+    phone: "+994501112233",
+  };
+  const expectedKey = buildVoiceRealtimeToolExecutionKey({
+    tenantKey: "acme",
+    voiceCallId,
+    providerRealtimeCallId,
+    toolCallId,
+    toolName: "create_business_request",
+    args,
+  });
+  const requestId = `voice_request:acme:${voiceCallId}:create_business_request:redrive`;
+  const requestRecord = {
+    id: requestId,
+    idempotencyKey: requestId,
+    tenantId,
+    tenantKey: "acme",
+    callId: voiceCallId,
+    sessionId: "",
+    actionName: "create_business_request",
+    requestType: "callback_request",
+    businessFamily: "generic_business",
+    priority: "normal",
+    summary: "callback_request | Need an operator callback | +994501112233",
+    customer: {
+      phone: "+994501112233",
+    },
+    payload: args,
+  };
+  const storedResult = {
+    ok: true,
+    action: "create_business_request",
+    status: "request_recorded",
+    confirmed: false,
+    requestOnly: true,
+    requestId,
+    idempotencyKey: requestId,
+    provider: "internal_request",
+    payload: args,
+    requestRecord,
+    callId: voiceCallId,
+    tenantId,
+    tenantKey: "acme",
+    businessActionAdapter: {
+      provider: "internal_request",
+      ready: true,
+      productionReady: true,
+      recordsRequest: true,
+      confirmsLiveTransaction: false,
+    },
+    message: "Request was recorded for human or operator follow-up.",
+  };
+  const storedProviderResponse = {
+    source: "browser_voice_tool_route",
+    toolCallId,
+    toolName: "create_business_request",
+    providerRealtimeCallId,
+    resultStatus: "request_recorded",
+    result: storedResult,
+    runtimeConfig: {
+      tenantKey: "acme",
+      businessActionSinks: {
+        inbox: {
+          enabled: true,
+        },
+      },
+    },
+    sinkRuntimeConfig: {
+      tenantKey: "acme",
+      businessActionSinks: {
+        inbox: {
+          enabled: true,
+        },
+      },
+    },
+  };
+  const appendedEvents = [];
+  const inboxMessageAttempts = [];
+  const voiceUpdates = [];
+  let runtimeCalls = 0;
+  let markSentCalls = 0;
+
+  const callRow = {
+    id: voiceCallId,
+    tenant_id: tenantId,
+    tenant_key: "acme",
+    provider: "browser",
+    provider_call_sid: "browser-call-sid",
+    status: "in_progress",
+    from_number: "+994501112233",
+    meta: {
+      realtime: {
+        providerRealtimeCallId,
+      },
+    },
+    extraction: {},
+    metrics: {},
+  };
+  const threadRow = {
+    id: inboxThreadId,
+    tenant_id: tenantId,
+    tenant_key: "acme",
+    channel: "voice",
+    external_thread_id: `voice:call:${voiceCallId}`,
+    external_user_id: "+994501112233",
+    external_username: "+994501112233",
+    customer_name: "+994501112233",
+    status: "open",
+    unread_count: 1,
+    labels: [],
+    meta: {},
+    handoff_active: false,
+    handoff_priority: "normal",
+  };
+  const messageRow = {
+    id: inboxMessageId,
+    thread_id: inboxThreadId,
+    tenant_id: tenantId,
+    tenant_key: "acme",
+    direction: "inbound",
+    sender_type: "customer",
+    external_message_id: requestId,
+    message_type: "text",
+    text: "callback_request | Need an operator callback | +994501112233",
+    attachments: [],
+    meta: {
+      source: "voice_business_action_sink",
+      callId: voiceCallId,
+    },
+    sent_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  };
+
+  const db = {
+    connect: async () => ({
+      query: async (sql, params = []) => {
+        const text = String(sql);
+
+        if (/^\s*BEGIN/i.test(text) || /^\s*COMMIT/i.test(text)) {
+          return { rows: [] };
+        }
+
+        if (text.includes("from inbox_threads")) {
+          assert.equal(params[0], "acme");
+          assert.equal(params[1], "voice");
+          assert.equal(params[2], `voice:call:${voiceCallId}`);
+          return { rows: [threadRow] };
+        }
+
+        if (text.includes("update inbox_threads")) {
+          assert.equal(params[0], inboxThreadId);
+          assert.equal(params[1], tenantId);
+          assert.equal(params[7], "acme");
+          return { rows: [threadRow] };
+        }
+
+        if (text.includes("insert into inbox_messages")) {
+          assert.equal(params[0], inboxThreadId);
+          assert.equal(params[1], tenantId);
+          assert.equal(params[2], "acme");
+          assert.equal(params[3], requestId);
+          inboxMessageAttempts.push(params[3]);
+          const err = new Error("duplicate inbox message");
+          err.code = "23505";
+          throw err;
+        }
+
+        if (text.includes("from inbox_messages")) {
+          assert.equal(params[0], "acme");
+          assert.equal(params[1], inboxThreadId);
+          assert.equal(params[2], requestId);
+          assert.equal(params[3], tenantId);
+          return { rows: [messageRow] };
+        }
+
+        throw new Error(`unexpected client query: ${text}`);
+      },
+      release() {},
+    }),
+    query: async (sql, params = []) => {
+      const text = String(sql);
+
+      if (text.includes("from voice_calls")) {
+        return { rows: [callRow] };
+      }
+
+      if (text.includes("insert into external_idempotency_keys")) {
+        assert.equal(params[1], "acme");
+        assert.equal(params[2], "voice_realtime");
+        assert.equal(params[3], "tool_execution");
+        assert.equal(params[4], expectedKey);
+        return { rows: [] };
+      }
+
+      if (text.includes("from external_idempotency_keys")) {
+        assert.equal(params[0], "acme");
+        assert.equal(params[1], "voice_realtime");
+        assert.equal(params[2], "tool_execution");
+        assert.equal(params[3], expectedKey);
+        return {
+          rows: [
+            {
+              id: "idem-browser-redrive",
+              tenant_id: tenantId,
+              tenant_key: "acme",
+              provider: "voice_realtime",
+              action_type: "tool_execution",
+              idempotency_key: expectedKey,
+              state: "sent",
+              provider_response: storedProviderResponse,
+            },
+          ],
+        };
+      }
+
+      if (text.includes("update external_idempotency_keys")) {
+        markSentCalls += 1;
+        throw new Error("duplicate request must not mark execution sent again");
+      }
+
+      if (text.includes("insert into voice_call_events")) {
+        const payload = JSON.parse(params[6]);
+        appendedEvents.push({
+          eventType: params[4],
+          payload,
+        });
+        return {
+          rows: [
+            {
+              id: `event-${appendedEvents.length}`,
+              call_id: params[1],
+              tenant_id: params[2],
+              tenant_key: params[3],
+              event_type: params[4],
+              actor: params[5],
+              payload,
+            },
+          ],
+        };
+      }
+
+      if (text.includes("from inbox_threads t")) {
+        return { rows: [threadRow] };
+      }
+
+      if (text.includes("update voice_calls")) {
+        const extraction = JSON.parse(params[32]);
+        const meta = JSON.parse(params[33]);
+        voiceUpdates.push({
+          inboxThreadId: params[23],
+          extraction,
+          meta,
+        });
+        return {
+          rows: [
+            {
+              ...callRow,
+              inbox_thread_id: params[23],
+              callback_requested: params[20],
+              callback_phone: params[21],
+              summary: params[25],
+              outcome: params[26],
+              extraction,
+              meta,
+            },
+          ],
+        };
+      }
+
+      throw new Error(`unexpected query: ${text}`);
+    },
+  };
+
+  const app = express();
+  app.use(express.json());
+  app.use((req, res, next) => {
+    req.auth = {
+      userId: "user-1",
+      tenantId,
+      tenantKey: "acme",
+      role: "admin",
+    };
+    next();
+  });
+  app.use(
+    voiceRoutes({
+      db,
+      getRuntime: async () => {
+        runtimeCalls += 1;
+        throw new Error("duplicate request should return before runtime load");
+      },
+    })
+  );
+
+  const server = await new Promise((resolve) => {
+    const nextServer = app.listen(0, () => resolve(nextServer));
+  });
+  try {
+    const response = await requestJson(server, {
+      path: `/voice/browser/calls/${voiceCallId}/tools`,
+      body: {
+        toolCallId,
+        name: "create_business_request",
+        args,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.result.status, "duplicate_skipped");
+    assert.equal(response.body.idempotency.idempotencyKey, expectedKey);
+
+    const duplicateEvent = appendedEvents.find(
+      (event) =>
+        event.eventType === "voice.event" &&
+        event.payload.originalEventType === "browser_voice.tool_executed"
+    );
+    assert.ok(duplicateEvent);
+    assert.equal(duplicateEvent.payload.reservationDuplicate, true);
+    assert.equal(duplicateEvent.payload.redriveAttempted, true);
+    assert.equal(duplicateEvent.payload.redriveOk, true);
+
+    const recordedEvent = appendedEvents.find(
+      (event) => event.eventType === "business_request_recorded"
+    );
+    assert.ok(recordedEvent);
+    assert.equal(recordedEvent.payload.source, "browser_voice_tool_route_duplicate_redrive");
+    assert.equal(recordedEvent.payload.sinkDelivery.inbox, "skipped");
+    assert.equal(
+      recordedEvent.payload.sinkDispatch.deliveries.some(
+        (item) =>
+          item.sink === "inbox" &&
+          item.inboxThreadId === inboxThreadId &&
+          item.inboxMessageId === inboxMessageId &&
+          item.duplicate === true
+      ),
+      true
+    );
+
+    assert.deepEqual(inboxMessageAttempts, [requestId]);
+    assert.equal(voiceUpdates.length, 1);
+    assert.equal(voiceUpdates[0].inboxThreadId, inboxThreadId);
+    assert.equal(
+      voiceUpdates[0].extraction.voiceOutcome.inboxSinkDelivery.inboxThreadId,
+      inboxThreadId
+    );
+    assert.equal(
+      voiceUpdates[0].meta.lastVoiceAction.inboxSinkDelivery.inboxMessageId,
+      inboxMessageId
+    );
+    assert.equal(runtimeCalls, 0);
+    assert.equal(markSentCalls, 0);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
+});
+
 test("browser tool request-recorded path dispatches inbox sink and links call", async () => {
   const tenantId = "11111111-1111-4111-8111-111111111111";
   const voiceCallId = "22222222-2222-4222-8222-222222222222";
@@ -661,6 +1029,12 @@ test("browser tool request-recorded path dispatches inbox sink and links call", 
         const providerResponse = JSON.parse(params[5]);
         assert.equal(providerResponse.source, "browser_voice_tool_route");
         assert.equal(providerResponse.resultStatus, "request_recorded");
+        assert.equal(providerResponse.result.status, "request_recorded");
+        assert.deepEqual(providerResponse.runtimeConfig, {});
+        assert.equal(
+          providerResponse.sinkRuntimeConfig.businessActionSinks.inbox.enabled,
+          true
+        );
         return {
           rows: [
             {
