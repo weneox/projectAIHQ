@@ -8,6 +8,10 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function arr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 export const VOICE_BUSINESS_ACTION_SINK_CONTRACT_VERSION =
   "voice_business_action_sink_contract.v1";
 
@@ -110,31 +114,15 @@ export function buildBusinessActionSinkContract({
   };
 }
 
-export function buildBusinessActionSinkContracts({
-  runtimeConfig = {},
-  requestRecord = {},
-  sinks = ["voice_core"],
-} = {}) {
-  const list = Array.isArray(sinks) && sinks.length ? sinks : ["voice_core"];
-
-  return list
-    .map((sink) =>
-      buildBusinessActionSinkContract({
-        sink,
-        runtimeConfig,
-        requestRecord,
-      })
-    )
-    .filter((item) => item.sink !== "none");
-}
-
 export function resolveBusinessActionSinkNames({
   runtimeConfig = {},
   sinks = null,
 } = {}) {
   const runtime = obj(runtimeConfig);
-  const configured = arr(sinks).length
-    ? arr(sinks)
+  const explicit = arr(sinks);
+
+  const configured = explicit.length
+    ? explicit
     : [
         ...arr(runtime.businessActionSinkNames),
         ...arr(runtime.voiceSinkNames),
@@ -158,4 +146,22 @@ export function resolveBusinessActionSinkNames({
         .filter((item) => item && item !== "none")
     )
   );
+}
+
+export function buildBusinessActionSinkContracts({
+  runtimeConfig = {},
+  requestRecord = {},
+  sinks = ["voice_core"],
+} = {}) {
+  const list = Array.isArray(sinks) && sinks.length ? sinks : ["voice_core"];
+
+  return list
+    .map((sink) =>
+      buildBusinessActionSinkContract({
+        sink,
+        runtimeConfig,
+        requestRecord,
+      })
+    )
+    .filter((item) => item.sink !== "none");
 }

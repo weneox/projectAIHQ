@@ -39,12 +39,17 @@ export function buildBusinessActionRecordedVoiceEventPayload({
   runtimeConfig = {},
   idempotency = {},
   source = "voice_action_executor",
+  sinkDispatch = {},
+  sinkDelivery = {},
 } = {}) {
   const item = obj(result);
   const record = obj(item.requestRecord);
   const adapter = obj(item.businessActionAdapter || record.adapter);
   const payload = obj(record.payload || item.payload);
   const customer = obj(record.customer);
+  const dispatch = obj(sinkDispatch);
+  const delivery = obj(sinkDelivery || dispatch.sinkDelivery);
+  const deliveries = arr(dispatch.deliveries);
 
   return {
     version: VOICE_BUSINESS_ACTION_EVENT_VERSION,
@@ -85,12 +90,17 @@ export function buildBusinessActionRecordedVoiceEventPayload({
     },
     idempotency: obj(idempotency),
     downstreamSinks: arr(record.downstreamSinks),
+    sinkDispatch: {
+      ok: dispatch.ok !== false,
+      requestId: s(dispatch.requestId || record.id || item.requestId),
+      deliveries,
+    },
     sinkDelivery: {
-      voiceCore: "recorded",
-      inbox: "not_attempted",
-      calendar: "not_attempted",
-      crm: "not_attempted",
-      webhook: "not_attempted",
+      voiceCore: s(delivery.voiceCore || delivery.voice_core || "recorded"),
+      inbox: s(delivery.inbox || "not_attempted"),
+      calendar: s(delivery.calendar || "not_attempted"),
+      crm: s(delivery.crm || "not_attempted"),
+      webhook: s(delivery.webhook || "not_attempted"),
     },
     audit: {
       ...(obj(record.audit)),
