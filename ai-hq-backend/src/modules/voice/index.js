@@ -27,3 +27,5 @@ export * from "./adapters/businessActionAdapterContracts.js";
 export * from "./adapters/businessActionExecutorRegistry.js";
 export * from "./adapters/businessActionRequestRecord.js";
 export * from "./events/businessActionEvents.js";
+export * from "./sinks/businessActionSinkContracts.js";
+export * from "./sinks/businessActionSinkRegistry.js";
