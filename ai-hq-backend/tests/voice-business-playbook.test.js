@@ -66,5 +66,6 @@ test("voice call state ignores browser_lab as a real phone number", () => {
 
   assert.equal(state.ok, false);
   assert.equal(state.nextMissing.field, "phone");
-  assert.equal(state.nextQuestion, "Əlaqə nömrənizi qeyd edə bilərəm?");
+  assert.equal(state.nextPromptHint.field, "phone");
+  assert.equal("nextQuestion" in state, false);
 });

@@ -1,4 +1,4 @@
-import {
+﻿import {
   normalizeVoiceActionRuntime,
 } from "./voiceActionContracts.js";
 import {
@@ -9,11 +9,12 @@ import {
 } from "./voiceOperationTaxonomy.js";
 import {
   analyzeVoiceActionState,
-  buildVoiceStateInstruction,
 } from "../callState.js";
 
 function s(value, fallback = "") {
-  return String(value ?? fallback).trim() || fallback;
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "object") return fallback;
+  return String(value).trim() || fallback;
 }
 
 function obj(value) {
@@ -26,8 +27,14 @@ function requestId(prefix = "voice_action") {
 
 function cleanPayload(value = {}) {
   const input = obj(value);
+
   return Object.fromEntries(
-    Object.entries(input).filter(([, item]) => item !== undefined && item !== null && item !== "")
+    Object.entries(input).filter(([, item]) => {
+      if (item === undefined || item === null || item === "") return false;
+      if (Array.isArray(item)) return item.length > 0;
+      if (typeof item === "object") return Object.keys(item).length > 0;
+      return true;
+    })
   );
 }
 
@@ -90,32 +97,6 @@ function isDemoProvider(value = "") {
   return ["internal_demo", "demo", "mock"].includes(s(value).toLowerCase());
 }
 
-function buildDemoAvailability({ runtime = {}, payload = {} } = {}) {
-  const family = s(runtime.businessFamily || "business");
-  const criteria = cleanPayload(payload);
-
-  return {
-    ok: true,
-    action: "check_availability",
-    status: VOICE_ACTION_RESULT_STATUS.LIVE_AVAILABLE,
-    confirmed: true,
-    live: true,
-    provider: "internal_demo",
-    businessFamily: family,
-    criteria,
-    available: true,
-    message:
-      family === "restaurant"
-        ? "Demo provider shows availability for the requested table criteria."
-        : family === "hotel"
-          ? "Demo provider shows availability for the requested room criteria."
-          : family === "clinic" || family === "salon"
-            ? "Demo provider shows availability for the requested appointment criteria."
-            : "Demo provider shows availability for the requested criteria.",
-  };
-}
-
-
 function actionModeForName(runtime = {}, actionName = "") {
   if (actionName === "check_availability") return runtime.availabilityMode;
   if (actionName === "create_reservation_request") return runtime.reservationMode;
@@ -128,6 +109,7 @@ function actionModeForName(runtime = {}, actionName = "") {
 
 function outcomeTypeForAction(actionName = "") {
   const name = s(actionName);
+
   if (name === "check_availability") return "availability_checked";
   if (name === "create_business_request") return "business_request_created";
   if (name === "create_reservation_request") return "reservation_request_created";
@@ -135,18 +117,26 @@ function outcomeTypeForAction(actionName = "") {
   if (name === "create_appointment_request") return "appointment_request_created";
   if (name === "create_handoff_request") return "handoff_requested";
   if (name === "end_call") return "call_ended";
+
   return "voice_action_unknown";
 }
 
 function dbSafeOutcomeForActionResult({ action = "", detailedOutcome = "", result = {} } = {}) {
   const safe = normalizeVoiceActionOutcome(result.outcome);
   if (safe !== "unknown") return safe;
+
   if (s(action) === "create_handoff_request") return "callback_requested";
-  if (s(action) === "create_business_request" && s(result.payload?.phone || result.payload?.customerPhone)) {
+
+  if (
+    s(action) === "create_business_request" &&
+    s(result.payload?.phone || result.payload?.customerPhone || result.payload?.customer_phone)
+  ) {
     return "callback_requested";
   }
+
   if (s(detailedOutcome) === "handoff_requested") return "callback_requested";
   if (s(result.status) === VOICE_ACTION_RESULT_STATUS.PROVIDER_NOT_CONFIGURED) return "failed";
+
   return "unknown";
 }
 
@@ -169,24 +159,31 @@ function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {
     return [
       s(payload.requestType),
       s(payload.description || payload.intent || payload.issue),
-      s(payload.phone),
+      s(payload.phone || payload.customerPhone || payload.customer_phone),
     ].filter(Boolean).join(" | ") || "Business request captured.";
   }
 
   if (action === "create_appointment_request") {
-    return [service, date, time, name, phone].filter(Boolean).join(" | ") || "Appointment request captured.";
+    return [service, date, time, name, phone].filter(Boolean).join(" | ") ||
+      "Appointment request captured.";
   }
 
   if (action === "create_reservation_request") {
-    return [date, time, payload.partySize ? `${payload.partySize} nəfər` : "", name, phone]
-      .filter(Boolean)
-      .join(" | ") || "Reservation request captured.";
+    return [
+      date,
+      time,
+      payload.partySize ? `${payload.partySize} people` : "",
+      name,
+      phone,
+    ].filter(Boolean).join(" | ") || "Reservation request captured.";
   }
 
   if (action === "create_order_request") {
-    return [Array.isArray(payload.items) ? `${payload.items.length} item` : "", s(payload.fulfillment), phone]
-      .filter(Boolean)
-      .join(" | ") || "Order request captured.";
+    return [
+      Array.isArray(payload.items) ? `${payload.items.length} item` : "",
+      s(payload.fulfillment),
+      phone,
+    ].filter(Boolean).join(" | ") || "Order request captured.";
   }
 
   if (action === "check_availability") {
@@ -202,6 +199,24 @@ function summarizeVoiceAction({ actionName = "", payload = {}, status = "" } = {
   return "Voice action executed.";
 }
 
+function buildDemoAvailability({ runtime = {}, payload = {} } = {}) {
+  const family = s(runtime.businessFamily || "business");
+  const criteria = cleanPayload(payload);
+
+  return {
+    ok: true,
+    action: "check_availability",
+    status: VOICE_ACTION_RESULT_STATUS.LIVE_AVAILABLE,
+    confirmed: true,
+    live: true,
+    provider: "internal_demo",
+    businessFamily: family,
+    criteria,
+    available: true,
+    message: "Demo provider shows availability for the requested criteria.",
+  };
+}
+
 export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
   const action = s(result.action);
   if (!action) return {};
@@ -211,11 +226,13 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
     result.status === VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS
       ? "voice_action_missing_required_fields"
       : outcomeTypeForAction(action);
+
   const safeOutcome = dbSafeOutcomeForActionResult({
     action,
     detailedOutcome: outcome,
     result,
   });
+
   const summary = summarizeVoiceAction({
     actionName: action,
     payload,
@@ -239,6 +256,8 @@ export function buildVoiceActionCallPatch({ result = {}, call = {} } = {}) {
         requestOnly: result.requestOnly === true,
         requestId: s(result.requestId),
         payload,
+        missingRequired: Array.isArray(result.missingRequired) ? result.missingRequired : [],
+        nextMissing: result.nextMissing || null,
         message: s(result.message),
         createdAt: new Date().toISOString(),
       },
@@ -312,6 +331,8 @@ export async function executeVoiceAction({
       shouldEndCall: true,
       confirmed: true,
       summary: s(payload.summary || "Caller ended the conversation."),
+      payload,
+      voiceState: actionState,
     };
   }
 
@@ -324,8 +345,8 @@ export async function executeVoiceAction({
         confirmed: false,
         live: false,
         criteria: payload,
-        message:
-          "Live availability is disabled for this business. Do not claim availability is confirmed.",
+        voiceState: actionState,
+        message: "Live availability is disabled for this business.",
       };
     }
 
@@ -340,8 +361,8 @@ export async function executeVoiceAction({
       confirmed: false,
       live: false,
       criteria: payload,
-      message:
-        "Live availability provider is not configured for this business yet. Do not claim availability is confirmed.",
+      voiceState: actionState,
+      message: "Live availability provider is not configured for this business.",
     };
   }
 
@@ -363,15 +384,13 @@ export async function executeVoiceAction({
         requestOnly: true,
         missingRequired: actionState.missingRequired,
         nextMissing: actionState.nextMissing,
-        nextQuestion: actionState.nextQuestion,
+        nextPromptHint: actionState.nextPromptHint,
         voiceState: actionState,
-        assistantInstruction: buildVoiceStateInstruction(actionState),
         payload,
         callId: s(call.id || call.callId || call.call_id),
         tenantId: s(scope.tenantId),
         tenantKey: s(scope.tenantKey),
-        message:
-          "Required fields are missing. Ask the caller exactly one next question before creating the request.",
+        message: "Required structured fields are missing.",
       };
     }
 
@@ -383,6 +402,7 @@ export async function executeVoiceAction({
         confirmed: false,
         requestOnly: false,
         payload,
+        voiceState: actionState,
         message: "This action is not enabled for the current business runtime.",
       };
     }
@@ -409,10 +429,7 @@ export async function executeVoiceAction({
       callId: s(call.id || call.callId || call.call_id),
       tenantId: s(scope.tenantId),
       tenantKey: s(scope.tenantKey),
-      message:
-        actionName === "create_business_request"
-          ? "Request was recorded for human/operator follow-up. Do not say it is confirmed."
-          : "Request was recorded for human/operator follow-up. Do not say booking/order/appointment is confirmed.",
+      message: "Request was recorded for human or operator follow-up.",
     };
   }
 
@@ -421,6 +438,8 @@ export async function executeVoiceAction({
     action: actionName,
     status: VOICE_ACTION_RESULT_STATUS.UNKNOWN_ACTION,
     confirmed: false,
+    payload,
+    voiceState: actionState,
     message: "Unknown voice action.",
   };
 }

@@ -6,7 +6,7 @@ import {
   VOICE_ACTION_RESULT_STATUS,
 } from "../src/modules/voice/actions/voiceActionRuntime.js";
 
-test("voice action runtime returns server-authored next question instructions for missing fields", async () => {
+test("voice action runtime returns structured followup hints for missing fields", async () => {
   const result = await executeVoiceAction({
     name: "create_appointment_request",
     args: {
@@ -32,8 +32,8 @@ test("voice action runtime returns server-authored next question instructions fo
   assert.equal(result.status, VOICE_ACTION_RESULT_STATUS.MISSING_REQUIRED_FIELDS);
   assert.equal(result.confirmed, false);
   assert.equal(result.nextMissing?.field, "preferredDateOrTime");
-  assert.match(result.nextQuestion, /hansı gün və ya saat/i);
-  assert.match(result.assistantInstruction, /Ask exactly this one question next/i);
-  assert.match(result.assistantInstruction, /Sizə hansı gün və ya saat daha uyğundur/i);
-  assert.doesNotMatch(result.assistantInstruction, /booking.*confirmed/i);
+  assert.equal(result.nextPromptHint?.field, "preferredDateOrTime");
+  assert.equal("nextQuestion" in result, false);
+  assert.equal("assistantInstruction" in result, false);
+  assert.doesNotMatch(JSON.stringify(result), /booking.*confirmed/i);
 });

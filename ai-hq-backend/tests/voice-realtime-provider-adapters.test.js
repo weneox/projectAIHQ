@@ -109,7 +109,7 @@ test("OpenAI sideband plan delegates to existing sideband connector behavior", (
   assert.equal(result.normalized, null);
 });
 
-test("OpenAI adapter builds same outbound tool output events as before", () => {
+test("OpenAI adapter builds outbound tool output events without direct assistant instructions", () => {
   const adapter = getRealtimeProviderAdapter("openai");
   const input = {
     toolCall: {
@@ -119,7 +119,8 @@ test("OpenAI adapter builds same outbound tool output events as before", () => {
     result: {
       ok: true,
       status: "request_recorded",
-      assistantInstruction: "Ask exactly this one question next.",
+      assistantInstruction: "legacy instruction must be stripped",
+      nextQuestion: "legacy question must be stripped",
     },
   };
 
@@ -132,8 +133,13 @@ test("OpenAI adapter builds same outbound tool output events as before", () => {
   assert.deepEqual(result.outboundEvents, expected);
   assert.equal(result.outboundEvents[0].type, "conversation.item.create");
   assert.equal(result.outboundEvents[0].item.type, "function_call_output");
+
+  const payload = JSON.parse(result.outboundEvents[0].item.output);
+  assert.equal(payload.assistantInstruction, undefined);
+  assert.equal(payload.nextQuestion, undefined);
+
   assert.equal(result.outboundEvents[1].type, "response.create");
-  assert.equal(result.outboundEvents[1].response.instructions, "Ask exactly this one question next.");
+  assert.equal(result.outboundEvents[1].response?.instructions, undefined);
 });
 
 test("OpenAI event normalization delegates to existing sideband event behavior", () => {

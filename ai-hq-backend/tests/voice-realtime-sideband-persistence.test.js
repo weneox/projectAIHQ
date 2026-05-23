@@ -107,14 +107,23 @@ test("builds tool result persisted event input from dispatcher resultTrace", () 
       target: target(),
     }
   );
+
   const resultTrace = buildRealtimeSidebandToolResultTrace({
     normalized,
     toolCall: normalized.toolCall,
     result: {
       status: "missing_required_fields",
-      assistantInstruction: "Ask exactly this one question next.",
-      nextQuestion: "What date works for you?",
       missingRequired: ["date"],
+      nextMissing: {
+        field: "date",
+      },
+      nextPromptHint: {
+        field: "date",
+        label: "date",
+      },
+      voiceState: {
+        complete: false,
+      },
     },
   });
 
@@ -132,9 +141,12 @@ test("builds tool result persisted event input from dispatcher resultTrace", () 
     VOICE_REALTIME_SIDEBAND_PERSISTENCE_VERSION
   );
   assert.equal(input.payload.resultStatus, "missing_required_fields");
-  assert.equal(input.payload.assistantInstruction, "Ask exactly this one question next.");
-  assert.equal(input.payload.nextQuestion, "What date works for you?");
+  assert.equal(input.payload.assistantInstruction, undefined);
+  assert.equal(input.payload.nextQuestion, undefined);
   assert.deepEqual(input.payload.missingRequired, ["date"]);
+  assert.equal(input.payload.nextMissing.field, "date");
+  assert.equal(input.payload.nextPromptHint.field, "date");
+  assert.equal(input.payload.voiceState.complete, false);
 });
 
 test("persist appends normalized event only when resultTrace absent", async () => {

@@ -216,3 +216,19 @@ export function normalizeRealtimeProviderEvent({
     target,
   });
 }
+
+export function buildRealtimeProviderToolOutputEvents({
+  provider = "",
+  target = {},
+  toolCall = {},
+  result = {},
+  includeResponseCreate = true,
+} = {}) {
+  const adapter = getRealtimeProviderAdapter(provider || target.provider);
+
+  return adapter.buildToolOutputEvents({
+    toolCall,
+    result,
+    includeResponseCreate,
+  });
+}
