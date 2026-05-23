@@ -45,6 +45,9 @@ import {
   readVoiceCallDetails,
   readVoiceCallEvents,
   listVoiceCallSessionsForCall,
+  buildVoiceQaAnnotationCallPatch,
+  buildVoiceQaAnnotationEventPayload,
+  buildVoiceQaAnnotationRecord,
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
@@ -1378,6 +1381,97 @@ async function handleBrowserVoiceToolCall(
   }
 }
 
+async function handleVoiceQaAnnotation(
+  req,
+  res,
+  { db, dbDisabled = false, audit } = {}
+) {
+  const logger = getRouteLogger(req, "voice.calls.qa.annotation");
+  try {
+    if (dbDisabled || !db) {
+      return fail(res, 503, "db_unavailable");
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const call = await getScopedCallOrFail({
+      db,
+      scope,
+      callId: req.params?.id,
+      res,
+    });
+    if (!call) return;
+
+    const actor = getActor(req);
+    const record = buildVoiceQaAnnotationRecord({
+      input: req.body || {},
+      call,
+      actor,
+      id: randomUUID(),
+    });
+
+    if (!record.ok) {
+      return fail(res, 400, record.reasonCode || "voice_qa_annotation_invalid", {
+        annotation: record.annotation,
+      });
+    }
+
+    const annotation = record.annotation;
+    const event = await appendVoiceCallEvent(db, {
+      callId: call.id,
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      eventType: "voice.qa.annotation_recorded",
+      actor,
+      payload: buildVoiceQaAnnotationEventPayload({ annotation, call }),
+    });
+
+    const patch = buildVoiceQaAnnotationCallPatch({ call, annotation });
+    const updatedCall = await updateVoiceCallForTenant(db, {
+      id: call.id,
+      tenantId: scope.tenantId,
+      patch,
+    });
+
+    await auditSafe(audit, {
+      tenantId: scope.tenantId,
+      tenantKey: scope.tenantKey,
+      actor,
+      action: "voice.qa.annotation_recorded",
+      objectType: "voice_call",
+      objectId: call.id,
+      meta: {
+        verdict: annotation.verdict,
+        severity: annotation.severity,
+        issueLabels: annotation.issueLabels || [],
+        slotLabels: annotation.slotLabels || [],
+      },
+    });
+
+    return ok(res, {
+      annotation,
+      event,
+      call: updatedCall,
+      qa: obj(updatedCall?.meta).qa || obj(patch.meta).qa,
+    });
+  } catch (err) {
+    logger.error("voice.calls.qa.annotation.failed", err, {
+      callId: s(req.params?.id),
+    });
+    recordVoiceRouteFailure({
+      route: "voice.calls.qa.annotation",
+      reasonCode: "voice_qa_annotation_failed",
+      err,
+      req,
+      context: {
+        callId: s(req.params?.id),
+      },
+    });
+    return fail(res, 500, "voice_qa_annotation_failed");
+  }
+}
+
 async function handleVoiceActionRuntimePreview(
   req,
   res,
@@ -1727,6 +1821,10 @@ export function voiceRoutes({
       return fail(res, 500, "voice_call_read_failed");
     }
   });
+
+  r.post("/voice/calls/:id/qa/annotations", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceQaAnnotation(req, res, { db, dbDisabled, audit })
+  );
 
   r.get("/voice/calls/:id/events", requireOperatorSurfaceAccess, async (req, res) => {
     const logger = getRouteLogger(req, "voice.calls.events");
