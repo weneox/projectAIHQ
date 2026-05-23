@@ -63,6 +63,92 @@ function normalizeSourceChannel(value) {
   return SOURCE_CHANNELS.has(raw) ? raw : "voice";
 }
 
+function normalizeOptionalSourceChannel(value) {
+  const raw = s(value).toLowerCase();
+  return SOURCE_CHANNELS.has(raw) ? raw : "";
+}
+
+function normalizeOptionalStatus(value) {
+  const raw = s(value).toLowerCase();
+  return STATUSES.has(raw) ? raw : "";
+}
+
+function normalizeOptionalPriority(value) {
+  const raw = s(value).toLowerCase();
+  return PRIORITIES.has(raw) ? raw : "";
+}
+
+function buildOperationRequestWhere({
+  tenantId,
+  status = "",
+  requestType = "",
+  priority = "",
+  sourceChannel = "",
+  businessFamily = "",
+  assignedTo = "",
+} = {}) {
+  const params = [tenantId];
+  const where = ["tenant_id = $1"];
+
+  const nextStatus = normalizeOptionalStatus(status);
+  if (nextStatus) {
+    params.push(nextStatus);
+    where.push(`status = ${params.length}`);
+  }
+
+  if (s(requestType)) {
+    params.push(s(requestType));
+    where.push(`request_type = ${params.length}`);
+  }
+
+  const nextPriority = normalizeOptionalPriority(priority);
+  if (nextPriority) {
+    params.push(nextPriority);
+    where.push(`priority = ${params.length}`);
+  }
+
+  const nextSourceChannel = normalizeOptionalSourceChannel(sourceChannel);
+  if (nextSourceChannel) {
+    params.push(nextSourceChannel);
+    where.push(`source_channel = ${params.length}`);
+  }
+
+  if (s(businessFamily)) {
+    params.push(s(businessFamily));
+    where.push(`business_family = ${params.length}`);
+  }
+
+  if (s(assignedTo)) {
+    params.push(s(assignedTo));
+    where.push(`assigned_to = ${params.length}`);
+  }
+
+  return { params, where };
+}
+
+function buildQueueSummary(rows = []) {
+  const byStatus = Object.fromEntries([...STATUSES].map((status) => [status, 0]));
+  let total = 0;
+
+  for (const row of rows) {
+    const status = normalizeStatus(row.status);
+    byStatus[status] = (byStatus[status] || 0) + Number(row.count || row.total || 0);
+    total += Number(row.count || row.total || 0);
+  }
+
+  return {
+    total,
+    byStatus,
+    openCount:
+      byStatus.new +
+      byStatus.in_review +
+      byStatus.waiting_customer +
+      byStatus.contacted +
+      byStatus.scheduled,
+    terminalCount: byStatus.resolved + byStatus.cancelled + byStatus.failed,
+  };
+}
+
 export function normalizeOperationRequest(row = {}) {
   if (!row) return null;
   return {
@@ -195,22 +281,28 @@ export async function getOperationRequestByIdForTenant(db, { id, tenantId } = {}
 
 export async function listOperationRequestsForTenant(
   db,
-  { tenantId, status = "", requestType = "", limit = 50 } = {}
+  {
+    tenantId,
+    status = "",
+    requestType = "",
+    priority = "",
+    sourceChannel = "",
+    businessFamily = "",
+    assignedTo = "",
+    limit = 50,
+  } = {}
 ) {
   if (!db || !tenantId) return [];
 
-  const params = [tenantId];
-  const where = ["tenant_id = $1"];
-
-  if (s(status)) {
-    params.push(normalizeStatus(status));
-    where.push(`status = $${params.length}`);
-  }
-
-  if (s(requestType)) {
-    params.push(s(requestType));
-    where.push(`request_type = $${params.length}`);
-  }
+  const { params, where } = buildOperationRequestWhere({
+    tenantId,
+    status,
+    requestType,
+    priority,
+    sourceChannel,
+    businessFamily,
+    assignedTo,
+  });
 
   params.push(Math.max(1, Math.min(Number(limit) || 50, 200)));
 
@@ -220,13 +312,59 @@ export async function listOperationRequestsForTenant(
       select *
       from operation_requests
       where ${where.join(" and ")}
-      order by created_at desc
-      limit $${params.length}
+      order by
+        case priority
+          when 'urgent' then 0
+          when 'high' then 1
+          when 'normal' then 2
+          when 'low' then 3
+          else 4
+        end,
+        created_at desc
+      limit ${params.length}
     `,
     params
   );
 
   return rows.map(normalizeOperationRequest);
+}
+
+export async function summarizeOperationRequestsForTenant(
+  db,
+  {
+    tenantId,
+    status = "",
+    requestType = "",
+    priority = "",
+    sourceChannel = "",
+    businessFamily = "",
+    assignedTo = "",
+  } = {}
+) {
+  if (!db || !tenantId) return buildQueueSummary([]);
+
+  const { params, where } = buildOperationRequestWhere({
+    tenantId,
+    status,
+    requestType,
+    priority,
+    sourceChannel,
+    businessFamily,
+    assignedTo,
+  });
+
+  const rows = await many(
+    db,
+    `
+      select status, count(*)::int as count
+      from operation_requests
+      where ${where.join(" and ")}
+      group by status
+    `,
+    params
+  );
+
+  return buildQueueSummary(rows);
 }
 
 export async function updateOperationRequestForTenant(

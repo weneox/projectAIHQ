@@ -3,6 +3,7 @@ import express from "express";
 import {
   getOperationRequestByIdForTenant,
   listOperationRequestsForTenant,
+  summarizeOperationRequestsForTenant,
   updateOperationRequestForTenant,
 } from "../../../db/helpers/operationRequests.js";
 import {
@@ -44,6 +45,22 @@ function readTenant(req = {}) {
 function n(value, fallback = 50) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function truthy(value = "") {
+  return ["1", "true", "yes", "y", "on"].includes(s(value).toLowerCase());
+}
+
+function readListFilters(req = {}) {
+  return {
+    status: s(req.query?.status),
+    requestType: s(req.query?.requestType || req.query?.request_type),
+    priority: s(req.query?.priority),
+    sourceChannel: s(req.query?.sourceChannel || req.query?.source_channel),
+    businessFamily: s(req.query?.businessFamily || req.query?.business_family),
+    assignedTo: s(req.query?.assignedTo || req.query?.assigned_to),
+    limit: n(req.query?.limit, 50),
+  };
 }
 
 const ALLOWED_PATCH_FIELDS = new Set([
@@ -245,17 +262,25 @@ export async function listOperationRequestsHandler(req, res, { db, dbDisabled = 
   const { tenantId } = readTenant(req);
   if (!tenantId) return fail(req, res, 401, "missing_authenticated_tenant_context");
 
+  const filters = readListFilters(req);
   const requests = await listOperationRequestsForTenant(db, {
     tenantId,
-    status: s(req.query?.status),
-    requestType: s(req.query?.requestType || req.query?.request_type),
-    limit: n(req.query?.limit, 50),
+    ...filters,
   });
+
+  const queueSummary = truthy(req.query?.includeSummary || req.query?.include_summary)
+    ? await summarizeOperationRequestsForTenant(db, {
+        tenantId,
+        ...filters,
+      })
+    : null;
 
   return ok(res, {
     requests,
     items: requests,
     count: requests.length,
+    filters,
+    ...(queueSummary ? { queueSummary } : {}),
   });
 }
 
@@ -352,5 +377,6 @@ export const __test__ = {
   getOperationRequestHandler,
   listOperationRequestsHandler,
   patchOperationRequestHandler,
+  readListFilters,
   readTenant,
 };
