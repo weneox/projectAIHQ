@@ -6,6 +6,10 @@ import {
   buildVoiceAssistantOpeningInstructions,
   VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
 } from "../brain/index.js";
+import {
+  buildVoiceSpeechPipeline,
+  normalizeVoiceOutputName,
+} from "../speech/voiceSpeechPipeline.js";
 
 function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
@@ -69,13 +73,7 @@ export function normalizeBrowserVoiceModel(value = "") {
 }
 
 export function normalizeBrowserVoiceName(value = "") {
-  const raw = s(value, "coral").toLowerCase();
-
-  if (["alloy", "echo", "shimmer", "verse"].includes(raw)) return "coral";
-
-  return ["coral", "sage", "ash", "ballad"].includes(raw)
-    ? raw
-    : "coral";
+  return normalizeVoiceOutputName(value);
 }
 
 export function buildBrowserTurnDetectionConfig(runtimeConfig = {}) {
@@ -133,7 +131,11 @@ export function buildBrowserRealtimeSessionPlan({
   runtimeApplied = false,
 } = {}) {
   const model = normalizeBrowserVoiceModel(requestedModel);
-  const voice = normalizeBrowserVoiceName(requestedVoice);
+  const speechPipeline = buildVoiceSpeechPipeline({
+    runtimeConfig,
+    requestedVoice,
+  });
+  const voice = speechPipeline.tts.voice;
 
   const instructions = buildLiveVoiceInstructions({
     baseInstructions,
@@ -153,6 +155,7 @@ export function buildBrowserRealtimeSessionPlan({
     brainPolicyVersion: VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
     model,
     voice,
+    speechPipeline,
     instructions,
     openingResponse: {
       enabled: true,
@@ -176,7 +179,7 @@ export function buildBrowserRealtimeSessionPlan({
           },
           input: {
             transcription: {
-              model: "gpt-4o-mini-transcribe",
+              model: speechPipeline.realtime.transcriptionModel,
             },
             turn_detection: turnDetection,
           },
