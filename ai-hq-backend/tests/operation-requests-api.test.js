@@ -68,6 +68,20 @@ function makeDb() {
   const rows = [
     row(),
     row({
+      id: "55555555-5555-4555-8555-555555555555",
+      tenant_id: TENANT_ID,
+      tenant_key: "acme",
+      source_channel: "webchat",
+      request_type: "quote_request",
+      business_family: "clinic",
+      status: "in_review",
+      priority: "urgent",
+      assigned_to: "operator-2",
+      title: "quote_request - Consultation",
+      description: "Consultation",
+      customer_phone: "+994502224455",
+    }),
+    row({
       id: "44444444-4444-4444-8444-444444444444",
       tenant_id: OTHER_TENANT_ID,
       tenant_key: "other",
@@ -94,15 +108,37 @@ function makeDb() {
           }
 
           let result = rows.filter((item) => item.tenant_id === params[0]);
-          if (normalized.includes("status = $2")) {
-            result = result.filter((item) => item.status === params[1]);
-          }
-          if (normalized.includes("request_type =")) {
-            const requestTypeParam = params.find((item) => String(item).endsWith("_request"));
-            if (requestTypeParam) {
-              result = result.filter((item) => item.request_type === requestTypeParam);
+
+          const filterPairs = [
+            ["status =", "status"],
+            ["request_type =", "request_type"],
+            ["priority =", "priority"],
+            ["source_channel =", "source_channel"],
+            ["business_family =", "business_family"],
+            ["assigned_to =", "assigned_to"],
+          ];
+
+          for (const [needle, field] of filterPairs) {
+            if (normalized.includes(needle)) {
+              const value = params.find((item) =>
+                rows.some((rowItem) => String(rowItem[field]) === String(item))
+              );
+              if (value !== undefined) {
+                result = result.filter((item) => String(item[field]) === String(value));
+              }
             }
           }
+
+          if (normalized.includes("group by status")) {
+            const counts = new Map();
+            for (const item of result) {
+              counts.set(item.status, (counts.get(item.status) || 0) + 1);
+            }
+            return {
+              rows: [...counts.entries()].map(([status, count]) => ({ status, count })),
+            };
+          }
+
           return { rows: result };
         }
 
@@ -638,6 +674,49 @@ test("patch records workflow transition metadata and operator note", async () =>
     assert.equal(response.body.request.meta.workflow.transitions.length, 1);
     assert.equal(fixture.auditEntries[0].meta.workflow.transitionReason, "Operator opened the request");
     assert.equal(fixture.auditEntries[0].meta.workflow.operatorNotePresent, true);
+  } finally {
+    await fixture.close();
+  }
+});
+
+
+test("queue read model filters by priority source business family and assignee", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      path: "/operation-requests?priority=urgent&sourceChannel=webchat&businessFamily=clinic&assignedTo=operator-2&includeSummary=1",
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.count, 1);
+    assert.equal(response.body.requests[0].id, "55555555-5555-4555-8555-555555555555");
+    assert.equal(response.body.requests[0].priority, "urgent");
+    assert.equal(response.body.requests[0].sourceChannel, "webchat");
+    assert.equal(response.body.requests[0].businessFamily, "clinic");
+    assert.equal(response.body.requests[0].assignedTo, "operator-2");
+    assert.equal(response.body.queueSummary.total, 1);
+    assert.equal(response.body.queueSummary.byStatus.in_review, 1);
+    assert.equal(response.body.queueSummary.openCount, 1);
+    assert.equal(response.body.filters.priority, "urgent");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("queue read model ignores invalid optional source channel and priority filters", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      path: "/operation-requests?priority=critical&sourceChannel=sms&includeSummary=1",
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.ok, true);
+    assert.equal(response.body.count, 2);
+    assert.equal(response.body.queueSummary.total, 2);
+    assert.equal(response.body.queueSummary.byStatus.new, 1);
+    assert.equal(response.body.queueSummary.byStatus.in_review, 1);
   } finally {
     await fixture.close();
   }
