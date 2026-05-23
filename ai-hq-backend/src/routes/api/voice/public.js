@@ -1211,6 +1211,10 @@ async function handleBrowserVoiceToolCall(
       });
     }
 
+    let sinkDispatch = null;
+    let sinkDelivery = null;
+    let inboxSinkDelivery = null;
+
     if (reservation?.acquired === false) {
       const result = buildDuplicateVoiceToolResult({
         reservation,
@@ -1218,10 +1222,6 @@ async function handleBrowserVoiceToolCall(
         toolName,
       });
       const idempotency = buildVoiceToolExecutionIdempotencyPayload(reservation);
-
-      inboxSinkDelivery = Array.isArray(sinkDispatch.deliveries)
-        ? sinkDispatch.deliveries.find((item) => item?.sink === "inbox") || null
-        : null;
 
       await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
