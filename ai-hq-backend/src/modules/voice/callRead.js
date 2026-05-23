@@ -3,6 +3,7 @@ import {
   listVoiceCallSessions,
 } from "../../db/helpers/voice.js";
 import { buildVoiceEventInspect } from "../../services/operatorReplayInspect.js";
+import { buildVoiceQaCallInspector } from "./qa/voiceQaCallInspector.js";
 import { n, s } from "./shared.js";
 
 export async function readVoiceCallDetails({ db, call } = {}) {
@@ -10,11 +11,14 @@ export async function readVoiceCallDetails({ db, call } = {}) {
     ...event,
     inspect: buildVoiceEventInspect(event),
   }));
+  const qaInspector = buildVoiceQaCallInspector({ call, events });
 
   return {
     call,
     events,
     inspect: events.at(-1)?.inspect || null,
+    qaInspector,
+    inspector: qaInspector,
   };
 }
 
@@ -23,10 +27,13 @@ export async function readVoiceCallEvents({ db, call } = {}) {
     ...event,
     inspect: buildVoiceEventInspect(event),
   }));
+  const qaInspector = buildVoiceQaCallInspector({ call, events });
 
   return {
     events,
     inspect: events.at(-1)?.inspect || null,
+    qaInspector,
+    inspector: qaInspector,
   };
 }
 
