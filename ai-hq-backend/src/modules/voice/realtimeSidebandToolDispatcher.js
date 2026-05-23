@@ -1,16 +1,6 @@
 ﻿import {
-  buildVoiceActionCallPatch,
-  applyVoiceInboxSinkDeliveryToCallPatch,
   executeVoiceAction,
 } from "./actions/voiceActionRuntime.js";
-import {
-  shouldRecordBusinessActionVoiceEvent,
-} from "./events/businessActionEvents.js";
-import {
-  buildBusinessActionSinkDeliverySnapshot,
-  createBusinessActionSinkRegistry,
-  dispatchBusinessActionSinks,
-} from "./sinks/businessActionSinkRegistry.js";
 import {
   normalizeRealtimeSidebandEvent,
 } from "./realtimeSidebandEvents.js";
@@ -23,6 +13,13 @@ import {
   markVoiceRealtimeToolExecutionSent,
   reserveVoiceRealtimeToolExecution,
 } from "./realtimeToolExecutionIdempotency.js";
+import {
+  buildVoiceToolCallPatchWithSinkDelivery,
+  buildVoiceToolSinkRuntimeConfig,
+  dispatchVoiceToolBusinessActionSinks,
+  readVoiceToolReservationProviderResponse,
+  redriveStoredVoiceToolBusinessActionResult,
+} from "./tooling/voiceToolSinkOrchestrator.js";
 
 export const VOICE_REALTIME_SIDEBAND_TOOL_DISPATCHER_VERSION =
   "voice-realtime-sideband-tool-dispatcher-v1";
@@ -67,117 +64,6 @@ function buildDuplicateToolResult({ reservation = {}, toolCall = {} } = {}) {
     message: "Tool execution already processed.",
     toolCallId: s(toolCall.id || toolCall.call_id || toolCall.callId),
     toolName: s(toolCall.name),
-  };
-}
-
-function readReservationProviderResponse(reservation = {}) {
-  const record = obj(reservation.record);
-  const value =
-    record.providerResponse ||
-    record.provider_response ||
-    reservation.providerResponse ||
-    reservation.provider_response;
-
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    try {
-      return obj(JSON.parse(value));
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-function findInboxSinkDelivery(deliveries = []) {
-  return Array.isArray(deliveries)
-    ? deliveries.find((item) => item?.sink === "inbox") || null
-    : null;
-}
-
-function buildSidebandSinkRuntimeConfig(runtimeConfig = {}) {
-  const runtime = obj(runtimeConfig);
-  const businessActionSinks = obj(runtime.businessActionSinks);
-  const inbox = obj(businessActionSinks.inbox);
-
-  return {
-    ...runtime,
-    businessActionSinks: {
-      ...businessActionSinks,
-      inbox: {
-        ...inbox,
-        enabled: inbox.enabled !== false,
-      },
-    },
-  };
-}
-
-async function redriveSidebandBusinessActionSink({
-  storedProviderResponse = {},
-  runtimeConfig = {},
-  call = {},
-  sinkRegistry = null,
-  createSinkRegistry = createBusinessActionSinkRegistry,
-  dispatchSinks = dispatchBusinessActionSinks,
-  buildSinkDeliverySnapshot = buildBusinessActionSinkDeliverySnapshot,
-  recordBusinessAction = shouldRecordBusinessActionVoiceEvent,
-  applyInboxSinkDeliveryToCallPatch = applyVoiceInboxSinkDeliveryToCallPatch,
-} = {}) {
-  const storedResult = obj(storedProviderResponse.result);
-
-  if (!recordBusinessAction(storedResult)) {
-    return {
-      attempted: false,
-      ok: true,
-      reasonCode: "stored_business_action_result_not_recordable",
-      callPatch: {},
-      sinkDispatch: null,
-      sinkDelivery: null,
-      inboxSinkDelivery: null,
-    };
-  }
-
-  const sinkRuntimeConfig = buildSidebandSinkRuntimeConfig(
-    storedProviderResponse.sinkRuntimeConfig ||
-      storedProviderResponse.runtimeConfig ||
-      runtimeConfig
-  );
-  const registry =
-    sinkRegistry ||
-    (typeof createSinkRegistry === "function" ? createSinkRegistry() : null);
-  const sinkDispatch = await dispatchSinks({
-    requestRecord: storedResult.requestRecord,
-    result: storedResult,
-    runtimeConfig: sinkRuntimeConfig,
-    registry,
-  });
-  const sinkDelivery = buildSinkDeliverySnapshot({
-    deliveries: sinkDispatch?.deliveries,
-  });
-  const inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch?.deliveries);
-
-  let callPatch = buildVoiceActionCallPatch({
-    result: storedResult,
-    call,
-  });
-  callPatch = applyInboxSinkDeliveryToCallPatch({
-    callPatch,
-    sinkDelivery,
-    inboxSinkDelivery,
-  });
-
-  return {
-    attempted: true,
-    ok: true,
-    reasonCode: "",
-    callPatch,
-    sinkDispatch,
-    sinkDelivery,
-    inboxSinkDelivery,
   };
 }
 
@@ -342,11 +228,11 @@ export async function dispatchRealtimeSidebandToolCall({
   markExecutionFailed = markVoiceRealtimeToolExecutionFailed,
   getProviderAdapter = getRealtimeProviderAdapter,
   sinkRegistry = null,
-  createSinkRegistry = createBusinessActionSinkRegistry,
-  dispatchSinks = dispatchBusinessActionSinks,
-  buildSinkDeliverySnapshot = buildBusinessActionSinkDeliverySnapshot,
-  recordBusinessAction = shouldRecordBusinessActionVoiceEvent,
-  applyInboxSinkDeliveryToCallPatch = applyVoiceInboxSinkDeliveryToCallPatch,
+  createSinkRegistry = undefined,
+  dispatchSinks = undefined,
+  buildSinkDeliverySnapshot = undefined,
+  recordBusinessAction = undefined,
+  applyInboxSinkDeliveryToCallPatch = undefined,
 } = {}) {
   const earlyProviderAdapter = resolveProviderAdapter({
     normalized: obj(preNormalized),
@@ -461,8 +347,9 @@ export async function dispatchRealtimeSidebandToolCall({
     }
 
     try {
-      const redrive = await redriveSidebandBusinessActionSink({
-        storedProviderResponse: readReservationProviderResponse(reservation),
+      const redrive = await redriveStoredVoiceToolBusinessActionResult({
+        storedProviderResponse:
+          readVoiceToolReservationProviderResponse(reservation),
         runtimeConfig,
         call,
         sinkRegistry,
@@ -522,7 +409,7 @@ export async function dispatchRealtimeSidebandToolCall({
   }
 
   let result = null;
-  const sinkRuntimeConfig = buildSidebandSinkRuntimeConfig(runtimeConfig);
+  const sinkRuntimeConfig = buildVoiceToolSinkRuntimeConfig(runtimeConfig);
 
   try {
     result = await executeAction({
@@ -566,7 +453,7 @@ export async function dispatchRealtimeSidebandToolCall({
     },
   });
 
-  let callPatch = buildVoiceActionCallPatch({
+  let callPatch = buildVoiceToolCallPatchWithSinkDelivery({
     result,
     call,
   });
@@ -574,26 +461,27 @@ export async function dispatchRealtimeSidebandToolCall({
   let sinkDelivery = null;
   let inboxSinkDelivery = null;
 
-  if (recordBusinessAction(result)) {
-    const registry =
-      sinkRegistry ||
-      (typeof createSinkRegistry === "function" ? createSinkRegistry() : null);
+  const sinkResult = await dispatchVoiceToolBusinessActionSinks({
+    result,
+    runtimeConfig: sinkRuntimeConfig,
+    sinkRegistry,
+    createSinkRegistry,
+    dispatchSinks,
+    buildSinkDeliverySnapshot,
+    recordBusinessAction,
+  });
 
-    sinkDispatch = await dispatchSinks({
-      requestRecord: result.requestRecord,
+  if (sinkResult.attempted === true) {
+    sinkDispatch = sinkResult.sinkDispatch;
+    sinkDelivery = sinkResult.sinkDelivery;
+    inboxSinkDelivery = sinkResult.inboxSinkDelivery;
+
+    callPatch = buildVoiceToolCallPatchWithSinkDelivery({
       result,
-      runtimeConfig: sinkRuntimeConfig,
-      registry,
-    });
-    sinkDelivery = buildSinkDeliverySnapshot({
-      deliveries: sinkDispatch?.deliveries,
-    });
-    inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch?.deliveries);
-
-    callPatch = applyInboxSinkDeliveryToCallPatch({
-      callPatch,
+      call,
       sinkDelivery,
       inboxSinkDelivery,
+      applyInboxSinkDeliveryToCallPatch,
     });
   }
 

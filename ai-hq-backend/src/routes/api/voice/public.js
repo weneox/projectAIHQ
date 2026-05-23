@@ -53,10 +53,7 @@ import {
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
-  shouldRecordBusinessActionVoiceEvent,
   buildBusinessActionRecordedVoiceEventPayload,
-  dispatchBusinessActionSinks,
-  buildBusinessActionSinkDeliverySnapshot,
   createBusinessActionSinkRegistry,
 } from "../../../modules/voice/index.js";
 import {
@@ -87,10 +84,15 @@ import {
   normalizeVoiceActionRuntime,
 } from "../../../modules/voice/actions/voiceActionContracts.js";
 import {
-  buildVoiceActionCallPatch,
-  applyVoiceInboxSinkDeliveryToCallPatch,
   executeVoiceAction,
 } from "../../../modules/voice/actions/voiceActionRuntime.js";
+import {
+  buildVoiceToolCallPatchWithSinkDelivery,
+  buildVoiceToolSinkRuntimeConfig,
+  dispatchVoiceToolBusinessActionSinks,
+  readVoiceToolReservationProviderResponse,
+  redriveBrowserVoiceBusinessActionSink,
+} from "../../../modules/voice/tooling/voiceToolSinkOrchestrator.js";
 import {
   buildRealtimeControlTarget,
   buildRealtimeProviderLinkPayload,
@@ -181,139 +183,6 @@ function buildDuplicateVoiceToolResult({ reservation = {}, toolCallId = "", tool
     message: "Tool execution already processed.",
     toolCallId: s(toolCallId),
     toolName: s(toolName),
-  };
-}
-
-function readReservationProviderResponse(reservation = {}) {
-  const record = obj(reservation.record);
-  const value =
-    record.providerResponse ||
-    record.provider_response ||
-    reservation.providerResponse ||
-    reservation.provider_response;
-
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    try {
-      return obj(JSON.parse(value));
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-function buildBrowserVoiceSinkRuntimeConfig(runtimeConfig = {}) {
-  const runtime = obj(runtimeConfig);
-  const businessActionSinks = obj(runtime.businessActionSinks);
-  const inbox = obj(businessActionSinks.inbox);
-
-  return {
-    ...runtime,
-    businessActionSinks: {
-      ...businessActionSinks,
-      inbox: {
-        ...inbox,
-        enabled: inbox.enabled !== false,
-      },
-    },
-  };
-}
-
-function findInboxSinkDelivery(deliveries = []) {
-  return Array.isArray(deliveries)
-    ? deliveries.find((item) => item?.sink === "inbox") || null
-    : null;
-}
-
-async function redriveBrowserVoiceBusinessActionSink({
-  db,
-  wsHub = null,
-  call = {},
-  scope = {},
-  voiceCallId = "",
-  storedProviderResponse = {},
-  idempotency = {},
-  fallbackToolCallId = "",
-  fallbackToolName = "",
-  fallbackProviderRealtimeCallId = "",
-} = {}) {
-  const storedResult = obj(storedProviderResponse.result);
-
-  if (!shouldRecordBusinessActionVoiceEvent(storedResult)) {
-    return {
-      attempted: false,
-      ok: true,
-      reasonCode: "stored_business_action_result_not_recordable",
-    };
-  }
-
-  const sinkRuntimeConfig = buildBrowserVoiceSinkRuntimeConfig(
-    storedProviderResponse.sinkRuntimeConfig || storedProviderResponse.runtimeConfig
-  );
-  const sinkRegistry = createBusinessActionSinkRegistry({
-    inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
-  });
-  const sinkDispatch = await dispatchBusinessActionSinks({
-    requestRecord: storedResult.requestRecord,
-    result: storedResult,
-    runtimeConfig: sinkRuntimeConfig,
-    registry: sinkRegistry,
-  });
-  const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
-    deliveries: sinkDispatch.deliveries,
-  });
-  const inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch.deliveries);
-
-  let callPatch = buildVoiceActionCallPatch({ result: storedResult, call });
-  callPatch = applyVoiceInboxSinkDeliveryToCallPatch({
-    callPatch,
-    sinkDelivery,
-    inboxSinkDelivery,
-  });
-
-  if (Object.keys(callPatch).length > 0) {
-    await updateVoiceCallForTenant(db, {
-      id: voiceCallId,
-      tenantId: scope.tenantId,
-      patch: callPatch,
-    });
-  }
-
-  await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
-    callId: voiceCallId,
-    scope,
-    eventType: "business_request_recorded",
-    actor: "voice_action_executor",
-    payload: buildBusinessActionRecordedVoiceEventPayload({
-      result: storedResult,
-      toolCallId: s(storedProviderResponse.toolCallId || fallbackToolCallId),
-      toolName: s(storedProviderResponse.toolName || fallbackToolName),
-      providerRealtimeCallId: s(
-        storedProviderResponse.providerRealtimeCallId || fallbackProviderRealtimeCallId
-      ),
-      runtimeConfig: sinkRuntimeConfig,
-      idempotency,
-      source: "browser_voice_tool_route_duplicate_redrive",
-      sinkDispatch,
-      sinkDelivery,
-    }),
-  }));
-
-  return {
-    attempted: true,
-    ok: true,
-    reasonCode: "",
-    sinkDelivery,
-    sinkDispatch: {
-      ok: sinkDispatch.ok !== false,
-      requestId: s(sinkDispatch.requestId),
-    },
-    inboxThreadId: s(inboxSinkDelivery?.inboxThreadId || inboxSinkDelivery?.inbox_thread_id),
   };
 }
 
@@ -1364,7 +1233,8 @@ async function handleBrowserVoiceToolCall(
         toolName,
       });
       const idempotency = buildVoiceToolExecutionIdempotencyPayload(reservation);
-      const storedProviderResponse = readReservationProviderResponse(reservation);
+      const storedProviderResponse =
+        readVoiceToolReservationProviderResponse(reservation);
       let duplicateRedrive = {
         attempted: false,
         ok: true,
@@ -1383,6 +1253,12 @@ async function handleBrowserVoiceToolCall(
           fallbackToolCallId: toolCallId,
           fallbackToolName: toolName,
           fallbackProviderRealtimeCallId: providerRealtimeCallId,
+          createInboxSinkExecutor: createVoiceBusinessActionInboxSinkExecutor,
+          createSinkRegistry: createBusinessActionSinkRegistry,
+          updateVoiceCallForTenant,
+          appendVoiceCallEvent,
+          buildBrowserVoiceEventInput,
+          buildBusinessActionRecordedVoiceEventPayload,
         });
       } catch (redriveErr) {
         duplicateRedrive = {
@@ -1484,7 +1360,7 @@ async function handleBrowserVoiceToolCall(
       throw executeErr;
     }
 
-    const sinkRuntimeConfig = buildBrowserVoiceSinkRuntimeConfig(runtimeConfig);
+    const sinkRuntimeConfig = buildVoiceToolSinkRuntimeConfig(runtimeConfig);
     const finalityRecord = await markVoiceRealtimeToolExecutionSent({
       db,
       reservation,
@@ -1534,21 +1410,19 @@ async function handleBrowserVoiceToolCall(
       },
     }));
 
-    if (shouldRecordBusinessActionVoiceEvent(result)) {
-      const sinkRegistry = createBusinessActionSinkRegistry({
-        inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
-      });
-      sinkDispatch = await dispatchBusinessActionSinks({
-        requestRecord: result.requestRecord,
-        result,
-        runtimeConfig: sinkRuntimeConfig,
-        registry: sinkRegistry,
-      });
-      sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
-        deliveries: sinkDispatch.deliveries,
-      });
+    const sinkResult = await dispatchVoiceToolBusinessActionSinks({
+      result,
+      runtimeConfig: sinkRuntimeConfig,
+      createSinkRegistry: () =>
+        createBusinessActionSinkRegistry({
+          inbox: createVoiceBusinessActionInboxSinkExecutor({ db, wsHub }),
+        }),
+    });
 
-      inboxSinkDelivery = findInboxSinkDelivery(sinkDispatch.deliveries);
+    if (sinkResult.attempted === true) {
+      sinkDispatch = sinkResult.sinkDispatch;
+      sinkDelivery = sinkResult.sinkDelivery;
+      inboxSinkDelivery = sinkResult.inboxSinkDelivery;
 
       await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
@@ -1569,9 +1443,9 @@ async function handleBrowserVoiceToolCall(
       }));
     }
 
-    let callPatch = buildVoiceActionCallPatch({ result, call });
-    callPatch = applyVoiceInboxSinkDeliveryToCallPatch({
-      callPatch,
+    const callPatch = buildVoiceToolCallPatchWithSinkDelivery({
+      result,
+      call,
       sinkDelivery,
       inboxSinkDelivery,
     });
