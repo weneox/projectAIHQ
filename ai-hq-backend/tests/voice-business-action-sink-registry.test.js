@@ -70,9 +70,8 @@ test("enabled inbox sink needs a configured executor", async () => {
   });
 
   assert.equal(dispatch.ok, false);
-  assert.equal(dispatch.sinkDelivery.voice_core, undefined);
-  assert.equal(dispatch.sinkDelivery.voice_core, undefined);
-  assert.equal(dispatch.sinkDelivery.voice_core, undefined);
+  assert.equal(dispatch.sinkDelivery.voice_core, "recorded");
+  assert.equal(dispatch.sinkDelivery.inbox, "not_configured");
   assert.equal(dispatch.deliveries[0].sink, "voice_core");
   assert.equal(dispatch.deliveries[0].status, "recorded");
   assert.equal(dispatch.deliveries[1].sink, "inbox");
