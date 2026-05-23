@@ -994,7 +994,7 @@ async function handleBrowserVoiceRealtimeLink(
           call,
           scope,
           target,
-          runtimeConfig: sinkRuntimeConfig,
+          runtimeConfig,
           env: process.env,
           logger,
         });
@@ -1365,7 +1365,7 @@ async function handleBrowserVoiceToolCall(
       const sinkDispatch = await dispatchBusinessActionSinks({
         requestRecord: result.requestRecord,
         result,
-        runtimeConfig: sinkRuntimeConfig,
+        runtimeConfig,
         registry: sinkRegistry,
       });
       const sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
