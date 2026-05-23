@@ -1427,6 +1427,7 @@ async function handleVoiceQaDatasetExport(
         label: s(req.query?.label),
         issueLabel: s(req.query?.issueLabel),
         slotLabel: s(req.query?.slotLabel),
+        naturalnessLabel: s(req.query?.naturalnessLabel),
         operatorAction: s(req.query?.operatorAction),
         onlyAnnotated: req.query?.onlyAnnotated,
         onlyNeedsFix: req.query?.onlyNeedsFix,
