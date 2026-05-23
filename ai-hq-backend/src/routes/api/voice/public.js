@@ -658,6 +658,30 @@ function pickBrowserVoiceName(value = "") {
   return normalizeBrowserVoiceName(value);
 }
 
+export function buildBrowserRealtimeSessionReadinessBlock(sessionPlan = {}) {
+  const readiness = obj(sessionPlan.readiness);
+
+  if (readiness.ready !== false) {
+    return null;
+  }
+
+  const reasonCode = s(
+    readiness.reasonCode || "browser_voice_session_not_ready"
+  );
+
+  return {
+    statusCode: 409,
+    error: "browser_voice_session_not_ready",
+    payload: {
+      blocked: true,
+      reasonCode,
+      readiness,
+      providerContract: obj(sessionPlan.providerContract),
+      speechPipeline: obj(sessionPlan.speechPipeline),
+    },
+  };
+}
+
 async function handleBrowserVoiceSession(
   req,
   res,
@@ -710,6 +734,22 @@ async function handleBrowserVoiceSession(
 
     model = browserSessionPlan.model;
     voice = browserSessionPlan.voice;
+
+    const readinessBlock = buildBrowserRealtimeSessionReadinessBlock(browserSessionPlan);
+    if (readinessBlock) {
+      logger.warn("voice.browser.session.readiness_blocked", {
+        reasonCode: s(readinessBlock.payload?.reasonCode),
+        provider: s(browserSessionPlan.readiness?.provider),
+        transport: s(browserSessionPlan.readiness?.transport),
+      });
+
+      return fail(
+        res,
+        readinessBlock.statusCode,
+        readinessBlock.error,
+        readinessBlock.payload
+      );
+    }
 
     const upstream = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
       method: "POST",
