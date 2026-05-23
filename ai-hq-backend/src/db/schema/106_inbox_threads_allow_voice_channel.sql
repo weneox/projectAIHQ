@@ -1,5 +1,10 @@
 BEGIN;
 
+UPDATE inbox_threads
+SET channel = lower(btrim(channel))
+WHERE channel IS NOT NULL
+  AND channel <> lower(btrim(channel));
+
 ALTER TABLE inbox_threads
   DROP CONSTRAINT IF EXISTS inbox_threads_channel_check;
 

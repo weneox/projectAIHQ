@@ -51,4 +51,4 @@
 \i ./103_runtime_incident_trail.sql
 \i ./104_inbox_delivery_truth.sql
 \i ./105_operation_requests.sql
-
+\i ./106_inbox_threads_allow_voice_channel.sql
