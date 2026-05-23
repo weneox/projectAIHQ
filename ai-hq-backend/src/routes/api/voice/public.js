@@ -1369,12 +1369,16 @@ async function handleBrowserVoiceToolCall(
       sinkDispatch = await dispatchBusinessActionSinks({
         requestRecord: result.requestRecord,
         result,
-        runtimeConfig,
+        runtimeConfig: sinkRuntimeConfig,
         registry: sinkRegistry,
       });
       sinkDelivery = buildBusinessActionSinkDeliverySnapshot({
         deliveries: sinkDispatch.deliveries,
       });
+
+      inboxSinkDelivery = Array.isArray(sinkDispatch.deliveries)
+        ? sinkDispatch.deliveries.find((item) => item?.sink === "inbox") || null
+        : null;
 
       await appendVoiceCallEvent(db, buildBrowserVoiceEventInput({
         callId: voiceCallId,
@@ -1386,7 +1390,7 @@ async function handleBrowserVoiceToolCall(
           toolCallId,
           toolName,
           providerRealtimeCallId,
-          runtimeConfig,
+          runtimeConfig: sinkRuntimeConfig,
           idempotency,
           source: "browser_voice_tool_route",
           sinkDispatch,
@@ -1396,6 +1400,29 @@ async function handleBrowserVoiceToolCall(
     }
 
     const callPatch = buildVoiceActionCallPatch({ result, call });
+    
+    if (inboxSinkDelivery?.inboxThreadId) {
+      const inboxThreadId = s(inboxSinkDelivery.inboxThreadId);
+      callPatch.inboxThreadId = inboxThreadId;
+      callPatch.extraction = {
+        ...obj(callPatch.extraction),
+        voiceOutcome: {
+          ...obj(callPatch.extraction?.voiceOutcome),
+          sinkDelivery: obj(sinkDelivery),
+          inboxSinkDelivery: obj(inboxSinkDelivery),
+        },
+      };
+      callPatch.meta = {
+        ...obj(callPatch.meta),
+        lastVoiceAction: {
+          ...obj(callPatch.meta?.lastVoiceAction),
+          sinkDelivery: obj(sinkDelivery),
+          inboxSinkDelivery: obj(inboxSinkDelivery),
+          inboxThreadId,
+        },
+      };
+    }
+
     if (Object.keys(callPatch).length > 0) {
       await updateVoiceCallForTenant(db, {
         id: voiceCallId,
