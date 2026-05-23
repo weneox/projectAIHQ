@@ -122,7 +122,7 @@ export async function dispatchBusinessActionSinks({
   requestRecord = {},
   result = {},
   runtimeConfig = {},
-  sinks = ["voice_core"],
+  sinks = null,
   registry = createBusinessActionSinkRegistry(),
 } = {}) {
   const contracts = buildBusinessActionSinkContracts({

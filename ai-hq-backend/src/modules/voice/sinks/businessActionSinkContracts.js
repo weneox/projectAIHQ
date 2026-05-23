@@ -127,3 +127,35 @@ export function buildBusinessActionSinkContracts({
     )
     .filter((item) => item.sink !== "none");
 }
+
+export function resolveBusinessActionSinkNames({
+  runtimeConfig = {},
+  sinks = null,
+} = {}) {
+  const runtime = obj(runtimeConfig);
+  const configured = arr(sinks).length
+    ? arr(sinks)
+    : [
+        ...arr(runtime.businessActionSinkNames),
+        ...arr(runtime.voiceSinkNames),
+        ...arr(runtime.enabledSinks),
+        ...arr(runtime.sinks),
+      ];
+
+  const nested = obj(runtime.businessActionSinks || runtime.voiceSinks);
+  const names = ["voice_core", ...configured];
+
+  for (const sink of ["inbox", "calendar", "crm", "webhook"]) {
+    if (obj(nested[sink]).enabled === true) {
+      names.push(sink);
+    }
+  }
+
+  return Array.from(
+    new Set(
+      names
+        .map((item) => normalizeBusinessActionSinkName(item))
+        .filter((item) => item && item !== "none")
+    )
+  );
+}
