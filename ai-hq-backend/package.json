@@ -30,7 +30,7 @@
     "source-sync:website:once": "node --import ../scripts/workspace-module-loader.mjs scripts/run-website-source-crawl-once.mjs",
     "source-sync:website:loop": "node scripts/run-website-source-crawl-loop.mjs",
     "test:public-webchat": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/public-webchat-widget.contract.test.js",
-    "test:voice:runtime": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/voice-internal-runtime-facade.test.js tests/voice-internal-runtime-hardening.test.js tests/voice-mutation-hardening.test.js tests/truth-authority-enforcement.test.js",
+    "test:voice:runtime": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/voice-business-action-events.test.js tests/voice-business-action-request-record.test.js tests/voice-business-action-executor-registry.test.js tests/voice-business-action-adapter-runtime.test.js tests/voice-business-action-adapter-contracts.test.js tests/voice-adapter-contracts.test.js tests/voice-internal-runtime-facade.test.js tests/voice-internal-runtime-hardening.test.js tests/voice-mutation-hardening.test.js tests/truth-authority-enforcement.test.js",
     "test:setup-brain": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/setup-assistant-orchestrator.test.js tests/setup-assistant-integration.test.js tests/setup-assistant-source-signals.test.js tests/setup-assistant-session-payload.test.js tests/setup-session-payload-business-only.test.js tests/setup-assistant-patching.test.js tests/setup-projection-business-only.test.js tests/setup-review-application.test.js"
   },
   "dependencies": {
