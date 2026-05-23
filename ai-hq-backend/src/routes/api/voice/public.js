@@ -2,13 +2,13 @@ import { randomUUID } from "crypto";
 import express from "express";
 import {
   requireOperatorSurfaceAccess,
-  } from "../../../utils/auth.js";
+} from "../../../utils/auth.js";
 import {
   createLogger,
-  } from "../../../utils/logger.js";
+} from "../../../utils/logger.js";
 import {
   recordRuntimeSignal,
-  } from "../../../observability/runtimeSignals.js";
+} from "../../../observability/runtimeSignals.js";
 import {
   s,
   n,
@@ -16,7 +16,7 @@ import {
   fail,
   getActor,
   isLiveVoiceStatus,
-  } from "./shared.js";
+} from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -27,17 +27,17 @@ import {
   createVoiceCall,
   updateVoiceCallForTenant,
   resolveTenantScope,
-  } from "./repository.js";
+} from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
   getScopedCallOrFail,
   getScopedSessionOrFail,
   auditSafe,
-  } from "./utils.js";
+} from "./utils.js";
 import {
   getTenantBrainRuntime,
-  } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
@@ -58,7 +58,10 @@ import {
   dispatchBusinessActionSinks,
   buildBusinessActionSinkDeliverySnapshot,
   createBusinessActionSinkRegistry,
-  } from "../../../modules/voice/index.js";
+} from "../../../modules/voice/index.js";
+import {
+  createVoiceBusinessActionInboxSinkExecutor,
+} from "../../../modules/inbox/voiceBusinessActionSink.js";
 import {
   createVoiceChannelConnection,
   buildVoiceSettingsInputWithChannels,
@@ -66,7 +69,7 @@ import {
   listVoiceChannelsFromSettings,
   startVoiceChannelRoutingTest,
   startVoiceChannelVerification,
-  } from "../../../modules/voice/channelConnection.js";
+} from "../../../modules/voice/channelConnection.js";
 import {
   buildBrowserRealtimeSessionPlan,
   normalizeBrowserVoiceModel,
@@ -85,8 +88,8 @@ import {
 } from "../../../modules/voice/actions/voiceActionContracts.js";
 import {
   buildVoiceActionCallPatch,
-  
-  applyVoiceInboxSinkDeliveryToCallPatch,executeVoiceAction,
+  applyVoiceInboxSinkDeliveryToCallPatch,
+  executeVoiceAction,
 } from "../../../modules/voice/actions/voiceActionRuntime.js";
 import {
   buildRealtimeControlTarget,
@@ -1158,7 +1161,7 @@ async function handleBrowserVoiceCallEvent(req, res, { db, dbDisabled = false } 
 async function handleBrowserVoiceToolCall(
   req,
   res,
-  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime, wsHub = null } = {}
 ) {
   const logger = getRouteLogger(req, "voice.browser.tool");
   try {
@@ -1745,7 +1748,7 @@ export function voiceRoutes({
   );
 
   r.post("/voice/browser/calls/:callId/tools", requireOperatorSurfaceAccess, (req, res) =>
-    handleBrowserVoiceToolCall(req, res, { db, dbDisabled, getRuntime })
+    handleBrowserVoiceToolCall(req, res, { db, dbDisabled, getRuntime, wsHub })
   );
 
   r.post("/voice/browser/session", requireOperatorSurfaceAccess, (req, res) =>
