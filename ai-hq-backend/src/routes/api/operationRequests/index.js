@@ -5,6 +5,12 @@ import {
   listOperationRequestsForTenant,
   updateOperationRequestForTenant,
 } from "../../../db/helpers/operationRequests.js";
+import {
+  buildOperationRequestWorkflowMeta,
+  isValidOperationRequestPriority,
+  isValidOperationRequestStatus,
+  validateOperationRequestStatusTransition,
+} from "../../../modules/operationRequests/workflow.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -50,21 +56,15 @@ const ALLOWED_PATCH_FIELDS = new Set([
   "description",
   "notes",
   "meta",
+  "transitionReason",
+  "statusReason",
+  "resolutionReason",
+  "reason",
+  "operatorNote",
+  "operatorNotes",
 ]);
 
 const ALLOWED_META_FIELDS = new Set(["notes", "operatorNotes"]);
-const STATUS_VALUES = new Set([
-  "new",
-  "in_review",
-  "waiting_customer",
-  "contacted",
-  "scheduled",
-  "resolved",
-  "cancelled",
-  "failed",
-]);
-const PRIORITY_VALUES = new Set(["low", "normal", "high", "urgent"]);
-
 const FORBIDDEN_PATCH_FIELDS = new Set([
   "tenantId",
   "tenant_id",
@@ -102,7 +102,7 @@ function findRejectedPatchFields(body = {}) {
   return rejected;
 }
 
-function buildPatch(body = {}, current = {}) {
+function buildPatch(body = {}, current = {}, context = {}) {
   const input = obj(body);
   const patch = {};
 
@@ -126,11 +126,33 @@ function buildPatch(body = {}, current = {}) {
     hasMetaPatch = true;
   }
 
+  if (input.operatorNote !== undefined) {
+    nextMeta.operatorNotes = s(input.operatorNote);
+    hasMetaPatch = true;
+  }
+
+  if (input.operatorNotes !== undefined) {
+    nextMeta.operatorNotes = s(input.operatorNotes);
+    hasMetaPatch = true;
+  }
+
   for (const [key, value] of Object.entries(obj(input.meta))) {
     if (ALLOWED_META_FIELDS.has(key)) {
       nextMeta[key] = s(value);
       hasMetaPatch = true;
     }
+  }
+
+  const workflowMeta = buildOperationRequestWorkflowMeta({
+    body: input,
+    current,
+    patch,
+    actor: s(context.actor || current.assignedTo || "user"),
+  });
+
+  if (workflowMeta) {
+    nextMeta.workflow = workflowMeta;
+    hasMetaPatch = true;
   }
 
   if (hasMetaPatch) {
@@ -159,14 +181,14 @@ function validatePatchBody(body = {}) {
     };
   }
 
-  if (input.status !== undefined && !STATUS_VALUES.has(s(input.status).toLowerCase())) {
+  if (input.status !== undefined && !isValidOperationRequestStatus(input.status)) {
     return {
       ok: false,
       code: "invalid_operation_request_status",
     };
   }
 
-  if (input.priority !== undefined && !PRIORITY_VALUES.has(s(input.priority).toLowerCase())) {
+  if (input.priority !== undefined && !isValidOperationRequestPriority(input.priority)) {
     return {
       ok: false,
       code: "invalid_operation_request_priority",
@@ -198,6 +220,20 @@ async function auditOperationRequestPatch({ audit, req, request, before = {}, pa
           before: s(before.priority),
           after: s(request?.priority),
           changed: patch.priority !== undefined,
+        },
+        workflow: {
+          transitionReason: s(
+            req.body?.transitionReason ||
+              req.body?.statusReason ||
+              req.body?.resolutionReason ||
+              req.body?.reason
+          ),
+          operatorNotePresent: !!s(
+            req.body?.operatorNote ||
+              req.body?.operatorNotes ||
+              req.body?.notes ||
+              req.body?.meta?.operatorNotes
+          ),
         },
       },
     });
@@ -259,7 +295,22 @@ export async function patchOperationRequestHandler(
   });
   if (!current) return fail(req, res, 404, "operation_request_not_found");
 
-  const patch = buildPatch(req.body, current);
+  const workflowValidation = validateOperationRequestStatusTransition({
+    currentStatus: current.status,
+    nextStatus: req.body?.status,
+  });
+
+  if (!workflowValidation.ok) {
+    return fail(req, res, 409, workflowValidation.code, {
+      currentStatus: workflowValidation.currentStatus,
+      nextStatus: workflowValidation.nextStatus,
+      allowedStatuses: workflowValidation.allowedStatuses,
+    });
+  }
+
+  const patch = buildPatch(req.body, current, {
+    actor: s(req.auth?.userId || req.user?.id || "user"),
+  });
   const updated = await updateOperationRequestForTenant(db, {
     id: current.id,
     tenantId,
