@@ -344,3 +344,53 @@ test("voice QA call inspector treats pass annotation as reviewed pass", () => {
   assert.equal(inspector.flags.needsHumanReview, false);
   assert.equal(inspector.flags.operatorAction, "reviewed_pass");
 });
+
+
+test("voice QA call inspector attaches outcome score", () => {
+  const inspector = buildVoiceQaCallInspector({
+    call: {
+      id: "call-score-1",
+      status: "completed",
+      meta: {
+        qa: {
+          annotations: [
+            {
+              id: "annotation-score-1",
+              verdict: "needs_fix",
+              severity: "medium",
+              naturalnessLabels: ["recording_like", "too_formal"],
+              naturalnessScore: 2,
+              naturalnessIssue: "Səs yazı kimi başlayır.",
+              createdAt: "2026-05-23T00:00:00.000Z",
+            },
+          ],
+          lastAnnotation: {
+            id: "annotation-score-1",
+            verdict: "needs_fix",
+            severity: "medium",
+            naturalnessLabels: ["recording_like", "too_formal"],
+            naturalnessScore: 2,
+            naturalnessIssue: "Səs yazı kimi başlayır.",
+            createdAt: "2026-05-23T00:00:00.000Z",
+          },
+          summary: {
+            latestVerdict: "needs_fix",
+            latestSeverity: "medium",
+            latestNaturalnessLabels: ["recording_like", "too_formal"],
+            latestNaturalnessScore: 2,
+            needsFix: true,
+            badCall: false,
+          },
+        },
+      },
+    },
+    events: [],
+  });
+
+  assert.equal(inspector.score.version, "voice-qa-outcome-score-v1");
+  assert.equal(inspector.outcomeScore.status, "naturalness_issue");
+  assert.equal(inspector.outcomeScore.outcome, "naturalness_issue");
+  assert.equal(inspector.outcomeScore.signals.hasNaturalnessIssue, true);
+  assert.deepEqual(inspector.qa.naturalnessLabels, ["recording_like", "too_formal"]);
+  assert.deepEqual(inspector.qa.latestNaturalnessLabels, ["recording_like", "too_formal"]);
+});

@@ -1,3 +1,7 @@
+import {
+  buildVoiceQaOutcomeScore,
+} from "./voiceQaOutcomeScore.js";
+
 export const VOICE_QA_CALL_INSPECTOR_VERSION = "voice-qa-call-inspector-v1";
 
 function s(value, fallback = "") {
@@ -135,6 +139,15 @@ function summarizeQaAnnotations({ call = {}, events = [] } = {}) {
     ),
   ];
 
+  const naturalnessLabels = [
+    ...new Set(
+      annotations
+        .flatMap((annotation) => arr(annotation.naturalnessLabels))
+        .map((label) => s(label))
+        .filter(Boolean)
+    ),
+  ];
+
   const latestVerdict = s(
     summary.latestVerdict || lastAnnotation.verdict
   );
@@ -153,6 +166,12 @@ function summarizeQaAnnotations({ call = {}, events = [] } = {}) {
     latestSlotLabels: arr(summary.latestSlotLabels).length
       ? arr(summary.latestSlotLabels)
       : arr(lastAnnotation.slotLabels),
+    latestNaturalnessLabels: arr(summary.latestNaturalnessLabels).length
+      ? arr(summary.latestNaturalnessLabels)
+      : arr(lastAnnotation.naturalnessLabels),
+    latestNaturalnessScore: Number(
+      summary.latestNaturalnessScore || lastAnnotation.naturalnessScore || 0
+    ),
     latestAnnotatedAt: s(summary.latestAnnotatedAt || lastAnnotation.createdAt),
     needsFix:
       summary.needsFix === true ||
@@ -162,6 +181,7 @@ function summarizeQaAnnotations({ call = {}, events = [] } = {}) {
       latestVerdict === "bad_call",
     issueLabels,
     slotLabels,
+    naturalnessLabels,
     byVerdict: countBy(annotations, (annotation) => annotation.verdict || "reviewed"),
     bySeverity: countBy(annotations, (annotation) => annotation.severity || "low"),
     lastAnnotation,
@@ -405,6 +425,14 @@ export function buildVoiceQaCallInspector({ call = {}, events = [] } = {}) {
   const timeline = summarizeTimeline(events);
   const qa = summarizeQaAnnotations({ call, events });
   const flags = decideInspectorFlags({ callSummary, runtime, tools, qa });
+  const score = buildVoiceQaOutcomeScore({
+    callSummary,
+    runtime,
+    tools,
+    timeline,
+    qa,
+    flags,
+  });
 
   return {
     version: VOICE_QA_CALL_INSPECTOR_VERSION,
@@ -416,5 +444,7 @@ export function buildVoiceQaCallInspector({ call = {}, events = [] } = {}) {
     qa,
     annotations: qa,
     flags,
+    score,
+    outcomeScore: score,
   };
 }
