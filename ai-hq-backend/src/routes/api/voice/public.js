@@ -48,6 +48,7 @@ import {
   buildVoiceQaAnnotationCallPatch,
   buildVoiceQaAnnotationEventPayload,
   buildVoiceQaAnnotationRecord,
+  buildVoiceQaDataset,
   toggleTenantVoiceSettings,
   resolveVoiceCallSessionForOperator,
   processVoiceTenantConfig,
@@ -1381,6 +1382,74 @@ async function handleBrowserVoiceToolCall(
   }
 }
 
+async function handleVoiceQaDatasetExport(
+  req,
+  res,
+  { db, dbDisabled = false } = {}
+) {
+  const logger = getRouteLogger(req, "voice.qa.dataset");
+  try {
+    if (dbDisabled || !db) {
+      return ok(res, {
+        dataset: buildVoiceQaDataset({ items: [] }),
+        rows: [],
+        summary: buildVoiceQaDataset({ items: [] }).summary,
+        dbDisabled: true,
+      });
+    }
+
+    const scope = await requireTenantScope(req, res, db);
+    if (!scope) return;
+
+    const calls = await listVoiceCalls(db, {
+      tenantId: scope.tenantId,
+      status: s(req.query?.status),
+      limit: Math.max(1, Math.min(200, n(req.query?.limit, 50))),
+    });
+
+    const items = [];
+    for (const call of calls) {
+      const details = await readVoiceCallEvents({ db, call });
+      items.push({
+        call,
+        inspector: details.qaInspector || details.inspector || {},
+      });
+    }
+
+    const dataset = buildVoiceQaDataset({
+      items,
+      includeText: ["1", "true", "yes", "y", "on"].includes(
+        s(req.query?.includeText).toLowerCase()
+      ),
+      maxText: Math.max(200, Math.min(5000, n(req.query?.maxText, 1200))),
+      filters: {
+        verdict: s(req.query?.verdict),
+        label: s(req.query?.label),
+        issueLabel: s(req.query?.issueLabel),
+        slotLabel: s(req.query?.slotLabel),
+        operatorAction: s(req.query?.operatorAction),
+        onlyAnnotated: req.query?.onlyAnnotated,
+        onlyNeedsFix: req.query?.onlyNeedsFix,
+      },
+    });
+
+    return ok(res, {
+      dataset,
+      rows: dataset.rows,
+      summary: dataset.summary,
+    });
+  } catch (err) {
+    logger.error("voice.qa.dataset.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.qa.dataset",
+      reasonCode: "voice_qa_dataset_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_qa_dataset_failed");
+  }
+}
+
 async function handleVoiceQaAnnotation(
   req,
   res,
@@ -1745,6 +1814,10 @@ export function voiceRoutes({
       return fail(res, 500, "voice_overview_failed");
     }
   });
+
+  r.get("/voice/qa/dataset", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceQaDatasetExport(req, res, { db, dbDisabled })
+  );
 
   r.get("/voice/calls", requireOperatorSurfaceAccess, async (req, res) => {
     const logger = getRouteLogger(req, "voice.calls.list");
