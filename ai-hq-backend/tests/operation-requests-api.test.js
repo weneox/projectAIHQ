@@ -561,3 +561,84 @@ test("operation requests route is mounted behind authenticated API middleware", 
     });
   }
 });
+
+
+test("patch rejects terminal status transitions", async () => {
+  const dbFixture = makeDb();
+  dbFixture.rows[0].status = "resolved";
+
+  const fixture = await withOperationRequestApp({ dbFixture });
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        status: "scheduled",
+        transitionReason: "Customer asked to reopen after resolution",
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.body.code, "operation_request_terminal_status_locked");
+    assert.equal(response.body.currentStatus, "resolved");
+    assert.equal(response.body.nextStatus, "scheduled");
+    assert.deepEqual(response.body.allowedStatuses, ["resolved"]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch rejects unsupported status transition", async () => {
+  const dbFixture = makeDb();
+  dbFixture.rows[0].status = "scheduled";
+
+  const fixture = await withOperationRequestApp({ dbFixture });
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        status: "new",
+        transitionReason: "Invalid regression",
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.body.code, "invalid_operation_request_status_transition");
+    assert.equal(response.body.currentStatus, "scheduled");
+    assert.equal(response.body.nextStatus, "new");
+    assert.ok(response.body.allowedStatuses.includes("resolved"));
+    assert.equal(response.body.allowedStatuses.includes("new"), false);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("patch records workflow transition metadata and operator note", async () => {
+  const fixture = await withOperationRequestApp();
+  try {
+    const response = await requestJson(fixture.server, {
+      method: "PATCH",
+      path: `/operation-requests/${REQUEST_ID}`,
+      body: {
+        status: "in_review",
+        transitionReason: "Operator opened the request",
+        operatorNote: "Call customer before noon",
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.request.status, "in_review");
+    assert.equal(response.body.request.meta.operatorNotes, "Call customer before noon");
+    assert.equal(response.body.request.meta.workflow.lastTransition.actor, "user-1");
+    assert.equal(response.body.request.meta.workflow.lastTransition.from, "new");
+    assert.equal(response.body.request.meta.workflow.lastTransition.to, "in_review");
+    assert.equal(response.body.request.meta.workflow.lastTransition.reason, "Operator opened the request");
+    assert.equal(response.body.request.meta.workflow.lastTransition.operatorNote, "Call customer before noon");
+    assert.equal(response.body.request.meta.workflow.transitions.length, 1);
+    assert.equal(fixture.auditEntries[0].meta.workflow.transitionReason, "Operator opened the request");
+    assert.equal(fixture.auditEntries[0].meta.workflow.operatorNotePresent, true);
+  } finally {
+    await fixture.close();
+  }
+});
