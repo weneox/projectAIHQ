@@ -146,6 +146,10 @@ export function normalizeBrowserSpeechSynthesisResult(result = {}) {
   };
 }
 
+export async function getVoiceSpeechGatewayReadiness(params = {}) {
+  return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
+}
+
 export async function transcribeBrowserSpeech(body = {}) {
   if (!hasBrowserSpeechAudioInput(body)) {
     throw new Error("audio is required");
