@@ -8,21 +8,24 @@ import {
   synthesizeBrowserSpeech,
   transcribeBrowserSpeech,
 } from "../../api/voice.js";
+import {
+  linkBrowserVoiceRealtimeSessionFromSdpResponse,
+  normalizeRealtimeProviderCallId,
+} from "../../pages/hooks/useBrowserVoiceCall.js";
+import {
+  arrayBufferToBase64,
+  blobToBrowserSpeechPayload,
+  createBrowserSpeechMediaRecorder,
+  isBrowserSpeechRecordingSupported,
+  pickBrowserSpeechMimeType,
+  stopBrowserSpeechStream,
+  transcribeBrowserAudioBlob,
+} from "../../pages/hooks/useBrowserSpeechBridge.js";
 
 vi.mock("../../api/client.js", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
 }));
-import {
-  linkBrowserVoiceRealtimeSessionFromSdpResponse,
-  normalizeRealtimeProviderCallId,
-} from "../../pages/hooks/useBrowserVoiceCall.js";
-
-import {
-  arrayBufferToBase64,
-  blobToBrowserSpeechPayload,
-  transcribeBrowserAudioBlob,
-} from "../../pages/hooks/useBrowserSpeechBridge.js";
 
 describe("Voice", () => {
   beforeEach(() => {
@@ -230,6 +233,76 @@ describe("Voice", () => {
       audioByteLength: 10,
       finalize: true,
     });
+  });
+
+  it("builds browser media recorder sessions with supported audio mime types", async () => {
+    const stopTrack = vi.fn();
+    const stream = {
+      getTracks: () => [{ stop: stopTrack }],
+    };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+
+    function FakeMediaRecorder(nextStream, options) {
+      this.stream = nextStream;
+      this.options = options;
+      this.state = "inactive";
+      this.start = vi.fn();
+      this.stop = vi.fn();
+    }
+
+    FakeMediaRecorder.isTypeSupported = vi.fn((mimeType) => mimeType === "audio/webm");
+
+    expect(
+      isBrowserSpeechRecordingSupported({
+        navigatorRef: { mediaDevices: { getUserMedia } },
+        mediaRecorderCtor: FakeMediaRecorder,
+      })
+    ).toBe(true);
+
+    expect(
+      pickBrowserSpeechMimeType(FakeMediaRecorder, ["audio/mp4", "audio/webm"])
+    ).toBe("audio/webm");
+
+    const session = await createBrowserSpeechMediaRecorder({
+      navigatorRef: { mediaDevices: { getUserMedia } },
+      mediaRecorderCtor: FakeMediaRecorder,
+      candidates: ["audio/mp4", "audio/webm"],
+    });
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(session.mimeType).toBe("audio/webm");
+    expect(session.stream).toBe(stream);
+    expect(session.recorder.options).toEqual({ mimeType: "audio/webm" });
+
+    expect(stopBrowserSpeechStream(stream)).toBe(1);
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when browser media recorder dependencies are unavailable", async () => {
+    expect(
+      isBrowserSpeechRecordingSupported({
+        navigatorRef: {},
+        mediaRecorderCtor: null,
+      })
+    ).toBe(false);
+
+    await expect(
+      createBrowserSpeechMediaRecorder({
+        navigatorRef: {},
+        mediaRecorderCtor: function FakeMediaRecorder() {},
+      })
+    ).rejects.toThrow("browser microphone is unavailable");
+
+    await expect(
+      createBrowserSpeechMediaRecorder({
+        navigatorRef: {
+          mediaDevices: {
+            getUserMedia: vi.fn(),
+          },
+        },
+        mediaRecorderCtor: null,
+      })
+    ).rejects.toThrow("MediaRecorder is unavailable");
   });
 
 });
