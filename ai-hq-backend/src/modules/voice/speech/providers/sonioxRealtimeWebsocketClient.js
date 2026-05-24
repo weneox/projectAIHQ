@@ -8,10 +8,24 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function cleanObject(value = {}) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, next]) => next !== undefined && next !== "")
+  );
+}
+
 export const SONIOX_REALTIME_WEBSOCKET_CLIENT_VERSION =
-  "soniox_realtime_websocket_client.v1";
+  "soniox_realtime_websocket_client.v2";
 
 export const SONIOX_REALTIME_STAGES = Object.freeze(["stt", "tts"]);
+
+export const SONIOX_DEFAULT_STT_MODEL = "stt-rt-v4";
+export const SONIOX_DEFAULT_TTS_MODEL = "tts-rt-v1";
 
 function normalizeStage(value = "") {
   const stage = s(value).toLowerCase();
@@ -22,10 +36,55 @@ function redactSecret(value = "") {
   return s(value) ? "[redacted]" : "";
 }
 
+function normalizeModel(stage, value = "") {
+  const model = s(value);
+  if (model && model !== "default") return model;
+  return stage === "tts" ? SONIOX_DEFAULT_TTS_MODEL : SONIOX_DEFAULT_STT_MODEL;
+}
+
+function buildSonioxInitialConfig({ runtimeConfig = {}, plan = {} } = {}) {
+  const config = obj(runtimeConfig);
+  const stage = s(plan.stage);
+  const apiKey = s(config.apiKey);
+
+  if (stage === "tts") {
+    return cleanObject({
+      api_key: apiKey,
+      stream_id: s(plan.streamId, "stream-1"),
+      model: normalizeModel("tts", plan.model),
+      language: s(plan.language, "az"),
+      voice: s(plan.voice, "default"),
+      audio_format: "pcm_s16le",
+      sample_rate: 24000,
+    });
+  }
+
+  return cleanObject({
+    api_key: apiKey,
+    model: normalizeModel("stt", plan.model),
+    language_hints: s(plan.language) ? [s(plan.language)] : undefined,
+    audio_format: "pcm_s16le",
+    sample_rate: n(plan.sampleRateHz, 16000),
+    num_channels: 1,
+    enable_endpoint_detection: true,
+  });
+}
+
+function buildSonioxInitialTextRequest(plan = {}) {
+  if (s(plan.stage) !== "tts" || !s(plan.text)) return null;
+
+  return {
+    text: s(plan.text),
+    text_end: true,
+    stream_id: s(plan.streamId, "stream-1"),
+  };
+}
+
 export function buildSonioxRealtimeConnectionPlan({
   runtimeConfig = {},
   stage = "stt",
   text = "",
+  streamId = "",
 } = {}) {
   const config = obj(runtimeConfig);
   const normalizedStage = normalizeStage(stage);
@@ -70,27 +129,31 @@ export function buildSonioxRealtimeConnectionPlan({
     networkIo: false,
     websocketUrl,
     authentication: {
-      type: "api_key",
+      type: "api_key_config_message",
       configured: true,
       value: redactSecret(config.apiKey),
     },
     language: s(stageConfig.language, config.language || "az"),
-    model: s(stageConfig.model, "default"),
+    model: normalizeModel(normalizedStage, stageConfig.model),
     voice: normalizedStage === "tts" ? s(stageConfig.voice, "default") : "",
     sampleRateHz:
       normalizedStage === "stt"
-        ? Number(stageConfig.sampleRateHz || 16000)
+        ? n(stageConfig.sampleRateHz, 16000)
         : undefined,
     interimResults:
       normalizedStage === "stt"
         ? stageConfig.interimResults !== false
         : undefined,
+    streamId: normalizedStage === "tts" ? s(streamId, "stream-1") : "",
     text: normalizedStage === "tts" ? s(text) : "",
     reasonCode: "",
   };
 }
 
 function buildPrivateSocketRequest({ runtimeConfig = {}, plan = {} } = {}) {
+  const initialConfig = buildSonioxInitialConfig({ runtimeConfig, plan });
+  const initialTextRequest = buildSonioxInitialTextRequest(plan);
+
   return {
     provider: "soniox",
     stage: s(plan.stage),
@@ -98,6 +161,8 @@ function buildPrivateSocketRequest({ runtimeConfig = {}, plan = {} } = {}) {
     headers: {
       Authorization: `Bearer ${s(runtimeConfig.apiKey)}`,
     },
+    initialConfig,
+    initialTextRequest,
     handshake: {
       provider: "soniox",
       stage: s(plan.stage),
@@ -106,6 +171,7 @@ function buildPrivateSocketRequest({ runtimeConfig = {}, plan = {} } = {}) {
       voice: s(plan.voice),
       sampleRateHz: plan.sampleRateHz,
       interimResults: plan.interimResults,
+      streamId: s(plan.streamId),
       text: s(plan.text),
     },
   };
@@ -126,16 +192,17 @@ export function createSonioxRealtimeWebsocketClient({
     configured: config.configured === true && !!s(config.apiKey),
     canCreateSocket,
 
-    buildConnectionPlan({ stage = "stt", text = "" } = {}) {
+    buildConnectionPlan({ stage = "stt", text = "", streamId = "" } = {}) {
       return buildSonioxRealtimeConnectionPlan({
         runtimeConfig: config,
         stage,
         text,
+        streamId,
       });
     },
 
-    async connect({ stage = "stt", text = "" } = {}) {
-      const connectionPlan = this.buildConnectionPlan({ stage, text });
+    async connect({ stage = "stt", text = "", streamId = "" } = {}) {
+      const connectionPlan = this.buildConnectionPlan({ stage, text, streamId });
 
       if (!connectionPlan.ok) {
         return {
