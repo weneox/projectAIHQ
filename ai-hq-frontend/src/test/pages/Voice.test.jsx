@@ -18,6 +18,12 @@ import {
   normalizeRealtimeProviderCallId,
 } from "../../pages/hooks/useBrowserVoiceCall.js";
 
+import {
+  arrayBufferToBase64,
+  blobToBrowserSpeechPayload,
+  transcribeBrowserAudioBlob,
+} from "../../pages/hooks/useBrowserSpeechBridge.js";
+
 describe("Voice", () => {
   beforeEach(() => {
     apiPost.mockReset();
@@ -188,6 +194,42 @@ describe("Voice", () => {
 
     expect(normalizeBrowserSpeechSynthesisResult({}).audioEncoding).toBe("base64");
     expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("converts browser audio blobs into speech bridge payloads", async () => {
+    const blob = new Blob(["fake-audio"], { type: "audio/webm" });
+    const payload = await blobToBrowserSpeechPayload(blob, { finalize: false });
+
+    expect(payload.audioBase64).toBe("ZmFrZS1hdWRpbw==");
+    expect(payload.encoding).toBe("base64");
+    expect(payload.mimeType).toBe("audio/webm");
+    expect(payload.audioByteLength).toBe(10);
+    expect(payload.finalize).toBe(false);
+
+    expect(arrayBufferToBase64(new TextEncoder().encode("ok"))).toBe("b2s=");
+  });
+
+  it("transcribes browser audio blobs through an injected speech client", async () => {
+    const transcribe = vi.fn().mockResolvedValue({
+      ok: true,
+      text: "Salam",
+    });
+
+    const result = await transcribeBrowserAudioBlob(
+      new Blob(["fake-audio"], { type: "audio/webm" }),
+      { finalize: true },
+      transcribe
+    );
+
+    expect(result.text).toBe("Salam");
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    expect(transcribe.mock.calls[0][0]).toEqual({
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      mimeType: "audio/webm",
+      audioByteLength: 10,
+      finalize: true,
+    });
   });
 
 });
