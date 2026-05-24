@@ -37,3 +37,4 @@ export * from "./speech/azConversationNaturalizer.js";
 export * from "./speech/providers/sonioxSpeechAdapter.js";
 
 export * from "./speech/providers/sonioxSpeechRuntimeConfig.js";
+export * from "./speech/providers/sonioxRealtimeWebsocketClient.js";
