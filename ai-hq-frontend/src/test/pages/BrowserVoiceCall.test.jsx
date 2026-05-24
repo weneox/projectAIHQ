@@ -1,61 +1,81 @@
-﻿import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const startCall = vi.fn();
-const stopCall = vi.fn();
+import BrowserVoiceCall from "../../pages/BrowserVoiceCall.jsx";
+import useBrowserVoiceCall from "../../pages/hooks/useBrowserVoiceCall.js";
 
 vi.mock("../../pages/hooks/useBrowserVoiceCall.js", () => ({
-  default: () => ({
+  default: vi.fn(),
+}));
+
+function buildHook(overrides = {}) {
+  return {
     status: "idle",
     error: "",
     voice: "coral",
-    runtimeMeta: {
-      runtimeApplied: true,
-      tenantKey: "acme",
-      activeVoiceChannel: {
-        provider: "browser_lab",
-      },
-      match: {
-        provider: "browser_lab",
-      },
-    },
+    runtimeMeta: null,
     events: [],
     remoteAudioRef: { current: null },
-    startCall,
-    stopCall,
-  }),
-}));
+    speechBridge: {
+      available: true,
+      error: "",
+      mode: "speech_bridge",
+      playbackStatus: "idle",
+      recording: false,
+      speakText: vi.fn(),
+      startRecording: vi.fn(),
+      status: "idle",
+      stopRecording: vi.fn(),
+      text: "Salam",
+    },
+    startCall: vi.fn(),
+    stopCall: vi.fn(),
+    ...overrides,
+  };
+}
 
-import BrowserVoiceCall from "../../pages/BrowserVoiceCall.jsx";
-
-describe("BrowserVoiceCall product surface", () => {
+describe("BrowserVoiceCall", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    useBrowserVoiceCall.mockReset();
   });
 
-  afterEach(() => {
-    cleanup();
+  it("renders GPT Realtime and speech bridge test lanes together", () => {
+    const hook = buildHook();
+    useBrowserVoiceCall.mockReturnValue(hook);
+
+    const { getByText, getByLabelText } = render(<BrowserVoiceCall />);
+
+    expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
+    expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
+    expect(getByLabelText("Speech bridge text")).toBeTruthy();
+
+    fireEvent.click(getByText("Start GPT Realtime call"));
+    expect(hook.startCall).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(getByText("Start speech bridge recording"));
+    expect(hook.speechBridge.startRecording).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(getByText("Speak via speech bridge"));
+    expect(hook.speechBridge.speakText).toHaveBeenCalledWith("Salam");
   });
 
-  it("renders a clean working browser voice call surface", () => {
-    render(<BrowserVoiceCall />);
+  it("uses stop controls when both voice lanes are active", () => {
+    const hook = buildHook({
+      status: "live",
+      speechBridge: {
+        ...buildHook().speechBridge,
+        recording: true,
+        status: "recording",
+      },
+    });
+    useBrowserVoiceCall.mockReturnValue(hook);
 
-    expect(
-      screen.getByRole("heading", { name: /^browser voice call$/i })
-    ).toBeInTheDocument();
+    const { getByText } = render(<BrowserVoiceCall />);
 
-    expect(screen.getByRole("button", { name: /start call/i })).toBeInTheDocument();
-    expect(screen.getByText(/openai realtime/i)).toBeInTheDocument();
-    expect(screen.getByText(/browser webrtc/i)).toBeInTheDocument();
-    expect(screen.getByText(/tenant runtime active/i)).toBeInTheDocument();
-    expect(screen.getByText(/live call log/i)).toBeInTheDocument();
+    fireEvent.click(getByText("End GPT Realtime call"));
+    expect(hook.stopCall).toHaveBeenCalledTimes(1);
 
-    expect(screen.queryByText(/scenario/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/expected outcome/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/score/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/latest results/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/enabled tools/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/availability/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/appointment/i)).not.toBeInTheDocument();
+    fireEvent.click(getByText("Stop speech bridge recording"));
+    expect(hook.speechBridge.stopRecording).toHaveBeenCalledTimes(1);
   });
 });
