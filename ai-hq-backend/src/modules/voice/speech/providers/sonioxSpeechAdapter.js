@@ -1,6 +1,9 @@
 ﻿import {
   buildSonioxSpeechRuntimeConfig,
 } from "./sonioxSpeechRuntimeConfig.js";
+import {
+  createSonioxRealtimeWebsocketClient,
+} from "./sonioxRealtimeWebsocketClient.js";
 
 function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
@@ -32,7 +35,7 @@ function safeConfig(config = {}) {
   };
 }
 
-export const SONIOX_SPEECH_ADAPTER_VERSION = "soniox_speech_adapter.v2";
+export const SONIOX_SPEECH_ADAPTER_VERSION = "soniox_speech_adapter.v3";
 
 export function createSonioxSpeechAdapter({
   env = process.env,
@@ -42,6 +45,9 @@ export function createSonioxSpeechAdapter({
   sttModel = "",
   ttsModel = "",
   runtimeConfig = null,
+  socketFactory = null,
+  realtimeClient = null,
+  now = () => new Date().toISOString(),
 } = {}) {
   const config =
     runtimeConfig ||
@@ -57,6 +63,13 @@ export function createSonioxSpeechAdapter({
     });
 
   const publicConfig = safeConfig(config);
+  const websocketClient =
+    realtimeClient ||
+    createSonioxRealtimeWebsocketClient({
+      runtimeConfig: config,
+      socketFactory,
+      now,
+    });
 
   return {
     version: SONIOX_SPEECH_ADAPTER_VERSION,
@@ -67,6 +80,13 @@ export function createSonioxSpeechAdapter({
     reasonCode: s(config.reasonCode),
     language: publicConfig.language,
     config: publicConfig,
+
+    realtime: {
+      provider: "soniox",
+      available: !!websocketClient,
+      canCreateSocket: websocketClient?.canCreateSocket === true,
+      networkIo: false,
+    },
 
     stt: {
       provider: "soniox",
@@ -115,6 +135,18 @@ export function createSonioxSpeechAdapter({
         text: s(text),
         reasonCode: config.configured ? "" : "soniox_api_key_missing",
       };
+    },
+
+    buildRealtimeConnectionPlan({ stage = "stt", text = "" } = {}) {
+      return websocketClient.buildConnectionPlan({ stage, text });
+    },
+
+    async connectStt() {
+      return websocketClient.connect({ stage: "stt" });
+    },
+
+    async connectTts({ text = "" } = {}) {
+      return websocketClient.connect({ stage: "tts", text });
     },
 
     async transcribeAudioChunk() {
