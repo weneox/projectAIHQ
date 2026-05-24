@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Mic, PhoneOff, Radio, RefreshCw, SatelliteDish, Square, Volume2 } from "lucide-react";
 
 import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
-import {
-  createPioneroLiveKitSession,
-  getVoiceSpeechGatewayReadiness,
-} from "../api/voice.js";
+import usePioneroLiveKitRoom from "./hooks/usePioneroLiveKitRoom.js";
+import { getVoiceSpeechGatewayReadiness } from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -47,6 +45,19 @@ function readEventText(event = {}) {
   );
 }
 
+function readPioneroLiveKitStatusLabel(status = "") {
+  const normalizedStatus = s(status, "idle");
+
+  if (normalizedStatus === "live") return "Live";
+  if (normalizedStatus === "creating") return "Creating session";
+  if (normalizedStatus === "connecting") return "Connecting";
+  if (normalizedStatus === "publishing_microphone") return "Publishing mic";
+  if (normalizedStatus === "stopping") return "Ending";
+  if (normalizedStatus === "error") return "Unavailable";
+
+  return "Idle";
+}
+
 export default function BrowserVoiceCall() {
   const {
     status,
@@ -59,14 +70,21 @@ export default function BrowserVoiceCall() {
     startCall,
     stopCall,
   } = useBrowserVoiceCall();
+  const {
+    status: pioneroLiveKitStatus,
+    error: pioneroLiveKitError,
+    roomName: pioneroLiveKitRoomName,
+    identity: pioneroLiveKitIdentity,
+    participants: pioneroLiveKitParticipants = [],
+    connect: connectPioneroLiveKit,
+    disconnect: disconnectPioneroLiveKit,
+    localMicEnabled: pioneroLiveKitLocalMicEnabled,
+  } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
   const [speechReadiness, setSpeechReadiness] = useState(null);
   const [speechReadinessStatus, setSpeechReadinessStatus] = useState("idle");
   const [speechReadinessError, setSpeechReadinessError] = useState("");
-  const [pioneroLiveKitSession, setPioneroLiveKitSession] = useState(null);
-  const [pioneroLiveKitStatus, setPioneroLiveKitStatus] = useState("idle");
-  const [pioneroLiveKitError, setPioneroLiveKitError] = useState("");
 
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
@@ -105,15 +123,20 @@ export default function BrowserVoiceCall() {
       speechReadiness?.runtimeReasonCode,
     "readiness_not_checked"
   );
-  const pioneroLiveKitReady = Boolean(pioneroLiveKitSession?.token);
-  const pioneroLiveKitLoading = pioneroLiveKitStatus === "creating";
-  const pioneroLiveKitLabel = pioneroLiveKitLoading
-    ? "Creating session"
-    : pioneroLiveKitReady
-      ? "Session ready"
-      : pioneroLiveKitStatus === "error"
-        ? "Unavailable"
-        : "Not started";
+  const pioneroLiveKitLive = pioneroLiveKitStatus === "live";
+  const pioneroLiveKitLoading = [
+    "creating",
+    "connecting",
+    "publishing_microphone",
+    "stopping",
+  ].includes(pioneroLiveKitStatus);
+  const pioneroLiveKitLabel = readPioneroLiveKitStatusLabel(pioneroLiveKitStatus);
+  const pioneroLiveKitParticipantCount = Array.isArray(pioneroLiveKitParticipants)
+    ? pioneroLiveKitParticipants.length
+    : 0;
+  const pioneroLiveKitMicLabel = pioneroLiveKitLocalMicEnabled
+    ? "published"
+    : "idle";
 
   const refreshSpeechReadiness = useCallback(async () => {
     setSpeechReadinessStatus("loading");
@@ -146,29 +169,6 @@ export default function BrowserVoiceCall() {
       window.clearTimeout(readinessTimer);
     };
   }, [refreshSpeechReadiness]);
-
-  const handleStartPioneroLiveKit = useCallback(async () => {
-    setPioneroLiveKitStatus("creating");
-    setPioneroLiveKitError("");
-
-    try {
-      const result = await createPioneroLiveKitSession({
-        roomName: "pionero-browser-test",
-        mode: "pionero_realtime_agent",
-        transport: "livekit",
-        sttProvider: "soniox",
-        llmProvider: "fast_text_llm",
-        ttsProvider: "cartesia",
-      });
-
-      setPioneroLiveKitSession(result);
-      setPioneroLiveKitStatus("ready");
-    } catch (err) {
-      setPioneroLiveKitSession(null);
-      setPioneroLiveKitStatus("error");
-      setPioneroLiveKitError(s(err?.message || err, "pionero_livekit_failed"));
-    }
-  }, []);
 
   const handleSpeakSpeechBridge = () => {
     speechBridge?.speakText?.(speechBridgeText);
@@ -203,8 +203,8 @@ export default function BrowserVoiceCall() {
 
       <InlineNotice
         tone="info"
-        title="Two voice lanes"
-        description="GPT Realtime WebRTC canlı danışıq üçün qalır. Speech Bridge paneli isə browser mic → STT və text → TTS axınını ayrıca yoxlamaq üçündür."
+        title="Three voice lanes"
+        description="GPT Realtime WebRTC canlı danışıq üçün qalır. Pionero LiveKit yeni realtime agent lane-ni yoxlayır. Speech Bridge paneli isə browser mic → STT və text → TTS axınını ayrıca yoxlamaq üçündür."
       />
 
       {runtimeMeta ? (
@@ -297,54 +297,56 @@ export default function BrowserVoiceCall() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Transport</div>
-            <div className="mt-1 text-sm font-semibold text-text">LiveKit</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Status</div>
+            <div className="mt-1 text-sm font-semibold text-text">{pioneroLiveKitLabel}</div>
           </div>
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">STT</div>
-            <div className="mt-1 text-sm font-semibold text-text">Soniox</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Room</div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitRoomName, "not connected")}
+            </div>
           </div>
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Brain</div>
-            <div className="mt-1 text-sm font-semibold text-text">Fast LLM</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Identity</div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitIdentity, "not connected")}
+            </div>
           </div>
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">TTS</div>
-            <div className="mt-1 text-sm font-semibold text-text">Cartesia</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Participants</div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitParticipantCount}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Mic</div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitMicLabel}
+            </div>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            leftIcon={<SatelliteDish className="h-4 w-4" />}
-            loading={pioneroLiveKitLoading}
-            onClick={handleStartPioneroLiveKit}
-          >
-            Start Pionero realtime call
-          </Button>
+          {pioneroLiveKitLive ? (
+            <Button
+              variant="danger"
+              leftIcon={<PhoneOff className="h-4 w-4" />}
+              onClick={disconnectPioneroLiveKit}
+            >
+              End Pionero realtime call
+            </Button>
+          ) : (
+            <Button
+              leftIcon={<SatelliteDish className="h-4 w-4" />}
+              loading={pioneroLiveKitLoading}
+              onClick={connectPioneroLiveKit}
+            >
+              Start Pionero realtime call
+            </Button>
+          )}
         </div>
-
-        {pioneroLiveKitReady ? (
-          <div className="mt-4 rounded-2xl border border-line-soft bg-surface-subtle p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">LiveKit session</div>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">
-              <div>
-                <div className="text-xs text-text-muted">Room</div>
-                <div className="mt-1 text-sm font-semibold text-text">{s(pioneroLiveKitSession?.roomName)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-text-muted">Identity</div>
-                <div className="mt-1 text-sm font-semibold text-text">{s(pioneroLiveKitSession?.identity)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-text-muted">URL</div>
-                <div className="mt-1 truncate text-sm font-semibold text-text">{s(pioneroLiveKitSession?.url)}</div>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         {pioneroLiveKitError ? (
           <InlineNotice
