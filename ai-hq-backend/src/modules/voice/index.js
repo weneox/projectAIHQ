@@ -35,3 +35,5 @@ export * from "./speech/voiceSpeechProviderConfig.js";
 export * from "./speech/voiceSpeechGateway.js";
 export * from "./speech/azConversationNaturalizer.js";
 export * from "./speech/providers/sonioxSpeechAdapter.js";
+
+export * from "./speech/providers/sonioxSpeechRuntimeConfig.js";
