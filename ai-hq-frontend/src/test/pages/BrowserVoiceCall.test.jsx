@@ -1,11 +1,16 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BrowserVoiceCall from "../../pages/BrowserVoiceCall.jsx";
 import useBrowserVoiceCall from "../../pages/hooks/useBrowserVoiceCall.js";
+import { getVoiceSpeechGatewayReadiness } from "../../api/voice.js";
 
 vi.mock("../../pages/hooks/useBrowserVoiceCall.js", () => ({
   default: vi.fn(),
+}));
+
+vi.mock("../../api/voice.js", () => ({
+  getVoiceSpeechGatewayReadiness: vi.fn(),
 }));
 
 function buildHook(overrides = {}) {
@@ -37,9 +42,37 @@ function buildHook(overrides = {}) {
 describe("BrowserVoiceCall", () => {
   beforeEach(() => {
     useBrowserVoiceCall.mockReset();
+    getVoiceSpeechGatewayReadiness.mockReset();
+    getVoiceSpeechGatewayReadiness.mockResolvedValue({
+      ok: true,
+      version: "voice_speech_gateway_readiness.v1",
+      runtimeApplied: false,
+      runtimeReasonCode: "db_unavailable",
+      gateway: {
+        language: "az",
+        providers: {
+          stt: "soniox",
+          tts: "soniox",
+        },
+        readiness: {
+          liveInferenceReady: false,
+          reasonCode: "speech_gateway_live_inference_not_implemented",
+        },
+      },
+      soniox: {
+        configured: true,
+        reasonCode: "",
+        stt: {
+          ok: true,
+        },
+        tts: {
+          ok: true,
+        },
+      },
+    });
   });
 
-  it("renders GPT Realtime and speech bridge test lanes together", () => {
+  it("renders GPT Realtime and speech bridge test lanes together", async () => {
     const hook = buildHook();
     useBrowserVoiceCall.mockReturnValue(hook);
 
@@ -47,7 +80,18 @@ describe("BrowserVoiceCall", () => {
 
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
+    expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(getVoiceSpeechGatewayReadiness).toHaveBeenCalledWith({
+        language: "az",
+        provider: "browser",
+        sttProvider: "soniox",
+        toNumber: "browser",
+        ttsProvider: "soniox",
+      });
+    });
 
     fireEvent.click(getByText("Start GPT Realtime call"));
     expect(hook.startCall).toHaveBeenCalledTimes(1);
@@ -57,6 +101,11 @@ describe("BrowserVoiceCall", () => {
 
     fireEvent.click(getByText("Speak via speech bridge"));
     expect(hook.speechBridge.speakText).toHaveBeenCalledWith("Salam");
+
+    fireEvent.click(getByText("Refresh readiness"));
+    await waitFor(() => {
+      expect(getVoiceSpeechGatewayReadiness).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("uses stop controls when both voice lanes are active", () => {

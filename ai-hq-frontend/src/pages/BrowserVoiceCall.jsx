@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Mic, PhoneOff, Radio, Square, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Mic, PhoneOff, Radio, RefreshCw, Square, Volume2 } from "lucide-react";
 
 import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
+import { getVoiceSpeechGatewayReadiness } from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -57,6 +58,9 @@ export default function BrowserVoiceCall() {
   } = useBrowserVoiceCall();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
+  const [speechReadiness, setSpeechReadiness] = useState(null);
+  const [speechReadinessStatus, setSpeechReadinessStatus] = useState("idle");
+  const [speechReadinessError, setSpeechReadinessError] = useState("");
 
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
@@ -75,6 +79,58 @@ export default function BrowserVoiceCall() {
   const speechBridgeStatus = s(speechBridge?.status, "idle");
   const speechBridgePlaybackStatus = s(speechBridge?.playbackStatus, "idle");
   const speechBridgeError = s(speechBridge?.error);
+  const sonioxReadiness = speechReadiness?.soniox || {};
+  const gatewayReadiness = speechReadiness?.gateway || {};
+  const sonioxConfigured = sonioxReadiness.configured === true;
+  const sonioxSttReady = sonioxReadiness?.stt?.ok === true;
+  const sonioxTtsReady = sonioxReadiness?.tts?.ok === true;
+  const speechReadinessLoading = speechReadinessStatus === "loading";
+  const speechReadinessLabel = speechReadinessLoading
+    ? "Checking"
+    : sonioxConfigured
+      ? "Configured"
+      : speechReadinessStatus === "error"
+        ? "Unavailable"
+        : "Not configured";
+  const speechReadinessReason = s(
+    speechReadinessError ||
+      sonioxReadiness.reasonCode ||
+      gatewayReadiness?.readiness?.reasonCode ||
+      speechReadiness?.runtimeReasonCode,
+    "readiness_not_checked"
+  );
+
+  const refreshSpeechReadiness = useCallback(async () => {
+    setSpeechReadinessStatus("loading");
+    setSpeechReadinessError("");
+
+    try {
+      const result = await getVoiceSpeechGatewayReadiness({
+        language: "az",
+        provider: "browser",
+        sttProvider: "soniox",
+        toNumber: "browser",
+        ttsProvider: "soniox",
+      });
+
+      setSpeechReadiness(result);
+      setSpeechReadinessStatus("ready");
+    } catch (err) {
+      setSpeechReadiness(null);
+      setSpeechReadinessStatus("error");
+      setSpeechReadinessError(s(err?.message || err, "speech_readiness_failed"));
+    }
+  }, []);
+
+  useEffect(() => {
+    const readinessTimer = window.setTimeout(() => {
+      void refreshSpeechReadiness();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(readinessTimer);
+    };
+  }, [refreshSpeechReadiness]);
 
   const handleSpeakSpeechBridge = () => {
     speechBridge?.speakText?.(speechBridgeText);
@@ -228,6 +284,59 @@ export default function BrowserVoiceCall() {
             </div>
             <div className="mt-1 text-sm font-semibold text-text">
               Text → synthesize
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-line-soft bg-surface-subtle p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Soniox readiness
+              </div>
+              <div className="mt-1 text-sm font-semibold text-text">
+                {speechReadinessLabel}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-text-muted">
+                {speechReadinessReason}
+              </div>
+            </div>
+
+            <Button
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              loading={speechReadinessLoading}
+              onClick={refreshSpeechReadiness}
+            >
+              Refresh readiness
+            </Button>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-line-soft bg-white p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                Gateway language
+              </div>
+              <div className="mt-1 text-sm font-semibold text-text">
+                {s(gatewayReadiness.language, "az")}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line-soft bg-white p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                STT readiness
+              </div>
+              <div className="mt-1 text-sm font-semibold text-text">
+                {sonioxSttReady ? "Ready" : "Not ready"}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line-soft bg-white p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                TTS readiness
+              </div>
+              <div className="mt-1 text-sm font-semibold text-text">
+                {sonioxTtsReady ? "Ready" : "Not ready"}
+              </div>
             </div>
           </div>
         </div>
