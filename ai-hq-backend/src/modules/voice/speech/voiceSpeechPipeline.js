@@ -1,4 +1,4 @@
-function s(value, fallback = "") {
+﻿function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
   if (typeof value === "object") return fallback;
   return String(value).trim() || fallback;
@@ -8,13 +8,26 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function key(value = "", fallback = "") {
+  return s(value || fallback, fallback)
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
 export const VOICE_SPEECH_PIPELINE_VERSION = "voice_speech_pipeline.v1";
 
 export const VOICE_SPEECH_PROVIDERS = Object.freeze([
   "openai_realtime",
+  "soniox",
+  "azure",
+  "google",
+  "deepgram",
+  "cartesia",
+  "elevenlabs",
   "external_stt",
   "external_tts",
   "livekit",
+  "unknown",
 ]);
 
 export const OPENAI_REALTIME_TRANSCRIPTION_MODELS = Object.freeze([
@@ -77,21 +90,37 @@ export function readVoiceSpeechConfig(runtimeConfig = {}) {
 }
 
 export function normalizeVoiceSpeechProvider(value = "", fallback = "openai_realtime") {
-  const raw = s(value, fallback).toLowerCase();
+  const raw = key(value, fallback);
 
-  if (raw === "openai" || raw === "gpt" || raw === "openai-realtime") {
+  if (["openai", "gpt", "openai_realtime", "openai_realtime_api"].includes(raw)) {
     return "openai_realtime";
   }
 
-  if (raw === "stt" || raw === "asr" || raw === "external-asr") {
+  if (["stt", "asr", "external_asr", "external_stt"].includes(raw)) {
     return "external_stt";
   }
 
-  if (raw === "tts" || raw === "external-voice") {
+  if (["tts", "external_voice", "external_tts"].includes(raw)) {
     return "external_tts";
   }
 
-  return VOICE_SPEECH_PROVIDERS.includes(raw) ? raw : fallback;
+  if (["google_stt", "google_speech", "google_speech_to_text"].includes(raw)) {
+    return "google";
+  }
+
+  if (["azure_speech", "microsoft_speech", "azure_ai_speech"].includes(raw)) {
+    return "azure";
+  }
+
+  if (["soniox_stt", "soniox_tts"].includes(raw)) {
+    return "soniox";
+  }
+
+  const fallbackKey = key(fallback, "openai_realtime");
+  if (VOICE_SPEECH_PROVIDERS.includes(raw)) return raw;
+  if (VOICE_SPEECH_PROVIDERS.includes(fallbackKey)) return fallbackKey;
+
+  return "openai_realtime";
 }
 
 export function normalizeRealtimeTranscriptionModel(value = "") {
@@ -101,14 +130,34 @@ export function normalizeRealtimeTranscriptionModel(value = "") {
     : "gpt-4o-mini-transcribe";
 }
 
-export function normalizeVoiceOutputName(value = "") {
-  const raw = s(value, "coral").toLowerCase();
+export function defaultVoiceForProvider(provider = "openai_realtime") {
+  const normalized = normalizeVoiceSpeechProvider(provider, "openai_realtime");
 
-  if (["alloy", "echo", "shimmer", "verse"].includes(raw)) {
-    return "coral";
+  if (normalized === "openai_realtime") return "coral";
+  if (normalized === "soniox") return "default";
+  if (normalized === "azure") return "default";
+  if (normalized === "google") return "default";
+  if (normalized === "deepgram") return "default";
+  if (normalized === "cartesia") return "default";
+  if (normalized === "elevenlabs") return "default";
+
+  return "default";
+}
+
+export function normalizeVoiceOutputName(value = "", provider = "openai_realtime") {
+  const normalizedProvider = normalizeVoiceSpeechProvider(provider, "openai_realtime");
+
+  if (normalizedProvider === "openai_realtime") {
+    const raw = s(value, "coral").toLowerCase();
+
+    if (["alloy", "echo", "shimmer", "verse"].includes(raw)) {
+      return "coral";
+    }
+
+    return OPENAI_REALTIME_OUTPUT_VOICES.includes(raw) ? raw : "coral";
   }
 
-  return OPENAI_REALTIME_OUTPUT_VOICES.includes(raw) ? raw : "coral";
+  return s(value, defaultVoiceForProvider(normalizedProvider));
 }
 
 function readInputSpeechConfig(speech = {}) {
@@ -157,6 +206,18 @@ export function buildVoiceSpeechPipeline({
     "openai_realtime"
   );
 
+  const language = s(
+    input.language ||
+      input.locale ||
+      output.language ||
+      output.locale ||
+      speech.language ||
+      speech.locale ||
+      runtimeConfig.defaultLanguage ||
+      runtimeConfig.language,
+    "az"
+  );
+
   const transcriptionModel = normalizeRealtimeTranscriptionModel(
     input.transcriptionModel ||
       input.model ||
@@ -169,7 +230,8 @@ export function buildVoiceSpeechPipeline({
       output.voice ||
       output.voiceName ||
       speech.voice ||
-      speech.outputVoice
+      speech.outputVoice,
+    ttsProvider
   );
 
   const compatibility = buildVoiceSpeechPipelineCompatibility({
@@ -180,13 +242,16 @@ export function buildVoiceSpeechPipeline({
   return {
     version: VOICE_SPEECH_PIPELINE_VERSION,
     mode: "realtime_audio",
+    language,
     asr: {
       provider: asrProvider,
       model: transcriptionModel,
+      language,
     },
     tts: {
       provider: ttsProvider,
       voice: outputVoice,
+      language,
     },
     realtime: {
       transcriptionModel,

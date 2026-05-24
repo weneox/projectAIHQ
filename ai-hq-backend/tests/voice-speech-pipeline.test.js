@@ -129,3 +129,32 @@ test("browser realtime plan exposes speech provider compatibility", () => {
   assert.equal(plan.speechPipeline.compatibility.browserRealtimeSupported, false);
   assert.equal(plan.speechPipeline.compatibility.externalSpeechAdapterRequired, true);
 });
+
+
+test("voice speech pipeline preserves Soniox as external speech provider", () => {
+  const pipeline = buildVoiceSpeechPipeline({
+    runtimeConfig: {
+      speech: {
+        input: {
+          provider: "soniox",
+          language: "az",
+        },
+        output: {
+          provider: "soniox",
+          language: "az",
+          voice: "default",
+        },
+      },
+    },
+  });
+
+  assert.equal(pipeline.asr.provider, "soniox");
+  assert.equal(pipeline.tts.provider, "soniox");
+  assert.equal(pipeline.language, "az");
+  assert.equal(pipeline.compatibility.browserRealtimeSupported, false);
+  assert.equal(pipeline.compatibility.externalSpeechAdapterRequired, true);
+  assert.deepEqual(pipeline.compatibility.reasonCodes, [
+    "asr_provider_requires_external_speech_adapter",
+    "tts_provider_requires_external_speech_adapter",
+  ]);
+});

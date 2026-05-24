@@ -29,3 +29,9 @@ export * from "./adapters/businessActionRequestRecord.js";
 export * from "./events/businessActionEvents.js";
 export * from "./sinks/businessActionSinkContracts.js";
 export * from "./sinks/businessActionSinkRegistry.js";
+
+export * from "./speech/voiceSpeechPipeline.js";
+export * from "./speech/voiceSpeechProviderConfig.js";
+export * from "./speech/voiceSpeechGateway.js";
+export * from "./speech/azConversationNaturalizer.js";
+export * from "./speech/providers/sonioxSpeechAdapter.js";
