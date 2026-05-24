@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BrowserVoiceCall from "../../pages/BrowserVoiceCall.jsx";
 import useBrowserVoiceCall from "../../pages/hooks/useBrowserVoiceCall.js";
-import { getVoiceSpeechGatewayReadiness } from "../../api/voice.js";
+import {
+  createPioneroLiveKitSession,
+  getVoiceSpeechGatewayReadiness,
+} from "../../api/voice.js";
 
 vi.mock("../../pages/hooks/useBrowserVoiceCall.js", () => ({
   default: vi.fn(),
 }));
 
 vi.mock("../../api/voice.js", () => ({
+  createPioneroLiveKitSession: vi.fn(),
   getVoiceSpeechGatewayReadiness: vi.fn(),
 }));
 
@@ -42,6 +46,23 @@ function buildHook(overrides = {}) {
 describe("BrowserVoiceCall", () => {
   beforeEach(() => {
     useBrowserVoiceCall.mockReset();
+    createPioneroLiveKitSession.mockReset();
+    createPioneroLiveKitSession.mockResolvedValue({
+      ok: true,
+      version: "pionero_livekit_token.v1",
+      provider: "livekit",
+      configured: true,
+      url: "wss://livekit.example.test",
+      roomName: "pionero-browser-test",
+      identity: "user-test",
+      token: "token-test",
+      pipeline: {
+        transport: "livekit",
+        stt: "soniox",
+        llm: "fast_text_llm",
+        tts: "cartesia",
+      },
+    });
     getVoiceSpeechGatewayReadiness.mockReset();
     getVoiceSpeechGatewayReadiness.mockResolvedValue({
       ok: true,
@@ -79,6 +100,7 @@ describe("BrowserVoiceCall", () => {
     const { getByText, getByLabelText } = render(<BrowserVoiceCall />);
 
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
+    expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();

@@ -1,6 +1,7 @@
 import {
   randomUUID } from "crypto";
 import express from "express";
+import { AccessToken } from "livekit-server-sdk";
 import {
   requireOperatorSurfaceAccess,
   } from "../../../utils/auth.js";
@@ -1752,6 +1753,106 @@ async function handleVoiceOperatorAction(
 }
 
 
+const PIONERO_LIVEKIT_TOKEN_VERSION = "pionero_livekit_token.v1";
+
+function cleanLiveKitName(value = "", fallback = "pionero") {
+  const clean = s(value, fallback)
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+
+  return clean || fallback;
+}
+
+function readLiveKitConfig(env = process.env) {
+  return {
+    url: s(env.LIVEKIT_URL || env.LIVEKIT_WS_URL || env.VITE_LIVEKIT_URL),
+    apiKey: s(env.LIVEKIT_API_KEY),
+    apiSecret: s(env.LIVEKIT_API_SECRET),
+  };
+}
+
+function buildPioneroLiveKitRoomName(req = {}) {
+  const requestedRoom = s(req.body?.roomName || req.query?.roomName);
+
+  if (requestedRoom) {
+    return cleanLiveKitName(requestedRoom, "pionero-room");
+  }
+
+  const tenantKey = cleanLiveKitName(req.auth?.tenantKey || req.auth?.tenantId, "tenant");
+  const suffix = cleanLiveKitName(randomUUID().slice(0, 8), "session");
+
+  return `aihq-pionero-${tenantKey}-${suffix}`;
+}
+
+async function handlePioneroLiveKitToken(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.token");
+
+  try {
+    const config = readLiveKitConfig(process.env);
+
+    if (!config.url || !config.apiKey || !config.apiSecret) {
+      return fail(res, 503, "livekit_config_missing", {
+        version: PIONERO_LIVEKIT_TOKEN_VERSION,
+        configured: false,
+        missing: {
+          url: !config.url,
+          apiKey: !config.apiKey,
+          apiSecret: !config.apiSecret,
+        },
+      });
+    }
+
+    const roomName = buildPioneroLiveKitRoomName(req);
+    const identity = cleanLiveKitName(
+      req.body?.identity || req.auth?.userId || getActor(req) || randomUUID(),
+      "operator"
+    );
+    const participantName = s(req.body?.name || getActor(req), identity);
+
+    const token = new AccessToken(config.apiKey, config.apiSecret, {
+      identity,
+      name: participantName,
+      ttl: "10m",
+    });
+
+    token.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    return ok(res, {
+      version: PIONERO_LIVEKIT_TOKEN_VERSION,
+      provider: "livekit",
+      configured: true,
+      url: config.url,
+      roomName,
+      identity,
+      token: await token.toJwt(),
+      expiresInSeconds: 600,
+      mode: "pionero_realtime_agent",
+      pipeline: {
+        transport: "livekit",
+        stt: "soniox",
+        llm: "fast_text_llm",
+        tts: "cartesia",
+      },
+    });
+  } catch (err) {
+    logger.error("voice.pionero.livekit.token.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.token",
+      reasonCode: "pionero_livekit_token_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_token_failed");
+  }
+}
+
 function readVoiceSpeechGatewayOverrides(req = {}) {
   const query = obj(req.query);
   const body = obj(req.body);
@@ -2120,6 +2221,11 @@ export function voiceRoutes({
   speechGatewayFactory = createVoiceSpeechGateway,
 } = {}) {
   const r = express.Router();
+
+
+  r.post("/voice/pionero/livekit/token", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitToken(req, res)
+  );
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
     handleSettingsGet(req, res, { db, dbDisabled })
