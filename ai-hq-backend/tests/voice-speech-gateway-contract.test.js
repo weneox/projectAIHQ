@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
@@ -77,4 +77,64 @@ test("voice speech gateway can build Azerbaijani turn output plan before real TT
   assert.equal(turn.output.language, "az");
   assert.equal(turn.output.text, "Oldu, başa düşdüm. Hansı tarix üçün baxım?");
   assert.ok(turn.output.chunks.length >= 2);
+});
+
+
+test("voice speech gateway delegates STT and TTS to configured adapter runtime", async () => {
+  let sttInput = null;
+  let ttsInput = null;
+
+  const gateway = createVoiceSpeechGateway({
+    env: {
+      VOICE_STT_PROVIDER: "soniox",
+      VOICE_TTS_PROVIDER: "soniox",
+      VOICE_LANGUAGE: "az",
+    },
+    adapterRegistry: {
+      soniox: {
+        transcribeAudioChunk: async (input) => {
+          sttInput = input;
+          return {
+            ok: true,
+            status: "transcribed",
+            provider: "soniox",
+            stage: "stt",
+            networkIo: true,
+            text: "Salam",
+          };
+        },
+        synthesizeSpeech: async (input) => {
+          ttsInput = input;
+          return {
+            ok: true,
+            status: "synthesized",
+            provider: "soniox",
+            stage: "tts",
+            networkIo: true,
+            audio: Buffer.from("fake-audio"),
+          };
+        },
+      },
+    },
+  });
+
+  const audioChunk = Buffer.from("fake-audio");
+  const stt = await gateway.transcribeAudioChunk({ audioChunk });
+  const tts = await gateway.synthesizeSpeech({
+    text: "Oldu.",
+    streamId: "stream-test",
+  });
+
+  assert.equal(stt.ok, true);
+  assert.equal(stt.status, "transcribed");
+  assert.equal(stt.text, "Salam");
+  assert.deepEqual(sttInput, { audioChunk });
+
+  assert.equal(tts.ok, true);
+  assert.equal(tts.status, "synthesized");
+  assert.equal(tts.audio.toString("utf8"), "fake-audio");
+  assert.deepEqual(ttsInput, {
+    text: "Oldu.",
+    streamId: "stream-test",
+  });
 });

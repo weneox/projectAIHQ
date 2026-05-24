@@ -180,29 +180,50 @@ export function buildVoiceSpeechGatewayPlan({
 
 export function createVoiceSpeechGateway(options = {}) {
   const plan = buildVoiceSpeechGatewayPlan(options);
+  const providerConfig = obj(plan.providerConfig);
+  const customRegistry = obj(options.adapterRegistry);
+
+  const adapterRegistry =
+    Object.keys(customRegistry).length > 0
+      ? customRegistry
+      : createDefaultSpeechAdapterRegistry({
+          providerConfig,
+          env: options.env || process.env,
+        });
+
+  const sttAdapter = adapterRegistry[providerConfig.stt?.provider] || null;
+  const ttsAdapter = adapterRegistry[providerConfig.tts?.provider] || null;
 
   return {
     version: VOICE_SPEECH_GATEWAY_VERSION,
     plan,
 
-    async transcribeAudioChunk() {
-      return {
-        ok: false,
-        status: "not_implemented",
-        networkIo: false,
-        reasonCode: "speech_gateway_stt_not_implemented",
-        provider: plan.providerConfig.stt.provider,
-      };
+    async transcribeAudioChunk(input = {}) {
+      if (!sttAdapter || typeof sttAdapter.transcribeAudioChunk !== "function") {
+        return {
+          ok: false,
+          status: "not_implemented",
+          networkIo: false,
+          reasonCode: "speech_gateway_stt_not_implemented",
+          provider: providerConfig.stt?.provider,
+        };
+      }
+
+      return sttAdapter.transcribeAudioChunk(input);
     },
 
-    async synthesizeSpeech() {
-      return {
-        ok: false,
-        status: "not_implemented",
-        networkIo: false,
-        reasonCode: "speech_gateway_tts_not_implemented",
-        provider: plan.providerConfig.tts.provider,
-      };
+    async synthesizeSpeech(input = {}) {
+      if (!ttsAdapter || typeof ttsAdapter.synthesizeSpeech !== "function") {
+        return {
+          ok: false,
+          status: "not_implemented",
+          networkIo: false,
+          reasonCode: "speech_gateway_tts_not_implemented",
+          provider: providerConfig.tts?.provider,
+        };
+      }
+
+      return ttsAdapter.synthesizeSpeech(input);
     },
 
     async buildTurnPlan({ transcript = "", responseText = "", mood = "neutral" } = {}) {
