@@ -11,6 +11,9 @@ import {
 import {
   linkBrowserVoiceRealtimeSessionFromSdpResponse,
   normalizeRealtimeProviderCallId,
+  playBrowserVoiceSpeechAudio,
+  readBrowserVoiceSpeechBridgeAudioBase64,
+  readBrowserVoiceSpeechBridgeText,
 } from "../../pages/hooks/useBrowserVoiceCall.js";
 import {
   arrayBufferToBase64,
@@ -303,6 +306,23 @@ describe("Voice", () => {
         mediaRecorderCtor: null,
       })
     ).rejects.toThrow("MediaRecorder is unavailable");
+  });
+
+  it("normalizes browser voice speech bridge payloads safely", async () => {
+    expect(readBrowserVoiceSpeechBridgeText({ text: "Salam" })).toBe("Salam");
+    expect(readBrowserVoiceSpeechBridgeText({ result: { text: "Oldu" } })).toBe("Oldu");
+    expect(
+      readBrowserVoiceSpeechBridgeAudioBase64({
+        result: {
+          audioBase64: "ZmFrZS1hdWRpbw==",
+        },
+      })
+    ).toBe("ZmFrZS1hdWRpbw==");
+
+    expect(await playBrowserVoiceSpeechAudio("")).toEqual({
+      ok: false,
+      reasonCode: "browser_speech_audio_missing",
+    });
   });
 
 });

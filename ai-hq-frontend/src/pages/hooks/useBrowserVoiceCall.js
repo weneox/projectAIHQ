@@ -5,7 +5,10 @@ import {
   createBrowserVoiceSession,
   executeBrowserVoiceTool,
   linkBrowserVoiceRealtimeSession,
+  synthesizeBrowserSpeech,
+  transcribeBrowserSpeech,
 } from "../../api/voice.js";
+import { useBrowserSpeechRecorder } from "./useBrowserSpeechBridge.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -289,6 +292,39 @@ function sendRealtimeToolOutput(dc, toolCall = {}, result = {}) {
   return true;
 }
 
+export function readBrowserVoiceSpeechBridgeText(payload = {}) {
+  return s(payload?.text || payload?.result?.text || payload?.transcript);
+}
+
+export function readBrowserVoiceSpeechBridgeAudioBase64(payload = {}) {
+  return s(payload?.result?.audioBase64 || payload?.audioBase64);
+}
+
+export async function playBrowserVoiceSpeechAudio(audioBase64, mimeType = "audio/mpeg") {
+  const audio = s(audioBase64);
+
+  if (!audio) {
+    return {
+      ok: false,
+      reasonCode: "browser_speech_audio_missing",
+    };
+  }
+
+  if (typeof globalThis === "undefined" || typeof globalThis.Audio !== "function") {
+    return {
+      ok: false,
+      reasonCode: "browser_audio_playback_unavailable",
+    };
+  }
+
+  const player = new globalThis.Audio("data:" + s(mimeType, "audio/mpeg") + ";base64," + audio);
+  await player.play();
+
+  return {
+    ok: true,
+  };
+}
+
 function extractRealtimeTranscriptEvent(event = {}) {
   const type = s(event?.type);
 
@@ -354,6 +390,9 @@ export default function useBrowserVoiceCall() {
   const [voice, setVoice] = useState("");
   const [runtimeMeta, setRuntimeMeta] = useState(null);
   const [events, setEvents] = useState([]);
+  const [speechBridgePlaybackStatus, setSpeechBridgePlaybackStatus] = useState("idle");
+  const [speechBridgePlaybackError, setSpeechBridgePlaybackError] = useState("");
+  const [speechBridgeText, setSpeechBridgeText] = useState("");
 
   const pcRef = useRef(null);
   const dcRef = useRef(null);
@@ -395,6 +434,96 @@ export default function useBrowserVoiceCall() {
       payload: buildTracePayload(event.payload),
     }).catch(() => {});
   }, [buildTracePayload]);
+
+
+  const handleSpeechBridgeTranscript = useCallback((result = {}) => {
+    const transcriptText = readBrowserVoiceSpeechBridgeText(result);
+
+    setSpeechBridgeText(transcriptText);
+    addEvent({
+      type: "browser_voice.speech_bridge_transcript",
+      text: transcriptText || "Speech bridge transcript received.",
+    });
+
+    sendCallEvent({
+      eventType: "browser_voice.speech_bridge_transcript",
+      actor: "caller",
+      role: "caller",
+      text: transcriptText,
+      payload: {
+        provider: "speech_bridge",
+        stage: "stt",
+      },
+    });
+  }, [addEvent, sendCallEvent]);
+
+  const speechBridgeRecorder = useBrowserSpeechRecorder({
+    transcribeBrowserSpeech,
+    onTranscript: handleSpeechBridgeTranscript,
+  });
+
+  const speakSpeechBridgeText = useCallback(async (inputText = "") => {
+    const textToSpeak = s(inputText || speechBridgeText);
+
+    if (!textToSpeak) {
+      const reasonCode = "browser_speech_text_missing";
+      setSpeechBridgePlaybackStatus("error");
+      setSpeechBridgePlaybackError(reasonCode);
+
+      return {
+        ok: false,
+        reasonCode,
+      };
+    }
+
+    setSpeechBridgePlaybackStatus("synthesizing");
+    setSpeechBridgePlaybackError("");
+
+    try {
+      const result = await synthesizeBrowserSpeech({ text: textToSpeak });
+      const audioBase64 = readBrowserVoiceSpeechBridgeAudioBase64(result);
+      const played = await playBrowserVoiceSpeechAudio(audioBase64, result?.result?.mimeType);
+
+      if (!played.ok) {
+        setSpeechBridgePlaybackStatus("ready");
+        setSpeechBridgePlaybackError(played.reasonCode);
+        return played;
+      }
+
+      setSpeechBridgePlaybackStatus("played");
+
+      addEvent({
+        type: "browser_voice.speech_bridge_played",
+        text: "Speech bridge audio played.",
+      });
+
+      sendCallEvent({
+        eventType: "browser_voice.speech_bridge_played",
+        actor: "assistant",
+        role: "assistant",
+        text: textToSpeak,
+        payload: {
+          provider: "speech_bridge",
+          stage: "tts",
+        },
+      });
+
+      return {
+        ok: true,
+      };
+    } catch (err) {
+      const message = s(err?.message || err, "browser speech playback failed");
+
+      setSpeechBridgePlaybackStatus("error");
+      setSpeechBridgePlaybackError(message);
+
+      return {
+        ok: false,
+        reasonCode: "browser_speech_synthesize_failed",
+        error: message,
+      };
+    }
+  }, [addEvent, sendCallEvent, speechBridgeText]);
 
   const stopCall = useCallback(() => {
     setStatus("stopping");
@@ -742,6 +871,18 @@ export default function useBrowserVoiceCall() {
     runtimeMeta,
     events,
     remoteAudioRef,
+    speechBridge: {
+      available: speechBridgeRecorder.isSupported,
+      error: speechBridgeRecorder.error || speechBridgePlaybackError,
+      mode: "speech_bridge",
+      playbackStatus: speechBridgePlaybackStatus,
+      recording: speechBridgeRecorder.recording,
+      speakText: speakSpeechBridgeText,
+      startRecording: speechBridgeRecorder.startRecording,
+      status: speechBridgeRecorder.status,
+      stopRecording: speechBridgeRecorder.stopRecording,
+      text: speechBridgeText || speechBridgeRecorder.text,
+    },
     startCall,
     stopCall,
   };
