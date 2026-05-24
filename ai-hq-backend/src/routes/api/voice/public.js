@@ -1,14 +1,15 @@
-import { randomUUID } from "crypto";
+import {
+  randomUUID } from "crypto";
 import express from "express";
 import {
   requireOperatorSurfaceAccess,
-} from "../../../utils/auth.js";
+  } from "../../../utils/auth.js";
 import {
   createLogger,
-} from "../../../utils/logger.js";
+  } from "../../../utils/logger.js";
 import {
   recordRuntimeSignal,
-} from "../../../observability/runtimeSignals.js";
+  } from "../../../observability/runtimeSignals.js";
 import {
   s,
   n,
@@ -16,7 +17,7 @@ import {
   fail,
   getActor,
   isLiveVoiceStatus,
-} from "./shared.js";
+  } from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -27,17 +28,17 @@ import {
   createVoiceCall,
   updateVoiceCallForTenant,
   resolveTenantScope,
-} from "./repository.js";
+  } from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
   getScopedCallOrFail,
   getScopedSessionOrFail,
   auditSafe,
-} from "./utils.js";
+  } from "./utils.js";
 import {
   getTenantBrainRuntime,
-} from "../../../services/businessBrain/getTenantBrainRuntime.js";
+  } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
@@ -55,6 +56,9 @@ import {
   processVoiceTenantConfig,
   buildBusinessActionRecordedVoiceEventPayload,
   createBusinessActionSinkRegistry,
+  buildVoiceSpeechGatewayPlan,
+  buildSonioxSpeechRuntimeConfig,
+  createSonioxSpeechAdapter,
 } from "../../../modules/voice/index.js";
 import {
   createVoiceBusinessActionInboxSinkExecutor,
@@ -1746,6 +1750,159 @@ async function handleVoiceOperatorAction(
   }
 }
 
+
+function readVoiceSpeechGatewayOverrides(req = {}) {
+  const query = obj(req.query);
+  const body = obj(req.body);
+
+  return {
+    transport: s(query.transport || body.transport),
+    sttProvider: s(
+      query.sttProvider ||
+        query.stt ||
+        query.asrProvider ||
+        body.sttProvider ||
+        body.stt ||
+        body.asrProvider
+    ),
+    ttsProvider: s(
+      query.ttsProvider ||
+        query.tts ||
+        body.ttsProvider ||
+        body.tts
+    ),
+    language: s(query.language || query.locale || body.language || body.locale),
+    agentMode: s(query.agentMode || body.agentMode),
+    llmProvider: s(query.llmProvider || body.llmProvider),
+    ttsVoice: s(query.voice || query.ttsVoice || body.voice || body.ttsVoice),
+  };
+}
+
+function compactVoiceSpeechGatewayPlan(plan = {}) {
+  const providerConfig = obj(plan.providerConfig);
+  const speechPipeline = obj(plan.speechPipeline);
+  const readiness = obj(plan.readiness);
+
+  return {
+    version: s(plan.version),
+    providerAgnostic: plan.providerAgnostic === true,
+    mode: s(plan.mode),
+    networkIo: plan.networkIo === true,
+    transport: s(plan.transport),
+    language: s(plan.language),
+    providers: {
+      stt: s(providerConfig.stt?.provider),
+      tts: s(providerConfig.tts?.provider),
+      llm: s(providerConfig.llm?.provider),
+    },
+    adapters: obj(plan.adapters),
+    readiness,
+    speechPipeline: {
+      version: s(speechPipeline.version),
+      mode: s(speechPipeline.mode),
+      language: s(speechPipeline.language),
+      asr: obj(speechPipeline.asr),
+      tts: obj(speechPipeline.tts),
+      compatibility: obj(speechPipeline.compatibility),
+    },
+    stages: Array.isArray(plan.stages) ? plan.stages : [],
+  };
+}
+
+async function handleVoiceSpeechGatewayReadiness(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.gateway.readiness");
+
+  try {
+    let scope = null;
+    let runtimeConfig = {};
+    let runtimeApplied = false;
+    let runtimeReasonCode = "";
+
+    if (!dbDisabled && db) {
+      scope = await requireTenantScope(req, res, db);
+      if (!scope) return;
+
+      try {
+        const runtimeResult = await processVoiceTenantConfig({
+          db,
+          tenantKey: scope.tenantKey,
+          toNumber: s(req.query?.toNumber || req.body?.toNumber || "browser"),
+          provider: s(req.query?.provider || req.body?.provider || "browser"),
+          getRuntime,
+        });
+
+        if (runtimeResult?.ok === true) {
+          runtimeApplied = true;
+          runtimeConfig = readBrowserVoiceConfigPayload(runtimeResult);
+        } else {
+          runtimeReasonCode = s(
+            runtimeResult?.error ||
+              runtimeResult?.details?.reasonCode ||
+              "voice_runtime_unavailable"
+          );
+        }
+      } catch (runtimeErr) {
+        runtimeReasonCode = "voice_runtime_resolution_failed";
+        logger.warn("voice.speech.gateway.runtime_unavailable", {
+          error: s(runtimeErr?.message || runtimeErr),
+        });
+      }
+    } else {
+      runtimeReasonCode = "db_unavailable";
+    }
+
+    const overrides = readVoiceSpeechGatewayOverrides(req);
+    const gatewayPlan = buildVoiceSpeechGatewayPlan({
+      env: process.env,
+      runtimeConfig,
+      overrides,
+      requestedVoice: overrides.ttsVoice,
+    });
+
+    const sonioxRuntime = buildSonioxSpeechRuntimeConfig({
+      env: process.env,
+      overrides: {
+        language: overrides.language,
+        voice: overrides.ttsVoice,
+      },
+    });
+
+    const sonioxAdapter = createSonioxSpeechAdapter({
+      runtimeConfig: sonioxRuntime,
+    });
+
+    return ok(res, {
+      version: "voice_speech_gateway_readiness.v1",
+      runtimeApplied,
+      runtimeReasonCode,
+      tenantKey: s(scope?.tenantKey),
+      tenantId: s(scope?.tenantId),
+      gateway: compactVoiceSpeechGatewayPlan(gatewayPlan),
+      soniox: {
+        provider: "soniox",
+        configured: sonioxAdapter.configured === true,
+        reasonCode: s(sonioxAdapter.reasonCode),
+        networkIo: sonioxAdapter.networkIo === true,
+        stt: sonioxAdapter.buildSttConnectionPlan(),
+        tts: sonioxAdapter.buildTtsConnectionPlan(),
+      },
+    });
+  } catch (err) {
+    logger.error("voice.speech.gateway.readiness.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.gateway.readiness",
+      reasonCode: "voice_speech_gateway_readiness_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_gateway_readiness_failed");
+  }
+}
+
 async function handleVoiceActionRuntimePreview(
   req,
   res,
@@ -1870,6 +2027,11 @@ export function voiceRoutes({
     handleVoiceActionRuntimePreview(req, res, { db, dbDisabled, getRuntime })
   );
 
+
+
+  r.get("/voice/speech/gateway/readiness", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechGatewayReadiness(req, res, { db, dbDisabled, getRuntime })
+  );
 
   r.post("/voice/browser/calls/:callId/realtime-link", requireOperatorSurfaceAccess, (req, res) =>
     handleBrowserVoiceRealtimeLink(req, res, {
