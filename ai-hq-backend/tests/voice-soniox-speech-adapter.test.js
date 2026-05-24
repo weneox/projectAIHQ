@@ -59,22 +59,63 @@ test("Soniox speech adapter builds STT and TTS connection plans without network 
   assert.equal(JSON.stringify(adapter).includes("test-secret"), false);
 });
 
-test("Soniox speech adapter returns not implemented result until real websocket runtime is added", async () => {
+test("Soniox speech adapter delegates STT and TTS calls to session runtimes", async () => {
+  let sttInput = null;
+  let ttsInput = null;
+
   const adapter = createSonioxSpeechAdapter({
     env: {
       SONIOX_API_KEY: "test-secret",
       VOICE_LANGUAGE: "az",
     },
+    sttSession: {
+      transcribe: async (input) => {
+        sttInput = input;
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          networkIo: true,
+          text: "Salam",
+        };
+      },
+    },
+    ttsSession: {
+      synthesize: async (input) => {
+        ttsInput = input;
+        return {
+          ok: true,
+          status: "synthesized",
+          provider: "soniox",
+          stage: "tts",
+          networkIo: true,
+          audio: Buffer.from("fake-audio"),
+        };
+      },
+    },
   });
 
-  const stt = await adapter.transcribeAudioChunk();
-  const tts = await adapter.synthesizeSpeech({ text: "Oldu." });
+  const audioChunk = Buffer.from("fake-audio");
+  const stt = await adapter.transcribeAudioChunk({ audioChunk });
+  const tts = await adapter.synthesizeSpeech({
+    text: "Oldu.",
+    streamId: "stream-test",
+  });
 
-  assert.equal(stt.ok, false);
-  assert.equal(stt.networkIo, false);
-  assert.equal(stt.reasonCode, "soniox_stt_network_adapter_not_implemented");
+  assert.equal(stt.ok, true);
+  assert.equal(stt.status, "transcribed");
+  assert.equal(stt.text, "Salam");
+  assert.deepEqual(sttInput.audioChunks, [audioChunk]);
+  assert.equal(sttInput.finalize, true);
 
-  assert.equal(tts.ok, false);
-  assert.equal(tts.networkIo, false);
-  assert.equal(tts.reasonCode, "soniox_tts_network_adapter_not_implemented");
+  assert.equal(tts.ok, true);
+  assert.equal(tts.status, "synthesized");
+  assert.equal(tts.audio.toString("utf8"), "fake-audio");
+  assert.deepEqual(ttsInput, {
+    text: "Oldu.",
+    streamId: "stream-test",
+  });
+
+  assert.equal(JSON.stringify(adapter).includes("test-secret"), false);
 });
