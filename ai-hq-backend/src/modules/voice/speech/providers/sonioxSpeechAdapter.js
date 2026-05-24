@@ -4,6 +4,12 @@
 import {
   createSonioxRealtimeWebsocketClient,
 } from "./sonioxRealtimeWebsocketClient.js";
+import {
+  createSonioxSttSession,
+} from "./sonioxSttSession.js";
+import {
+  createSonioxTtsSession,
+} from "./sonioxTtsSession.js";
 
 function s(value, fallback = "") {
   if (value === undefined || value === null) return fallback;
@@ -47,6 +53,8 @@ export function createSonioxSpeechAdapter({
   runtimeConfig = null,
   socketFactory = null,
   realtimeClient = null,
+  sttSession = null,
+  ttsSession = null,
   now = () => new Date().toISOString(),
 } = {}) {
   const config =
@@ -66,6 +74,22 @@ export function createSonioxSpeechAdapter({
   const websocketClient =
     realtimeClient ||
     createSonioxRealtimeWebsocketClient({
+      runtimeConfig: config,
+      socketFactory,
+      now,
+    });
+
+  const sttRuntime =
+    sttSession ||
+    createSonioxSttSession({
+      runtimeConfig: config,
+      socketFactory,
+      now,
+    });
+
+  const ttsRuntime =
+    ttsSession ||
+    createSonioxTtsSession({
       runtimeConfig: config,
       socketFactory,
       now,
@@ -149,28 +173,28 @@ export function createSonioxSpeechAdapter({
       return websocketClient.connect({ stage: "tts", text });
     },
 
-    async transcribeAudioChunk() {
-      return {
-        ok: false,
-        status: "not_implemented",
-        provider: "soniox",
-        stage: "stt",
-        networkIo: false,
-        connectionPlan: this.buildSttConnectionPlan(),
-        reasonCode: "soniox_stt_network_adapter_not_implemented",
-      };
+    async transcribeAudioChunk(input = {}) {
+      const payload =
+        Buffer.isBuffer(input) || input instanceof Uint8Array || typeof input === "string"
+          ? { audioChunk: input }
+          : input && typeof input === "object"
+            ? input
+            : {};
+
+      const audioChunks = Array.isArray(payload.audioChunks) ? payload.audioChunks : [];
+      const chunks =
+        audioChunks.length > 0
+          ? audioChunks
+          : [payload.audioChunk].filter((chunk) => chunk !== undefined && chunk !== null);
+
+      return sttRuntime.transcribe({
+        audioChunks: chunks,
+        finalize: payload.finalize !== false,
+      });
     },
 
-    async synthesizeSpeech({ text = "" } = {}) {
-      return {
-        ok: false,
-        status: "not_implemented",
-        provider: "soniox",
-        stage: "tts",
-        networkIo: false,
-        connectionPlan: this.buildTtsConnectionPlan({ text }),
-        reasonCode: "soniox_tts_network_adapter_not_implemented",
-      };
+    async synthesizeSpeech({ text = "", streamId = "" } = {}) {
+      return ttsRuntime.synthesize({ text, streamId });
     },
   };
 }
