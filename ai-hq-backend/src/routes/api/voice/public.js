@@ -57,6 +57,7 @@ import {
   buildBusinessActionRecordedVoiceEventPayload,
   createBusinessActionSinkRegistry,
   buildVoiceSpeechGatewayPlan,
+  createVoiceSpeechGateway,
   buildSonioxSpeechRuntimeConfig,
   createSonioxSpeechAdapter,
 } from "../../../modules/voice/index.js";
@@ -926,7 +927,7 @@ async function handleBrowserVoiceRealtimeLink(
     dbDisabled = false,
     getRuntime = getTenantBrainRuntime,
     startSidebandRunner = startRealtimeSidebandSocketRunner,
-    wsHub = null,
+wsHub = null,
   } = {}
 ) {
   const logger = getRouteLogger(req, "voice.browser.realtime_link");
@@ -1903,6 +1904,153 @@ async function handleVoiceSpeechGatewayReadiness(
   }
 }
 
+
+function readBrowserSpeechAudioChunks(input = {}) {
+  const body = obj(input);
+  const rawChunks = Array.isArray(body.audioChunks)
+    ? body.audioChunks
+    : [
+        body.audioChunk,
+        body.audio,
+        body.audioBase64,
+      ].filter((chunk) => chunk !== undefined && chunk !== null);
+
+  return rawChunks
+    .map((chunk) => {
+      if (Buffer.isBuffer(chunk)) return chunk;
+
+      if (chunk instanceof Uint8Array) {
+        return Buffer.from(chunk);
+      }
+
+      if (Array.isArray(chunk)) {
+        return Buffer.from(chunk);
+      }
+
+      if (chunk && typeof chunk === "object") {
+        if (typeof chunk.base64 === "string") {
+          return Buffer.from(chunk.base64, "base64");
+        }
+
+        if (Array.isArray(chunk.bytes)) {
+          return Buffer.from(chunk.bytes);
+        }
+      }
+
+      if (typeof chunk === "string") {
+        const encoding = s(body.encoding || body.audioEncoding);
+        return Buffer.from(chunk, encoding === "base64" ? "base64" : "utf8");
+      }
+
+      return null;
+    })
+    .filter((chunk) => Buffer.isBuffer(chunk) && chunk.byteLength > 0);
+}
+
+function compactSpeechBridgeResult(result = {}) {
+  const payload = obj(result);
+  const audio = Buffer.isBuffer(payload.audio) ? payload.audio : null;
+  const { audio: _audio, ...safePayload } = payload;
+
+  if (!audio) {
+    return safePayload;
+  }
+
+  return {
+    ...safePayload,
+    audioBase64: audio.toString("base64"),
+    audioByteLength: Number(payload.audioByteLength || audio.byteLength || 0),
+    audioEncoding: "base64",
+  };
+}
+
+function createRouteVoiceSpeechGateway(req, speechGatewayFactory = createVoiceSpeechGateway) {
+  const overrides = readVoiceSpeechGatewayOverrides(req);
+
+  return speechGatewayFactory({
+    env: process.env,
+    overrides,
+    requestedVoice: overrides.ttsVoice,
+  });
+}
+
+async function handleVoiceSpeechBrowserTranscribe(
+  req,
+  res,
+  { speechGatewayFactory = createVoiceSpeechGateway } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.browser.transcribe");
+
+  try {
+    const audioChunks = readBrowserSpeechAudioChunks(req.body || {});
+
+    if (audioChunks.length === 0) {
+      return fail(res, 400, "voice_speech_audio_missing");
+    }
+
+    const gateway = createRouteVoiceSpeechGateway(req, speechGatewayFactory);
+    const result = await gateway.transcribeAudioChunk({
+      audioChunks,
+      finalize: req.body?.finalize !== false,
+    });
+
+    return ok(res, {
+      version: "voice_speech_browser_bridge.v1",
+      provider: s(result?.provider),
+      stage: "stt",
+      result: compactSpeechBridgeResult(result),
+      text: s(result?.text),
+    });
+  } catch (err) {
+    logger.error("voice.speech.browser.transcribe.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.browser.transcribe",
+      reasonCode: "voice_speech_browser_transcribe_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_browser_transcribe_failed");
+  }
+}
+
+async function handleVoiceSpeechBrowserSynthesize(
+  req,
+  res,
+  { speechGatewayFactory = createVoiceSpeechGateway } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.browser.synthesize");
+
+  try {
+    const text = s(req.body?.text || req.body?.responseText);
+
+    if (!text) {
+      return fail(res, 400, "voice_speech_text_missing");
+    }
+
+    const gateway = createRouteVoiceSpeechGateway(req, speechGatewayFactory);
+    const result = await gateway.synthesizeSpeech({
+      text,
+      streamId: s(req.body?.streamId || req.body?.stream_id),
+    });
+
+    return ok(res, {
+      version: "voice_speech_browser_bridge.v1",
+      provider: s(result?.provider),
+      stage: "tts",
+      result: compactSpeechBridgeResult(result),
+    });
+  } catch (err) {
+    logger.error("voice.speech.browser.synthesize.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.browser.synthesize",
+      reasonCode: "voice_speech_browser_synthesize_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_browser_synthesize_failed");
+  }
+}
+
 async function handleVoiceActionRuntimePreview(
   req,
   res,
@@ -1969,6 +2117,7 @@ export function voiceRoutes({
   wsHub = null,
   getRuntime = getTenantBrainRuntime,
   startSidebandRunner = startRealtimeSidebandSocketRunner,
+  speechGatewayFactory = createVoiceSpeechGateway,
 } = {}) {
   const r = express.Router();
 
@@ -2031,6 +2180,14 @@ export function voiceRoutes({
 
   r.get("/voice/speech/gateway/readiness", requireOperatorSurfaceAccess, (req, res) =>
     handleVoiceSpeechGatewayReadiness(req, res, { db, dbDisabled, getRuntime })
+  );
+
+  r.post("/voice/speech/browser/transcribe", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechBrowserTranscribe(req, res, { speechGatewayFactory })
+  );
+
+  r.post("/voice/speech/browser/synthesize", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechBrowserSynthesize(req, res, { speechGatewayFactory })
   );
 
   r.post("/voice/browser/calls/:callId/realtime-link", requireOperatorSurfaceAccess, (req, res) =>
