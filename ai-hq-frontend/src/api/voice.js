@@ -146,6 +146,10 @@ export function normalizeBrowserSpeechSynthesisResult(result = {}) {
   };
 }
 
+export async function createPioneroLiveKitSession(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/token", body);
+}
+
 export async function getVoiceSpeechGatewayReadiness(params = {}) {
   return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
 }
