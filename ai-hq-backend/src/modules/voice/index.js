@@ -39,3 +39,4 @@ export * from "./speech/providers/sonioxSpeechAdapter.js";
 export * from "./speech/providers/sonioxSpeechRuntimeConfig.js";
 export * from "./speech/providers/sonioxRealtimeWebsocketClient.js";
 export * from "./speech/providers/sonioxNodeWebsocketFactory.js";
+export * from "./speech/providers/sonioxTtsSession.js";
