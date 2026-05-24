@@ -1,13 +1,28 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Voice from "../../pages/Voice.jsx";
+import { apiPost } from "../../api/client.js";
+import {
+  normalizeBrowserSpeechSynthesisResult,
+  synthesizeBrowserSpeech,
+  transcribeBrowserSpeech,
+} from "../../api/voice.js";
+
+vi.mock("../../api/client.js", () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+}));
 import {
   linkBrowserVoiceRealtimeSessionFromSdpResponse,
   normalizeRealtimeProviderCallId,
 } from "../../pages/hooks/useBrowserVoiceCall.js";
 
 describe("Voice", () => {
+  beforeEach(() => {
+    apiPost.mockReset();
+  });
+
   it("stays intentionally stripped while this legacy surface is frozen for v1", () => {
     const { container } = render(<Voice />);
     expect(container.innerHTML).toBe("");
@@ -116,4 +131,63 @@ describe("Voice", () => {
       )
     ).toBe("rtc_full_url");
   });
+  it("posts browser speech bridge API requests", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        ok: true,
+        version: "voice_speech_browser_bridge.v1",
+        stage: "stt",
+        text: "Salam",
+        result: {
+          ok: true,
+          text: "Salam",
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        version: "voice_speech_browser_bridge.v1",
+        stage: "tts",
+        result: {
+          ok: true,
+          audioBase64: "ZmFrZS1hdWRpbw==",
+          audioByteLength: 10,
+          audioEncoding: "base64",
+        },
+      });
+
+    const transcript = await transcribeBrowserSpeech({
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      finalize: true,
+    });
+
+    expect(transcript.text).toBe("Salam");
+    expect(apiPost).toHaveBeenNthCalledWith(1, "/api/voice/speech/browser/transcribe", {
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      finalize: true,
+    });
+
+    const speech = await synthesizeBrowserSpeech({
+      text: "Oldu.",
+      streamId: "stream-test",
+    });
+
+    expect(speech.result.audioBase64).toBe("ZmFrZS1hdWRpbw==");
+    expect(speech.result.audioByteLength).toBe(10);
+    expect(speech.result.audioEncoding).toBe("base64");
+    expect(apiPost).toHaveBeenNthCalledWith(2, "/api/voice/speech/browser/synthesize", {
+      text: "Oldu.",
+      streamId: "stream-test",
+    });
+  });
+
+  it("fails closed before browser speech bridge API calls when required input is missing", async () => {
+    await expect(transcribeBrowserSpeech({})).rejects.toThrow("audio is required");
+    await expect(synthesizeBrowserSpeech({})).rejects.toThrow("text is required");
+
+    expect(normalizeBrowserSpeechSynthesisResult({}).audioEncoding).toBe("base64");
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
 });
