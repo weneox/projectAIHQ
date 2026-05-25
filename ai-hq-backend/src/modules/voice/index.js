@@ -45,3 +45,4 @@ export * from "./speech/providers/sonioxSttSession.js";
 export * from "./pionero/pioneroLiveKitAgent.js";
 export * from "./pionero/pioneroLiveKitAgentRunner.js";
 export * from "./pionero/pioneroLiveKitAgentRuntime.js";
+export * from "./pionero/pioneroLiveKitRoomClassFactory.js";

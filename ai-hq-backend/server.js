@@ -66,6 +66,9 @@ import {
   hasOperationalReadinessBlockers,
   shouldEnforceOperationalReadinessOnStartup,
 } from "./src/services/operationalReadiness.js";
+import {
+  createPioneroLiveKitRoomClassFactory,
+} from "./src/modules/voice/index.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -190,6 +193,10 @@ async function main() {
   const processWorkerCapable = cfg.app.processRole !== "web";
   const processApiCapable = cfg.app.processRole !== "worker";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
+  const pioneroLiveKitRoomClassFactory = createPioneroLiveKitRoomClassFactory({
+    env: process.env,
+    logger,
+  });
   const runtimeStartedAt = new Date().toISOString();
   validateAndLogMetaConnectConfig(logger);
   assertConfigValid(console);
@@ -950,6 +957,7 @@ async function main() {
       wsHub,
       audit,
       dbDisabled,
+      pioneroLiveKitRoomClassFactory,
     })
   );
 
@@ -960,6 +968,7 @@ async function main() {
       wsHub,
       audit,
       dbDisabled,
+      pioneroLiveKitRoomClassFactory,
     })
   );
 
