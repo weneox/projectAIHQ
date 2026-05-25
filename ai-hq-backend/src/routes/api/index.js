@@ -513,7 +513,13 @@ function requireOperationalSurfaceWriteAccess(req, res, next) {
   return next();
 }
 
-export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
+export function apiRouter({
+  db,
+  wsHub,
+  audit,
+  dbDisabled = false,
+  pioneroLiveKitRoomClassFactory = null,
+}) {
   const r = express.Router();
 
   // public + internal bypass routes
@@ -741,6 +747,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
         dbDisabled,
         audit,
         wsHub,
+        pioneroLiveKitRoomClassFactory,
       })
     );
   }
