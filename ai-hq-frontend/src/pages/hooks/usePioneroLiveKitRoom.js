@@ -17,6 +17,14 @@ const PIONERO_LIVEKIT_SESSION_REQUEST = {
   llmProvider: "fast_text_llm",
   ttsProvider: "cartesia",
 };
+const PIONERO_MICROPHONE_PUBLISH_OPTIONS = {
+  source: "microphone",
+};
+const PIONERO_BROWSER_AUDIO_OPTIONS = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
 const SESSION_SECRET_KEYS = new Set([
   "accesstoken",
   "api_key",
@@ -129,6 +137,27 @@ function readRoomParticipants(room) {
   }
 
   return Array.from(remoteParticipants.values()).map(readParticipantSnapshot);
+}
+
+async function publishPioneroMicrophone(targetRoom) {
+  const localParticipant = targetRoom?.localParticipant;
+
+  if (!localParticipant) {
+    throw new Error("pionero_livekit_local_participant_missing");
+  }
+
+  if (typeof localParticipant.setMicrophoneEnabled === "function") {
+    await localParticipant.setMicrophoneEnabled(true);
+    return null;
+  }
+
+  const localMicTrack = await createLocalAudioTrack(PIONERO_BROWSER_AUDIO_OPTIONS);
+  await localParticipant.publishTrack(
+    localMicTrack,
+    PIONERO_MICROPHONE_PUBLISH_OPTIONS
+  );
+
+  return localMicTrack;
 }
 
 function readAgentAudioIngestState(audioIngest = {}) {
@@ -513,6 +542,12 @@ export default function usePioneroLiveKitRoom({
     localMicTrackRef.current = null;
 
     try {
+      await room?.localParticipant?.setMicrophoneEnabled?.(false);
+    } catch {
+      // Ignore microphone disable failures during teardown.
+    }
+
+    try {
       await room?.disconnect?.();
     } catch {
       // Cleanup should continue even if the SDK is already disconnected.
@@ -619,9 +654,8 @@ export default function usePioneroLiveKitRoom({
       setSafeParticipants(nextRoom);
 
       setSafeStatus("publishing_microphone");
-      const localMicTrack = await createLocalAudioTrack();
+      const localMicTrack = await publishPioneroMicrophone(nextRoom);
       localMicTrackRef.current = localMicTrack;
-      await nextRoom.localParticipant.publishTrack(localMicTrack);
 
       if (mountedRef.current) {
         setLocalMicEnabled(true);
@@ -786,4 +820,3 @@ export default function usePioneroLiveKitRoom({
     agentTtsReasonCode,
   };
 }
-
